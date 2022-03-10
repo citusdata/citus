@@ -351,7 +351,15 @@ CREATE SCHEMA localschema;
 -- should error out
 SELECT run_command_on_workers($$DROP SCHEMA localschema;$$);
 
+CREATE ROLE schema_owner WITH LOGIN;
+SELECT run_command_on_workers($$CREATE ROLE schema_owner WITH LOGIN;$$);
 RESET citus.enable_ddl_propagation;
+-- create schema with the name of the owner
+CREATE SCHEMA AUTHORIZATION schema_owner;
+-- verify the schema is created on workers
+SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_namespace WHERE nspname='schema_owner';$$);
+
+DROP SCHEMA schema_owner;
 
 DROP SCHEMA mx_old_schema CASCADE;
 DROP SCHEMA mx_new_schema CASCADE;
