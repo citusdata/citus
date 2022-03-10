@@ -44,6 +44,7 @@ static ObjectAddress GetObjectAddressBySchemaName(char *schemaName, bool missing
 static List * FilterDistributedSchemas(List *schemas);
 static bool SchemaHasDistributedTableWithFKey(char *schemaName);
 static bool ShouldPropagateCreateSchemaStmt(void);
+static void NoticeIfCreateSchemaStmtHasSchemaElements(Node *node);
 
 
 /*
@@ -62,6 +63,8 @@ PreprocessCreateSchemaStmt(Node *node, const char *queryString,
 	EnsureCoordinator();
 
 	EnsureSequentialMode(OBJECT_SCHEMA);
+
+	NoticeIfCreateSchemaStmtHasSchemaElements(node);
 
 	/* deparse sql*/
 	const char *sql = DeparseTreeNode(node);
@@ -391,4 +394,18 @@ ShouldPropagateCreateSchemaStmt()
 	}
 
 	return true;
+}
+
+
+static void
+NoticeIfCreateSchemaStmtHasSchemaElements(Node *node)
+{
+	CreateSchemaStmt *stmt = castNode(CreateSchemaStmt, node);
+
+	if (list_length(stmt->schemaElts) > 0)
+	{
+		ereport(NOTICE, (errmsg("schema elements will not be distributed"),
+						 errdetail("Citus does not propagate other CREATE commands in "
+								   "CREATE SCHEMA statements")));
+	}
 }

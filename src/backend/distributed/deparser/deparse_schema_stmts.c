@@ -87,11 +87,6 @@ DeparseAlterSchemaRenameStmt(Node *node)
 static void
 AppendCreateSchemaStmt(StringInfo buf, CreateSchemaStmt *stmt)
 {
-	if (stmt->schemaElts != NIL)
-	{
-		elog(ERROR, "schema creating is not supported with other create commands");
-	}
-
 	appendStringInfoString(buf, "CREATE SCHEMA ");
 
 	if (stmt->if_not_exists)
