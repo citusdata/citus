@@ -110,7 +110,6 @@ AppendCreateSchemaStmt(StringInfo buf, CreateSchemaStmt *stmt)
 		 * with the name of the authorizated user.
 		 */
 		Assert(stmt->authrole != NULL);
-		appendStringInfo(buf, "%s ", RoleSpecString(stmt->authrole, true));
 	}
 
 	if (stmt->authrole != NULL)
