@@ -46,9 +46,9 @@
 #include "distributed/placement_connection.h"
 #include "distributed/tuple_destination.h"
 #include "distributed/tuplestore.h"
-#include "distributed/listutils.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
+#include "distributed/jsonbutils.h"
 #include "executor/tstoreReceiver.h"
 #include "fmgr.h"
 #include "lib/stringinfo.h"
@@ -143,10 +143,8 @@ static void ExplainWorkerPlan(PlannedStmt *plannedStmt, DestReceiver *dest,
 							  QueryEnvironment *queryEnv,
 							  const instr_time *planduration,
 							  double *executionDurationMillisec);
-static bool ExtractFieldBoolean(Datum jsonbDoc, const char *fieldName, bool defaultValue);
 static ExplainFormat ExtractFieldExplainFormat(Datum jsonbDoc, const char *fieldName,
 											   ExplainFormat defaultValue);
-static bool ExtractFieldJsonbDatum(Datum jsonbDoc, const char *fieldName, Datum *result);
 static TupleDestination * CreateExplainAnlyzeDestination(Task *task,
 														 TupleDestination *taskDest);
 static void ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
@@ -1113,25 +1111,6 @@ FreeSavedExplainPlan(void)
 
 
 /*
- * ExtractFieldBoolean gets value of fieldName from jsonbDoc, or returns
- * defaultValue if it doesn't exist.
- */
-static bool
-ExtractFieldBoolean(Datum jsonbDoc, const char *fieldName, bool defaultValue)
-{
-	Datum jsonbDatum = 0;
-	bool found = ExtractFieldJsonbDatum(jsonbDoc, fieldName, &jsonbDatum);
-	if (!found)
-	{
-		return defaultValue;
-	}
-
-	Datum boolDatum = DirectFunctionCall1(jsonb_bool, jsonbDatum);
-	return DatumGetBool(boolDatum);
-}
-
-
-/*
  * ExtractFieldExplainFormat gets value of fieldName from jsonbDoc, or returns
  * defaultValue if it doesn't exist.
  */
@@ -1166,50 +1145,6 @@ ExtractFieldExplainFormat(Datum jsonbDoc, const char *fieldName, ExplainFormat
 
 	ereport(ERROR, (errmsg("Invalid explain analyze format: %s", formatStr)));
 	return 0;
-}
-
-
-/*
- * ExtractFieldJsonbDatum gets value of fieldName from jsonbDoc and puts it
- * into result. If not found, returns false. Otherwise, returns true.
- */
-static bool
-ExtractFieldJsonbDatum(Datum jsonbDoc, const char *fieldName, Datum *result)
-{
-	Datum pathArray[1] = { CStringGetTextDatum(fieldName) };
-	bool pathNulls[1] = { false };
-	bool typeByValue = false;
-	char typeAlignment = 0;
-	int16 typeLength = 0;
-	int dimensions[1] = { 1 };
-	int lowerbounds[1] = { 1 };
-
-	get_typlenbyvalalign(TEXTOID, &typeLength, &typeByValue, &typeAlignment);
-
-	ArrayType *pathArrayObject = construct_md_array(pathArray, pathNulls, 1, dimensions,
-													lowerbounds, TEXTOID, typeLength,
-													typeByValue, typeAlignment);
-	Datum pathDatum = PointerGetDatum(pathArrayObject);
-
-	/*
-	 * We need to check whether the result of jsonb_extract_path is NULL or not, so use
-	 * FunctionCallInvoke() instead of other function call api.
-	 *
-	 * We cannot use jsonb_path_exists to ensure not-null since it is not available in
-	 * postgres 11.
-	 */
-	FmgrInfo fmgrInfo;
-	fmgr_info(JsonbExtractPathFuncId(), &fmgrInfo);
-
-	LOCAL_FCINFO(functionCallInfo, 2);
-	InitFunctionCallInfoData(*functionCallInfo, &fmgrInfo, 2, DEFAULT_COLLATION_OID, NULL,
-							 NULL);
-
-	fcSetArg(functionCallInfo, 0, jsonbDoc);
-	fcSetArg(functionCallInfo, 1, pathDatum);
-
-	*result = FunctionCallInvoke(functionCallInfo);
-	return !functionCallInfo->isnull;
 }
 
 

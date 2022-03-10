@@ -30,8 +30,9 @@
 #include "distributed/transaction_recovery.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/jsonbutils.h"
 #include "utils/memutils.h"
-
+#include "utils/builtins.h"
 
 static void SendCommandToMetadataWorkersParams(const char *command,
 											   const char *user, int parameterCount,
@@ -638,4 +639,59 @@ ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList)
 									" gets synced to it and try again.")));
 		}
 	}
+}
+
+
+/*
+ * IsWorkerTheCurrentNode checks if the given worker refers to the
+ * the current node by comparing the server id of the worker and of the
+ * current nodefrom pg_dist_node_metadata
+ */
+bool
+IsWorkerTheCurrentNode(WorkerNode *workerNode)
+{
+	int connectionFlags = REQUIRE_METADATA_CONNECTION;
+
+	MultiConnection *workerConnection =
+		GetNodeUserDatabaseConnection(connectionFlags,
+									  workerNode->workerName,
+									  workerNode->workerPort,
+									  CurrentUserName(),
+									  NULL);
+	const char *command =
+		"SELECT metadata ->> 'server_id' AS server_id FROM pg_dist_node_metadata";
+
+	SendRemoteCommand(workerConnection, command);
+
+	PGresult *result = GetRemoteCommandResult(workerConnection, true);
+
+	if (result == NULL)
+	{
+		return false;
+	}
+
+	List *commandResult = ReadFirstColumnAsText(result);
+
+	PQclear(result);
+	ForgetResults(workerConnection);
+
+	if ((list_length(commandResult) != 1))
+	{
+		return false;
+	}
+
+	StringInfo resultInfo = (StringInfo) linitial(commandResult);
+	char *workerServerId = resultInfo->data;
+
+	Datum metadata = DistNodeMetadata();
+	text *currentServerIdTextP = ExtractFieldTextP(metadata, "server_id");
+
+	if (currentServerIdTextP == NULL)
+	{
+		return false;
+	}
+
+	char *currentServerId = text_to_cstring(currentServerIdTextP);
+
+	return strcmp(workerServerId, currentServerId) == 0;
 }
