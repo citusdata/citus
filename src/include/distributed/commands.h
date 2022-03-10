@@ -146,6 +146,7 @@ extern List * PreprocessDropCollationStmt(Node *stmt, const char *queryString,
 extern List * PreprocessAlterCollationOwnerStmt(Node *stmt, const char *queryString,
 												ProcessUtilityContext
 												processUtilityContext);
+extern List * PostprocessAlterCollationOwnerStmt(Node *node, const char *queryString);
 extern List * PreprocessAlterCollationSchemaStmt(Node *stmt, const char *queryString,
 												 ProcessUtilityContext
 												 processUtilityContext);
@@ -281,6 +282,7 @@ extern ObjectAddress RenameFunctionStmtObjectAddress(Node *stmt,
 													 bool missing_ok);
 extern List * PreprocessAlterFunctionOwnerStmt(Node *stmt, const char *queryString,
 											   ProcessUtilityContext processUtilityContext);
+extern List * PostprocessAlterFunctionOwnerStmt(Node *stmt, const char *queryString);
 extern ObjectAddress AlterFunctionOwnerObjectAddress(Node *stmt,
 													 bool missing_ok);
 extern List * PreprocessAlterFunctionSchemaStmt(Node *stmt, const char *queryString,
@@ -432,6 +434,7 @@ extern List * PreprocessAlterStatisticsStmt(Node *node, const char *queryString,
 extern List * PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString,
 												 ProcessUtilityContext
 												 processUtilityContext);
+extern List * PostprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString);
 extern List * GetExplicitStatisticsCommandList(Oid relationId);
 extern List * GetExplicitStatisticsSchemaIdList(Oid relationId);
 extern List * GetAlterIndexStatisticsCommands(Oid indexOid);
