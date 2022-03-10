@@ -48,10 +48,9 @@ CREATE TABLE t3 (a int PRIMARY KEY, b tc2);
 SELECT create_distributed_table('t3','a');
 INSERT INTO t3 VALUES (4, ('5',6)::tc2);
 SELECT * FROM t3;
-
+COMMIT;
 -- verify typmod was propagated
 SELECT run_command_on_workers($$SELECT atttypmod FROM pg_attribute WHERE attnum = 1 AND attrelid = (SELECT typrelid FROM pg_type WHERE typname = 'tc2');$$);
-COMMIT;
 
 -- transaction block with simple type
 BEGIN;
@@ -328,6 +327,12 @@ CREATE TABLE immediate_table(a int,b immediate_type);
 SELECT create_distributed_table('immediate_table', 'a');
 SHOW citus.multi_shard_modify_mode;
 COMMIT;
+
+-- Show that PG does not allow adding a circular dependency btw types
+-- We added here to make sure we can catch it if PG changes it's behaviour
+CREATE TYPE circ_type1 AS (a int);
+CREATE TYPE circ_type2 AS (a int, b circ_type1);
+ALTER TYPE circ_type1 ADD ATTRIBUTE b circ_type2;
 
 -- clear objects
 SET client_min_messages TO error; -- suppress cascading objects dropping

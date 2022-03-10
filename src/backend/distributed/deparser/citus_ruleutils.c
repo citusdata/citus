@@ -124,6 +124,48 @@ pg_get_extensiondef_string(Oid tableRelationId)
 
 
 /*
+ * get_extension_version - given an extension OID, fetch its extversion
+ * or NULL if not found.
+ */
+char *
+get_extension_version(Oid extensionId)
+{
+	char *versionName = NULL;
+
+	Relation relation = table_open(ExtensionRelationId, AccessShareLock);
+
+	ScanKeyData entry[1];
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_oid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(extensionId));
+
+	SysScanDesc scanDesc = systable_beginscan(relation, ExtensionOidIndexId, true,
+											  NULL, 1, entry);
+
+	HeapTuple tuple = systable_getnext(scanDesc);
+
+	/* We assume that there can be at most one matching tuple */
+	if (HeapTupleIsValid(tuple))
+	{
+		bool isNull = false;
+		Datum versionDatum = heap_getattr(tuple, Anum_pg_extension_extversion,
+										  RelationGetDescr(relation), &isNull);
+		if (!isNull)
+		{
+			versionName = text_to_cstring(DatumGetTextPP(versionDatum));
+		}
+	}
+
+	systable_endscan(scanDesc);
+
+	table_close(relation, AccessShareLock);
+
+	return versionName;
+}
+
+
+/*
  * get_extension_schema - given an extension OID, fetch its extnamespace
  *
  * Returns InvalidOid if no such extension.

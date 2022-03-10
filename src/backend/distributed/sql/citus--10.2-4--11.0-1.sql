@@ -31,9 +31,22 @@
 #include "udfs/citus_calculate_gpid/11.0-1.sql"
 #include "udfs/citus_backend_gpid/11.0-1.sql"
 
-DROP FUNCTION IF EXISTS pg_catalog.citus_dist_stat_activity() CASCADE;
-DROP FUNCTION IF EXISTS pg_catalog.citus_worker_stat_activity() CASCADE;
+DROP VIEW IF EXISTS pg_catalog.citus_lock_waits;
+DROP VIEW IF EXISTS pg_catalog.citus_dist_stat_activity;
+DROP VIEW IF EXISTS pg_catalog.citus_worker_stat_activity;
+DROP FUNCTION IF EXISTS pg_catalog.citus_dist_stat_activity();
+DROP FUNCTION IF EXISTS pg_catalog.citus_worker_stat_activity();
 #include "udfs/citus_dist_stat_activity/11.0-1.sql"
+
+-- a very simple helper function defined for citus_lock_waits
+CREATE OR REPLACE FUNCTION get_nodeid_for_groupid(groupIdInput int) RETURNS int AS $$
+DECLARE
+	returnNodeNodeId int := 0;
+begin
+	SELECT nodeId into returnNodeNodeId FROM pg_dist_node WHERE groupid = groupIdInput and nodecluster = current_setting('citus.cluster_name');
+	RETURN returnNodeNodeId;
+end
+$$ LANGUAGE plpgsql;
 
 #include "udfs/citus_lock_waits/11.0-1.sql"
 
@@ -84,3 +97,9 @@ ALTER TABLE citus.pg_dist_object SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.pg_dist_object TO public;
 #include "udfs/citus_prepare_pg_upgrade/11.0-1.sql"
 #include "udfs/citus_finish_pg_upgrade/11.0-1.sql"
+
+#include "udfs/citus_nodename_for_nodeid/11.0-1.sql"
+#include "udfs/citus_nodeport_for_nodeid/11.0-1.sql"
+
+#include "udfs/citus_nodeid_for_gpid/11.0-1.sql"
+#include "udfs/citus_pid_for_gpid/11.0-1.sql"

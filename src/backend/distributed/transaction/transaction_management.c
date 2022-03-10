@@ -245,7 +245,7 @@ InitializeTransactionManagement(void)
  * transaction independent connection management.
  *
  * NB: There should only ever be a single transaction callback in citus, the
- * ordering between the callbacks and thee actions within those callbacks
+ * ordering between the callbacks and the actions within those callbacks
  * otherwise becomes too undeterministic / hard to reason about.
  */
 static void

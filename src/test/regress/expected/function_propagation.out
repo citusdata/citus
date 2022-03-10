@@ -92,6 +92,7 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 
 -- Have a separate check for type created in transaction
 BEGIN;
+    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE TYPE function_prop_type_3 AS (a int, b int);
 COMMIT;
 -- Objects in the body part is not found as dependency
@@ -134,9 +135,9 @@ BEGIN
     return 1;
 END;
 $$;
-WARNING:  Citus can't distribute function "func_4" having dependency on non-distributed relation "function_prop_table"
-DETAIL:  Function will be created only locally
-HINT:  To distribute function, distribute dependent relations first. Then, re-create the function
+WARNING:  "function func_4(function_prop_table)" has dependency to "table function_prop_table" that is not in Citus' metadata
+DETAIL:  "function func_4(function_prop_table)" will be created only locally
+HINT:  Distribute "table function_prop_table" first to distribute "function func_4(function_prop_table)"
 CREATE OR REPLACE FUNCTION func_5(param_1 int)
 RETURNS function_prop_table
 LANGUAGE plpgsql AS
@@ -145,9 +146,9 @@ BEGIN
     return 1;
 END;
 $$;
-WARNING:  Citus can't distribute function "func_5" having dependency on non-distributed relation "function_prop_table"
-DETAIL:  Function will be created only locally
-HINT:  To distribute function, distribute dependent relations first. Then, re-create the function
+WARNING:  "function func_5(integer)" has dependency to "table function_prop_table" that is not in Citus' metadata
+DETAIL:  "function func_5(integer)" will be created only locally
+HINT:  Distribute "table function_prop_table" first to distribute "function func_5(integer)"
 -- Functions can be created with distributed table dependency
 SELECT create_distributed_table('function_prop_table', 'a');
  create_distributed_table
@@ -186,8 +187,8 @@ BEGIN
     return 1;
 END;
 $$;
-WARNING:  Citus can't distribute functions having dependency on unsupported object of type "view"
-DETAIL:  Function will be created only locally
+WARNING:  "function func_7(function_prop_view)" has dependency on unsupported object "view function_prop_view"
+DETAIL:  "function func_7(function_prop_view)" will be created only locally
 CREATE OR REPLACE FUNCTION func_8(param_1 int)
 RETURNS function_prop_view
 LANGUAGE plpgsql AS
@@ -196,8 +197,8 @@ BEGIN
     return 1;
 END;
 $$;
-WARNING:  Citus can't distribute functions having dependency on unsupported object of type "view"
-DETAIL:  Function will be created only locally
+WARNING:  "function func_8(integer)" has dependency on unsupported object "view function_prop_view"
+DETAIL:  "function func_8(integer)" will be created only locally
 -- Check within transaction
 BEGIN;
     CREATE TYPE type_in_transaction AS (a int, b int);
@@ -209,16 +210,17 @@ BEGIN;
         return 1;
     END;
     $$;
-    -- Within transaction functions are not distributed
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.type_in_transaction'::regtype::oid;
- pg_identify_object_as_address
+                pg_identify_object_as_address
 ---------------------------------------------------------------------
-(0 rows)
+ (type,{function_propagation_schema.type_in_transaction},{})
+(1 row)
 
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction'::regproc::oid;
- pg_identify_object_as_address
+                                          pg_identify_object_as_address
 ---------------------------------------------------------------------
-(0 rows)
+ (function,"{function_propagation_schema,func_in_transaction}",{function_propagation_schema.type_in_transaction})
+(1 row)
 
 COMMIT;
 -- Show that recreating it outside transaction distributes the function and dependencies
@@ -435,8 +437,8 @@ BEGIN;
     CREATE TABLE table_to_prop_func_3(id int, col_1 int default func_in_transaction_3(NULL::non_dist_table));
     -- It should error out as there is a non-distributed table dependency
     SELECT create_distributed_table('table_to_prop_func_3','id');
-ERROR:  Relation "table_to_prop_func_3" has dependency to a table "non_dist_table" that is not in Citus' metadata
-HINT:  Distribute dependent relation first.
+ERROR:  "table table_to_prop_func_3" has dependency to "table non_dist_table" that is not in Citus' metadata
+HINT:  Distribute "table non_dist_table" first to distribute "table table_to_prop_func_3"
 COMMIT;
 -- Adding a column with default value should propagate the function
 BEGIN;
@@ -497,8 +499,8 @@ BEGIN;
 (1 row)
 
     ALTER TABLE table_to_dist ADD COLUMN col_1 int default function_propagation_schema.non_dist_func(NULL::non_dist_table_for_function);
-ERROR:  Relation "table_to_dist" has dependency to a table "non_dist_table_for_function" that is not in Citus' metadata
-HINT:  Distribute dependent relation first.
+ERROR:  "table table_to_dist" has dependency to "table non_dist_table_for_function" that is not in Citus' metadata
+HINT:  Distribute "table non_dist_table_for_function" first to distribute "table table_to_dist"
 ROLLBACK;
 -- Adding multiple columns with default values should propagate the function
 BEGIN;
@@ -723,8 +725,8 @@ BEGIN;
     CREATE TABLE table_to_prop_func_9(id int, col_1 int check (func_in_transaction_11(col_1, NULL::local_table_for_const)));
     -- It should error out since there is non-distributed table dependency exists
     SELECT create_distributed_table('table_to_prop_func_9', 'id');
-ERROR:  Relation "table_to_prop_func_9" has dependency to a table "local_table_for_const" that is not in Citus' metadata
-HINT:  Distribute dependent relation first.
+ERROR:  "table table_to_prop_func_9" has dependency to "table local_table_for_const" that is not in Citus' metadata
+HINT:  Distribute "table local_table_for_const" first to distribute "table table_to_prop_func_9"
 COMMIT;
 -- Show that function as a part of generated always is supporte
 BEGIN;
@@ -1188,6 +1190,95 @@ SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catal
                              |              |
 (1 row)
 
+-- Show that causing circular dependency via functions and default values are not allowed
+CREATE TABLE table_1_for_circ_dep(id int);
+select create_distributed_table('table_1_for_circ_dep','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE OR REPLACE FUNCTION func_1_for_circ_dep(col_1 table_1_for_circ_dep)
+RETURNS int
+LANGUAGE plpgsql AS
+$$
+BEGIN
+return 1;
+END;
+$$;
+CREATE TABLE table_2_for_circ_dep(id int, col_2 int default func_1_for_circ_dep(NULL::table_1_for_circ_dep));
+select create_distributed_table('table_2_for_circ_dep','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE OR REPLACE FUNCTION func_2_for_circ_dep(col_3 table_2_for_circ_dep)
+RETURNS int
+LANGUAGE plpgsql AS
+$$
+BEGIN
+return 1;
+END;
+$$;
+-- It should error out due to circular dependency
+ALTER TABLE table_1_for_circ_dep ADD COLUMN col_2 int default func_2_for_circ_dep(NULL::table_2_for_circ_dep);
+ERROR:  Citus can not handle circular dependencies between distributed objects
+DETAIL:  "table table_1_for_circ_dep" circularly depends itself, resolve circular dependency first
+-- Show that causing circular dependency via functions and constraints are not allowed
+CREATE TABLE table_1_for_circ_dep_2(id int, col_1 int);
+select create_distributed_table('table_1_for_circ_dep_2','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE OR REPLACE FUNCTION func_1_for_circ_dep_2(param_1 int, param_2 table_1_for_circ_dep_2)
+RETURNS boolean
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return param_1 > 5;
+END;
+$$;
+CREATE TABLE table_2_for_circ_dep_2(id int, col_1 int check (func_1_for_circ_dep_2(col_1, NULL::table_1_for_circ_dep_2)));
+select create_distributed_table('table_2_for_circ_dep_2','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE OR REPLACE FUNCTION func_2_for_circ_dep_2(param_1 int, param_2 table_2_for_circ_dep_2)
+RETURNS boolean
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return param_1 > 5;
+END;
+$$;
+-- It should error out due to circular dependency
+ALTER TABLE table_1_for_circ_dep_2 ADD CONSTRAINT check_const_for_circ check (func_2_for_circ_dep_2(col_1, NULL::table_2_for_circ_dep_2));
+ERROR:  Citus can not handle circular dependencies between distributed objects
+DETAIL:  "table table_1_for_circ_dep_2" circularly depends itself, resolve circular dependency first
+-- Show that causing circular dependency via functions and create_distributed_table are not allowed
+CREATE TABLE table_1_for_circ_dep_3(id int, col_1 int);
+CREATE OR REPLACE FUNCTION func_for_circ_dep_3(param_1 int, param_2 table_1_for_circ_dep_3)
+RETURNS boolean
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return param_1 > 5;
+END;
+$$;
+WARNING:  "function func_for_circ_dep_3(integer,table_1_for_circ_dep_3)" has dependency to "table table_1_for_circ_dep_3" that is not in Citus' metadata
+DETAIL:  "function func_for_circ_dep_3(integer,table_1_for_circ_dep_3)" will be created only locally
+HINT:  Distribute "table table_1_for_circ_dep_3" first to distribute "function func_for_circ_dep_3(integer,table_1_for_circ_dep_3)"
+CREATE TABLE table_2_for_circ_dep_3(id int, col_1 int check (func_for_circ_dep_3(col_1, NULL::table_1_for_circ_dep_3)));
+ALTER TABLE table_1_for_circ_dep_3 ADD COLUMN col_2 table_2_for_circ_dep_3;
+-- It should error out due to circular dependency
+SELECT create_distributed_table('table_1_for_circ_dep_3','id');
+ERROR:  Citus can not handle circular dependencies between distributed objects
+DETAIL:  "table table_1_for_circ_dep_3" circularly depends itself, resolve circular dependency first
 RESET search_path;
 SET client_min_messages TO WARNING;
 DROP SCHEMA function_propagation_schema CASCADE;

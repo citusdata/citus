@@ -240,3 +240,75 @@ ROLLBACK;
 
 DROP SCHEMA drop_partitioned_table CASCADE;
 SET search_path TO public;
+
+-- dropping the schema should drop the metadata on the workers
+CREATE SCHEMA partitioning_schema;
+SET search_path TO partitioning_schema;
+
+CREATE TABLE part_table (
+      col timestamp
+  ) PARTITION BY RANGE (col);
+
+CREATE TABLE part_table_1
+  PARTITION OF part_table
+  FOR VALUES FROM ('2010-01-01') TO ('2015-01-01');
+
+SELECT create_distributed_table('part_table', 'col');
+
+-- show we have pg_dist_partition entries on the workers
+SELECT run_command_on_workers($$SELECT count(*) FROM  pg_dist_partition where exists(select * from pg_class where pg_class.oid=pg_dist_partition.logicalrelid AND relname ILIKE '%part_table%');$$);
+-- show we have pg_dist_object entries on the workers
+SELECT run_command_on_workers($$SELECT count(*) FROM  pg_dist_object as obj where classid = 1259 AND exists(select * from pg_class where pg_class.oid=obj.objid AND relname ILIKE '%part_table%');$$);
+
+DROP SCHEMA partitioning_schema CASCADE;
+
+-- show we don't have pg_dist_partition entries on the workers after dropping the schema
+SELECT run_command_on_workers($$SELECT count(*) FROM  pg_dist_partition where exists(select * from pg_class where pg_class.oid=pg_dist_partition.logicalrelid AND relname ILIKE '%part_table%');$$);
+
+-- show we don't have pg_dist_object entries on the workers after dropping the schema
+SELECT run_command_on_workers($$SELECT count(*) FROM  pg_dist_object as obj where classid = 1259 AND exists(select * from pg_class where pg_class.oid=obj.objid AND relname ILIKE '%part_table%');$$);
+
+-- dropping the parent should drop the metadata on the workers
+CREATE SCHEMA partitioning_schema;
+SET search_path TO partitioning_schema;
+
+CREATE TABLE part_table (
+      col timestamp
+  ) PARTITION BY RANGE (col);
+
+CREATE TABLE part_table_1
+  PARTITION OF part_table
+  FOR VALUES FROM ('2010-01-01') TO ('2015-01-01');
+
+SELECT create_distributed_table('part_table', 'col');
+
+DROP TABLE part_table;
+
+-- show we don't have pg_dist_partition entries on the workers after dropping the parent
+SELECT run_command_on_workers($$SELECT count(*) FROM  pg_dist_partition where exists(select * from pg_class where pg_class.oid=pg_dist_partition.logicalrelid AND relname ILIKE '%part_table%');$$);
+
+-- show we don't have pg_dist_object entries on the workers after dropping the parent
+SELECT run_command_on_workers($$SELECT count(*) FROM  pg_dist_object as obj where classid = 1259 AND exists(select * from pg_class where pg_class.oid=obj.objid AND relname ILIKE '%part_table%');$$);
+
+SET search_path TO partitioning_schema;
+
+CREATE TABLE part_table (
+      col timestamp
+  ) PARTITION BY RANGE (col);
+
+CREATE TABLE part_table_1
+  PARTITION OF part_table
+  FOR VALUES FROM ('2010-01-01') TO ('2015-01-01');
+
+SELECT create_distributed_table('part_table', 'col');
+
+DROP TABLE part_table_1;
+
+-- show we have pg_dist_partition entries for the parent on the workers after dropping the partition
+SELECT run_command_on_workers($$SELECT count(*) FROM  pg_dist_partition where exists(select * from pg_class where pg_class.oid=pg_dist_partition.logicalrelid AND relname ILIKE '%part_table%');$$);
+
+-- show we have pg_dist_object entries for the parent on the workers after dropping the partition
+SELECT run_command_on_workers($$SELECT count(*) FROM  pg_dist_object as obj where classid = 1259 AND exists(select * from pg_class where pg_class.oid=obj.objid AND relname ILIKE '%part_table%');$$);
+
+-- clean-up
+DROP SCHEMA partitioning_schema CASCADE;

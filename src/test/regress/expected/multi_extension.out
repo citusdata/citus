@@ -1009,11 +1009,16 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                       | function citus_internal_delete_colocation_metadata(integer) void
                                                                                                                       | function citus_internal_global_blocked_processes() SETOF record
                                                                                                                       | function citus_internal_local_blocked_processes() SETOF record
+                                                                                                                      | function citus_nodeid_for_gpid(bigint) integer
+                                                                                                                      | function citus_nodename_for_nodeid(integer) text
+                                                                                                                      | function citus_nodeport_for_nodeid(integer) integer
+                                                                                                                      | function citus_pid_for_gpid(bigint) integer
                                                                                                                       | function citus_run_local_command(text) void
                                                                                                                       | function citus_shard_indexes_on_worker() SETOF record
                                                                                                                       | function citus_shards_on_worker() SETOF record
                                                                                                                       | function citus_stat_activity() SETOF record
                                                                                                                       | function create_distributed_function(regprocedure,text,text,boolean) void
+                                                                                                                      | function get_nodeid_for_groupid(integer) integer
                                                                                                                       | function pg_cancel_backend(bigint) boolean
                                                                                                                       | function pg_terminate_backend(bigint,bigint) boolean
                                                                                                                       | function run_command_on_all_nodes(text,boolean,boolean) SETOF record
@@ -1023,7 +1028,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                       | function worker_partition_query_result(text,text,integer,citus.distribution_type,text[],text[],boolean,boolean,boolean) SETOF record
                                                                                                                       | table pg_dist_object
                                                                                                                       | view citus_stat_activity
-(35 rows)
+(40 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

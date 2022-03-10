@@ -11,11 +11,13 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
+
 #include "distributed/commands/utility_hook.h"
 #include "distributed/commands.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/worker_transaction.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -123,6 +125,10 @@ master_remove_distributed_table_metadata_from_workers(PG_FUNCTION_ARGS)
  * The function is a no-op for non-distributed tables and clusters that don't
  * have any workers with metadata. Also, the function errors out if called
  * from a worker node.
+ *
+ * This function assumed that it is called via a trigger. But we cannot do the
+ * typical CALLED_AS_TRIGGER check because this is called via another trigger,
+ * which CALLED_AS_TRIGGER does not cover.
  */
 static void
 MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId, char *schemaName,
@@ -143,6 +149,16 @@ MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId, char *schemaName
 
 	if (!ShouldSyncTableMetadataViaCatalog(relationId))
 	{
+		return;
+	}
+
+	if (PartitionTable(relationId))
+	{
+		/*
+		 * MasterRemoveDistributedTableMetadataFromWorkers is only called from drop trigger.
+		 * When parent is dropped in a drop trigger, we remove all the corresponding
+		 * partitions via the parent, mostly for performance reasons.
+		 */
 		return;
 	}
 

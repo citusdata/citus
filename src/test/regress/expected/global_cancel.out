@@ -88,5 +88,27 @@ SELECT citus_backend_gpid() = citus_calculate_gpid(:coordinator_node_id, pg_back
  t
 (1 row)
 
+SELECT nodename = citus_nodename_for_nodeid(nodeid) AND nodeport = citus_nodeport_for_nodeid(nodeid)
+FROM pg_dist_node
+WHERE isactive = true AND noderole = 'primary';
+ ?column?
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
+SELECT citus_nodeid_for_gpid(10000000000 * 2 + 3);
+ citus_nodeid_for_gpid
+---------------------------------------------------------------------
+        2
+(1 row)
+
+SELECT citus_pid_for_gpid(10000000000 * 2 + 3);
+ citus_pid_for_gpid
+---------------------------------------------------------------------
+        3
+(1 row)
+
 DROP SCHEMA global_cancel CASCADE;
 NOTICE:  drop cascades to table global_cancel.dist_table

@@ -57,42 +57,12 @@ PostprocessDefineAggregateStmt(Node *node, const char *queryString)
 
 	EnsureSequentialMode(OBJECT_AGGREGATE);
 
-	ObjectAddress *undistributableDependency = GetUndistributableDependency(
-		&address);
-	if (undistributableDependency != NULL)
+	/* If the aggregate has any unsupported dependency, create it locally */
+	DeferredErrorMessage *depError = DeferErrorIfHasUnsupportedDependency(&address);
+
+	if (depError != NULL)
 	{
-		if (SupportedDependencyByCitus(undistributableDependency))
-		{
-			/*
-			 * Citus can't distribute some relations as dependency, although those
-			 * types as supported by Citus. So we can use get_rel_name directly
-			 */
-			RangeVar *aggRangeVar = makeRangeVarFromNameList(stmt->defnames);
-			char *aggName = aggRangeVar->relname;
-			char *dependentRelationName =
-				get_rel_name(undistributableDependency->objectId);
-
-			ereport(WARNING, (errmsg("Citus can't distribute aggregate \"%s\" having "
-									 "dependency on non-distributed relation \"%s\"",
-									 aggName, dependentRelationName),
-							  errdetail("Aggregate will be created only locally"),
-							  errhint("To distribute aggregate, distribute dependent "
-									  "relations first. Then, re-create the aggregate")));
-		}
-		else
-		{
-			char *objectType = NULL;
-			#if PG_VERSION_NUM >= PG_VERSION_14
-			objectType = getObjectTypeDescription(undistributableDependency, false);
-			#else
-			objectType = getObjectTypeDescription(undistributableDependency);
-			#endif
-			ereport(WARNING, (errmsg("Citus can't distribute functions having "
-									 "dependency on unsupported object of type \"%s\"",
-									 objectType),
-							  errdetail("Aggregate will be created only locally")));
-		}
-
+		RaiseDeferredError(depError, WARNING);
 		return NIL;
 	}
 

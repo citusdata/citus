@@ -45,6 +45,7 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 
 -- Have a separate check for type created in transaction
 BEGIN;
+    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE TYPE function_prop_type_3 AS (a int, b int);
 COMMIT;
 
@@ -132,7 +133,6 @@ BEGIN;
     END;
     $$;
 
-    -- Within transaction functions are not distributed
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.type_in_transaction'::regtype::oid;
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction'::regproc::oid;
 COMMIT;
@@ -755,6 +755,82 @@ SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catal
 SELECT create_distributed_function('func_to_colocate(int)');
 -- show that the pg_dist_object fields are gone
 SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catalog.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
+
+
+-- Show that causing circular dependency via functions and default values are not allowed
+CREATE TABLE table_1_for_circ_dep(id int);
+select create_distributed_table('table_1_for_circ_dep','id');
+
+CREATE OR REPLACE FUNCTION func_1_for_circ_dep(col_1 table_1_for_circ_dep)
+RETURNS int
+LANGUAGE plpgsql AS
+$$
+BEGIN
+return 1;
+END;
+$$;
+
+CREATE TABLE table_2_for_circ_dep(id int, col_2 int default func_1_for_circ_dep(NULL::table_1_for_circ_dep));
+select create_distributed_table('table_2_for_circ_dep','id');
+CREATE OR REPLACE FUNCTION func_2_for_circ_dep(col_3 table_2_for_circ_dep)
+RETURNS int
+LANGUAGE plpgsql AS
+$$
+BEGIN
+return 1;
+END;
+$$;
+
+-- It should error out due to circular dependency
+ALTER TABLE table_1_for_circ_dep ADD COLUMN col_2 int default func_2_for_circ_dep(NULL::table_2_for_circ_dep);
+
+
+-- Show that causing circular dependency via functions and constraints are not allowed
+CREATE TABLE table_1_for_circ_dep_2(id int, col_1 int);
+select create_distributed_table('table_1_for_circ_dep_2','id');
+
+CREATE OR REPLACE FUNCTION func_1_for_circ_dep_2(param_1 int, param_2 table_1_for_circ_dep_2)
+RETURNS boolean
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return param_1 > 5;
+END;
+$$;
+
+CREATE TABLE table_2_for_circ_dep_2(id int, col_1 int check (func_1_for_circ_dep_2(col_1, NULL::table_1_for_circ_dep_2)));
+
+select create_distributed_table('table_2_for_circ_dep_2','id');
+CREATE OR REPLACE FUNCTION func_2_for_circ_dep_2(param_1 int, param_2 table_2_for_circ_dep_2)
+RETURNS boolean
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return param_1 > 5;
+END;
+$$;
+
+-- It should error out due to circular dependency
+ALTER TABLE table_1_for_circ_dep_2 ADD CONSTRAINT check_const_for_circ check (func_2_for_circ_dep_2(col_1, NULL::table_2_for_circ_dep_2));
+
+
+-- Show that causing circular dependency via functions and create_distributed_table are not allowed
+CREATE TABLE table_1_for_circ_dep_3(id int, col_1 int);
+
+CREATE OR REPLACE FUNCTION func_for_circ_dep_3(param_1 int, param_2 table_1_for_circ_dep_3)
+RETURNS boolean
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return param_1 > 5;
+END;
+$$;
+
+CREATE TABLE table_2_for_circ_dep_3(id int, col_1 int check (func_for_circ_dep_3(col_1, NULL::table_1_for_circ_dep_3)));
+ALTER TABLE table_1_for_circ_dep_3 ADD COLUMN col_2 table_2_for_circ_dep_3;
+
+-- It should error out due to circular dependency
+SELECT create_distributed_table('table_1_for_circ_dep_3','id');
 
 RESET search_path;
 SET client_min_messages TO WARNING;

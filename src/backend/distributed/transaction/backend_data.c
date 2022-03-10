@@ -100,6 +100,8 @@ PG_FUNCTION_INFO_V1(get_global_active_transactions);
 PG_FUNCTION_INFO_V1(get_all_active_transactions);
 PG_FUNCTION_INFO_V1(citus_calculate_gpid);
 PG_FUNCTION_INFO_V1(citus_backend_gpid);
+PG_FUNCTION_INFO_V1(citus_nodeid_for_gpid);
+PG_FUNCTION_INFO_V1(citus_pid_for_gpid);
 
 
 /*
@@ -721,6 +723,7 @@ UnSetGlobalPID(void)
 		MyBackendData->globalPID = 0;
 		MyBackendData->databaseId = 0;
 		MyBackendData->userId = 0;
+		MyBackendData->distributedCommandOriginator = false;
 
 		SpinLockRelease(&MyBackendData->mutex);
 	}
@@ -850,12 +853,16 @@ AssignGlobalPID(void)
 
 
 /*
- * OverrideBackendDataDistributedCommandOriginator should only be used for isolation testing.
- * See how it is used in the relevant functions.
+ * SetBackendDataDistributedCommandOriginator is used to set the distributedCommandOriginator
+ * field on MyBackendData.
  */
 void
-OverrideBackendDataDistributedCommandOriginator(bool distributedCommandOriginator)
+SetBackendDataDistributedCommandOriginator(bool distributedCommandOriginator)
 {
+	if (!MyBackendData)
+	{
+		return;
+	}
 	SpinLockAcquire(&MyBackendData->mutex);
 	MyBackendData->distributedCommandOriginator =
 		distributedCommandOriginator;
@@ -939,6 +946,35 @@ citus_backend_gpid(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	PG_RETURN_UINT64(GetGlobalPID());
+}
+
+
+/*
+ * citus_nodeid_for_gpid returns node id for the global process with given global pid
+ */
+Datum
+citus_nodeid_for_gpid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	uint64 globalPID = PG_GETARG_INT64(0);
+
+	bool missingOk = false;
+	PG_RETURN_INT32(ExtractNodeIdFromGlobalPID(globalPID, missingOk));
+}
+
+
+/*
+ * citus_pid_for_gpid returns process id for the global process with given global pid
+ */
+Datum
+citus_pid_for_gpid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	uint64 globalPID = PG_GETARG_INT64(0);
+
+	PG_RETURN_INT32(ExtractProcessIdFromGlobalPID(globalPID));
 }
 
 

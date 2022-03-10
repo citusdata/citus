@@ -71,7 +71,14 @@ $$);
  (localhost,57638,t,"CREATE FOREIGN DATA WRAPPER")
 (2 rows)
 
+-- Since we are assuming fdw should be part of the extension, add it manually.
+ALTER EXTENSION citus ADD FOREIGN DATA WRAPPER fake_fdw_1;
+NOTICE:  Citus does not propagate adding/dropping member objects
+HINT:  You can add/drop the member objects on the workers as well.
 CREATE SERVER fake_fdw_server_1 FOREIGN DATA WRAPPER fake_fdw_1;
+ALTER EXTENSION citus DROP FOREIGN DATA WRAPPER fake_fdw_1;
+NOTICE:  Citus does not propagate adding/dropping member objects
+HINT:  You can add/drop the member objects on the workers as well.
 CREATE FOREIGN TABLE foreign_table (
   key int,
   value text

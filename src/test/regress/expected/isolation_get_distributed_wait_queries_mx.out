@@ -1,4 +1,4 @@
-Parsed test spec with 4 sessions
+Parsed test spec with 8 sessions
 
 starting permutation: s1-begin s1-update-ref-table-from-coordinator s2-start-session-level-connection s2-begin-on-worker s2-update-ref-table s3-select-distributed-waiting-queries s1-commit s2-commit-worker s2-stop-connection
 step s1-begin:
@@ -61,7 +61,7 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -157,7 +157,7 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -253,7 +253,7 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -349,7 +349,7 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -445,7 +445,7 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -539,7 +539,7 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -635,7 +635,7 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -729,7 +729,7 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -823,7 +823,7 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -919,7 +919,7 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -986,7 +986,7 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1018,7 +1018,7 @@ step s1-commit:
 	COMMIT;
 
 step s2-update-on-the-coordinator: <... completed>
-restore_isolation_tester_func
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1114,7 +1114,7 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1194,13 +1194,13 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 
-starting permutation: s1-begin s1-update-ref-table-from-coordinator s2-start-session-level-connection s2-update-ref-table s3-select-distributed-waiting-queries s1-commit s2-stop-connection
+starting permutation: s1-begin s1-update-ref-table-from-coordinator s2-start-session-level-connection s2-update-ref-table s3-select-distributed-waiting-queries s1-commit s2-stop-connection s5-begin s5-alter s6-select s3-select-distributed-waiting-queries s3-show-actual-gpids s5-rollback s8-begin s8-select s7-alter s3-select-distributed-waiting-queries s3-show-actual-gpids s8-rollback
 step s1-begin:
 	BEGIN;
 
@@ -1245,7 +1245,87 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+step s5-begin:
+	BEGIN;
+
+step s5-alter:
+	ALTER TABLE tt1 ADD COLUMN new_column INT;
+
+step s6-select:
+	SELECT user_id FROM tt1 ORDER BY user_id DESC LIMIT 1;
+ <waiting ...>
+step s3-select-distributed-waiting-queries: 
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+
+blocked_statement                                        |current_statement_in_blocking_process
+---------------------------------------------------------------------
+
+	SELECT user_id FROM tt1 ORDER BY user_id DESC LIMIT 1;
+|
+	ALTER TABLE tt1 ADD COLUMN new_column INT;
+
+(1 row)
+
+step s3-show-actual-gpids:
+	SELECT global_pid > 0 as gpid_exists, query FROM citus_stat_activity WHERE state = 'active' AND query IN (SELECT blocked_statement FROM citus_lock_waits UNION SELECT current_statement_in_blocking_process FROM citus_lock_waits) ORDER BY 1 DESC;
+
+gpid_exists|query
+---------------------------------------------------------------------
+f          |
+	SELECT user_id FROM tt1 ORDER BY user_id DESC LIMIT 1;
+
+(1 row)
+
+step s5-rollback:
+	ROLLBACK;
+
+step s6-select: <... completed>
+user_id
+---------------------------------------------------------------------
+      7
+(1 row)
+
+step s8-begin:
+	BEGIN;
+
+step s8-select:
+	SELECT user_id FROM tt1 ORDER BY user_id DESC LIMIT 1;
+
+user_id
+---------------------------------------------------------------------
+      7
+(1 row)
+
+step s7-alter:
+	ALTER TABLE tt1 ADD COLUMN new_column INT;
+ <waiting ...>
+step s3-select-distributed-waiting-queries: 
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+
+blocked_statement                            |current_statement_in_blocking_process
+---------------------------------------------------------------------
+
+	ALTER TABLE tt1 ADD COLUMN new_column INT;
+|
+	SELECT user_id FROM tt1 ORDER BY user_id DESC LIMIT 1;
+
+(1 row)
+
+step s3-show-actual-gpids:
+	SELECT global_pid > 0 as gpid_exists, query FROM citus_stat_activity WHERE state = 'active' AND query IN (SELECT blocked_statement FROM citus_lock_waits UNION SELECT current_statement_in_blocking_process FROM citus_lock_waits) ORDER BY 1 DESC;
+
+gpid_exists|query
+---------------------------------------------------------------------
+t          |
+	ALTER TABLE tt1 ADD COLUMN new_column INT;
+
+(1 row)
+
+step s8-rollback:
+	ROLLBACK;
+
+step s7-alter: <... completed>
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
