@@ -15,6 +15,11 @@
 #include "nodes/pg_list.h"
 #include "lib/ilist.h"
 
+/*
+ * Not to exceed the community-code global transaction
+ * identifier (GID) size (200)
+ */
+#define PREPARED_TRANSACTION_NAME_LEN 128
 
 /* forward declare, to avoid recursive includes */
 struct MultiConnection;
@@ -82,17 +87,20 @@ typedef struct RemoteTransaction
 	bool transactionRecovering;
 
 	/* 2PC transaction name currently associated with connection */
-	char preparedName[NAMEDATALEN];
+	char preparedName[PREPARED_TRANSACTION_NAME_LEN];
 
 	/* set when BEGIN is sent over the connection */
 	bool beginSent;
 } RemoteTransaction;
 
+extern bool EnableGlobalClock;
+
 
 /* utility functions for dealing with remote transactions */
 extern bool ParsePreparedTransactionName(char *preparedTransactionName, int32 *groupId,
 										 int *procId, uint64 *transactionNumber,
-										 uint32 *connectionNumber);
+										 uint32 *connectionNumber,
+										 uint64 *transactionClockValue);
 
 /* change an individual remote transaction's state */
 extern void StartRemoteTransactionBegin(struct MultiConnection *connection);

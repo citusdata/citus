@@ -28,6 +28,7 @@
  *  -  transactionNumber: A locally unique identifier assigned for the distributed
  *     transaction on the node that initiated the distributed transaction
  *  -  timestamp: The current timestamp of distributed transaction initiation
+ *  -  transactionClockValue: The cluster clock value of the transaction commit time
  *
  */
 typedef struct DistributedTransactionId
@@ -36,6 +37,7 @@ typedef struct DistributedTransactionId
 	bool transactionOriginator;
 	uint64 transactionNumber;
 	TimestampTz timestamp;
+	uint64 transactionClockValue;
 } DistributedTransactionId;
 
 

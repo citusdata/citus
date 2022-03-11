@@ -450,11 +450,13 @@ IsTransactionInProgress(HTAB *activeTransactionNumberSet, char *preparedTransact
 	uint32 connectionNumber = 0;
 	uint64 transactionNumber = 0;
 	bool isTransactionInProgress = false;
+	uint64 transactionClockValue = 0;
 
 	bool isValidName = ParsePreparedTransactionName(preparedTransactionName, &groupId,
 													&procId,
 													&transactionNumber,
-													&connectionNumber);
+													&connectionNumber,
+													&transactionClockValue);
 	if (isValidName)
 	{
 		hash_search(activeTransactionNumberSet, &transactionNumber, HASH_FIND,

@@ -21,6 +21,7 @@
 #include "access/xact.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/cluster_clock.h"
 #include "distributed/connection_management.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/function_call_delegation.h"
@@ -275,6 +276,9 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			if (CurrentCoordinatedTransactionState == COORD_TRANS_PREPARED)
 			{
+				/* Coordinator: Adjust local clock value to the global cluster value */
+				AdjustLocalClockToGlobal();
+
 				/* handles both already prepared and open transactions */
 				CoordinatedRemoteTransactionsCommit();
 			}
@@ -284,6 +288,11 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			{
 				ResetPlacementConnectionManagement();
 				AfterXactConnectionHandling(true);
+			}
+			else
+			{
+				/* Worker(s): Adjust local clock value to the global cluster value */
+				AdjustLocalClockToGlobal();
 			}
 
 			/*

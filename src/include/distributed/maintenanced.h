@@ -28,5 +28,6 @@ extern void InitializeMaintenanceDaemonBackend(void);
 extern bool LockCitusExtension(void);
 
 extern void CitusMaintenanceDaemonMain(Datum main_arg);
+extern bool IsMaintainanceDaemonProcess(void);
 
 #endif /* MAINTENANCED_H */

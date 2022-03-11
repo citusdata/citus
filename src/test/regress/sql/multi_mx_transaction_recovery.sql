@@ -19,7 +19,7 @@ SELECT count(*) FROM pg_dist_transaction;
 -- If the groupid of the worker changes this query will produce a
 -- different result and the prepared statement names should be adapted
 -- accordingly.
-SELECT * FROM pg_dist_local_group;
+SELECT groupid FROM pg_dist_local_group;
 
 BEGIN;
 CREATE TABLE table_should_abort (value int);

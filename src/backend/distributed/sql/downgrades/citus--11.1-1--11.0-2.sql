@@ -45,3 +45,30 @@ CREATE FUNCTION pg_catalog.worker_repartition_cleanup(bigint)
  LANGUAGE c
  STRICT
 AS 'MODULE_PATHNAME', $function$worker_repartition_cleanup$function$
+
+ALTER TABLE pg_catalog.pg_dist_local_group DROP COLUMN logical_clock_value;
+DROP FUNCTION pg_catalog.get_cluster_clock();
+DROP FUNCTION citus_internal.set_transaction_id_clock_value();
+
+DROP FUNCTION IF EXISTS pg_catalog.get_all_active_transactions();
+CREATE OR REPLACE FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_id int, OUT initiator_node_identifier int4,
+								  OUT worker_query BOOL, OUT transaction_number int8, OUT transaction_stamp timestamptz,
+                                                                  OUT global_pid int8)
+RETURNS SETOF RECORD
+LANGUAGE C STRICT AS 'MODULE_PATHNAME',
+$$get_all_active_transactions$$;
+
+COMMENT ON FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT datname text, OUT process_id int, OUT initiator_node_identifier int4,
+							   OUT worker_query BOOL, OUT transaction_number int8, OUT transaction_stamp timestamptz,
+                                                           OUT global_pid int8)
+IS 'returns transaction information for all Citus initiated transactions';
+
+DROP FUNCTION IF EXISTS pg_catalog.get_global_active_transactions();
+CREATE OR REPLACE FUNCTION pg_catalog.get_global_active_transactions(OUT datid oid, OUT process_id int, OUT initiator_node_identifier int4, OUT worker_query BOOL,
+								     OUT transaction_number int8, OUT transaction_stamp timestamptz, OUT global_pid int8)
+  RETURNS SETOF RECORD
+  LANGUAGE C STRICT
+  AS 'MODULE_PATHNAME', $$get_global_active_transactions$$;
+COMMENT ON FUNCTION pg_catalog.get_global_active_transactions(OUT datid oid, OUT process_id int, OUT initiator_node_identifier int4, OUT worker_query BOOL,
+							      OUT transaction_number int8, OUT transaction_stamp timestamptz, OUT global_pid int8)
+     IS 'returns transaction information for all Citus initiated transactions from each node of the cluster';

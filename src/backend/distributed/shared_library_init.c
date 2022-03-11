@@ -539,6 +539,7 @@ StartupCitusBackend(void)
 	InitializeBackendData();
 	RegisterConnectionCleanup();
 	AssignGlobalPID();
+	RegisterAndAdjustClockValue();
 }
 
 
@@ -912,6 +913,17 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&EnableFastPathRouterPlanner,
 		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_global_clock",
+		gettext_noop("Enables using citus_get_cluster_clock() for the cluster-wide "
+					 "timestamp for transactions"),
+		NULL,
+		&EnableGlobalClock,
+		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);

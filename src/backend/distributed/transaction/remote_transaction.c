@@ -17,6 +17,7 @@
 #include "access/xact.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/cluster_clock.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
@@ -31,7 +32,7 @@
 #include "utils/hsearch.h"
 
 
-#define PREPARED_TRANSACTION_NAME_FORMAT "citus_%u_%u_"UINT64_FORMAT "_%u"
+#define PREPARED_TRANSACTION_NAME_FORMAT "citus_%u_%u_"UINT64_FORMAT "_%u_"UINT64_FORMAT
 
 
 static char * AssignDistributedTransactionIdCommand(void);
@@ -50,6 +51,7 @@ static void FinishRemoteTransactionSavepointRollback(MultiConnection *connection
 
 static void Assign2PCIdentifier(MultiConnection *connection);
 
+bool EnableGlobalClock = false;
 
 /*
  * StartRemoteTransactionBegin initiates beginning the remote transaction in
@@ -793,14 +795,15 @@ CoordinatedRemoteTransactionsPrepare(void)
 {
 	dlist_iter iter;
 	List *connectionList = NIL;
+	MultiConnection *connection = NULL;
 
 	/* issue PREPARE TRANSACTION; to all relevant remote nodes */
 
 	/* asynchronously send PREPARE */
 	dlist_foreach(iter, &InProgressTransactions)
 	{
-		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
-													  iter.cur);
+		connection = dlist_container(MultiConnection, transactionNode,
+									 iter.cur);
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
 		Assert(transaction->transactionState != REMOTE_TRANS_NOT_STARTED);
@@ -818,9 +821,22 @@ CoordinatedRemoteTransactionsPrepare(void)
 		 */
 		if (ConnectionModifiedPlacement(connection))
 		{
-			StartRemoteTransactionPrepare(connection);
 			connectionList = lappend(connectionList, connection);
 		}
+	}
+
+	/*
+	 * If enabled, get the transaction clock value from all nodes and use the
+	 * highest value.
+	 */
+	if (EnableGlobalClock)
+	{
+		SetTransactionClusterClock(connectionList);
+	}
+
+	foreach_ptr(connection, connectionList)
+	{
+		StartRemoteTransactionPrepare(connection);
 	}
 
 	bool raiseInterrupts = true;
@@ -829,8 +845,8 @@ CoordinatedRemoteTransactionsPrepare(void)
 	/* Wait for result */
 	dlist_foreach(iter, &InProgressTransactions)
 	{
-		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
-													  iter.cur);
+		connection = dlist_container(MultiConnection, transactionNode,
+									 iter.cur);
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
 		if (transaction->transactionState != REMOTE_TRANS_PREPARING)
@@ -1321,7 +1337,7 @@ CheckRemoteTransactionsHealth(void)
  *
  * citus_<source group>_<pid>_<distributed transaction number>_<connection number>
  *
- * (at most 5+1+10+1+10+1+20+1+10 = 59 characters, while limit is 64)
+ * (at most 5+1+10+1+10+1+20+1+10+1+20 = 80 characters, while limit is 128)
  *
  * The source group is used to distinguish 2PCs started by different
  * coordinators. A coordinator will only attempt to recover its own 2PCs.
@@ -1335,6 +1351,9 @@ CheckRemoteTransactionsHealth(void)
  * The connection number is used to distinguish connections made to a node
  * within the same transaction.
  *
+ * The transactionClockValue can be used to track all the changes made
+ * within the same transaction.
+ *
  */
 static void
 Assign2PCIdentifier(MultiConnection *connection)
@@ -1345,10 +1364,14 @@ Assign2PCIdentifier(MultiConnection *connection)
 	/* transaction identifier that is unique across processes */
 	uint64 transactionNumber = CurrentDistributedTransactionNumber();
 
+	/* Cluster clock value */
+	uint64 transactionClockValue = GetTransactionIdClockValue();
+
 	/* print all numbers as unsigned to guarantee no minus symbols appear in the name */
-	SafeSnprintf(connection->remoteTransaction.preparedName, NAMEDATALEN,
+	SafeSnprintf(connection->remoteTransaction.preparedName,
+				 PREPARED_TRANSACTION_NAME_LEN,
 				 PREPARED_TRANSACTION_NAME_FORMAT, GetLocalGroupId(), MyProcPid,
-				 transactionNumber, connectionNumber++);
+				 transactionNumber, connectionNumber++, transactionClockValue);
 }
 
 
@@ -1362,7 +1385,8 @@ bool
 ParsePreparedTransactionName(char *preparedTransactionName,
 							 int32 *groupId, int *procId,
 							 uint64 *transactionNumber,
-							 uint32 *connectionNumber)
+							 uint32 *connectionNumber,
+							 uint64 *transactionClockValue)
 {
 	char *currentCharPointer = preparedTransactionName;
 
@@ -1427,6 +1451,21 @@ ParsePreparedTransactionName(char *preparedTransactionName,
 	*connectionNumber = strtoul(currentCharPointer, NULL, 10);
 	if ((*connectionNumber == 0 && errno == EINVAL) ||
 		(*connectionNumber == UINT_MAX && errno == ERANGE))
+	{
+		return false;
+	}
+
+	currentCharPointer = strchr(currentCharPointer, '_');
+	if (currentCharPointer == NULL)
+	{
+		return false;
+	}
+
+	/* step ahead of the current '_' character */
+	++currentCharPointer;
+
+	*transactionClockValue = pg_strtouint64(currentCharPointer, NULL, 10);
+	if ((errno != 0) || (*transactionClockValue == ULLONG_MAX && errno == ERANGE))
 	{
 		return false;
 	}

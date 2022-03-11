@@ -26,6 +26,7 @@
 #include "datatype/timestamp.h"
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
+#include "distributed/cluster_clock.h"
 #include "distributed/listutils.h"
 #include "distributed/lock_graph.h"
 #include "distributed/metadata_cache.h"
@@ -47,7 +48,7 @@
 
 
 #define GET_ACTIVE_TRANSACTION_QUERY "SELECT * FROM get_all_active_transactions();"
-#define ACTIVE_TRANSACTION_COLUMN_COUNT 7
+#define ACTIVE_TRANSACTION_COLUMN_COUNT 8
 #define GLOBAL_PID_NODE_ID_MULTIPLIER 10000000000
 
 /*
@@ -74,6 +75,10 @@ typedef struct BackendManagementShmemData
 	 * or such, and also exludes internal connections between nodes.
 	 */
 	pg_atomic_uint32 externalClientBackendCounter;
+
+	/* Logical clock value of this cluster */
+	slock_t clockMutex;
+	uint64 clusterClockValue;
 
 	BackendData backends[FLEXIBLE_ARRAY_MEMBER];
 } BackendManagementShmemData;
@@ -317,6 +322,7 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 			values[4] = ParseIntField(result, rowIndex, 4);
 			values[5] = ParseTimestampTzField(result, rowIndex, 5);
 			values[6] = ParseIntField(result, rowIndex, 6);
+			values[7] = ParseIntField(result, rowIndex, 7);
 
 			tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
 		}
@@ -409,6 +415,8 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 
 		transactionNumber = currentBackend->transactionId.transactionNumber;
 		TimestampTz transactionIdTimestamp = currentBackend->transactionId.timestamp;
+		uint64 transactionClockValue =
+			currentBackend->transactionId.transactionClockValue;
 
 		SpinLockRelease(&currentBackend->mutex);
 
@@ -437,6 +445,7 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 			values[4] = UInt64GetDatum(transactionNumber);
 			values[5] = TimestampTzGetDatum(transactionIdTimestamp);
 			values[6] = UInt64GetDatum(currentBackend->globalPID);
+			values[7] = UInt64GetDatum(transactionClockValue);
 		}
 		else
 		{
@@ -447,6 +456,7 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 			isNulls[4] = true;
 			isNulls[5] = true;
 			values[6] = UInt64GetDatum(currentBackend->globalPID);
+			values[7] = UInt64GetDatum(transactionClockValue);
 		}
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
@@ -552,6 +562,10 @@ BackendManagementShmemInit(void)
 
 		/* there are no active backends yet, so start with zero */
 		pg_atomic_init_u32(&backendManagementShmemData->externalClientBackendCounter, 0);
+
+		/* A zero value indicates that the clock is not adjusted yet */
+		backendManagementShmemData->clusterClockValue = 0;
+		SpinLockInit(&backendManagementShmemData->clockMutex);
 
 		/*
 		 * We need to init per backend's spinlock before any backend
@@ -1277,4 +1291,184 @@ void
 DecrementExternalClientBackendCounter(void)
 {
 	pg_atomic_sub_fetch_u32(&backendManagementShmemData->externalClientBackendCounter, 1);
+}
+
+
+/*
+ * GetTransactionIdClockValue returns the clock value of the current
+ * distributed transaction. The caller must make sure a distributed
+ * transaction is in progress.
+ */
+uint64
+GetTransactionIdClockValue(void)
+{
+	Assert(MyBackendData != NULL);
+
+	return MyBackendData->transactionId.transactionClockValue;
+}
+
+
+/*
+ * SetTransactionIdClockValue is used to set the transaction clock value
+ * in the current distributed transaction id.
+ */
+void
+SetTransactionIdClockValue(uint64 transactionClockValue)
+{
+	if (!MyBackendData)
+	{
+		return;
+	}
+
+	SpinLockAcquire(&MyBackendData->mutex);
+	MyBackendData->transactionId.transactionClockValue = transactionClockValue;
+	SpinLockRelease(&MyBackendData->mutex);
+
+	ereport(DEBUG1, (errmsg("Set transaction clock %lu on node(%d)",
+							transactionClockValue, GetLocalNodeId())));
+}
+
+
+/*
+ * GetCurrentClusterClockValue returns the current logical clock value.
+ */
+uint64
+GetCurrentClusterClockValue(void)
+{
+	SpinLockAcquire(&backendManagementShmemData->clockMutex);
+	uint64 epochValue = backendManagementShmemData->clusterClockValue;
+	SpinLockRelease(&backendManagementShmemData->clockMutex);
+
+	return epochValue;
+}
+
+
+/*
+ * GetNextClusterClock implements the internal guts of the UDF citus_get_cluster_clock()
+ */
+uint64
+GetNextClusterClock(void)
+{
+	uint64 epochValue = GetEpochTimeMs();
+
+	SpinLockAcquire(&backendManagementShmemData->clockMutex);
+
+	/* Check if the clock is adjusted after the boot */
+	if (backendManagementShmemData->clusterClockValue == 0)
+	{
+		SpinLockRelease(&backendManagementShmemData->clockMutex);
+		ereport(ERROR, (errmsg("backend never adjusted the clock, please retry")));
+	}
+
+	uint64 nextClusterClockValue = backendManagementShmemData->clusterClockValue + 1;
+
+	if (epochValue > nextClusterClockValue)
+	{
+		nextClusterClockValue = epochValue;
+	}
+
+	backendManagementShmemData->clusterClockValue = nextClusterClockValue;
+
+	SpinLockRelease(&backendManagementShmemData->clockMutex);
+
+	return nextClusterClockValue;
+}
+
+
+/*
+ * AdjustLocalClockToGlobal sets the node's local logical cluster clock value
+ * to the distributed transaction clock value, which is the maximum clock value
+ * of all the participating nodes.
+ */
+void
+AdjustLocalClockToGlobal(void)
+{
+	if (!EnableGlobalClock || !MyBackendData)
+	{
+		return;
+	}
+
+	uint64 transactionClockValue = MyBackendData->transactionId.transactionClockValue;
+
+	/* It's ok to check unprotected as the real assignment is done under protection */
+	if (transactionClockValue <= backendManagementShmemData->clusterClockValue)
+	{
+		/*
+		 * Clock moved and greater than the rest of the nodes, there is
+		 * no need to adjust the clock.
+		 */
+		return;
+	}
+
+	SpinLockAcquire(&backendManagementShmemData->clockMutex);
+
+	backendManagementShmemData->clusterClockValue =
+		MyBackendData->transactionId.transactionClockValue;
+
+	SpinLockRelease(&backendManagementShmemData->clockMutex);
+}
+
+
+/*
+ * RegisterAndAdjustClockValue registers a shared-memory exit callback, which
+ * will persist the current clock value from shared memory to catalog. Calls
+ * routine that initializes and adjusts the clock if needed.
+ */
+void
+RegisterAndAdjustClockValue(void)
+{
+	static bool registeredSaveClock = false;
+
+	/* Avoid repeated initialization */
+	if (registeredSaveClock == true)
+	{
+		return;
+	}
+
+	before_shmem_exit(PersistLocalClockValue, (Datum) 0);
+	AdjustAndInitializeClusterClock();
+	registeredSaveClock = true;
+}
+
+
+/*
+ * AdjustAndInitializeClusterClock compares the current epoch value with
+ * the persisted clock value to see if the clock drifted backwards, and
+ * adjusts the logical clock accordingly.
+ * Ideally, this routine should be called only _once_ at the time of boot.
+ */
+void
+AdjustAndInitializeClusterClock(void)
+{
+	uint64 epochPersistedValue;
+
+	if (!GetLocalClockValue(&epochPersistedValue))
+	{
+		/* couldn't get the value from catalog, might happened
+		 * during pg upgrade */
+		return;
+	}
+
+	/* Ensure clock never drifts back */
+	SpinLockAcquire(&backendManagementShmemData->clockMutex);
+
+	/* Check if the clock was already set after the boot */
+	if (backendManagementShmemData->clusterClockValue > 0)
+	{
+		/* Already initialized */
+		SpinLockRelease(&backendManagementShmemData->clockMutex);
+		return;
+	}
+
+	Assert(backendManagementShmemData->clusterClockValue == 0);
+	backendManagementShmemData->clusterClockValue = epochPersistedValue;
+
+	SpinLockRelease(&backendManagementShmemData->clockMutex);
+
+	uint64 epochValue = GetEpochTimeMs();
+	if (epochPersistedValue > epochValue)
+	{
+		ereport(LOG, (errmsg("Drift in the epoch clock, adjusted "
+							 "to persisted old value:(%ld)", epochPersistedValue)));
+	}
 }

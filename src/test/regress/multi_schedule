@@ -79,7 +79,7 @@ test: multi_average_expression multi_working_columns multi_having_pushdown havin
 test: multi_array_agg multi_limit_clause multi_orderby_limit_pushdown
 test: multi_jsonb_agg multi_jsonb_object_agg multi_json_agg multi_json_object_agg bool_agg ch_bench_having chbenchmark_all_queries expression_reference_join anonymous_columns
 test: ch_bench_subquery_repartition
-test: multi_agg_type_conversion multi_count_type_conversion recursive_relation_planning_restriction_pushdown
+test: multi_agg_type_conversion multi_count_type_conversion recursive_relation_planning_restriction_pushdown clock
 test: multi_partition_pruning single_hash_repartition_join unsupported_lateral_subqueries
 test: multi_join_pruning multi_hash_pruning intermediate_result_pruning
 test: multi_null_minmax_value_pruning cursors
@@ -95,7 +95,6 @@ test: issue_5248 issue_5099
 test: object_propagation_debug
 test: undistribute_table
 test: run_command_on_all_nodes
-
 
 # ---------
 # test that no tests leaked intermediate results. This should always be last

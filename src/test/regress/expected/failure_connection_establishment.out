@@ -226,7 +226,7 @@ SELECT count(*) FROM single_replicatated WHERE key = 100;
 RESET client_min_messages;
 -- verify get_global_active_transactions works when a timeout happens on a connection
 SELECT * FROM get_global_active_transactions() WHERE transaction_number != 0;
- datid | process_id | initiator_node_identifier | worker_query | transaction_number | transaction_stamp | global_pid
+ datid | process_id | initiator_node_identifier | worker_query | transaction_number | transaction_stamp | global_pid | transactionclock
 ---------------------------------------------------------------------
 (0 rows)
 

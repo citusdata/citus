@@ -118,7 +118,7 @@ SELECT nodeid, hasmetadata FROM pg_dist_node WHERE nodename='localhost' AND node
 
 -- Check that the metadata has been copied to the worker
 \c - - - :worker_1_port
-SELECT * FROM pg_dist_local_group;
+SELECT groupid FROM pg_dist_local_group;
 SELECT * FROM pg_dist_node ORDER BY nodeid;
 SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
 SELECT * FROM pg_dist_shard  WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY shardid;
@@ -168,7 +168,7 @@ RESET citus.shard_replication_factor;
 SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 \c - - - :worker_1_port
-SELECT * FROM pg_dist_local_group;
+SELECT groupid FROM pg_dist_local_group;
 SELECT * FROM pg_dist_node ORDER BY nodeid;
 SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
 SELECT * FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY shardid;

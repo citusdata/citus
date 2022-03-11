@@ -33,6 +33,7 @@
 #include "libpq/pqsignal.h"
 #include "catalog/namespace.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/cluster_clock.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/maintenanced.h"
 #include "distributed/coordinator_protocol.h"
@@ -622,6 +623,13 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			timeout = Min(timeout, deadlockTimeout);
 		}
 
+		/* Periodically persist the logical clock value */
+		if (!RecoveryInProgress())
+		{
+			InvalidateMetadataSystemCache();
+			PersistLocalClockValue(0, (Datum) 0);
+		}
+
 		if (!RecoveryInProgress() && DeferShardDeleteInterval > 0 &&
 			TimestampDifferenceExceeds(lastShardCleanTime, GetCurrentTimestamp(),
 									   DeferShardDeleteInterval))
@@ -967,4 +975,15 @@ MetadataSyncTriggeredCheckAndReset(MaintenanceDaemonDBData *dbData)
 	LWLockRelease(&MaintenanceDaemonControl->lock);
 
 	return metadataSyncTriggered;
+}
+
+
+/*
+ * IsMaintainanceDaemonProcess returns true if the process is
+ * maintenance daemon, false for all other backends.
+ */
+bool
+IsMaintainanceDaemonProcess(void)
+{
+	return IsMaintenanceDaemon;
 }

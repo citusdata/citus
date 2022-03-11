@@ -62,6 +62,7 @@ ORDER BY 1;
  function citus_finalize_upgrade_to_citus11(boolean)
  function citus_finish_pg_upgrade()
  function citus_get_active_worker_nodes()
+ function citus_get_cluster_clock()
  function citus_internal.columnar_ensure_am_depends_catalog()
  function citus_internal.downgrade_columnar_storage(regclass)
  function citus_internal.find_groupid_for_node(text,integer)
@@ -71,6 +72,7 @@ ORDER BY 1;
  function citus_internal.refresh_isolation_tester_prepared_statement()
  function citus_internal.replace_isolation_tester_func()
  function citus_internal.restore_isolation_tester_func()
+ function citus_internal.set_transaction_id_clock_value(bigint)
  function citus_internal.upgrade_columnar_storage(regclass)
  function citus_internal_add_colocation_metadata(integer,integer,integer,regtype,oid)
  function citus_internal_add_object_metadata(text,text[],text[],integer,integer,boolean)
@@ -275,5 +277,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(259 rows)
+(261 rows)
 
