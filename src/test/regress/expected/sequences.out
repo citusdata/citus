@@ -6,7 +6,8 @@ select count(*) from pg_sequence where seqrelid = 'renamed_seq'::regclass;
      1
 (1 row)
 
-INSERT INTO seq_test_0 VALUES (1,2);
+TRUNCATE seq_test_0;
+INSERT INTO seq_test_0 VALUES (1);
 -- verify that sequence works properly
 select max(z)<nextval('renamed_seq') as check_sanity from seq_test_0 ;
  check_sanity
@@ -14,3 +15,42 @@ select max(z)<nextval('renamed_seq') as check_sanity from seq_test_0 ;
  t
 (1 row)
 
+select max(y)<nextval('seq_1') as check_sanity from seq_test_0 ;
+ check_sanity
+---------------------------------------------------------------------
+ t
+(1 row)
+
+TRUNCATE seq_test_0;
+BEGIN;
+    INSERT INTO seq_test_0 VALUES (199999, DEFAULT, DEFAULT);
+    SELECT 1 from (select setval('renamed_seq', max(z)) FROM seq_test_0) as setvalue;
+ ?column?
+----------
+        1
+(1 row)
+
+    SELECT currval('renamed_seq') = max(z) FROM seq_test_0;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+COMMIT;
+TRUNCATE seq_test_0;
+BEGIN;
+    INSERT INTO seq_test_0 VALUES (2);
+    -- verify that sequence works properly
+     select max(z)<nextval('renamed_seq') as check_sanity from seq_test_0 ;
+  check_sanity
+---------------------------------------------------------------------
+  t
+ (1 row)
+
+    select max(y)<nextval('seq_1') as check_sanity from seq_test_0 ;
+ check_sanity
+---------------------------------------------------------------------
+ t
+(1 row)
+
+COMMIT;
