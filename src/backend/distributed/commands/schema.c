@@ -420,6 +420,7 @@ GetGrantOnSchemaCommandsFromCreateSchemaStmt(Node *node)
 
 		GrantStmt *grantStmt = castNode(GrantStmt, element);
 
+		/* we only propagate GRANT ON SCHEMA in community */
 		if (grantStmt->objtype == OBJECT_SCHEMA)
 		{
 			commands = lappend(commands, DeparseGrantOnSchemaStmt(element));
