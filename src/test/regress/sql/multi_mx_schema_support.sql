@@ -351,7 +351,9 @@ CREATE SCHEMA localschema;
 -- should error out
 SELECT run_command_on_workers($$DROP SCHEMA localschema;$$);
 
+SET client_min_messages TO ERROR;
 CREATE ROLE schema_owner WITH LOGIN;
+RESET client_min_messages;
 SELECT run_command_on_workers($$CREATE ROLE schema_owner WITH LOGIN;$$);
 RESET citus.enable_ddl_propagation;
 -- create schema with the name of the owner
@@ -361,5 +363,32 @@ SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_namespace WHERE nspname=
 
 DROP SCHEMA schema_owner;
 
+-- test CREATE SCHEMA .. GRANT ON SCHEMA commands
+-- first create the role to be granted
+SET citus.enable_ddl_propagation TO OFF;
+SET client_min_messages TO ERROR;
+CREATE ROLE role_to_be_granted WITH LOGIN;
+RESET client_min_messages;
+SELECT run_command_on_workers($$CREATE ROLE role_to_be_granted WITH LOGIN;$$);
+RESET citus.enable_ddl_propagation;
+
+CREATE SCHEMA old_schema;
+CREATE SCHEMA new_schema
+    CREATE TABLE t1 (a int)
+    GRANT ALL ON SCHEMA old_schema TO role_to_be_granted
+    GRANT ALL ON SCHEMA new_schema TO role_to_be_granted;
+
+-- the role should be granted on both the new and the old schema
+SELECT nspacl FROM pg_namespace WHERE nspname='old_schema' OR nspname='new_schema';
+-- verify on workers
+SELECT run_command_on_workers($$SELECT nspacl FROM pg_namespace WHERE nspname='new_schema';$$);
+SELECT run_command_on_workers($$SELECT nspacl FROM pg_namespace WHERE nspname='old_schema';$$);
+
+-- verify the table t1 is created as a local pg table
+-- this might be changed after some improvements on use_citus_managed_tables
+-- if so, please verify that t1 is added to metadata
+SELECT COUNT(*)=0 FROM pg_dist_partition WHERE logicalrelid='new_schema.t1'::regclass;
+
+DROP SCHEMA old_schema, new_schema CASCADE;
 DROP SCHEMA mx_old_schema CASCADE;
 DROP SCHEMA mx_new_schema CASCADE;

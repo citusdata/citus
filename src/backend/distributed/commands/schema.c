@@ -399,6 +399,11 @@ ShouldPropagateCreateSchemaStmt()
 }
 
 
+/*
+ * GetGrantOnSchemaCommandsFromCreateSchemaStmt takes a CreateSchemaStmt and returns the
+ * list of deparsed queries of the inner GRANT ON SCHEMA commands of the given statement.
+ * Ignores commands other than GRANT ON SCHEMA statements.
+ */
 static List *
 GetGrantOnSchemaCommandsFromCreateSchemaStmt(Node *node)
 {
@@ -408,7 +413,7 @@ GetGrantOnSchemaCommandsFromCreateSchemaStmt(Node *node)
 	Node *element = NULL;
 	foreach_ptr(element, stmt->schemaElts)
 	{
-		if (nodeTag(element) != T_GrantStmt)
+		if (!IsA(element, GrantStmt))
 		{
 			continue;
 		}
