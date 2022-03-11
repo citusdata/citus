@@ -290,7 +290,7 @@ step s3-compare-snapshot:
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
-f
+t
 (1 row)
 
 step s2-drop-schema:
