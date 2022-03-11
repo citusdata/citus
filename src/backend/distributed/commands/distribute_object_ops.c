@@ -538,7 +538,7 @@ static DistributeObjectOps TextSearchConfig_Comment = {
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchConfig_Define = {
-	.deparse = DeparseCreateTextSearchStmt,
+	.deparse = DeparseCreateTextSearchConfigurationStmt,
 	.qualify = NULL,
 	.preprocess = NULL,
 	.postprocess = PostprocessCreateTextSearchConfigurationStmt,
@@ -559,6 +559,62 @@ static DistributeObjectOps TextSearchConfig_Rename = {
 	.preprocess = PreprocessRenameTextSearchConfigurationStmt,
 	.postprocess = NULL,
 	.address = RenameTextSearchConfigurationStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps TextSearchDict_Alter = {
+	.deparse = DeparseAlterTextSearchDictionaryStmt,
+	.qualify = QualifyAlterTextSearchDictionaryStmt,
+	.preprocess = PreprocessAlterTextSearchDictionaryStmt,
+	.postprocess = NULL,
+	.address = AlterTextSearchDictionaryStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps TextSearchDict_AlterObjectSchema = {
+	.deparse = DeparseAlterTextSearchDictionarySchemaStmt,
+	.qualify = QualifyAlterTextSearchDictionarySchemaStmt,
+	.preprocess = PreprocessAlterTextSearchDictionarySchemaStmt,
+	.postprocess = PostprocessAlterTextSearchDictionarySchemaStmt,
+	.address = AlterTextSearchDictionarySchemaStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps TextSearchDict_AlterOwner = {
+	.deparse = DeparseAlterTextSearchDictionaryOwnerStmt,
+	.qualify = QualifyAlterTextSearchDictionaryOwnerStmt,
+	.preprocess = PreprocessAlterTextSearchDictionaryOwnerStmt,
+	.postprocess = PostprocessAlterTextSearchDictionaryOwnerStmt,
+	.address = AlterTextSearchDictOwnerObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps TextSearchDict_Comment = {
+	.deparse = DeparseTextSearchDictionaryCommentStmt,
+	.qualify = QualifyTextSearchDictionaryCommentStmt,
+	.preprocess = PreprocessTextSearchDictionaryCommentStmt,
+	.postprocess = NULL,
+	.address = TextSearchDictCommentObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps TextSearchDict_Define = {
+	.deparse = DeparseCreateTextSearchDictionaryStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessCreateTextSearchDictionaryStmt,
+	.address = CreateTextSearchDictObjectAddress,
+	.markDistributed = true,
+};
+static DistributeObjectOps TextSearchDict_Drop = {
+	.deparse = DeparseDropTextSearchDictionaryStmt,
+	.qualify = QualifyDropTextSearchDictionaryStmt,
+	.preprocess = PreprocessDropTextSearchDictionaryStmt,
+	.postprocess = NULL,
+	.address = NULL,
+	.markDistributed = false,
+};
+static DistributeObjectOps TextSearchDict_Rename = {
+	.deparse = DeparseRenameTextSearchDictionaryStmt,
+	.qualify = QualifyRenameTextSearchDictionaryStmt,
+	.preprocess = PreprocessRenameTextSearchDictionaryStmt,
+	.postprocess = NULL,
+	.address = RenameTextSearchDictionaryStmtObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps Trigger_AlterObjectDepends = {
@@ -872,6 +928,11 @@ GetDistributeObjectOps(Node *node)
 					return &TextSearchConfig_AlterObjectSchema;
 				}
 
+				case OBJECT_TSDICTIONARY:
+				{
+					return &TextSearchDict_AlterObjectSchema;
+				}
+
 				case OBJECT_TYPE:
 				{
 					return &Type_AlterObjectSchema;
@@ -932,6 +993,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_TSCONFIGURATION:
 				{
 					return &TextSearchConfig_AlterOwner;
+				}
+
+				case OBJECT_TSDICTIONARY:
+				{
+					return &TextSearchDict_AlterOwner;
 				}
 
 				case OBJECT_TYPE:
@@ -1020,6 +1086,11 @@ GetDistributeObjectOps(Node *node)
 			return &TextSearchConfig_Alter;
 		}
 
+		case T_AlterTSDictionaryStmt:
+		{
+			return &TextSearchDict_Alter;
+		}
+
 		case T_ClusterStmt:
 		{
 			return &Any_Cluster;
@@ -1033,6 +1104,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_TSCONFIGURATION:
 				{
 					return &TextSearchConfig_Comment;
+				}
+
+				case OBJECT_TSDICTIONARY:
+				{
+					return &TextSearchDict_Comment;
 				}
 
 				default:
@@ -1105,6 +1181,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_TSCONFIGURATION:
 				{
 					return &TextSearchConfig_Define;
+				}
+
+				case OBJECT_TSDICTIONARY:
+				{
+					return &TextSearchDict_Define;
 				}
 
 				default:
@@ -1187,6 +1268,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_TSCONFIGURATION:
 				{
 					return &TextSearchConfig_Drop;
+				}
+
+				case OBJECT_TSDICTIONARY:
+				{
+					return &TextSearchDict_Drop;
 				}
 
 				case OBJECT_TYPE:
@@ -1291,6 +1377,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_TSCONFIGURATION:
 				{
 					return &TextSearchConfig_Rename;
+				}
+
+				case OBJECT_TSDICTIONARY:
+				{
+					return &TextSearchDict_Rename;
 				}
 
 				case OBJECT_TYPE:

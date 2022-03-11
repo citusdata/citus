@@ -411,6 +411,7 @@ ErrorIfCurrentUserCanNotDistributeObject(ObjectType type, ObjectAddress *addr,
 		case OBJECT_PROCEDURE:
 		case OBJECT_AGGREGATE:
 		case OBJECT_TSCONFIGURATION:
+		case OBJECT_TSDICTIONARY:
 		case OBJECT_TYPE:
 		case OBJECT_FOREIGN_SERVER:
 		case OBJECT_SEQUENCE:

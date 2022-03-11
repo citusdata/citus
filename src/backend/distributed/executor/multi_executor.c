@@ -788,6 +788,11 @@ GetObjectTypeString(ObjectType objType)
 			return "text search configuration";
 		}
 
+		case OBJECT_TSDICTIONARY:
+		{
+			return "text search dictionary";
+		}
+
 		case OBJECT_TYPE:
 		{
 			return "type";

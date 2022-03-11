@@ -1,3 +1,11 @@
+-- print whether we're using version > 12 to make version-specific tests clear
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 12 AS version_above_twelve;
+ version_above_twelve
+---------------------------------------------------------------------
+ f
+(1 row)
+
 CREATE SCHEMA "extension'test";
 -- use  a schema name with escape character
 SET search_path TO "extension'test";
@@ -184,8 +192,6 @@ SELECT create_reference_table('ref_table_2');
 CREATE FUNCTION dintdict_init(internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
 CREATE FUNCTION dintdict_lexize(internal, internal, internal, internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
 CREATE TEXT SEARCH TEMPLATE intdict_template (LEXIZE = dintdict_lexize, INIT   = dintdict_init );
-CREATE TEXT SEARCH DICTIONARY intdict (TEMPLATE = intdict_template);
-COMMENT ON TEXT SEARCH DICTIONARY intdict IS 'dictionary for integers';
 SELECT run_command_on_workers($$
 CREATE TEXT SEARCH TEMPLATE intdict_template (LEXIZE = dintdict_lexize, INIT   = dintdict_init );
 $$);
@@ -194,22 +200,8 @@ $$);
  (localhost,57637,t,"CREATE TEXT SEARCH TEMPLATE")
 (1 row)
 
-SELECT run_command_on_workers($$
 CREATE TEXT SEARCH DICTIONARY intdict (TEMPLATE = intdict_template);
-$$);
-               run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE TEXT SEARCH DICTIONARY")
-(1 row)
-
-SELECT run_command_on_workers($$
 COMMENT ON TEXT SEARCH DICTIONARY intdict IS 'dictionary for integers';
-$$);
-   run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,COMMENT)
-(1 row)
-
 CREATE EXTENSION dict_int FROM unpackaged;
 SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHERE extname = 'dict_int'$$);
  run_command_on_workers
@@ -223,7 +215,27 @@ SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extnam
  (localhost,57637,t,1.0)
 (1 row)
 
--- and add the other node
+-- adding the second node will fail as the text search template needs to be created manually
+SELECT 1 from master_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- create the text search template manually on the worker
+\c - - - :worker_2_port
+SET citus.enable_metadata_sync TO false;
+CREATE FUNCTION dintdict_init(internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
+ERROR:  function "dintdict_init" already exists with same argument types
+CREATE FUNCTION dintdict_lexize(internal, internal, internal, internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
+ERROR:  function "dintdict_lexize" already exists with same argument types
+CREATE TEXT SEARCH TEMPLATE intdict_template (LEXIZE = dintdict_lexize, INIT   = dintdict_init );
+ERROR:  duplicate key value violates unique constraint "pg_ts_template_tmplname_index"
+DETAIL:  Key (tmplname, tmplnamespace)=(intdict_template, 2200) already exists.
+RESET citus.enable_metadata_sync;
+\c - - - :master_port
+SET client_min_messages TO WARNING;
+-- add the second node now
 SELECT 1 from master_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
