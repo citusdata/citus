@@ -44,7 +44,7 @@ static ObjectAddress GetObjectAddressBySchemaName(char *schemaName, bool missing
 static List * FilterDistributedSchemas(List *schemas);
 static bool SchemaHasDistributedTableWithFKey(char *schemaName);
 static bool ShouldPropagateCreateSchemaStmt(void);
-static List * GetGrantOnSchemaCommandsFromCreateSchemaStmt(Node *node);
+static List * GetGrantCommandsFromCreateSchemaStmt(Node *node);
 
 
 /*
@@ -72,7 +72,7 @@ PreprocessCreateSchemaStmt(Node *node, const char *queryString,
 
 	commands = lappend(commands, (void *) sql);
 
-	commands = list_concat(commands, GetGrantOnSchemaCommandsFromCreateSchemaStmt(node));
+	commands = list_concat(commands, GetGrantCommandsFromCreateSchemaStmt(node));
 
 	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
 
@@ -400,12 +400,12 @@ ShouldPropagateCreateSchemaStmt()
 
 
 /*
- * GetGrantOnSchemaCommandsFromCreateSchemaStmt takes a CreateSchemaStmt and returns the
- * list of deparsed queries of the inner GRANT ON SCHEMA commands of the given statement.
- * Ignores commands other than GRANT ON SCHEMA statements.
+ * GetGrantCommandsFromCreateSchemaStmt takes a CreateSchemaStmt and returns the
+ * list of deparsed queries of the inner GRANT commands of the given statement.
+ * Ignores commands other than GRANT statements.
  */
 static List *
-GetGrantOnSchemaCommandsFromCreateSchemaStmt(Node *node)
+GetGrantCommandsFromCreateSchemaStmt(Node *node)
 {
 	List *commands = NIL;
 	CreateSchemaStmt *stmt = castNode(CreateSchemaStmt, node);
@@ -420,10 +420,19 @@ GetGrantOnSchemaCommandsFromCreateSchemaStmt(Node *node)
 
 		GrantStmt *grantStmt = castNode(GrantStmt, element);
 
-		/* we only propagate GRANT ON SCHEMA in community */
-		if (grantStmt->objtype == OBJECT_SCHEMA)
+		switch (grantStmt->objtype)
 		{
-			commands = lappend(commands, DeparseGrantOnSchemaStmt(element));
+			/* we only propagate GRANT ON SCHEMA in community */
+			case OBJECT_SCHEMA:
+			{
+				commands = lappend(commands, DeparseGrantOnSchemaStmt(element));
+				break;
+			}
+
+			default:
+			{
+				break;
+			}
 		}
 	}
 
