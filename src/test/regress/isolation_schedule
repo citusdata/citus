@@ -61,6 +61,7 @@ test: isolation_ddl_vs_all
 test: isolation_get_all_active_transactions
 test: isolation_validate_vs_insert
 test: isolation_insert_select_conflict
+test: isolation_ref2ref_foreign_keys
 test: shared_connection_waits
 test: isolation_cancellation
 test: isolation_max_client_connections
@@ -96,7 +97,4 @@ test: isolation_replicated_dist_on_mx
 test: isolation_replicate_reference_tables_to_coordinator
 test: isolation_multiuser_locking
 
-# MXless tests
 test: isolation_check_mx
-test: isolation_turn_mx_off
-test: isolation_ref2ref_foreign_keys
