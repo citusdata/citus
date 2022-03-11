@@ -45,6 +45,8 @@
 #include "parser/parsetree.h"
 
 
+#define INVALID_RELID -1
+
 /*
  * RecurringTuplesType is used to distinguish different types of expressions
  * that always produce the same set of tuples when a shard is queried. We make
@@ -61,6 +63,17 @@ typedef enum RecurringTuplesType
 	RECURRING_TUPLES_VALUES
 } RecurringTuplesType;
 
+/*
+ * RelidsReferenceWalkerContext is used to find Vars in a (sub)query that
+ * refer to certain relids from the upper query.
+ */
+typedef struct RelidsReferenceWalkerContext
+{
+	int level;
+	Relids relids;
+	int foundRelid;
+} RelidsReferenceWalkerContext;
+
 
 /* Config variable managed via guc.c */
 bool SubqueryPushdown = false; /* is subquery pushdown enabled */
@@ -76,7 +89,9 @@ static RecurringTuplesType FromClauseRecurringTupleType(Query *queryTree);
 static DeferredErrorMessage * DeferredErrorIfUnsupportedRecurringTuplesJoin(
 	PlannerRestrictionContext *plannerRestrictionContext);
 static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
-static DeferredErrorMessage * DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree);
+static DeferredErrorMessage * DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree, bool
+																lateral,
+																char *referencedThing);
 static bool ExtractSetOperationStatementWalker(Node *node, List **setOperationList);
 static RecurringTuplesType FetchFirstRecurType(PlannerInfo *plannerInfo,
 											   Relids relids);
@@ -90,7 +105,12 @@ static List * CreateSubqueryTargetListAndAdjustVars(List *columnList);
 static AttrNumber FindResnoForVarInTargetList(List *targetList, int varno, int varattno);
 static bool RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 													Relids relids);
+static DeferredErrorMessage * DeferredErrorIfUnsupportedLateralSubquery(
+	PlannerInfo *plannerInfo, Relids recurringRelIds, Relids nonRecurringRelIds);
 static Var * PartitionColumnForPushedDownSubquery(Query *query);
+static bool ContainsReferencesToRelids(Query *query, Relids relids, int *foundRelid);
+static bool ContainsReferencesToRelidsWalker(Node *node,
+											 RelidsReferenceWalkerContext *context);
 
 
 /*
@@ -844,6 +864,49 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 				break;
 			}
 		}
+		else if (joinType == JOIN_INNER && plannerInfo->hasLateralRTEs)
+		{
+			/*
+			 * Sometimes we cannot push down INNER JOINS when they have only
+			 * recurring tuples on one side and a lateral on the other side.
+			 * See comment on DeferredErrorIfUnsupportedLateralSubquery for
+			 * details.
+			 *
+			 * When planning inner joins postgres can move RTEs from left to
+			 * right and from right to left. So we don't know on which side the
+			 * lateral join wil appear. Thus we try to find a side of the join
+			 * that only contains recurring tuples. And then we check the other
+			 * side to see if it contains an unsupported lateral join.
+			 *
+			 */
+			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, innerrelRelids))
+			{
+				DeferredErrorMessage *deferredError =
+					DeferredErrorIfUnsupportedLateralSubquery(plannerInfo,
+															  innerrelRelids,
+															  outerrelRelids);
+				if (deferredError)
+				{
+					return deferredError;
+				}
+			}
+			else if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, outerrelRelids))
+			{
+				/*
+				 * This branch uses "else if" instead of "if", because if both
+				 * sides contain only recurring tuples there will never be an
+				 * unsupported lateral subquery.
+				 */
+				DeferredErrorMessage *deferredError =
+					DeferredErrorIfUnsupportedLateralSubquery(plannerInfo,
+															  outerrelRelids,
+															  innerrelRelids);
+				if (deferredError)
+				{
+					return deferredError;
+				}
+			}
+		}
 	}
 
 	if (recurType == RECURRING_TUPLES_REFERENCE_TABLE)
@@ -950,7 +1013,8 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 	 */
 	if (!ContainsReferencesToOuterQuery(subqueryTree))
 	{
-		deferredError = DeferErrorIfSubqueryRequiresMerge(subqueryTree);
+		deferredError = DeferErrorIfSubqueryRequiresMerge(subqueryTree, false,
+														  "another query");
 		if (deferredError)
 		{
 			return deferredError;
@@ -1028,24 +1092,29 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
  * column, etc.).
  */
 static DeferredErrorMessage *
-DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree)
+DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree, bool lateral,
+								  char *referencedThing)
 {
 	bool preconditionsSatisfied = true;
 	char *errorDetail = NULL;
 
+	char *lateralString = lateral ? "lateral " : "";
+
 	if (subqueryTree->limitOffset)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Offset clause is currently unsupported when a subquery "
-					  "references a column from another query";
+		errorDetail = psprintf("Offset clause is currently unsupported when a %ssubquery "
+							   "references a column from %s", lateralString,
+							   referencedThing);
 	}
 
 	/* limit is not supported when SubqueryPushdown is not set */
 	if (subqueryTree->limitCount && !SubqueryPushdown)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Limit in subquery is currently unsupported when a "
-					  "subquery references a column from another query";
+		errorDetail = psprintf("Limit clause is currently unsupported when a "
+							   "%ssubquery references a column from %s", lateralString,
+							   referencedThing);
 	}
 
 	/* group clause list must include partition column */
@@ -1060,9 +1129,9 @@ DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree)
 		if (!groupOnPartitionColumn)
 		{
 			preconditionsSatisfied = false;
-			errorDetail = "Group by list without partition column is currently "
-						  "unsupported when a subquery references a column "
-						  "from another query";
+			errorDetail = psprintf("Group by list without partition column is currently "
+								   "unsupported when a %ssubquery references a column "
+								   "from %s", lateralString, referencedThing);
 		}
 	}
 
@@ -1070,17 +1139,18 @@ DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree)
 	if (subqueryTree->hasAggs && (subqueryTree->groupClause == NULL))
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Aggregates without group by are currently unsupported "
-					  "when a subquery references a column from another query";
+		errorDetail = psprintf("Aggregates without group by are currently unsupported "
+							   "when a %ssubquery references a column from %s",
+							   lateralString, referencedThing);
 	}
 
 	/* having clause without group by on partition column is not supported */
 	if (subqueryTree->havingQual && (subqueryTree->groupClause == NULL))
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Having qual without group by on partition column is "
-					  "currently unsupported when a subquery references "
-					  "a column from another query";
+		errorDetail = psprintf("Having qual without group by on partition column is "
+							   "currently unsupported when a %ssubquery references "
+							   "a column from %s", lateralString, referencedThing);
 	}
 
 	/*
@@ -1394,6 +1464,259 @@ RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo, Relids relids)
 	}
 
 	return true;
+}
+
+
+/*
+ * RecurringTypeDescription returns a discriptive string for the given
+ * recurType. This string can be used in error messages to help the users
+ * understand why a query cannot be planned.
+ */
+static char *
+RecurringTypeDescription(RecurringTuplesType recurType)
+{
+	switch (recurType)
+	{
+		case RECURRING_TUPLES_REFERENCE_TABLE:
+		{
+			return "a reference table";
+		}
+
+		case RECURRING_TUPLES_FUNCTION:
+		{
+			return "a table function";
+		}
+
+		case RECURRING_TUPLES_EMPTY_JOIN_TREE:
+		{
+			return "a subquery without FROM";
+		}
+
+		case RECURRING_TUPLES_RESULT_FUNCTION:
+		{
+			return "complex subqueries, CTEs or local tables";
+		}
+
+		case RECURRING_TUPLES_VALUES:
+		{
+			return "a VALUES clause";
+		}
+
+		case RECURRING_TUPLES_INVALID:
+		{
+			/*
+			 * This branch should never be hit, but it's here just in case it
+			 * happens.
+			 */
+			return "an unknown recurring tuple";
+		}
+	}
+
+	/*
+	 * This should never be hit, but is needed to fix compiler warnings.
+	 */
+	return "an unknown recurring tuple";
+}
+
+
+/*
+ * ContainsReferencesToRelids determines whether the given query contains
+ * any references that point to columns of the given relids. The given relids
+ * should be from exactly one query level above the given query.
+ *
+ * If the function returns true, then foundRelid is set to the first relid that
+ * was referenced.
+ *
+ * There are some queries where it cannot easily be determined if the relids
+ * are used, e.g because the query contains placeholder vars. In those cases
+ * this function returns true, because it's better to error out than to return
+ * wrong results. But in these cases foundRelid is set to INVALID_RELID.
+ */
+static bool
+ContainsReferencesToRelids(Query *query, Relids relids, int *foundRelid)
+{
+	RelidsReferenceWalkerContext context = { 0 };
+	context.level = 1;
+	context.relids = relids;
+	context.foundRelid = INVALID_RELID;
+	int flags = 0;
+
+	if (query_tree_walker(query, ContainsReferencesToRelidsWalker,
+						  &context, flags))
+	{
+		*foundRelid = context.foundRelid;
+		return true;
+	}
+	return false;
+}
+
+
+/*
+ * ContainsReferencesToRelidsWalker determines whether the given query
+ * contains any Vars that reference the relids in the context.
+ *
+ * ContainsReferencesToRelidsWalker recursively descends into subqueries
+ * and increases the level by 1 before recursing.
+ */
+static bool
+ContainsReferencesToRelidsWalker(Node *node, RelidsReferenceWalkerContext *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Var))
+	{
+		Var *var = (Var *) node;
+		if (var->varlevelsup == context->level && bms_is_member(var->varno,
+																context->relids))
+		{
+			context->foundRelid = var->varno;
+			return true;
+		}
+
+		return false;
+	}
+	else if (IsA(node, Aggref))
+	{
+		if (((Aggref *) node)->agglevelsup > context->level)
+		{
+			/*
+			 * TODO: Only return true when aggref points to an aggregate that
+			 * uses vars from a recurring tuple.
+			 */
+			return true;
+		}
+	}
+	else if (IsA(node, GroupingFunc))
+	{
+		if (((GroupingFunc *) node)->agglevelsup > context->level)
+		{
+			/*
+			 * TODO: Only return true when groupingfunc points to a grouping
+			 * func that uses vars from a recurring tuple.
+			 */
+			return true;
+		}
+
+		return false;
+	}
+	else if (IsA(node, PlaceHolderVar))
+	{
+		if (((PlaceHolderVar *) node)->phlevelsup > context->level)
+		{
+			/*
+			 * TODO: Only return true when aggref points to a placeholdervar
+			 * that uses vars from a recurring tuple.
+			 */
+			return true;
+		}
+	}
+	else if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+		int flags = 0;
+
+		context->level += 1;
+		bool found = query_tree_walker(query, ContainsReferencesToRelidsWalker,
+									   context, flags);
+		context->level -= 1;
+
+		return found;
+	}
+
+	return expression_tree_walker(node, ContainsReferencesToRelidsWalker,
+								  context);
+}
+
+
+/*
+ * DeferredErrorIfUnsupportedLateralSubquery returns true if
+ * notFullyRecurringRelids contains a lateral subquery that we do not support.
+ *
+ * If there is an inner join with a lateral subquery we cannot
+ * push it down when the following properties all hold:
+ * 1. The lateral subquery contains some non recurring tuples
+ * 2. The lateral subquery references a recurring tuple from
+ *    outside of the subquery (recurringRelids)
+ * 3. The lateral subquery requires a merge step (e.g. a LIMIT)
+ * 4. The reference to the recurring tuple should be something else than an
+ *    equality check on the distribution column, e.g. equality on a non
+ *    distribution column.
+ *
+ * Property number four is considered both hard to detect and
+ * probably not used very often, so we only check for 1, 2 and 3.
+ */
+static DeferredErrorMessage *
+DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo,
+										  Relids recurringRelids,
+										  Relids notFullyRecurringRelids)
+{
+	int relationId = -1;
+	while ((relationId = bms_next_member(notFullyRecurringRelids, relationId)) >= 0)
+	{
+		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
+
+		if (!rangeTableEntry->lateral)
+		{
+			continue;
+		}
+
+		/* TODO: What about others kinds? */
+		if (rangeTableEntry->rtekind == RTE_SUBQUERY)
+		{
+			/* property number 1, contains non-recurring tuples */
+			if (!FindNodeMatchingCheckFunctionInRangeTableList(
+					list_make1(rangeTableEntry), IsDistributedTableRTE))
+			{
+				continue;
+			}
+
+			/* property number 2, references recurring tuple */
+			int recurringRelid = INVALID_RELID;
+			if (!ContainsReferencesToRelids(rangeTableEntry->subquery, recurringRelids,
+											&recurringRelid))
+			{
+				continue;
+			}
+
+			char *recurTypeDescription =
+				"an aggregate, grouping func or placeholder var coming from the outer query";
+			if (recurringRelid != INVALID_RELID)
+			{
+				RangeTblEntry *recurringRangeTableEntry =
+					plannerInfo->simple_rte_array[recurringRelid];
+				RecurringTuplesType recurType = RECURRING_TUPLES_INVALID;
+				ContainsRecurringRTE(recurringRangeTableEntry, &recurType);
+				recurTypeDescription = RecurringTypeDescription(recurType);
+
+				/*
+				 * Add the alias for all recuring tuples where it is useful to
+				 * see them. We don't add it for VALUES and intermediate
+				 * results, because there the aliases are currently hardcoded
+				 * strings anyway.
+				 */
+				if (recurType != RECURRING_TUPLES_VALUES &&
+					recurType != RECURRING_TUPLES_RESULT_FUNCTION)
+				{
+					recurTypeDescription = psprintf("%s (%s)", recurTypeDescription,
+													recurringRangeTableEntry->eref->
+													aliasname);
+				}
+			}
+
+			/* property number 3, has a merge step */
+			DeferredErrorMessage *deferredError = DeferErrorIfSubqueryRequiresMerge(
+				rangeTableEntry->subquery, true, recurTypeDescription);
+			if (deferredError)
+			{
+				return deferredError;
+			}
+		}
+	}
+
+	return NULL;
 }
 
 
