@@ -22,6 +22,7 @@
 #include "catalog/pg_depend_d.h"
 #endif
 #include "catalog/pg_foreign_server.h"
+#include "commands/event_trigger.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/distribution_column.h"
 #include "distributed/listutils.h"
@@ -151,7 +152,20 @@ WorkerDropDistributedTable(Oid relationId)
 		 *
 		 * We drop the table with cascade since other tables may be referring to it.
 		 */
-		performDeletion(&distributedTableObject, DROP_CASCADE, 0);
+
+		bool needCleanup = EventTriggerBeginCompleteQuery();
+		PG_TRY();
+		{
+			performDeletion(&distributedTableObject, DROP_CASCADE, 0);
+		}
+		PG_FINALLY();
+		{
+			if (needCleanup)
+			{
+				EventTriggerEndCompleteQuery();
+			}
+		}
+		PG_END_TRY();
 	}
 
 	/* iterate over shardList to delete the corresponding rows */
