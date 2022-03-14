@@ -22,15 +22,13 @@ select max(y)+1=nextval('seq_1') as check_sanity from seq_test_0 ;
 (1 row)
 
 TRUNCATE seq_test_0;
-BEGIN;
-    INSERT INTO seq_test_0 VALUES (199999, DEFAULT, DEFAULT);
-    SELECT currval('renamed_seq') = max(z) FROM seq_test_0;
+INSERT INTO seq_test_0 VALUES (199999, DEFAULT, DEFAULT);
+SELECT currval('renamed_seq') = max(z) FROM seq_test_0;
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-COMMIT;
 TRUNCATE seq_test_0;
 BEGIN;
     INSERT INTO seq_test_0 VALUES (2);
