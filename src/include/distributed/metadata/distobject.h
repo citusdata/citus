@@ -25,11 +25,12 @@ extern bool ClusterHasDistributedFunctionWithDistArgument(void);
 extern void MarkObjectDistributed(const ObjectAddress *distAddress);
 extern void MarkObjectDistributedViaSuperUser(const ObjectAddress *distAddress);
 extern void UnmarkObjectDistributed(const ObjectAddress *address);
+extern void UnmarkObjectDistributedLocally(const ObjectAddress *address);
 extern bool IsTableOwnedByExtension(Oid relationId);
 extern bool IsObjectAddressOwnedByExtension(const ObjectAddress *target,
 											ObjectAddress *extensionAddress);
 extern ObjectAddress PgGetObjectAddress(char *ttype, ArrayType *namearr,
-										ArrayType *argsarr);
+										ArrayType *argsarr, bool missingOk);
 extern List * GetDistributedObjectAddressList(void);
 extern RoleSpec * GetRoleSpecObjectForUser(Oid roleOid);
 extern void UpdateDistributedObjectColocationId(uint32 oldColocationId, uint32

@@ -45,6 +45,7 @@ extern char * MarkObjectsDistributedCreateCommand(List *addresses,
 												  List *distributionArgumentIndexes,
 												  List *colocationIds,
 												  List *forceDelegations);
+extern char * DropDistributedObjectCommand(const ObjectAddress *address)												  ;
 extern char * DistributionCreateCommand(CitusTableCacheEntry *cacheEntry);
 extern char * DistributionDeleteCommand(const char *schemaName,
 										const char *tableName);

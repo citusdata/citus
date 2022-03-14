@@ -90,7 +90,14 @@ citus_unmark_object_distributed(PG_FUNCTION_ARGS)
 						errhint("drop the object via a DROP command")));
 	}
 
-	UnmarkObjectDistributed(&address);
+	if (IsCoordinator())
+	{
+		UnmarkObjectDistributed(&address);
+	}
+	else
+	{
+		UnmarkObjectDistributedLocally(&address);
+	}
 
 	PG_RETURN_VOID();
 }
@@ -312,6 +319,23 @@ ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
  */
 void
 UnmarkObjectDistributed(const ObjectAddress *address)
+{
+	UnmarkObjectDistributedLocally(address);
+
+	if (EnableMetadataSync)
+	{
+		char *pgDistObjectDropCommand = DropDistributedObjectCommand(address);
+		SendCommandToWorkersWithMetadataViaSuperUser(pgDistObjectDropCommand);
+	}
+}
+
+
+/*
+ * UnmarkObjectDistributedLocally removes the entry from pg_dist_object that marks this
+ * object as distributed locally.
+ */
+void
+UnmarkObjectDistributedLocally(const ObjectAddress *address)
 {
 	int paramCount = 3;
 	Oid paramTypes[3] = {

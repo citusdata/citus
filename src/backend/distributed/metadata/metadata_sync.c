@@ -153,6 +153,7 @@ PG_FUNCTION_INFO_V1(citus_internal_update_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_shard_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_update_relation_colocation);
 PG_FUNCTION_INFO_V1(citus_internal_add_object_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_drop_object_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_colocation_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_colocation_metadata);
 
@@ -963,7 +964,7 @@ citus_internal_add_object_metadata(PG_FUNCTION_ARGS)
 	 * argsArray parameters
 	 */
 	ObjectAddress objectAddress = PgGetObjectAddress(textType, nameArray,
-													 argsArray);
+													 argsArray, false);
 
 	/* First, disable propagation off to not to cause infinite propagation */
 	bool prevDependencyCreationValue = EnableMetadataSync;
@@ -995,6 +996,103 @@ citus_internal_add_object_metadata(PG_FUNCTION_ARGS)
 	}
 
 	SetLocalEnableMetadataSync(prevDependencyCreationValue);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * DropDistributedObjectCommand generates a command that can be executed to
+ * drop the provided object from pg_dist_object on a worker node.
+ */
+char *
+DropDistributedObjectCommand(const ObjectAddress *address)
+{
+	StringInfo dropDistributedObjectCommand = makeStringInfo();
+
+	appendStringInfo(dropDistributedObjectCommand,
+					 "SELECT citus_internal_drop_object_metadata(");
+
+	List *names = NIL;
+	List *args = NIL;
+	char *objectType = NULL;
+
+	#if PG_VERSION_NUM >= PG_VERSION_14
+	objectType = getObjectTypeDescription(address, false);
+	getObjectIdentityParts(address, &names, &args, false);
+	#else
+	objectType = getObjectTypeDescription(address);
+	getObjectIdentityParts(address, &names, &args);
+	#endif
+
+	appendStringInfo(dropDistributedObjectCommand,
+					 "(%s, ARRAY[",
+					 quote_literal_cstr(objectType));
+
+	char *name = NULL;
+	bool firstInNameLoop = true;
+	foreach_ptr(name, names)
+	{
+		if (!firstInNameLoop)
+		{
+			appendStringInfo(dropDistributedObjectCommand, ", ");
+		}
+
+		firstInNameLoop = false;
+		appendStringInfoString(dropDistributedObjectCommand,
+							   quote_literal_cstr(name));
+	}
+
+	appendStringInfo(dropDistributedObjectCommand, "]::text[], ARRAY[");
+
+	char *arg;
+	bool firstInArgLoop = true;
+	foreach_ptr(arg, args)
+	{
+		if (!firstInArgLoop)
+		{
+			appendStringInfo(dropDistributedObjectCommand, ", ");
+		}
+		firstInArgLoop = false;
+		appendStringInfoString(dropDistributedObjectCommand,
+							   quote_literal_cstr(arg));
+	}
+
+	appendStringInfo(dropDistributedObjectCommand, "]::text[]);");
+
+	return dropDistributedObjectCommand->data;
+}
+
+
+/*
+ * citus_internal_drop_object_metadata is an internal UDF to
+ * drop a row from pg_dist_object.
+ */
+Datum
+citus_internal_drop_object_metadata(PG_FUNCTION_ARGS)
+{
+	char *textType = TextDatumGetCString(PG_GETARG_DATUM(0));
+	ArrayType *nameArray = PG_GETARG_ARRAYTYPE_P(1);
+	ArrayType *argsArray = PG_GETARG_ARRAYTYPE_P(2);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+	}
+
+	/*
+	 * We check the acl/ownership while getting the object address. That
+	 * funtion also checks the sanity of given textType, nameArray and
+	 * argsArray parameters
+	 */
+	ObjectAddress objectAddress = PgGetObjectAddress(textType, nameArray,
+													 argsArray, true);
+
+	if (OidIsValid(objectAddress.objectId))
+	{
+		UnmarkObjectDistributedLocally(&objectAddress);
+	}
 
 	PG_RETURN_VOID();
 }

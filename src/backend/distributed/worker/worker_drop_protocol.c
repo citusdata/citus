@@ -137,10 +137,10 @@ WorkerDropDistributedTable(Oid relationId)
 	{
 		ObjectAddress ownedSequenceAddress = { 0 };
 		ObjectAddressSet(ownedSequenceAddress, RelationRelationId, ownedSequenceOid);
-		UnmarkObjectDistributed(&ownedSequenceAddress);
+		UnmarkObjectDistributedLocally(&ownedSequenceAddress);
 	}
 
-	UnmarkObjectDistributed(&distributedTableObject);
+	UnmarkObjectDistributedLocally(&distributedTableObject);
 
 	if (!IsObjectAddressOwnedByExtension(&distributedTableObject, NULL))
 	{
@@ -238,7 +238,7 @@ worker_drop_shell_table(PG_FUNCTION_ARGS)
 	{
 		ObjectAddress ownedSequenceAddress = { 0 };
 		ObjectAddressSet(ownedSequenceAddress, RelationRelationId, ownedSequenceOid);
-		UnmarkObjectDistributed(&ownedSequenceAddress);
+		UnmarkObjectDistributedLocally(&ownedSequenceAddress);
 	}
 
 	/*

@@ -53,7 +53,7 @@ static List * textarray_to_strvaluelist(ArrayType *arr);
  * Codes added by Citus are tagged with CITUS CODE BEGIN/END.
  */
 ObjectAddress
-PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr)
+PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr, bool missingOk)
 {
 	List *name = NIL;
 	TypeName *typename = NULL;
@@ -368,7 +368,12 @@ PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr)
 	}
 
 	ObjectAddress addr = get_object_address(type, objnode,
-											&relation, AccessShareLock, false);
+											&relation, AccessShareLock, missingOk);
+
+	if (!OidIsValid(addr.objectId))
+	{
+		return addr;
+	}
 
 	/* CITUS CODE BEGIN */
 	ErrorIfCurrentUserCanNotDistributeObject(type, &addr, objnode, &relation);
