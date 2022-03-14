@@ -87,6 +87,9 @@ begin return x * 2;
 end;
 $$;
 
+SELECT pg_identify_object_as_address(classid, objid, objsubid), * from pg_catalog.pg_dist_object;
+SELECT unnest(result::text[]) FROM run_command_on_workers($$select array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$) order by 1;
+
 create aggregate psum(int, int)(
     sfunc=psum_sfunc,
     combinefunc=psum_combinefunc,
@@ -154,6 +157,9 @@ returns text immutable language plpgsql as $$
 begin if coalesce(s1,'') > coalesce(s2,'') then return s1; else return s2; end if;
 end;
 $$;
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid), * from pg_catalog.pg_dist_object;
+SELECT unnest(result::text[]) FROM run_command_on_workers($$select array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$) order by 1;
 
 create aggregate binstragg(text, text)(
     sfunc=binstragg_sfunc,
@@ -246,6 +252,9 @@ group by u1.value_3;
 select regr_syy(u1.user_id, u2.user_id) filter (where '0300030' LIKE '%3%')::int
 from users_table  u1, events_table u2
 where u1.user_id = u2.user_id;
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid), * from pg_catalog.pg_dist_object;
+SELECT unnest(result::text[]) FROM run_command_on_workers($$select array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$) order by 1;
 
 -- multiple aggs with filters
 select regr_syy(u1.user_id, u2.user_id) filter (where u1.value_1 < 5)::numeric(10,3), regr_syy(u1.value_1, u2.value_2) filter (where u1.user_id < 5)::numeric(10,3)
@@ -464,6 +473,9 @@ RETURN $1 * $1;
 END;
 $function$;
 
+SELECT pg_identify_object_as_address(classid, objid, objsubid), * from pg_catalog.pg_dist_object;
+SELECT unnest(result::text[]) FROM run_command_on_workers($$select array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$) order by 1;
+
 SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION square_func(int)
 RETURNS int
@@ -474,6 +486,9 @@ RETURN $1 * $1;
 END;
 $function$;
 RESET citus.enable_metadata_sync;
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid), * from pg_catalog.pg_dist_object;
+SELECT unnest(result::text[]) FROM run_command_on_workers($$select array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$) order by 1;
 
 SELECT const_function(1), string_agg(a::character, ',') FROM t1;
 SELECT const_function(1), count(b) FROM t1;
@@ -523,6 +538,9 @@ SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
 FROM dist_table
 LEFT JOIN ref_table ON TRUE;
 
+SELECT pg_identify_object_as_address(classid, objid, objsubid), * from pg_catalog.pg_dist_object;
+SELECT unnest(result::text[]) FROM run_command_on_workers($$select array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$) order by 1;
+
 SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
 FROM (SELECT *, random() FROM dist_table) a;
 
@@ -553,6 +571,9 @@ SELECT create_distributed_table('dummy_tbl','a');
 create function dummy_fnc(a dummy_tbl, d double precision) RETURNS dummy_tbl
     AS $$SELECT 1;$$ LANGUAGE sql;
 
+SELECT pg_identify_object_as_address(classid, objid, objsubid), * from pg_catalog.pg_dist_object;
+SELECT unnest(result::text[]) FROM run_command_on_workers($$select array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$) order by 1;
+
 -- test in tx block
 -- shouldn't distribute, as citus.create_object_propagation is set to deferred
 BEGIN;
@@ -562,7 +583,13 @@ COMMIT;
 -- verify not distributed
 SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
 
+SELECT pg_identify_object_as_address(classid, objid, objsubid), * from pg_catalog.pg_dist_object;
+SELECT unnest(result::text[]) FROM run_command_on_workers($$select array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$) order by 1;
+
 drop aggregate dependent_agg ( double precision);
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid), * from pg_catalog.pg_dist_object;
+SELECT unnest(result::text[]) FROM run_command_on_workers($$select array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$) order by 1;
 
 -- now try with create_object_propagation = immediate
 SET citus.create_object_propagation TO immediate;
@@ -572,8 +599,14 @@ BEGIN;
 create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
 COMMIT;
 
+SELECT pg_identify_object_as_address(classid, objid, objsubid), * from pg_catalog.pg_dist_object;
+SELECT unnest(result::text[]) FROM run_command_on_workers($$select array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$) order by 1;
+
 -- verify distributed
 SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid), * from pg_catalog.pg_dist_object;
+SELECT unnest(result::text[]) FROM run_command_on_workers($$select array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$) order by 1;
 
 drop aggregate dependent_agg ( double precision);
 
@@ -585,6 +618,9 @@ BEGIN;
 create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
 COMMIT;
 
+SELECT pg_identify_object_as_address(classid, objid, objsubid), * from pg_catalog.pg_dist_object;
+SELECT unnest(result::text[]) FROM run_command_on_workers($$select array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$) order by 1;
+
 -- verify distributed
 SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
 
@@ -592,6 +628,9 @@ SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid
 SELECT run_command_on_workers($$SELECT count(*) from pg_catalog.pg_dist_object where objid = 'aggregate_support.dependent_agg'::regproc;$$);
 
 RESET citus.create_object_propagation;
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid), * from pg_catalog.pg_dist_object;
+SELECT unnest(result::text[]) FROM run_command_on_workers($$select array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$) order by 1;
 
 -- drop and test outside of tx block
 drop aggregate dependent_agg (float8);
@@ -601,7 +640,13 @@ create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
 --verify
 SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
 
+SELECT pg_identify_object_as_address(classid, objid, objsubid), * from pg_catalog.pg_dist_object;
+SELECT unnest(result::text[]) FROM run_command_on_workers($$select array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$) order by 1;
+
 DROP TABLE dummy_tbl CASCADE;
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid), * from pg_catalog.pg_dist_object;
+SELECT unnest(result::text[]) FROM run_command_on_workers($$select array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$) order by 1;
 
 SET citus.create_object_propagation TO automatic;
 begin;
@@ -610,6 +655,9 @@ begin;
     create aggregate dependent_agg (float8) (stype=typ1, sfunc=fnagg);
 commit;
 RESET citus.create_object_propagation;
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid), * from pg_catalog.pg_dist_object;
+SELECT unnest(result::text[]) FROM run_command_on_workers($$select array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$) order by 1;
 
 SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
 

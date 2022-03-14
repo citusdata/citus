@@ -23,3 +23,6 @@ SELECT unnest(result::text[]) AS unnested_result
 FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
     EXCEPT
 SELECT unnest(activate_node_snapshot());
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid), * from pg_catalog.pg_dist_object;
+SELECT unnest(result::text[]) FROM run_command_on_workers($$select array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$) order by 1;
