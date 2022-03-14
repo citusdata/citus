@@ -658,10 +658,16 @@ IsWorkerTheCurrentNode(WorkerNode *workerNode)
 									  workerNode->workerPort,
 									  CurrentUserName(),
 									  NULL);
+
 	const char *command =
 		"SELECT metadata ->> 'server_id' AS server_id FROM pg_dist_node_metadata";
 
-	SendRemoteCommand(workerConnection, command);
+	int r = SendRemoteCommand(workerConnection, command);
+
+	if(r == 0)
+	{
+		return false;
+	}
 
 	PGresult *result = GetRemoteCommandResult(workerConnection, true);
 
