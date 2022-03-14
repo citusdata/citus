@@ -664,7 +664,7 @@ IsWorkerTheCurrentNode(WorkerNode *workerNode)
 
 	int r = SendRemoteCommand(workerConnection, command);
 
-	if(r == 0)
+	if (r == 0)
 	{
 		return false;
 	}
