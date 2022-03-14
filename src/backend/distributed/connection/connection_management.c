@@ -870,7 +870,19 @@ WaitEventSetFromMultiConnectionStates(List *connections, int *waitCount)
 
 		int eventMask = MultiConnectionStateEventMask(connectionState);
 
-		AddWaitEventToSet(waitEventSet, eventMask, sock, NULL, connectionState);
+		int waitEventSetIndex =
+			CitusAddWaitEventSetToSet(waitEventSet, eventMask, sock,
+									  NULL, (void *) connectionState);
+		if (waitEventSetIndex == WAIT_EVENT_SET_INDEX_FAILED)
+		{
+			ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
+							errmsg("connection establishment for node %s:%d failed",
+								   connectionState->connection->hostname,
+								   connectionState->connection->port),
+							errhint("Check both the local and remote server logs for the "
+									"connection establishment errors.")));
+		}
+
 		numEventsAdded++;
 
 		if (waitCount)
@@ -1020,7 +1032,19 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 				{
 					/* connection state changed, reset the event mask */
 					uint32 eventMask = MultiConnectionStateEventMask(connectionState);
-					ModifyWaitEvent(waitEventSet, event->pos, eventMask, NULL);
+					bool success =
+						CitusModifyWaitEvent(waitEventSet, event->pos,
+											 eventMask, NULL);
+					if (!success)
+					{
+						ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
+										errmsg("connection establishment for node %s:%d "
+											   "failed", connection->hostname,
+											   connection->port),
+										errhint("Check both the local and remote server "
+												"logs for the connection establishment "
+												"errors.")));
+					}
 				}
 
 				/*
@@ -1520,4 +1544,96 @@ MarkConnectionConnected(MultiConnection *connection)
 	{
 		INSTR_TIME_SET_CURRENT(connection->connectionEstablishmentEnd);
 	}
+}
+
+
+/*
+ * CitusAddWaitEventSetToSet is a wrapper around Postgres' AddWaitEventToSet().
+ *
+ * AddWaitEventToSet() may throw hard errors. For example, when the
+ * underlying socket for a connection is closed by the remote server
+ * and already reflected by the OS, however Citus hasn't had a chance
+ * to get this information. In that case, if replication factor is >1,
+ * Citus can failover to other nodes for executing the query. Even if
+ * replication factor = 1, Citus can give much nicer errors.
+ *
+ * So CitusAddWaitEventSetToSet simply puts ModifyWaitEvent into a
+ * PG_TRY/PG_CATCH block in order to catch any hard errors, and
+ * returns this information to the caller.
+ */
+int
+CitusAddWaitEventSetToSet(WaitEventSet *set, uint32 events, pgsocket fd,
+						  Latch *latch, void *user_data)
+{
+	volatile int waitEventSetIndex = WAIT_EVENT_SET_INDEX_NOT_INITIALIZED;
+	MemoryContext savedContext = CurrentMemoryContext;
+
+	PG_TRY();
+	{
+		waitEventSetIndex =
+			AddWaitEventToSet(set, events, fd, latch, (void *) user_data);
+	}
+	PG_CATCH();
+	{
+		/*
+		 * We might be in an arbitrary memory context when the
+		 * error is thrown and we should get back to one we had
+		 * at PG_TRY() time, especially because we are not
+		 * re-throwing the error.
+		 */
+		MemoryContextSwitchTo(savedContext);
+
+		FlushErrorState();
+
+		/* let the callers know about the failure */
+		waitEventSetIndex = WAIT_EVENT_SET_INDEX_FAILED;
+	}
+	PG_END_TRY();
+
+	return waitEventSetIndex;
+}
+
+
+/*
+ * CitusModifyWaitEvent is a wrapper around Postgres' ModifyWaitEvent().
+ *
+ * ModifyWaitEvent may throw hard errors. For example, when the underlying
+ * socket for a connection is closed by the remote server and already
+ * reflected by the OS, however Citus hasn't had a chance to get this
+ * information. In that case, if replication factor is >1, Citus can
+ * failover to other nodes for executing the query. Even if replication
+ * factor = 1, Citus can give much nicer errors.
+ *
+ * So CitusModifyWaitEvent simply puts ModifyWaitEvent into a PG_TRY/PG_CATCH
+ * block in order to catch any hard errors, and returns this information to the
+ * caller.
+ */
+bool
+CitusModifyWaitEvent(WaitEventSet *set, int pos, uint32 events, Latch *latch)
+{
+	volatile bool success = true;
+	MemoryContext savedContext = CurrentMemoryContext;
+
+	PG_TRY();
+	{
+		ModifyWaitEvent(set, pos, events, latch);
+	}
+	PG_CATCH();
+	{
+		/*
+		 * We might be in an arbitrary memory context when the
+		 * error is thrown and we should get back to one we had
+		 * at PG_TRY() time, especially because we are not
+		 * re-throwing the error.
+		 */
+		MemoryContextSwitchTo(savedContext);
+
+		FlushErrorState();
+
+		/* let the callers know about the failure */
+		success = false;
+	}
+	PG_END_TRY();
+
+	return success;
 }

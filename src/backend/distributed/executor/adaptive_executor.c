@@ -178,8 +178,6 @@
 #include "utils/timestamp.h"
 
 #define SLOW_START_DISABLED 0
-#define WAIT_EVENT_SET_INDEX_NOT_INITIALIZED -1
-#define WAIT_EVENT_SET_INDEX_FAILED -2
 
 
 /*
@@ -678,10 +676,6 @@ static int UsableConnectionCount(WorkerPool *workerPool);
 static long NextEventTimeout(DistributedExecution *execution);
 static WaitEventSet * BuildWaitEventSet(List *sessionList);
 static void RebuildWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList);
-static int CitusAddWaitEventSetToSet(WaitEventSet *set, uint32 events, pgsocket fd,
-									 Latch *latch, void *user_data);
-static bool CitusModifyWaitEvent(WaitEventSet *set, int pos, uint32 events,
-								 Latch *latch);
 static TaskPlacementExecution * PopPlacementExecution(WorkerSession *session);
 static TaskPlacementExecution * PopAssignedPlacementExecution(WorkerSession *session);
 static TaskPlacementExecution * PopUnassignedPlacementExecution(WorkerPool *workerPool);
@@ -5367,6 +5361,19 @@ BuildWaitEventSet(List *sessionList)
 			CitusAddWaitEventSetToSet(waitEventSet, connection->waitFlags, sock,
 									  NULL, (void *) session);
 		session->waitEventSetIndex = waitEventSetIndex;
+
+		/*
+		 * Inform failed to add to wait event set with a debug message as this
+		 * is too detailed information for users.
+		 */
+		if (session->waitEventSetIndex == WAIT_EVENT_SET_INDEX_FAILED)
+		{
+			ereport(DEBUG1, (errcode(ERRCODE_CONNECTION_FAILURE),
+							 errmsg("Adding wait event for node %s:%d failed. "
+									"The socket was: %d",
+									session->workerPool->nodeName,
+									session->workerPool->nodePort, sock)));
+		}
 	}
 
 	CitusAddWaitEventSetToSet(waitEventSet, WL_POSTMASTER_DEATH, PGINVALID_SOCKET, NULL,
@@ -5375,64 +5382,6 @@ BuildWaitEventSet(List *sessionList)
 							  NULL);
 
 	return waitEventSet;
-}
-
-
-/*
- * CitusAddWaitEventSetToSet is a wrapper around Postgres' AddWaitEventToSet().
- *
- * AddWaitEventToSet() may throw hard errors. For example, when the
- * underlying socket for a connection is closed by the remote server
- * and already reflected by the OS, however Citus hasn't had a chance
- * to get this information. In that case, if replication factor is >1,
- * Citus can failover to other nodes for executing the query. Even if
- * replication factor = 1, Citus can give much nicer errors.
- *
- * So CitusAddWaitEventSetToSet simply puts ModifyWaitEvent into a
- * PG_TRY/PG_CATCH block in order to catch any hard errors, and
- * returns this information to the caller.
- */
-static int
-CitusAddWaitEventSetToSet(WaitEventSet *set, uint32 events, pgsocket fd,
-						  Latch *latch, void *user_data)
-{
-	volatile int waitEventSetIndex = WAIT_EVENT_SET_INDEX_NOT_INITIALIZED;
-	MemoryContext savedContext = CurrentMemoryContext;
-
-	PG_TRY();
-	{
-		waitEventSetIndex =
-			AddWaitEventToSet(set, events, fd, latch, (void *) user_data);
-	}
-	PG_CATCH();
-	{
-		/*
-		 * We might be in an arbitrary memory context when the
-		 * error is thrown and we should get back to one we had
-		 * at PG_TRY() time, especially because we are not
-		 * re-throwing the error.
-		 */
-		MemoryContextSwitchTo(savedContext);
-
-		FlushErrorState();
-
-		if (user_data != NULL)
-		{
-			WorkerSession *workerSession = (WorkerSession *) user_data;
-
-			ereport(DEBUG1, (errcode(ERRCODE_CONNECTION_FAILURE),
-							 errmsg("Adding wait event for node %s:%d failed. "
-									"The socket was: %d",
-									workerSession->workerPool->nodeName,
-									workerSession->workerPool->nodePort, fd)));
-		}
-
-		/* let the callers know about the failure */
-		waitEventSetIndex = WAIT_EVENT_SET_INDEX_FAILED;
-	}
-	PG_END_TRY();
-
-	return waitEventSetIndex;
 }
 
 
@@ -5485,7 +5434,7 @@ RebuildWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList)
 		if (!success)
 		{
 			ereport(DEBUG1, (errcode(ERRCODE_CONNECTION_FAILURE),
-							 errmsg("Modifying wait event for node %s:%d failed. "
+							 errmsg("modifying wait event for node %s:%d failed. "
 									"The wait event index was: %d",
 									connection->hostname, connection->port,
 									waitEventSetIndex)));
@@ -5493,51 +5442,6 @@ RebuildWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList)
 			session->waitEventSetIndex = WAIT_EVENT_SET_INDEX_FAILED;
 		}
 	}
-}
-
-
-/*
- * CitusModifyWaitEvent is a wrapper around Postgres' ModifyWaitEvent().
- *
- * ModifyWaitEvent may throw hard errors. For example, when the underlying
- * socket for a connection is closed by the remote server and already
- * reflected by the OS, however Citus hasn't had a chance to get this
- * information. In that case, if replication factor is >1, Citus can
- * failover to other nodes for executing the query. Even if replication
- * factor = 1, Citus can give much nicer errors.
- *
- * So CitusModifyWaitEvent simply puts ModifyWaitEvent into a PG_TRY/PG_CATCH
- * block in order to catch any hard errors, and returns this information to the
- * caller.
- */
-static bool
-CitusModifyWaitEvent(WaitEventSet *set, int pos, uint32 events, Latch *latch)
-{
-	volatile bool success = true;
-	MemoryContext savedContext = CurrentMemoryContext;
-
-	PG_TRY();
-	{
-		ModifyWaitEvent(set, pos, events, latch);
-	}
-	PG_CATCH();
-	{
-		/*
-		 * We might be in an arbitrary memory context when the
-		 * error is thrown and we should get back to one we had
-		 * at PG_TRY() time, especially because we are not
-		 * re-throwing the error.
-		 */
-		MemoryContextSwitchTo(savedContext);
-
-		FlushErrorState();
-
-		/* let the callers know about the failure */
-		success = false;
-	}
-	PG_END_TRY();
-
-	return success;
 }
 
 
