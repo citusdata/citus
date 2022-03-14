@@ -779,7 +779,8 @@ ALTER SYSTEM SET citus.metadata_sync_interval TO DEFAULT;
 ALTER SYSTEM SET citus.metadata_sync_retry_interval TO DEFAULT;
 SELECT pg_reload_conf();
 
-UPDATE pg_dist_node SET metadatasynced=true WHERE nodeport=:worker_1_port;
+-- make sure that all the nodes have valid metadata before moving forward
+SELECT wait_until_metadata_sync(60000);
 
 SELECT master_add_node('localhost', :worker_2_port);
 
