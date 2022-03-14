@@ -151,8 +151,7 @@ WorkerDropDistributedTable(Oid relationId)
 		 *
 		 * We drop the table with cascade since other tables may be referring to it.
 		 */
-		performDeletion(&distributedTableObject, DROP_CASCADE,
-						PERFORM_DELETION_INTERNAL);
+		performDeletion(&distributedTableObject, DROP_CASCADE, 0);
 	}
 
 	/* iterate over shardList to delete the corresponding rows */
