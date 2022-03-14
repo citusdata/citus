@@ -103,6 +103,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self.settings = {
             "shared_preload_libraries": "citus",
             "log_error_verbosity": "terse",
+            "fsync": False,
             "citus.node_conninfo": "sslmode=prefer",
             "citus.enable_repartition_joins": True,
             "citus.repartition_join_bucket_count_per_node": 2,
