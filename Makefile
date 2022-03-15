@@ -14,7 +14,7 @@ include Makefile.global
 all: extension
 
 
-#build columnar only
+# build columnar only
 columnar:
 	$(MAKE) -C src/backend/columnar all
 # build extension

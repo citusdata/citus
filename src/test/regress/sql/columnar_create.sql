@@ -130,10 +130,5 @@ SELECT COUNT(*)=0 FROM columnar_temp;
 -- since we deleted all the rows, we shouldn't have any stripes for table
 SELECT columnar_test_helpers.columnar_metadata_has_storage_id(:columnar_temp_storage_id);
 
---
--- Will throw error due to redefining GUCs, because citus is already
--- loaded and has already initialized columnar code. This test is to
--- ensure that the citus_columnar module is built and present, and
--- that it can be loaded without link failures.
---
+-- make sure citus_columnar can be loaded
 LOAD 'citus_columnar';

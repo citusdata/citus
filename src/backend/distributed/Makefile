@@ -19,8 +19,6 @@ DATA_built = $(generated_sql_files)
 
 # directories with source files
 SUBDIRS = . commands connection ddl deparser executor metadata operations planner progress relay safeclib test transaction utils worker
-# columnar modules
-SUBDIRS += ../columnar
 # enterprise modules
 SUBDIRS +=
 
@@ -30,10 +28,8 @@ ENSURE_SUBDIRS_EXIST := $(shell mkdir -p $(SUBDIRS))
 
 # That patsubst rule searches all directories listed in SUBDIRS for .c
 # files, and adds the corresponding .o files to OBJS
-ALL_OBJS = \
+OBJS += \
 	$(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(citus_abs_srcdir)/$(dir)/*.c))))
-
-OBJS += $(filter-out ../columnar/mod.o,$(ALL_OBJS))
 
 # be explicit about the default target
 all:
