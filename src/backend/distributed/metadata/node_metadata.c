@@ -283,6 +283,7 @@ citus_add_node(PG_FUNCTION_ARGS)
 		 */
 		if (workerNode != NULL &&
 			workerNode->groupId != COORDINATOR_GROUP_ID &&
+			workerNode->nodeRole != SecondaryNodeRoleId() &&
 			IsWorkerTheCurrentNode(workerNode))
 		{
 			ereport(ERROR, (errmsg("Node cannot add itself as a worker."),
