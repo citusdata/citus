@@ -603,6 +603,14 @@ SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid
 
 DROP TABLE dummy_tbl CASCADE;
 
+-- Show that after dropping a table on which functions and aggregates depending on
+-- pg_dist_object is consistent on coordinator and worker node.
+SELECT pg_identify_object_as_address(classid, objid, objsubid)::text
+FROM pg_catalog.pg_dist_object
+    EXCEPT
+SELECT unnest(result::text[]) AS unnested_result
+FROM run_command_on_workers($$SELECT array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$);
+
 SET citus.create_object_propagation TO automatic;
 begin;
     create type typ1 as (a int);
