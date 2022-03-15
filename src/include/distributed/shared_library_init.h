@@ -11,6 +11,8 @@
 #ifndef SHARED_LIBRARY_INIT_H
 #define SHARED_LIBRARY_INIT_H
 
+#include "columnar/columnar.h"
+
 #define GUC_STANDARD 0
 #define MAX_SHARD_COUNT 64000
 #define MAX_SHARD_REPLICATION_FACTOR 100

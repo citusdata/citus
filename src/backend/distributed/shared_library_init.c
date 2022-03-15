@@ -360,6 +360,11 @@ _PG_init(void)
 	 */
 	load_file(COLUMNAR_LIB_NAME, false);
 
+	/*
+	 * Now, acquire symbols from columnar module. First, acquire
+	 * the address of the set options hook, and set it so that we
+	 * can propagate options changes.
+	 */
 	ColumnarTableSetOptions_hook_type **ColumnarTableSetOptions_hook_ptr =
 		(ColumnarTableSetOptions_hook_type **) find_rendezvous_variable(
 			"ColumnarTableSetOptions_hook");
@@ -368,11 +373,34 @@ _PG_init(void)
 	Assert(ColumnarTableSetOptions_hook_ptr != NULL);
 	Assert(*ColumnarTableSetOptions_hook_ptr != NULL);
 
-	/*
-	 * Set the hook, so that when the options change on a columnar
-	 * table, we propagate the changes to shards.
-	 */
 	**ColumnarTableSetOptions_hook_ptr = ColumnarTableSetOptionsHook;
+
+	/*
+	 * Next, acquire symbols for columnar functions that citus
+	 * needs to call.
+	 */
+	void *handle = NULL;
+	ColumnarSupportsIndexAM = (ColumnarSupportsIndexAM_type)
+	  load_external_function(COLUMNAR_LIB_NAME, "ColumnarSupportsIndexAM",
+				 true, &handle);
+	CompressionTypeStr = (CompressionTypeStr_type)
+	  load_external_function(COLUMNAR_LIB_NAME, "CompressionTypeStr",
+				 true, &handle);
+	IsColumnarAmTable = (IsColumnarAmTable_type)
+	  load_external_function(COLUMNAR_LIB_NAME, "IsColumnarAmTable",
+				 true, &handle);
+	ReadColumnarOptions = (ReadColumnarOptions_type)
+	  load_external_function(COLUMNAR_LIB_NAME, "ReadColumnarOptions",
+				 true, &handle);
+
+	/*
+	 * Finally, acquire symbols the "pass through" to columnar so
+	 * that a SQL function declared on the citus module can be
+	 * defined in the columnar module. This helps with the upgrade
+	 * transition, where some columnar functions
+	 * (e.g. columnar_handler) are declared in SQL to be in the
+	 * citus module.
+	 */
 }
 
 
