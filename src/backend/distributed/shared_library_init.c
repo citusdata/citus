@@ -95,7 +95,7 @@
 #include "utils/syscache.h"
 #include "utils/varlena.h"
 
-#include "columnar/mod.h"
+#include "columnar/columnar.h"
 
 /* marks shared object as one loadable by the postgres version compiled against */
 PG_MODULE_MAGIC;

@@ -207,6 +207,7 @@ extern int columnar_compression_level;
 typedef void (*ColumnarTableSetOptions_hook_type)(Oid relid, ColumnarOptions options);
 extern ColumnarTableSetOptions_hook_type ColumnarTableSetOptions_hook;
 
+extern void columnar_init(void);
 extern void columnar_init_gucs(void);
 
 extern CompressionType ParseCompressionType(const char *compressionTypeString);

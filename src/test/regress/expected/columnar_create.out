@@ -185,3 +185,11 @@ SELECT columnar_test_helpers.columnar_metadata_has_storage_id(:columnar_temp_sto
  f
 (1 row)
 
+--
+-- Will throw error due to redefining GUCs, because citus is already
+-- loaded and has already initialized columnar code. This test is to
+-- ensure that the citus_columnar module is built and present, and
+-- that it can be loaded without link failures.
+--
+LOAD 'citus_columnar';
+ERROR:  attempt to redefine parameter "columnar.compression"
