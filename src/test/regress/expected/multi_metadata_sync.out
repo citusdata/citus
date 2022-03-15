@@ -1819,7 +1819,13 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
-UPDATE pg_dist_node SET metadatasynced=true WHERE nodeport=:worker_1_port;
+-- make sure that all the nodes have valid metadata before moving forward
+SELECT wait_until_metadata_sync(60000);
+ wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT master_add_node('localhost', :worker_2_port);
  master_add_node
 ---------------------------------------------------------------------
