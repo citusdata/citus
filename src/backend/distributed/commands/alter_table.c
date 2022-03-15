@@ -52,6 +52,7 @@
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/shared_library_init.h"
 #include "distributed/shard_utils.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
@@ -687,7 +688,7 @@ ConvertTable(TableConversionState *con)
 		strcmp(con->originalAccessMethod, "columnar") == 0)
 	{
 		ColumnarOptions options = { 0 };
-		ReadColumnarOptions(con->relationId, &options);
+		ExternReadColumnarOptions(con->relationId, &options);
 
 		ColumnarTableDDLContext *context = (ColumnarTableDDLContext *) palloc0(
 			sizeof(ColumnarTableDDLContext));
@@ -843,7 +844,7 @@ DropIndexesNotSupportedByColumnar(Oid relationId, bool suppressNoticeMessages)
 	foreach_oid(indexId, indexIdList)
 	{
 		char *indexAmName = GetIndexAccessMethodName(indexId);
-		if (ColumnarSupportsIndexAM(indexAmName))
+		if (ExternColumnarSupportsIndexAM(indexAmName))
 		{
 			continue;
 		}

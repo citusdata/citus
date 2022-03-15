@@ -25,6 +25,8 @@
 #include "columnar/columnar_compression.h"
 #include "columnar/columnar_metadata.h"
 
+#define COLUMNAR_MODULE_NAME "citus_columnar"
+
 /* Defines for valid option names */
 #define OPTION_NAME_COMPRESSION_TYPE "compression"
 #define OPTION_NAME_STRIPE_ROW_COUNT "stripe_row_limit"
@@ -187,6 +189,10 @@ typedef enum StripeWriteStateEnum
 	STRIPE_WRITE_IN_PROGRESS
 } StripeWriteStateEnum;
 
+typedef bool (*ColumnarSupportsIndexAM_type)(char *);
+typedef const char *(*CompressionTypeStr_type)(CompressionType);
+typedef bool (*IsColumnarTableAmTable_type)(Oid);
+typedef bool (*ReadColumnarOptions_type)(Oid, ColumnarOptions *);
 
 /* ColumnarReadState represents state of a columnar scan. */
 struct ColumnarReadState;
@@ -205,7 +211,6 @@ extern int columnar_compression_level;
 
 /* called when the user changes options on the given relation */
 typedef void (*ColumnarTableSetOptions_hook_type)(Oid relid, ColumnarOptions options);
-extern ColumnarTableSetOptions_hook_type ColumnarTableSetOptions_hook;
 
 extern void columnar_init(void);
 extern void columnar_init_gucs(void);
@@ -315,6 +320,5 @@ extern void NonTransactionDropWriteState(Oid relfilenode);
 extern bool PendingWritesInUpperTransactions(Oid relfilenode,
 											 SubTransactionId currentSubXid);
 extern MemoryContext GetWriteContextForDebug(void);
-
 
 #endif /* COLUMNAR_H */

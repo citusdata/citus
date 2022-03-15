@@ -100,6 +100,37 @@
 /* marks shared object as one loadable by the postgres version compiled against */
 PG_MODULE_MAGIC;
 
+ColumnarSupportsIndexAM_type ExternColumnarSupportsIndexAM = NULL;
+CompressionTypeStr_type ExternCompressionTypeStr = NULL;
+IsColumnarTableAmTable_type ExternIsColumnarTableAmTable = NULL;
+ReadColumnarOptions_type ExternReadColumnarOptions = NULL;
+
+/*
+ * Define "pass-through" functions so that a SQL function defined as one of
+ * these symbols in the citus module can use the definition in the columnar
+ * module.
+ */
+#define DEFINE_COLUMNAR_PASSTHROUGH_FUNC(funcname) \
+	static PGFunction CppConcat(extern_, funcname); \
+	PG_FUNCTION_INFO_V1(funcname); \
+	Datum funcname(PG_FUNCTION_ARGS) \
+	{ \
+		return CppConcat(extern_, funcname)(fcinfo); \
+	}
+#define INIT_COLUMNAR_PASSTHROUGH_SYMBOL(funcname) \
+	CppConcat(extern_, funcname) = load_external_function( \
+		COLUMNAR_MODULE_NAME, # funcname, true, &handle)
+
+DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_handler)
+DEFINE_COLUMNAR_PASSTHROUGH_FUNC(alter_columnar_table_set)
+DEFINE_COLUMNAR_PASSTHROUGH_FUNC(alter_columnar_table_reset)
+DEFINE_COLUMNAR_PASSTHROUGH_FUNC(upgrade_columnar_storage)
+DEFINE_COLUMNAR_PASSTHROUGH_FUNC(downgrade_columnar_storage)
+DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_relation_storageid)
+DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_storage_info)
+DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_store_memory_stats)
+DEFINE_COLUMNAR_PASSTHROUGH_FUNC(test_columnar_storage_write_new_page)
+
 #define DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE 9999999
 static char *CitusVersion = CITUS_VERSION;
 
@@ -323,12 +354,6 @@ _PG_init(void)
 	original_client_auth_hook = ClientAuthentication_hook;
 	ClientAuthentication_hook = CitusAuthHook;
 
-	/*
-	 * When the options change on a columnar table, we may need to propagate
-	 * the changes to shards.
-	 */
-	ColumnarTableSetOptions_hook = ColumnarTableSetOptionsHook;
-
 	InitializeMaintenanceDaemon();
 
 	/* initialize coordinated transaction management */
@@ -357,7 +382,56 @@ _PG_init(void)
 	{
 		DoInitialCleanup();
 	}
-	columnar_init();
+
+	/* ensure columnar module is loaded at the right time */
+	load_file(COLUMNAR_MODULE_NAME, false);
+
+	/*
+	 * Now, acquire symbols from columnar module. First, acquire
+	 * the address of the set options hook, and set it so that we
+	 * can propagate options changes.
+	 */
+	ColumnarTableSetOptions_hook_type **ColumnarTableSetOptions_hook_ptr =
+		(ColumnarTableSetOptions_hook_type **) find_rendezvous_variable(
+			"ColumnarTableSetOptions_hook");
+
+	/* rendezvous variable registered during columnar initialization */
+	Assert(ColumnarTableSetOptions_hook_ptr != NULL);
+	Assert(*ColumnarTableSetOptions_hook_ptr != NULL);
+
+	**ColumnarTableSetOptions_hook_ptr = ColumnarTableSetOptionsHook;
+
+	/*
+	 * Acquire symbols for columnar functions that citus calls.
+	 */
+	void *handle = NULL;
+	ExternColumnarSupportsIndexAM = (ColumnarSupportsIndexAM_type) (void *)
+									load_external_function(COLUMNAR_MODULE_NAME,
+														   "ColumnarSupportsIndexAM",
+														   true, &handle);
+	ExternCompressionTypeStr = (CompressionTypeStr_type) (void *)
+							   load_external_function(COLUMNAR_MODULE_NAME,
+													  "CompressionTypeStr",
+													  true, &handle);
+	ExternIsColumnarTableAmTable = (IsColumnarTableAmTable_type) (void *)
+								   load_external_function(COLUMNAR_MODULE_NAME,
+														  "IsColumnarTableAmTable",
+														  true, &handle);
+	ExternReadColumnarOptions = (ReadColumnarOptions_type) (void *)
+								load_external_function(COLUMNAR_MODULE_NAME,
+													   "ReadColumnarOptions",
+													   true, &handle);
+
+	/* initialize symbols for "pass-through" functions */
+	INIT_COLUMNAR_PASSTHROUGH_SYMBOL(columnar_handler);
+	INIT_COLUMNAR_PASSTHROUGH_SYMBOL(alter_columnar_table_set);
+	INIT_COLUMNAR_PASSTHROUGH_SYMBOL(alter_columnar_table_reset);
+	INIT_COLUMNAR_PASSTHROUGH_SYMBOL(upgrade_columnar_storage);
+	INIT_COLUMNAR_PASSTHROUGH_SYMBOL(downgrade_columnar_storage);
+	INIT_COLUMNAR_PASSTHROUGH_SYMBOL(columnar_relation_storageid);
+	INIT_COLUMNAR_PASSTHROUGH_SYMBOL(columnar_storage_info);
+	INIT_COLUMNAR_PASSTHROUGH_SYMBOL(columnar_store_memory_stats);
+	INIT_COLUMNAR_PASSTHROUGH_SYMBOL(test_columnar_storage_write_new_page);
 }
 
 

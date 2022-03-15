@@ -48,6 +48,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/namespace_utils.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/shared_library_init.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "foreign/foreign.h"
@@ -613,7 +614,7 @@ GetPreLoadTableCreationCommands(Oid relationId,
 
 
 	/* add columnar options for cstore tables */
-	if (accessMethod == NULL && IsColumnarTableAmTable(relationId))
+	if (accessMethod == NULL && ExternIsColumnarTableAmTable(relationId))
 	{
 		TableDDLCommand *cstoreOptionsDDL = ColumnarGetTableOptionsDDL(relationId);
 		if (cstoreOptionsDDL != NULL)
@@ -1047,7 +1048,8 @@ CitusCreateAlterColumnarTableSet(char *qualifiedRelationName,
 					 options->chunkRowCount,
 					 options->stripeRowCount,
 					 options->compressionLevel,
-					 quote_literal_cstr(CompressionTypeStr(options->compressionType)));
+					 quote_literal_cstr(ExternCompressionTypeStr(
+											options->compressionType)));
 
 	return buf.data;
 }
@@ -1136,7 +1138,7 @@ ColumnarGetTableOptionsDDL(Oid relationId)
 	char *relationName = get_rel_name(relationId);
 
 	ColumnarOptions options = { 0 };
-	ReadColumnarOptions(relationId, &options);
+	ExternReadColumnarOptions(relationId, &options);
 
 	return ColumnarGetCustomTableOptionsDDL(schemaName, relationName, options);
 }
