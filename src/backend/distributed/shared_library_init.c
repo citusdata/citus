@@ -323,12 +323,6 @@ _PG_init(void)
 	original_client_auth_hook = ClientAuthentication_hook;
 	ClientAuthentication_hook = CitusAuthHook;
 
-	/*
-	 * When the options change on a columnar table, we may need to propagate
-	 * the changes to shards.
-	 */
-	ColumnarTableSetOptions_hook = ColumnarTableSetOptionsHook;
-
 	InitializeMaintenanceDaemon();
 
 	/* initialize coordinated transaction management */
@@ -357,7 +351,28 @@ _PG_init(void)
 	{
 		DoInitialCleanup();
 	}
-	columnar_init();
+
+	/*
+	 * For convenience and backwards compatibility, we avoid users
+	 * having to add both citus and columnar to
+	 * shared_preload_libraries by loading citus_columnar.so as
+	 * part of loading citus.so.
+	 */
+	load_file(COLUMNAR_LIB_NAME, false);
+
+	ColumnarTableSetOptions_hook_type **ColumnarTableSetOptions_hook_ptr =
+		(ColumnarTableSetOptions_hook_type **) find_rendezvous_variable(
+			"ColumnarTableSetOptions_hook");
+
+	/* rendezvous variable registered during columnar initialization */
+	Assert(ColumnarTableSetOptions_hook_ptr != NULL);
+	Assert(*ColumnarTableSetOptions_hook_ptr != NULL);
+
+	/*
+	 * Set the hook, so that when the options change on a columnar
+	 * table, we propagate the changes to shards.
+	 */
+	**ColumnarTableSetOptions_hook_ptr = ColumnarTableSetOptionsHook;
 }
 
 
