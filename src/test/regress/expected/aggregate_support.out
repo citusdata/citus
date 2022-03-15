@@ -1189,6 +1189,17 @@ DROP TABLE dummy_tbl CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to function dummy_fnc(dummy_tbl,double precision)
 drop cascades to function dependent_agg(double precision)
+-- Show that after dropping a table on which functions and aggregates depending on
+-- pg_dist_object is consistent on coordinator and worker node.
+SELECT pg_identify_object_as_address(classid, objid, objsubid)::text
+FROM pg_catalog.pg_dist_object
+    EXCEPT
+SELECT unnest(result::text[]) AS unnested_result
+FROM run_command_on_workers($$SELECT array_agg(pg_identify_object_as_address(classid, objid, objsubid)) from pg_catalog.pg_dist_object$$);
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
 SET citus.create_object_propagation TO automatic;
 begin;
     create type typ1 as (a int);

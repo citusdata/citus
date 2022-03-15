@@ -27,12 +27,16 @@
 #include "distributed/listutils.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/multi_partitioning_utils.h"
+#include "distributed/worker_protocol.h"
 #include "foreign/foreign.h"
+#include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
 
 PG_FUNCTION_INFO_V1(worker_drop_distributed_table);
 PG_FUNCTION_INFO_V1(worker_drop_shell_table);
@@ -142,20 +146,11 @@ WorkerDropDistributedTable(Oid relationId)
 
 	UnmarkObjectDistributed(&distributedTableObject);
 
-	if (!IsObjectAddressOwnedByExtension(&distributedTableObject, NULL))
-	{
-		/*
-		 * If the table is owned by an extension, we cannot drop it, nor should we
-		 * until the user runs DROP EXTENSION. Therefore, we skip dropping the
-		 * table and only delete the metadata.
-		 *
-		 * We drop the table with cascade since other tables may be referring to it.
-		 */
-		performDeletion(&distributedTableObject, DROP_CASCADE,
-						PERFORM_DELETION_INTERNAL);
-	}
-
-	/* iterate over shardList to delete the corresponding rows */
+	/*
+	 * Remove metadata before object's itself to make functions no-op within
+	 * drop event trigger for undistributed objects on worker nodes except
+	 * removing pg_dist_object entries.
+	 */
 	List *shardList = LoadShardList(relationId);
 	uint64 *shardIdPointer = NULL;
 	foreach_ptr(shardIdPointer, shardList)
@@ -176,6 +171,33 @@ WorkerDropDistributedTable(Oid relationId)
 
 	/* delete the row from pg_dist_partition */
 	DeletePartitionRow(relationId);
+
+	/*
+	 * If the table is owned by an extension, we cannot drop it, nor should we
+	 * until the user runs DROP EXTENSION. Therefore, we skip dropping the
+	 * table.
+	 */
+	if (!IsObjectAddressOwnedByExtension(&distributedTableObject, NULL))
+	{
+		char *relName = get_rel_name(relationId);
+		Oid schemaId = get_rel_namespace(relationId);
+		char *schemaName = get_namespace_name(schemaId);
+
+		StringInfo dropCommand = makeStringInfo();
+		appendStringInfo(dropCommand, "DROP%sTABLE %s CASCADE",
+						 IsForeignTable(relationId) ? " FOREIGN " : " ",
+						 quote_qualified_identifier(schemaName, relName));
+
+		Node *dropCommandNode = ParseTreeNode(dropCommand->data);
+
+		/*
+		 * We use ProcessUtilityParseTree (instead of performDeletion) to make sure that
+		 * we also drop objects that depend on the table and call the drop event trigger
+		 * which removes them from pg_dist_object.
+		 */
+		ProcessUtilityParseTree(dropCommandNode, dropCommand->data,
+								PROCESS_UTILITY_QUERY, NULL, None_Receiver, NULL);
+	}
 }
 
 
