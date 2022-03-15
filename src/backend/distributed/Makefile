@@ -30,8 +30,10 @@ ENSURE_SUBDIRS_EXIST := $(shell mkdir -p $(SUBDIRS))
 
 # That patsubst rule searches all directories listed in SUBDIRS for .c
 # files, and adds the corresponding .o files to OBJS
-OBJS += \
+ALL_OBJS = \
 	$(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(citus_abs_srcdir)/$(dir)/*.c))))
+
+OBJS += $(filter-out ../columnar/mod.o,$(ALL_OBJS))
 
 # be explicit about the default target
 all:
@@ -84,7 +86,8 @@ endif
 .PHONY: clean-full install install-downgrades install-all
 
 cleanup-before-install:
-	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus*
+	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus.control
+	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus--*
 
 install: cleanup-before-install
 
