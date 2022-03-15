@@ -662,10 +662,11 @@ IsWorkerTheCurrentNode(WorkerNode *workerNode)
 	const char *command =
 		"SELECT metadata ->> 'server_id' AS server_id FROM pg_dist_node_metadata";
 
-	int r = SendRemoteCommand(workerConnection, command);
+	int resultCode = SendRemoteCommand(workerConnection, command);
 
-	if (r == 0)
+	if (resultCode == 0)
 	{
+		CloseConnection(workerConnection);
 		return false;
 	}
 
