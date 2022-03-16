@@ -123,7 +123,7 @@ END;
           GROUP BY result;
           IF enforce_version_check AND worker_node_version_count != 1 THEN
                     RAISE EXCEPTION 'All nodes should have the same Citus version installed. Currently '
-                                     'the some of the workers has version different versions';
+                                     'some of the workers have different versions.';
           ELSE
                     RAISE DEBUG 'All worker nodes have the same Citus version';
           END IF;
