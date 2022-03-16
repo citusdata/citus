@@ -64,11 +64,11 @@ def add_settings(abs_data_path, settings):
 
 def create_role(pg_path, node_ports, user_name):
     def create(port):
-        command = "SELECT worker_create_or_alter_role('{}', 'CREATE ROLE {} WITH LOGIN CREATEROLE CREATEDB;', NULL)".format(
+        command = "SET citus.enable_ddl_propagation TO OFF; SELECT worker_create_or_alter_role('{}', 'CREATE ROLE {} WITH LOGIN CREATEROLE CREATEDB;', NULL)".format(
             user_name, user_name
         )
         utils.psql(pg_path, port, command)
-        command = "GRANT CREATE ON DATABASE postgres to {}".format(user_name)
+        command = "SET citus.enable_ddl_propagation TO OFF; GRANT CREATE ON DATABASE postgres to {}".format(user_name)
         utils.psql(pg_path, port, command)
 
     parallel_run(create, node_ports)
