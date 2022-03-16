@@ -354,7 +354,7 @@ SELECT run_command_on_workers($$DROP SCHEMA localschema;$$);
 SET client_min_messages TO ERROR;
 CREATE ROLE schema_owner WITH LOGIN;
 RESET client_min_messages;
-SELECT run_command_on_workers($$CREATE ROLE schema_owner WITH LOGIN;$$);
+SELECT run_command_on_workers($$SET citus.enable_ddl_propagation TO OFF;CREATE ROLE schema_owner WITH LOGIN;RESET citus.enable_ddl_propagation;$$);
 RESET citus.enable_ddl_propagation;
 -- create schema with the name of the owner
 CREATE SCHEMA AUTHORIZATION schema_owner;
@@ -369,7 +369,7 @@ SET citus.enable_ddl_propagation TO OFF;
 SET client_min_messages TO ERROR;
 CREATE ROLE role_to_be_granted WITH LOGIN;
 RESET client_min_messages;
-SELECT run_command_on_workers($$CREATE ROLE role_to_be_granted WITH LOGIN;$$);
+SELECT run_command_on_workers($$SET citus.enable_ddl_propagation TO OFF;CREATE ROLE role_to_be_granted WITH LOGIN;RESET citus.enable_ddl_propagation;$$);
 RESET citus.enable_ddl_propagation;
 
 CREATE SCHEMA old_schema;
