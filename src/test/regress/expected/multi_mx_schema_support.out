@@ -541,11 +541,11 @@ SELECT run_command_on_workers($$DROP SCHEMA localschema;$$);
 SET client_min_messages TO ERROR;
 CREATE ROLE schema_owner WITH LOGIN;
 RESET client_min_messages;
-SELECT run_command_on_workers($$CREATE ROLE schema_owner WITH LOGIN;$$);
+SELECT run_command_on_workers($$SET citus.enable_ddl_propagation TO OFF;CREATE ROLE schema_owner WITH LOGIN;RESET citus.enable_ddl_propagation;$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
+ (localhost,57637,t,SET)
+ (localhost,57638,t,SET)
 (2 rows)
 
 RESET citus.enable_ddl_propagation;
@@ -566,11 +566,11 @@ SET citus.enable_ddl_propagation TO OFF;
 SET client_min_messages TO ERROR;
 CREATE ROLE role_to_be_granted WITH LOGIN;
 RESET client_min_messages;
-SELECT run_command_on_workers($$CREATE ROLE role_to_be_granted WITH LOGIN;$$);
+SELECT run_command_on_workers($$SET citus.enable_ddl_propagation TO OFF;CREATE ROLE role_to_be_granted WITH LOGIN;RESET citus.enable_ddl_propagation;$$);
       run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
+ (localhost,57637,t,SET)
+ (localhost,57638,t,SET)
 (2 rows)
 
 RESET citus.enable_ddl_propagation;
