@@ -645,12 +645,26 @@ LogTransactionNode(TransactionNode *transactionNode)
 	appendStringInfo(logMessage, "[WaitsFor gpids: %s]",
 					 WaitsForToString(transactionNode->waitsFor));
 
+	uint64 gpid = transactionId->gpid;
+	bool gpidMissingOk = false;
+
 	/* log the backend query if the proc is associated with the transaction */
 	if (transactionNode->initiatorProc != NULL)
 	{
 		const char *backendQuery =
 			pgstat_get_backend_current_activity(transactionNode->initiatorProc->pid,
 												false);
+
+		appendStringInfo(logMessage, "[Backend Query: %s]", backendQuery);
+	}
+	else if (
+		gpid &&
+		ExtractNodeIdFromGlobalPID(gpid, gpidMissingOk) == GetLocalNodeId()
+		)
+	{
+		int pid = ExtractProcessIdFromGlobalPID(gpid);
+		const char *backendQuery =
+			pgstat_get_backend_current_activity(pid, false);
 
 		appendStringInfo(logMessage, "[Backend Query: %s]", backendQuery);
 	}
