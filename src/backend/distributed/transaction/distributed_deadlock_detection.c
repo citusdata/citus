@@ -457,25 +457,29 @@ BuildAdjacencyListsForWaitGraph(WaitGraph *waitGraph)
 
 	HTAB *adjacencyList = hash_create("distributed deadlock detection", 64, &info,
 									  hashFlags);
-
 	for (int edgeIndex = 0; edgeIndex < edgeCount; edgeIndex++)
 	{
 		WaitEdge *edge = &waitGraph->edges[edgeIndex];
 		bool transactionOriginator = false;
 
+
 		DistributedTransactionId waitingId = {
 			edge->waitingNodeId,
 			transactionOriginator,
 			edge->waitingTransactionNum,
-			edge->waitingTransactionStamp
+			edge->waitingTransactionStamp,
+			edge->waitingGPid,
 		};
 
 		DistributedTransactionId blockingId = {
 			edge->blockingNodeId,
 			transactionOriginator,
 			edge->blockingTransactionNum,
-			edge->blockingTransactionStamp
+			edge->blockingTransactionStamp,
+			edge->blockingGPid,
 		};
+
+		elog(LOG, UINT64_FORMAT "->" UINT64_FORMAT, waitingId.gpid, blockingId.gpid);
 
 		TransactionNode *waitingTransaction =
 			GetOrCreateTransactionNode(adjacencyList, &waitingId);
@@ -528,6 +532,8 @@ DistributedTransactionIdHash(const void *key, Size keysize)
 									   sizeof(int64)));
 	hash = hash_combine(hash, hash_any((unsigned char *) &entry->timestamp,
 									   sizeof(TimestampTz)));
+	hash = hash_combine(hash, hash_any((unsigned char *) &entry->gpid,
+									   sizeof(uint64)));
 
 	return hash;
 }
@@ -546,7 +552,15 @@ DistributedTransactionIdCompare(const void *a, const void *b, Size keysize)
 	DistributedTransactionId *xactIdA = (DistributedTransactionId *) a;
 	DistributedTransactionId *xactIdB = (DistributedTransactionId *) b;
 
-	if (!TimestampDifferenceExceeds(xactIdB->timestamp, xactIdA->timestamp, 0))
+	if (xactIdA->gpid < xactIdB->gpid)
+	{
+		return -1;
+	}
+	else if (xactIdA->gpid > xactIdB->gpid)
+	{
+		return 1;
+	}
+	else if (!TimestampDifferenceExceeds(xactIdB->timestamp, xactIdA->timestamp, 0))
 	{
 		/* ! (B <= A) = A < B */
 		return -1;
@@ -594,11 +608,13 @@ LogCancellingBackend(TransactionNode *transactionNode)
 
 	StringInfo logMessage = makeStringInfo();
 
-	appendStringInfo(logMessage, "Cancelling the following backend "
-								 "to resolve distributed deadlock "
-								 "(transaction number = " UINT64_FORMAT ", pid = %d)",
+	appendStringInfo(logMessage,
+					 "Cancelling the following backend "
+					 "to resolve distributed deadlock "
+					 "(transaction number = " UINT64_FORMAT
+					 ", gpid = " UINT64_FORMAT ")",
 					 transactionNode->transactionId.transactionNumber,
-					 transactionNode->initiatorProc->pid);
+					 transactionNode->transactionId.gpid);
 
 	LogDistributedDeadlockDebugMessage(logMessage->data);
 }
@@ -620,12 +636,14 @@ LogTransactionNode(TransactionNode *transactionNode)
 	DistributedTransactionId *transactionId = &(transactionNode->transactionId);
 
 	appendStringInfo(logMessage,
-					 "[DistributedTransactionId: (%d, " UINT64_FORMAT ", %s)] = ",
+					 "[DistributedTransactionId: (" UINT64_FORMAT ", %d," UINT64_FORMAT
+					 ", %s)] = ",
+					 transactionId->gpid,
 					 transactionId->initiatorNodeIdentifier,
 					 transactionId->transactionNumber,
 					 timestamptz_to_str(transactionId->timestamp));
 
-	appendStringInfo(logMessage, "[WaitsFor transaction numbers: %s]",
+	appendStringInfo(logMessage, "[WaitsFor gpids: %s]",
 					 WaitsForToString(transactionNode->waitsFor));
 
 	/* log the backend query if the proc is associated with the transaction */
@@ -679,7 +697,7 @@ WaitsForToString(List *waitsFor)
 		}
 
 		appendStringInfo(transactionIdStr, UINT64_FORMAT,
-						 waitingNode->transactionId.transactionNumber);
+						 waitingNode->transactionId.gpid);
 	}
 
 	return transactionIdStr->data;

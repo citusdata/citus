@@ -45,7 +45,6 @@ typedef struct PROCStack
 } PROCStack;
 
 
-static void AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex);
 static void ReturnWaitGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo);
 static void AddWaitEdgeFromBlockedProcessResult(WaitGraph *waitGraph, PGresult *result,
 												int rowIndex);
@@ -175,24 +174,12 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 	{
 		StringInfo queryString = makeStringInfo();
 
-		if (onlyDistributedTx)
-		{
-			appendStringInfo(queryString,
-							 "SELECT waiting_pid, waiting_node_id, "
-							 "waiting_transaction_num, waiting_transaction_stamp, "
-							 "blocking_pid, blocking_node_id, blocking_transaction_num, "
-							 "blocking_transaction_stamp, blocking_transaction_waiting "
-							 "FROM dump_local_wait_edges()");
-		}
-		else
-		{
-			appendStringInfo(queryString,
-							 "SELECT waiting_global_pid, waiting_pid, "
-							 "waiting_node_id, waiting_transaction_num, waiting_transaction_stamp, "
-							 "blocking_global_pid,blocking_pid, blocking_node_id, "
-							 "blocking_transaction_num, blocking_transaction_stamp, blocking_transaction_waiting "
-							 "FROM citus_internal_local_blocked_processes()");
-		}
+		appendStringInfo(queryString,
+						 "SELECT waiting_global_pid, waiting_pid, "
+						 "waiting_node_id, waiting_transaction_num, waiting_transaction_stamp, "
+						 "blocking_global_pid,blocking_pid, blocking_node_id, "
+						 "blocking_transaction_num, blocking_transaction_stamp, blocking_transaction_waiting "
+						 "FROM citus_internal_local_blocked_processes()");
 
 		int querySent = SendRemoteCommand(connection, queryString->data);
 		if (querySent == 0)
@@ -216,13 +203,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 		int64 rowCount = PQntuples(result);
 		int64 colCount = PQnfields(result);
 
-		if (onlyDistributedTx && colCount != 9)
-		{
-			ereport(WARNING, (errmsg("unexpected number of columns from "
-									 "dump_local_wait_edges")));
-			continue;
-		}
-		else if (!onlyDistributedTx && colCount != 11)
+		if (colCount != 11)
 		{
 			ereport(WARNING, (errmsg("unexpected number of columns from "
 									 "citus_internal_local_blocked_processes")));
@@ -231,14 +212,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 
 		for (int64 rowIndex = 0; rowIndex < rowCount; rowIndex++)
 		{
-			if (onlyDistributedTx)
-			{
-				AddWaitEdgeFromResult(waitGraph, result, rowIndex);
-			}
-			else
-			{
-				AddWaitEdgeFromBlockedProcessResult(waitGraph, result, rowIndex);
-			}
+			AddWaitEdgeFromBlockedProcessResult(waitGraph, result, rowIndex);
 		}
 
 		PQclear(result);
@@ -246,29 +220,6 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 	}
 
 	return waitGraph;
-}
-
-
-/*
- * AddWaitEdgeFromResult adds an edge to the wait graph that is read from
- * a PGresult.
- */
-static void
-AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex)
-{
-	WaitEdge *waitEdge = AllocWaitEdge(waitGraph);
-
-	waitEdge->waitingGPid = 0; /* not requested for deadlock detection */
-	waitEdge->waitingPid = ParseIntField(result, rowIndex, 0);
-	waitEdge->waitingNodeId = ParseIntField(result, rowIndex, 1);
-	waitEdge->waitingTransactionNum = ParseIntField(result, rowIndex, 2);
-	waitEdge->waitingTransactionStamp = ParseTimestampTzField(result, rowIndex, 3);
-	waitEdge->blockingGPid = 0; /* not requested for deadlock detection */
-	waitEdge->blockingPid = ParseIntField(result, rowIndex, 4);
-	waitEdge->blockingNodeId = ParseIntField(result, rowIndex, 5);
-	waitEdge->blockingTransactionNum = ParseIntField(result, rowIndex, 6);
-	waitEdge->blockingTransactionStamp = ParseTimestampTzField(result, rowIndex, 7);
-	waitEdge->isBlockingXactWaiting = ParseBoolField(result, rowIndex, 8);
 }
 
 
