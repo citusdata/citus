@@ -202,12 +202,15 @@ RelationIsAKnownShard(Oid shardRelationId)
 		}
 	}
 
-	Relation relation = try_relation_open(shardRelationId, AccessShareLock);
-	if (relation == NULL)
+	/*
+	 * We do not take locks here, because that might block a query on pg_class.
+	 */
+
+	if (!SearchSysCacheExists1(RELOID, ObjectIdGetDatum(shardRelationId)))
 	{
+		/* relation does not exist */
 		return false;
 	}
-	relation_close(relation, NoLock);
 
 	/*
 	 * If the input relation is an index we simply replace the
