@@ -492,11 +492,12 @@ SELECT  "Constraint", "Definition" FROM table_fkeys
   WHERE "Constraint" LIKE 'table2_group%' OR "Constraint" LIKE 'table1_group%';
               Constraint               |                          Definition
 ---------------------------------------------------------------------
+ table2_group1_table1_id_fkey          | FOREIGN KEY (table1_id) REFERENCES table1_group1(id)
  table2_group1_table1_id_fkey_13000028 | FOREIGN KEY (table1_id) REFERENCES table1_group1_13000022(id)
  table2_group1_table1_id_fkey_13000029 | FOREIGN KEY (table1_id) REFERENCES table1_group1_13000023(id)
  table2_group1_table1_id_fkey_13000031 | FOREIGN KEY (table1_id) REFERENCES table1_group1_13000025(id)
  table2_group1_table1_id_fkey_13000033 | FOREIGN KEY (table1_id) REFERENCES table1_group1_13000027(id)
-(4 rows)
+(5 rows)
 
 \c - - - :master_port
 -- test shard copy with foreign constraints
