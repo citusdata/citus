@@ -41,17 +41,15 @@ SELECT pg_cancel_backend(citus_backend_gpid());
 
 \c - postgres - :master_port
 
-SELECT nodeid AS coordinator_node_id FROM pg_dist_node WHERE nodeport = :master_port \gset
-
 SET client_min_messages TO DEBUG;
 
 -- 10000000000 is the node id multiplier for global pid
-SELECT pg_cancel_backend(10000000000 * :coordinator_node_id + 0);
-SELECT pg_terminate_backend(10000000000 * :coordinator_node_id + 0);
+SELECT pg_cancel_backend(10000000000 * citus_coordinator_nodeid() + 0);
+SELECT pg_terminate_backend(10000000000 * citus_coordinator_nodeid() + 0);
 
 RESET client_min_messages;
 
-SELECT citus_backend_gpid() = citus_calculate_gpid(:coordinator_node_id, pg_backend_pid());
+SELECT citus_backend_gpid() = citus_calculate_gpid(citus_coordinator_nodeid(), pg_backend_pid());
 
 SELECT nodename = citus_nodename_for_nodeid(nodeid) AND nodeport = citus_nodeport_for_nodeid(nodeid)
 FROM pg_dist_node
