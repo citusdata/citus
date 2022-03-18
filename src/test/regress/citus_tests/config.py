@@ -225,7 +225,7 @@ class CitusSmallSharedPoolSizeConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {
-             "citus.local_shared_pool_size": 5,
+            "citus.local_shared_pool_size": 5,
             "citus.max_shared_pool_size": 5,
         }
 
@@ -271,7 +271,7 @@ class CitusUnusualExecutorConfig(CitusDefaultClusterConfig):
 
         # this setting does not necessarily need to be here
         # could go any other test
-        self.env_variables = {'PGAPPNAME' : 'test_app'}
+        self.env_variables = {"PGAPPNAME": "test_app"}
 
 
 class CitusSmallCopyBuffersConfig(CitusDefaultClusterConfig):
