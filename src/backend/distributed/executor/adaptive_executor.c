@@ -1436,6 +1436,15 @@ DistributedExecutionRequiresRollback(List *taskList)
 		return true;
 	}
 
+	if (task->queryCount > 1)
+	{
+		/*
+		 * When there are multiple sequential queries in a task
+		 * we need to run those as a transaction.
+		 */
+		return true;
+	}
+
 	return false;
 }
 
