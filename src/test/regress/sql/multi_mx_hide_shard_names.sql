@@ -41,8 +41,15 @@ SET search_path TO 'mx_hide_shard_names';
 SELECT * FROM citus_shards_on_worker WHERE "Schema" = 'mx_hide_shard_names' ORDER BY 2;
 SELECT * FROM citus_shard_indexes_on_worker WHERE "Schema" = 'mx_hide_shard_names' ORDER BY 2;
 
+-- make sure that pg_class queries do not get blocked on table locks
+begin;
+lock table test_table in access exclusive mode;
+prepare transaction 'take-aggressive-lock';
+
 -- shards are hidden when using psql as application_name
 SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+
+commit prepared 'take-aggressive-lock';
 
 -- now create an index
 \c - - - :master_port
