@@ -334,6 +334,31 @@ CREATE TYPE circ_type1 AS (a int);
 CREATE TYPE circ_type2 AS (a int, b circ_type1);
 ALTER TYPE circ_type1 ADD ATTRIBUTE b circ_type2;
 
+-- Show that types can be created locally if has unsupported dependency
+CREATE TYPE text_local_def;
+CREATE FUNCTION text_local_def_in(cstring)
+   RETURNS text_local_def
+   AS 'textin'
+   LANGUAGE internal STRICT IMMUTABLE;
+CREATE FUNCTION text_local_def_out(text_local_def)
+   RETURNS cstring
+   AS 'textout'
+   LANGUAGE internal STRICT IMMUTABLE;
+CREATE TYPE text_local_def (
+   internallength = variable,
+   input = text_local_def_in,
+   output = text_local_def_out,
+   alignment = int4,
+   default = 'zippo'
+);
+
+-- It should be created locally as it has unsupported dependency
+CREATE TYPE default_test_row AS (f1 text_local_def, f2 int4);
+
+-- Distributing table depending on that type should error out
+CREATE TABLE table_text_local_def(id int, col_1 default_test_row);
+SELECT create_distributed_table('table_text_local_def','id');
+
 -- clear objects
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;

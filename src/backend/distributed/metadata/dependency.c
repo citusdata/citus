@@ -776,10 +776,11 @@ DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 	#endif
 
 	/*
-	 * If the given object is a procedure, we want to create it locally,
+	 * If the given object is a procedure or type, we want to create it locally,
 	 * so provide that information in the error detail.
 	 */
-	if (getObjectClass(objectAddress) == OCLASS_PROC)
+	if (getObjectClass(objectAddress) == OCLASS_PROC ||
+		getObjectClass(objectAddress) == OCLASS_TYPE)
 	{
 		appendStringInfo(detailInfo, "\"%s\" will be created only locally",
 						 objectDescription);
