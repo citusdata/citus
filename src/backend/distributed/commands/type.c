@@ -57,6 +57,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
@@ -132,28 +133,7 @@ PreprocessCompositeTypeStmt(Node *node, const char *queryString,
 	/* fully qualify before lookup and later deparsing */
 	QualifyTreeNode(node);
 
-	/*
-	 * reconstruct creation statement in a portable fashion. The create_or_replace helper
-	 * function will be used to create the type in an idempotent manner on the workers.
-	 *
-	 * Types could exist on the worker prior to being created on the coordinator when the
-	 * type previously has been attempted to be created in a transaction which did not
-	 * commit on the coordinator.
-	 */
-	const char *compositeTypeStmtSql = DeparseCompositeTypeStmt(node);
-	compositeTypeStmtSql = WrapCreateOrReplace(compositeTypeStmtSql);
-
-	/*
-	 * when we allow propagation within a transaction block we should make sure to only
-	 * allow this in sequential mode
-	 */
-	EnsureSequentialMode(OBJECT_TYPE);
-
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) compositeTypeStmtSql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NIL;
 }
 
 
@@ -176,9 +156,39 @@ PostprocessCompositeTypeStmt(Node *node, const char *queryString)
 	 * locally it can't be missing
 	 */
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
+
+	/* If the type has any unsupported dependency, create it locally */
+	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(&typeAddress);
+	if (errMsg != NULL)
+	{
+		RaiseDeferredError(errMsg, WARNING);
+		return NIL;
+	}
+
+	/*
+	 * when we allow propagation within a transaction block we should make sure to only
+	 * allow this in sequential mode
+	 */
+	EnsureSequentialMode(OBJECT_TYPE);
+
 	EnsureDependenciesExistOnAllNodes(&typeAddress);
 
-	return NIL;
+	/*
+	 * reconstruct creation statement in a portable fashion. The create_or_replace helper
+	 * function will be used to create the type in an idempotent manner on the workers.
+	 *
+	 * Types could exist on the worker prior to being created on the coordinator when the
+	 * type previously has been attempted to be created in a transaction which did not
+	 * commit on the coordinator.
+	 */
+	const char *compositeTypeStmtSql = DeparseCompositeTypeStmt(node);
+	compositeTypeStmtSql = WrapCreateOrReplace(compositeTypeStmtSql);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) compositeTypeStmtSql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
