@@ -1,3 +1,15 @@
+### citus v10.2.5 (March 15, 2022) ###
+
+* Fixes a bug that could cause `worker_save_query_explain_analyze` to fail on
+  custom types
+
+* Fixes a bug that limits usage of sequences in non-integer columns
+
+* Fixes a crash that occurs when the aggregate that cannot be pushed-down
+  returns empty result from a worker
+
+* Improves concurrent metadata syncing and metadata changing DDL operations
+
 ### citus v10.2.4 (February 1, 2022) ###
 
 * Adds support for operator class parameters in indexes
