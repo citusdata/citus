@@ -603,6 +603,23 @@ SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid
 
 DROP TABLE dummy_tbl CASCADE;
 
+-- Show that polymorphic aggregates with zero-argument works
+CREATE FUNCTION stfnp_zero_arg(int[]) RETURNS int[] AS
+'select $1' LANGUAGE SQL;
+
+CREATE FUNCTION ffp_zero_arg(anyarray) RETURNS anyarray AS
+'select $1' LANGUAGE SQL;
+
+CREATE AGGREGATE zero_arg_agg(*) (SFUNC = stfnp_zero_arg, STYPE = int4[],
+  FINALFUNC = ffp_zero_arg, INITCOND = '{}');
+
+CREATE TABLE zero_arg_agg_table(f1 int, f2 int[]);
+SELECT create_distributed_table('zero_arg_agg_table','f1');
+INSERT INTO zero_arg_agg_table VALUES(1, array[1]);
+INSERT INTO zero_arg_agg_table VALUES(1, array[11]);
+
+SELECT zero_arg_agg(*) from zero_arg_agg_table;
+
 -- Show that after dropping a table on which functions and aggregates depending on
 -- pg_dist_object is consistent on coordinator and worker node.
 SELECT pg_identify_object_as_address(classid, objid, objsubid)::text
