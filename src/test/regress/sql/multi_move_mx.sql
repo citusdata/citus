@@ -3,8 +3,6 @@
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1550000;
 
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
-
 -- Create mx test tables
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
@@ -134,9 +132,3 @@ LIMIT 1 OFFSET 1;
 DROP TABLE mx_table_1;
 DROP TABLE mx_table_2;
 DROP TABLE mx_table_3;
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
-\c - - - :worker_2_port
-DELETE FROM pg_dist_node;
-DELETE FROM pg_dist_partition;
-DELETE FROM pg_dist_shard;
-DELETE FROM pg_dist_shard_placement;
