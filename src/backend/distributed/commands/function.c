@@ -966,6 +966,14 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 		insertorderbyat = agg->aggnumdirectargs;
 	}
 
+	/*
+	 * For zero-argument aggregate, write * in place of the list of arguments
+	 */
+	if (numargs == 0)
+	{
+		appendStringInfo(&buf, "*");
+	}
+
 	for (i = 0; i < numargs; i++)
 	{
 		Oid argtype = argtypes[i];
