@@ -345,6 +345,62 @@ SELECT result FROM run_command_on_all_nodes($$
     SELECT 'my_turkish_dict'::regdictionary;
 $$);
 
+-- test different templates that are used in dictionaries
+CREATE TEXT SEARCH DICTIONARY simple_dict (
+    TEMPLATE = pg_catalog.simple,
+    STOPWORDS = english,
+    accept = false
+);
+SELECT COUNT(DISTINCT result)=1 FROM run_command_on_all_nodes($$
+    SELECT ROW(dictname, dictnamespace::regnamespace, dictowner::regrole, tmplname, dictinitoption)
+    FROM pg_ts_dict d JOIN pg_ts_template t ON ( d.dicttemplate = t.oid )
+    WHERE dictname = 'simple_dict';
+$$);
+
+CREATE TEXT SEARCH DICTIONARY synonym_dict (
+    template=synonym,
+    synonyms='synonym_sample',
+    casesensitive=1
+);
+SELECT COUNT(DISTINCT result)=1 FROM run_command_on_all_nodes($$
+    SELECT ROW(dictname, dictnamespace::regnamespace, dictowner::regrole, tmplname, dictinitoption)
+    FROM pg_ts_dict d JOIN pg_ts_template t ON ( d.dicttemplate = t.oid )
+    WHERE dictname = 'synonym_dict';
+$$);
+
+CREATE TEXT SEARCH DICTIONARY thesaurus_dict (
+    TEMPLATE = thesaurus,
+    DictFile = thesaurus_sample,
+    Dictionary = pg_catalog.english_stem
+);
+SELECT COUNT(DISTINCT result)=1 FROM run_command_on_all_nodes($$
+    SELECT ROW(dictname, dictnamespace::regnamespace, dictowner::regrole, tmplname, dictinitoption)
+    FROM pg_ts_dict d JOIN pg_ts_template t ON ( d.dicttemplate = t.oid )
+    WHERE dictname = 'thesaurus_dict';
+$$);
+
+CREATE TEXT SEARCH DICTIONARY ispell_dict (
+    TEMPLATE = ispell,
+    DictFile = ispell_sample,
+    AffFile = ispell_sample,
+    Stopwords = english
+);
+SELECT COUNT(DISTINCT result)=1 FROM run_command_on_all_nodes($$
+    SELECT ROW(dictname, dictnamespace::regnamespace, dictowner::regrole, tmplname, dictinitoption)
+    FROM pg_ts_dict d JOIN pg_ts_template t ON ( d.dicttemplate = t.oid )
+    WHERE dictname = 'ispell_dict';
+$$);
+
+CREATE TEXT SEARCH DICTIONARY snowball_dict (
+    TEMPLATE = snowball,
+    Language = english,
+    StopWords = english
+);
+SELECT COUNT(DISTINCT result)=1 FROM run_command_on_all_nodes($$
+    SELECT ROW(dictname, dictnamespace::regnamespace, dictowner::regrole, tmplname, dictinitoption)
+    FROM pg_ts_dict d JOIN pg_ts_template t ON ( d.dicttemplate = t.oid )
+    WHERE dictname = 'snowball_dict';
+$$);
 
 SET client_min_messages TO 'warning';
 DROP SCHEMA text_search, text_search2, "Text Search Requiring Quote's" CASCADE;
