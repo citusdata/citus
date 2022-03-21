@@ -604,11 +604,6 @@ DETAIL:  "type temp_type" will be created only locally
 CREATE TYPE pg_temp.temp_enum AS ENUM ('one', 'two', 'three');
 WARNING:  "type temp_enum" has dependency on unsupported object "schema pg_temp_xxx"
 DETAIL:  "type temp_enum" will be created only locally
-WARNING:  cannot PREPARE a transaction that has operated on temporary objects
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: another command is already in progress
-ERROR:  cannot PREPARE a transaction that has operated on temporary objects
-CONTEXT:  while executing command on localhost:xxxxx
 -- clear objects
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
