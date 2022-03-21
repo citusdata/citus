@@ -163,6 +163,13 @@ ALTER TABLE test_table ADD COLUMN id3 bigserial;
 ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes when metadata is synchronized to workers
 ALTER TABLE test_table ADD COLUMN id4 bigserial CHECK (id4 > 0);
 ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes when metadata is synchronized to workers
+CREATE SEQUENCE pg_temp.temp_sequence;
+CREATE TABLE table_with_temp_sequence (
+  dist_key int,
+  seq_col bigint default nextval('pg_temp.temp_sequence')
+);
+SELECT create_distributed_table('table_with_temp_sequence', 'dist_key');
+ERROR:  "table table_with_temp_sequence" has dependency on unsupported object "schema pg_temp_xxx"
 DROP TABLE test_table CASCADE;
 DROP SEQUENCE test_sequence_0;
 DROP SEQUENCE test_sequence_1;

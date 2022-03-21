@@ -297,6 +297,14 @@ PostprocessCreateEnumStmt(Node *node, const char *queryString)
 
 	/* lookup type address of just created type */
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
+
+	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(&typeAddress);
+	if (errMsg != NULL)
+	{
+		RaiseDeferredError(errMsg, WARNING);
+		return NIL;
+	}
+
 	EnsureDependenciesExistOnAllNodes(&typeAddress);
 
 	return NIL;

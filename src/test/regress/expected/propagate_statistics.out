@@ -15,6 +15,8 @@ SELECT create_distributed_table('test_stats', 'a');
 
 (1 row)
 
+CREATE STATISTICS pg_temp.s1 (dependencies) ON a, b FROM test_stats;
+ERROR:  "statistics object s1" has dependency on unsupported object "schema pg_temp_xxx"
 CREATE STATISTICS s1 (dependencies) ON a, b FROM test_stats;
 -- test for distributing an already existing statistics
 CREATE TABLE "test'stats2" (

@@ -158,6 +158,8 @@ EnsureDependenciesCanBeDistributed(const ObjectAddress *objectAddress)
 
 	if (depError != NULL)
 	{
+		/* override error detail as it is not applicable here*/
+		depError->detail = NULL;
 		RaiseDeferredError(depError, ERROR);
 	}
 }

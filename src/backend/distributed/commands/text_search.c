@@ -34,6 +34,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
@@ -91,6 +92,14 @@ PostprocessCreateTextSearchConfigurationStmt(Node *node, const char *queryString
 	EnsureSequentialMode(OBJECT_TSCONFIGURATION);
 
 	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
+
+	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(&address);
+	if (errMsg != NULL)
+	{
+		RaiseDeferredError(errMsg, WARNING);
+		return NIL;
+	}
+
 	EnsureDependenciesExistOnAllNodes(&address);
 
 	/*
@@ -132,6 +141,14 @@ PostprocessCreateTextSearchDictionaryStmt(Node *node, const char *queryString)
 	EnsureSequentialMode(OBJECT_TSDICTIONARY);
 
 	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
+
+	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(&address);
+	if (errMsg != NULL)
+	{
+		RaiseDeferredError(errMsg, WARNING);
+		return NIL;
+	}
+
 	EnsureDependenciesExistOnAllNodes(&address);
 
 	QualifyTreeNode(node);

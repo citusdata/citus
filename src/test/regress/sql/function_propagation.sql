@@ -832,6 +832,16 @@ ALTER TABLE table_1_for_circ_dep_3 ADD COLUMN col_2 table_2_for_circ_dep_3;
 -- It should error out due to circular dependency
 SELECT create_distributed_table('table_1_for_circ_dep_3','id');
 
+-- will skip trying to propagate the function due to temp schema
+CREATE FUNCTION pg_temp.temp_func(group_size BIGINT) RETURNS SETOF integer[]
+AS $$
+    SELECT array_agg(s) OVER w
+      FROM generate_series(1,5) s
+    WINDOW w AS (ORDER BY s ROWS BETWEEN CURRENT ROW AND GROUP_SIZE FOLLOWING)
+$$ LANGUAGE SQL STABLE;
+
+SELECT create_distributed_function('pg_temp.temp_func(BIGINT)');
+
 RESET search_path;
 SET client_min_messages TO WARNING;
 DROP SCHEMA function_propagation_schema CASCADE;

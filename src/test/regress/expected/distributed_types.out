@@ -597,6 +597,18 @@ DETAIL:  "type default_test_row" will be created only locally
 CREATE TABLE table_text_local_def(id int, col_1 default_test_row);
 SELECT create_distributed_table('table_text_local_def','id');
 ERROR:  "table table_text_local_def" has dependency on unsupported object "type text_local_def"
+-- will skip trying to propagate the type/enum due to temp schema
+CREATE TYPE pg_temp.temp_type AS (int_field int);
+WARNING:  "type temp_type" has dependency on unsupported object "schema pg_temp_xxx"
+DETAIL:  "type temp_type" will be created only locally
+CREATE TYPE pg_temp.temp_enum AS ENUM ('one', 'two', 'three');
+WARNING:  "type temp_enum" has dependency on unsupported object "schema pg_temp_xxx"
+DETAIL:  "type temp_enum" will be created only locally
+WARNING:  cannot PREPARE a transaction that has operated on temporary objects
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: another command is already in progress
+ERROR:  cannot PREPARE a transaction that has operated on temporary objects
+CONTEXT:  while executing command on localhost:xxxxx
 -- clear objects
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;

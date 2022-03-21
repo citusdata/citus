@@ -600,7 +600,7 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 		{
 			case OCLASS_SCHEMA:
 			{
-				return true;
+				return !isTempNamespace(address->objectId);
 			}
 
 			default:
@@ -631,9 +631,13 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 		}
 
 		case OCLASS_COLLATION:
-		case OCLASS_SCHEMA:
 		{
 			return true;
+		}
+
+		case OCLASS_SCHEMA:
+		{
+			return !isTempNamespace(address->objectId);
 		}
 
 		case OCLASS_PROC:
@@ -776,15 +780,16 @@ DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 	#endif
 
 	/*
-	 * If the given object is a procedure or type, we want to create it locally,
-	 * so provide that information in the error detail.
+	 * We expect callers to interpret the error returned from this function
+	 * as a warning if the object itself is just being created. In that case,
+	 * we expect them to report below error detail as well to indicate that
+	 * object itself will not be propagated but will still be created locally.
+	 *
+	 * Otherwise, callers are expected to throw the error returned from this
+	 * function as a hard one by ignoring the detail part.
 	 */
-	if (getObjectClass(objectAddress) == OCLASS_PROC ||
-		getObjectClass(objectAddress) == OCLASS_TYPE)
-	{
-		appendStringInfo(detailInfo, "\"%s\" will be created only locally",
-						 objectDescription);
-	}
+	appendStringInfo(detailInfo, "\"%s\" will be created only locally",
+					 objectDescription);
 
 	if (SupportedDependencyByCitus(undistributableDependency))
 	{
@@ -800,9 +805,7 @@ DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 						 objectDescription);
 
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 errorInfo->data,
-							 strlen(detailInfo->data) == 0 ? NULL : detailInfo->data,
-							 hintInfo->data);
+							 errorInfo->data, detailInfo->data, hintInfo->data);
 	}
 
 	appendStringInfo(errorInfo, "\"%s\" has dependency on unsupported "
@@ -810,9 +813,7 @@ DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 					 dependencyDescription);
 
 	return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-						 errorInfo->data,
-						 strlen(detailInfo->data) == 0 ? NULL : detailInfo->data,
-						 NULL);
+						 errorInfo->data, detailInfo->data, NULL);
 }
 
 
