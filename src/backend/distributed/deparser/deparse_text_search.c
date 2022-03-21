@@ -12,6 +12,7 @@
 #include "postgres.h"
 
 #include "catalog/namespace.h"
+#include "commands/defrem.h"
 #include "utils/builtins.h"
 
 #include "distributed/citus_ruleutils.h"
@@ -78,8 +79,6 @@ DeparseCreateTextSearchDictionaryStmt(Node *node)
  * AppendDefElemList is a helper to append a comma separated list of definitions to a
  * define statement.
  *
- * Currently only supports String and TypeName entries. Will error on others.
- *
  * The extra objectName parameter is used to create meaningful error messages.
  */
 static void
@@ -109,32 +108,11 @@ AppendDefElemList(StringInfo buf, List *defelems, char *objectName)
 			continue;
 		}
 
-		/* extract identifier from defelem */
-		const char *identifier = NULL;
-		switch (nodeTag(defelem->arg))
-		{
-			case T_String:
-			{
-				identifier = quote_identifier(strVal(defelem->arg));
-				break;
-			}
-
-			case T_TypeName:
-			{
-				TypeName *typeName = castNode(TypeName, defelem->arg);
-				identifier = NameListToQuotedString(typeName->names);
-				break;
-			}
-
-			default:
-			{
-				ereport(ERROR, (errmsg("unexpected argument during deparsing of "
-									   "TEXT SEARCH %s definition", objectName)));
-			}
-		}
+		/* extract value from defelem */
+		const char *value = defGetString(defelem);
 
 		/* stringify */
-		appendStringInfo(buf, "%s = %s", defelem->defname, identifier);
+		appendStringInfo(buf, "%s = %s", defelem->defname, value);
 	}
 }
 
