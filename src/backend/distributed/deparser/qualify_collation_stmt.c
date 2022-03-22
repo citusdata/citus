@@ -124,7 +124,6 @@ QualifyCollationName(List *name)
 			(Form_pg_collation) GETSTRUCT(colltup);
 
 		schemaName = get_namespace_name(collationForm->collnamespace);
-		collationName = NameStr(collationForm->collname);
 		name = list_make2(makeString(schemaName), makeString(collationName));
 		ReleaseSysCache(colltup);
 	}
