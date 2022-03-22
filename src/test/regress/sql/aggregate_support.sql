@@ -638,5 +638,13 @@ RESET citus.create_object_propagation;
 
 SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
 
+CREATE AGGREGATE newavg (
+   sfunc = int4_avg_accum, basetype = int4, stype = _int8,
+   finalfunc = int8_avg,
+   initcond1 = '{0,0}'
+);
+
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%newavg%';$$);
+
 set client_min_messages to error;
 drop schema aggregate_support cascade;

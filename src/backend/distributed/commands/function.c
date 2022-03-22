@@ -1454,7 +1454,16 @@ DefineAggregateStmtObjectAddress(Node *node, bool missing_ok)
 	}
 	else
 	{
-		objectWithArgs->objargs = list_make1(makeTypeName("anyelement"));
+		DefElem *defItem = NULL;
+		foreach_ptr(defItem, stmt->definition)
+		{
+			/* if no explicit args are given, pg includes basetype in the signature */
+			if (strcmp(defItem->defname, "basetype") == 0 && IsA(defItem->arg, TypeName))
+			{
+				objectWithArgs->objargs = lappend(objectWithArgs->objargs,
+												  defItem->arg);
+			}
+		}
 	}
 
 	return FunctionToObjectAddress(OBJECT_AGGREGATE, objectWithArgs, missing_ok);
