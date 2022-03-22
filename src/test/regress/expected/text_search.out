@@ -696,6 +696,18 @@ $$);
  t
 (1 row)
 
+-- will skip trying to propagate the text search configuration due to temp schema
+CREATE TEXT SEARCH CONFIGURATION pg_temp.temp_text_search_config ( parser = default );
+WARNING:  "text search configuration pg_temp_xxx.temp_text_search_config" has dependency on unsupported object "schema pg_temp_xxx"
+DETAIL:  "text search configuration pg_temp_xxx.temp_text_search_config" will be created only locally
+-- will skip trying to propagate the text search dictionary due to temp schema
+CREATE TEXT SEARCH DICTIONARY pg_temp.temp_text_search_dict (
+    template = snowball,
+    language = english,
+    stopwords = english
+);
+WARNING:  "text search dictionary pg_temp_xxx.temp_text_search_dict" has dependency on unsupported object "schema pg_temp_xxx"
+DETAIL:  "text search dictionary pg_temp_xxx.temp_text_search_dict" will be created only locally
 SET client_min_messages TO 'warning';
 DROP SCHEMA text_search, text_search2, "Text Search Requiring Quote's" CASCADE;
 DROP ROLE text_search_owner;

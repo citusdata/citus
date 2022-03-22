@@ -628,5 +628,10 @@ objid = (SELECT oid FROM pg_proc WHERE prosrc = 'cube_a_f8_f8');
 (1 row)
 
 ROLLBACK;
+-- Postgres already doesn't allow creating extensions in temp schema but
+-- let's have a test for that to track any furher changes in postgres.
+DROP EXTENSION isn CASCADE;
+CREATE EXTENSION isn WITH SCHEMA pg_temp;
+ERROR:  schema "pg_temp" does not exist
 -- drop the schema and all the objects
 DROP SCHEMA "extension'test" CASCADE;

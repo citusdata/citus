@@ -14,6 +14,8 @@ CREATE TABLE test_stats (
 
 SELECT create_distributed_table('test_stats', 'a');
 
+CREATE STATISTICS pg_temp.s1 (dependencies) ON a, b FROM test_stats;
+
 CREATE STATISTICS s1 (dependencies) ON a, b FROM test_stats;
 
 -- test for distributing an already existing statistics

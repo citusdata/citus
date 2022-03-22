@@ -260,22 +260,7 @@ PreprocessCreateEnumStmt(Node *node, const char *queryString,
 	/* enforce fully qualified typeName for correct deparsing and lookup */
 	QualifyTreeNode(node);
 
-	/* reconstruct creation statement in a portable fashion */
-	const char *createEnumStmtSql = DeparseCreateEnumStmt(node);
-	createEnumStmtSql = WrapCreateOrReplace(createEnumStmtSql);
-
-	/*
-	 * when we allow propagation within a transaction block we should make sure to only
-	 * allow this in sequential mode
-	 */
-	EnsureSequentialMode(OBJECT_TYPE);
-
-	/* to prevent recursion with mx we disable ddl propagation */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) createEnumStmtSql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NIL;
 }
 
 
@@ -297,9 +282,32 @@ PostprocessCreateEnumStmt(Node *node, const char *queryString)
 
 	/* lookup type address of just created type */
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
+
+	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(&typeAddress);
+	if (errMsg != NULL)
+	{
+		RaiseDeferredError(errMsg, WARNING);
+		return NIL;
+	}
+
+	/*
+	 * when we allow propagation within a transaction block we should make sure to only
+	 * allow this in sequential mode
+	 */
+	EnsureSequentialMode(OBJECT_TYPE);
+
 	EnsureDependenciesExistOnAllNodes(&typeAddress);
 
-	return NIL;
+	/* reconstruct creation statement in a portable fashion */
+	const char *createEnumStmtSql = DeparseCreateEnumStmt(node);
+	createEnumStmtSql = WrapCreateOrReplace(createEnumStmtSql);
+
+	/* to prevent recursion with mx we disable ddl propagation */
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) createEnumStmtSql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 

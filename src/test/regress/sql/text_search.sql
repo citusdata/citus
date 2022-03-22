@@ -402,6 +402,16 @@ SELECT COUNT(DISTINCT result)=1 FROM run_command_on_all_nodes($$
     WHERE dictname = 'snowball_dict';
 $$);
 
+-- will skip trying to propagate the text search configuration due to temp schema
+CREATE TEXT SEARCH CONFIGURATION pg_temp.temp_text_search_config ( parser = default );
+
+-- will skip trying to propagate the text search dictionary due to temp schema
+CREATE TEXT SEARCH DICTIONARY pg_temp.temp_text_search_dict (
+    template = snowball,
+    language = english,
+    stopwords = english
+);
+
 SET client_min_messages TO 'warning';
 DROP SCHEMA text_search, text_search2, "Text Search Requiring Quote's" CASCADE;
 DROP ROLE text_search_owner;

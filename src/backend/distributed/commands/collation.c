@@ -19,6 +19,7 @@
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_utility.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
@@ -587,6 +588,14 @@ PostprocessDefineCollationStmt(Node *node, const char *queryString)
 
 	ObjectAddress collationAddress =
 		DefineCollationStmtObjectAddress(node, false);
+
+	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(
+		&collationAddress);
+	if (errMsg != NULL)
+	{
+		RaiseDeferredError(errMsg, WARNING);
+		return NIL;
+	}
 
 	EnsureDependenciesExistOnAllNodes(&collationAddress);
 
