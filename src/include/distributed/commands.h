@@ -123,6 +123,8 @@ typedef enum SearchForeignKeyColumnFlags
 
 
 /* aggregate.c - forward declarations */
+extern List * PreprocessDefineAggregateStmt(Node *node, const char *queryString,
+											ProcessUtilityContext processUtilityContext);
 extern List * PostprocessDefineAggregateStmt(Node *node, const char *queryString);
 
 /* cluster.c - forward declarations */

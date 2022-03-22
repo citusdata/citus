@@ -122,6 +122,13 @@ ALTER TABLE test_table ALTER COLUMN id3 SET DEFAULT nextval('test_sequence_1'), 
 ALTER TABLE test_table ADD COLUMN id3 bigserial;
 ALTER TABLE test_table ADD COLUMN id4 bigserial CHECK (id4 > 0);
 
+CREATE SEQUENCE pg_temp.temp_sequence;
+CREATE TABLE table_with_temp_sequence (
+  dist_key int,
+  seq_col bigint default nextval('pg_temp.temp_sequence')
+);
+SELECT create_distributed_table('table_with_temp_sequence', 'dist_key');
+
 DROP TABLE test_table CASCADE;
 DROP SEQUENCE test_sequence_0;
 DROP SEQUENCE test_sequence_1;

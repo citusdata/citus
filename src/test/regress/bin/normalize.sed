@@ -263,3 +263,23 @@ s/issuing SELECT pg_cancel_backend\([0-9]+::integer\)/issuing SELECT pg_cancel_b
 
 # node id in run_command_on_all_nodes warning
 s/Error on node with node id [0-9]+/Error on node with node id xxxxx/g
+
+# Temp schema names in error messages regarding dependencies that we cannot distribute
+#
+# 1) Schema of the depending object in the error message:
+#
+# e.g.:
+#   WARNING:  "function pg_temp_3.f(bigint)" has dependency on unsupported object "<foo>"
+# will be replaced with
+#   WARNING:  "function pg_temp_xxx.f(bigint)" has dependency on unsupported object "<foo>"
+s/^(WARNING|ERROR)(:  "[a-z\ ]+ )pg_temp_[0-9]+(\..*" has dependency on unsupported object ".*")$/\1\2pg_temp_xxx\3/g
+
+# 2) Schema of the depending object in the error detail:
+s/^(DETAIL:  "[a-z\ ]+ )pg_temp_[0-9]+(\..*" will be created only locally)$/\1pg_temp_xxx\2/g
+
+# 3) Schema that the object depends in the error message:
+# e.g.:
+#   WARNING:  "function func(bigint)" has dependency on unsupported object "schema pg_temp_3"
+# will be replaced with
+#   WARNING:  "function func(bigint)" has dependency on unsupported object "schema pg_temp_xxx"
+s/^(WARNING|ERROR)(:  "[a-z\ ]+ .*" has dependency on unsupported object) "schema pg_temp_[0-9]+"$/\1\2 "schema pg_temp_xxx"/g

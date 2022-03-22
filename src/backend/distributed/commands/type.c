@@ -94,6 +94,9 @@ static List * FilterNameListForDistributedTypes(List *objects, bool missing_ok);
 static List * TypeNameListToObjectAddresses(List *objects);
 static TypeName * MakeTypeNameFromRangeVar(const RangeVar *relation);
 static Oid GetTypeOwner(Oid typeOid);
+static Oid LookupNonAssociatedArrayTypeNameOid(ParseState *pstate,
+											   const TypeName *typeName,
+											   bool missing_ok);
 
 /* recreate functions */
 static CompositeTypeStmt * RecreateCompositeTypeStmt(Oid typeOid);
@@ -257,22 +260,7 @@ PreprocessCreateEnumStmt(Node *node, const char *queryString,
 	/* enforce fully qualified typeName for correct deparsing and lookup */
 	QualifyTreeNode(node);
 
-	/* reconstruct creation statement in a portable fashion */
-	const char *createEnumStmtSql = DeparseCreateEnumStmt(node);
-	createEnumStmtSql = WrapCreateOrReplace(createEnumStmtSql);
-
-	/*
-	 * when we allow propagation within a transaction block we should make sure to only
-	 * allow this in sequential mode
-	 */
-	EnsureSequentialMode(OBJECT_TYPE);
-
-	/* to prevent recursion with mx we disable ddl propagation */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) createEnumStmtSql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NIL;
 }
 
 
@@ -294,9 +282,32 @@ PostprocessCreateEnumStmt(Node *node, const char *queryString)
 
 	/* lookup type address of just created type */
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
+
+	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(&typeAddress);
+	if (errMsg != NULL)
+	{
+		RaiseDeferredError(errMsg, WARNING);
+		return NIL;
+	}
+
+	/*
+	 * when we allow propagation within a transaction block we should make sure to only
+	 * allow this in sequential mode
+	 */
+	EnsureSequentialMode(OBJECT_TYPE);
+
 	EnsureDependenciesExistOnAllNodes(&typeAddress);
 
-	return NIL;
+	/* reconstruct creation statement in a portable fashion */
+	const char *createEnumStmtSql = DeparseCreateEnumStmt(node);
+	createEnumStmtSql = WrapCreateOrReplace(createEnumStmtSql);
+
+	/* to prevent recursion with mx we disable ddl propagation */
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) createEnumStmtSql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -742,7 +753,7 @@ CompositeTypeStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CompositeTypeStmt *stmt = castNode(CompositeTypeStmt, node);
 	TypeName *typeName = MakeTypeNameFromRangeVar(stmt->typevar);
-	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+	Oid typeOid = LookupNonAssociatedArrayTypeNameOid(NULL, typeName, missing_ok);
 	ObjectAddress address = { 0 };
 	ObjectAddressSet(address, TypeRelationId, typeOid);
 
@@ -763,7 +774,7 @@ CreateEnumStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CreateEnumStmt *stmt = castNode(CreateEnumStmt, node);
 	TypeName *typeName = makeTypeNameFromNameList(stmt->typeName);
-	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
+	Oid typeOid = LookupNonAssociatedArrayTypeNameOid(NULL, typeName, missing_ok);
 	ObjectAddress address = { 0 };
 	ObjectAddressSet(address, TypeRelationId, typeOid);
 
@@ -1167,4 +1178,33 @@ ShouldPropagateTypeCreate()
 	}
 
 	return true;
+}
+
+
+/*
+ * LookupNonAssociatedArrayTypeNameOid returns the oid of the type with the given type name
+ * that is not an array type that is associated to another user defined type.
+ */
+static Oid
+LookupNonAssociatedArrayTypeNameOid(ParseState *pstate, const TypeName *typeName,
+									bool missing_ok)
+{
+	Type tup = LookupTypeName(NULL, typeName, NULL, missing_ok);
+	Oid typeOid = InvalidOid;
+	if (tup != NULL)
+	{
+		if (((Form_pg_type) GETSTRUCT(tup))->typelem == 0)
+		{
+			typeOid = ((Form_pg_type) GETSTRUCT(tup))->oid;
+		}
+		ReleaseSysCache(tup);
+	}
+
+	if (!missing_ok && typeOid == InvalidOid)
+	{
+		elog(ERROR, "type \"%s\" that is not an array type associated with "
+					"another type does not exist", TypeNameToString(typeName));
+	}
+
+	return typeOid;
 }

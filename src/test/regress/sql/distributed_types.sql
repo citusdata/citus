@@ -359,6 +359,10 @@ CREATE TYPE default_test_row AS (f1 text_local_def, f2 int4);
 CREATE TABLE table_text_local_def(id int, col_1 default_test_row);
 SELECT create_distributed_table('table_text_local_def','id');
 
+-- will skip trying to propagate the type/enum due to temp schema
+CREATE TYPE pg_temp.temp_type AS (int_field int);
+CREATE TYPE pg_temp.temp_enum AS ENUM ('one', 'two', 'three');
+
 -- clear objects
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;

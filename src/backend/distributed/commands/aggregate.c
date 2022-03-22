@@ -23,6 +23,20 @@
 
 
 /*
+ * PreprocessDefineAggregateStmt only qualifies the node with schema name.
+ * We will handle the rest in the Postprocess phase.
+ */
+List *
+PreprocessDefineAggregateStmt(Node *node, const char *queryString,
+							  ProcessUtilityContext processUtilityContext)
+{
+	QualifyTreeNode((Node *) node);
+
+	return NIL;
+}
+
+
+/*
  * PostprocessDefineAggregateStmt actually creates the plan we need to execute for
  * aggregate propagation.
  * This is the downside of using the locally created aggregate to get the sql statement.
@@ -37,8 +51,6 @@
 List *
 PostprocessDefineAggregateStmt(Node *node, const char *queryString)
 {
-	QualifyTreeNode((Node *) node);
-
 	DefineStmt *stmt = castNode(DefineStmt, node);
 
 	if (!ShouldPropagate())

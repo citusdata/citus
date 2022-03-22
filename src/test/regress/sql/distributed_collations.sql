@@ -109,3 +109,8 @@ CREATE COLLATION collation_creation_on_worker.another_german_phonebook (provider
 SET citus.enable_ddl_propagation TO off;
 DROP SCHEMA collation_creation_on_worker;
 SET citus.enable_ddl_propagation TO on;
+
+\c - - - :master_port
+
+-- will skip trying to propagate the collation due to temp schema
+CREATE COLLATION pg_temp.temp_collation (provider = icu, locale = 'de-u-co-phonebk');

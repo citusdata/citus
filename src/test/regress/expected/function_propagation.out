@@ -1279,6 +1279,17 @@ ALTER TABLE table_1_for_circ_dep_3 ADD COLUMN col_2 table_2_for_circ_dep_3;
 SELECT create_distributed_table('table_1_for_circ_dep_3','id');
 ERROR:  Citus can not handle circular dependencies between distributed objects
 DETAIL:  "table table_1_for_circ_dep_3" circularly depends itself, resolve circular dependency first
+-- will skip trying to propagate the function due to temp schema
+CREATE FUNCTION pg_temp.temp_func(group_size BIGINT) RETURNS SETOF integer[]
+AS $$
+    SELECT array_agg(s) OVER w
+      FROM generate_series(1,5) s
+    WINDOW w AS (ORDER BY s ROWS BETWEEN CURRENT ROW AND GROUP_SIZE FOLLOWING)
+$$ LANGUAGE SQL STABLE;
+WARNING:  "function pg_temp_xxx.temp_func(bigint)" has dependency on unsupported object "schema pg_temp_xxx"
+DETAIL:  "function pg_temp_xxx.temp_func(bigint)" will be created only locally
+SELECT create_distributed_function('pg_temp.temp_func(BIGINT)');
+ERROR:  "function pg_temp_xxx.temp_func(bigint)" has dependency on unsupported object "schema pg_temp_xxx"
 RESET search_path;
 SET client_min_messages TO WARNING;
 DROP SCHEMA function_propagation_schema CASCADE;

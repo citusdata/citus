@@ -371,5 +371,10 @@ SELECT distribution_argument_index FROM pg_catalog.pg_dist_object WHERE classid 
 objid = (SELECT oid FROM pg_proc WHERE prosrc = 'cube_a_f8_f8');
 ROLLBACK;
 
+-- Postgres already doesn't allow creating extensions in temp schema but
+-- let's have a test for that to track any furher changes in postgres.
+DROP EXTENSION isn CASCADE;
+CREATE EXTENSION isn WITH SCHEMA pg_temp;
+
 -- drop the schema and all the objects
 DROP SCHEMA "extension'test" CASCADE;

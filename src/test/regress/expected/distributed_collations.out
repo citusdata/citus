@@ -179,3 +179,8 @@ HINT:  Connect to the coordinator and run it again.
 SET citus.enable_ddl_propagation TO off;
 DROP SCHEMA collation_creation_on_worker;
 SET citus.enable_ddl_propagation TO on;
+\c - - - :master_port
+-- will skip trying to propagate the collation due to temp schema
+CREATE COLLATION pg_temp.temp_collation (provider = icu, locale = 'de-u-co-phonebk');
+WARNING:  "collation pg_temp_xxx.temp_collation" has dependency on unsupported object "schema pg_temp_xxx"
+DETAIL:  "collation pg_temp_xxx.temp_collation" will be created only locally
