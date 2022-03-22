@@ -12,7 +12,6 @@ Options:
     --seed=<seed>                   random number seed
     --base                          whether to use the base sql schedule or not
 """
-from cgi import test
 import sys
 import os, shutil
 

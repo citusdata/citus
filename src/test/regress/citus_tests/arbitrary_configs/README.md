@@ -69,11 +69,13 @@ So the infrastructure tests:
 When you want to add a new test, you can add the create statements to `create_schedule` and add the sql queries to `sql_schedule`.
 If you are adding Citus UDFs that should be a NO-OP for Postgres, make sure to override the UDFs in `postgres.sql`.
 
+If the test needs to be skipped in some configs, you can do that by adding the test names in the `skip_tests` array for
+each config. The test files associated with the skipped test will be set to empty so the test will pass without the actual test
+being run.
+
 ## Adding a new config
 
 You can add your new config to `config.py`. Make sure to extend either `CitusDefaultClusterConfig` or `CitusMXBaseClusterConfig`.
-
-If there are tests which need to be skipped in some configs, you can do that by adding the test names in the `skip_tests` array for each config.
 
 ## Debugging failures
 
