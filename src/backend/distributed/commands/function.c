@@ -894,11 +894,25 @@ GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
 	 * If the function exists we want to use format_procedure_qualified to
 	 * serialize its canonical arguments
 	 */
-	char *functionSignature = format_procedure_qualified(funcOid);
+	char *schemaName = get_namespace_name(get_func_namespace(funcOid));
+	char *functionName = get_func_name(funcOid);
+	char *qualifiedName = quote_qualified_identifier(schemaName, functionName);
+
 	char *functionOwner = GetUserNameFromId(procOwner, false);
 
-	appendStringInfo(alterCommand, "ALTER ROUTINE %s OWNER TO %s;",
-					 functionSignature,
+	Datum sqlTextDatum = (Datum) 0;
+
+	PushOverrideEmptySearchPath(CurrentMemoryContext);
+
+	sqlTextDatum = DirectFunctionCall1(pg_get_function_arguments,
+									   ObjectIdGetDatum(funcOid));
+	char *functionParams = TextDatumGetCString(sqlTextDatum);
+
+	/* revert back to original search_path */
+	PopOverrideSearchPath();
+
+	appendStringInfo(alterCommand, "ALTER ROUTINE %s(%s) OWNER TO %s;",
+					 qualifiedName, functionParams,
 					 quote_identifier(functionOwner));
 
 	return alterCommand->data;
