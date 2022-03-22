@@ -52,6 +52,8 @@
 #include "miscadmin.h"
 #include "pgstat.h"
 
+#include "citus_version.h"
+
 #include <arpa/inet.h> /* for htons */
 #include <netinet/in.h> /* for htons */
 #include <string.h>
@@ -70,6 +72,7 @@
 #include "commands/defrem.h"
 #include "commands/progress.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/commands/copy_url.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/intermediate_results.h"
@@ -305,6 +308,7 @@ static SelectStmt * CitusCopySelect(CopyStmt *copyStatement);
 static void CitusCopyTo(CopyStmt *copyStatement, QueryCompletionCompat *completionTag);
 static int64 ForwardCopyDataFromConnection(CopyOutState copyOutState,
 										   MultiConnection *connection);
+
 
 /* Private functions copied and adapted from copy.c in PostgreSQL */
 static void SendCopyBegin(CopyOutState cstate);
@@ -543,13 +547,30 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 		copiedDistributedRelationTuple->relkind = RELKIND_RELATION;
 	}
 
+	char *fileName = copyStatement->filename;
+	copy_data_source_cb dataSource = NULL;
+
+#ifdef HAVE_LIBCURL
+	if (fileName != NULL)
+	{
+		if (strncmp(fileName, "http://", strlen("http://")) == 0 ||
+			strncmp(fileName, "https://", strlen("https://")) == 0)
+		{
+			OpenURL(fileName);
+
+			dataSource = ReadBytesFromURL;
+			fileName = NULL;
+		}
+	}
+#endif
+
 	/* initialize copy state to read from COPY data source */
 	CopyFromState copyState = BeginCopyFrom_compat(NULL,
 												   copiedDistributedRelation,
 												   NULL,
-												   copyStatement->filename,
+												   fileName,
 												   copyStatement->is_program,
-												   NULL,
+												   dataSource,
 												   copyStatement->attlist,
 												   copyStatement->options);
 
@@ -607,6 +628,10 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 	{
 		CompleteCopyQueryTagCompat(completionTag, processedRowCount);
 	}
+
+#ifdef HAVE_LIBCURL
+	CloseURL();
+#endif
 }
 
 
