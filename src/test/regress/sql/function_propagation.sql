@@ -842,6 +842,17 @@ $$ LANGUAGE SQL STABLE;
 
 SELECT create_distributed_function('pg_temp.temp_func(BIGINT)');
 
+-- Show that support functions are supported
+CREATE FUNCTION func_with_support(int, int) RETURNS bool
+  LANGUAGE internal STRICT IMMUTABLE PARALLEL SAFE
+  AS $$int4eq$$ SUPPORT generate_series_int8_support;
+
+CREATE FUNCTION func_with_support_2(int, int) RETURNS bool
+  LANGUAGE internal STRICT IMMUTABLE PARALLEL SAFE
+  AS $$int4eq$$;
+
+ALTER FUNCTION func_with_support_2(int, int) SUPPORT generate_series_int8_support;
+
 RESET search_path;
 SET client_min_messages TO WARNING;
 DROP SCHEMA function_propagation_schema CASCADE;

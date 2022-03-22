@@ -1290,6 +1290,14 @@ WARNING:  "function pg_temp_xxx.temp_func(bigint)" has dependency on unsupported
 DETAIL:  "function pg_temp_xxx.temp_func(bigint)" will be created only locally
 SELECT create_distributed_function('pg_temp.temp_func(BIGINT)');
 ERROR:  "function pg_temp_xxx.temp_func(bigint)" has dependency on unsupported object "schema pg_temp_xxx"
+-- Show that support functions are supported
+CREATE FUNCTION func_with_support(int, int) RETURNS bool
+  LANGUAGE internal STRICT IMMUTABLE PARALLEL SAFE
+  AS $$int4eq$$ SUPPORT generate_series_int8_support;
+CREATE FUNCTION func_with_support_2(int, int) RETURNS bool
+  LANGUAGE internal STRICT IMMUTABLE PARALLEL SAFE
+  AS $$int4eq$$;
+ALTER FUNCTION func_with_support_2(int, int) SUPPORT generate_series_int8_support;
 RESET search_path;
 SET client_min_messages TO WARNING;
 DROP SCHEMA function_propagation_schema CASCADE;

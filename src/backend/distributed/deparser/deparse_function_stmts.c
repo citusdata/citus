@@ -59,6 +59,7 @@ static void AppendDefElemParallel(StringInfo buf, DefElem *def);
 static void AppendDefElemCost(StringInfo buf, DefElem *def);
 static void AppendDefElemRows(StringInfo buf, DefElem *def);
 static void AppendDefElemSet(StringInfo buf, DefElem *def);
+static void AppendDefElemSupport(StringInfo buf, DefElem *def);
 
 static void AppendVarSetValue(StringInfo buf, VariableSetStmt *setStmt);
 static void AppendRenameFunctionStmt(StringInfo buf, RenameStmt *stmt);
@@ -179,6 +180,10 @@ AppendDefElem(StringInfo buf, DefElem *def)
 	{
 		AppendDefElemSet(buf, def);
 	}
+	else if (strcmp(def->defname, "support") == 0)
+	{
+		AppendDefElemSupport(buf, def);
+	}
 }
 
 
@@ -279,6 +284,16 @@ AppendDefElemSet(StringInfo buf, DefElem *def)
 	VariableSetStmt *setStmt = castNode(VariableSetStmt, def->arg);
 
 	AppendVariableSet(buf, setStmt);
+}
+
+
+/*
+ * AppendDefElemSupport appends a string representing the DefElem to a buffer
+ */
+static void
+AppendDefElemSupport(StringInfo buf, DefElem *def)
+{
+	appendStringInfo(buf, " SUPPORT %s", defGetString(def));
 }
 
 
