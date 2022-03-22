@@ -1,0 +1,176 @@
+SET search_path TO truncate_tests_schema;
+-- Test truncate rollback on a basic table
+SELECT COUNT(*) FROM basic_table;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+BEGIN;
+TRUNCATE basic_table;
+SELECT COUNT(*) FROM basic_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+ROLLBACK;
+SELECT COUNT(*) FROM basic_table;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+-- Test truncate on a basic table
+SELECT COUNT(*) FROM basic_table;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+TRUNCATE basic_table;
+SELECT COUNT(*) FROM basic_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- Test trucate rollback on partitioned table
+SELECT COUNT(*) FROM partitioned_table_0;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+BEGIN;
+TRUNCATE partitioned_table;
+SELECT COUNT(*) FROM partitioned_table_0;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+ROLLBACK;
+SELECT COUNT(*) FROM partitioned_table_0;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+-- Test truncate on a partition
+SELECT COUNT(*) FROM partitioned_table;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+SELECT COUNT(*) FROM partitioned_table_0;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+SELECT COUNT(*) FROM partitioned_table_1;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+TRUNCATE partitioned_table_0;
+SELECT COUNT(*) FROM partitioned_table;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+SELECT COUNT(*) FROM partitioned_table_0;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT COUNT(*) FROM partitioned_table_1;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+-- Test truncate a partioned
+SELECT COUNT(*) FROM partitioned_table;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+SELECT COUNT(*) FROM partitioned_table_1;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+TRUNCATE partitioned_table;
+SELECT COUNT(*) FROM partitioned_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT COUNT(*) FROM partitioned_table_1;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- Test truncate error on table with dependencies
+TRUNCATE table_with_pk;
+ERROR:  cannot truncate a table referenced in a foreign key constraint
+DETAIL:  Table "table_with_fk" references "table_with_pk".
+HINT:  Truncate table "table_with_fk" at the same time, or use TRUNCATE ... CASCADE.
+-- Test truncate rollback on table with dependencies
+SELECT COUNT(*) FROM table_with_fk;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+BEGIN;
+TRUNCATE table_with_pk CASCADE;
+SELECT COUNT(*) FROM table_with_fk;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+ROLLBACK;
+SELECT COUNT(*) FROM table_with_fk;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+-- Test truncate on table with dependencies
+SELECT COUNT(*) FROM table_with_pk;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+SELECT COUNT(*) FROM table_with_fk;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+TRUNCATE table_with_pk CASCADE;
+SELECT COUNT(*) FROM table_with_pk;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT COUNT(*) FROM table_with_fk;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+

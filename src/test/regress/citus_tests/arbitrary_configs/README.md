@@ -73,6 +73,8 @@ If you are adding Citus UDFs that should be a NO-OP for Postgres, make sure to o
 
 You can add your new config to `config.py`. Make sure to extend either `CitusDefaultClusterConfig` or `CitusMXBaseClusterConfig`.
 
+If there are tests which need to be skipped in some configs, you can do that by adding the test names in the `skip_tests` array for each config.
+
 ## Debugging failures
 
 On the CI, upon a failure, all logfiles will be uploaded as artifacts, so you can check the artifacts tab.

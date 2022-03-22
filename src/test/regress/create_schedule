@@ -5,3 +5,4 @@ test: local_dist_join_load
 test: partitioned_indexes_create
 test: connectivity_checks
 test: sequences_create
+test: truncate_create

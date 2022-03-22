@@ -112,6 +112,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self.new_settings = {}
         self.add_coordinator_to_metadata = False
         self.env_variables = {}
+        self.skip_tests = []
 
     def post_init(self):
         self._init_node_name_ports()
@@ -320,6 +321,7 @@ class CitusShardReplicationFactorClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {"citus.shard_replication_factor": 2}
+        self.skip_tests = ["truncate_create", "truncate"]
 
 
 class CitusSingleShardClusterConfig(CitusMXBaseClusterConfig):
