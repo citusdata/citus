@@ -1487,13 +1487,10 @@ GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
 
 	table_close(depRel, AccessShareLock);
 
-	ListCell *attrdefOidCell = NULL;
-	ListCell *attrdefAttnumCell = NULL;
-	forboth(attrdefOidCell, attrdefResult, attrdefAttnumCell, attrdefAttnumResult)
+	AttrNumber attrdefAttnum = InvalidAttrNumber;
+	Oid attrdefOid = InvalidOid;
+	forboth_int_oid(attrdefAttnum, attrdefAttnumResult, attrdefOid, attrdefResult)
 	{
-		Oid attrdefOid = lfirst_oid(attrdefOidCell);
-		AttrNumber attrdefAttnum = lfirst_int(attrdefAttnumCell);
-
 		List *sequencesFromAttrDef = GetSequencesFromAttrDef(attrdefOid);
 
 		/* to simplify and eliminate cases like "DEFAULT nextval('..') - nextval('..')" */
@@ -1689,14 +1686,10 @@ SequenceDependencyCommandList(Oid relationId)
 
 	ExtractDefaultColumnsAndOwnedSequences(relationId, &columnNameList, &sequenceIdList);
 
-	ListCell *columnNameCell = NULL;
-	ListCell *sequenceIdCell = NULL;
-
-	forboth(columnNameCell, columnNameList, sequenceIdCell, sequenceIdList)
+	char *columnName = NULL;
+	Oid sequenceId = InvalidOid;
+	forboth_ptr_oid(columnName, columnNameList, sequenceId, sequenceIdList)
 	{
-		char *columnName = lfirst(columnNameCell);
-		Oid sequenceId = lfirst_oid(sequenceIdCell);
-
 		if (!OidIsValid(sequenceId))
 		{
 			/*

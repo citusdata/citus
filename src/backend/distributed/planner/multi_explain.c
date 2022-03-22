@@ -575,8 +575,6 @@ static void
 ExplainTaskList(CitusScanState *scanState, List *taskList, ExplainState *es,
 				ParamListInfo params)
 {
-	ListCell *taskCell = NULL;
-	ListCell *remoteExplainCell = NULL;
 	List *remoteExplainList = NIL;
 
 	/* if tasks are executed, we sort them by time; unless we are on a test env */
@@ -591,10 +589,9 @@ ExplainTaskList(CitusScanState *scanState, List *taskList, ExplainState *es,
 		taskList = SortList(taskList, CompareTasksByTaskId);
 	}
 
-	foreach(taskCell, taskList)
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
 	{
-		Task *task = (Task *) lfirst(taskCell);
-
 		RemoteExplainPlan *remoteExplain = RemoteExplain(task, es, params);
 		remoteExplainList = lappend(remoteExplainList, remoteExplain);
 
@@ -604,12 +601,9 @@ ExplainTaskList(CitusScanState *scanState, List *taskList, ExplainState *es,
 		}
 	}
 
-	forboth(taskCell, taskList, remoteExplainCell, remoteExplainList)
+	RemoteExplainPlan *remoteExplain = NULL;
+	forboth_ptr(task, taskList, remoteExplain, remoteExplainList)
 	{
-		Task *task = (Task *) lfirst(taskCell);
-		RemoteExplainPlan *remoteExplain =
-			(RemoteExplainPlan *) lfirst(remoteExplainCell);
-
 		ExplainTask(scanState, task, remoteExplain->placementIndex,
 					remoteExplain->explainOutputList, es);
 	}
