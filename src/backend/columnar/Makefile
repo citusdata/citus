@@ -8,6 +8,8 @@ OBJS += \
 	$(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(citus_abs_srcdir)/$(dir)/*.c))))
 
 MODULE_big = citus_columnar
+EXTENSION = citus_columnar
+DATA = citus_columnar--11.0-2.sql
 
 PG_CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include
 
