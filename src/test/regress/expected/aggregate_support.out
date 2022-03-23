@@ -1236,5 +1236,17 @@ SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid
  (localhost,57638,t,aggregate_support.dependent_agg)
 (2 rows)
 
+CREATE AGGREGATE newavg (
+   sfunc = int4_avg_accum, basetype = int4, stype = _int8,
+   finalfunc = int8_avg,
+   initcond1 = '{0,0}'
+);
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%newavg%';$$);
+               run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,aggregate_support.newavg)
+ (localhost,57638,t,aggregate_support.newavg)
+(2 rows)
+
 set client_min_messages to error;
 drop schema aggregate_support cascade;
