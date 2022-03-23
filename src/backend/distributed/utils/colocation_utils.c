@@ -303,9 +303,6 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 void
 ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId)
 {
-	ListCell *leftShardIntervalCell = NULL;
-	ListCell *rightShardIntervalCell = NULL;
-
 	/* get sorted shard interval lists for both tables */
 	List *leftShardIntervalList = LoadShardIntervalList(leftRelationId);
 	List *rightShardIntervalList = LoadShardIntervalList(rightRelationId);
@@ -329,15 +326,11 @@ ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId)
 	}
 
 	/* compare shard intervals one by one */
-	forboth(leftShardIntervalCell, leftShardIntervalList,
-			rightShardIntervalCell, rightShardIntervalList)
+	ShardInterval *leftInterval = NULL;
+	ShardInterval *rightInterval = NULL;
+	forboth_ptr(leftInterval, leftShardIntervalList,
+				rightInterval, rightShardIntervalList)
 	{
-		ShardInterval *leftInterval = (ShardInterval *) lfirst(leftShardIntervalCell);
-		ShardInterval *rightInterval = (ShardInterval *) lfirst(rightShardIntervalCell);
-
-		ListCell *leftPlacementCell = NULL;
-		ListCell *rightPlacementCell = NULL;
-
 		uint64 leftShardId = leftInterval->shardId;
 		uint64 rightShardId = rightInterval->shardId;
 
@@ -373,14 +366,11 @@ ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId)
 												  CompareShardPlacementsByNode);
 
 		/* compare shard placements one by one */
-		forboth(leftPlacementCell, sortedLeftPlacementList,
-				rightPlacementCell, sortedRightPlacementList)
+		ShardPlacement *leftPlacement = NULL;
+		ShardPlacement *rightPlacement = NULL;
+		forboth_ptr(leftPlacement, sortedLeftPlacementList,
+					rightPlacement, sortedRightPlacementList)
 		{
-			ShardPlacement *leftPlacement =
-				(ShardPlacement *) lfirst(leftPlacementCell);
-			ShardPlacement *rightPlacement =
-				(ShardPlacement *) lfirst(rightPlacementCell);
-
 			/*
 			 * If shard placements are on different nodes, these shard
 			 * placements are not colocated.

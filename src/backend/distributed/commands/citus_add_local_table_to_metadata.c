@@ -1106,13 +1106,10 @@ DropDefaultExpressionsAndMoveOwnedSequenceOwnerships(Oid sourceRelationId,
 	ExtractDefaultColumnsAndOwnedSequences(sourceRelationId, &columnNameList,
 										   &ownedSequenceIdList);
 
-	ListCell *columnNameCell = NULL;
-	ListCell *ownedSequenceIdCell = NULL;
-	forboth(columnNameCell, columnNameList, ownedSequenceIdCell, ownedSequenceIdList)
+	char *columnName = NULL;
+	Oid ownedSequenceId = InvalidOid;
+	forboth_ptr_oid(columnName, columnNameList, ownedSequenceId, ownedSequenceIdList)
 	{
-		char *columnName = (char *) lfirst(columnNameCell);
-		Oid ownedSequenceId = lfirst_oid(ownedSequenceIdCell);
-
 		DropDefaultColumnDefinition(sourceRelationId, columnName);
 
 		/* column might not own a sequence */

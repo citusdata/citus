@@ -2194,11 +2194,9 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 						 DeferredErrorMessage **planningError)
 {
 	List *sqlTaskList = NIL;
-	ListCell *restrictionCell = NULL;
 	uint32 taskIdIndex = 1; /* 0 is reserved for invalid taskId */
 	int shardCount = 0;
 	bool *taskRequiredForShardIndex = NULL;
-	ListCell *prunedRelationShardCell = NULL;
 
 	/* error if shards are not co-partitioned */
 	ErrorIfUnsupportedShardDistribution(query);
@@ -2216,14 +2214,13 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	int minShardOffset = 0;
 	int maxShardOffset = 0;
 
-	forboth(prunedRelationShardCell, prunedRelationShardList,
-			restrictionCell, relationRestrictionContext->relationRestrictionList)
+	RelationRestriction *relationRestriction = NULL;
+	List *prunedShardList = NULL;
+
+	forboth_ptr(prunedShardList, prunedRelationShardList,
+				relationRestriction, relationRestrictionContext->relationRestrictionList)
 	{
-		RelationRestriction *relationRestriction =
-			(RelationRestriction *) lfirst(restrictionCell);
 		Oid relationId = relationRestriction->relationId;
-		List *prunedShardList = (List *) lfirst(prunedRelationShardCell);
-		ListCell *shardIntervalCell = NULL;
 
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 		if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
@@ -2266,9 +2263,9 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 			continue;
 		}
 
-		foreach(shardIntervalCell, prunedShardList)
+		ShardInterval *shardInterval = NULL;
+		foreach_ptr(shardInterval, prunedShardList)
 		{
-			ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 			int shardIndex = shardInterval->shardIndex;
 
 			taskRequiredForShardIndex[shardIndex] = true;

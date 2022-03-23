@@ -244,13 +244,10 @@ CompareStringList(List *list1, List *list2)
 		return false;
 	}
 
-	ListCell *cell1 = NULL;
-	ListCell *cell2 = NULL;
-	forboth(cell1, list1, cell2, list2)
+	const char *str1 = NULL;
+	const char *str2 = NULL;
+	forboth_ptr(str1, list1, str2, list2)
 	{
-		const char *str1 = lfirst(cell1);
-		const char *str2 = lfirst(cell2);
-
 		if (strcmp(str1, str2) != 0)
 		{
 			return false;

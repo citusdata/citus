@@ -3127,13 +3127,10 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 
 	List *taskList = NIL;
 
-	ListCell *leftShardCell = NULL;
-	ListCell *rightShardCell = NULL;
-	forboth(leftShardCell, leftShardList, rightShardCell, rightShardList)
+	ShardInterval *leftShardInterval = NULL;
+	ShardInterval *rightShardInterval = NULL;
+	forboth_ptr(leftShardInterval, leftShardList, rightShardInterval, rightShardList)
 	{
-		ShardInterval *leftShardInterval = (ShardInterval *) lfirst(leftShardCell);
-		ShardInterval *rightShardInterval = (ShardInterval *) lfirst(rightShardCell);
-
 		uint64 leftShardId = leftShardInterval->shardId;
 		uint64 rightShardId = rightShardInterval->shardId;
 
