@@ -6,10 +6,7 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-v2021_10_27'
-  pg12_version:
-    type: string
-    default: '12.8'
+    default: '-vabaecad'
   pg13_version:
     type: string
     default: '13.4'
@@ -18,7 +15,7 @@ parameters:
     default: '14.0'
   upgrade_pg_versions:
     type: string
-    default: '12.8-13.4-14.0'
+    default: '13.4-14.0'
 jobs:
   build:
     description: Build the citus extension
@@ -530,10 +527,6 @@ workflows:
                 - /release-[0-9]+\.[0-9]+.*/ # match with releaseX.Y.*
 
       - build:
-          name: build-12
-          pg_major: 12
-          image_tag: '<< pipeline.parameters.pg12_version >>'
-      - build:
           name: build-13
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
@@ -544,80 +537,6 @@ workflows:
 
       - check-style
       - check-sql-snapshots
-
-      - test-citus:
-          name: 'test-12_check-multi'
-          pg_major: 12
-          image_tag: '<< pipeline.parameters.pg12_version >>'
-          make: check-multi
-          requires: [build-12]
-      - test-citus:
-          name: 'test-12_check-multi-1'
-          pg_major: 12
-          image_tag: '<< pipeline.parameters.pg12_version >>'
-          make: check-multi-1
-          requires: [build-12]
-      - test-citus:
-          name: 'test-12_check-mx'
-          pg_major: 12
-          image_tag: '<< pipeline.parameters.pg12_version >>'
-          make: check-multi-mx
-          requires: [build-12]
-      - test-citus:
-          name: 'test-12_check-vanilla'
-          pg_major: 12
-          image_tag: '<< pipeline.parameters.pg12_version >>'
-          make: check-vanilla
-          requires: [build-12]
-      - test-citus:
-          name: 'test-12_check-isolation'
-          pg_major: 12
-          image_tag: '<< pipeline.parameters.pg12_version >>'
-          make: check-isolation
-          requires: [build-12]
-      - test-citus:
-          name: 'test-12_check-worker'
-          pg_major: 12
-          image_tag: '<< pipeline.parameters.pg12_version >>'
-          make: check-worker
-          requires: [build-12]
-      - test-citus:
-          name: 'test-12_check-operations'
-          pg_major: 12
-          image_tag: '<< pipeline.parameters.pg12_version >>'
-          make: check-operations
-          requires: [build-12]
-      - test-citus:
-          name: 'test-12_check-follower-cluster'
-          pg_major: 12
-          image_tag: '<< pipeline.parameters.pg12_version >>'
-          make: check-follower-cluster
-          requires: [build-12]
-      - test-citus:
-          name: 'test-12_check-columnar'
-          pg_major: 12
-          image_tag: '<< pipeline.parameters.pg12_version >>'
-          make: check-columnar
-          requires: [build-12]
-      - test-citus:
-          name: 'test-12_check-columnar-isolation'
-          pg_major: 12
-          image_tag: '<< pipeline.parameters.pg12_version >>'
-          make: check-columnar-isolation
-          requires: [build-12]
-      - tap-test-citus:
-          name: 'test_12_tap-recovery'
-          pg_major: 12
-          image_tag: '<< pipeline.parameters.pg12_version >>'
-          suite: recovery
-          requires: [build-12]
-      - test-citus:
-          name: 'test-12_check-failure'
-          pg_major: 12
-          image: citus/failtester
-          image_tag: '<< pipeline.parameters.pg12_version >>'
-          make: check-failure
-          requires: [build-12]
 
       - test-citus:
           name: 'test-13_check-multi'
@@ -768,11 +687,6 @@ workflows:
           requires: [build-14]
 
       - test-arbitrary-configs:
-          name: 'test-12_check-arbitrary-configs'
-          pg_major: 12
-          image_tag: '<< pipeline.parameters.pg12_version >>'
-          requires: [build-12]
-      - test-arbitrary-configs:
           name: 'test-13_check-arbitrary-configs'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
@@ -784,20 +698,6 @@ workflows:
           requires: [build-14]
 
       - test-pg-upgrade:
-          name: 'test-12-13_check-pg-upgrade'
-          old_pg_major: 12
-          new_pg_major: 13
-          image_tag: '<< pipeline.parameters.upgrade_pg_versions >>'
-          requires: [build-12, build-13]
-
-      - test-pg-upgrade:
-          name: 'test-12-14_check-pg-upgrade'
-          old_pg_major: 12
-          new_pg_major: 14
-          image_tag: '<< pipeline.parameters.upgrade_pg_versions >>'
-          requires: [build-12, build-14]
-
-      - test-pg-upgrade:
           name: 'test-13-14_check-pg-upgrade'
           old_pg_major: 13
           new_pg_major: 14
@@ -805,10 +705,10 @@ workflows:
           requires: [build-13, build-14]
 
       - test-citus-upgrade:
-          name: test-12_check-citus-upgrade
-          pg_major: 12
-          image_tag: '<< pipeline.parameters.pg12_version >>'
-          requires: [build-12]
+          name: test-13_check-citus-upgrade
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          requires: [build-13]
 
       - ch_benchmark:
           requires: [build-13]
