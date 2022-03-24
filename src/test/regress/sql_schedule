@@ -7,4 +7,4 @@ test: dropped_columns_1 distributed_planning
 test: local_dist_join
 test: connectivity_checks citus_run_command
 test: sequences
-test: truncate
+test: arbitrary_configs_truncate
