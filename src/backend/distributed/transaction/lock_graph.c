@@ -23,6 +23,7 @@
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/lock_graph.h"
+#include "distributed/maintenanced.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/tuplestore.h"
@@ -672,9 +673,34 @@ IsProcessWaitingForSafeOperations(PGPROC *proc)
 	PROCLOCK *waitProcLock = proc->waitProcLock;
 	LOCK *waitLock = waitProcLock->tag.myLock;
 
-	return waitLock->tag.locktag_type == LOCKTAG_RELATION_EXTEND ||
-		   waitLock->tag.locktag_type == LOCKTAG_PAGE ||
-		   waitLock->tag.locktag_type == LOCKTAG_SPECULATIVE_TOKEN;
+
+	if (waitLock->tag.locktag_type == LOCKTAG_RELATION_EXTEND ||
+		waitLock->tag.locktag_type == LOCKTAG_PAGE ||
+		waitLock->tag.locktag_type == LOCKTAG_SPECULATIVE_TOKEN)
+	{
+		return true;
+	}
+# if PG_VERSION_NUM >= PG_VERSION_14
+
+	/*
+	 * We ignore processes that are waiting for a short time, to give the
+	 * regular Postgres deadlock detector a chance to kick in. The Postgres
+	 * deadlock detector is more advanced that the distributed deadlock
+	 * detector from Citus. It is sometimes able to shuffle waiting processes
+	 * around in the wait queue to break lock cycles, which is preferable to
+	 * cancelling transactions.
+	 */
+	TimestampTz waitStart = pg_atomic_read_u64(&proc->waitStart);
+
+	TimestampTz timeoutReachedAt = TimestampTzPlusMilliseconds(
+		waitStart,
+		DistributedDeadlockDetectionTimeoutFactor * (double) DeadlockTimeout);
+	if (timestamptz_cmp_internal(GetCurrentTimestamp(), timeoutReachedAt) == 1)
+	{
+		return true;
+	}
+#endif
+	return false;
 }
 
 
