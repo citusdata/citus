@@ -306,6 +306,13 @@ class CitusUnusualQuerySettingsConfig(CitusMXBaseClusterConfig):
             "citus.values_materialization_threshold": "0",
         }
 
+        self.skip_tests = [
+            # Creating a reference table from a table referred to by a fk
+            # requires the table with the fk to be converted to a citus_local_table.
+            # As of c11, there is no way to do that through remote execution so this test
+            # will fail
+            "truncate_create", "truncate"]
+
 
 class CitusSingleNodeSingleShardClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
@@ -321,7 +328,10 @@ class CitusShardReplicationFactorClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {"citus.shard_replication_factor": 2}
-        self.skip_tests = ["truncate_create", "truncate"]
+        self.skip_tests = [
+            # citus does not support foreign keys in distributed tables
+            # when citus.shard_replication_factor > 2
+            "truncate_create", "truncate"]
 
 
 class CitusSingleShardClusterConfig(CitusMXBaseClusterConfig):
