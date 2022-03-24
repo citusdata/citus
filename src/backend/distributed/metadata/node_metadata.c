@@ -2417,6 +2417,9 @@ InsertCoordinatorIfClusterEmpty(void)
 		 * no pg_dist_node records. Add a record for the coordinator.
 		 */
 		InsertPlaceholderCoordinatorRecord();
+
+		/* next commands should see the node */
+		CommandCounterIncrement();
 	}
 
 	/*
