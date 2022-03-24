@@ -45,9 +45,6 @@ static void InlineCTEsInQueryTree(Query *query);
 static bool QueryTreeContainsInlinableCteWalker(Node *node);
 
 
-/* controlled via GUC */
-bool EnableCTEInlining = true;
-
 /*
  * RecursivelyInlineCtesInQueryTree gets a query and recursively traverses the
  * tree from top to bottom. On each level, the CTEs that are eligable for

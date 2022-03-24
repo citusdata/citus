@@ -81,6 +81,59 @@ typedef struct ListCellAndListWrapper
 		 var ## CellDoNotUse = lnext_compat(l, var ## CellDoNotUse))
 
 /*
+ * forboth_ptr -
+ *	  a convenience macro which loops through two lists of pointers at the same
+ *	  time, without needing a ListCell. It only needs two declared pointer
+ *	  variables to store the pointer of each of the two cells in.
+ */
+#define forboth_ptr(var1, l1, var2, l2) \
+	for (ListCell *(var1 ## CellDoNotUse) = list_head(l1), \
+		 *(var2 ## CellDoNotUse) = list_head(l2); \
+		 (var1 ## CellDoNotUse) != NULL && \
+		 (var2 ## CellDoNotUse) != NULL && \
+		 (((var1) = lfirst(var1 ## CellDoNotUse)) || true) && \
+		 (((var2) = lfirst(var2 ## CellDoNotUse)) || true); \
+		 var1 ## CellDoNotUse = lnext_compat(l1, var1 ## CellDoNotUse), \
+		 var2 ## CellDoNotUse = lnext_compat(l2, var2 ## CellDoNotUse) \
+		 )
+
+/*
+ * forboth_ptr_oid -
+ *	  a convenience macro which loops through two lists at the same time. The
+ *	  first list should contain pointers and the second list should contain
+ *	  Oids. It does not need a ListCell to do this. It only needs two declared
+ *	  variables to store the pointer and the Oid of each of the two cells in.
+ */
+#define forboth_ptr_oid(var1, l1, var2, l2) \
+	for (ListCell *(var1 ## CellDoNotUse) = list_head(l1), \
+		 *(var2 ## CellDoNotUse) = list_head(l2); \
+		 (var1 ## CellDoNotUse) != NULL && \
+		 (var2 ## CellDoNotUse) != NULL && \
+		 (((var1) = lfirst(var1 ## CellDoNotUse)) || true) && \
+		 (((var2) = lfirst_oid(var2 ## CellDoNotUse)) || true); \
+		 var1 ## CellDoNotUse = lnext_compat(l1, var1 ## CellDoNotUse), \
+		 var2 ## CellDoNotUse = lnext_compat(l2, var2 ## CellDoNotUse) \
+		 )
+
+/*
+ * forboth_int_oid -
+ *	  a convenience macro which loops through two lists at the same time. The
+ *	  first list should contain integers and the second list should contain
+ *	  Oids. It does not need a ListCell to do this. It only needs two declared
+ *	  variables to store the int and the Oid of each of the two cells in.
+ */
+#define forboth_int_oid(var1, l1, var2, l2) \
+	for (ListCell *(var1 ## CellDoNotUse) = list_head(l1), \
+		 *(var2 ## CellDoNotUse) = list_head(l2); \
+		 (var1 ## CellDoNotUse) != NULL && \
+		 (var2 ## CellDoNotUse) != NULL && \
+		 (((var1) = lfirst_int(var1 ## CellDoNotUse)) || true) && \
+		 (((var2) = lfirst_oid(var2 ## CellDoNotUse)) || true); \
+		 var1 ## CellDoNotUse = lnext_compat(l1, var1 ## CellDoNotUse), \
+		 var2 ## CellDoNotUse = lnext_compat(l2, var2 ## CellDoNotUse) \
+		 )
+
+/*
  * foreach_ptr_append -
  *	  a convenience macro which loops through a pointer List and can append list
  *	  elements without needing a ListCell or and index variable, just a declared

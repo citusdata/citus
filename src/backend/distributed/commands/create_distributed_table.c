@@ -592,14 +592,11 @@ EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid ownerRelationId
 		List *dependentSequenceList = NIL;
 		GetDependentSequencesWithRelation(citusTableId, &attnumList,
 										  &dependentSequenceList, 0);
-		ListCell *attnumCell = NULL;
-		ListCell *dependentSequenceCell = NULL;
-		forboth(attnumCell, attnumList, dependentSequenceCell,
-				dependentSequenceList)
+		AttrNumber currentAttnum = InvalidAttrNumber;
+		Oid currentSeqOid = InvalidOid;
+		forboth_int_oid(currentAttnum, attnumList, currentSeqOid,
+						dependentSequenceList)
 		{
-			AttrNumber currentAttnum = lfirst_int(attnumCell);
-			Oid currentSeqOid = lfirst_oid(dependentSequenceCell);
-
 			/*
 			 * If another distributed table is using the same sequence
 			 * in one of its column defaults, make sure the types of the
@@ -675,13 +672,10 @@ static void
 EnsureDistributedSequencesHaveOneType(Oid relationId, List *dependentSequenceList,
 									  List *attnumList)
 {
-	ListCell *attnumCell = NULL;
-	ListCell *dependentSequenceCell = NULL;
-	forboth(attnumCell, attnumList, dependentSequenceCell, dependentSequenceList)
+	AttrNumber attnum = InvalidAttrNumber;
+	Oid sequenceOid = InvalidOid;
+	forboth_int_oid(attnum, attnumList, sequenceOid, dependentSequenceList)
 	{
-		AttrNumber attnum = lfirst_int(attnumCell);
-		Oid sequenceOid = lfirst_oid(dependentSequenceCell);
-
 		/*
 		 * We should make sure that the type of the column that uses
 		 * that sequence is supported

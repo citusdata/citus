@@ -29,6 +29,7 @@
 #include "commands/copy.h"
 #include "commands/tablecmds.h"
 #include "common/string.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
@@ -436,14 +437,11 @@ List *
 ColumnDefinitionList(List *columnNameList, List *columnTypeList)
 {
 	List *columnDefinitionList = NIL;
-	ListCell *columnNameCell = NULL;
-	ListCell *columnTypeCell = NULL;
 
-	forboth(columnNameCell, columnNameList, columnTypeCell, columnTypeList)
+	const char *columnName = NULL;
+	const char *columnType = NULL;
+	forboth_ptr(columnName, columnNameList, columnType, columnTypeList)
 	{
-		const char *columnName = (const char *) lfirst(columnNameCell);
-		const char *columnType = (const char *) lfirst(columnTypeCell);
-
 		/*
 		 * We should have a SQL compatible column type declaration; we first
 		 * convert this type to PostgreSQL's type identifiers and modifiers.

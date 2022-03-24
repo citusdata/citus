@@ -58,10 +58,7 @@ port_lock = threading.Lock()
 
 def should_include_config(class_name):
 
-    if inspect.isclass(class_name) and (
-        issubclass(class_name, CitusMXBaseClusterConfig)
-        or issubclass(class_name, CitusDefaultClusterConfig)
-    ):
+    if inspect.isclass(class_name) and issubclass(class_name, CitusDefaultClusterConfig):
         return True
     return False
 
@@ -97,7 +94,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self.temp_dir = CITUS_ARBITRARY_TEST_DIR
         self.worker_amount = 2
         self.user = REGULAR_USER_NAME
-        self.is_mx = False
+        self.is_mx = True
         self.is_citus = True
         self.name = type(self).__name__
         self.settings = {
@@ -169,12 +166,6 @@ class CitusDefaultClusterConfig(CitusBaseClusterConfig):
         self.add_coordinator_to_metadata = True
 
 
-class CitusMXBaseClusterConfig(CitusDefaultClusterConfig):
-    def __init__(self, arguments):
-        super().__init__(arguments)
-        self.is_mx = True
-
-
 class CitusUpgradeConfig(CitusBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
@@ -185,6 +176,7 @@ class CitusUpgradeConfig(CitusBaseClusterConfig):
         self.user = SUPER_USER_NAME
         self.mixed_mode = arguments["--mixed"]
         self.fixed_port = 57635
+        self.is_mx = False
 
 
 class PostgresConfig(CitusDefaultClusterConfig):
@@ -206,19 +198,19 @@ class CitusSingleNodeClusterConfig(CitusDefaultClusterConfig):
         common.coordinator_should_haveshards(self.bindir, self.coordinator_port())
 
 
-class CitusSingleWorkerClusterConfig(CitusMXBaseClusterConfig):
+class CitusSingleWorkerClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.worker_amount = 1
 
 
-class CitusSuperUserDefaultClusterConfig(CitusMXBaseClusterConfig):
+class CitusSuperUserDefaultClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.user = SUPER_USER_NAME
 
 
-class CitusThreeWorkersManyShardsClusterConfig(CitusMXBaseClusterConfig):
+class CitusThreeWorkersManyShardsClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {"citus.shard_count": 191}
@@ -228,7 +220,7 @@ class CitusThreeWorkersManyShardsClusterConfig(CitusMXBaseClusterConfig):
         common.coordinator_should_haveshards(self.bindir, self.coordinator_port())
 
 
-class CitusSmallSharedPoolSizeConfig(CitusMXBaseClusterConfig):
+class CitusSmallSharedPoolSizeConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {
@@ -237,7 +229,7 @@ class CitusSmallSharedPoolSizeConfig(CitusMXBaseClusterConfig):
         }
 
 
-class CitusSmallExecutorPoolSizeConfig(CitusMXBaseClusterConfig):
+class CitusSmallExecutorPoolSizeConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {
@@ -245,7 +237,7 @@ class CitusSmallExecutorPoolSizeConfig(CitusMXBaseClusterConfig):
         }
 
 
-class CitusSequentialExecutionConfig(CitusMXBaseClusterConfig):
+class CitusSequentialExecutionConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {
@@ -253,7 +245,7 @@ class CitusSequentialExecutionConfig(CitusMXBaseClusterConfig):
         }
 
 
-class CitusCacheManyConnectionsConfig(CitusMXBaseClusterConfig):
+class CitusCacheManyConnectionsConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {
@@ -261,7 +253,7 @@ class CitusCacheManyConnectionsConfig(CitusMXBaseClusterConfig):
         }
 
 
-class CitusUnusualExecutorConfig(CitusMXBaseClusterConfig):
+class CitusUnusualExecutorConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {
@@ -282,7 +274,7 @@ class CitusUnusualExecutorConfig(CitusMXBaseClusterConfig):
         self.env_variables = {'PGAPPNAME' : 'test_app'}
 
 
-class CitusSmallCopyBuffersConfig(CitusMXBaseClusterConfig):
+class CitusSmallCopyBuffersConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {
@@ -292,7 +284,7 @@ class CitusSmallCopyBuffersConfig(CitusMXBaseClusterConfig):
         }
 
 
-class CitusUnusualQuerySettingsConfig(CitusMXBaseClusterConfig):
+class CitusUnusualQuerySettingsConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {
@@ -324,7 +316,7 @@ class CitusSingleNodeSingleShardClusterConfig(CitusDefaultClusterConfig):
         common.coordinator_should_haveshards(self.bindir, self.coordinator_port())
 
 
-class CitusShardReplicationFactorClusterConfig(CitusMXBaseClusterConfig):
+class CitusShardReplicationFactorClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {"citus.shard_replication_factor": 2}
@@ -334,13 +326,13 @@ class CitusShardReplicationFactorClusterConfig(CitusMXBaseClusterConfig):
             "truncate_create", "truncate"]
 
 
-class CitusSingleShardClusterConfig(CitusMXBaseClusterConfig):
+class CitusSingleShardClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {"citus.shard_count": 1}
 
 
-class CitusNonMxClusterConfig(CitusMXBaseClusterConfig):
+class CitusNonMxClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.is_mx = False
