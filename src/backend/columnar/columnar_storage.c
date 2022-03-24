@@ -48,6 +48,7 @@
 
 #include "columnar/columnar.h"
 #include "columnar/columnar_storage.h"
+#include "columnar/columnar_wal.h"
 
 
 /*
@@ -697,6 +698,16 @@ static void
 WriteToBlock(Relation rel, BlockNumber blockno, uint32 offset, char *buf,
 			 uint32 len, bool clear)
 {
+	if (clear)
+	{
+		columnar_wal_page_overwrite(rel, blockno, buf, len);
+	}
+	else
+	{
+		columnar_wal_page_append(rel, blockno, offset, buf, len);
+	}
+
+#ifdef NOT_USED
 	Buffer buffer = ReadBuffer(rel, blockno);
 	GenericXLogState *state = GenericXLogStart(rel);
 
@@ -742,6 +753,7 @@ WriteToBlock(Relation rel, BlockNumber blockno, uint32 offset, char *buf,
 	GenericXLogFinish(state);
 
 	UnlockReleaseBuffer(buffer);
+#endif
 }
 
 
