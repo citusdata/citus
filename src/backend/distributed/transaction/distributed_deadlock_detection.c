@@ -167,6 +167,8 @@ CheckForDistributedDeadlocks(void)
 			LogDistributedDeadlockDebugMessage("Distributed deadlock found among the "
 											   "following distributed transactions:");
 
+			Bitmapset *involvedNodes = NULL;
+
 			/*
 			 * We search for the youngest participant for two reasons
 			 * (i) predictable results (ii) cancel the youngest transaction
@@ -203,6 +205,23 @@ CheckForDistributedDeadlocks(void)
 				{
 					youngestAliveTransaction = currentNode;
 				}
+
+				involvedNodes = bms_add_members(involvedNodes,
+												currentNode->blockedOnNodes);
+			}
+
+			/*
+			 * If only a single node is involved in the cycle we rely on the
+			 * local deadlock detection from Postgres. We do this because
+			 * Postgres its local deadlock detection is more advanced than
+			 * Citus its distributed deadlock detection. Postgres deadlock
+			 * detection can sometimes resolve a deadlock without canceling any
+			 * query. It does this by changing the order of processes in the
+			 * lock wait queues.
+			 */
+			if (bms_num_members(involvedNodes))
+			{
+				continue;
 			}
 
 			/* we found the deadlock and its associated proc exists */
@@ -487,6 +506,8 @@ BuildAdjacencyListsForWaitGraph(WaitGraph *waitGraph)
 
 		waitingTransaction->waitsFor = lappend(waitingTransaction->waitsFor,
 											   blockingTransaction);
+		waitingTransaction->blockedOnNodes = bms_add_member(
+			waitingTransaction->blockedOnNodes, edge->nodeId);
 	}
 
 	return adjacencyList;
@@ -511,6 +532,7 @@ GetOrCreateTransactionNode(HTAB *adjacencyList, DistributedTransactionId *transa
 	{
 		transactionNode->waitsFor = NIL;
 		transactionNode->initiatorProc = NULL;
+		transactionNode->blockedOnNodes = NULL;
 	}
 
 	return transactionNode;

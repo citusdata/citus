@@ -46,10 +46,11 @@ typedef struct PROCStack
 } PROCStack;
 
 
-static void AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex);
+static void AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex,
+								  WorkerNode *worker);
 static void ReturnWaitGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo);
 static void AddWaitEdgeFromBlockedProcessResult(WaitGraph *waitGraph, PGresult *result,
-												int rowIndex);
+												int rowIndex, WorkerNode *worker);
 static void ReturnBlockedProcessGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo);
 static WaitGraph * BuildLocalWaitGraph(bool onlyDistributedTx);
 static bool IsProcessWaitingForSafeOperations(PGPROC *proc);
@@ -203,7 +204,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 	}
 
 	/* receive dump_local_wait_edges results */
-	foreach_ptr(connection, connectionList)
+	forboth_ptr(connection, connectionList, workerNode, workerNodeList)
 	{
 		bool raiseInterrupts = true;
 
@@ -234,11 +235,12 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 		{
 			if (onlyDistributedTx)
 			{
-				AddWaitEdgeFromResult(waitGraph, result, rowIndex);
+				AddWaitEdgeFromResult(waitGraph, result, rowIndex, workerNode);
 			}
 			else
 			{
-				AddWaitEdgeFromBlockedProcessResult(waitGraph, result, rowIndex);
+				AddWaitEdgeFromBlockedProcessResult(waitGraph, result, rowIndex,
+													workerNode);
 			}
 		}
 
@@ -255,7 +257,8 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
  * a PGresult.
  */
 static void
-AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex)
+AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex,
+					  WorkerNode *worker)
 {
 	WaitEdge *waitEdge = AllocWaitEdge(waitGraph);
 
@@ -270,6 +273,7 @@ AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex)
 	waitEdge->blockingTransactionNum = ParseIntField(result, rowIndex, 6);
 	waitEdge->blockingTransactionStamp = ParseTimestampTzField(result, rowIndex, 7);
 	waitEdge->isBlockingXactWaiting = ParseBoolField(result, rowIndex, 8);
+	waitEdge->nodeId = worker->nodeId;
 }
 
 
@@ -278,7 +282,8 @@ AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex)
  * is read from a PGresult.
  */
 static void
-AddWaitEdgeFromBlockedProcessResult(WaitGraph *waitGraph, PGresult *result, int rowIndex)
+AddWaitEdgeFromBlockedProcessResult(WaitGraph *waitGraph, PGresult *result, int rowIndex,
+									WorkerNode *worker)
 {
 	WaitEdge *waitEdge = AllocWaitEdge(waitGraph);
 
@@ -293,6 +298,7 @@ AddWaitEdgeFromBlockedProcessResult(WaitGraph *waitGraph, PGresult *result, int 
 	waitEdge->blockingTransactionNum = ParseIntField(result, rowIndex, 8);
 	waitEdge->blockingTransactionStamp = ParseTimestampTzField(result, rowIndex, 9);
 	waitEdge->isBlockingXactWaiting = ParseBoolField(result, rowIndex, 10);
+	waitEdge->nodeId = worker->nodeId;
 }
 
 

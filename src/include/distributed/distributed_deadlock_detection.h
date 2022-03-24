@@ -31,6 +31,7 @@ typedef struct TransactionNode
 	PGPROC *initiatorProc;
 
 	bool transactionVisited;
+	Bitmapset *blockedOnNodes;
 } TransactionNode;
 
 

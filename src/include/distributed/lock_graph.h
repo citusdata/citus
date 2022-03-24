@@ -45,6 +45,8 @@ typedef struct WaitEdge
 
 	/* blocking transaction is also waiting on a lock */
 	bool isBlockingXactWaiting;
+
+	int nodeId;
 } WaitEdge;
 
 
