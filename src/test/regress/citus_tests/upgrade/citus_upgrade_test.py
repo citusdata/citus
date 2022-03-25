@@ -74,11 +74,11 @@ def report_initial_version(config):
 
 
 def get_version_number(version):
-    return re.findall("\d+.\d+", version)[0]
+    return re.findall(r"\d+.\d+", version)[0]
 
 
 def get_actual_citus_version(pg_path, port):
-    citus_version = utils.psql(pg_path, port, CITUS_VERSION_SQL)
+    citus_version = utils.psql_capture(pg_path, port, CITUS_VERSION_SQL)
     citus_version = citus_version.decode("utf-8")
     return get_version_number(citus_version)
 
