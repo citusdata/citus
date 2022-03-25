@@ -913,8 +913,8 @@ RegisterCitusConfigVariables(void)
 		"citus.distributed_deadlock_detection_factor",
 		gettext_noop("Sets the time to wait before checking for distributed "
 					 "deadlocks. Postgres' deadlock_timeout setting is "
-					 "multiplied with the value. If the value is set to"
-					 "1000, distributed deadlock detection is disabled."),
+					 "multiplied with the value. If the value is set to -1, "
+					 "distributed deadlock detection is disabled."),
 		NULL,
 		&DistributedDeadlockDetectionTimeoutFactor,
 		2.0, -1.0, 1000.0,
