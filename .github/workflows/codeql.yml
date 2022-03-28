@@ -1,0 +1,79 @@
+name: "CodeQL"
+
+on:
+  schedule:
+    - cron: '59 23 * * 6'
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'cpp', 'python']
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: ${{ matrix.language }}
+
+    - name: Install package dependencies
+      run: |
+        # Create the file repository configuration:
+        sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main 15" > /etc/apt/sources.list.d/pgdg.list'
+        # Import the repository signing key:
+        wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          autotools-dev \
+          build-essential \
+          ca-certificates \
+          curl \
+          debhelper \
+          devscripts \
+          fakeroot \
+          flex \
+          libcurl4-openssl-dev \
+          libdistro-info-perl \
+          libedit-dev \
+          libfile-fcntllock-perl \
+          libicu-dev \
+          libkrb5-dev \
+          liblz4-1 \
+          liblz4-dev \
+          libpam0g-dev \
+          libreadline-dev \
+          libselinux1-dev \
+          libssl-dev \
+          libxslt-dev \
+          libzstd-dev \
+          libzstd1 \
+          lintian \
+          postgresql-server-dev-15 \
+          postgresql-server-dev-all \
+          python3-pip \
+          python3-setuptools \
+          wget \
+          zlib1g-dev
+
+
+    - name: Configure, Build and Install Citus
+      if: matrix.language == 'cpp'
+      run: |
+        ./configure
+        make -sj8
+        sudo make install-all
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
