@@ -21,3 +21,19 @@ SELECT * FROM select_filtered_view;
 
 -- dummy temp recursive view
 CREATE TEMP RECURSIVE VIEW recursive_defined_non_recursive_view(c) AS (SELECT 1);
+
+CREATE MATERIALIZED VIEW select_all_matview AS
+    SELECT * FROM view_test_table
+    WITH DATA;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS select_filtered_matview AS
+    SELECT * FROM view_test_table WHERE c = 'views'
+    WITH NO DATA;
+
+REFRESH MATERIALIZED VIEW select_filtered_matview;
+
+SELECT COUNT(*) FROM select_all_matview;
+SELECT * FROM select_filtered_matview;
+
+SELECT COUNT(*) FROM select_all_view a JOIN select_filtered_matview b ON a.c=b.c;
+SELECT COUNT(*) FROM select_all_view a JOIN view_test_table b ON a.c=b.c;
