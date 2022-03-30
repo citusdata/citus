@@ -326,7 +326,7 @@ class CitusShardReplicationFactorClusterConfig(CitusDefaultClusterConfig):
             "arbitrary_configs_truncate_partition_create", "arbitrary_configs_truncate_partition",
             # citus does not support modifying a partition when
             # citus.shard_replication_factor > 2
-            "arbitrary_configs_truncate_partition_create", "arbitrary_configs_partition_cascade"]
+            "arbitrary_configs_truncate_cascade_create", "arbitrary_configs_truncate_cascade"]
 
 
 class CitusSingleShardClusterConfig(CitusDefaultClusterConfig):
