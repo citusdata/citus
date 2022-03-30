@@ -38,7 +38,7 @@ SELECT COUNT(*) FROM partitioned_table;
 SELECT COUNT(*) FROM partitioned_table_0;
 SELECT COUNT(*) FROM partitioned_table_1;
 
--- Test truncate a partioned
+-- Test truncate a partioned table
 SELECT COUNT(*) FROM partitioned_table;
 SELECT COUNT(*) FROM partitioned_table_1;
 
@@ -46,25 +46,3 @@ TRUNCATE partitioned_table;
 
 SELECT COUNT(*) FROM partitioned_table;
 SELECT COUNT(*) FROM partitioned_table_1;
-
--- Test truncate error on table with dependencies
-TRUNCATE table_with_pk;
-
--- Test truncate rollback on table with dependencies
-SELECT COUNT(*) FROM table_with_fk;
-
-BEGIN;
-TRUNCATE table_with_pk CASCADE;
-SELECT COUNT(*) FROM table_with_fk;
-ROLLBACK;
-
-SELECT COUNT(*) FROM table_with_fk;
-
--- Test truncate on table with dependencies
-SELECT COUNT(*) FROM table_with_pk;
-SELECT COUNT(*) FROM table_with_fk;
-
-TRUNCATE table_with_pk CASCADE;
-
-SELECT COUNT(*) FROM table_with_pk;
-SELECT COUNT(*) FROM table_with_fk;

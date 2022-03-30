@@ -136,12 +136,10 @@ def copy_test_files_with_names(test_names, sql_dir_path, expected_dir_path, conf
         # make empty files for the skipped tests
         if test_name in config.skip_tests:
             expected_sql_file = os.path.join(sql_dir_path, test_name + ".sql")
-            with open(expected_sql_file, 'w') as f:
-                f.write("")
+            open(expected_sql_file, 'x').close()
 
             expected_out_file = os.path.join(expected_dir_path, test_name + ".out")
-            with open(expected_out_file, 'w') as f:
-                f.write("")
+            open(expected_out_file, 'x').close()
 
             continue
 
