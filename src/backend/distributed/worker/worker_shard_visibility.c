@@ -8,6 +8,7 @@
  */
 
 #include "postgres.h"
+#include "miscadmin.h"
 
 #include "catalog/index.h"
 #include "catalog/namespace.h"
@@ -47,6 +48,7 @@ static HideShardsMode HideShards = CHECK_APPLICATION_NAME;
 
 static bool ShouldHideShards(void);
 static bool ShouldHideShardsInternal(void);
+static bool IsPgBgWorker(void);
 static bool FilterShardsFromPgclass(Node *node, void *context);
 static Node * CreateRelationIsAKnownShardFilter(int pgClassVarno);
 
@@ -334,6 +336,28 @@ ResetHideShardsDecision(void)
 static bool
 ShouldHideShardsInternal(void)
 {
+	if (MyBackendType == B_BG_WORKER)
+	{
+		if (IsPgBgWorker())
+		{
+			/*
+			 * If a background worker belongs to Postgres, we should
+			 * never hide shards. For other background workers, enforce
+			 * the application_name check below.
+			 */
+			return false;
+		}
+	}
+	else if (MyBackendType != B_BACKEND)
+	{
+		/*
+		 * We are aiming only to hide shards from client
+		 * backends or certain background workers(see above),
+		 * not backends like walsender or checkpointer.
+		 */
+		return false;
+	}
+
 	if (IsCitusInternalBackend() || IsRebalancerInternalBackend())
 	{
 		/* we never hide shards from Citus */
@@ -366,6 +390,24 @@ ShouldHideShardsInternal(void)
 		{
 			return true;
 		}
+	}
+
+	return false;
+}
+
+
+/*
+ * IsPgBgWorker returns true if the current background worker
+ * belongs to Postgres.
+ */
+static bool
+IsPgBgWorker(void)
+{
+	Assert(MyBackendType == B_BG_WORKER);
+
+	if (MyBgworkerEntry)
+	{
+		return strcmp(MyBgworkerEntry->bgw_library_name, "postgres") == 0;
 	}
 
 	return false;
