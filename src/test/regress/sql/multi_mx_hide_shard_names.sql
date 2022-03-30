@@ -207,6 +207,38 @@ SELECT * FROM citus_shard_indexes_on_worker WHERE "Schema" = 'CiTuS.TeeN' ORDER 
 \d
 \di
 
+
+\c - - - :worker_1_port
+-- re-connect to the worker node and show that only
+-- client backends can filter shards
+SET search_path TO "CiTuS.TeeN";
+
+-- Create the necessary test utility function
+SET citus.enable_metadata_sync TO off;
+CREATE OR REPLACE FUNCTION set_backend_type(backend_type int)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus';
+RESET citus.enable_metadata_sync;
+
+-- the shards and indexes do not show up
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+
+-- say, we set it to bgworker
+-- the shards and indexes do not show up
+SELECT set_backend_type(4);
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+
+-- or, we set it to walsender
+-- the shards and indexes do show up
+SELECT set_backend_type(9);
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+
+-- but, client backends to see the shards
+SELECT set_backend_type(3);
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+
+
 -- clean-up
 \c - - - :master_port
 
