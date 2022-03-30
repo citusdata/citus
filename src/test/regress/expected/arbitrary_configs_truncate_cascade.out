@@ -2,10 +2,16 @@ SET search_path TO truncate_cascade_tests_schema;
 -- Test truncate error on table with dependencies
 TRUNCATE table_with_pk;
 ERROR:  cannot truncate a table referenced in a foreign key constraint
-DETAIL:  Table "table_with_fk" references "table_with_pk".
-HINT:  Truncate table "table_with_fk" at the same time, or use TRUNCATE ... CASCADE.
+DETAIL:  Table "table_with_fk_1" references "table_with_pk".
+HINT:  Truncate table "table_with_fk_1" at the same time, or use TRUNCATE ... CASCADE.
 -- Test truncate rollback on table with dependencies
-SELECT COUNT(*) FROM table_with_fk;
+SELECT COUNT(*) FROM table_with_fk_1;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+SELECT COUNT(*) FROM table_with_fk_2;
  count
 ---------------------------------------------------------------------
     10
@@ -13,14 +19,26 @@ SELECT COUNT(*) FROM table_with_fk;
 
 BEGIN;
 TRUNCATE table_with_pk CASCADE;
-SELECT COUNT(*) FROM table_with_fk;
+SELECT COUNT(*) FROM table_with_fk_1;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT COUNT(*) FROM table_with_fk_2;
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 ROLLBACK;
-SELECT COUNT(*) FROM table_with_fk;
+SELECT COUNT(*) FROM table_with_fk_1;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+SELECT COUNT(*) FROM table_with_fk_2;
  count
 ---------------------------------------------------------------------
     10
@@ -33,7 +51,13 @@ SELECT COUNT(*) FROM table_with_pk;
     10
 (1 row)
 
-SELECT COUNT(*) FROM table_with_fk;
+SELECT COUNT(*) FROM table_with_fk_1;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+SELECT COUNT(*) FROM table_with_fk_2;
  count
 ---------------------------------------------------------------------
     10
@@ -46,7 +70,13 @@ SELECT COUNT(*) FROM table_with_pk;
      0
 (1 row)
 
-SELECT COUNT(*) FROM table_with_fk;
+SELECT COUNT(*) FROM table_with_fk_1;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT COUNT(*) FROM table_with_fk_2;
  count
 ---------------------------------------------------------------------
      0

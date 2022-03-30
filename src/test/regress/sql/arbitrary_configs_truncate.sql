@@ -27,17 +27,6 @@ ROLLBACK;
 
 SELECT COUNT(*) FROM partitioned_table_0;
 
--- Test truncate on a partition
-SELECT COUNT(*) FROM partitioned_table;
-SELECT COUNT(*) FROM partitioned_table_0;
-SELECT COUNT(*) FROM partitioned_table_1;
-
-TRUNCATE partitioned_table_0;
-
-SELECT COUNT(*) FROM partitioned_table;
-SELECT COUNT(*) FROM partitioned_table_0;
-SELECT COUNT(*) FROM partitioned_table_1;
-
 -- Test truncate a partioned table
 SELECT COUNT(*) FROM partitioned_table;
 SELECT COUNT(*) FROM partitioned_table_1;

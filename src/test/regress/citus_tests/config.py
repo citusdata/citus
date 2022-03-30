@@ -303,7 +303,7 @@ class CitusUnusualQuerySettingsConfig(CitusDefaultClusterConfig):
             # requires the table with the fk to be converted to a citus_local_table.
             # As of c11, there is no way to do that through remote execution so this test
             # will fail
-            "arbitrary_configs_truncate_cascade_create", "arbitrary_configs_cascade_truncate"]
+            "arbitrary_configs_truncate_cascade_create", "arbitrary_configs_truncate_cascade"]
 
 
 class CitusSingleNodeSingleShardClusterConfig(CitusDefaultClusterConfig):
@@ -323,7 +323,10 @@ class CitusShardReplicationFactorClusterConfig(CitusDefaultClusterConfig):
         self.skip_tests = [
             # citus does not support foreign keys in distributed tables
             # when citus.shard_replication_factor > 2
-            "arbitrary_configs_truncate_cascade_create", "arbitrary_configs_cascade_truncate"]
+            "arbitrary_configs_truncate_partition_create", "arbitrary_configs_truncate_partition",
+            # citus does not support modifying a partition when
+            # citus.shard_replication_factor > 2
+            "arbitrary_configs_truncate_partition_create", "arbitrary_configs_partition_cascade"]
 
 
 class CitusSingleShardClusterConfig(CitusDefaultClusterConfig):
