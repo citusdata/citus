@@ -403,6 +403,86 @@ SELECT * FROM citus_shard_indexes_on_worker WHERE "Schema" = 'CiTuS.TeeN' ORDER 
  CiTuS.TeeN | MyTenantIndex | index | postgres | TeeNTabLE.1!?!
 (1 row)
 
+\c - - - :worker_1_port
+-- re-connect to the worker node and show that only
+-- client backends can filter shards
+SET search_path TO "CiTuS.TeeN";
+-- Create the necessary test utility function
+SET citus.enable_metadata_sync TO off;
+CREATE OR REPLACE FUNCTION set_backend_type(backend_type int)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus';
+RESET citus.enable_metadata_sync;
+-- the shards and indexes do not show up
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+       relname
+---------------------------------------------------------------------
+ test_index
+ test_table
+ test_table_102008
+ test_table_2_1130000
+(4 rows)
+
+-- say, we set it to bgworker
+-- the shards and indexes do not show up
+SELECT set_backend_type(4);
+NOTICE:  backend type switched to: background worker
+ set_backend_type
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+       relname
+---------------------------------------------------------------------
+ test_index
+ test_table
+ test_table_102008
+ test_table_2_1130000
+(4 rows)
+
+-- or, we set it to walsender
+-- the shards and indexes do show up
+SELECT set_backend_type(9);
+NOTICE:  backend type switched to: walsender
+ set_backend_type
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+          relname
+---------------------------------------------------------------------
+ test_index
+ test_index_1130000
+ test_index_1130002
+ test_table
+ test_table_102008
+ test_table_102008_1130004
+ test_table_102008_1130006
+ test_table_1130000
+ test_table_1130002
+ test_table_2_1130000
+(10 rows)
+
+-- but, client backends to see the shards
+SELECT set_backend_type(3);
+NOTICE:  backend type switched to: client backend
+ set_backend_type
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+       relname
+---------------------------------------------------------------------
+ test_index
+ test_table
+ test_table_102008
+ test_table_2_1130000
+(4 rows)
+
 -- clean-up
 \c - - - :master_port
 -- show that common psql functions do not show shards
