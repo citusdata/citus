@@ -17,8 +17,8 @@ SELECT create_distributed_table('table_with_fk_1', 'a');
 
 (1 row)
 
-SELECT create_distributed_table('table_with_fk_2', 'a');
- create_distributed_table
+SELECT create_reference_table('table_with_fk_2');
+ create_reference_table
 ---------------------------------------------------------------------
 
 (1 row)

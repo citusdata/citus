@@ -9,7 +9,7 @@ CREATE TABLE table_with_fk_2(a bigint, b bigint, FOREIGN KEY (b) REFERENCES tabl
 -- distribute tables
 SELECT create_reference_table('table_with_pk');
 SELECT create_distributed_table('table_with_fk_1', 'a');
-SELECT create_distributed_table('table_with_fk_2', 'a');
+SELECT create_reference_table('table_with_fk_2');
 
 -- fill tables with data
 INSERT INTO table_with_pk(a) SELECT n FROM generate_series(1, 10) n;
