@@ -374,22 +374,27 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *originalQuery, ParamL
 									 boundParams, bool hasUnresolvedParams,
 									 PlannerRestrictionContext *plannerRestrictionContext)
 {
-	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(originalQuery);
-	RangeTblEntry *insertRte = ExtractResultRelationRTEOrError(originalQuery);
+	Query *insertSelectQuery = copyObject(originalQuery);
+
+	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
+	RangeTblEntry *insertRte = ExtractResultRelationRTEOrError(insertSelectQuery);
 	Oid targetRelationId = insertRte->relid;
 
-	Query *selectQuery = BuildSelectForInsertSelect(originalQuery);
+	Query *selectQuery = BuildSelectForInsertSelect(insertSelectQuery);
+
+	selectRte->subquery = selectQuery;
+	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte, 2);
 
 	/*
 	 * Cast types of insert target list and select projection list to
 	 * match the column types of the target relation.
 	 */
 	selectQuery->targetList =
-		AddInsertSelectCasts(originalQuery->targetList,
+		AddInsertSelectCasts(insertSelectQuery->targetList,
 							 selectQuery->targetList,
 							 targetRelationId);
 
-	originalQuery->cteList = NIL;
+	insertSelectQuery->cteList = NIL;
 	DistributedPlan *distPlan = CreateDistributedPlan(planId, selectQuery,
 													  copyObject(selectQuery),
 													  boundParams, hasUnresolvedParams,
@@ -429,7 +434,7 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *originalQuery, ParamL
 	 * distributed select instead of returning it.
 	 */
 	selectRte->subquery = distPlan->combineQuery;
-	distPlan->combineQuery = originalQuery;
+	distPlan->combineQuery = insertSelectQuery;
 
 	return distPlan;
 }
@@ -848,7 +853,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 
 
 	/* this is required for correct deparsing of the query */
-	ReorderInsertSelectTargetLists(copiedQuery, copiedInsertRte, copiedSubqueryRte);
+	ReorderInsertSelectTargetLists(copiedQuery, copiedInsertRte, copiedSubqueryRte, 1);
 
 	/* setting an alias simplifies deparsing of RETURNING */
 	if (copiedInsertRte->alias == NULL)
@@ -888,16 +893,16 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
  */
 Query *
 ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
-							   RangeTblEntry *subqueryRte)
+							   RangeTblEntry *subqueryRte, Index insertTableId)
 {
 	ListCell *insertTargetEntryCell;
 	List *newSubqueryTargetlist = NIL;
 	List *newInsertTargetlist = NIL;
 	int resno = 1;
-	Index insertTableId = 1;
 	int targetEntryIndex = 0;
 
-	AssertArg(InsertSelectIntoCitusTable(originalQuery));
+	AssertArg(InsertSelectIntoCitusTable(originalQuery) ||
+			  InsertSelectIntoLocalTable(originalQuery));
 
 	Query *subquery = subqueryRte->subquery;
 
@@ -1427,7 +1432,7 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 	Query *selectQuery = BuildSelectForInsertSelect(insertSelectQuery);
 
 	selectRte->subquery = selectQuery;
-	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
+	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte, 1);
 
 	/*
 	 * Cast types of insert target list and select projection list to

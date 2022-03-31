@@ -103,7 +103,7 @@ RebuildQueryStrings(Job *workerJob)
 				AddPartitionKeyNotNullFilterToSelect(copiedSubquery);
 			}
 
-			ReorderInsertSelectTargetLists(query, copiedInsertRte, copiedSubqueryRte);
+			ReorderInsertSelectTargetLists(query, copiedInsertRte, copiedSubqueryRte, 1);
 
 			UpdateRelationToShardNames((Node *) copiedSubquery, relationShardList);
 		}
