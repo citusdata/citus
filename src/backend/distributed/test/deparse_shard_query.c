@@ -65,7 +65,7 @@ deparse_shard_query_test(PG_FUNCTION_ARGS)
 				RangeTblEntry *subqueryRte = lsecond(query->rtable);
 
 
-				ReorderInsertSelectTargetLists(query, insertRte, subqueryRte, 1);
+				ReorderInsertSelectTargetLists(query, insertRte, subqueryRte);
 			}
 
 			deparse_shard_query(query, InvalidOid, 0, buffer);

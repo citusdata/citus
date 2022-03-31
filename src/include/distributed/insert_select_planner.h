@@ -28,8 +28,7 @@ extern bool CheckInsertSelectQuery(Query *query);
 extern bool InsertSelectIntoLocalTable(Query *query);
 extern Query * ReorderInsertSelectTargetLists(Query *originalQuery,
 											  RangeTblEntry *insertRte,
-											  RangeTblEntry *subqueryRte,
-											  Index insertTableId);
+											  RangeTblEntry *subqueryRte);
 extern void NonPushableInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 											   struct ExplainState *es);
 extern DistributedPlan * CreateInsertSelectPlan(uint64 planId, Query *originalQuery,

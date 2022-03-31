@@ -383,7 +383,7 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *originalQuery, ParamL
 	Query *selectQuery = BuildSelectForInsertSelect(insertSelectQuery);
 
 	selectRte->subquery = selectQuery;
-	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte, 2);
+	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
 
 	/*
 	 * Cast types of insert target list and select projection list to
@@ -853,7 +853,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 
 
 	/* this is required for correct deparsing of the query */
-	ReorderInsertSelectTargetLists(copiedQuery, copiedInsertRte, copiedSubqueryRte, 1);
+	ReorderInsertSelectTargetLists(copiedQuery, copiedInsertRte, copiedSubqueryRte);
 
 	/* setting an alias simplifies deparsing of RETURNING */
 	if (copiedInsertRte->alias == NULL)
@@ -893,8 +893,10 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
  */
 Query *
 ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
-							   RangeTblEntry *subqueryRte, Index insertTableId)
+							   RangeTblEntry *subqueryRte)
 {
+	Index insertTableId = originalQuery->resultRelation + 1;
+
 	ListCell *insertTargetEntryCell;
 	List *newSubqueryTargetlist = NIL;
 	List *newInsertTargetlist = NIL;
@@ -1432,7 +1434,7 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 	Query *selectQuery = BuildSelectForInsertSelect(insertSelectQuery);
 
 	selectRte->subquery = selectQuery;
-	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte, 1);
+	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
 
 	/*
 	 * Cast types of insert target list and select projection list to
