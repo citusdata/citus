@@ -1198,6 +1198,62 @@ RETURNING *;
 
 SELECT * FROM local_table_4 ORDER BY 1,2,3,4,5,6,7,8;
 
+-- test using a column that has a default value
+CREATE TABLE local_table_5(
+    col_1 integer,
+    col_2 integer,
+    col_3 text,
+    col_4 text default 'deftext',
+    col_5 int,
+    col_6 text,
+    col_7 text,
+    col_8 text
+);
+
+-- test remote execution
+INSERT INTO local_table_5 (col_1, col_2, col_3, col_5, col_6, col_7, col_8)
+SELECT
+    t1.dist_col,
+    1,
+    'string_1',
+    2,
+    'string_2',
+    t1.text_col_1,
+    t1.text_col_2
+FROM dist_table_1 t1
+RETURNING *;
+
+-- test local execution
+BEGIN;
+    INSERT INTO local_table_5 (col_1, col_2, col_3, col_5, col_6, col_7, col_8)
+    SELECT
+        t1.dist_col,
+        3,
+        'string_3',
+        4,
+        'string_4',
+        t1.text_col_1,
+        t1.text_col_2
+    FROM dist_table_1 t1
+    RETURNING *;
+COMMIT;
+
+-- test EXPLAIN (ANALYZE)
+EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF)
+INSERT INTO local_table_5 (col_1, col_2, col_3, col_5, col_6, col_7, col_8)
+SELECT
+    t1.dist_col,
+    5,
+    'string_5',
+    6,
+    'string_6',
+    t1.text_col_1,
+    t1.text_col_2
+FROM dist_table_1 t1
+RETURNING *;
+
+SELECT * FROM local_table_5 ORDER BY 1,2,3,4,5,6,7,8;
+
 -- suppress notices
 SET client_min_messages TO error;
 
