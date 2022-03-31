@@ -2485,11 +2485,11 @@ NOTICE:  executing the command locally: INSERT INTO single_node.dist_table_2_102
 -- test inserting into local table by ignoring one of the columns
 INSERT INTO local_table_6 (col_1, col_2)
 SELECT col_1, col_2 FROM dist_table_2;
-ERROR:  could not find attribute 3 in subquery targetlist
 SELECT * FROM local_table_6 ORDER BY 1,2;
  col_1 | extra_col | col_2
 ---------------------------------------------------------------------
-(0 rows)
+     1 |           |     2
+(1 row)
 
 -- suppress notices
 SET client_min_messages TO error;

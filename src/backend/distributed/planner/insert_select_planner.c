@@ -978,7 +978,7 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 		 */
 		Assert(!newSubqueryTargetEntry->resjunk);
 
-		Var *newInsertVar = makeVar(insertTableId, originalAttrNo,
+		Var *newInsertVar = makeVar(insertTableId, newSubqueryTargetEntry->resno,
 									exprType((Node *) newSubqueryTargetEntry->expr),
 									exprTypmod((Node *) newSubqueryTargetEntry->expr),
 									exprCollation((Node *) newSubqueryTargetEntry->expr),
