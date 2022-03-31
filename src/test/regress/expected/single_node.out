@@ -2335,9 +2335,71 @@ BEGIN;
         t1.text_col_2
     FROM dist_table_1 t1
     RETURNING *;
-NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_4', 'string_5', 4, 'string_6', text_col_1, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
-NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_4', 'string_5', 4, 'string_6', text_col_1, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
-NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_4', 'string_5', 4, 'string_6', text_col_1, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
-NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_4', 'string_5', 4, 'string_6', text_col_1, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
-SSL SYSCALL error: EOF detected
-connection to server was lost
+NOTICE:  executing the command locally: SELECT dist_col, 3, ('string_4')::text AS auto_coerced_by_citus_2, ('string_5')::text AS auto_coerced_by_citus_3, 4, ('string_6')::text AS auto_coerced_by_citus_5, text_col_1, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 3, ('string_4')::text AS auto_coerced_by_citus_2, ('string_5')::text AS auto_coerced_by_citus_3, 4, ('string_6')::text AS auto_coerced_by_citus_5, text_col_1, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 3, ('string_4')::text AS auto_coerced_by_citus_2, ('string_5')::text AS auto_coerced_by_citus_3, 4, ('string_6')::text AS auto_coerced_by_citus_5, text_col_1, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 3, ('string_4')::text AS auto_coerced_by_citus_2, ('string_5')::text AS auto_coerced_by_citus_3, 4, ('string_6')::text AS auto_coerced_by_citus_5, text_col_1, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
+ col_1 | col_2 |  col_3   |  col_4   | col_5 |  col_6   |   col_7   |   col_8
+---------------------------------------------------------------------
+    10 |     3 | string_4 | string_5 |     4 | string_6 | string_10 | string_11
+(1 row)
+
+COMMIT;
+-- test EXPLAIN (ANALYZE)
+EXPLAIN (ANALYZE)
+INSERT INTO local_table_4
+SELECT
+    t1.dist_col,
+    5,
+    'string_7',
+    'string_8',
+    6,
+    'string_9',
+    t1.text_col_1,
+    t1.text_col_2
+FROM dist_table_1 t1
+RETURNING *;
+                                                              QUERY PLAN
+---------------------------------------------------------------------
+ Insert on local_table_4  (cost=0.00..0.00 rows=100000 width=172) (actual time=4.387..4.391 rows=1 loops=1)
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=172) (actual time=4.367..4.369 rows=1 loops=1)
+         Task Count: 4
+         Tuple data received from nodes: 54 bytes
+         Tasks Shown: One of 4
+         ->  Task
+               Tuple data received from node: 54 bytes
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Seq Scan on dist_table_1_102048 t1  (cost=0.00..18.10 rows=810 width=172) (actual time=0.007..0.008 rows=1 loops=1)
+                   Planning Time: 0.037 ms
+                   Execution Time: 0.026 ms
+ Planning Time: 0.402 ms
+ Execution Time: 4.797 ms
+(13 rows)
+
+SELECT * FROM local_table_4 ORDER BY 1,2,3,4,5,6,7,8;
+ col_1 | col_2 |  col_3   |  col_4   | col_5 |  col_6   |   col_7   |   col_8
+---------------------------------------------------------------------
+    10 |     1 | string_1 | string_2 |     2 | string_3 | string_10 | string_11
+    10 |     3 | string_4 | string_5 |     4 | string_6 | string_10 | string_11
+    10 |     5 | string_7 | string_8 |     6 | string_9 | string_10 | string_11
+(3 rows)
+
+-- suppress notices
+SET client_min_messages TO error;
+-- cannot remove coordinator since a reference table exists on coordinator and no other worker nodes are added
+SELECT 1 FROM master_remove_node('localhost', :master_port);
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
+DETAIL:  One of the table(s) that prevents the operation complete successfully is single_node.ref
+HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
+-- Cleanup
+DROP SCHEMA single_node CASCADE;
+-- Remove the coordinator again
+SELECT 1 FROM master_remove_node('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- restart nodeid sequence so that multi_cluster_management still has the same
+-- nodeids
+ALTER SEQUENCE pg_dist_node_nodeid_seq RESTART 1;

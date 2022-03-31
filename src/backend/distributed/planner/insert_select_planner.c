@@ -375,8 +375,20 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *originalQuery, ParamL
 									 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(originalQuery);
+	RangeTblEntry *insertRte = ExtractResultRelationRTEOrError(originalQuery);
+	Oid targetRelationId = insertRte->relid;
 
 	Query *selectQuery = BuildSelectForInsertSelect(originalQuery);
+
+	/*
+	 * Cast types of insert target list and select projection list to
+	 * match the column types of the target relation.
+	 */
+	selectQuery->targetList =
+		AddInsertSelectCasts(originalQuery->targetList,
+							 selectQuery->targetList,
+							 targetRelationId);
+
 	originalQuery->cteList = NIL;
 	DistributedPlan *distPlan = CreateDistributedPlan(planId, selectQuery,
 													  copyObject(selectQuery),
@@ -1551,15 +1563,14 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 	TargetEntry *selectEntry = NULL;
 	forboth_ptr(insertEntry, insertTargetList, selectEntry, selectTargetList)
 	{
-		Var *insertColumn = (Var *) insertEntry->expr;
 		Form_pg_attribute attr = TupleDescAttr(destTupleDescriptor,
 											   insertEntry->resno - 1);
 
-		Oid sourceType = insertColumn->vartype;
+		Oid sourceType = exprType((Node *) selectEntry->expr);
 		Oid targetType = attr->atttypid;
 		if (sourceType != targetType)
 		{
-			insertEntry->expr = CastExpr((Expr *) insertColumn, sourceType, targetType,
+			insertEntry->expr = CastExpr(insertEntry->expr, sourceType, targetType,
 										 attr->attcollation, attr->atttypmod);
 
 			/*
