@@ -4,6 +4,7 @@ test: dropped_columns_create_load distributed_planning_create_load
 test: local_dist_join_load
 test: partitioned_indexes_create
 test: connectivity_checks
+test: schemas_create
 test: views_create
 test: sequences_create
 test: index_create
