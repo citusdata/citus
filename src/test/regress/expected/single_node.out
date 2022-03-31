@@ -2346,7 +2346,7 @@ NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_4'::text AS 
 
 COMMIT;
 -- test EXPLAIN (ANALYZE)
-EXPLAIN (ANALYZE)
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
 INSERT INTO local_table_4
 SELECT
     t1.dist_col,
@@ -2359,22 +2359,18 @@ SELECT
     t1.text_col_2
 FROM dist_table_1 t1
 RETURNING *;
-                                                              QUERY PLAN
+                                  QUERY PLAN
 ---------------------------------------------------------------------
- Insert on local_table_4  (cost=0.00..0.00 rows=100000 width=172) (actual time=5.137..5.142 rows=1 loops=1)
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=172) (actual time=5.106..5.108 rows=1 loops=1)
+ Insert on local_table_4 (actual rows=1 loops=1)
+   ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
          Task Count: 4
          Tuple data received from nodes: 54 bytes
          Tasks Shown: One of 4
          ->  Task
                Tuple data received from node: 54 bytes
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on dist_table_1_102048 t1  (cost=0.00..18.10 rows=810 width=172) (actual time=0.008..0.009 rows=1 loops=1)
-                   Planning Time: 0.035 ms
-                   Execution Time: 0.032 ms
- Planning Time: 0.401 ms
- Execution Time: 5.558 ms
-(13 rows)
+               ->  Seq Scan on dist_table_1_102048 t1 (actual rows=1 loops=1)
+(9 rows)
 
 SELECT * FROM local_table_4 ORDER BY 1,2,3,4,5,6,7,8;
  col_1 | col_2 |  col_3   |  col_4   | col_5 |  col_6   |   col_7   |   col_8
@@ -2436,7 +2432,7 @@ NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_3'::text AS 
 
 COMMIT;
 -- test EXPLAIN (ANALYZE)
-EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF)
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
 INSERT INTO local_table_5 (col_1, col_2, col_3, col_5, col_6, col_7, col_8)
 SELECT
     t1.dist_col,
@@ -2448,17 +2444,17 @@ SELECT
     t1.text_col_2
 FROM dist_table_1 t1
 RETURNING *;
-                                           QUERY PLAN
+                                  QUERY PLAN
 ---------------------------------------------------------------------
- Insert on local_table_5 (actual time=5.047..5.051 rows=1 loops=1)
-   ->  Custom Scan (Citus Adaptive) (actual time=5.014..5.016 rows=1 loops=1)
+ Insert on local_table_5 (actual rows=1 loops=1)
+   ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
          Task Count: 4
          Tuple data received from nodes: 53 bytes
          Tasks Shown: One of 4
          ->  Task
                Tuple data received from node: 53 bytes
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on dist_table_1_102048 t1 (actual time=0.013..0.015 rows=1 loops=1)
+               ->  Seq Scan on dist_table_1_102048 t1 (actual rows=1 loops=1)
 (9 rows)
 
 SELECT * FROM local_table_5 ORDER BY 1,2,3,4,5,6,7,8;
