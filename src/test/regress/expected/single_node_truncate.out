@@ -1,5 +1,6 @@
 CREATE SCHEMA single_node_truncate;
 SET search_path TO single_node_truncate;
+SET citus.next_shard_id TO 90730500;
 SET citus.shard_replication_factor TO 1;
 -- helper view that prints out local table names and sizes in the schema
 CREATE VIEW table_sizes AS
@@ -28,12 +29,12 @@ CREATE TABLE citus_local(id int, ref_id int REFERENCES ref(id));
 INSERT INTO citus_local SELECT x,x FROM generate_series(1,10000) x;
 -- verify that shell tables for citus local tables are empty
 SELECT * FROM table_sizes;
-        name        | has_data
+         name         | has_data
 ---------------------------------------------------------------------
- citus_local        | f
- citus_local_102049 | t
- ref                | t
- ref_102048         | t
+ citus_local          | f
+ citus_local_90730501 | t
+ ref                  | t
+ ref_90730500         | t
 (4 rows)
 
 -- verify that this UDF is noop on Citus local tables
@@ -44,12 +45,12 @@ SELECT truncate_local_data_after_distributing_table('citus_local');
 (1 row)
 
 SELECT * FROM table_sizes;
-        name        | has_data
+         name         | has_data
 ---------------------------------------------------------------------
- citus_local        | f
- citus_local_102049 | t
- ref                | t
- ref_102048         | t
+ citus_local          | f
+ citus_local_90730501 | t
+ ref                  | t
+ ref_90730500         | t
 (4 rows)
 
 -- test that we allow cascading truncates to citus local tables
@@ -62,12 +63,12 @@ NOTICE:  truncate cascades to table "citus_local"
 (1 row)
 
 SELECT * FROM table_sizes;
-        name        | has_data
+         name         | has_data
 ---------------------------------------------------------------------
- citus_local        | f
- citus_local_102049 | t
- ref                | f
- ref_102048         | t
+ citus_local          | f
+ citus_local_90730501 | t
+ ref                  | f
+ ref_90730500         | t
 (4 rows)
 
 ROLLBACK;
@@ -95,17 +96,17 @@ NOTICE:  truncate cascades to table "dist"
 (1 row)
 
 SELECT * FROM table_sizes;
-        name        | has_data
+         name         | has_data
 ---------------------------------------------------------------------
- citus_local        | f
- citus_local_102049 | t
- dist               | f
- dist_102051        | t
- dist_102052        | t
- dist_102053        | t
- dist_102054        | t
- ref                | f
- ref_102048         | t
+ citus_local          | f
+ citus_local_90730501 | t
+ dist                 | f
+ dist_90730503        | t
+ dist_90730504        | t
+ dist_90730505        | t
+ dist_90730506        | t
+ ref                  | f
+ ref_90730500         | t
 (9 rows)
 
 ROLLBACK;
@@ -118,17 +119,17 @@ SELECT truncate_local_data_after_distributing_table('dist');
 (1 row)
 
 SELECT * FROM table_sizes;
-        name        | has_data
+         name         | has_data
 ---------------------------------------------------------------------
- citus_local        | f
- citus_local_102049 | t
- dist               | f
- dist_102051        | t
- dist_102052        | t
- dist_102053        | t
- dist_102054        | t
- ref                | t
- ref_102048         | t
+ citus_local          | f
+ citus_local_90730501 | t
+ dist                 | f
+ dist_90730503        | t
+ dist_90730504        | t
+ dist_90730505        | t
+ dist_90730506        | t
+ ref                  | t
+ ref_90730500         | t
 (9 rows)
 
 ROLLBACK;
