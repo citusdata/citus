@@ -109,6 +109,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self.new_settings = {}
         self.add_coordinator_to_metadata = False
         self.env_variables = {}
+        self.skip_tests = []
 
     def post_init(self):
         self._init_node_name_ports()
@@ -297,6 +298,13 @@ class CitusUnusualQuerySettingsConfig(CitusDefaultClusterConfig):
             "citus.values_materialization_threshold": "0",
         }
 
+        self.skip_tests = [
+            # Creating a reference table from a table referred to by a fk
+            # requires the table with the fk to be converted to a citus_local_table.
+            # As of c11, there is no way to do that through remote execution so this test
+            # will fail
+            "arbitrary_configs_truncate_cascade_create", "arbitrary_configs_truncate_cascade"]
+
 
 class CitusSingleNodeSingleShardClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
@@ -312,6 +320,13 @@ class CitusShardReplicationFactorClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {"citus.shard_replication_factor": 2}
+        self.skip_tests = [
+            # citus does not support foreign keys in distributed tables
+            # when citus.shard_replication_factor > 2
+            "arbitrary_configs_truncate_partition_create", "arbitrary_configs_truncate_partition",
+            # citus does not support modifying a partition when
+            # citus.shard_replication_factor > 2
+            "arbitrary_configs_truncate_cascade_create", "arbitrary_configs_truncate_cascade"]
 
 
 class CitusSingleShardClusterConfig(CitusDefaultClusterConfig):
