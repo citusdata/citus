@@ -1181,6 +1181,9 @@ BEGIN;
     RETURNING *;
 COMMIT;
 
+-- Ensure tuple data in explain analyze output is the same on all PG versions
+SET citus.enable_binary_protocol = TRUE;
+
 -- test EXPLAIN (ANALYZE)
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
 INSERT INTO local_table_4
