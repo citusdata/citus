@@ -6,3 +6,6 @@ test: partitioned_indexes_create
 test: connectivity_checks
 test: views_create
 test: sequences_create
+test: arbitrary_configs_truncate_create
+test: arbitrary_configs_truncate_cascade_create
+test: arbitrary_configs_truncate_partition_create
