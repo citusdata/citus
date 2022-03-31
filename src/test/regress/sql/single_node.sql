@@ -1254,6 +1254,26 @@ RETURNING *;
 
 SELECT * FROM local_table_5 ORDER BY 1,2,3,4,5,6,7,8;
 
+CREATE TABLE local_table_6 (
+    col_1 int,
+    extra_col int,
+    col_2 int
+);
+
+CREATE TABLE dist_table_2 (
+    col_1 int,
+    col_2 int
+);
+SELECT create_distributed_table('dist_table_2', 'col_1');
+
+INSERT INTO dist_table_2 (col_1, col_2) VALUES (1, 2);
+
+-- test inserting into local table by ignoring one of the columns
+INSERT INTO local_table_6 (col_1, col_2)
+SELECT col_1, col_2 FROM dist_table_2;
+
+SELECT * FROM local_table_6 ORDER BY 1,2;
+
 -- suppress notices
 SET client_min_messages TO error;
 

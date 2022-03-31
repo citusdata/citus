@@ -2465,6 +2465,32 @@ SELECT * FROM local_table_5 ORDER BY 1,2,3,4,5,6,7,8;
     10 |     5 | string_5 | deftext |     6 | string_6 | string_10 | string_11
 (3 rows)
 
+CREATE TABLE local_table_6 (
+    col_1 int,
+    extra_col int,
+    col_2 int
+);
+CREATE TABLE dist_table_2 (
+    col_1 int,
+    col_2 int
+);
+SELECT create_distributed_table('dist_table_2', 'col_1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist_table_2 (col_1, col_2) VALUES (1, 2);
+NOTICE:  executing the command locally: INSERT INTO single_node.dist_table_2_102052 (col_1, col_2) VALUES (1, 2)
+-- test inserting into local table by ignoring one of the columns
+INSERT INTO local_table_6 (col_1, col_2)
+SELECT col_1, col_2 FROM dist_table_2;
+ERROR:  could not find attribute 3 in subquery targetlist
+SELECT * FROM local_table_6 ORDER BY 1,2;
+ col_1 | extra_col | col_2
+---------------------------------------------------------------------
+(0 rows)
+
 -- suppress notices
 SET client_min_messages TO error;
 -- cannot remove coordinator since a reference table exists on coordinator and no other worker nodes are added
