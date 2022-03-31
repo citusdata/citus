@@ -2047,7 +2047,6 @@ ERROR:  relation "test_creating_distributed_relation_table_from_shard_102044" is
 -- create reference table
 SELECT create_reference_table('test_creating_distributed_relation_table_from_shard_102044');
 ERROR:  relation "test_creating_distributed_relation_table_from_shard_102044" is a shard relation
-RESET citus.shard_replication_factor;
 DROP TABLE test_creating_distributed_relation_table_from_shard;
 -- lets flush the copy often to make sure everyhing is fine
 SET citus.local_copy_flush_threshold TO 1;
@@ -2279,22 +2278,66 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
--- suppress notices
-SET client_min_messages TO error;
--- cannot remove coordinator since a reference table exists on coordinator and no other worker nodes are added
-SELECT 1 FROM master_remove_node('localhost', :master_port);
-ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
-DETAIL:  One of the table(s) that prevents the operation complete successfully is single_node.ref
-HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
--- Cleanup
-DROP SCHEMA single_node CASCADE;
--- Remove the coordinator again
-SELECT 1 FROM master_remove_node('localhost', :master_port);
- ?column?
+SET citus.enable_local_execution TO TRUE;
+CREATE TABLE local_table_4(
+    col_1 integer,
+    col_2 integer,
+    col_3 text,
+    col_4 text,
+    col_5 int,
+    col_6 text,
+    col_7 text,
+    col_8 text
+);
+CREATE TABLE dist_table_1(
+    dist_col integer,
+    int_col integer,
+    text_col_1 text,
+    text_col_2 text
+);
+SELECT create_distributed_table('dist_table_1', 'dist_col');
+ create_distributed_table
 ---------------------------------------------------------------------
-        1
+
 (1 row)
 
--- restart nodeid sequence so that multi_cluster_management still has the same
--- nodeids
-ALTER SEQUENCE pg_dist_node_nodeid_seq RESTART 1;
+INSERT INTO dist_table_1 VALUES (10, 11, 'string_10', 'string_11');
+NOTICE:  executing the command locally: INSERT INTO single_node.dist_table_1_102048 (dist_col, int_col, text_col_1, text_col_2) VALUES (10, 11, 'string_10'::text, 'string_11'::text)
+-- test remote execution
+INSERT INTO local_table_4
+SELECT
+    t1.dist_col,
+    1,
+    'string_1',
+    'string_2',
+    2,
+    'string_3',
+    t1.text_col_1,
+    t1.text_col_2
+FROM dist_table_1 t1
+RETURNING *;
+ col_1 | col_2 |  col_3   |  col_4   | col_5 |  col_6   |   col_7   |   col_8
+---------------------------------------------------------------------
+    10 |     1 | string_1 | string_2 |     2 | string_3 | string_10 | string_11
+(1 row)
+
+-- test local execution
+BEGIN;
+    INSERT INTO local_table_4
+    SELECT
+        t1.dist_col,
+        3,
+        'string_4',
+        'string_5',
+        4,
+        'string_6',
+        t1.text_col_1,
+        t1.text_col_2
+    FROM dist_table_1 t1
+    RETURNING *;
+NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_4', 'string_5', 4, 'string_6', text_col_1, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_4', 'string_5', 4, 'string_6', text_col_1, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_4', 'string_5', 4, 'string_6', text_col_1, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_4', 'string_5', 4, 'string_6', text_col_1, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
+SSL SYSCALL error: EOF detected
+connection to server was lost

@@ -1037,7 +1037,6 @@ SELECT create_distributed_table('test_creating_distributed_relation_table_from_s
 -- create reference table
 SELECT create_reference_table('test_creating_distributed_relation_table_from_shard_102044');
 
-RESET citus.shard_replication_factor;
 DROP TABLE test_creating_distributed_relation_table_from_shard;
 
 -- lets flush the copy often to make sure everyhing is fine
@@ -1129,7 +1128,75 @@ ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
 ALTER SYSTEM RESET citus.local_shared_pool_size;
 SELECT pg_reload_conf();
 
+SET citus.enable_local_execution TO TRUE;
 
+CREATE TABLE local_table_4(
+    col_1 integer,
+    col_2 integer,
+    col_3 text,
+    col_4 text,
+    col_5 int,
+    col_6 text,
+    col_7 text,
+    col_8 text
+);
+
+CREATE TABLE dist_table_1(
+    dist_col integer,
+    int_col integer,
+    text_col_1 text,
+    text_col_2 text
+);
+SELECT create_distributed_table('dist_table_1', 'dist_col');
+
+INSERT INTO dist_table_1 VALUES (10, 11, 'string_10', 'string_11');
+
+-- test remote execution
+INSERT INTO local_table_4
+SELECT
+    t1.dist_col,
+    1,
+    'string_1',
+    'string_2',
+    2,
+    'string_3',
+    t1.text_col_1,
+    t1.text_col_2
+FROM dist_table_1 t1
+RETURNING *;
+
+-- test local execution
+BEGIN;
+    INSERT INTO local_table_4
+    SELECT
+        t1.dist_col,
+        3,
+        'string_4',
+        'string_5',
+        4,
+        'string_6',
+        t1.text_col_1,
+        t1.text_col_2
+    FROM dist_table_1 t1
+    RETURNING *;
+COMMIT;
+
+-- test EXPLAIN (ANALYZE)
+EXPLAIN (ANALYZE)
+INSERT INTO local_table_4
+SELECT
+    t1.dist_col,
+    5,
+    'string_7',
+    'string_8',
+    6,
+    'string_9',
+    t1.text_col_1,
+    t1.text_col_2
+FROM dist_table_1 t1
+RETURNING *;
+
+SELECT * FROM local_table_4 ORDER BY 1,2,3,4,5,6,7,8;
 
 -- suppress notices
 SET client_min_messages TO error;
