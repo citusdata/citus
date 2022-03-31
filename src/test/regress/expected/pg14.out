@@ -1330,7 +1330,7 @@ SELECT count(*) FROM pg14.foreign_table;
 
 -- should error out
 TRUNCATE foreign_table;
-ERROR:  truncating foreign tables that are added to metadata can only be excuted on the coordinator
+ERROR:  truncating foreign tables that are added to metadata can only be executed on the coordinator
 \c - - - :master_port
 -- cleanup
 set client_min_messages to error;

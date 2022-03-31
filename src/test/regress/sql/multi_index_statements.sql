@@ -398,6 +398,41 @@ BEGIN
 END;
 $BODY$ LANGUAGE plpgsql;
 
+
+CREATE TABLE test_for_func(
+    a int
+);
+
+SELECT create_distributed_table('test_for_func', 'a');
+
+-- create a function that depends on a relation that depends on an extension
+CREATE OR REPLACE FUNCTION function_on_table_depends_on_extension (
+    p_table_name text)
+RETURNS TABLE (LIKE pg_dist_partition)
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT * FROM pg_dist_partition WHERE logicalrelid::regclass::text = p_table_name;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT logicalrelid FROM function_on_table_depends_on_extension('test_for_func');
+
+
+-- create a function that depends on a relation that does not depend on an extension
+CREATE TABLE local_test(a int);
+CREATE OR REPLACE FUNCTION function_on_table_does_not_depend_on_extension (
+    input int)
+RETURNS TABLE (LIKE local_test)
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT * FROM local_test WHERE a = input;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT * FROM function_on_table_does_not_depend_on_extension(5);
+
 -- hide plpgsql messages as they differ across pg versions
 \set VERBOSITY terse
 

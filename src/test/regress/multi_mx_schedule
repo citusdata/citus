@@ -66,6 +66,7 @@ test: metadata_sync_helpers
 
 # test that no tests leaked intermediate results. This should always be last
 test: ensure_no_intermediate_data_leak
+test: check_mx
 
 # ---------
 # ensures that we never leak any connection counts

@@ -277,7 +277,7 @@ ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("truncating foreign tables that are added to metadata "
-								   "can only be excuted on the coordinator")));
+								   "can only be executed on the coordinator")));
 		}
 	}
 }

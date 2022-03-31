@@ -631,6 +631,50 @@ BEGIN
     CREATE INDEX ON distributed_table(last_column);
 END;
 $BODY$ LANGUAGE plpgsql;
+CREATE TABLE test_for_func(
+    a int
+);
+SELECT create_distributed_table('test_for_func', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- create a function that depends on a relation that depends on an extension
+CREATE OR REPLACE FUNCTION function_on_table_depends_on_extension (
+    p_table_name text)
+RETURNS TABLE (LIKE pg_dist_partition)
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT * FROM pg_dist_partition WHERE logicalrelid::regclass::text = p_table_name;
+END;
+$$ LANGUAGE plpgsql;
+SELECT logicalrelid FROM function_on_table_depends_on_extension('test_for_func');
+ logicalrelid
+---------------------------------------------------------------------
+ test_for_func
+(1 row)
+
+-- create a function that depends on a relation that does not depend on an extension
+CREATE TABLE local_test(a int);
+CREATE OR REPLACE FUNCTION function_on_table_does_not_depend_on_extension (
+    input int)
+RETURNS TABLE (LIKE local_test)
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT * FROM local_test WHERE a = input;
+END;
+$$ LANGUAGE plpgsql;
+WARNING:  "function function_on_table_does_not_depend_on_extension(integer)" has dependency to "table local_test" that is not in Citus' metadata
+DETAIL:  "function function_on_table_does_not_depend_on_extension(integer)" will be created only locally
+HINT:  Distribute "table local_test" first to distribute "function function_on_table_does_not_depend_on_extension(integer)"
+SELECT * FROM function_on_table_does_not_depend_on_extension(5);
+ a
+---------------------------------------------------------------------
+(0 rows)
+
 -- hide plpgsql messages as they differ across pg versions
 \set VERBOSITY terse
 SELECT create_index_in_plpgsql();
