@@ -1,0 +1,15 @@
+SELECT nspname FROM pg_namespace WHERE nspname LIKE 'test_schema%' ORDER BY nspname;
+    nspname
+---------------------------------------------------------------------
+ test_schema_1
+ test_schema_3_renamed
+ test_schema_5
+(3 rows)
+
+SELECT * FROM test_schema_5.test_table ORDER BY a;
+ a
+---------------------------------------------------------------------
+ 1
+ 2
+(2 rows)
+
