@@ -1570,14 +1570,22 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 	TargetEntry *selectEntry = NULL;
 	forboth_ptr(insertEntry, insertTargetList, selectEntry, selectTargetList)
 	{
+		Var *insertColumn = (Var *) insertEntry->expr;
 		Form_pg_attribute attr = TupleDescAttr(destTupleDescriptor,
 											   insertEntry->resno - 1);
 
-		Oid sourceType = exprType((Node *) selectEntry->expr);
+		/*
+		 * Assert that insert and select target entries created by
+		 * ReorderInsertSelectTargetLists() have the expressions of the same
+		 * type.
+		 */
+		Assert(insertColumn->vartype == exprType((Node *) selectEntry->expr));
+
+		Oid sourceType = insertColumn->vartype;
 		Oid targetType = attr->atttypid;
 		if (sourceType != targetType)
 		{
-			insertEntry->expr = CastExpr(insertEntry->expr, sourceType, targetType,
+			insertEntry->expr = CastExpr((Expr *) insertColumn, sourceType, targetType,
 										 attr->attcollation, attr->atttypmod);
 
 			/*
