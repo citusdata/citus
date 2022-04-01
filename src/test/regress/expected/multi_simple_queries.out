@@ -664,6 +664,83 @@ DEBUG:  query has a single distribution column value: 1
  41 |         1 | aznavour     |      11814
 (5 rows)
 
+SELECT count(*) FROM articles TABLESAMPLE SYSTEM (0);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM articles TABLESAMPLE BERNOULLI (0);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- We use REPEATABLE to get deterministic results in terms of which pages are returned.
+-- That does mean we get the same page indexes on each shard, which in this case means
+-- they all return the first page, meaning all rows.
+SELECT count(*) FROM articles TABLESAMPLE SYSTEM (90) REPEATABLE (200);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ count
+---------------------------------------------------------------------
+    50
+(1 row)
+
+SELECT count(*) FROM articles TABLESAMPLE BERNOULLI (90) REPEATABLE (200);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ count
+---------------------------------------------------------------------
+    43
+(1 row)
+
+SELECT count(*) FROM articles TABLESAMPLE SYSTEM (100);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ count
+---------------------------------------------------------------------
+    50
+(1 row)
+
+SELECT count(*) FROM articles TABLESAMPLE BERNOULLI (100);
+DEBUG:  Router planner cannot handle multi-shard select queries
+ count
+---------------------------------------------------------------------
+    50
+(1 row)
+
+SELECT count(*) FROM (SELECT random() FROM articles TABLESAMPLE SYSTEM (0)) a;
+DEBUG:  Router planner cannot handle multi-shard select queries
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM (SELECT random() FROM articles TABLESAMPLE BERNOULLI (0)) a;
+DEBUG:  Router planner cannot handle multi-shard select queries
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM (SELECT random() FROM articles TABLESAMPLE SYSTEM (100)) a;
+DEBUG:  Router planner cannot handle multi-shard select queries
+ count
+---------------------------------------------------------------------
+    50
+(1 row)
+
+SELECT count(*) FROM (SELECT random() FROM articles TABLESAMPLE BERNOULLI (100)) a;
+DEBUG:  Router planner cannot handle multi-shard select queries
+ count
+---------------------------------------------------------------------
+    50
+(1 row)
+
+DELETE FROM articles a USING articles b TABLESAMPLE bernoulli(0) WHERE a.author_id = b.author_id;
+DEBUG:  Creating router plan
+UPDATE articles a SET title = '' FROM articles b TABLESAMPLE bernoulli(0) WHERE a.author_id = b.author_id;
+DEBUG:  Creating router plan
 -- test tablesample with fast path as well
 SET citus.enable_fast_path_router_planner TO true;
 SELECT * FROM articles TABLESAMPLE SYSTEM (0) WHERE author_id = 1;

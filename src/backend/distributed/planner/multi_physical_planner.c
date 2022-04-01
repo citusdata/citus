@@ -735,6 +735,7 @@ BaseRangeTableList(MultiNode *multiNode)
 				rangeTableEntry->alias = multiTable->alias;
 				rangeTableEntry->relid = multiTable->relationId;
 				rangeTableEntry->inh = multiTable->includePartitions;
+				rangeTableEntry->tablesample = multiTable->tablesample;
 
 				SetRangeTblExtraData(rangeTableEntry, CITUS_RTE_RELATION, NULL, NULL,
 									 list_make1_int(multiTable->rangeTableId),
