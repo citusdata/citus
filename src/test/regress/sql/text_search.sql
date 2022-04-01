@@ -2,7 +2,7 @@ CREATE SCHEMA text_search;
 CREATE SCHEMA text_search2;
 SET search_path TO text_search;
 
--- create a new configruation from scratch
+-- create a new configuration from scratch
 CREATE TEXT SEARCH CONFIGURATION my_text_search_config ( parser = default );
 CREATE TABLE t1(id int, name text);
 CREATE INDEX t1_search_name ON t1 USING gin (to_tsvector('text_search.my_text_search_config'::regconfig, (COALESCE(name, ''::character varying))::text));
@@ -26,13 +26,13 @@ COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config IS 'on demand propaga
 CREATE TABLE t1(id int, name text);
 CREATE INDEX t1_search_name ON t1 USING gin (to_tsvector('text_search.my_text_search_config'::regconfig, (COALESCE(name, ''::character varying))::text));
 SELECT create_distributed_table('t1', 'name');
+-- verify that we can change the object
+COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config  IS 'this comment can be set right now';
+COMMIT;
 SELECT * FROM run_command_on_workers($$
     SELECT obj_description('text_search.my_text_search_config'::regconfig);
 $$) ORDER BY 1,2;
-
--- verify that changing anything on a managed TEXT SEARCH CONFIGURATION fails after parallel execution
-COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config  IS 'this comment can''t be set right now';
-ABORT;
+DROP TABLE t1;
 
 -- create an index on an already distributed table
 BEGIN;
@@ -41,10 +41,11 @@ COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config2 IS 'on demand propag
 CREATE TABLE t1(id int, name text);
 SELECT create_distributed_table('t1', 'name');
 CREATE INDEX t1_search_name ON t1 USING gin (to_tsvector('text_search.my_text_search_config2'::regconfig, (COALESCE(name, ''::character varying))::text));
+COMMIT;
 SELECT * FROM run_command_on_workers($$
     SELECT obj_description('text_search.my_text_search_config2'::regconfig);
 $$) ORDER BY 1,2;
-ABORT;
+DROP TABLE t1;
 
 -- should be able to create a configuration based on a copy of an existing configuration
 CREATE TEXT SEARCH CONFIGURATION french_noaccent ( COPY = french );
@@ -83,7 +84,7 @@ $$) ORDER BY 1,2;
 ALTER TEXT SEARCH CONFIGURATION french_noaccent DROP MAPPING IF EXISTS FOR asciihword;
 
 -- Comment on a text search configuration
-COMMENT ON TEXT SEARCH CONFIGURATION french_noaccent IS 'a text configuration that is butcherd to test all edge cases';
+COMMENT ON TEXT SEARCH CONFIGURATION french_noaccent IS 'a text configuration that is butchered to test all edge cases';
 SELECT * FROM run_command_on_workers($$
     SELECT obj_description('text_search.french_noaccent'::regconfig);
 $$) ORDER BY 1,2;
@@ -274,6 +275,142 @@ CREATE TABLE sensors(
 CREATE TABLE sensors_a_partition PARTITION OF sensors FOR VALUES FROM ('2000-01-01') TO ('2020-01-01');
 CREATE INDEX sensors_search_name ON sensors USING gin (to_tsvector('partial_index_test_config'::regconfig, (COALESCE(name, ''::character varying))::text));
 SELECT create_distributed_table('sensors', 'measureid');
+
+--  create a new dictionary from scratch
+CREATE TEXT SEARCH DICTIONARY my_english_dict (
+    template = snowball,
+    language = english,
+    stopwords = english
+);
+
+-- verify that the dictionary definition is the same in all nodes
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT ROW(dictname, dictnamespace::regnamespace, dictowner::regrole, tmplname, dictinitoption)
+    FROM pg_ts_dict d JOIN pg_ts_template t ON ( d.dicttemplate = t.oid )
+    WHERE dictname = 'my_english_dict';
+$$);
+
+-- use the new dictionary in a configuration mapping
+CREATE TEXT SEARCH CONFIGURATION my_english_config ( COPY = english );
+ALTER TEXT SEARCH CONFIGURATION my_english_config ALTER MAPPING FOR asciiword WITH my_english_dict;
+
+-- verify that the dictionary is available on the worker nodes
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT ROW(alias,dictionary) FROM ts_debug('text_search.my_english_config', 'The Brightest supernovaes') WHERE alias = 'asciiword' LIMIT 1;
+$$);
+
+-- comment on a text search dictionary
+COMMENT ON TEXT SEARCH DICTIONARY my_english_dict IS 'a text search dictionary that is butchered to test all edge cases';
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT obj_description('text_search.my_english_dict'::regdictionary);
+$$);
+
+-- remove a comment
+COMMENT ON TEXT SEARCH DICTIONARY my_english_dict IS NULL;
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT obj_description('text_search.my_english_dict'::regdictionary);
+$$);
+
+-- test various ALTER TEXT SEARCH DICTIONARY commands
+ALTER TEXT SEARCH DICTIONARY my_english_dict RENAME TO my_turkish_dict;
+ALTER TEXT SEARCH DICTIONARY my_turkish_dict (language = turkish, stopwords);
+ALTER TEXT SEARCH DICTIONARY my_turkish_dict OWNER TO text_search_owner;
+ALTER TEXT SEARCH DICTIONARY my_turkish_dict SET SCHEMA "Text Search Requiring Quote's";
+
+-- verify that the dictionary definition is the same in all nodes
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT ROW(dictname, dictnamespace::regnamespace, dictowner::regrole, tmplname, dictinitoption)
+    FROM pg_ts_dict d JOIN pg_ts_template t ON ( d.dicttemplate = t.oid )
+    WHERE dictname = 'my_turkish_dict';
+$$);
+
+-- verify that the configuration dictionary is changed in all nodes
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT ROW(alias,dictionary) FROM ts_debug('text_search.my_english_config', 'The Brightest supernovaes') WHERE alias = 'asciiword' LIMIT 1;
+$$);
+
+-- before testing drops, check that the dictionary exists on all nodes
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT '"Text Search Requiring Quote''s".my_turkish_dict'::regdictionary;
+$$);
+
+ALTER TEXT SEARCH DICTIONARY "Text Search Requiring Quote's".my_turkish_dict SET SCHEMA text_search;
+
+-- verify that we can drop the dictionary only with cascade option
+DROP TEXT SEARCH DICTIONARY my_turkish_dict;
+DROP TEXT SEARCH DICTIONARY my_turkish_dict CASCADE;
+
+-- verify that it is dropped now
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT 'my_turkish_dict'::regdictionary;
+$$);
+
+-- test different templates that are used in dictionaries
+CREATE TEXT SEARCH DICTIONARY simple_dict (
+    TEMPLATE = pg_catalog.simple,
+    STOPWORDS = english,
+    accept = false
+);
+SELECT COUNT(DISTINCT result)=1 FROM run_command_on_all_nodes($$
+    SELECT ROW(dictname, dictnamespace::regnamespace, dictowner::regrole, tmplname, dictinitoption)
+    FROM pg_ts_dict d JOIN pg_ts_template t ON ( d.dicttemplate = t.oid )
+    WHERE dictname = 'simple_dict';
+$$);
+
+CREATE TEXT SEARCH DICTIONARY synonym_dict (
+    template=synonym,
+    synonyms='synonym_sample',
+    casesensitive=1
+);
+SELECT COUNT(DISTINCT result)=1 FROM run_command_on_all_nodes($$
+    SELECT ROW(dictname, dictnamespace::regnamespace, dictowner::regrole, tmplname, dictinitoption)
+    FROM pg_ts_dict d JOIN pg_ts_template t ON ( d.dicttemplate = t.oid )
+    WHERE dictname = 'synonym_dict';
+$$);
+
+CREATE TEXT SEARCH DICTIONARY thesaurus_dict (
+    TEMPLATE = thesaurus,
+    DictFile = thesaurus_sample,
+    Dictionary = pg_catalog.english_stem
+);
+SELECT COUNT(DISTINCT result)=1 FROM run_command_on_all_nodes($$
+    SELECT ROW(dictname, dictnamespace::regnamespace, dictowner::regrole, tmplname, dictinitoption)
+    FROM pg_ts_dict d JOIN pg_ts_template t ON ( d.dicttemplate = t.oid )
+    WHERE dictname = 'thesaurus_dict';
+$$);
+
+CREATE TEXT SEARCH DICTIONARY ispell_dict (
+    TEMPLATE = ispell,
+    DictFile = ispell_sample,
+    AffFile = ispell_sample,
+    Stopwords = english
+);
+SELECT COUNT(DISTINCT result)=1 FROM run_command_on_all_nodes($$
+    SELECT ROW(dictname, dictnamespace::regnamespace, dictowner::regrole, tmplname, dictinitoption)
+    FROM pg_ts_dict d JOIN pg_ts_template t ON ( d.dicttemplate = t.oid )
+    WHERE dictname = 'ispell_dict';
+$$);
+
+CREATE TEXT SEARCH DICTIONARY snowball_dict (
+    TEMPLATE = snowball,
+    Language = english,
+    StopWords = english
+);
+SELECT COUNT(DISTINCT result)=1 FROM run_command_on_all_nodes($$
+    SELECT ROW(dictname, dictnamespace::regnamespace, dictowner::regrole, tmplname, dictinitoption)
+    FROM pg_ts_dict d JOIN pg_ts_template t ON ( d.dicttemplate = t.oid )
+    WHERE dictname = 'snowball_dict';
+$$);
+
+-- will skip trying to propagate the text search configuration due to temp schema
+CREATE TEXT SEARCH CONFIGURATION pg_temp.temp_text_search_config ( parser = default );
+
+-- will skip trying to propagate the text search dictionary due to temp schema
+CREATE TEXT SEARCH DICTIONARY pg_temp.temp_text_search_dict (
+    template = snowball,
+    language = english,
+    stopwords = english
+);
 
 SET client_min_messages TO 'warning';
 DROP SCHEMA text_search, text_search2, "Text Search Requiring Quote's" CASCADE;

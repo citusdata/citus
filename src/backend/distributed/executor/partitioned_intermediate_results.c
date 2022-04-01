@@ -16,6 +16,7 @@
 #include "miscadmin.h"
 #include "port.h"
 
+#include "access/hash.h"
 #include "access/nbtree.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_type.h"
@@ -349,6 +350,12 @@ QueryTupleShardSearchInfo(ArrayType *minValuesArray, ArrayType *maxValuesArray,
 
 		hashFunction = palloc0(sizeof(FmgrInfo));
 		fmgr_info_copy(hashFunction, &(typeEntry->hash_proc_finfo), CurrentMemoryContext);
+
+		if (!OidIsValid(hashFunction->fn_oid))
+		{
+			ereport(ERROR, (errmsg("no hash function defined for type %s",
+								   format_type_be(partitionColumn->vartype))));
+		}
 	}
 
 	ShardInterval **shardIntervalArray = palloc0(partitionCount *

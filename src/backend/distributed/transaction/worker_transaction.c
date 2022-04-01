@@ -30,8 +30,9 @@
 #include "distributed/transaction_recovery.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/jsonbutils.h"
 #include "utils/memutils.h"
-
+#include "utils/builtins.h"
 
 static void SendCommandToMetadataWorkersParams(const char *command,
 											   const char *user, int parameterCount,
@@ -71,7 +72,7 @@ void
 SendCommandToWorkersAsUser(TargetWorkerSet targetWorkerSet, const char *nodeUser,
 						   const char *command)
 {
-	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
+	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, RowShareLock);
 
 	/* run commands serially */
 	WorkerNode *workerNode = NULL;
@@ -184,7 +185,7 @@ void
 SendBareCommandListToMetadataWorkers(List *commandList)
 {
 	TargetWorkerSet targetWorkerSet = NON_COORDINATOR_METADATA_NODES;
-	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
+	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, RowShareLock);
 	char *nodeUser = CurrentUserName();
 
 	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
@@ -225,7 +226,7 @@ SendCommandToMetadataWorkersParams(const char *command,
 								   const char *const *parameterValues)
 {
 	List *workerNodeList = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
-												   ShareLock);
+												   RowShareLock);
 
 	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
 
@@ -304,7 +305,7 @@ OpenConnectionsToWorkersInParallel(TargetWorkerSet targetWorkerSet, const char *
 {
 	List *connectionList = NIL;
 
-	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
+	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, RowShareLock);
 
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
@@ -373,7 +374,7 @@ SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *
 								   const char *const *parameterValues)
 {
 	List *connectionList = NIL;
-	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
+	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, RowShareLock);
 
 	UseCoordinatedTransaction();
 	Use2PCForCoordinatedTransaction();
@@ -638,4 +639,66 @@ ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList)
 									" gets synced to it and try again.")));
 		}
 	}
+}
+
+
+/*
+ * IsWorkerTheCurrentNode checks if the given worker refers to the
+ * the current node by comparing the server id of the worker and of the
+ * current nodefrom pg_dist_node_metadata
+ */
+bool
+IsWorkerTheCurrentNode(WorkerNode *workerNode)
+{
+	int connectionFlags = REQUIRE_METADATA_CONNECTION;
+
+	MultiConnection *workerConnection =
+		GetNodeUserDatabaseConnection(connectionFlags,
+									  workerNode->workerName,
+									  workerNode->workerPort,
+									  CurrentUserName(),
+									  NULL);
+
+	const char *command =
+		"SELECT metadata ->> 'server_id' AS server_id FROM pg_dist_node_metadata";
+
+	int resultCode = SendRemoteCommand(workerConnection, command);
+
+	if (resultCode == 0)
+	{
+		CloseConnection(workerConnection);
+		return false;
+	}
+
+	PGresult *result = GetRemoteCommandResult(workerConnection, true);
+
+	if (result == NULL)
+	{
+		return false;
+	}
+
+	List *commandResult = ReadFirstColumnAsText(result);
+
+	PQclear(result);
+	ForgetResults(workerConnection);
+
+	if ((list_length(commandResult) != 1))
+	{
+		return false;
+	}
+
+	StringInfo resultInfo = (StringInfo) linitial(commandResult);
+	char *workerServerId = resultInfo->data;
+
+	Datum metadata = DistNodeMetadata();
+	text *currentServerIdTextP = ExtractFieldTextP(metadata, "server_id");
+
+	if (currentServerIdTextP == NULL)
+	{
+		return false;
+	}
+
+	char *currentServerId = text_to_cstring(currentServerIdTextP);
+
+	return strcmp(workerServerId, currentServerId) == 0;
 }

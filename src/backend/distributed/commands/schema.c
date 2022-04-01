@@ -44,6 +44,7 @@ static ObjectAddress GetObjectAddressBySchemaName(char *schemaName, bool missing
 static List * FilterDistributedSchemas(List *schemas);
 static bool SchemaHasDistributedTableWithFKey(char *schemaName);
 static bool ShouldPropagateCreateSchemaStmt(void);
+static List * GetGrantCommandsFromCreateSchemaStmt(Node *node);
 
 
 /*
@@ -63,13 +64,17 @@ PreprocessCreateSchemaStmt(Node *node, const char *queryString,
 
 	EnsureSequentialMode(OBJECT_SCHEMA);
 
+	/* to prevent recursion with mx we disable ddl propagation */
+	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
+
 	/* deparse sql*/
 	const char *sql = DeparseTreeNode(node);
 
-	/* to prevent recursion with mx we disable ddl propagation */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
+	commands = lappend(commands, (void *) sql);
+
+	commands = list_concat(commands, GetGrantCommandsFromCreateSchemaStmt(node));
+
+	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
@@ -223,7 +228,24 @@ CreateSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CreateSchemaStmt *stmt = castNode(CreateSchemaStmt, node);
 
-	return GetObjectAddressBySchemaName(stmt->schemaname, missing_ok);
+	StringInfoData schemaName = { 0 };
+	initStringInfo(&schemaName);
+
+	if (stmt->schemaname == NULL)
+	{
+		/*
+		 * If the schema name is not provided, the schema will be created
+		 * with the name of the authorizated user.
+		 */
+		Assert(stmt->authrole != NULL);
+		appendStringInfoString(&schemaName, RoleSpecString(stmt->authrole, true));
+	}
+	else
+	{
+		appendStringInfoString(&schemaName, stmt->schemaname);
+	}
+
+	return GetObjectAddressBySchemaName(schemaName.data, missing_ok);
 }
 
 
@@ -374,4 +396,45 @@ ShouldPropagateCreateSchemaStmt()
 	}
 
 	return true;
+}
+
+
+/*
+ * GetGrantCommandsFromCreateSchemaStmt takes a CreateSchemaStmt and returns the
+ * list of deparsed queries of the inner GRANT commands of the given statement.
+ * Ignores commands other than GRANT statements.
+ */
+static List *
+GetGrantCommandsFromCreateSchemaStmt(Node *node)
+{
+	List *commands = NIL;
+	CreateSchemaStmt *stmt = castNode(CreateSchemaStmt, node);
+
+	Node *element = NULL;
+	foreach_ptr(element, stmt->schemaElts)
+	{
+		if (!IsA(element, GrantStmt))
+		{
+			continue;
+		}
+
+		GrantStmt *grantStmt = castNode(GrantStmt, element);
+
+		switch (grantStmt->objtype)
+		{
+			/* we only propagate GRANT ON SCHEMA in community */
+			case OBJECT_SCHEMA:
+			{
+				commands = lappend(commands, DeparseGrantOnSchemaStmt(element));
+				break;
+			}
+
+			default:
+			{
+				break;
+			}
+		}
+	}
+
+	return commands;
 }

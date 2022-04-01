@@ -428,6 +428,37 @@ PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString,
 
 
 /*
+ * PostprocessAlterStatisticsOwnerStmt is invoked after the owner has been changed locally.
+ * Since changing the owner could result in new dependencies being found for this object
+ * we re-ensure all the dependencies for the statistics do exist.
+ *
+ * This is solely to propagate the new owner (and all its dependencies) if it was not
+ * already distributed in the cluster.
+ */
+List *
+PostprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+	Assert(stmt->objectType == OBJECT_STATISTIC_EXT);
+
+	Oid statsOid = get_statistics_object_oid((List *) stmt->object, false);
+	Oid relationId = GetRelIdByStatsOid(statsOid);
+
+	if (!IsCitusTable(relationId) || !ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	ObjectAddress statisticsAddress = { 0 };
+	ObjectAddressSet(statisticsAddress, StatisticExtRelationId, statsOid);
+
+	EnsureDependenciesExistOnAllNodes(&statisticsAddress);
+
+	return NIL;
+}
+
+
+/*
  * GetExplicitStatisticsCommandList returns the list of DDL commands to create
  * or alter statistics that are explicitly created for the table with relationId.
  * This function gets called when distributing the table with relationId.

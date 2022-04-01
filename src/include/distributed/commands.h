@@ -123,6 +123,8 @@ typedef enum SearchForeignKeyColumnFlags
 
 
 /* aggregate.c - forward declarations */
+extern List * PreprocessDefineAggregateStmt(Node *node, const char *queryString,
+											ProcessUtilityContext processUtilityContext);
 extern List * PostprocessDefineAggregateStmt(Node *node, const char *queryString);
 
 /* cluster.c - forward declarations */
@@ -146,6 +148,7 @@ extern List * PreprocessDropCollationStmt(Node *stmt, const char *queryString,
 extern List * PreprocessAlterCollationOwnerStmt(Node *stmt, const char *queryString,
 												ProcessUtilityContext
 												processUtilityContext);
+extern List * PostprocessAlterCollationOwnerStmt(Node *node, const char *queryString);
 extern List * PreprocessAlterCollationSchemaStmt(Node *stmt, const char *queryString,
 												 ProcessUtilityContext
 												 processUtilityContext);
@@ -281,6 +284,7 @@ extern ObjectAddress RenameFunctionStmtObjectAddress(Node *stmt,
 													 bool missing_ok);
 extern List * PreprocessAlterFunctionOwnerStmt(Node *stmt, const char *queryString,
 											   ProcessUtilityContext processUtilityContext);
+extern List * PostprocessAlterFunctionOwnerStmt(Node *stmt, const char *queryString);
 extern ObjectAddress AlterFunctionOwnerObjectAddress(Node *stmt,
 													 bool missing_ok);
 extern List * PreprocessAlterFunctionSchemaStmt(Node *stmt, const char *queryString,
@@ -432,6 +436,7 @@ extern List * PreprocessAlterStatisticsStmt(Node *node, const char *queryString,
 extern List * PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString,
 												 ProcessUtilityContext
 												 processUtilityContext);
+extern List * PostprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString);
 extern List * GetExplicitStatisticsCommandList(Oid relationId);
 extern List * GetExplicitStatisticsSchemaIdList(Oid relationId);
 extern List * GetAlterIndexStatisticsCommands(Oid indexOid);
@@ -476,49 +481,94 @@ extern bool ConstrTypeUsesIndex(ConstrType constrType);
 /* text_search.c - forward declarations */
 extern List * PostprocessCreateTextSearchConfigurationStmt(Node *node,
 														   const char *queryString);
+extern List * PostprocessCreateTextSearchDictionaryStmt(Node *node,
+														const char *queryString);
 extern List * GetCreateTextSearchConfigStatements(const ObjectAddress *address);
+extern List * GetCreateTextSearchDictionaryStatements(const ObjectAddress *address);
 extern List * CreateTextSearchConfigDDLCommandsIdempotent(const ObjectAddress *address);
+extern List * CreateTextSearchDictDDLCommandsIdempotent(const ObjectAddress *address);
 extern List * PreprocessDropTextSearchConfigurationStmt(Node *node,
 														const char *queryString,
 														ProcessUtilityContext
 														processUtilityContext);
+extern List * PreprocessDropTextSearchDictionaryStmt(Node *node,
+													 const char *queryString,
+													 ProcessUtilityContext
+													 processUtilityContext);
 extern List * PreprocessAlterTextSearchConfigurationStmt(Node *node,
 														 const char *queryString,
 														 ProcessUtilityContext
 														 processUtilityContext);
+extern List * PreprocessAlterTextSearchDictionaryStmt(Node *node,
+													  const char *queryString,
+													  ProcessUtilityContext
+													  processUtilityContext);
 extern List * PreprocessRenameTextSearchConfigurationStmt(Node *node,
 														  const char *queryString,
 														  ProcessUtilityContext
 														  processUtilityContext);
+extern List * PreprocessRenameTextSearchDictionaryStmt(Node *node,
+													   const char *queryString,
+													   ProcessUtilityContext
+													   processUtilityContext);
 extern List * PreprocessAlterTextSearchConfigurationSchemaStmt(Node *node,
 															   const char *queryString,
 															   ProcessUtilityContext
 															   processUtilityContext);
+extern List * PreprocessAlterTextSearchDictionarySchemaStmt(Node *node,
+															const char *queryString,
+															ProcessUtilityContext
+															processUtilityContext);
 extern List * PostprocessAlterTextSearchConfigurationSchemaStmt(Node *node,
 																const char *queryString);
+extern List * PostprocessAlterTextSearchDictionarySchemaStmt(Node *node,
+															 const char *queryString);
 extern List * PreprocessTextSearchConfigurationCommentStmt(Node *node,
 														   const char *queryString,
 														   ProcessUtilityContext
 														   processUtilityContext);
+extern List * PreprocessTextSearchDictionaryCommentStmt(Node *node,
+														const char *queryString,
+														ProcessUtilityContext
+														processUtilityContext);
 extern List * PreprocessAlterTextSearchConfigurationOwnerStmt(Node *node,
 															  const char *queryString,
 															  ProcessUtilityContext
 															  processUtilityContext);
+extern List * PreprocessAlterTextSearchDictionaryOwnerStmt(Node *node,
+														   const char *queryString,
+														   ProcessUtilityContext
+														   processUtilityContext);
 extern List * PostprocessAlterTextSearchConfigurationOwnerStmt(Node *node,
 															   const char *queryString);
+extern List * PostprocessAlterTextSearchDictionaryOwnerStmt(Node *node,
+															const char *queryString);
 extern ObjectAddress CreateTextSearchConfigurationObjectAddress(Node *node,
 																bool missing_ok);
+extern ObjectAddress CreateTextSearchDictObjectAddress(Node *node,
+													   bool missing_ok);
 extern ObjectAddress RenameTextSearchConfigurationStmtObjectAddress(Node *node,
 																	bool missing_ok);
+extern ObjectAddress RenameTextSearchDictionaryStmtObjectAddress(Node *node,
+																 bool missing_ok);
 extern ObjectAddress AlterTextSearchConfigurationStmtObjectAddress(Node *node,
 																   bool missing_ok);
+extern ObjectAddress AlterTextSearchDictionaryStmtObjectAddress(Node *node,
+																bool missing_ok);
 extern ObjectAddress AlterTextSearchConfigurationSchemaStmtObjectAddress(Node *node,
 																		 bool missing_ok);
+extern ObjectAddress AlterTextSearchDictionarySchemaStmtObjectAddress(Node *node,
+																	  bool missing_ok);
 extern ObjectAddress TextSearchConfigurationCommentObjectAddress(Node *node,
 																 bool missing_ok);
+extern ObjectAddress TextSearchDictCommentObjectAddress(Node *node,
+														bool missing_ok);
 extern ObjectAddress AlterTextSearchConfigurationOwnerObjectAddress(Node *node,
 																	bool missing_ok);
+extern ObjectAddress AlterTextSearchDictOwnerObjectAddress(Node *node,
+														   bool missing_ok);
 extern char * GenerateBackupNameForTextSearchConfiguration(const ObjectAddress *address);
+extern char * GenerateBackupNameForTextSearchDict(const ObjectAddress *address);
 extern List * get_ts_config_namelist(Oid tsconfigOid);
 
 /* truncate.c - forward declarations */

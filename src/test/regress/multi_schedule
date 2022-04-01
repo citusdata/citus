@@ -53,7 +53,7 @@ test: subqueries_deep subquery_view subquery_partitioning subqueries_not_support
 test: subquery_in_targetlist subquery_in_where subquery_complex_target_list subquery_append
 test: subquery_prepared_statements
 test: non_colocated_leaf_subquery_joins non_colocated_subquery_joins
-test: cte_inline recursive_view_local_table values
+test: cte_inline recursive_view_local_table values sequences_with_different_types
 test: pg13 pg12
 # run pg14 sequentially as it syncs metadata
 test: pg14
@@ -80,7 +80,7 @@ test: multi_array_agg multi_limit_clause multi_orderby_limit_pushdown
 test: multi_jsonb_agg multi_jsonb_object_agg multi_json_agg multi_json_object_agg bool_agg ch_bench_having chbenchmark_all_queries expression_reference_join anonymous_columns
 test: ch_bench_subquery_repartition subscripting_op
 test: multi_agg_type_conversion multi_count_type_conversion recursive_relation_planning_restriction_pushdown
-test: multi_partition_pruning single_hash_repartition_join
+test: multi_partition_pruning single_hash_repartition_join unsupported_lateral_subqueries
 test: multi_join_pruning multi_hash_pruning intermediate_result_pruning
 test: multi_null_minmax_value_pruning cursors
 test: modification_correctness

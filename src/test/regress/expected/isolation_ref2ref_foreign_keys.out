@@ -38,6 +38,11 @@ mode|count
 ---------------------------------------------------------------------
 (0 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s2-begin s2-delete-table-1 s1-view-locks s2-rollback s1-view-locks
 step s2-begin:
@@ -70,6 +75,11 @@ step s1-view-locks:
 mode|count
 ---------------------------------------------------------------------
 (0 rows)
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s2-begin s2-update-table-2 s1-view-locks s2-rollback s1-view-locks
@@ -104,6 +114,11 @@ mode|count
 ---------------------------------------------------------------------
 (0 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s2-begin s2-delete-table-2 s1-view-locks s2-rollback s1-view-locks
 step s2-begin:
@@ -136,6 +151,11 @@ step s1-view-locks:
 mode|count
 ---------------------------------------------------------------------
 (0 rows)
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s2-begin s2-update-table-3 s1-begin s1-view-locks s1-rollback s2-rollback s1-view-locks
@@ -176,6 +196,11 @@ mode|count
 ---------------------------------------------------------------------
 (0 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s2-begin s2-delete-table-3 s1-begin s1-view-locks s1-rollback s2-rollback s1-view-locks
 step s2-begin:
@@ -215,6 +240,11 @@ mode|count
 ---------------------------------------------------------------------
 (0 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s2-begin s2-insert-table-1 s1-view-locks s2-rollback s1-view-locks
 step s2-begin:
@@ -247,6 +277,11 @@ step s1-view-locks:
 mode|count
 ---------------------------------------------------------------------
 (0 rows)
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s2-begin s2-insert-table-2 s1-view-locks s2-rollback s1-view-locks
@@ -281,6 +316,11 @@ mode|count
 ---------------------------------------------------------------------
 (0 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s2-begin s2-insert-table-3 s1-view-locks s2-rollback s1-view-locks
 step s2-begin:
@@ -314,6 +354,11 @@ mode|count
 ---------------------------------------------------------------------
 (0 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s1-begin s2-begin s2-update-table-1 s1-delete-table-2 s2-commit s1-commit s1-select-table-2
 step s1-begin:
@@ -343,6 +388,11 @@ id|value
  3|    3
  5|    5
 (2 rows)
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-begin s2-begin s2-update-table-1 s1-insert-table-2 s2-commit s1-commit s1-select-table-2
@@ -376,6 +426,11 @@ id|value
  7|    2
 (4 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s1-begin s2-begin s2-update-table-1 s1-update-table-2 s2-commit s1-commit s1-select-table-2
 step s1-begin:
@@ -407,6 +462,11 @@ id|value
  5|    5
 (3 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-delete-table-2 s2-commit s1-commit s1-select-table-2
 step s1-begin:
@@ -436,6 +496,11 @@ id|value
  3|    3
  5|    5
 (2 rows)
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-insert-table-2 s2-commit s1-commit s1-select-table-2
@@ -468,6 +533,11 @@ id|value
  5|    5
 (2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-update-table-2 s2-commit s1-commit s1-select-table-2
 step s1-begin:
@@ -497,6 +567,11 @@ id|value
  3|    3
  5|    5
 (2 rows)
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-delete-table-3 s2-commit s1-commit s1-select-table-3
@@ -532,6 +607,11 @@ id|value
  5|    5
 (2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-insert-table-3 s2-commit s1-commit s1-select-table-3
 step s1-begin:
@@ -562,6 +642,11 @@ id|value
  3|    3
  5|    5
 (2 rows)
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-update-table-3 s2-commit s1-commit s1-select-table-3
@@ -596,6 +681,11 @@ id|value
  3|    3
  5|    5
 (2 rows)
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-begin s2-begin s2-insert-table-1 s1-update-table-3 s2-commit s1-commit s1-select-table-3
@@ -633,6 +723,11 @@ id|value
  5|    5
 (3 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s1-begin s2-begin s1-update-table-3 s2-insert-table-1 s1-commit s2-commit s1-select-table-3
 step s1-begin:
@@ -669,6 +764,11 @@ id|value
  5|    5
 (3 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s1-begin s2-begin s2-insert-table-1 s1-update-table-2 s2-commit s1-commit s1-select-table-3
 step s1-begin:
@@ -700,6 +800,11 @@ id|value
  5|    5
 (3 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s1-begin s2-begin s1-update-table-2 s2-insert-table-1 s1-commit s2-commit s1-select-table-3
 step s1-begin:
@@ -730,6 +835,11 @@ id|value
  3|    3
  5|    5
 (3 rows)
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-begin s2-begin s2-insert-table-2 s1-update-table-3 s2-commit s1-commit s1-select-table-3
@@ -767,6 +877,11 @@ id|value
  5|    5
 (3 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s1-begin s2-begin s1-update-table-3 s2-insert-table-2 s1-commit s2-commit s1-select-table-3
 step s1-begin:
@@ -803,6 +918,11 @@ id|value
  5|    5
 (3 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s1-begin s2-begin s2-insert-table-1 s1-select-table-1 s2-commit s1-commit
 step s1-begin:
@@ -829,6 +949,11 @@ step s2-commit:
 
 step s1-commit:
     COMMIT;
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-begin s2-begin s2-insert-table-1 s1-select-table-2 s2-commit s1-commit
@@ -857,6 +982,11 @@ step s2-commit:
 step s1-commit:
     COMMIT;
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s1-begin s2-begin s2-insert-table-1 s1-select-table-3 s2-commit s1-commit
 step s1-begin:
@@ -883,6 +1013,11 @@ step s2-commit:
 
 step s1-commit:
     COMMIT;
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-begin s2-begin s2-delete-table-2 s1-select-table-1 s2-commit s1-commit
@@ -911,6 +1046,11 @@ step s2-commit:
 step s1-commit:
     COMMIT;
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s1-begin s2-begin s2-delete-table-2 s1-select-table-2 s2-commit s1-commit
 step s1-begin:
@@ -937,6 +1077,11 @@ step s2-commit:
 
 step s1-commit:
     COMMIT;
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-begin s2-begin s2-delete-table-2 s1-select-table-3 s2-commit s1-commit
@@ -965,6 +1110,11 @@ step s2-commit:
 step s1-commit:
     COMMIT;
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s1-begin s2-begin s2-update-table-3 s1-select-table-1 s2-commit s1-commit
 step s1-begin:
@@ -991,6 +1141,11 @@ step s2-commit:
 
 step s1-commit:
     COMMIT;
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-begin s2-begin s2-update-table-3 s1-select-table-2 s2-commit s1-commit
@@ -1019,6 +1174,11 @@ step s2-commit:
 step s1-commit:
     COMMIT;
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s1-begin s2-begin s2-update-table-3 s1-select-table-3 s2-commit s1-commit
 step s1-begin:
@@ -1045,4 +1205,9 @@ step s2-commit:
 
 step s1-commit:
     COMMIT;
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 

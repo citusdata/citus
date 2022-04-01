@@ -67,7 +67,6 @@ WHERE
 
 DROP TABLE replicate_reference_table_unhealthy;
 
-
 -- test replicating a reference table when a new node added
 CREATE TABLE replicate_reference_table_valid(column1 int);
 SELECT create_reference_table('replicate_reference_table_valid');
@@ -184,6 +183,15 @@ WHERE colocationid IN
 
 DROP TABLE replicate_reference_table_rollback;
 
+-- confirm that there is just 1 node
+SELECT count(*) FROM pg_dist_node;
+-- test whether we can create distributed objects on a single worker node
+CREATE TABLE cp_test (a int, b text);
+CREATE PROCEDURE ptest1(x text)
+LANGUAGE SQL
+AS $$
+ INSERT INTO cp_test VALUES (1, x);
+$$;
 
 -- test replicating a reference table when a new node added in TRANSACTION + COMMIT
 CREATE TABLE replicate_reference_table_commit(column1 int);

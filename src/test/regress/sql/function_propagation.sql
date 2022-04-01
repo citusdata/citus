@@ -45,6 +45,7 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 
 -- Have a separate check for type created in transaction
 BEGIN;
+    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE TYPE function_prop_type_3 AS (a int, b int);
 COMMIT;
 
@@ -132,7 +133,6 @@ BEGIN;
     END;
     $$;
 
-    -- Within transaction functions are not distributed
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.type_in_transaction'::regtype::oid;
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction'::regproc::oid;
 COMMIT;
@@ -831,6 +831,27 @@ ALTER TABLE table_1_for_circ_dep_3 ADD COLUMN col_2 table_2_for_circ_dep_3;
 
 -- It should error out due to circular dependency
 SELECT create_distributed_table('table_1_for_circ_dep_3','id');
+
+-- will skip trying to propagate the function due to temp schema
+CREATE FUNCTION pg_temp.temp_func(group_size BIGINT) RETURNS SETOF integer[]
+AS $$
+    SELECT array_agg(s) OVER w
+      FROM generate_series(1,5) s
+    WINDOW w AS (ORDER BY s ROWS BETWEEN CURRENT ROW AND GROUP_SIZE FOLLOWING)
+$$ LANGUAGE SQL STABLE;
+
+SELECT create_distributed_function('pg_temp.temp_func(BIGINT)');
+
+-- Show that support functions are supported
+CREATE FUNCTION func_with_support(int, int) RETURNS bool
+  LANGUAGE internal STRICT IMMUTABLE PARALLEL SAFE
+  AS $$int4eq$$ SUPPORT generate_series_int8_support;
+
+CREATE FUNCTION func_with_support_2(int, int) RETURNS bool
+  LANGUAGE internal STRICT IMMUTABLE PARALLEL SAFE
+  AS $$int4eq$$;
+
+ALTER FUNCTION func_with_support_2(int, int) SUPPORT generate_series_int8_support;
 
 RESET search_path;
 SET client_min_messages TO WARNING;

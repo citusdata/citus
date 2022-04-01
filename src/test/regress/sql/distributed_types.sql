@@ -48,10 +48,9 @@ CREATE TABLE t3 (a int PRIMARY KEY, b tc2);
 SELECT create_distributed_table('t3','a');
 INSERT INTO t3 VALUES (4, ('5',6)::tc2);
 SELECT * FROM t3;
-
+COMMIT;
 -- verify typmod was propagated
 SELECT run_command_on_workers($$SELECT atttypmod FROM pg_attribute WHERE attnum = 1 AND attrelid = (SELECT typrelid FROM pg_type WHERE typname = 'tc2');$$);
-COMMIT;
 
 -- transaction block with simple type
 BEGIN;
@@ -334,6 +333,35 @@ COMMIT;
 CREATE TYPE circ_type1 AS (a int);
 CREATE TYPE circ_type2 AS (a int, b circ_type1);
 ALTER TYPE circ_type1 ADD ATTRIBUTE b circ_type2;
+
+-- Show that types can be created locally if has unsupported dependency
+CREATE TYPE text_local_def;
+CREATE FUNCTION text_local_def_in(cstring)
+   RETURNS text_local_def
+   AS 'textin'
+   LANGUAGE internal STRICT IMMUTABLE;
+CREATE FUNCTION text_local_def_out(text_local_def)
+   RETURNS cstring
+   AS 'textout'
+   LANGUAGE internal STRICT IMMUTABLE;
+CREATE TYPE text_local_def (
+   internallength = variable,
+   input = text_local_def_in,
+   output = text_local_def_out,
+   alignment = int4,
+   default = 'zippo'
+);
+
+-- It should be created locally as it has unsupported dependency
+CREATE TYPE default_test_row AS (f1 text_local_def, f2 int4);
+
+-- Distributing table depending on that type should error out
+CREATE TABLE table_text_local_def(id int, col_1 default_test_row);
+SELECT create_distributed_table('table_text_local_def','id');
+
+-- will skip trying to propagate the type/enum due to temp schema
+CREATE TYPE pg_temp.temp_type AS (int_field int);
+CREATE TYPE pg_temp.temp_enum AS ENUM ('one', 'two', 'three');
 
 -- clear objects
 SET client_min_messages TO error; -- suppress cascading objects dropping

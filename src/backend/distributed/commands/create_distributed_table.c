@@ -31,6 +31,7 @@
 #include "catalog/pg_opclass.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_trigger.h"
+#include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
 #include "commands/sequence.h"
@@ -579,7 +580,7 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
  * explicitly.
  */
 void
-EnsureSequenceTypeSupported(Oid seqOid, Oid seqTypId, Oid ownerRelationId)
+EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid ownerRelationId)
 {
 	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
 	citusTableIdList = list_append_unique_oid(citusTableIdList, ownerRelationId);
@@ -591,14 +592,11 @@ EnsureSequenceTypeSupported(Oid seqOid, Oid seqTypId, Oid ownerRelationId)
 		List *dependentSequenceList = NIL;
 		GetDependentSequencesWithRelation(citusTableId, &attnumList,
 										  &dependentSequenceList, 0);
-		ListCell *attnumCell = NULL;
-		ListCell *dependentSequenceCell = NULL;
-		forboth(attnumCell, attnumList, dependentSequenceCell,
-				dependentSequenceList)
+		AttrNumber currentAttnum = InvalidAttrNumber;
+		Oid currentSeqOid = InvalidOid;
+		forboth_int_oid(currentAttnum, attnumList, currentSeqOid,
+						dependentSequenceList)
 		{
-			AttrNumber currentAttnum = lfirst_int(attnumCell);
-			Oid currentSeqOid = lfirst_oid(dependentSequenceCell);
-
 			/*
 			 * If another distributed table is using the same sequence
 			 * in one of its column defaults, make sure the types of the
@@ -606,9 +604,9 @@ EnsureSequenceTypeSupported(Oid seqOid, Oid seqTypId, Oid ownerRelationId)
 			 */
 			if (currentSeqOid == seqOid)
 			{
-				Oid currentSeqTypId = GetAttributeTypeOid(citusTableId,
-														  currentAttnum);
-				if (seqTypId != currentSeqTypId)
+				Oid currentAttributeTypId = GetAttributeTypeOid(citusTableId,
+																currentAttnum);
+				if (attributeTypeId != currentAttributeTypId)
 				{
 					char *sequenceName = generate_qualified_relation_name(
 						seqOid);
@@ -674,28 +672,37 @@ static void
 EnsureDistributedSequencesHaveOneType(Oid relationId, List *dependentSequenceList,
 									  List *attnumList)
 {
-	ListCell *attnumCell = NULL;
-	ListCell *dependentSequenceCell = NULL;
-	forboth(attnumCell, attnumList, dependentSequenceCell, dependentSequenceList)
+	AttrNumber attnum = InvalidAttrNumber;
+	Oid sequenceOid = InvalidOid;
+	forboth_int_oid(attnum, attnumList, sequenceOid, dependentSequenceList)
 	{
-		AttrNumber attnum = lfirst_int(attnumCell);
-		Oid sequenceOid = lfirst_oid(dependentSequenceCell);
-
 		/*
 		 * We should make sure that the type of the column that uses
 		 * that sequence is supported
 		 */
-		Oid seqTypId = GetAttributeTypeOid(relationId, attnum);
-		EnsureSequenceTypeSupported(sequenceOid, seqTypId, relationId);
+		Oid attributeTypeId = GetAttributeTypeOid(relationId, attnum);
+		EnsureSequenceTypeSupported(sequenceOid, attributeTypeId, relationId);
 
 		/*
 		 * Alter the sequence's data type in the coordinator if needed.
+		 *
+		 * First, we should only change the sequence type if the column
+		 * is a supported sequence type. For example, if a sequence is used
+		 * in an expression which then becomes a text, we should not try to
+		 * alter the sequence type to text. Postgres only supports int2, int4
+		 * and int8 as the sequence type.
+		 *
 		 * A sequence's type is bigint by default and it doesn't change even if
 		 * it's used in an int column. We should change the type if needed,
 		 * and not allow future ALTER SEQUENCE ... TYPE ... commands for
-		 * sequences used as defaults in distributed tables
+		 * sequences used as defaults in distributed tables.
 		 */
-		AlterSequenceType(sequenceOid, seqTypId);
+		if (attributeTypeId == INT2OID ||
+			attributeTypeId == INT4OID ||
+			attributeTypeId == INT8OID)
+		{
+			AlterSequenceType(sequenceOid, attributeTypeId);
+		}
 	}
 }
 

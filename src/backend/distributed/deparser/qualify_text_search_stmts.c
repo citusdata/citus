@@ -70,6 +70,44 @@ QualifyDropTextSearchConfigurationStmt(Node *node)
 
 
 /*
+ * QualifyDropTextSearchDictionaryStmt adds any missing schema names to text search
+ * dictionaries being dropped. All dictionaries are expected to exists before fully
+ * qualifying the statement. Errors will be raised for objects not existing. Non-existing
+ * objects are expected to not be distributed.
+ */
+void
+QualifyDropTextSearchDictionaryStmt(Node *node)
+{
+	DropStmt *stmt = castNode(DropStmt, node);
+	Assert(stmt->removeType == OBJECT_TSDICTIONARY);
+
+	List *qualifiedObjects = NIL;
+	List *objName = NIL;
+
+	foreach_ptr(objName, stmt->objects)
+	{
+		char *schemaName = NULL;
+		char *tsdictName = NULL;
+		DeconstructQualifiedName(objName, &schemaName, &tsdictName);
+
+		if (!schemaName)
+		{
+			Oid tsdictOid = get_ts_dict_oid(objName, false);
+			Oid namespaceOid = get_ts_dict_namespace(tsdictOid);
+			schemaName = get_namespace_name(namespaceOid);
+
+			objName = list_make2(makeString(schemaName),
+								 makeString(tsdictName));
+		}
+
+		qualifiedObjects = lappend(qualifiedObjects, objName);
+	}
+
+	stmt->objects = qualifiedObjects;
+}
+
+
+/*
  * QualifyAlterTextSearchConfigurationStmt adds the schema name (if missing) to the name
  * of the text search configurations, as well as the dictionaries referenced.
  */
@@ -129,6 +167,32 @@ QualifyAlterTextSearchConfigurationStmt(Node *node)
 
 
 /*
+ * QualifyAlterTextSearchDictionaryStmt adds the schema name (if missing) to the name
+ * of the text search dictionary.
+ */
+void
+QualifyAlterTextSearchDictionaryStmt(Node *node)
+{
+	AlterTSDictionaryStmt *stmt = castNode(AlterTSDictionaryStmt, node);
+
+	char *schemaName = NULL;
+	char *objName = NULL;
+	DeconstructQualifiedName(stmt->dictname, &schemaName, &objName);
+
+	/* fully qualify the dictname being altered */
+	if (!schemaName)
+	{
+		Oid tsdictOid = get_ts_dict_oid(stmt->dictname, false);
+		Oid namespaceOid = get_ts_dict_namespace(tsdictOid);
+		schemaName = get_namespace_name(namespaceOid);
+
+		stmt->dictname = list_make2(makeString(schemaName),
+									makeString(objName));
+	}
+}
+
+
+/*
  * QualifyRenameTextSearchConfigurationStmt adds the schema name (if missing) to the
  * configuration being renamed. The new name will kept be without schema name since this
  * command cannot be used to change the schema of a configuration.
@@ -157,8 +221,36 @@ QualifyRenameTextSearchConfigurationStmt(Node *node)
 
 
 /*
+ * QualifyRenameTextSearchDictionaryStmt adds the schema name (if missing) to the
+ * dictionary being renamed. The new name will kept be without schema name since this
+ * command cannot be used to change the schema of a dictionary.
+ */
+void
+QualifyRenameTextSearchDictionaryStmt(Node *node)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	Assert(stmt->renameType == OBJECT_TSDICTIONARY);
+
+	char *schemaName = NULL;
+	char *objName = NULL;
+	DeconstructQualifiedName(castNode(List, stmt->object), &schemaName, &objName);
+
+	/* fully qualify the dictname being altered */
+	if (!schemaName)
+	{
+		Oid tsdictOid = get_ts_dict_oid(castNode(List, stmt->object), false);
+		Oid namespaceOid = get_ts_dict_namespace(tsdictOid);
+		schemaName = get_namespace_name(namespaceOid);
+
+		stmt->object = (Node *) list_make2(makeString(schemaName),
+										   makeString(objName));
+	}
+}
+
+
+/*
  * QualifyAlterTextSearchConfigurationSchemaStmt adds the schema name (if missing) for the
- * text search being moved to a new schema.
+ * text search config being moved to a new schema.
  */
 void
 QualifyAlterTextSearchConfigurationSchemaStmt(Node *node)
@@ -174,6 +266,32 @@ QualifyAlterTextSearchConfigurationSchemaStmt(Node *node)
 	{
 		Oid tsconfigOid = get_ts_config_oid(castNode(List, stmt->object), false);
 		Oid namespaceOid = get_ts_config_namespace(tsconfigOid);
+		schemaName = get_namespace_name(namespaceOid);
+
+		stmt->object = (Node *) list_make2(makeString(schemaName),
+										   makeString(objName));
+	}
+}
+
+
+/*
+ * QualifyAlterTextSearchDictionarySchemaStmt adds the schema name (if missing) for the
+ * text search dictionary being moved to a new schema.
+ */
+void
+QualifyAlterTextSearchDictionarySchemaStmt(Node *node)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_TSDICTIONARY);
+
+	char *schemaName = NULL;
+	char *objName = NULL;
+	DeconstructQualifiedName(castNode(List, stmt->object), &schemaName, &objName);
+
+	if (!schemaName)
+	{
+		Oid tsdictOid = get_ts_dict_oid(castNode(List, stmt->object), false);
+		Oid namespaceOid = get_ts_dict_namespace(tsdictOid);
 		schemaName = get_namespace_name(namespaceOid);
 
 		stmt->object = (Node *) list_make2(makeString(schemaName),
@@ -209,6 +327,32 @@ QualifyTextSearchConfigurationCommentStmt(Node *node)
 
 
 /*
+ * QualifyTextSearchDictionaryCommentStmt adds the schema name (if missing) to the
+ * dictionary name on which the comment is created.
+ */
+void
+QualifyTextSearchDictionaryCommentStmt(Node *node)
+{
+	CommentStmt *stmt = castNode(CommentStmt, node);
+	Assert(stmt->objtype == OBJECT_TSDICTIONARY);
+
+	char *schemaName = NULL;
+	char *objName = NULL;
+	DeconstructQualifiedName(castNode(List, stmt->object), &schemaName, &objName);
+
+	if (!schemaName)
+	{
+		Oid tsdictOid = get_ts_dict_oid(castNode(List, stmt->object), false);
+		Oid namespaceOid = get_ts_dict_namespace(tsdictOid);
+		schemaName = get_namespace_name(namespaceOid);
+
+		stmt->object = (Node *) list_make2(makeString(schemaName),
+										   makeString(objName));
+	}
+}
+
+
+/*
  * QualifyAlterTextSearchConfigurationOwnerStmt adds the schema name (if missing) to the
  * configuration for which the owner is changing.
  */
@@ -226,6 +370,32 @@ QualifyAlterTextSearchConfigurationOwnerStmt(Node *node)
 	{
 		Oid tsconfigOid = get_ts_config_oid(castNode(List, stmt->object), false);
 		Oid namespaceOid = get_ts_config_namespace(tsconfigOid);
+		schemaName = get_namespace_name(namespaceOid);
+
+		stmt->object = (Node *) list_make2(makeString(schemaName),
+										   makeString(objName));
+	}
+}
+
+
+/*
+ * QualifyAlterTextSearchDictionaryOwnerStmt adds the schema name (if missing) to the
+ * dictionary for which the owner is changing.
+ */
+void
+QualifyAlterTextSearchDictionaryOwnerStmt(Node *node)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+	Assert(stmt->objectType == OBJECT_TSDICTIONARY);
+
+	char *schemaName = NULL;
+	char *objName = NULL;
+	DeconstructQualifiedName(castNode(List, stmt->object), &schemaName, &objName);
+
+	if (!schemaName)
+	{
+		Oid tsdictOid = get_ts_dict_oid(castNode(List, stmt->object), false);
+		Oid namespaceOid = get_ts_dict_namespace(tsdictOid);
 		schemaName = get_namespace_name(namespaceOid);
 
 		stmt->object = (Node *) list_make2(makeString(schemaName),

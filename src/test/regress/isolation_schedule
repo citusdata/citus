@@ -1,8 +1,6 @@
 test: isolation_add_remove_node
-test: isolation_turn_mx_off
 test: isolation_update_node
 test: isolation_update_node_lock_writes
-test: isolation_turn_mx_on
 test: isolation_ensure_dependency_activate_node
 test: isolation_add_node_vs_reference_table_operations
 test: isolation_create_table_vs_add_remove_node
@@ -46,6 +44,7 @@ test: isolation_multi_shard_modify_vs_all
 test: isolation_modify_with_subquery_vs_dml
 test: isolation_hash_copy_vs_all
 test: isolation_range_copy_vs_all
+test: isolation_reference_copy_vs_all
 test: isolation_partitioned_copy_vs_all
 test: isolation_select_vs_all
 test: isolation_insert_vs_all
@@ -60,6 +59,7 @@ test: isolation_ddl_vs_all
 test: isolation_get_all_active_transactions
 test: isolation_validate_vs_insert
 test: isolation_insert_select_conflict
+test: isolation_ref2ref_foreign_keys
 test: shared_connection_waits
 test: isolation_cancellation
 test: isolation_max_client_connections
@@ -95,8 +95,4 @@ test: isolation_replicated_dist_on_mx
 test: isolation_replicate_reference_tables_to_coordinator
 test: isolation_multiuser_locking
 
-# MXless tests
 test: isolation_check_mx
-test: isolation_turn_mx_off
-test: isolation_reference_copy_vs_all
-test: isolation_ref2ref_foreign_keys

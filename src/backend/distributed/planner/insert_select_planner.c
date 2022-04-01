@@ -1513,14 +1513,10 @@ InsertSelectResultIdPrefix(uint64 planId)
 static void
 RelabelTargetEntryList(List *selectTargetList, List *insertTargetList)
 {
-	ListCell *selectTargetCell = NULL;
-	ListCell *insertTargetCell = NULL;
-
-	forboth(selectTargetCell, selectTargetList, insertTargetCell, insertTargetList)
+	TargetEntry *selectTargetEntry = NULL;
+	TargetEntry *insertTargetEntry = NULL;
+	forboth_ptr(selectTargetEntry, selectTargetList, insertTargetEntry, insertTargetList)
 	{
-		TargetEntry *selectTargetEntry = lfirst(selectTargetCell);
-		TargetEntry *insertTargetEntry = lfirst(insertTargetCell);
-
 		selectTargetEntry->resname = insertTargetEntry->resname;
 	}
 }
@@ -1537,8 +1533,6 @@ static List *
 AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 					 Oid targetRelationId)
 {
-	ListCell *insertEntryCell = NULL;
-	ListCell *selectEntryCell = NULL;
 	List *projectedEntries = NIL;
 	List *nonProjectedEntries = NIL;
 
@@ -1553,10 +1547,10 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 	TupleDesc destTupleDescriptor = RelationGetDescr(distributedRelation);
 
 	int targetEntryIndex = 0;
-	forboth(insertEntryCell, insertTargetList, selectEntryCell, selectTargetList)
+	TargetEntry *insertEntry = NULL;
+	TargetEntry *selectEntry = NULL;
+	forboth_ptr(insertEntry, insertTargetList, selectEntry, selectTargetList)
 	{
-		TargetEntry *insertEntry = (TargetEntry *) lfirst(insertEntryCell);
-		TargetEntry *selectEntry = (TargetEntry *) lfirst(selectEntryCell);
 		Var *insertColumn = (Var *) insertEntry->expr;
 		Form_pg_attribute attr = TupleDescAttr(destTupleDescriptor,
 											   insertEntry->resno - 1);

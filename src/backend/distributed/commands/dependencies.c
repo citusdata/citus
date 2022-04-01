@@ -158,6 +158,8 @@ EnsureDependenciesCanBeDistributed(const ObjectAddress *objectAddress)
 
 	if (depError != NULL)
 	{
+		/* override error detail as it is not applicable here*/
+		depError->detail = NULL;
 		RaiseDeferredError(depError, ERROR);
 	}
 }
@@ -396,6 +398,11 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 		case OCLASS_TSCONFIG:
 		{
 			return CreateTextSearchConfigDDLCommandsIdempotent(dependency);
+		}
+
+		case OCLASS_TSDICT:
+		{
+			return CreateTextSearchDictDDLCommandsIdempotent(dependency);
 		}
 
 		case OCLASS_TYPE:

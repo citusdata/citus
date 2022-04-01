@@ -244,13 +244,10 @@ CompareStringList(List *list1, List *list2)
 		return false;
 	}
 
-	ListCell *cell1 = NULL;
-	ListCell *cell2 = NULL;
-	forboth(cell1, list1, cell2, list2)
+	const char *str1 = NULL;
+	const char *str2 = NULL;
+	forboth_ptr(str1, list1, str2, list2)
 	{
-		const char *str1 = lfirst(cell1);
-		const char *str2 = lfirst(cell2);
-
 		if (strcmp(str1, str2) != 0)
 		{
 			return false;
@@ -286,15 +283,13 @@ CreateStmtListByObjectAddress(const ObjectAddress *address)
 
 		case OCLASS_TSCONFIG:
 		{
-			/*
-			 * We do support TEXT SEARCH CONFIGURATION, however, we can't recreate the
-			 * object in 1 command. Since the returned text is compared to the create
-			 * statement sql we always want the sql to be different compared to the
-			 * canonical creation sql we return here, hence we return an empty string, as
-			 * that should never match the sql we have passed in for the creation.
-			 */
-
 			List *stmts = GetCreateTextSearchConfigStatements(address);
+			return DeparseTreeNodes(stmts);
+		}
+
+		case OCLASS_TSDICT:
+		{
+			List *stmts = GetCreateTextSearchDictionaryStatements(address);
 			return DeparseTreeNodes(stmts);
 		}
 

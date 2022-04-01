@@ -18,6 +18,7 @@
 #include "lib/ilist.h"
 #include "pg_config.h"
 #include "portability/instr_time.h"
+#include "storage/latch.h"
 #include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/timestamp.h"
@@ -33,6 +34,10 @@
 
 /* application name used for internal connections in rebalancer */
 #define CITUS_REBALANCER_NAME "citus_rebalancer"
+
+/* deal with waiteventset errors */
+#define WAIT_EVENT_SET_INDEX_NOT_INITIALIZED -1
+#define WAIT_EVENT_SET_INDEX_FAILED -2
 
 /* forward declare, to avoid forcing large headers on everyone */
 struct pg_conn; /* target of the PGconn typedef */
@@ -283,6 +288,13 @@ extern void UnclaimConnection(MultiConnection *connection);
 extern bool IsCitusInternalBackend(void);
 extern bool IsRebalancerInternalBackend(void);
 extern void MarkConnectionConnected(MultiConnection *connection);
+
+/* waiteventset utilities */
+extern int CitusAddWaitEventSetToSet(WaitEventSet *set, uint32 events, pgsocket fd,
+									 Latch *latch, void *user_data);
+
+extern bool CitusModifyWaitEvent(WaitEventSet *set, int pos, uint32 events,
+								 Latch *latch);
 
 /* time utilities */
 extern double MillisecondsPassedSince(instr_time moment);

@@ -88,6 +88,7 @@ SELECT * FROM t3;
  4 | (5,6)
 (1 row)
 
+COMMIT;
 -- verify typmod was propagated
 SELECT run_command_on_workers($$SELECT atttypmod FROM pg_attribute WHERE attnum = 1 AND attrelid = (SELECT typrelid FROM pg_type WHERE typname = 'tc2');$$);
  run_command_on_workers
@@ -96,7 +97,6 @@ SELECT run_command_on_workers($$SELECT atttypmod FROM pg_attribute WHERE attnum 
  (localhost,57638,t,14)
 (2 rows)
 
-COMMIT;
 -- transaction block with simple type
 BEGIN;
 CREATE TYPE te2 AS ENUM ('yes', 'no');
@@ -566,6 +566,44 @@ CREATE TYPE circ_type1 AS (a int);
 CREATE TYPE circ_type2 AS (a int, b circ_type1);
 ALTER TYPE circ_type1 ADD ATTRIBUTE b circ_type2;
 ERROR:  composite type circ_type1 cannot be made a member of itself
+-- Show that types can be created locally if has unsupported dependency
+CREATE TYPE text_local_def;
+CREATE FUNCTION text_local_def_in(cstring)
+   RETURNS text_local_def
+   AS 'textin'
+   LANGUAGE internal STRICT IMMUTABLE;
+NOTICE:  return type text_local_def is only a shell
+WARNING:  "function text_local_def_in(cstring)" has dependency on unsupported object "type text_local_def"
+DETAIL:  "function text_local_def_in(cstring)" will be created only locally
+CREATE FUNCTION text_local_def_out(text_local_def)
+   RETURNS cstring
+   AS 'textout'
+   LANGUAGE internal STRICT IMMUTABLE;
+NOTICE:  argument type text_local_def is only a shell
+WARNING:  "function text_local_def_out(text_local_def)" has dependency on unsupported object "type text_local_def"
+DETAIL:  "function text_local_def_out(text_local_def)" will be created only locally
+CREATE TYPE text_local_def (
+   internallength = variable,
+   input = text_local_def_in,
+   output = text_local_def_out,
+   alignment = int4,
+   default = 'zippo'
+);
+-- It should be created locally as it has unsupported dependency
+CREATE TYPE default_test_row AS (f1 text_local_def, f2 int4);
+WARNING:  "type default_test_row" has dependency on unsupported object "type text_local_def"
+DETAIL:  "type default_test_row" will be created only locally
+-- Distributing table depending on that type should error out
+CREATE TABLE table_text_local_def(id int, col_1 default_test_row);
+SELECT create_distributed_table('table_text_local_def','id');
+ERROR:  "table table_text_local_def" has dependency on unsupported object "type text_local_def"
+-- will skip trying to propagate the type/enum due to temp schema
+CREATE TYPE pg_temp.temp_type AS (int_field int);
+WARNING:  "type temp_type" has dependency on unsupported object "schema pg_temp_xxx"
+DETAIL:  "type temp_type" will be created only locally
+CREATE TYPE pg_temp.temp_enum AS ENUM ('one', 'two', 'three');
+WARNING:  "type temp_enum" has dependency on unsupported object "schema pg_temp_xxx"
+DETAIL:  "type temp_enum" will be created only locally
 -- clear objects
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;

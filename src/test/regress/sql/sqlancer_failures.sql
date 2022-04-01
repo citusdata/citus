@@ -91,6 +91,20 @@ RIGHT JOIN (SELECT * FROM reference_table OFFSET 0) c ON (c.id > 0);
 -- drop existing sqlancer tables before next tests
 DROP TABLE t0, t1, t2, t3, t4 CASCADE;
 
+CREATE TABLE tbl1(a REAL, b FLOAT, c money);
+CREATE TABLE tbl2(a REAL, b FLOAT, c money);
+
+SELECT create_distributed_table('tbl1', 'a');
+SELECT create_distributed_table('tbl2', 'b');
+
+INSERT INTO tbl1 VALUES(1, 1, 1);
+
+SET citus.enable_repartition_joins to ON;
+
+SELECT * FROM tbl1, tbl2 WHERE tbl2.c=tbl1.c;
+
+DROP TABLE tbl1, tbl2 CASCADE;
+
 CREATE TABLE IF NOT EXISTS t0(c0 TEXT CHECK (TRUE), c1 money ) WITH (autovacuum_vacuum_threshold=1180014707, autovacuum_freeze_table_age=13771154, autovacuum_vacuum_cost_delay=23, autovacuum_analyze_threshold=1935153914, autovacuum_freeze_min_age=721733768, autovacuum_enabled=0, autovacuum_vacuum_cost_limit=9983);
 CREATE UNLOGGED TABLE IF NOT EXISTS t1(LIKE t0);
 CREATE TABLE t2(LIKE t0 INCLUDING INDEXES);

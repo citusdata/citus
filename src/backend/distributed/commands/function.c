@@ -966,6 +966,14 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 		insertorderbyat = agg->aggnumdirectargs;
 	}
 
+	/*
+	 * For zero-argument aggregate, write * in place of the list of arguments
+	 */
+	if (numargs == 0)
+	{
+		appendStringInfo(&buf, "*");
+	}
+
 	for (i = 0; i < numargs; i++)
 	{
 		Oid argtype = argtypes[i];
@@ -1446,7 +1454,21 @@ DefineAggregateStmtObjectAddress(Node *node, bool missing_ok)
 	}
 	else
 	{
-		objectWithArgs->objargs = list_make1(makeTypeName("anyelement"));
+		DefElem *defItem = NULL;
+		foreach_ptr(defItem, stmt->definition)
+		{
+			/*
+			 * If no explicit args are given, pg includes basetype in the signature.
+			 * If the basetype given is a type, like int4, we should include it in the
+			 * signature. In that case, defItem->arg would be a TypeName.
+			 * If the basetype given is a string, like "ANY", we shouldn't include it.
+			 */
+			if (strcmp(defItem->defname, "basetype") == 0 && IsA(defItem->arg, TypeName))
+			{
+				objectWithArgs->objargs = lappend(objectWithArgs->objargs,
+												  defItem->arg);
+			}
+		}
 	}
 
 	return FunctionToObjectAddress(OBJECT_AGGREGATE, objectWithArgs, missing_ok);
@@ -1581,6 +1603,32 @@ PreprocessAlterFunctionOwnerStmt(Node *node, const char *queryString,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * PostprocessAlterFunctionOwnerStmt is invoked after the owner has been changed locally.
+ * Since changing the owner could result in new dependencies being found for this object
+ * we re-ensure all the dependencies for the function do exist.
+ *
+ * This is solely to propagate the new owner (and all its dependencies) if it was not
+ * already distributed in the cluster.
+ */
+List *
+PostprocessAlterFunctionOwnerStmt(Node *node, const char *queryString)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+	AssertObjectTypeIsFunctional(stmt->objectType);
+
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateAlterFunction(&address))
+	{
+		return NIL;
+	}
+
+	EnsureDependenciesExistOnAllNodes(&address);
+
+	return NIL;
 }
 
 

@@ -19,8 +19,6 @@ DATA_built = $(generated_sql_files)
 
 # directories with source files
 SUBDIRS = . commands connection ddl deparser executor metadata operations planner progress relay safeclib test transaction utils worker
-# columnar modules
-SUBDIRS += ../columnar
 # enterprise modules
 SUBDIRS +=
 
@@ -84,7 +82,8 @@ endif
 .PHONY: clean-full install install-downgrades install-all
 
 cleanup-before-install:
-	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus*
+	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus.control
+	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus--*
 
 install: cleanup-before-install
 

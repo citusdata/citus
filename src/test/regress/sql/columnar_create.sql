@@ -129,3 +129,6 @@ SELECT COUNT(*)=1 FROM pg_class WHERE relname='columnar_temp';
 SELECT COUNT(*)=0 FROM columnar_temp;
 -- since we deleted all the rows, we shouldn't have any stripes for table
 SELECT columnar_test_helpers.columnar_metadata_has_storage_id(:columnar_temp_storage_id);
+
+-- make sure citus_columnar can be loaded
+LOAD 'citus_columnar';

@@ -109,3 +109,26 @@ CREATE COLLATION collation_creation_on_worker.another_german_phonebook (provider
 SET citus.enable_ddl_propagation TO off;
 DROP SCHEMA collation_creation_on_worker;
 SET citus.enable_ddl_propagation TO on;
+
+\c - - - :master_port
+
+-- will skip trying to propagate the collation due to temp schema
+CREATE COLLATION pg_temp.temp_collation (provider = icu, locale = 'de-u-co-phonebk');
+
+SET client_min_messages TO ERROR;
+CREATE USER alter_collation_user;
+SELECT 1 FROM run_command_on_workers('CREATE USER alter_collation_user');
+RESET client_min_messages;
+
+CREATE COLLATION alter_collation FROM "C";
+ALTER COLLATION alter_collation OWNER TO alter_collation_user;
+
+SELECT result FROM run_command_on_all_nodes('
+    SELECT collowner::regrole FROM pg_collation WHERE collname = ''alter_collation'';
+');
+
+DROP COLLATION alter_collation;
+SET client_min_messages TO ERROR;
+DROP USER alter_collation_user;
+SELECT 1 FROM run_command_on_workers('DROP USER alter_collation_user');
+RESET client_min_messages;

@@ -7,8 +7,12 @@ setup
     SELECT create_distributed_table('update_node', 'id');
 }
 
+// we sleep 2 seconds to let isolation test sync metadata
+// which is longer than citus.metadata_sync_interval, 1 second
 teardown
 {
+    SELECT pg_sleep(2);
+
     RESET citus.shard_replication_factor;
     DROP TABLE update_node CASCADE;
 

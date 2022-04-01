@@ -55,7 +55,6 @@ def run_for_config(config, lock, sql_schedule_name):
     if config.user == cfg.REGULAR_USER_NAME:
         common.create_role(
             config.bindir,
-            config.coordinator_port(),
             config.node_name_to_ports.values(),
             config.user,
         )
@@ -129,13 +128,24 @@ def copy_test_files(config):
                 colon_index = line.index(":")
                 line = line[colon_index + 1 :].strip()
                 test_names = line.split(" ")
-                copy_test_files_with_names(test_names, sql_dir_path, expected_dir_path)
+                copy_test_files_with_names(test_names, sql_dir_path, expected_dir_path, config)
 
 
-def copy_test_files_with_names(test_names, sql_dir_path, expected_dir_path):
+def copy_test_files_with_names(test_names, sql_dir_path, expected_dir_path, config):
     for test_name in test_names:
+        # make empty files for the skipped tests
+        if test_name in config.skip_tests:
+            expected_sql_file = os.path.join(sql_dir_path, test_name + ".sql")
+            open(expected_sql_file, 'x').close()
+
+            expected_out_file = os.path.join(expected_dir_path, test_name + ".out")
+            open(expected_out_file, 'x').close()
+
+            continue
+
         sql_name = os.path.join("./sql", test_name + ".sql")
         output_name = os.path.join("./expected", test_name + ".out")
+
         shutil.copy(sql_name, sql_dir_path)
         if os.path.isfile(output_name):
             # it might be the first time we run this test and the expected file

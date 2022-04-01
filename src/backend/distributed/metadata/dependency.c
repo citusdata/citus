@@ -600,7 +600,7 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 		{
 			case OCLASS_SCHEMA:
 			{
-				return true;
+				return !isTempNamespace(address->objectId);
 			}
 
 			default:
@@ -631,9 +631,13 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 		}
 
 		case OCLASS_COLLATION:
-		case OCLASS_SCHEMA:
 		{
 			return true;
+		}
+
+		case OCLASS_SCHEMA:
+		{
+			return !isTempNamespace(address->objectId);
 		}
 
 		case OCLASS_PROC:
@@ -672,6 +676,11 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 		}
 
 		case OCLASS_TSCONFIG:
+		{
+			return true;
+		}
+
+		case OCLASS_TSDICT:
 		{
 			return true;
 		}
@@ -771,14 +780,16 @@ DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 	#endif
 
 	/*
-	 * If the given object is a procedure, we want to create it locally,
-	 * so provide that information in the error detail.
+	 * We expect callers to interpret the error returned from this function
+	 * as a warning if the object itself is just being created. In that case,
+	 * we expect them to report below error detail as well to indicate that
+	 * object itself will not be propagated but will still be created locally.
+	 *
+	 * Otherwise, callers are expected to throw the error returned from this
+	 * function as a hard one by ignoring the detail part.
 	 */
-	if (getObjectClass(objectAddress) == OCLASS_PROC)
-	{
-		appendStringInfo(detailInfo, "\"%s\" will be created only locally",
-						 objectDescription);
-	}
+	appendStringInfo(detailInfo, "\"%s\" will be created only locally",
+					 objectDescription);
 
 	if (SupportedDependencyByCitus(undistributableDependency))
 	{
@@ -794,9 +805,7 @@ DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 						 objectDescription);
 
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 errorInfo->data,
-							 strlen(detailInfo->data) == 0 ? NULL : detailInfo->data,
-							 hintInfo->data);
+							 errorInfo->data, detailInfo->data, hintInfo->data);
 	}
 
 	appendStringInfo(errorInfo, "\"%s\" has dependency on unsupported "
@@ -804,9 +813,7 @@ DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 					 dependencyDescription);
 
 	return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-						 errorInfo->data,
-						 strlen(detailInfo->data) == 0 ? NULL : detailInfo->data,
-						 NULL);
+						 errorInfo->data, detailInfo->data, NULL);
 }
 
 
@@ -857,9 +864,13 @@ GetUndistributableDependency(const ObjectAddress *objectAddress)
 		if (!SupportedDependencyByCitus(dependency))
 		{
 			/*
-			 * Since roles should be handled manually with Citus community, skip them.
+			 * Skip roles and text search templates.
+			 *
+			 * Roles should be handled manually with Citus community whereas text search
+			 * templates should be handled manually in both community and enterprise
 			 */
-			if (getObjectClass(dependency) != OCLASS_ROLE)
+			if (getObjectClass(dependency) != OCLASS_ROLE &&
+				getObjectClass(dependency) != OCLASS_TSTEMPLATE)
 			{
 				return dependency;
 			}
@@ -1259,7 +1270,7 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 
 			/*
 			 * Tables could have indexes. Indexes themself could have dependencies that
-			 * need to be propagated. eg. TEXT SEARCH CONFIGRUATIONS. Here we add the
+			 * need to be propagated. eg. TEXT SEARCH CONFIGURATIONS. Here we add the
 			 * addresses of all indices to the list of objects to vist, as to make sure we
 			 * create all objects required by the indices before we create the table
 			 * including indices.

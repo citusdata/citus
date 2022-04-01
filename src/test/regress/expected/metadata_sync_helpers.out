@@ -593,11 +593,11 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
- SET application_name to 'citus_internal gpid=10000000001';
- \set VERBOSITY terse
- WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
-   AS (VALUES ('non_existing_type', ARRAY['non_existing_user']::text[], ARRAY[]::text[], -1, 0, false))
- SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
+	SET application_name to 'citus_internal gpid=10000000001';
+	\set VERBOSITY terse
+	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
+		AS (VALUES ('non_existing_type', ARRAY['non_existing_user']::text[], ARRAY[]::text[], -1, 0, false))
+	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
 ERROR:  unrecognized object type "non_existing_type"
 ROLLBACK;
 -- check the sanity of distributionArgumentIndex and colocationId
@@ -637,11 +637,11 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
- SET application_name to 'citus_internal gpid=10000000001';
- \set VERBOSITY terse
- WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
-   AS (VALUES ('role', ARRAY['non_existing_user']::text[], ARRAY[]::text[], -1, 0, false))
- SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
+	SET application_name to 'citus_internal gpid=10000000001';
+	\set VERBOSITY terse
+	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
+		AS (VALUES ('role', ARRAY['non_existing_user']::text[], ARRAY[]::text[], -1, 0, false))
+	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
 ERROR:  role "non_existing_user" does not exist
 ROLLBACK;
 -- since citus_internal_add_object_metadata is strict function returns NULL
@@ -653,11 +653,11 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
- SET application_name to 'citus_internal gpid=10000000001';
- \set VERBOSITY terse
- WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
-   AS (VALUES ('role', ARRAY['metadata_sync_helper_role']::text[], ARRAY[]::text[], 0, NULL::int, false))
- SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
+	SET application_name to 'citus_internal gpid=10000000001';
+	\set VERBOSITY terse
+	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
+		AS (VALUES ('role', ARRAY['metadata_sync_helper_role']::text[], ARRAY[]::text[], 0, NULL::int, false))
+	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
  citus_internal_add_object_metadata
 ---------------------------------------------------------------------
 
@@ -711,6 +711,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
     SET application_name to 'citus_internal gpid=10000000001';
+    SET citus.enable_ddl_propagation TO OFF;
     \set VERBOSITY terse
     CREATE TYPE distributed_test_type AS (a int, b int);
     SET ROLE metadata_sync_helper_role;
@@ -1323,6 +1324,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 ERROR:  cannot colocate tables test_6 and test_5
 ROLLBACK;
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+    SET citus.enable_ddl_propagation TO OFF;
 	CREATE COLLATION collation_t1 (provider = icu, locale = 'de-u-co-phonebk');
 	CREATE COLLATION caseinsensitive (provider = icu, locale = 'und-u-ks-level2');
 	-- colocated hash distributed table should have the same dist key collations

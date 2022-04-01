@@ -80,6 +80,33 @@ CREATE FUNCTION add_polygons(polygon, polygon) RETURNS int
     LANGUAGE SQL
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
+CREATE FUNCTION agg_dummy_func(state int, item int)
+RETURNS int IMMUTABLE LANGUAGE plpgsql AS $$
+begin
+    return state + item;
+end;
+$$;
+SET client_min_messages TO WARNING;
+-- will skip trying to propagate the aggregate due to temp schema
+CREATE AGGREGATE pg_temp.dummy_agg(int) (
+    sfunc = agg_dummy_func,
+    stype = int,
+    sspace = 8,
+    finalfunc = agg_dummy_func,
+    finalfunc_extra,
+    initcond = '5',
+    msfunc = agg_dummy_func,
+    mstype = int,
+    msspace = 12,
+    minvfunc = agg_dummy_func,
+    mfinalfunc = agg_dummy_func,
+    mfinalfunc_extra,
+    minitcond = '1',
+    sortop = ">"
+);
+WARNING:  "function pg_temp_xxx.dummy_agg(integer)" has dependency on unsupported object "schema pg_temp_xxx"
+DETAIL:  "function pg_temp_xxx.dummy_agg(integer)" will be created only locally
+RESET client_min_messages;
 -- Test some combination of functions without ddl propagation
 -- This will prevent the workers from having those types created. They are
 -- created just-in-time on function distribution

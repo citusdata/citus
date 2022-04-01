@@ -9,12 +9,12 @@ setup
 	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 
 	SET citus.shard_replication_factor TO 1;
-	CREATE SCHEMA drop_tests
-		CREATE TABLE drop_hash(id integer, data text);
+	CREATE SCHEMA drop_tests;
+	CREATE TABLE drop_tests.drop_hash(id integer, data text);
 	SELECT create_distributed_table('drop_tests.drop_hash', 'id');
 
-	CREATE SCHEMA drop_tests_2
-		CREATE TABLE drop_hash_2(id integer, data text);
+	CREATE SCHEMA drop_tests_2;
+	CREATE TABLE drop_tests_2.drop_hash_2(id integer, data text);
 	SELECT create_distributed_table('drop_tests_2.drop_hash_2', 'id');
 }
 

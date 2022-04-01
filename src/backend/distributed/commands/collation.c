@@ -19,6 +19,7 @@
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_utility.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
@@ -301,6 +302,32 @@ PreprocessAlterCollationOwnerStmt(Node *node, const char *queryString,
 
 
 /*
+ * PostprocessAlterCollationOwnerStmt is invoked after the owner has been changed locally.
+ * Since changing the owner could result in new dependencies being found for this object
+ * we re-ensure all the dependencies for the collation do exist.
+ *
+ * This is solely to propagate the new owner (and all its dependencies) if it was not
+ * already distributed in the cluster.
+ */
+List *
+PostprocessAlterCollationOwnerStmt(Node *node, const char *queryString)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+	Assert(stmt->objectType == OBJECT_COLLATION);
+
+	ObjectAddress collationAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateObject(&collationAddress))
+	{
+		return NIL;
+	}
+
+	EnsureDependenciesExistOnAllNodes(&collationAddress);
+
+	return NIL;
+}
+
+
+/*
  * PreprocessRenameCollationStmt is called when the user is renaming the collation. The invocation happens
  * before the statement is applied locally.
  *
@@ -561,6 +588,14 @@ PostprocessDefineCollationStmt(Node *node, const char *queryString)
 
 	ObjectAddress collationAddress =
 		DefineCollationStmtObjectAddress(node, false);
+
+	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(
+		&collationAddress);
+	if (errMsg != NULL)
+	{
+		RaiseDeferredError(errMsg, WARNING);
+		return NIL;
+	}
 
 	EnsureDependenciesExistOnAllNodes(&collationAddress);
 

@@ -126,6 +126,7 @@ static void ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum val
 											   char *field);
 static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards);
 static void RemoveOldShardPlacementForNodeGroup(int groupId);
+static int FindCoordinatorNodeId(void);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_set_coordinator_host);
@@ -148,6 +149,7 @@ PG_FUNCTION_INFO_V1(master_update_node);
 PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
 PG_FUNCTION_INFO_V1(citus_nodename_for_nodeid);
 PG_FUNCTION_INFO_V1(citus_nodeport_for_nodeid);
+PG_FUNCTION_INFO_V1(citus_coordinator_nodeid);
 
 
 /*
@@ -275,6 +277,24 @@ citus_add_node(PG_FUNCTION_ARGS)
 	 */
 	if (!nodeAlreadyExists)
 	{
+		WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeNameString, nodePort);
+
+		/*
+		 * If the worker is not marked as a coordinator, check that
+		 * the node is not trying to add itself
+		 */
+		if (workerNode != NULL &&
+			workerNode->groupId != COORDINATOR_GROUP_ID &&
+			workerNode->nodeRole != SecondaryNodeRoleId() &&
+			IsWorkerTheCurrentNode(workerNode))
+		{
+			ereport(ERROR, (errmsg("Node cannot add itself as a worker."),
+							errhint(
+								"Add the node as a coordinator by using: "
+								"SELECT citus_set_coordinator_host('%s', %d);",
+								nodeNameString, nodePort)));
+		}
+
 		ActivateNode(nodeNameString, nodePort);
 	}
 
@@ -1520,6 +1540,25 @@ citus_nodeport_for_nodeid(PG_FUNCTION_ARGS)
 
 
 /*
+ * citus_coordinator_nodeid returns the node id of the coordinator node
+ */
+Datum
+citus_coordinator_nodeid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	int coordinatorNodeId = FindCoordinatorNodeId();
+
+	if (coordinatorNodeId == -1)
+	{
+		PG_RETURN_INT32(0);
+	}
+
+	PG_RETURN_INT32(coordinatorNodeId);
+}
+
+
+/*
  * FindWorkerNode searches over the worker nodes and returns the workerNode
  * if it already exists. Else, the function returns NULL.
  */
@@ -1614,6 +1653,28 @@ FindNodeWithNodeId(int nodeId, bool missingOk)
 	}
 
 	return NULL;
+}
+
+
+/*
+ * FindCoordinatorNodeId returns the node id of the coordinator node
+ */
+static int
+FindCoordinatorNodeId()
+{
+	bool includeNodesFromOtherClusters = false;
+	List *nodeList = ReadDistNode(includeNodesFromOtherClusters);
+	WorkerNode *node = NULL;
+
+	foreach_ptr(node, nodeList)
+	{
+		if (NodeIsCoordinator(node))
+		{
+			return node->nodeId;
+		}
+	}
+
+	return -1;
 }
 
 

@@ -41,8 +41,15 @@ SET search_path TO 'mx_hide_shard_names';
 SELECT * FROM citus_shards_on_worker WHERE "Schema" = 'mx_hide_shard_names' ORDER BY 2;
 SELECT * FROM citus_shard_indexes_on_worker WHERE "Schema" = 'mx_hide_shard_names' ORDER BY 2;
 
+-- make sure that pg_class queries do not get blocked on table locks
+begin;
+lock table test_table in access exclusive mode;
+prepare transaction 'take-aggressive-lock';
+
 -- shards are hidden when using psql as application_name
 SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+
+commit prepared 'take-aggressive-lock';
 
 -- now create an index
 \c - - - :master_port
@@ -199,6 +206,38 @@ SELECT * FROM citus_shard_indexes_on_worker WHERE "Schema" = 'CiTuS.TeeN' ORDER 
 
 \d
 \di
+
+
+\c - - - :worker_1_port
+-- re-connect to the worker node and show that only
+-- client backends can filter shards
+SET search_path TO "CiTuS.TeeN";
+
+-- Create the necessary test utility function
+SET citus.enable_metadata_sync TO off;
+CREATE OR REPLACE FUNCTION set_backend_type(backend_type int)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus';
+RESET citus.enable_metadata_sync;
+
+-- the shards and indexes do not show up
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+
+-- say, we set it to bgworker
+-- the shards and indexes do not show up
+SELECT set_backend_type(4);
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+
+-- or, we set it to walsender
+-- the shards and indexes do show up
+SELECT set_backend_type(9);
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+
+-- but, client backends to see the shards
+SELECT set_backend_type(3);
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+
 
 -- clean-up
 \c - - - :master_port
