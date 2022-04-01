@@ -90,6 +90,9 @@ typedef struct MultiTable
 	Alias *referenceNames;
 	Query *subquery; /* this field is only valid for non-relation subquery types */
 	bool includePartitions;
+
+	/* FROM .. TABLESAMPLE clause */
+	TableSampleClause *tablesample;
 } MultiTable;
 
 

@@ -319,6 +319,26 @@ SELECT * FROM articles TABLESAMPLE BERNOULLI (0) WHERE author_id = 1;
 SELECT * FROM articles TABLESAMPLE SYSTEM (100) WHERE author_id = 1 ORDER BY id;
 SELECT * FROM articles TABLESAMPLE BERNOULLI (100) WHERE author_id = 1 ORDER BY id;
 
+SELECT count(*) FROM articles TABLESAMPLE SYSTEM (0);
+SELECT count(*) FROM articles TABLESAMPLE BERNOULLI (0);
+
+-- We use REPEATABLE to get deterministic results in terms of which pages are returned.
+-- That does mean we get the same page indexes on each shard, which in this case means
+-- they all return the first page, meaning all rows.
+SELECT count(*) FROM articles TABLESAMPLE SYSTEM (90) REPEATABLE (200);
+SELECT count(*) FROM articles TABLESAMPLE BERNOULLI (90) REPEATABLE (200);
+
+SELECT count(*) FROM articles TABLESAMPLE SYSTEM (100);
+SELECT count(*) FROM articles TABLESAMPLE BERNOULLI (100);
+
+SELECT count(*) FROM (SELECT random() FROM articles TABLESAMPLE SYSTEM (0)) a;
+SELECT count(*) FROM (SELECT random() FROM articles TABLESAMPLE BERNOULLI (0)) a;
+SELECT count(*) FROM (SELECT random() FROM articles TABLESAMPLE SYSTEM (100)) a;
+SELECT count(*) FROM (SELECT random() FROM articles TABLESAMPLE BERNOULLI (100)) a;
+
+DELETE FROM articles a USING articles b TABLESAMPLE bernoulli(0) WHERE a.author_id = b.author_id;
+UPDATE articles a SET title = '' FROM articles b TABLESAMPLE bernoulli(0) WHERE a.author_id = b.author_id;
+
 -- test tablesample with fast path as well
 SET citus.enable_fast_path_router_planner TO true;
 SELECT * FROM articles TABLESAMPLE SYSTEM (0) WHERE author_id = 1;
