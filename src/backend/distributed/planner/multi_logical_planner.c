@@ -75,7 +75,6 @@ static Oid NodeTryGetRteRelid(Node *node);
 static bool FullCompositeFieldList(List *compositeFieldList);
 static bool HasUnsupportedJoinWalker(Node *node, void *context);
 static bool ErrorHintRequired(const char *errorHint, Query *queryTree);
-static bool HasTablesample(Query *queryTree);
 static bool HasComplexRangeTableType(Query *queryTree);
 static bool IsReadIntermediateResultFunction(Node *node);
 static bool IsReadIntermediateResultArrayFunction(Node *node);
@@ -899,14 +898,6 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 		errorHint = filterHint;
 	}
 
-	bool hasTablesample = HasTablesample(queryTree);
-	if (hasTablesample)
-	{
-		preconditionsSatisfied = false;
-		errorMessage = "could not run distributed query which use TABLESAMPLE";
-		errorHint = filterHint;
-	}
-
 	bool hasUnsupportedJoin = HasUnsupportedJoinWalker((Node *) queryTree->jointree,
 													   NULL);
 	if (hasUnsupportedJoin)
@@ -957,28 +948,6 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 	}
 
 	return NULL;
-}
-
-
-/* HasTablesample returns tree if the query contains tablesample */
-static bool
-HasTablesample(Query *queryTree)
-{
-	List *rangeTableList = queryTree->rtable;
-	ListCell *rangeTableEntryCell = NULL;
-	bool hasTablesample = false;
-
-	foreach(rangeTableEntryCell, rangeTableList)
-	{
-		RangeTblEntry *rangeTableEntry = lfirst(rangeTableEntryCell);
-		if (rangeTableEntry->tablesample)
-		{
-			hasTablesample = true;
-			break;
-		}
-	}
-
-	return hasTablesample;
 }
 
 
@@ -1541,6 +1510,7 @@ MultiTableNodeList(List *tableEntryList, List *rangeTableList)
 		tableNode->alias = rangeTableEntry->alias;
 		tableNode->referenceNames = rangeTableEntry->eref;
 		tableNode->includePartitions = GetOriginalInh(rangeTableEntry);
+		tableNode->tablesample = rangeTableEntry->tablesample;
 
 		tableNodeList = lappend(tableNodeList, tableNode);
 	}
