@@ -32,6 +32,8 @@
 #include "distributed/transmit.h"
 #include "distributed/transaction_identifier.h"
 #include "distributed/tuplestore.h"
+#include "distributed/utils/array_type.h"
+#include "distributed/utils/directory.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"

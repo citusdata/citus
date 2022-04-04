@@ -43,7 +43,7 @@ output_files := $(patsubst $(citus_abs_srcdir)/output/%.source,expected/%.out, $
 # intermediate, for muscle memory backward compatibility.
 check: check-full
 # check-full triggers all tests that ought to be run routinely
-check-full: check-multi check-multi-mx check-multi-1 check-worker check-operations check-follower-cluster check-isolation check-failure
+check-full: check-multi check-multi-mx check-multi-1 check-operations check-follower-cluster check-isolation check-failure
 
 
 ISOLATION_DEPDIR=.deps/isolation
@@ -97,12 +97,6 @@ isolation_test_files=$(generated_isolation_files) create-symbolic-link
 ifndef CITUS_VALGRIND_LOG_FILE
 CITUS_VALGRIND_LOG_FILE := citus_valgrind_test_log.txt
 endif
-
-# using pg_regress_multi_check unnecessarily starts up multiple nodes, which isn't needed
-# for check-worker. But that's harmless besides a few cycles.
-check-worker: all
-	$(pg_regress_multi_check) --load-extension=citus \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/worker_schedule $(EXTRA_TESTS)
 
 # check-base only sets up a testing environment so you can specify all your tests using EXTRA_TESTS
 check-base: all

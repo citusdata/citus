@@ -46,6 +46,7 @@
 #include "distributed/shard_rebalancer.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/tuplestore.h"
+#include "distributed/utils/array_type.h"
 #include "distributed/worker_protocol.h"
 #include "funcapi.h"
 #include "miscadmin.h"

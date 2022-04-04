@@ -52,6 +52,7 @@
 #include "distributed/pg_dist_placement.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/utils/function.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"

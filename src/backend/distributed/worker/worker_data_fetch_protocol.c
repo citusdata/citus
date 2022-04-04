@@ -62,14 +62,12 @@
 
 
 /* Local functions forward declarations */
-static void FetchRegularFileAsSuperUser(const char *nodeName, uint32 nodePort,
-										StringInfo remoteFilename,
-										StringInfo localFilename);
 static bool ReceiveRegularFile(const char *nodeName, uint32 nodePort,
 							   const char *nodeUser, StringInfo transmitCommand,
 							   StringInfo filePath);
 static void ReceiveResourceCleanup(int32 connectionId, const char *filename,
 								   int32 fileDescriptor);
+static CopyStmt * CopyStatement(RangeVar *relation, char *sourceFilename);
 static void CitusDeleteFile(const char *filename);
 static bool check_log_statement(List *stmt_list);
 static void AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
@@ -77,140 +75,11 @@ static void AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequence
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(worker_fetch_partition_file);
 PG_FUNCTION_INFO_V1(worker_apply_shard_ddl_command);
 PG_FUNCTION_INFO_V1(worker_apply_inter_shard_ddl_command);
 PG_FUNCTION_INFO_V1(worker_apply_sequence_command);
 PG_FUNCTION_INFO_V1(worker_append_table_to_shard);
 PG_FUNCTION_INFO_V1(worker_nextval);
-
-/*
- * Following UDFs are stub functions, you can check their comments for more
- * detail.
- */
-PG_FUNCTION_INFO_V1(worker_fetch_regular_table);
-PG_FUNCTION_INFO_V1(worker_fetch_foreign_file);
-PG_FUNCTION_INFO_V1(master_expire_table_cache);
-
-
-/*
- * worker_fetch_partition_file fetches a partition file from the remote node.
- * The function assumes an upstream compute task depends on this partition file,
- * and therefore directly fetches the file into the upstream task's directory.
- */
-Datum
-worker_fetch_partition_file(PG_FUNCTION_ARGS)
-{
-	CheckCitusVersion(ERROR);
-
-	uint64 jobId = PG_GETARG_INT64(0);
-	uint32 partitionTaskId = PG_GETARG_UINT32(1);
-	uint32 partitionFileId = PG_GETARG_UINT32(2);
-	uint32 upstreamTaskId = PG_GETARG_UINT32(3);
-	text *nodeNameText = PG_GETARG_TEXT_P(4);
-	uint32 nodePort = PG_GETARG_UINT32(5);
-
-	/* remote filename is <jobId>/<partitionTaskId>/<partitionFileId> */
-	StringInfo remoteDirectoryName = TaskDirectoryName(jobId, partitionTaskId);
-	StringInfo remoteFilename = PartitionFilename(remoteDirectoryName, partitionFileId);
-
-	/* local filename is <jobId>/<upstreamTaskId>/<partitionTaskId> */
-	StringInfo taskDirectoryName = TaskDirectoryName(jobId, upstreamTaskId);
-	StringInfo taskFilename = UserTaskFilename(taskDirectoryName, partitionTaskId);
-
-	/*
-	 * If we are the first function to fetch a file for the upstream task, the
-	 * task directory does not exist. We then lock and create the directory.
-	 */
-	bool taskDirectoryExists = DirectoryExists(taskDirectoryName);
-
-	if (!taskDirectoryExists)
-	{
-		InitTaskDirectory(jobId, upstreamTaskId);
-	}
-
-	char *nodeName = text_to_cstring(nodeNameText);
-
-	/* we've made sure the file names are sanitized, safe to fetch as superuser */
-	FetchRegularFileAsSuperUser(nodeName, nodePort, remoteFilename, taskFilename);
-
-	PG_RETURN_VOID();
-}
-
-
-/* Constructs a standardized task file path for given directory and task id. */
-StringInfo
-TaskFilename(StringInfo directoryName, uint32 taskId)
-{
-	StringInfo taskFilename = makeStringInfo();
-	appendStringInfo(taskFilename, "%s/%s%0*u",
-					 directoryName->data,
-					 TASK_FILE_PREFIX, MIN_TASK_FILENAME_WIDTH, taskId);
-
-	return taskFilename;
-}
-
-
-/*
- * UserTaskFilename returns a full file path for a task file including the
- * current user ID as a suffix.
- */
-StringInfo
-UserTaskFilename(StringInfo directoryName, uint32 taskId)
-{
-	StringInfo taskFilename = TaskFilename(directoryName, taskId);
-
-	appendStringInfo(taskFilename, ".%u", GetUserId());
-
-	return taskFilename;
-}
-
-
-/*
- * FetchRegularFileAsSuperUser copies a file from a remote node in an idempotent
- * manner. It connects to the remote node as superuser to give file access.
- * Callers must make sure that the file names are sanitized.
- */
-static void
-FetchRegularFileAsSuperUser(const char *nodeName, uint32 nodePort,
-							StringInfo remoteFilename, StringInfo localFilename)
-{
-	char *userName = CurrentUserName();
-	uint32 randomId = (uint32) random();
-
-	/*
-	 * We create an attempt file to signal that the file is still in transit. We
-	 * further append a random id to the filename to handle the unexpected case
-	 * of another process concurrently fetching the same file.
-	 */
-	StringInfo attemptFilename = makeStringInfo();
-	appendStringInfo(attemptFilename, "%s_%0*u%s", localFilename->data,
-					 MIN_TASK_FILENAME_WIDTH, randomId, ATTEMPT_FILE_SUFFIX);
-
-	StringInfo transmitCommand = makeStringInfo();
-	appendStringInfo(transmitCommand, TRANSMIT_WITH_USER_COMMAND, remoteFilename->data,
-					 quote_literal_cstr(userName));
-
-	/* connect as superuser to give file access */
-	char *nodeUser = CitusExtensionOwnerName();
-
-	bool received = ReceiveRegularFile(nodeName, nodePort, nodeUser, transmitCommand,
-									   attemptFilename);
-	if (!received)
-	{
-		ereport(ERROR, (errmsg("could not receive file \"%s\" from %s:%u",
-							   remoteFilename->data, nodeName, nodePort)));
-	}
-
-	/* atomically rename the attempt file */
-	int renamed = rename(attemptFilename->data, localFilename->data);
-	if (renamed != 0)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not rename file \"%s\" to \"%s\": %m",
-							   attemptFilename->data, localFilename->data)));
-	}
-}
 
 
 /*
@@ -713,6 +582,26 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 
 
 /*
+ * CopyStatement creates and initializes a copy statement to read the given
+ * file's contents into the given table, using copy's standard text format.
+ */
+static CopyStmt *
+CopyStatement(RangeVar *relation, char *sourceFilename)
+{
+	CopyStmt *copyStatement = makeNode(CopyStmt);
+	copyStatement->relation = relation;
+	copyStatement->query = NULL;
+	copyStatement->attlist = NIL;
+	copyStatement->options = NIL;
+	copyStatement->is_from = true;
+	copyStatement->is_program = false;
+	copyStatement->filename = sourceFilename;
+
+	return copyStatement;
+}
+
+
+/*
  * worker_nextval calculates nextval() in worker nodes
  * for int and smallint column default types
  * TODO: not error out but get the proper nextval()
@@ -862,40 +751,4 @@ SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg)
 	defElem = makeDefElem((char *) name, arg, -1);
 
 	statement->options = lappend(statement->options, defElem);
-}
-
-
-/*
- * worker_fetch_regular_table UDF is a stub UDF to install Citus flawlessly.
- * Otherwise we need to delete them from our sql files, which is confusing
- */
-Datum
-worker_fetch_regular_table(PG_FUNCTION_ARGS)
-{
-	ereport(DEBUG2, (errmsg("this function is deprecated and no longer is used")));
-	PG_RETURN_VOID();
-}
-
-
-/*
- * worker_fetch_foreign_file UDF is a stub UDF to install Citus flawlessly.
- * Otherwise we need to delete them from our sql files, which is confusing
- */
-Datum
-worker_fetch_foreign_file(PG_FUNCTION_ARGS)
-{
-	ereport(DEBUG2, (errmsg("this function is deprecated and no longer is used")));
-	PG_RETURN_VOID();
-}
-
-
-/*
- * master_expire_table_cache UDF is a stub UDF to install Citus flawlessly.
- * Otherwise we need to delete them from our sql files, which is confusing
- */
-Datum
-master_expire_table_cache(PG_FUNCTION_ARGS)
-{
-	ereport(DEBUG2, (errmsg("this function is deprecated and no longer is used")));
-	PG_RETURN_VOID();
 }

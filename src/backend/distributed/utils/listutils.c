@@ -91,25 +91,6 @@ PointerArrayFromList(List *pointerList)
 
 
 /*
- * DatumArrayToArrayType converts the provided Datum array (of the specified
- * length and type) into an ArrayType suitable for returning from a UDF.
- */
-ArrayType *
-DatumArrayToArrayType(Datum *datumArray, int datumCount, Oid datumTypeId)
-{
-	int16 typeLength = 0;
-	bool typeByValue = false;
-	char typeAlignment = 0;
-
-	get_typlenbyvalalign(datumTypeId, &typeLength, &typeByValue, &typeAlignment);
-	ArrayType *arrayObject = construct_array(datumArray, datumCount, datumTypeId,
-											 typeLength, typeByValue, typeAlignment);
-
-	return arrayObject;
-}
-
-
-/*
  * ListToHashSet creates a hash table in which the keys are copied from
  * from itemList and the values are the same as the keys. This can
  * be used for fast lookups of the presence of a byte array in a set.
