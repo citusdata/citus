@@ -895,12 +895,11 @@ Query *
 ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 							   RangeTblEntry *subqueryRte)
 {
-	Index insertTableId = originalQuery->resultRelation + 1;
-
 	ListCell *insertTargetEntryCell;
 	List *newSubqueryTargetlist = NIL;
 	List *newInsertTargetlist = NIL;
 	int resno = 1;
+	Index insertTableId = 2;
 	int targetEntryIndex = 0;
 
 	AssertArg(InsertSelectIntoCitusTable(originalQuery) ||
