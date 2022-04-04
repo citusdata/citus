@@ -185,3 +185,5 @@ SELECT columnar_test_helpers.columnar_metadata_has_storage_id(:columnar_temp_sto
  f
 (1 row)
 
+-- make sure citus_columnar can be loaded
+LOAD 'citus_columnar';
