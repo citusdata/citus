@@ -2387,6 +2387,9 @@ NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_4'::text AS 
 (1 row)
 
 COMMIT;
+-- show that it is ok to not relabel columns read from distributed table
+INSERT INTO local_table_4 (col_5, col_2)
+SELECT max(int_col), max(int_col) FROM dist_table_1 GROUP BY dist_col;
 -- Ensure tuple data in explain analyze output is the same on all PG versions
 SET citus.enable_binary_protocol = TRUE;
 -- test EXPLAIN (ANALYZE)
@@ -2424,7 +2427,8 @@ SELECT * FROM local_table_4 ORDER BY 1,2,3,4,5,6,7,8;
     10 |     3 | string_4 | string_5 |     4 | string_6 | string_10 | string_11
     10 |     3 | string_4 | string_5 |     4 | string_6 | string_10 | string_11
     10 |     5 | string_7 | string_8 |     6 | string_9 | string_10 | string_11
-(5 rows)
+       |    11 |          |          |    11 |          |           |
+(6 rows)
 
 -- test using a column that has a default value
 CREATE TABLE local_table_5(

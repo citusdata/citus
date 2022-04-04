@@ -1213,6 +1213,10 @@ BEGIN;
     RETURNING *;
 COMMIT;
 
+-- show that it is ok to not relabel columns read from distributed table
+INSERT INTO local_table_4 (col_5, col_2)
+SELECT max(int_col), max(int_col) FROM dist_table_1 GROUP BY dist_col;
+
 -- Ensure tuple data in explain analyze output is the same on all PG versions
 SET citus.enable_binary_protocol = TRUE;
 
