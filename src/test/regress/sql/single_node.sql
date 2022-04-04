@@ -1165,6 +1165,21 @@ SELECT
 FROM dist_table_1 t1
 RETURNING *;
 
+-- test remote execution using router select
+INSERT INTO local_table_4
+SELECT
+    t1.dist_col,
+    1,
+    'string_1',
+    'string_2',
+    2,
+    'string_3',
+    t1.text_col_1,
+    t1.text_col_2
+FROM dist_table_1 t1
+WHERE dist_col = 10
+RETURNING *;
+
 -- test local execution
 BEGIN;
     INSERT INTO local_table_4
@@ -1178,6 +1193,23 @@ BEGIN;
         t1.text_col_1,
         t1.text_col_2
     FROM dist_table_1 t1
+    RETURNING *;
+COMMIT;
+
+-- test local execution using router select
+BEGIN;
+    INSERT INTO local_table_4
+    SELECT
+        t1.dist_col,
+        3,
+        'string_4',
+        'string_5',
+        4,
+        'string_6',
+        t1.text_col_1,
+        t1.text_col_2
+    FROM dist_table_1 t1
+    WHERE dist_col = 10
     RETURNING *;
 COMMIT;
 

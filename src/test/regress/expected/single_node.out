@@ -2321,6 +2321,26 @@ RETURNING *;
     10 |     1 | string_1 | string_2 |     2 | string_3 | string_10 | string_11
 (1 row)
 
+-- test remote execution using router select
+INSERT INTO local_table_4
+SELECT
+    t1.dist_col,
+    1,
+    'string_1',
+    'string_2',
+    2,
+    'string_3',
+    t1.text_col_1,
+    t1.text_col_2
+FROM dist_table_1 t1
+WHERE dist_col = 10
+RETURNING *;
+NOTICE:  executing the command locally: SELECT dist_col, 1, 'string_1'::text AS col_3, 'string_2'::text AS col_4, 2, 'string_3'::text AS col_6, text_col_1, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE (dist_col OPERATOR(pg_catalog.=) 10)
+ col_1 | col_2 |  col_3   |  col_4   | col_5 |  col_6   |   col_7   |   col_8
+---------------------------------------------------------------------
+    10 |     1 | string_1 | string_2 |     2 | string_3 | string_10 | string_11
+(1 row)
+
 -- test local execution
 BEGIN;
     INSERT INTO local_table_4
@@ -2339,6 +2359,28 @@ NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_4'::text AS 
 NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_4'::text AS col_3, 'string_5'::text AS col_4, 4, 'string_6'::text AS col_6, text_col_1, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
 NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_4'::text AS col_3, 'string_5'::text AS col_4, 4, 'string_6'::text AS col_6, text_col_1, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
 NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_4'::text AS col_3, 'string_5'::text AS col_4, 4, 'string_6'::text AS col_6, text_col_1, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
+ col_1 | col_2 |  col_3   |  col_4   | col_5 |  col_6   |   col_7   |   col_8
+---------------------------------------------------------------------
+    10 |     3 | string_4 | string_5 |     4 | string_6 | string_10 | string_11
+(1 row)
+
+COMMIT;
+-- test local execution using router select
+BEGIN;
+    INSERT INTO local_table_4
+    SELECT
+        t1.dist_col,
+        3,
+        'string_4',
+        'string_5',
+        4,
+        'string_6',
+        t1.text_col_1,
+        t1.text_col_2
+    FROM dist_table_1 t1
+    WHERE dist_col = 10
+    RETURNING *;
+NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_4'::text AS col_3, 'string_5'::text AS col_4, 4, 'string_6'::text AS col_6, text_col_1, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE (dist_col OPERATOR(pg_catalog.=) 10)
  col_1 | col_2 |  col_3   |  col_4   | col_5 |  col_6   |   col_7   |   col_8
 ---------------------------------------------------------------------
     10 |     3 | string_4 | string_5 |     4 | string_6 | string_10 | string_11
@@ -2378,9 +2420,11 @@ SELECT * FROM local_table_4 ORDER BY 1,2,3,4,5,6,7,8;
  col_1 | col_2 |  col_3   |  col_4   | col_5 |  col_6   |   col_7   |   col_8
 ---------------------------------------------------------------------
     10 |     1 | string_1 | string_2 |     2 | string_3 | string_10 | string_11
+    10 |     1 | string_1 | string_2 |     2 | string_3 | string_10 | string_11
+    10 |     3 | string_4 | string_5 |     4 | string_6 | string_10 | string_11
     10 |     3 | string_4 | string_5 |     4 | string_6 | string_10 | string_11
     10 |     5 | string_7 | string_8 |     6 | string_9 | string_10 | string_11
-(3 rows)
+(5 rows)
 
 -- test using a column that has a default value
 CREATE TABLE local_table_5(
