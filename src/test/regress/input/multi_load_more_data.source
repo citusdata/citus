@@ -23,9 +23,3 @@ copy customer_append FROM '@abs_srcdir@/data/customer.3.data' with (delimiter '|
 SELECT master_create_empty_shard('part_append') AS shardid \gset
 
 copy part_append FROM '@abs_srcdir@/data/part.more.data' with (delimiter '|', append_to_shard :shardid);
-
--- Exchange partition files in binary format in remaining tests
-ALTER SYSTEM SET citus.binary_worker_copy_format TO on;
-SELECT pg_reload_conf();
-SELECT success FROM run_command_on_workers('ALTER SYSTEM SET citus.binary_worker_copy_format TO on');
-SELECT success FROM run_command_on_workers('SELECT pg_reload_conf()');

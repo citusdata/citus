@@ -27,6 +27,8 @@
 #include "distributed/pg_dist_shard.h"
 #include "distributed/remote_commands.h"
 #include "distributed/tuplestore.h"
+#include "distributed/utils/array_type.h"
+#include "distributed/utils/function.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"

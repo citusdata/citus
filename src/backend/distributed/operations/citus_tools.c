@@ -20,6 +20,8 @@
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/remote_commands.h"
+#include "distributed/utils/array_type.h"
+#include "distributed/utils/function.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "funcapi.h"

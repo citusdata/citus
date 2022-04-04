@@ -17,6 +17,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/utils/array_type.h"
 
 
 /* declarations for dynamic loading */

@@ -215,23 +215,17 @@ ORDER BY 1;
  function worker_apply_shard_ddl_command(bigint,text)
  function worker_apply_shard_ddl_command(bigint,text,text)
  function worker_change_sequence_dependency(regclass,regclass,regclass)
- function worker_cleanup_job_schema_cache()
  function worker_create_or_alter_role(text,text,text)
  function worker_create_or_replace_object(text)
  function worker_create_or_replace_object(text[])
- function worker_create_schema(bigint,text)
  function worker_create_truncate_trigger(regclass)
  function worker_drop_distributed_table(text)
  function worker_drop_sequence_dependency(text)
  function worker_drop_shell_table(text)
- function worker_fetch_foreign_file(text,text,bigint,text[],integer[])
- function worker_fetch_partition_file(bigint,integer,integer,integer,text,integer)
  function worker_fix_partition_shard_index_names(regclass,text,text)
  function worker_fix_pre_citus10_partitioned_table_constraint_names(regclass,bigint,text)
  function worker_hash("any")
- function worker_hash_partition_table(bigint,integer,text,text,oid,anyarray)
  function worker_last_saved_explain_analyze()
- function worker_merge_files_into_table(bigint,integer,text[],text[])
  function worker_nextval(regclass)
  function worker_partial_agg(oid,anyelement)
  function worker_partial_agg_ffunc(internal)
@@ -240,9 +234,7 @@ ORDER BY 1;
  function worker_partitioned_relation_size(regclass)
  function worker_partitioned_relation_total_size(regclass)
  function worker_partitioned_table_size(regclass)
- function worker_range_partition_table(bigint,integer,text,text,oid,anyarray)
  function worker_record_sequence_dependency(regclass,regclass,name)
- function worker_repartition_cleanup(bigint)
  function worker_save_query_explain_analyze(text,jsonb)
  schema citus
  schema citus_internal
@@ -283,5 +275,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(267 rows)
+(259 rows)
 

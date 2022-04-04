@@ -1031,12 +1031,27 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                       | view citus_stat_activity
 (41 rows)
 
+-- Snapshot of state at 11.1-1
+ALTER EXTENSION citus UPDATE TO '11.1-1';
+SELECT * FROM multi_extension.print_extension_changes();
+                                    previous_object                                     | current_object
+---------------------------------------------------------------------
+ function worker_cleanup_job_schema_cache() void                                        |
+ function worker_create_schema(bigint,text) void                                        |
+ function worker_fetch_foreign_file(text,text,bigint,text[],integer[]) void             |
+ function worker_fetch_partition_file(bigint,integer,integer,integer,text,integer) void |
+ function worker_hash_partition_table(bigint,integer,text,text,oid,anyarray) void       |
+ function worker_merge_files_into_table(bigint,integer,text[],text[]) void              |
+ function worker_range_partition_table(bigint,integer,text,text,oid,anyarray) void      |
+ function worker_repartition_cleanup(bigint) void                                       |
+(8 rows)
+
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
 SHOW citus.version;
  citus.version
 ---------------------------------------------------------------------
- 11.0devel
+ 11.1devel
 (1 row)
 
 -- ensure no unexpected objects were created outside pg_catalog
@@ -1060,7 +1075,7 @@ RESET columnar.enable_version_checks;
 DROP EXTENSION citus;
 CREATE EXTENSION citus VERSION '8.0-1';
 ERROR:  specified version incompatible with loaded Citus library
-DETAIL:  Loaded library requires 11.0, but 8.0-1 was specified.
+DETAIL:  Loaded library requires 11.1, but 8.0-1 was specified.
 HINT:  If a newer library is present, restart the database and try the command again.
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
@@ -1105,7 +1120,7 @@ ORDER BY 1;
 -- We should not distribute table in version mistmatch
 SELECT create_distributed_table('version_mismatch_table', 'column1');
 ERROR:  loaded Citus library version differs from installed extension version
-DETAIL:  Loaded library requires 11.0, but the installed extension version is 8.1-1.
+DETAIL:  Loaded library requires 11.1, but the installed extension version is 8.1-1.
 HINT:  Run ALTER EXTENSION citus UPDATE and try again.
 -- This function will cause fail in next ALTER EXTENSION
 CREATE OR REPLACE FUNCTION pg_catalog.relation_is_a_known_shard(regclass)
