@@ -899,8 +899,20 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 	List *newSubqueryTargetlist = NIL;
 	List *newInsertTargetlist = NIL;
 	int resno = 1;
-	Index insertTableId = 2;
 	int targetEntryIndex = 0;
+
+	/*
+	 * Callers of this function are already sure about the fact that whole
+	 * SELECT query is wrapped in a subquery and hence represented by a single
+	 * RTE in the top-level.
+	 *
+	 * This is either done by postgres or by us by calling
+	 * BuildSelectForInsertSelect function for the query tree.
+	 *
+	 * And hence, while the first RTE always belongs to the table that we're
+	 * inserting into, the second one belongs to the subquery mentioned above.
+	 */
+	Index subqueryVarNo = 2;
 
 	AssertArg(InsertSelectIntoCitusTable(originalQuery) ||
 			  InsertSelectIntoLocalTable(originalQuery));
@@ -979,12 +991,9 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 		 */
 		Assert(!newSubqueryTargetEntry->resjunk);
 
-		Var *newInsertVar = makeVar(insertTableId, newSubqueryTargetEntry->resno,
-									exprType((Node *) newSubqueryTargetEntry->expr),
-									exprTypmod((Node *) newSubqueryTargetEntry->expr),
-									exprCollation((Node *) newSubqueryTargetEntry->expr),
-									0);
-		TargetEntry *newInsertTargetEntry = makeTargetEntry((Expr *) newInsertVar,
+		Var *newSubqueryVar = makeVarFromTargetEntry(subqueryVarNo,
+													 newSubqueryTargetEntry);
+		TargetEntry *newInsertTargetEntry = makeTargetEntry((Expr *) newSubqueryVar,
 															originalAttrNo,
 															oldInsertTargetEntry->resname,
 															oldInsertTargetEntry->resjunk);
