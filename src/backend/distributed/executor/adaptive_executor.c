@@ -152,6 +152,7 @@
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/param_utils.h"
 #include "distributed/placement_access.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
@@ -830,6 +831,19 @@ AdaptiveExecutor(CitusScanState *scanState)
 		distributedPlan->modLevel, taskList, excludeFromXact);
 
 	bool localExecutionSupported = true;
+
+	/*
+	 * In some rare cases, we have prepared statements that pass a parameter
+	 * and never used in the query, mark such parameters' type as Invalid(0),
+	 * which will be used later in ExtractParametersFromParamList() to map them
+	 * to a generic datatype. Skip for dynamic parameters.
+	 */
+	if (paramListInfo && !paramListInfo->paramFetch)
+	{
+		paramListInfo = copyParamList(paramListInfo);
+		MarkUnreferencedExternParams((Node *) job->jobQuery, paramListInfo);
+	}
+
 	DistributedExecution *execution = CreateDistributedExecution(
 		distributedPlan->modLevel,
 		taskList,
