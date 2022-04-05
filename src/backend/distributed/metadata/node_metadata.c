@@ -563,7 +563,7 @@ citus_disable_node(PG_FUNCTION_ARGS)
 		 * where we expect all nodes up and running.
 		 */
 
-		TriggerMetadataSyncOnCommit();
+		TriggerNodeMetadataSyncOnCommit();
 	}
 
 	PG_RETURN_VOID();
@@ -1374,7 +1374,7 @@ citus_update_node(PG_FUNCTION_ARGS)
 	 */
 	if (UnsetMetadataSyncedForAllWorkers())
 	{
-		TriggerMetadataSyncOnCommit();
+		TriggerNodeMetadataSyncOnCommit();
 	}
 
 	if (handle != NULL)
