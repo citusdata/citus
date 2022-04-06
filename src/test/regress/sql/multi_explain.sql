@@ -24,6 +24,17 @@ BEGIN
 END;
 $BODY$ LANGUAGE plpgsql;
 
+CREATE FUNCTION explain_analyze_json(query text)
+RETURNS jsonb
+AS $BODY$
+DECLARE
+  result jsonb;
+BEGIN
+  EXECUTE format('EXPLAIN (ANALYZE TRUE, FORMAT JSON) %s', query) INTO result;
+  RETURN result;
+END;
+$BODY$ LANGUAGE plpgsql;
+
 -- Function that parses explain output as XML
 CREATE FUNCTION explain_xml(query text)
 RETURNS xml
@@ -35,6 +46,19 @@ BEGIN
   RETURN result;
 END;
 $BODY$ LANGUAGE plpgsql;
+
+-- Function that parses explain output as XML
+CREATE FUNCTION explain_analyze_xml(query text)
+RETURNS xml
+AS $BODY$
+DECLARE
+  result xml;
+BEGIN
+  EXECUTE format('EXPLAIN (ANALYZE true, FORMAT XML) %s', query) INTO result;
+  RETURN result;
+END;
+$BODY$ LANGUAGE plpgsql;
+
 
 -- VACUMM related tables to ensure test outputs are stable
 VACUUM ANALYZE lineitem;
@@ -63,6 +87,13 @@ SELECT true AS valid FROM explain_json($$
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity$$);
 
+SELECT true AS valid FROM explain_analyze_json($$
+	WITH a AS (
+		SELECT l_quantity, count(*) count_quantity FROM lineitem
+		GROUP BY l_quantity ORDER BY count_quantity, l_quantity LIMIT 10)
+	SELECT count(*) FROM a
+$$);
+
 -- Test XML format
 EXPLAIN (COSTS FALSE, FORMAT XML)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
@@ -72,6 +103,13 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
 SELECT true AS valid FROM explain_xml($$
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity$$);
+
+SELECT true AS valid FROM explain_analyze_xml($$
+	WITH a AS (
+		SELECT l_quantity, count(*) count_quantity FROM lineitem
+		GROUP BY l_quantity ORDER BY count_quantity, l_quantity LIMIT 10)
+	SELECT count(*) FROM a
+$$);
 
 -- Test YAML format
 EXPLAIN (COSTS FALSE, FORMAT YAML)
