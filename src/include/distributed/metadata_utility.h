@@ -41,6 +41,15 @@
 
 #define SHARD_SIZES_COLUMN_COUNT (3)
 
+/*
+ * Flag to keep track of whether the process is currently in a function converting the
+ * type of the table. Since it only affects the level of the log shown while dropping/
+ * recreating table within the table type conversion, rollbacking to the savepoint hasn't
+ * been implemented for the sake of simplicity. If you are planning to use that flag for
+ * any other purpose, please consider implementing that.
+ */
+extern bool InTableTypeConversionFunctionCall;
+
 /* In-memory representation of a typed tuple in pg_dist_shard. */
 typedef struct ShardInterval
 {

@@ -445,20 +445,24 @@ SELECT count(*) FROM mat_view_4;
 SELECT count(*) FROM distributed_table WHERE b in
 (SELECT count FROM mat_view_4);
 
+SET citus.enable_ddl_propagation TO OFF;
 CREATE VIEW view_2 AS
 SELECT count(*)
 FROM citus_local_table
 JOIN citus_local_table_2 USING (a)
 JOIN distributed_table USING (a);
+RESET citus.enable_ddl_propagation;
 
 -- should fail as view contains direct local dist join
 SELECT count(*) FROM view_2;
 
+SET citus.enable_ddl_propagation TO OFF;
 CREATE VIEW view_3
 AS SELECT count(*)
 FROM citus_local_table_2
 JOIN reference_table
 USING (a);
+RESET citus.enable_ddl_propagation;
 
 -- ok
 SELECT count(*) FROM view_3;

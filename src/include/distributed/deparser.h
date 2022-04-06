@@ -144,6 +144,10 @@ extern Oid TypeOidGetNamespaceOid(Oid typeOid);
 extern ObjectAddress GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok);
 extern ObjectAddress RenameAttributeStmtObjectAddress(Node *stmt, bool missing_ok);
 
+/* forward declarations for deparse_view_stmts.c */
+extern void QualifyDropViewStmt(Node *node);
+extern void AppendViewDefinitionToCreateViewCommand(StringInfo buf, Oid viewOid);
+
 /* forward declarations for deparse_function_stmts.c */
 extern char * DeparseDropFunctionStmt(Node *stmt);
 extern char * DeparseAlterFunctionStmt(Node *stmt);

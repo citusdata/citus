@@ -358,6 +358,9 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 CREATE VIEW local_regular_view AS SELECT * FROM local;
+WARNING:  "view local_regular_view" has dependency to "table local" that is not in Citus' metadata
+DETAIL:  "view local_regular_view" will be created only locally
+HINT:  Distribute "table local" first to distribute "view local_regular_view"
 CREATE VIEW dist_regular_view AS SELECT * FROM distributed;
 SELECT count(*) FROM distributed JOIN local_regular_view USING (id);
 DEBUG:  generating subplan XXX_1 for subquery SELECT local.id, local.title FROM local_dist_join_mixed.local
@@ -1601,14 +1604,5 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
    101
 (1 row)
 
+SET client_min_messages TO ERROR;
 DROP SCHEMA local_dist_join_mixed CASCADE;
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A command for a distributed schema is run. To make sure subsequent commands see the schema correctly we need to make sure to use only one connection for all future commands
-NOTICE:  drop cascades to 7 other objects
-DETAIL:  drop cascades to table distributed
-drop cascades to table reference
-drop cascades to table local
-drop cascades to table unlogged_local
-drop cascades to materialized view mat_view
-drop cascades to view local_regular_view
-drop cascades to view dist_regular_view

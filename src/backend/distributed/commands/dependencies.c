@@ -348,6 +348,14 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 				return DDLCommandsForSequence(dependency->objectId, sequenceOwnerName);
 			}
 
+			if (relKind == RELKIND_VIEW)
+			{
+				char *createViewCommand = CreateViewDDLCommand(dependency->objectId);
+				char *alterViewOwnerCommand = AlterViewOwnerCommand(dependency->objectId);
+
+				return list_make2(createViewCommand, alterViewOwnerCommand);
+			}
+
 			/* if this relation is not supported, break to the error at the end */
 			break;
 		}

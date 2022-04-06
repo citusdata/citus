@@ -1096,6 +1096,8 @@ CREATE TEMPORARY VIEW correlated_subquery_view AS
 	     FROM events_table e1
 	     WHERE e1.user_id = u1.user_id
 	          ) > 0;
+WARNING:  "view correlated_subquery_view" has dependency on unsupported object "schema pg_temp_xxx"
+DETAIL:  "view correlated_subquery_view" will be created only locally
 SELECT sum(user_id) FROM correlated_subquery_view;
  sum
 ---------------------------------------------------------------------

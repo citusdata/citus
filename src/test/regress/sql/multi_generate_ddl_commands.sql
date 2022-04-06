@@ -116,7 +116,7 @@ ALTER TABLE fiddly_table
 
 SELECT master_get_table_ddl_events('fiddly_table');
 
--- propagating views is not supported
+-- propagating views is not supported if local table dependency exists
 CREATE VIEW local_view AS SELECT * FROM simple_table;
 
 SELECT master_get_table_ddl_events('local_view');

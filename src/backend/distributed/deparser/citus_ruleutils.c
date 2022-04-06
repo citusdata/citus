@@ -80,7 +80,6 @@ static void deparse_index_columns(StringInfo buffer, List *indexParameterList,
 static void AppendStorageParametersToString(StringInfo stringBuffer,
 											List *optionList);
 static void simple_quote_literal(StringInfo buf, const char *val);
-static char * flatten_reloptions(Oid relid);
 static void AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer);
 
 
@@ -1231,7 +1230,7 @@ pg_get_replica_identity_command(Oid tableRelationId)
  * This function comes from PostgreSQL source code in
  * src/backend/utils/adt/ruleutils.c
  */
-static char *
+char *
 flatten_reloptions(Oid relid)
 {
 	char *result = NULL;

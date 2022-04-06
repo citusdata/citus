@@ -803,6 +803,11 @@ GetObjectTypeString(ObjectType objType)
 			return "type";
 		}
 
+		case OBJECT_VIEW:
+		{
+			return "view";
+		}
+
 		default:
 		{
 			ereport(DEBUG1, (errmsg("unsupported object type"),
