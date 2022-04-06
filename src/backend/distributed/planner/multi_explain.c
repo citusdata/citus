@@ -57,7 +57,9 @@
 #include "nodes/print.h"
 #include "optimizer/clauses.h"
 #include "optimizer/planner.h"
+#include "parser/analyze.h"
 #include "portability/instr_time.h"
+#include "rewrite/rewriteHandler.h"
 #include "tcop/dest.h"
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
@@ -152,7 +154,11 @@ static void ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 									   HeapTuple heapTuple, uint64 tupleLibpqSize);
 static TupleDesc ExplainAnalyzeDestTupleDescForQuery(TupleDestination *self, int
 													 queryNumber);
-static char * WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc);
+static char * WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc,
+										 ParamListInfo params);
+static char * FetchPlanQueryForExplainAnalyze(const char *queryString,
+											  ParamListInfo params);
+static char * ParameterResolutionSubquery(ParamListInfo params);
 static List * SplitString(const char *str, char delimiter, int maxLength);
 
 /* Static Explain functions copied from explain.c */
@@ -1042,14 +1048,25 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	int numParams = boundParams ? boundParams->numParams : 0;
 	Oid *paramTypes = NULL;
 	const char **paramValues = NULL;
+
 	if (boundParams != NULL)
 	{
 		ExtractParametersFromParamList(boundParams, &paramTypes, &paramValues, false);
 	}
 
-	List *queryList = pg_analyze_and_rewrite(parseTree, queryString, paramTypes,
-											 numParams, NULL);
+	/* resolve OIDs of unknown (user-defined) types */
+	Query *analyzedQuery = parse_analyze_varparams(parseTree, queryString,
+												   &paramTypes, &numParams);
 
+#if PG_VERSION_NUM >= PG_VERSION_14
+
+	/* pg_rewrite_query is a wrapper around QueryRewrite with some debugging logic */
+	List *queryList = pg_rewrite_query(analyzedQuery);
+#else
+
+	/* pg_rewrite_query is not yet public in PostgreSQL 13 */
+	List *queryList = QueryRewrite(analyzedQuery);
+#endif
 	if (list_length(queryList) != 1)
 	{
 		ereport(ERROR, (errmsg("cannot EXPLAIN ANALYZE a query rewritten "
@@ -1377,9 +1394,21 @@ ExplainAnalyzeTaskList(List *originalTaskList,
 
 		Task *explainAnalyzeTask = copyObject(originalTask);
 		const char *queryString = TaskQueryString(explainAnalyzeTask);
-		char *wrappedQuery = WrapQueryForExplainAnalyze(queryString, tupleDesc);
-		char *fetchQuery =
-			"SELECT explain_analyze_output, execution_duration FROM worker_last_saved_explain_analyze()";
+		ParamListInfo taskParams = params;
+
+		/*
+		 * We will not send parameters if they have already been resolved in the query
+		 * string.
+		 */
+		if (explainAnalyzeTask->parametersInQueryStringResolved)
+		{
+			taskParams = NULL;
+		}
+
+		char *wrappedQuery = WrapQueryForExplainAnalyze(queryString, tupleDesc,
+														taskParams);
+		char *fetchQuery = FetchPlanQueryForExplainAnalyze(queryString, taskParams);
+
 		SetTaskQueryStringList(explainAnalyzeTask, list_make2(wrappedQuery, fetchQuery));
 
 		TupleDestination *originalTaskDest = originalTask->tupleDest ?
@@ -1401,7 +1430,8 @@ ExplainAnalyzeTaskList(List *originalTaskList,
  * call so we can fetch its explain analyze after its execution.
  */
 static char *
-WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc)
+WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc,
+						   ParamListInfo params)
 {
 	StringInfo columnDef = makeStringInfo();
 	for (int columnIndex = 0; columnIndex < tupleDesc->natts; columnIndex++)
@@ -1453,6 +1483,17 @@ WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc)
 	 * number of columns returned by worker_save_query_explain_analyze.
 	 */
 	char *workerSaveQueryFetchCols = (tupleDesc->natts == 0) ? "" : "*";
+
+	if (params != NULL)
+	{
+		/*
+		 * Add a dummy CTE to ensure all parameters are referenced, such that their
+		 * types can be resolved.
+		 */
+		appendStringInfo(wrappedQuery, "WITH unused AS (%s) ",
+						 ParameterResolutionSubquery(params));
+	}
+
 	appendStringInfo(wrappedQuery,
 					 "SELECT %s FROM worker_save_query_explain_analyze(%s, %s) AS (%s)",
 					 workerSaveQueryFetchCols,
@@ -1461,6 +1502,60 @@ WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc)
 					 columnDef->data);
 
 	return wrappedQuery->data;
+}
+
+
+/*
+ * FetchPlanQueryForExplainAnalyze generates a query to fetch the plan saved
+ * by worker_save_query_explain_analyze from the worker.
+ */
+static char *
+FetchPlanQueryForExplainAnalyze(const char *queryString, ParamListInfo params)
+{
+	StringInfo fetchQuery = makeStringInfo();
+
+	if (params != NULL)
+	{
+		/*
+		 * Add a dummy CTE to ensure all parameters are referenced, such that their
+		 * types can be resolved.
+		 */
+		appendStringInfo(fetchQuery, "WITH unused AS (%s) ",
+						 ParameterResolutionSubquery(params));
+	}
+
+	appendStringInfoString(fetchQuery,
+						   "SELECT explain_analyze_output, execution_duration "
+						   "FROM worker_last_saved_explain_analyze()");
+
+	return fetchQuery->data;
+}
+
+
+/*
+ * ParameterResolutionSubquery generates a subquery that returns all parameters
+ * in params with explicit casts to their type names. This can be used in cases
+ * where we use custom type parameters that are not directly referenced.
+ */
+static char *
+ParameterResolutionSubquery(ParamListInfo params)
+{
+	StringInfo paramsQuery = makeStringInfo();
+
+	appendStringInfo(paramsQuery, "SELECT");
+
+	for (int paramIndex = 0; paramIndex < params->numParams; paramIndex++)
+	{
+		ParamExternData *param = &params->params[paramIndex];
+		char *typeName = format_type_extended(param->ptype, -1,
+											  FORMAT_TYPE_FORCE_QUALIFY);
+
+		appendStringInfo(paramsQuery, "%s $%d::%s",
+						 paramIndex > 0 ? "," : "",
+						 paramIndex + 1, typeName);
+	}
+
+	return paramsQuery->data;
 }
 
 
