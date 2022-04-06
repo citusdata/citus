@@ -142,8 +142,9 @@ where (select pg_catalog.array_agg(id) from sqlsmith_failures.countries)
 
 -- cleanup
 DROP SCHEMA sqlsmith_failures CASCADE;
-NOTICE:  drop cascades to 6 other objects
+NOTICE:  drop cascades to 7 other objects
 DETAIL:  drop cascades to table countries
+drop cascades to table countries_1280000
 drop cascades to table orgs
 drop cascades to table users
 drop cascades to table orders

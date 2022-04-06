@@ -438,6 +438,9 @@ CREATE VIEW replication_test_table_placements_per_node AS
     AND shardstate != 4
     GROUP BY nodename, nodeport
     ORDER BY nodename, nodeport;
+WARNING:  "view replication_test_table_placements_per_node" has dependency to "table replication_test_table" that is not in Citus' metadata
+DETAIL:  "view replication_test_table_placements_per_node" will be created only locally
+HINT:  Distribute "table replication_test_table" first to distribute "view replication_test_table_placements_per_node"
 -- Create four shards with replication factor 2, and delete the placements
 -- with smaller port number to simulate under-replicated shards.
 SELECT count(master_create_empty_shard('replication_test_table'))
