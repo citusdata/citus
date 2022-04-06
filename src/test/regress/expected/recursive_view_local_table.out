@@ -12,6 +12,9 @@ CREATE RECURSIVE VIEW recursive_view(val_1, val_2) AS
 	WHERE val_2 < 50
 );
 CREATE RECURSIVE VIEW recursive_defined_non_recursive_view(c) AS (SELECT 1 FROM local_table);
+WARNING:  "view recursive_defined_non_recursive_view" has dependency to "table local_table" that is not in Citus' metadata
+DETAIL:  "view recursive_defined_non_recursive_view" will be created only locally
+HINT:  Distribute "table local_table" first to distribute "view recursive_defined_non_recursive_view"
 CREATE TABLE ref_table(a int, b INT);
 SELECT create_reference_table('ref_table');
  create_reference_table

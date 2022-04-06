@@ -110,6 +110,7 @@ WHERE
 SET search_path TO recursive_dml_queries_mx, public;
 CREATE TABLE recursive_dml_queries_mx.local_table (id text, name text);
 INSERT INTO local_table SELECT i::text, 'user_' || i FROM generate_series (0, 100) i;
+SET citus.enable_ddl_propagation TO OFF;
 CREATE VIEW tenant_ids AS
 	SELECT
 		tenant_id, name
@@ -118,6 +119,7 @@ CREATE VIEW tenant_ids AS
 	WHERE
 		distributed_table.dept::text = reference_table.id
 	ORDER BY 2 DESC, 1 DESC;
+RESET citus.enable_ddl_propagation;
 -- we currently do not allow local tables in modification queries
 UPDATE
 	distributed_table

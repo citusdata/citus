@@ -408,4 +408,5 @@ JOIN
 USING
 	(id);
 
+SET client_min_messages TO ERROR;
 DROP SCHEMA local_dist_join_mixed CASCADE;

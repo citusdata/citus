@@ -420,6 +420,7 @@ ErrorIfCurrentUserCanNotDistributeObject(ObjectType type, ObjectAddress *addr,
 		case OBJECT_TABLE:
 		case OBJECT_EXTENSION:
 		case OBJECT_COLLATION:
+		case OBJECT_VIEW:
 		{
 			check_object_ownership(userId, type, *addr, node, *relation);
 			break;

@@ -52,22 +52,6 @@ WHERE n.nspname IN ('drop_partitioned_table', 'schema1')
     AND c.relkind IN ('r','p')
 ORDER BY 1, 2;
 
-\c - - - :worker_1_port
-SET search_path = drop_partitioned_table;
-CREATE VIEW tables_info AS
-SELECT n.nspname as "Schema",
-    c.relname as "Name",
-    CASE c.relkind WHEN 'r' THEN 'table' WHEN 'p' THEN 'partitioned table' END as "Type",
-    pg_catalog.pg_get_userbyid(c.relowner) as "Owner"
-FROM pg_catalog.pg_class c
-    LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-    LEFT JOIN pg_user u ON u.usesysid = c.relowner
-WHERE n.nspname IN ('drop_partitioned_table', 'schema1')
-    AND c.relkind IN ('r','p')
-ORDER BY 1, 2;
-
-\c - - - :master_port
-SET search_path = drop_partitioned_table;
 SET citus.next_shard_id TO 721000;
 
 -- CASE 1
