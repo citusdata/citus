@@ -162,6 +162,7 @@ static bool FollowAllDependencies(ObjectAddressCollector *collector,
 								  DependencyDefinition *definition);
 static void ApplyAddToDependencyList(ObjectAddressCollector *collector,
 									 DependencyDefinition *definition);
+static List * GetRelationRuleReferenceDependencyList(Oid relationId);
 static List * ExpandCitusSupportedTypes(ObjectAddressCollector *collector,
 										ObjectAddress target);
 static ViewDependencyNode * BuildViewDependencyGraph(Oid relationId, HTAB *nodeMap);
@@ -422,7 +423,7 @@ DependencyDefinitionFromPgDepend(ObjectAddress target)
 
 
 /*
- * DependencyDefinitionFromPgDepend loads all pg_shdepend records describing the
+ * DependencyDefinitionFromPgShDepend loads all pg_shdepend records describing the
  * dependencies of target.
  */
 static List *
@@ -734,7 +735,8 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 				relKind == RELKIND_FOREIGN_TABLE ||
 				relKind == RELKIND_SEQUENCE ||
 				relKind == RELKIND_INDEX ||
-				relKind == RELKIND_PARTITIONED_INDEX)
+				relKind == RELKIND_PARTITIONED_INDEX ||
+				relKind == RELKIND_VIEW)
 			{
 				return true;
 			}
@@ -1275,9 +1277,18 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			 * create all objects required by the indices before we create the table
 			 * including indices.
 			 */
-
 			List *indexDependencyList = GetRelationIndicesDependencyList(relationId);
 			result = list_concat(result, indexDependencyList);
+
+			/*
+			 * Get the dependencies of the rule for the given relation. PG keeps internal
+			 * dependency between relation and rule. As it is stated on the PG doc, if
+			 * there is an internal dependency, NORMAL and AUTO dependencies of the
+			 * dependent object behave much like they were dependencies of the referenced
+			 * object.
+			 */
+			List *ruleRefDepList = GetRelationRuleReferenceDependencyList(relationId);
+			result = list_concat(result, ruleRefDepList);
 		}
 
 		default:
@@ -1287,6 +1298,57 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 		}
 	}
 	return result;
+}
+
+
+/*
+ * GetRelationRuleReferenceDependencyList returns the dependencies of the relation's
+ * internal rule dependencies.
+ */
+static List *
+GetRelationRuleReferenceDependencyList(Oid relationId)
+{
+	List *dependencyTupleList = GetPgDependTuplesForDependingObjects(RelationRelationId,
+																	 relationId);
+	List *nonInternalRuleDependencies = NIL;
+
+	HeapTuple depTup = NULL;
+	foreach_ptr(depTup, dependencyTupleList)
+	{
+		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
+
+		/*
+		 * Dependencies of the internal rule dependency should be handled as the dependency
+		 * of referenced object.
+		 */
+		if (pg_depend->deptype == DEPENDENCY_INTERNAL && pg_depend->classid ==
+			RewriteRelationId)
+		{
+			ObjectAddress ruleAddress = { 0 };
+			ObjectAddressSet(ruleAddress, RewriteRelationId, pg_depend->objid);
+
+			/* Expand results with the noninternal dependencies of it */
+			List *ruleDependencies = DependencyDefinitionFromPgDepend(ruleAddress);
+
+			DependencyDefinition *dependencyDefinition = NULL;
+			foreach_ptr(dependencyDefinition, ruleDependencies)
+			{
+				/* Do not add internal dependencies and relation itself */
+				if (dependencyDefinition->data.pg_depend.deptype == DEPENDENCY_INTERNAL ||
+					(dependencyDefinition->data.pg_depend.refclassid ==
+					 RelationRelationId &&
+					 dependencyDefinition->data.pg_depend.refobjid == relationId))
+				{
+					continue;
+				}
+
+				nonInternalRuleDependencies = lappend(nonInternalRuleDependencies,
+													  dependencyDefinition);
+			}
+		}
+	}
+
+	return nonInternalRuleDependencies;
 }
 
 

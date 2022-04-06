@@ -624,6 +624,16 @@ extern void UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 /* vacuum.c - forward declarations */
 extern void PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
 
+/* view.c - forward declarations */
+extern List * PreprocessViewStmt(Node *node, const char *queryString,
+								 ProcessUtilityContext processUtilityContext);
+extern List * PostprocessViewStmt(Node *node, const char *queryString);
+extern ObjectAddress ViewStmtObjectAddress(Node *node, bool missing_ok);
+extern List * PreprocessDropViewStmt(Node *node, const char *queryString,
+									 ProcessUtilityContext processUtilityContext);
+extern char * DeparseViewStmt(Node *node);
+extern char * DeparseDropViewStmt(Node *node);
+
 /* trigger.c - forward declarations */
 extern List * GetExplicitTriggerCommandList(Oid relationId);
 extern HeapTuple GetTriggerTupleById(Oid triggerId, bool missingOk);

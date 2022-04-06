@@ -121,6 +121,8 @@ extern void QualifyCreateEnumStmt(Node *stmt);
 extern void QualifyAlterTypeSchemaStmt(Node *stmt);
 extern void QualifyAlterTypeOwnerStmt(Node *stmt);
 
+extern void QualifyDropViewStmt(Node *node);
+
 extern ObjectAddress GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok);
 extern ObjectAddress RenameAttributeStmtObjectAddress(Node *stmt, bool missing_ok);
 
