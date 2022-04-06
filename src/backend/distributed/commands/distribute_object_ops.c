@@ -197,6 +197,14 @@ static DistributeObjectOps Any_CreateFunction = {
 	.address = CreateFunctionStmtObjectAddress,
 	.markDistributed = true,
 };
+static DistributeObjectOps Any_View = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessViewStmt,
+	.postprocess = PostprocessViewStmt,
+	.address = ViewStmtObjectAddress,
+	.markDistributed = true,
+};
 static DistributeObjectOps Any_CreatePolicy = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -466,6 +474,14 @@ static DistributeObjectOps Function_Drop = {
 	.deparse = DeparseDropFunctionStmt,
 	.qualify = NULL,
 	.preprocess = PreprocessDropDistributedObjectStmt,
+	.postprocess = NULL,
+	.address = NULL,
+	.markDistributed = false,
+};
+static DistributeObjectOps View_Drop = {
+	.deparse = DeparseDropViewStmt,
+	.qualify = QualifyDropViewStmt,
+	.preprocess = PreprocessDropViewStmt,
 	.postprocess = NULL,
 	.address = NULL,
 	.markDistributed = false,
@@ -1419,6 +1435,11 @@ GetDistributeObjectOps(Node *node)
 					return &Trigger_Drop;
 				}
 
+				case OBJECT_VIEW:
+				{
+					return &View_Drop;
+				}
+
 				default:
 				{
 					return &NoDistributeOps;
@@ -1446,6 +1467,11 @@ GetDistributeObjectOps(Node *node)
 		case T_IndexStmt:
 		{
 			return &Any_Index;
+		}
+
+		case T_ViewStmt:
+		{
+			return &Any_View;
 		}
 
 		case T_ReindexStmt:

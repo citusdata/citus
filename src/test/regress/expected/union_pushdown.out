@@ -899,6 +899,9 @@ INSERT INTO range_dist_table_2 VALUES ((10, 91));
 INSERT INTO range_dist_table_2 VALUES ((20, 100));
 -- the following can be pushed down
 CREATE OR REPLACE VIEW v2 AS SELECT * from range_dist_table_2 UNION ALL SELECT * from range_dist_table_2;
+WARNING:  "view v2" has dependency to "table range_dist_table_2" that is not in Citus' metadata
+DETAIL:  "view v2" will be created only locally
+HINT:  Distribute "table range_dist_table_2" first to distribute "view v2"
 SELECT public.explain_has_distributed_subplan($$
 EXPLAIN
 SELECT COUNT(dist_col) FROM v2;

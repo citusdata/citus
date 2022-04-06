@@ -177,7 +177,7 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
  localhost |    57638 | t       | (function,"{function_propagation_schema,func_6}",{function_propagation_schema.function_prop_table})
 (2 rows)
 
--- Views are not supported
+-- Views are supported
 CREATE VIEW function_prop_view AS SELECT * FROM function_prop_table;
 CREATE OR REPLACE FUNCTION func_7(param_1 function_prop_view)
 RETURNS int
@@ -187,8 +187,6 @@ BEGIN
     return 1;
 END;
 $$;
-WARNING:  "function func_7(function_prop_view)" has dependency on unsupported object "view function_prop_view"
-DETAIL:  "function func_7(function_prop_view)" will be created only locally
 CREATE OR REPLACE FUNCTION func_8(param_1 int)
 RETURNS function_prop_view
 LANGUAGE plpgsql AS
@@ -197,8 +195,6 @@ BEGIN
     return 1;
 END;
 $$;
-WARNING:  "function func_8(integer)" has dependency on unsupported object "view function_prop_view"
-DETAIL:  "function func_8(integer)" will be created only locally
 -- Check within transaction
 BEGIN;
     CREATE TYPE type_in_transaction AS (a int, b int);
@@ -504,7 +500,7 @@ BEGIN;
 
     ALTER TABLE table_to_dist ADD COLUMN col_1 int default function_propagation_schema.non_dist_func(NULL::non_dist_table_for_function);
 ERROR:  "table table_to_dist" has dependency to "table non_dist_table_for_function" that is not in Citus' metadata
-HINT:  Distribute "table non_dist_table_for_function" first to distribute "table table_to_dist"
+HINT:  Distribute "table non_dist_table_for_function" first to modify "table table_to_dist" on worker nodes
 ROLLBACK;
 -- Adding multiple columns with default values should propagate the function
 BEGIN;

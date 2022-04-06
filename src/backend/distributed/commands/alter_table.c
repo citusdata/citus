@@ -215,6 +215,9 @@ PG_FUNCTION_INFO_V1(alter_distributed_table);
 PG_FUNCTION_INFO_V1(alter_table_set_access_method);
 PG_FUNCTION_INFO_V1(worker_change_sequence_dependency);
 
+/* global variable keeping track of whether we are in a table type conversion function */
+bool InTableTypeConversionFunctionCall = false;
+
 
 /*
  * undistribute_table gets a distributed table name and
@@ -503,10 +506,16 @@ AlterTableSetAccessMethod(TableConversionParameters *params)
  *
  * The function returns a TableConversionReturn object that can stores variables that
  * can be used at the caller operations.
+ *
+ * To be able to provide more meaningful messages while converting a table type,
+ * Citus keeps InTableTypeConversionFunctionCall flag. Don't forget to set it properly
+ * in case you add a new way to return from this function.
  */
 TableConversionReturn *
 ConvertTable(TableConversionState *con)
 {
+	InTableTypeConversionFunctionCall = true;
+
 	/*
 	 * We undistribute citus local tables that are not chained with any reference
 	 * tables via foreign keys at the end of the utility hook.
@@ -535,6 +544,7 @@ ConvertTable(TableConversionState *con)
 		 * subgraph including itself, so return here.
 		 */
 		SetLocalEnableLocalReferenceForeignKeys(oldEnableLocalReferenceForeignKeys);
+		InTableTypeConversionFunctionCall = false;
 		return NULL;
 	}
 	char *newAccessMethod = con->accessMethod ? con->accessMethod :
@@ -819,6 +829,7 @@ ConvertTable(TableConversionState *con)
 
 	SetLocalEnableLocalReferenceForeignKeys(oldEnableLocalReferenceForeignKeys);
 
+	InTableTypeConversionFunctionCall = false;
 	return ret;
 }
 

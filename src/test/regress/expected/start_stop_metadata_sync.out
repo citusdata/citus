@@ -141,7 +141,6 @@ SELECT * FROM distributed_table_1;
 ---------------------------------------------------------------------
 (0 rows)
 
-CREATE VIEW test_view AS SELECT COUNT(*) FROM distributed_table_3;
 CREATE MATERIALIZED VIEW test_matview AS SELECT COUNT(*) FROM distributed_table_3;
 SELECT * FROM test_view;
  count

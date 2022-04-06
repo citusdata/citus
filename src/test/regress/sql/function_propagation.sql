@@ -101,7 +101,7 @@ $$;
 SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_6'::regproc::oid;
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_6'::regproc::oid;$$) ORDER BY 1,2;
 
--- Views are not supported
+-- Views are supported
 CREATE VIEW function_prop_view AS SELECT * FROM function_prop_table;
 CREATE OR REPLACE FUNCTION func_7(param_1 function_prop_view)
 RETURNS int

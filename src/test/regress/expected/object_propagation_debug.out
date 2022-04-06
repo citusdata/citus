@@ -50,8 +50,9 @@ ON TRUE
 ---------------------------------------------------------------------
  ("composite type","""object prop""",t1,"""object prop"".t1")
  (schema,,"""object prop""","""object prop""")
+ (table,"""object prop""",test,"""object prop"".test")
  (type,"""object prop""",t1,"""object prop"".t1")
-(3 rows)
+(4 rows)
 
 -- find all the dependencies of type t1
 SELECT

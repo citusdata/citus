@@ -324,6 +324,7 @@ test: distributed_collations
 test: distributed_procedure
 test: distributed_collations_conflict
 test: function_propagation
+test: view_propagation
 test: check_mx
 
 # ---------
