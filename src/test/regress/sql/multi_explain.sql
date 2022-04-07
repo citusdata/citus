@@ -1090,5 +1090,13 @@ SELECT create_distributed_table('tbl', 'a');
 
 EXPLAIN :default_analyze_flags SELECT * FROM tbl;
 
+PREPARE q1(int_wrapper_type) AS WITH a AS (SELECT * FROM tbl WHERE b = $1 AND a = 1 OFFSET 0) SELECT * FROM a;
+EXPLAIN (COSTS false) EXECUTE q1('(1)');
+EXPLAIN :default_analyze_flags EXECUTE q1('(1)');
+
+PREPARE q2(int_wrapper_type) AS WITH a AS (UPDATE tbl SET b = $1 WHERE a = 1 RETURNING *) SELECT * FROM a;
+EXPLAIN (COSTS false) EXECUTE q2('(1)');
+EXPLAIN :default_analyze_flags EXECUTE q2('(1)');
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_explain CASCADE;
