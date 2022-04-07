@@ -31,6 +31,9 @@
 /* A string containing the version number, platform, and C compiler */
 #undef CITUS_VERSION_STR
 
+/* Define to 1 to build with lz4 support. (--with-lz4) */
+#undef HAVE_CITUS_LIBLZ4
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
@@ -38,7 +41,7 @@
 #undef HAVE_LIBCURL
 
 /* Define to 1 if you have the `lz4' library (-llz4). */
-#undef HAVE_CITUS_LIBLZ4
+#undef HAVE_LIBLZ4
 
 /* Define to 1 if you have the `zstd' library (-lzstd). */
 #undef HAVE_LIBZSTD

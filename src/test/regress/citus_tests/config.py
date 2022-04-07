@@ -38,7 +38,7 @@ CITUS_ARBITRARY_TEST_DIR = "./tmp_citus_test"
 
 MASTER = "master"
 # This should be updated when citus version changes
-MASTER_VERSION = "11.0"
+MASTER_VERSION = "11.1"
 
 HOME = expanduser("~")
 
@@ -264,7 +264,6 @@ class CitusUnusualExecutorConfig(CitusDefaultClusterConfig):
             "citus.max_cached_connection_lifetime": "10ms",
             # https://github.com/citusdata/citus/issues/5345
             # "citus.force_max_query_parallelization": "on",
-            "citus.binary_worker_copy_format": False,
             "citus.enable_binary_protocol": False,
             "citus.local_table_join_policy": "prefer-distributed",
         }

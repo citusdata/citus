@@ -77,6 +77,7 @@
 
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
+#include "distributed/utils/directory.h"
 #include "distributed/worker_log_messages.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
@@ -432,12 +433,12 @@ _PG_init(void)
 /*
  * DoInitialCleanup does cleanup at start time.
  * Currently it:
- * - Removes repartition directories ( in case there are any leftovers)
+ * - Removes intermediate result directories ( in case there are any leftovers)
  */
 static void
 DoInitialCleanup(void)
 {
-	RepartitionCleanupJobDirectories();
+	CleanupJobCacheDirectory();
 }
 
 
@@ -666,22 +667,6 @@ RegisterCitusConfigVariables(void)
 		&AllowModificationsFromWorkersToReplicatedTables,
 		true,
 		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		"citus.binary_worker_copy_format",
-		gettext_noop("Use the binary worker copy format."),
-		gettext_noop("When enabled, data is copied from workers to workers "
-					 "in PostgreSQL's binary serialization format when "
-					 "joining large tables."),
-		&BinaryWorkerCopyFormat,
-#if PG_VERSION_NUM >= PG_VERSION_14
-		true,
-#else
-		false,
-#endif
-		PGC_SIGHUP,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
@@ -1575,20 +1560,6 @@ RegisterCitusConfigVariables(void)
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.partition_buffer_size",
-		gettext_noop("Sets the buffer size to use for partition operations."),
-		gettext_noop("Worker nodes allow for table data to be repartitioned "
-					 "into multiple text files, much like Hadoop's Map "
-					 "command. This configuration value sets the buffer size "
-					 "to use per partition operation. After the buffer fills "
-					 "up, we flush the repartitioned data into text files."),
-		&PartitionBufferSize,
-		8192, 0, (INT_MAX / 1024), /* result stored in int variable */
-		PGC_USERSET,
-		GUC_UNIT_KB | GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

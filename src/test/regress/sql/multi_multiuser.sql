@@ -77,12 +77,6 @@ SET citus.shard_replication_factor TO 1;
 PREPARE prepare_insert AS INSERT INTO test VALUES ($1);
 PREPARE prepare_select AS SELECT count(*) FROM test;
 
--- not allowed to read absolute paths, even as superuser
-COPY "/etc/passwd" TO STDOUT WITH (format transmit);
-
--- not allowed to read paths outside pgsql_job_cache, even as superuser
-COPY "postgresql.conf" TO STDOUT WITH (format transmit);
-
 -- check full permission
 SET ROLE full_access;
 
@@ -101,13 +95,6 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
 
 SET citus.enable_repartition_joins TO true;
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
-
--- should not be able to transmit directly
-COPY "postgresql.conf" TO STDOUT WITH (format transmit);
-
-
--- should not be able to transmit directly
-COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 
 -- check read permission
 SET ROLE read_access;
@@ -132,9 +119,6 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
 
 SET citus.enable_repartition_joins TO true;
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
-
--- should not be able to transmit directly
-COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 
 -- should not be allowed to take aggressive locks on table
 BEGIN;
@@ -198,10 +182,6 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
 
 SET citus.enable_repartition_joins TO true;
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
-
--- should not be able to transmit directly
-COPY "postgresql.conf" TO STDOUT WITH (format transmit);
-
 
 -- should be able to use intermediate results as any user
 BEGIN;
@@ -355,50 +335,7 @@ CREATE TABLE full_access_user_schema.t2(id int);
 SELECT create_distributed_table('full_access_user_schema.t2', 'id');
 RESET ROLE;
 
--- super user should be the only one being able to call worker_cleanup_job_schema_cache
-SELECT worker_cleanup_job_schema_cache();
-SET ROLE full_access;
-SELECT worker_cleanup_job_schema_cache();
-SET ROLE usage_access;
-SELECT worker_cleanup_job_schema_cache();
-SET ROLE read_access;
-SELECT worker_cleanup_job_schema_cache();
-SET ROLE no_access;
-SELECT worker_cleanup_job_schema_cache();
-RESET ROLE;
-
--- to test access to files created during repartition we will create some on worker 1
-\c - - - :worker_1_port
-SET citus.enable_metadata_sync TO OFF;
-CREATE OR REPLACE FUNCTION citus_rm_job_directory(bigint)
-	RETURNS void
-	AS 'citus'
-	LANGUAGE C STRICT;
-RESET citus.enable_metadata_sync;
-SET ROLE full_access;
-SELECT worker_hash_partition_table(42,1,'SELECT a FROM generate_series(1,100) AS a', 'a', 23, ARRAY[-2147483648, -1073741824, 0, 1073741824]::int4[]);
-RESET ROLE;
--- all attempts for transfer are initiated from other workers
-
 \c - - - :worker_2_port
-SET citus.enable_metadata_sync TO OFF;
-CREATE OR REPLACE FUNCTION citus_rm_job_directory(bigint)
-	RETURNS void
-	AS 'citus'
-	LANGUAGE C STRICT;
-RESET citus.enable_metadata_sync;
--- super user should not be able to copy files created by a user
-SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
-
--- different user should not be able to fetch partition file
-SET ROLE usage_access;
-SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
-
--- only the user whom created the files should be able to fetch
-SET ROLE full_access;
-SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
-RESET ROLE;
-
 -- non-superuser should be able to use worker_append_table_to_shard on their own shard
 SET ROLE full_access;
 CREATE TABLE full_access_user_schema.source_table (id int);
@@ -422,44 +359,6 @@ SELECT worker_append_table_to_shard('full_access_user_schema.shard_0', 'full_acc
 RESET ROLE;
 
 DROP TABLE full_access_user_schema.source_table, full_access_user_schema.shard_0;
-
--- now we will test that only the user who owns the fetched file is able to merge it into
--- a table
--- test that no other user can merge the downloaded file before the task is being tracked
-SET ROLE usage_access;
-SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
-RESET ROLE;
-
--- test that no other user can merge the downloaded file after the task is being tracked
-SET ROLE usage_access;
-SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
-RESET ROLE;
-
--- test that the super user is unable to read the contents of the intermediate file,
--- although it does create the table
-SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
-SELECT count(*) FROM pg_merge_job_0042.task_000001;
-DROP TABLE pg_merge_job_0042.task_000001; -- drop table so we can reuse the same files for more tests
-
-SET ROLE full_access;
-SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
-SELECT count(*) FROM pg_merge_job_0042.task_000001;
-DROP TABLE pg_merge_job_0042.task_000001; -- drop table so we can reuse the same files for more tests
-RESET ROLE;
-
-SELECT count(*) FROM pg_merge_job_0042.task_000001_merge;
-SELECT count(*) FROM pg_merge_job_0042.task_000001;
-DROP TABLE pg_merge_job_0042.task_000001, pg_merge_job_0042.task_000001_merge; -- drop table so we can reuse the same files for more tests
-
-SELECT count(*) FROM pg_merge_job_0042.task_000001_merge;
-SELECT count(*) FROM pg_merge_job_0042.task_000001;
-DROP TABLE pg_merge_job_0042.task_000001, pg_merge_job_0042.task_000001_merge; -- drop table so we can reuse the same files for more tests
-RESET ROLE;
-
-SELECT citus_rm_job_directory(42::bigint);
-
-\c - - - :worker_1_port
-SELECT citus_rm_job_directory(42::bigint);
 
 \c - - - :master_port
 

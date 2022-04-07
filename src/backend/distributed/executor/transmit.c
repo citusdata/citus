@@ -19,6 +19,7 @@
 #include "distributed/listutils.h"
 #include "distributed/relay_utility.h"
 #include "distributed/transmit.h"
+#include "distributed/utils/directory.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "libpq/libpq.h"
@@ -32,6 +33,7 @@ static void SendCopyOutStart(void);
 static void SendCopyDone(void);
 static void SendCopyData(StringInfo fileBuffer);
 static bool ReceiveCopyData(StringInfo copyData);
+static void FreeStringInfo(StringInfo stringInfo);
 
 
 /*
@@ -121,7 +123,7 @@ SendRegularFile(const char *filename)
 
 
 /* Helper function that deallocates string info object. */
-void
+static void
 FreeStringInfo(StringInfo stringInfo)
 {
 	resetStringInfo(stringInfo);
@@ -309,114 +311,4 @@ ReceiveCopyData(StringInfo copyData)
 	}
 
 	return copyDone;
-}
-
-
-/* Is the passed in statement a transmit statement? */
-bool
-IsTransmitStmt(Node *parsetree)
-{
-	if (IsA(parsetree, CopyStmt))
-	{
-		CopyStmt *copyStatement = (CopyStmt *) parsetree;
-
-		/* Extract options from the statement node tree */
-		DefElem *defel = NULL;
-		foreach_ptr(defel, copyStatement->options)
-		{
-			if (strncmp(defel->defname, "format", NAMEDATALEN) == 0 &&
-				strncmp(defGetString(defel), "transmit", NAMEDATALEN) == 0)
-			{
-				return true;
-			}
-		}
-	}
-
-	return false;
-}
-
-
-/*
- * TransmitStatementUser extracts the user attribute from a
- * COPY ... (format 'transmit', user '...') statement.
- */
-char *
-TransmitStatementUser(CopyStmt *copyStatement)
-{
-	AssertArg(IsTransmitStmt((Node *) copyStatement));
-
-	DefElem *lastUserDefElem = NULL;
-	DefElem *defel = NULL;
-	foreach_ptr(defel, copyStatement->options)
-	{
-		if (strncmp(defel->defname, "user", NAMEDATALEN) == 0)
-		{
-			lastUserDefElem = defel;
-		}
-	}
-
-	if (lastUserDefElem == NULL)
-	{
-		return NULL;
-	}
-
-	return defGetString(lastUserDefElem);
-}
-
-
-/*
- * VerifyTransmitStmt checks that the passed in command is a valid transmit
- * statement. Raise ERROR if not.
- *
- * Note that only 'toplevel' options in the CopyStmt struct are checked, and
- * that verification of the target files existance is not done here.
- */
-void
-VerifyTransmitStmt(CopyStmt *copyStatement)
-{
-	EnsureSuperUser();
-
-	/* do some minimal option verification */
-	if (copyStatement->relation == NULL ||
-		copyStatement->relation->relname == NULL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("FORMAT 'transmit' requires a target file")));
-	}
-
-	char *fileName = copyStatement->relation->relname;
-
-	if (is_absolute_path(fileName))
-	{
-		ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						(errmsg("absolute path not allowed"))));
-	}
-	else if (!path_is_relative_and_below_cwd(fileName))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 (errmsg("path must be in or below the current directory"))));
-	}
-	else if (!CacheDirectoryElement(fileName))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 (errmsg("path must be in the " PG_JOB_CACHE_DIR " directory"))));
-	}
-
-	if (copyStatement->filename != NULL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("FORMAT 'transmit' only accepts STDIN/STDOUT"
-							   " as input/output")));
-	}
-
-	if (copyStatement->query != NULL ||
-		copyStatement->attlist != NULL ||
-		copyStatement->is_program)
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("FORMAT 'transmit' does not accept query, attribute list"
-							   " or PROGRAM parameters ")));
-	}
 }

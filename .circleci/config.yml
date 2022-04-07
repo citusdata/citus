@@ -569,12 +569,6 @@ workflows:
           make: check-isolation
           requires: [build-13]
       - test-citus:
-          name: 'test-13_check-worker'
-          pg_major: 13
-          image_tag: '<< pipeline.parameters.pg13_version >>'
-          make: check-worker
-          requires: [build-13]
-      - test-citus:
           name: 'test-13_check-operations'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
@@ -599,7 +593,7 @@ workflows:
           make: check-columnar-isolation
           requires: [build-13]
       - tap-test-citus:
-          name: 'test_13_tap-recovery'
+          name: 'test-13_tap-recovery'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           suite: recovery
@@ -643,12 +637,6 @@ workflows:
           make: check-isolation
           requires: [build-14]
       - test-citus:
-          name: 'test-14_check-worker'
-          pg_major: 14
-          image_tag: '<< pipeline.parameters.pg14_version >>'
-          make: check-worker
-          requires: [build-14]
-      - test-citus:
           name: 'test-14_check-operations'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
@@ -673,7 +661,7 @@ workflows:
           make: check-columnar-isolation
           requires: [build-14]
       - tap-test-citus:
-          name: 'test_14_tap-recovery'
+          name: 'test-14_tap-recovery'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           suite: recovery

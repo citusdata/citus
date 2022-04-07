@@ -27,6 +27,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/tuplestore.h"
 #include "distributed/listutils.h"
+#include "distributed/utils/array_type.h"
 #include "distributed/version_compat.h"
 #include "tcop/tcopprot.h"
 

@@ -20,6 +20,7 @@
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/remote_commands.h"
+#include "distributed/utils/array_type.h"
 #include "distributed/worker_manager.h"
 #include "postmaster/postmaster.h"
 #include "miscadmin.h"

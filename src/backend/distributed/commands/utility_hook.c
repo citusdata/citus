@@ -64,7 +64,6 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
-#include "distributed/transmit.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
@@ -425,42 +424,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		{
 			PostprocessVariableSetStmt(setStmt, queryString);
 		}
-	}
-
-	/*
-	 * TRANSMIT used to be separate command, but to avoid patching the grammar
-	 * it's now overlaid onto COPY, but with FORMAT = 'transmit' instead of the
-	 * normal FORMAT options.
-	 */
-	if (IsTransmitStmt(parsetree))
-	{
-		CopyStmt *copyStatement = (CopyStmt *) parsetree;
-		char *userName = TransmitStatementUser(copyStatement);
-		bool missingOK = false;
-		StringInfo transmitPath = makeStringInfo();
-
-		VerifyTransmitStmt(copyStatement);
-
-		/* ->relation->relname is the target file in our overloaded COPY */
-		appendStringInfoString(transmitPath, copyStatement->relation->relname);
-
-		if (userName != NULL)
-		{
-			Oid userId = get_role_oid(userName, missingOK);
-			appendStringInfo(transmitPath, ".%d", userId);
-		}
-
-		if (copyStatement->is_from)
-		{
-			RedirectCopyDataToRegularFile(transmitPath->data);
-		}
-		else
-		{
-			SendRegularFile(transmitPath->data);
-		}
-
-		/* Don't execute the faux copy statement */
-		return;
 	}
 
 	if (IsA(parsetree, CopyStmt))
