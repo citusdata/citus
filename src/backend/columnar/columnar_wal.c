@@ -98,20 +98,24 @@ columnar_wal_page_overwrite(Relation rel, BlockNumber blockno, char *buf,
 	Page page = BufferGetPage(buffer);
 
 	PageHeader phdr = (PageHeader) page;
-	PageInit(page, BLCKSZ, 0);
 
-	if (len > phdr->pd_upper - phdr->pd_lower)
+	if (PageIsNew(page))
+		PageInit(page, BLCKSZ, 0);
+
+	if (len > phdr->pd_upper - SizeOfPageHeaderData)
 	{
 		elog(ERROR,
 			 "write of columnar data of length %d exceeds page size on block %d of relation %d",
 			 len, blockno, rel->rd_id);
 	}
 
-	memcpy_s(page + phdr->pd_lower, phdr->pd_upper - phdr->pd_lower, buf, len);
-	phdr->pd_lower += len;
+	memcpy_s(page + SizeOfPageHeaderData, phdr->pd_upper - SizeOfPageHeaderData, buf, len);
+	phdr->pd_lower = SizeOfPageHeaderData + len;
 
+	MarkBufferDirty(buffer);
 	XLogBeginInsert();
-	XLogRegisterBuffer(0, buffer, REGBUF_STANDARD | REGBUF_FORCE_IMAGE);
+	XLogRegisterBuffer(0, buffer, REGBUF_STANDARD);
+	XLogRegisterBufData(0, buf, len);
 	recptr = XLogInsert(RM_COLUMNAR_ID, XLOG_COLUMNAR_PAGE_OVERWRITE);
 	PageSetLSN(page, recptr);
 
@@ -228,8 +232,24 @@ columnar_redo_page_overwrite(XLogReaderState *record)
 
 	XLogRedoAction action = XLogReadBufferForRedo(record, 0, &buffer);
 
-	/* full page image is forced, no redo necessary */
-	Assert(action != BLK_NEEDS_REDO);
+	if (action == BLK_NEEDS_REDO)
+	{
+		XLogRecPtr	 lsn  = record->EndRecPtr;
+		Page		 page = BufferGetPage(buffer);
+		PageHeader	 phdr = (PageHeader) page;
+		Size		 datalen;
+		char		*data = XLogRecGetBlockData(record, 0, &datalen);
+
+		PageInit(page, BLCKSZ, 0);
+
+		memcpy_s(page + phdr->pd_lower, phdr->pd_upper - phdr->pd_lower,
+				 data, datalen);
+		phdr->pd_lower += datalen;
+
+		PageSetLSN(page, lsn);
+
+		MarkBufferDirty(buffer);
+	}
 
 	if (BufferIsValid(buffer))
 		UnlockReleaseBuffer(buffer);
