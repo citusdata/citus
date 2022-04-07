@@ -1,3 +1,4 @@
+\set VERBOSITY terse
 CREATE SCHEMA function_create;
 SET search_path TO function_create;
 
