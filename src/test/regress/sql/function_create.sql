@@ -72,14 +72,6 @@ ALTER FUNCTION eq(macaddr,macaddr) SET search_path TO 'sch'';ma', public;
 SELECT verify_function_is_same_on_workers('function_create.eq(macaddr,macaddr)');
 ALTER FUNCTION eq(macaddr,macaddr) RESET search_path;
 
--- SET ... FROM CURRENT is not supported, verify the query fails with a descriptive error irregardless of where in the action list the statement occurs
-ALTER FUNCTION eq(macaddr,macaddr) SET client_min_messages FROM CURRENT;
-SELECT verify_function_is_same_on_workers('function_create.eq(macaddr,macaddr)');
-ALTER FUNCTION eq(macaddr,macaddr) RETURNS NULL ON NULL INPUT SET client_min_messages FROM CURRENT;
-SELECT verify_function_is_same_on_workers('function_create.eq(macaddr,macaddr)');
-ALTER FUNCTION eq(macaddr,macaddr) SET client_min_messages FROM CURRENT SECURITY DEFINER;
-SELECT verify_function_is_same_on_workers('function_create.eq(macaddr,macaddr)');
-
 -- rename function and make sure the new name can be used on the workers
 ALTER FUNCTION eq(macaddr,macaddr) RENAME TO eq2;
 SELECT verify_function_is_same_on_workers('function_create.eq2(macaddr,macaddr)');
