@@ -316,6 +316,8 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 			es->indent += 3;
 		}
 
+		ExplainOpenGroup("Subplan", NULL, true, es);
+
 		if (es->analyze)
 		{
 			if (es->timing)
@@ -358,8 +360,13 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		}
 		#endif
 
+		ExplainOpenGroup("PlannedStmt", "PlannedStmt", false, es);
+
 		ExplainOnePlanCompat(plan, into, es, queryString, params, NULL, &planduration,
 							 (es->buffers ? &bufusage : NULL));
+
+		ExplainCloseGroup("PlannedStmt", "PlannedStmt", false, es);
+		ExplainCloseGroup("Subplan", NULL, true, es);
 
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 		{
