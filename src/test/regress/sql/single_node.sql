@@ -13,9 +13,15 @@ ALTER SYSTEM SET citus.max_cached_conns_per_worker TO 0;
 -- adding the coordinator as inactive is disallowed
 SELECT 1 FROM master_add_inactive_node('localhost', :master_port, groupid => 0);
 
+-- before adding a node we are not officially a coordinator
+SELECT citus_is_coordinator();
+
 -- idempotently add node to allow this test to run without add_coordinator
 SET client_min_messages TO WARNING;
 SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
+
+-- after adding a node we are officially a coordinator
+SELECT citus_is_coordinator();
 
 -- coordinator cannot be disabled
 SELECT 1 FROM citus_disable_node('localhost', :master_port);

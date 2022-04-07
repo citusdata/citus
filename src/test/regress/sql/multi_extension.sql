@@ -459,6 +459,10 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '11.0-1';
 SELECT * FROM multi_extension.print_extension_changes();
 
+-- Snapshot of state at 11.0-2
+ALTER EXTENSION citus UPDATE TO '11.0-2';
+SELECT * FROM multi_extension.print_extension_changes();
+
 -- Snapshot of state at 11.1-1
 ALTER EXTENSION citus UPDATE TO '11.1-1';
 SELECT * FROM multi_extension.print_extension_changes();

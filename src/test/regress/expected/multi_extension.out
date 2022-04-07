@@ -1031,6 +1031,14 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                       | view citus_stat_activity
 (41 rows)
 
+-- Snapshot of state at 11.0-2
+ALTER EXTENSION citus UPDATE TO '11.0-2';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object |             current_object
+---------------------------------------------------------------------
+                 | function citus_is_coordinator() boolean
+(1 row)
+
 -- Snapshot of state at 11.1-1
 ALTER EXTENSION citus UPDATE TO '11.1-1';
 SELECT * FROM multi_extension.print_extension_changes();

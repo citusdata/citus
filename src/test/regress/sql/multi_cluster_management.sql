@@ -8,6 +8,11 @@ ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1;
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
+-- I am coordinator
+SELECT citus_is_coordinator();
+-- workers are not coordinator
+SELECT result FROM run_command_on_workers('SELECT citus_is_coordinator()');
+
 -- get the active nodes
 SELECT master_get_active_worker_nodes();
 
