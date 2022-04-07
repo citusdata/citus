@@ -15,6 +15,7 @@
 #include "commands/defrem.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
+#include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
@@ -24,7 +25,6 @@
 static void AddQualifiedViewNameToCreateViewCommand(StringInfo buf, Oid viewOid);
 static void AddAliasesToCreateViewCommand(StringInfo buf, ViewStmt *stmt);
 static void AddOptionsToCreateViewCommand(StringInfo buf, ViewStmt *stmt);
-static void AddViewDefinitionToCreateViewCommand(StringInfo buf, Oid viewOid);
 static void AppendDropViewStmt(StringInfo buf, DropStmt *stmt);
 static void AppendViewNameList(StringInfo buf, List *objects);
 
@@ -54,13 +54,18 @@ DeparseViewStmt(Node *node)
 		appendStringInfoString(viewString, "TEMPORARY ");
 	}
 
-	/* Skip recursive views for now */
-
 	appendStringInfo(viewString, "VIEW ");
 
 	AddQualifiedViewNameToCreateViewCommand(viewString, viewOid);
 	AddAliasesToCreateViewCommand(viewString, stmt);
 	AddOptionsToCreateViewCommand(viewString, stmt);
+
+	/*
+	 * Note that Postgres converts CREATE RECURSIVE VIEW commands to
+	 * CREATE VIEW ... WITH RECURSIVE and pg_get_viewdef return it properly.
+	 * So, we don't need to RECURSIVE views separately while obtaining the
+	 * view creation command
+	 */
 	AddViewDefinitionToCreateViewCommand(viewString, viewOid);
 
 	return viewString->data;
@@ -159,7 +164,7 @@ AddOptionsToCreateViewCommand(StringInfo buf, ViewStmt *stmt)
  * AddViewDefinitionToCreateViewCommand adds the definition of the given view to the
  * given create view command.
  */
-static void
+void
 AddViewDefinitionToCreateViewCommand(StringInfo buf, Oid viewOid)
 {
 	/*

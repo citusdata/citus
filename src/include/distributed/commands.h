@@ -631,6 +631,7 @@ extern List * PostprocessViewStmt(Node *node, const char *queryString);
 extern ObjectAddress ViewStmtObjectAddress(Node *node, bool missing_ok);
 extern List * PreprocessDropViewStmt(Node *node, const char *queryString,
 									 ProcessUtilityContext processUtilityContext);
+extern List * CreateViewDDLCommandsIdempotent(const ObjectAddress *viewAddress);
 extern char * DeparseViewStmt(Node *node);
 extern char * DeparseDropViewStmt(Node *node);
 

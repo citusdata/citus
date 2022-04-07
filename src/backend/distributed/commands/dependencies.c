@@ -349,6 +349,11 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 				return DDLCommandsForSequence(dependency->objectId, sequenceOwnerName);
 			}
 
+			if (relKind == RELKIND_VIEW)
+			{
+				return CreateViewDDLCommandsIdempotent(dependency);
+			}
+
 			/* if this relation is not supported, break to the error at the end */
 			break;
 		}

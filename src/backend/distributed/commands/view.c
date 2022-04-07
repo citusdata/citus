@@ -11,9 +11,11 @@
 #include "postgres.h"
 #include "fmgr.h"
 
+#include "access/genam.h"
 #include "catalog/objectaddress.h"
 #include "commands/extension.h"
 #include "distributed/commands.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
 #include "distributed/errormessage.h"
@@ -29,10 +31,13 @@
 #include "nodes/pg_list.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
 static List * FilterNameListForDistributedViews(List *viewNamesList, bool missing_ok);
+static void AppendAliasesToCreateViewCommandForExistingView(StringInfo createViewCommand,
+															Oid viewOid);
 
 /*
  * PreprocessViewStmt is called during the planning phase for CREATE OR REPLACE VIEW
@@ -232,4 +237,106 @@ FilterNameListForDistributedViews(List *viewNamesList, bool missing_ok)
 		}
 	}
 	return distributedViewNames;
+}
+
+
+/*
+ * CreateViewDDLCommandsIdempotent returns a list of DDL statements (const char *) to be
+ * executed on a node to recreate the view addressed by the viewAddress.
+ */
+List *
+CreateViewDDLCommandsIdempotent(const ObjectAddress *viewAddress)
+{
+	StringInfo createViewCommand = makeStringInfo();
+
+	Oid viewOid = viewAddress->objectId;
+
+	char *viewName = get_rel_name(viewOid);
+	Oid schemaOid = get_rel_namespace(viewOid);
+	char *schemaName = get_namespace_name(schemaOid);
+
+	appendStringInfoString(createViewCommand, "CREATE OR REPLACE VIEW ");
+	char *qualifiedViewName = NameListToQuotedString(list_make2(makeString(schemaName),
+																makeString(viewName)));
+
+	appendStringInfo(createViewCommand, "%s ", qualifiedViewName);
+
+	/* Add column aliases to create view command */
+	AppendAliasesToCreateViewCommandForExistingView(createViewCommand, viewOid);
+
+	/* Add rel options to create view command */
+	char *relOptions = flatten_reloptions(viewOid);
+	if (relOptions != NULL)
+	{
+		appendStringInfo(createViewCommand, "WITH (%s) ", relOptions);
+		pfree(relOptions);
+	}
+
+	/* Add view definition to create view command */
+	AddViewDefinitionToCreateViewCommand(createViewCommand, viewOid);
+
+	/* Add alter owner commmand */
+	StringInfo alterOwnerCommand = makeStringInfo();
+	char *viewOwnerName = TableOwner(viewOid);
+	appendStringInfo(alterOwnerCommand,
+					 "ALTER VIEW %s OWNER TO %s", qualifiedViewName,
+					 quote_identifier(viewOwnerName));
+
+	return list_make2(createViewCommand->data,
+					  alterOwnerCommand->data);
+}
+
+
+/*
+ * AppendAliasesToCreateViewCommandForExistingView appends aliases to the create view
+ * command for the existing view.
+ */
+static void
+AppendAliasesToCreateViewCommandForExistingView(StringInfo createViewCommand, Oid viewOid)
+{
+	/* Get column name aliases from pg_attribute */
+	ScanKeyData key[1];
+	ScanKeyInit(&key[0],
+				Anum_pg_attribute_attrelid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(viewOid));
+
+	/* TODO: Check the lock */
+	Relation maprel = table_open(AttributeRelationId, AccessShareLock);
+	Relation mapidx = index_open(AttributeRelidNumIndexId, AccessShareLock);
+	SysScanDesc pgAttributeScan = systable_beginscan_ordered(maprel, mapidx, NULL, 1,
+															 key);
+
+	bool isInitialAlias = true;
+	bool hasAlias = false;
+	HeapTuple attributeTuple;
+	while (HeapTupleIsValid(attributeTuple = systable_getnext_ordered(pgAttributeScan,
+																	  ForwardScanDirection)))
+	{
+		Form_pg_attribute att = (Form_pg_attribute) GETSTRUCT(attributeTuple);
+		char *aliasName = NameStr(att->attname);
+
+		if (isInitialAlias)
+		{
+			appendStringInfoString(createViewCommand, "(");
+		}
+		else
+		{
+			appendStringInfoString(createViewCommand, ",");
+		}
+
+		appendStringInfoString(createViewCommand, aliasName);
+
+		hasAlias = true;
+		isInitialAlias = false;
+	}
+
+	if (hasAlias)
+	{
+		appendStringInfoString(createViewCommand, ") ");
+	}
+
+	systable_endscan_ordered(pgAttributeScan);
+	index_close(mapidx, AccessShareLock);
+	table_close(maprel, AccessShareLock);
 }

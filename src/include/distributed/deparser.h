@@ -122,6 +122,7 @@ extern void QualifyAlterTypeSchemaStmt(Node *stmt);
 extern void QualifyAlterTypeOwnerStmt(Node *stmt);
 
 extern void QualifyDropViewStmt(Node *node);
+extern void AddViewDefinitionToCreateViewCommand(StringInfo buf, Oid viewOid);
 
 extern ObjectAddress GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok);
 extern ObjectAddress RenameAttributeStmtObjectAddress(Node *stmt, bool missing_ok);

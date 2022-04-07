@@ -1330,20 +1330,19 @@ GetRelationRuleReferenceDependencyList(Oid relationId)
 			/* Expand results with the noninternal dependencies of it */
 			List *ruleDependencies = DependencyDefinitionFromPgDepend(ruleAddress);
 
-			DependencyDefinition *dependencyDefinition = NULL;
+			DependencyDefinition *dependencyDef = NULL;
 			foreach_ptr(dependencyDefinition, ruleDependencies)
 			{
 				/* Do not add internal dependencies and relation itself */
-				if (dependencyDefinition->data.pg_depend.deptype == DEPENDENCY_INTERNAL ||
-					(dependencyDefinition->data.pg_depend.refclassid ==
-					 RelationRelationId &&
-					 dependencyDefinition->data.pg_depend.refobjid == relationId))
+				if (dependencyDef->data.pg_depend.deptype == DEPENDENCY_INTERNAL ||
+					(dependencyDef->data.pg_depend.refclassid == RelationRelationId &&
+					 dependencyDef->data.pg_depend.refobjid == relationId))
 				{
 					continue;
 				}
 
 				nonInternalRuleDependencies = lappend(nonInternalRuleDependencies,
-													  dependencyDefinition);
+													  dependencyDef);
 			}
 		}
 	}
