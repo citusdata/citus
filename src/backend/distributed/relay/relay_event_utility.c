@@ -158,7 +158,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 												  AccessShareLock,
 												  missingOk);
 
-					if (constraint->contype == CONSTR_PRIMARY && constraint->indexname)
+					if (constraint->indexname)
 					{
 						char **indexName = &(constraint->indexname);
 						AppendShardIdToName(indexName, shardId);
