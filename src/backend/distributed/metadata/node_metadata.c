@@ -150,6 +150,7 @@ PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
 PG_FUNCTION_INFO_V1(citus_nodename_for_nodeid);
 PG_FUNCTION_INFO_V1(citus_nodeport_for_nodeid);
 PG_FUNCTION_INFO_V1(citus_coordinator_nodeid);
+PG_FUNCTION_INFO_V1(citus_is_coordinator);
 
 
 /*
@@ -1555,6 +1556,29 @@ citus_coordinator_nodeid(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_INT32(coordinatorNodeId);
+}
+
+
+/*
+ * citus_is_coordinator returns whether the current node is a coordinator.
+ * We consider the node a coordinator if its group ID is 0 and it has
+ * pg_dist_node entries (only group ID 0 could indicate a worker without
+ * metadata).
+ */
+Datum
+citus_is_coordinator(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	bool isCoordinator = false;
+
+	if (GetLocalGroupId() == COORDINATOR_GROUP_ID &&
+		ActivePrimaryNodeCount() > 0)
+	{
+		isCoordinator = true;
+	}
+
+	PG_RETURN_BOOL(isCoordinator);
 }
 
 
