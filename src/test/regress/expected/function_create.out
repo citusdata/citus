@@ -71,8 +71,7 @@ SELECT verify_function_is_same_on_workers('function_create.eq(macaddr,macaddr)')
  t
 (1 row)
 
-ALTER FUNCTION eq(macaddr,macaddr) CALLED ON NULL INPUT IMMUTABLE SECURITY INVOKER PARALLEL UNSAFE LEAKPROOF COST 5;
-ERROR:  only superuser can define a leakproof function
+ALTER FUNCTION eq(macaddr,macaddr) CALLED ON NULL INPUT IMMUTABLE SECURITY INVOKER PARALLEL UNSAFE COST 5;
 SELECT verify_function_is_same_on_workers('function_create.eq(macaddr,macaddr)');
  verify_function_is_same_on_workers
 ---------------------------------------------------------------------

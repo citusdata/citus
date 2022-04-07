@@ -57,7 +57,7 @@ CREATE FUNCTION eq(macaddr, macaddr) RETURNS bool
 -- ROWS 5, untested because;
 -- ERROR:  ROWS is not applicable when function does not return a set
 SELECT verify_function_is_same_on_workers('function_create.eq(macaddr,macaddr)');
-ALTER FUNCTION eq(macaddr,macaddr) CALLED ON NULL INPUT IMMUTABLE SECURITY INVOKER PARALLEL UNSAFE LEAKPROOF COST 5;
+ALTER FUNCTION eq(macaddr,macaddr) CALLED ON NULL INPUT IMMUTABLE SECURITY INVOKER PARALLEL UNSAFE COST 5;
 SELECT verify_function_is_same_on_workers('function_create.eq(macaddr,macaddr)');
 ALTER FUNCTION eq(macaddr,macaddr) RETURNS NULL ON NULL INPUT STABLE SECURITY DEFINER PARALLEL RESTRICTED;
 SELECT verify_function_is_same_on_workers('function_create.eq(macaddr,macaddr)');
