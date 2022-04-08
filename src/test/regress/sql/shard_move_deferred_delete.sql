@@ -167,17 +167,30 @@ SET search_path TO shard_move_deferred_delete;
 -- When there would not be enough free space left after the move, the move should fail
 SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
 
--- Restore the original function
-SELECT run_command_on_workers($cmd$
-    CREATE OR REPLACE FUNCTION pg_catalog.citus_local_disk_space_stats(
-    OUT available_disk_size bigint,
-    OUT total_disk_size bigint)
-    RETURNS record
-    LANGUAGE C STRICT
-    AS 'citus', $$citus_local_disk_space_stats$$;
-    COMMENT ON FUNCTION pg_catalog.citus_local_disk_space_stats()
-    IS 'returns statistics on available disk space on the local node';
-$cmd$);
+-- Restore the original function on workers
+\c - - - :worker_1_port
+SET citus.enable_metadata_sync TO OFF;
 
+CREATE OR REPLACE FUNCTION pg_catalog.citus_local_disk_space_stats(
+OUT available_disk_size bigint,
+OUT total_disk_size bigint)
+RETURNS record
+LANGUAGE C STRICT
+AS 'citus', $$citus_local_disk_space_stats$$;
+COMMENT ON FUNCTION pg_catalog.citus_local_disk_space_stats()
+IS 'returns statistics on available disk space on the local node';
 
+\c - - - :worker_2_port
+SET citus.enable_metadata_sync TO OFF;
+
+CREATE OR REPLACE FUNCTION pg_catalog.citus_local_disk_space_stats(
+OUT available_disk_size bigint,
+OUT total_disk_size bigint)
+RETURNS record
+LANGUAGE C STRICT
+AS 'citus', $$citus_local_disk_space_stats$$;
+COMMENT ON FUNCTION pg_catalog.citus_local_disk_space_stats()
+IS 'returns statistics on available disk space on the local node';
+
+\c - - - :master_port
 DROP SCHEMA shard_move_deferred_delete CASCADE;
