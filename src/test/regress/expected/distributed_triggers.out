@@ -314,6 +314,8 @@ ORDER BY shard_key_value, object_id, change_id;
 DROP TRIGGER bad_shardkey_record_change_trigger ON data;
 CREATE OR REPLACE FUNCTION remote_shardkey_record_change()
 RETURNS trigger
+SET search_path = 'distributed_triggers'
+LANGUAGE plpgsql
 AS $$
 DECLARE
     last_change_id bigint;
@@ -321,12 +323,15 @@ BEGIN
     UPDATE distributed_triggers.data_changes SET operation_type = TG_OP;
     RETURN NULL;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 CREATE TRIGGER remote_shardkey_record_change_trigger
 AFTER INSERT OR UPDATE OR DELETE ON data
 FOR EACH ROW EXECUTE FUNCTION distributed_triggers.remote_shardkey_record_change();
 CREATE FUNCTION insert_document(key text, id text)
-RETURNS void LANGUAGE plpgsql AS $fn$
+RETURNS void
+LANGUAGE plpgsql
+SET search_path = 'distributed_triggers'
+AS $fn$
 BEGIN
 	INSERT INTO distributed_triggers.data VALUES (key, id, '{"id1":"id2"}');
 	DELETE FROM distributed_triggers.data where shard_key_value = key;
@@ -882,8 +887,8 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_trigger WHERE tgname lik
 (2 rows)
 
 RESET client_min_messages;
-SET citus.enable_unsafe_triggers TO false;
-SELECT run_command_on_workers('ALTER SYSTEM SET citus.enable_unsafe_triggers TO false;');
+RESET citus.enable_unsafe_triggers;
+SELECT run_command_on_workers('ALTER SYSTEM RESET citus.enable_unsafe_triggers;');
        run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,"ALTER SYSTEM")
