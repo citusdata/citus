@@ -15,6 +15,7 @@ create schema test_tableam;
 set search_path to test_tableam;
 
 SELECT public.run_command_on_coordinator_and_workers($Q$
+	SET citus.enable_ddl_propagation TO off;
 	CREATE FUNCTION fake_am_handler(internal)
 	RETURNS table_am_handler
 	AS 'citus'

@@ -11,10 +11,12 @@ setup
 	GRANT USAGE ON SCHEMA public TO my_user;
 	GRANT SELECT ON TABLE my_table TO my_user;
 
+	SET citus.enable_ddl_propagation TO OFF;
 	CREATE FUNCTION make_external_connection_to_node(text,int,text,text)
 	RETURNS void
 	AS 'citus'
 	LANGUAGE C STRICT;
+	RESET citus.enable_ddl_propagation;
 
 	SELECT run_command_on_workers('ALTER SYSTEM SET citus.max_client_connections TO 1');
 	SELECT run_command_on_workers('SELECT pg_reload_conf()');
