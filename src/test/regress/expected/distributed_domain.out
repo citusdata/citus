@@ -1,0 +1,947 @@
+CREATE SCHEMA distributed_domain;
+SET search_path TO distributed_domain;
+SET citus.next_shard_id TO 93631000;
+-- verify domain is not already present on workers
+SELECT * FROM run_command_on_workers($$
+    SELECT 'distributed_domain.age'::regtype;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                        result
+---------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  type "distributed_domain.age" does not exist
+ localhost |    57638 | f       | ERROR:  type "distributed_domain.age" does not exist
+(2 rows)
+
+CREATE DOMAIN age AS int CHECK( VALUE >= 0 );
+-- check domain exists on workers to proof the domain got propagated
+SELECT * FROM run_command_on_workers($$
+    SELECT 'distributed_domain.age'::regtype;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success |         result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | distributed_domain.age
+ localhost |    57638 | t       | distributed_domain.age
+(2 rows)
+
+-- verify the constraint triggers when operations that conflict are pushed to the shards
+CREATE TABLE foo (a int);
+SELECT create_distributed_table('foo', 'a', shard_count => 2);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE bar (a age);
+SELECT create_distributed_table('bar', 'a', shard_count => 2);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO foo (a) VALUES (-1); -- foo can have negative values
+INSERT INTO bar (a) SELECT a FROM foo; -- bar cannot
+ERROR:  value for domain distributed_domain.age violates check constraint "age_check"
+CONTEXT:  while executing command on localhost:xxxxx
+DROP TABLE bar; -- need to drop this one directly, there is currently a bug in drop schema cascade when it drops both a table and the type of the distribution column at the same time
+-- create a domain that is not propagated
+SET citus.enable_ddl_propagation TO off;
+CREATE DOMAIN us_postal_code AS TEXT
+    CHECK(
+        VALUE ~ '^\d{5}$'
+    OR VALUE ~ '^\d{5}-\d{4}$'
+    );
+RESET citus.enable_ddl_propagation;
+-- and use in distributed table to trigger domain propagation
+CREATE TABLE us_snail_addy (
+   address_id SERIAL PRIMARY KEY,
+   street1 TEXT NOT NULL,
+   street2 TEXT,
+   street3 TEXT,
+   city TEXT NOT NULL,
+   postal us_postal_code NOT NULL
+);
+SELECT create_distributed_table('us_snail_addy', 'address_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- defaults are marked as a constraint on the statement, which makes it interesting for deparsing, so some extensive
+-- test coverage to make sure it works in all strange cases.
+CREATE SCHEMA distributed_domain_constraints;
+SET search_path TO distributed_domain_constraints;
+CREATE DOMAIN with_default AS int DEFAULT 0;
+CREATE DOMAIN age_with_default AS int DEFAULT 0 CHECK (value > 0);
+CREATE DOMAIN age_with_default2 AS int CHECK (value > 0) DEFAULT 0;
+CREATE DOMAIN age_with_default3 AS int CHECK (value > 0) DEFAULT NULL;
+CREATE DOMAIN age_with_default4 AS int NOT NULL CHECK (value > 0) DEFAULT NULL;
+-- test casting with worker queries
+-- should simply work, has no check constraints
+SELECT * FROM run_command_on_workers($$
+    SELECT NULL::distributed_domain_constraints.with_default;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       |
+ localhost |    57638 | t       |
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$
+    SELECT 0::distributed_domain_constraints.with_default;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 0
+ localhost |    57638 | t       | 0
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$
+    SELECT 1::distributed_domain_constraints.with_default;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 1
+ localhost |    57638 | t       | 1
+(2 rows)
+
+-- has a constraint where the number needs to be greater than 0
+SELECT * FROM run_command_on_workers($$
+    SELECT NULL::distributed_domain_constraints.age_with_default;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       |
+ localhost |    57638 | t       |
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$
+    SELECT 0::distributed_domain_constraints.age_with_default;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                                                           result
+---------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  value for domain distributed_domain_constraints.age_with_default violates check constraint "age_with_default_check"
+ localhost |    57638 | f       | ERROR:  value for domain distributed_domain_constraints.age_with_default violates check constraint "age_with_default_check"
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$
+    SELECT 1::distributed_domain_constraints.age_with_default;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 1
+ localhost |    57638 | t       | 1
+(2 rows)
+
+-- has a constraint where the number needs to be greater than 0
+SELECT * FROM run_command_on_workers($$
+    SELECT NULL::distributed_domain_constraints.age_with_default2;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       |
+ localhost |    57638 | t       |
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$
+    SELECT 0::distributed_domain_constraints.age_with_default2;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                                                            result
+---------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  value for domain distributed_domain_constraints.age_with_default2 violates check constraint "age_with_default2_check"
+ localhost |    57638 | f       | ERROR:  value for domain distributed_domain_constraints.age_with_default2 violates check constraint "age_with_default2_check"
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$
+    SELECT 1::distributed_domain_constraints.age_with_default2;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 1
+ localhost |    57638 | t       | 1
+(2 rows)
+
+-- has a constraint where the number needs to be greater than 0
+SELECT * FROM run_command_on_workers($$
+    SELECT NULL::distributed_domain_constraints.age_with_default3;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       |
+ localhost |    57638 | t       |
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$
+    SELECT 0::distributed_domain_constraints.age_with_default3;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                                                            result
+---------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  value for domain distributed_domain_constraints.age_with_default3 violates check constraint "age_with_default3_check"
+ localhost |    57638 | f       | ERROR:  value for domain distributed_domain_constraints.age_with_default3 violates check constraint "age_with_default3_check"
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$
+    SELECT 1::distributed_domain_constraints.age_with_default3;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 1
+ localhost |    57638 | t       | 1
+(2 rows)
+
+-- has a constraint where the number needs to be greater than 0 and not null
+SELECT * FROM run_command_on_workers($$
+    SELECT NULL::distributed_domain_constraints.age_with_default4;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                                           result
+---------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  domain distributed_domain_constraints.age_with_default4 does not allow null values
+ localhost |    57638 | f       | ERROR:  domain distributed_domain_constraints.age_with_default4 does not allow null values
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$
+    SELECT 0::distributed_domain_constraints.age_with_default4;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                                                            result
+---------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  value for domain distributed_domain_constraints.age_with_default4 violates check constraint "age_with_default4_check"
+ localhost |    57638 | f       | ERROR:  value for domain distributed_domain_constraints.age_with_default4 violates check constraint "age_with_default4_check"
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$
+    SELECT 1::distributed_domain_constraints.age_with_default4;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 1
+ localhost |    57638 | t       | 1
+(2 rows)
+
+-- test usage in distributed tables
+-- we use all domains defined earlier and insert all possible values, NULL, default, non-violation, violation. Some of
+-- the default values will violate a constraint.
+-- Based on the constraints on the domain we see different errors and will end up with a final set of data stored.
+CREATE TABLE use_default (a int, b with_default);
+SELECT create_distributed_table('use_default', 'a', shard_count => 2);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO use_default (a, b) VALUES (0, NULL);
+INSERT INTO use_default (a) VALUES (1);
+INSERT INTO use_default (a, b) VALUES (2, 1);
+INSERT INTO use_default (a, b) VALUES (3, -1);
+SELECT * FROM use_default ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 0 |
+ 1 |  0
+ 2 |  1
+ 3 | -1
+(4 rows)
+
+CREATE TABLE use_age_default (a int, b age_with_default);
+SELECT create_distributed_table('use_age_default', 'a', shard_count => 2);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO use_age_default (a, b) VALUES (0, NULL);
+INSERT INTO use_age_default (a) VALUES (1);
+ERROR:  value for domain distributed_domain_constraints.age_with_default violates check constraint "age_with_default_check"
+CONTEXT:  while executing command on localhost:xxxxx
+INSERT INTO use_age_default (a, b) VALUES (2, 1);
+INSERT INTO use_age_default (a, b) VALUES (3, -1);
+ERROR:  value for domain distributed_domain_constraints.age_with_default violates check constraint "age_with_default_check"
+CONTEXT:  while executing command on localhost:xxxxx
+-- also load some data with copy to verify coercions.
+\COPY use_age_default FROM STDIN DELIMITER AS ',';
+ERROR:  value for domain age_with_default violates check constraint "age_with_default_check"
+CONTEXT:  COPY use_age_default, line 1, column b: " -1"
+\COPY use_age_default FROM STDIN DELIMITER AS ',';
+SELECT * FROM use_age_default ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 0 |
+ 2 | 1
+ 5 | 1
+(3 rows)
+
+CREATE TABLE use_age_default2 (a int, b age_with_default2);
+SELECT create_distributed_table('use_age_default2', 'a', shard_count => 2);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO use_age_default2 (a, b) VALUES (0, NULL);
+INSERT INTO use_age_default2 (a) VALUES (1);
+ERROR:  value for domain distributed_domain_constraints.age_with_default2 violates check constraint "age_with_default2_check"
+CONTEXT:  while executing command on localhost:xxxxx
+INSERT INTO use_age_default2 (a, b) VALUES (2, 1);
+INSERT INTO use_age_default2 (a, b) VALUES (3, -1);
+ERROR:  value for domain distributed_domain_constraints.age_with_default2 violates check constraint "age_with_default2_check"
+CONTEXT:  while executing command on localhost:xxxxx
+SELECT * FROM use_age_default2 ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 0 |
+ 2 | 1
+(2 rows)
+
+CREATE TABLE use_age_default3 (a int, b age_with_default3);
+SELECT create_distributed_table('use_age_default3', 'a', shard_count => 2);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO use_age_default3 (a, b) VALUES (0, NULL);
+INSERT INTO use_age_default3 (a) VALUES (1);
+INSERT INTO use_age_default3 (a, b) VALUES (2, 1);
+INSERT INTO use_age_default3 (a, b) VALUES (3, -1);
+ERROR:  value for domain distributed_domain_constraints.age_with_default3 violates check constraint "age_with_default3_check"
+CONTEXT:  while executing command on localhost:xxxxx
+SELECT * FROM use_age_default3 ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 0 |
+ 1 |
+ 2 | 1
+(3 rows)
+
+CREATE TABLE use_age_default4 (a int, b age_with_default4);
+SELECT create_distributed_table('use_age_default4', 'a', shard_count => 2);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO use_age_default4 (a, b) VALUES (0, NULL);
+ERROR:  domain distributed_domain_constraints.age_with_default4 does not allow null values
+CONTEXT:  while executing command on localhost:xxxxx
+INSERT INTO use_age_default4 (a) VALUES (1);
+ERROR:  domain distributed_domain_constraints.age_with_default4 does not allow null values
+CONTEXT:  while executing command on localhost:xxxxx
+INSERT INTO use_age_default4 (a, b) VALUES (2, 1);
+INSERT INTO use_age_default4 (a, b) VALUES (3, -1);
+ERROR:  value for domain distributed_domain_constraints.age_with_default4 violates check constraint "age_with_default4_check"
+CONTEXT:  while executing command on localhost:xxxxx
+SELECT * FROM use_age_default4 ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 2 | 1
+(1 row)
+
+SET client_min_messages TO warning;
+DROP SCHEMA distributed_domain_constraints CASCADE;
+RESET client_min_messages;
+-- same tests as above, with with just in time propagation of domains
+CREATE SCHEMA distributed_domain_constraints;
+SET citus.enable_ddl_propagation TO off;
+CREATE DOMAIN with_default AS int DEFAULT 0;
+CREATE DOMAIN age_with_default AS int DEFAULT 0 CHECK (value > 0);
+CREATE DOMAIN age_with_default2 AS int CHECK (value > 0) DEFAULT 0;
+CREATE DOMAIN age_with_default3 AS int CHECK (value > 0) DEFAULT NULL;
+CREATE DOMAIN age_with_default4 AS int NOT NULL CHECK (value > 0) DEFAULT NULL;
+RESET citus.enable_ddl_propagation;
+-- use all domains in tables to get them propagated
+CREATE TABLE use_default (a int, b with_default);
+SELECT create_distributed_table('use_default', 'a', shard_count => 2);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO use_default (a, b) VALUES (0, NULL);
+INSERT INTO use_default (a) VALUES (1);
+INSERT INTO use_default (a, b) VALUES (2, 1);
+INSERT INTO use_default (a, b) VALUES (3, -1);
+SELECT * FROM use_default ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 0 |
+ 1 |  0
+ 2 |  1
+ 3 | -1
+(4 rows)
+
+CREATE TABLE use_age_default (a int, b age_with_default);
+SELECT create_distributed_table('use_age_default', 'a', shard_count => 2);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO use_age_default (a, b) VALUES (0, NULL);
+INSERT INTO use_age_default (a) VALUES (1);
+ERROR:  value for domain distributed_domain_constraints.age_with_default violates check constraint "age_with_default_check"
+CONTEXT:  while executing command on localhost:xxxxx
+INSERT INTO use_age_default (a, b) VALUES (2, 1);
+INSERT INTO use_age_default (a, b) VALUES (3, -1);
+ERROR:  value for domain distributed_domain_constraints.age_with_default violates check constraint "age_with_default_check"
+CONTEXT:  while executing command on localhost:xxxxx
+SELECT * FROM use_age_default ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 0 |
+ 2 | 1
+(2 rows)
+
+CREATE TABLE use_age_default2 (a int, b age_with_default2);
+SELECT create_distributed_table('use_age_default2', 'a', shard_count => 2);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO use_age_default2 (a, b) VALUES (0, NULL);
+INSERT INTO use_age_default2 (a) VALUES (1);
+ERROR:  value for domain distributed_domain_constraints.age_with_default2 violates check constraint "age_with_default2_check"
+CONTEXT:  while executing command on localhost:xxxxx
+INSERT INTO use_age_default2 (a, b) VALUES (2, 1);
+INSERT INTO use_age_default2 (a, b) VALUES (3, -1);
+ERROR:  value for domain distributed_domain_constraints.age_with_default2 violates check constraint "age_with_default2_check"
+CONTEXT:  while executing command on localhost:xxxxx
+SELECT * FROM use_age_default2 ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 0 |
+ 2 | 1
+(2 rows)
+
+CREATE TABLE use_age_default3 (a int, b age_with_default3);
+SELECT create_distributed_table('use_age_default3', 'a', shard_count => 2);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO use_age_default3 (a, b) VALUES (0, NULL);
+INSERT INTO use_age_default3 (a) VALUES (1);
+INSERT INTO use_age_default3 (a, b) VALUES (2, 1);
+INSERT INTO use_age_default3 (a, b) VALUES (3, -1);
+ERROR:  value for domain distributed_domain_constraints.age_with_default3 violates check constraint "age_with_default3_check"
+CONTEXT:  while executing command on localhost:xxxxx
+SELECT * FROM use_age_default3 ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 0 |
+ 1 |
+ 2 | 1
+(3 rows)
+
+CREATE TABLE use_age_default4 (a int, b age_with_default4);
+SELECT create_distributed_table('use_age_default4', 'a', shard_count => 2);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO use_age_default4 (a, b) VALUES (0, NULL);
+ERROR:  domain distributed_domain_constraints.age_with_default4 does not allow null values
+CONTEXT:  while executing command on localhost:xxxxx
+INSERT INTO use_age_default4 (a) VALUES (1);
+ERROR:  domain distributed_domain_constraints.age_with_default4 does not allow null values
+CONTEXT:  while executing command on localhost:xxxxx
+INSERT INTO use_age_default4 (a, b) VALUES (2, 1);
+INSERT INTO use_age_default4 (a, b) VALUES (3, -1);
+ERROR:  value for domain distributed_domain_constraints.age_with_default4 violates check constraint "age_with_default4_check"
+CONTEXT:  while executing command on localhost:xxxxx
+SELECT * FROM use_age_default4 ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 2 | 1
+(1 row)
+
+-- clean up
+SET client_min_messages TO warning;
+DROP SCHEMA distributed_domain_constraints CASCADE;
+RESET client_min_messages;
+CREATE SCHEMA postgres_domain_examples;
+SET search_path TO postgres_domain_examples;
+-- make sure the function gets automatically propagated when we propagate the domain
+SET citus.enable_ddl_propagation TO off;
+create function sql_is_distinct_from(anyelement, anyelement)
+    returns boolean language sql
+    as 'select $1 is distinct from $2 limit 1';
+RESET citus.enable_ddl_propagation;
+CREATE DOMAIN inotnull int
+    CHECK (sql_is_distinct_from(value, null));
+SELECT * FROM run_command_on_workers($$ SELECT 1::postgres_domain_examples.inotnull; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 1
+ localhost |    57638 | t       | 1
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$ SELECT null::postgres_domain_examples.inotnull; $$);
+ nodename  | nodeport | success |                                                result
+---------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  value for domain postgres_domain_examples.inotnull violates check constraint "inotnull_check"
+ localhost |    57638 | f       | ERROR:  value for domain postgres_domain_examples.inotnull violates check constraint "inotnull_check"
+(2 rows)
+
+-- create a domain with sql function as a default value
+SET citus.enable_ddl_propagation TO off;
+create function random_between(min int, max int)
+    returns int language sql
+    as 'SELECT round(random()*($2-$1))+$1;';
+RESET citus.enable_ddl_propagation;
+-- this verifies the function in the default expression is found and distributed, otherwise the creation of the domain would fail on the workers.
+CREATE DOMAIN with_random_default int DEFAULT random_between(100, 200);
+SET client_min_messages TO warning;
+DROP SCHEMA postgres_domain_examples CASCADE;
+RESET client_min_messages;
+SET search_path TO distributed_domain;
+-- verify drops are propagated
+CREATE DOMAIN will_drop AS text DEFAULT 'foo';
+DROP DOMAIN will_drop;
+-- verify domain is dropped from workers
+SELECT * FROM run_command_on_workers($$ SELECT 'dropped?'::distributed_domain.will_drop; $$);
+ nodename  | nodeport | success |                           result
+---------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  type "distributed_domain.will_drop" does not exist
+ localhost |    57638 | f       | ERROR:  type "distributed_domain.will_drop" does not exist
+(2 rows)
+
+-- verify the type modifiers are deparsed correctly, both for direct propagation as well as on demand propagation
+CREATE DOMAIN varcharmod AS varchar(3);
+SELECT * FROM run_command_on_workers($$ SELECT '12345'::distributed_domain.varcharmod; $$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 123
+ localhost |    57638 | t       | 123
+(2 rows)
+
+SET citus.enable_ddl_propagation TO off;
+CREATE DOMAIN varcharmod_ondemand AS varchar(3);
+RESET citus.enable_ddl_propagation;
+CREATE TABLE use_varcharmod_ondemand (a int, b varcharmod_ondemand);
+SELECT create_distributed_table('use_varcharmod_ondemand', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- epxected error due to value being too long for varchar(3)
+INSERT INTO use_varcharmod_ondemand VALUES (1,'12345');
+ERROR:  value too long for type character varying(3)
+SELECT * FROM run_command_on_workers($$ SELECT '12345'::distributed_domain.varcharmod_ondemand; $$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 123
+ localhost |    57638 | t       | 123
+(2 rows)
+
+-- section testing default altering
+CREATE DOMAIN alter_default AS text DEFAULT 'foo';
+CREATE TABLE use_alter_default (a int, b alter_default);
+SELECT create_distributed_table('use_alter_default', 'a', shard_count => 4);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO use_alter_default (a) VALUES (1);
+ALTER DOMAIN alter_default SET DEFAULT 'bar';
+INSERT INTO use_alter_default (a) VALUES (2);
+ALTER DOMAIN alter_default DROP DEFAULT;
+INSERT INTO use_alter_default (a) VALUES (3);
+SELECT * FROM use_alter_default ORDER BY 1,2;
+ a |  b
+---------------------------------------------------------------------
+ 1 | foo
+ 2 | bar
+ 3 |
+(3 rows)
+
+-- add new dependency while adding default
+CREATE DOMAIN add_default_with_function AS int;
+SET citus.enable_ddl_propagation TO off;
+create function random_between(min int, max int)
+    returns int language sql
+    as 'SELECT round(random()*($2-$1))+$1;';
+RESET citus.enable_ddl_propagation;
+ALTER DOMAIN add_default_with_function SET DEFAULT random_between(100, 200);
+CREATE TABLE use_add_default_with_function (a int, b add_default_with_function);
+SELECT create_distributed_table('use_add_default_with_function', 'a', shard_count => 4);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO use_add_default_with_function (a) VALUES (1);
+-- altering NULL/NOT NULL
+CREATE DOMAIN alter_null AS int;
+CREATE TABLE use_alter_null (a int, b alter_null);
+SELECT create_distributed_table('use_alter_null', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO use_alter_null (a) VALUES (1);
+ALTER DOMAIN alter_null SET NOT NULL;
+ERROR:  column "b" of table "use_alter_null_93631040" contains null values
+CONTEXT:  while executing command on localhost:xxxxx
+TRUNCATE use_alter_null;
+ALTER DOMAIN alter_null SET NOT NULL;
+INSERT INTO use_alter_null (a) VALUES (2);
+ERROR:  domain distributed_domain.alter_null does not allow null values
+CONTEXT:  while executing command on localhost:xxxxx
+ALTER DOMAIN alter_null DROP NOT NULL;
+INSERT INTO use_alter_null (a) VALUES (3);
+SELECT * FROM use_alter_null ORDER BY 1;
+ a | b
+---------------------------------------------------------------------
+ 3 |
+(1 row)
+
+-- testing adding/dropping constraints
+SET citus.enable_ddl_propagation TO off;
+create function sql_is_distinct_from(anyelement, anyelement)
+    returns boolean language sql
+    as 'select $1 is distinct from $2 limit 1';
+RESET citus.enable_ddl_propagation;
+CREATE DOMAIN alter_add_constraint int;
+ALTER DOMAIN alter_add_constraint ADD CONSTRAINT check_distinct CHECK (sql_is_distinct_from(value, null));
+SELECT * FROM run_command_on_workers($$ SELECT 1::distributed_domain.alter_add_constraint; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 1
+ localhost |    57638 | t       | 1
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$ SELECT null::distributed_domain.alter_add_constraint; $$);
+ nodename  | nodeport | success |                                                   result
+---------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  value for domain distributed_domain.alter_add_constraint violates check constraint "check_distinct"
+ localhost |    57638 | f       | ERROR:  value for domain distributed_domain.alter_add_constraint violates check constraint "check_distinct"
+(2 rows)
+
+ALTER DOMAIN alter_add_constraint DROP CONSTRAINT check_distinct;
+SELECT * FROM run_command_on_workers($$ SELECT 1::distributed_domain.alter_add_constraint; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 1
+ localhost |    57638 | t       | 1
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$ SELECT null::distributed_domain.alter_add_constraint; $$);
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       |
+ localhost |    57638 | t       |
+(2 rows)
+
+ALTER DOMAIN alter_add_constraint DROP CONSTRAINT IF EXISTS check_distinct;
+NOTICE:  constraint "check_distinct" of domain "distributed_domain.alter_add_constraint" does not exist, skipping
+ALTER DOMAIN alter_add_constraint ADD CONSTRAINT check_distinct CHECK (sql_is_distinct_from(value, null));
+ALTER DOMAIN alter_add_constraint RENAME CONSTRAINT check_distinct TO check_distinct_renamed;
+ALTER DOMAIN alter_add_constraint DROP CONSTRAINT check_distinct_renamed;
+-- test validating invalid constraints
+CREATE DOMAIN age_invalid AS int NOT NULL DEFAULT 0;
+CREATE TABLE use_age_invalid (a int, b age_invalid);
+SELECT create_distributed_table('use_age_invalid', 'a', shard_count => 4);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO use_age_invalid VALUES (1,1), (2, 2), (3, 0), (4, -1);
+ALTER DOMAIN age_invalid ADD CONSTRAINT check_age_positive CHECK (value>=0) NOT VALID;
+-- should fail, even though constraint is not valid
+INSERT INTO use_age_invalid VALUES (5,-1);
+ERROR:  value for domain distributed_domain.age_invalid violates check constraint "check_age_positive"
+CONTEXT:  while executing command on localhost:xxxxx
+-- reading violating data of an non-valid constraint errors in citus
+SELECT * FROM use_age_invalid ORDER BY 1;
+ERROR:  value for domain age_invalid violates check constraint "check_age_positive"
+-- should fail since there is data in the table that violates the check
+ALTER DOMAIN age_invalid VALIDATE CONSTRAINT check_age_positive;
+ERROR:  column "b" of table "use_age_invalid_93631045" contains values that violate the new constraint
+CONTEXT:  while executing command on localhost:xxxxx
+DELETE FROM use_age_invalid WHERE b < 0;
+-- should succeed now since the violating data has been removed
+ALTER DOMAIN age_invalid VALIDATE CONSTRAINT check_age_positive;
+-- still fails for constraint
+INSERT INTO use_age_invalid VALUES (5,-1);
+ERROR:  value for domain distributed_domain.age_invalid violates check constraint "check_age_positive"
+CONTEXT:  while executing command on localhost:xxxxx
+SELECT * FROM use_age_invalid ORDER BY 1;
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+ 2 | 2
+ 3 | 0
+(3 rows)
+
+-- verify we can validate a constraint that is already validated, can happen when we add a node while a domain constraint was not validated
+ALTER DOMAIN age_invalid VALIDATE CONSTRAINT check_age_positive;
+-- test changing the owner of a domain
+SET client_min_messages TO error;
+SELECT 1 FROM run_command_on_workers($$ CREATE ROLE domain_owner; $$);
+ ?column?
+---------------------------------------------------------------------
+        1
+        1
+(2 rows)
+
+CREATE ROLE domain_owner;
+RESET client_min_messages;
+CREATE DOMAIN alter_domain_owner AS int;
+ALTER DOMAIN alter_domain_owner OWNER TO domain_owner;
+SELECT u.rolname
+FROM pg_type t
+         JOIN pg_roles u
+              ON (t.typowner = u.oid)
+WHERE t.oid = 'distributed_domain.alter_domain_owner'::regtype;
+   rolname
+---------------------------------------------------------------------
+ domain_owner
+(1 row)
+
+SELECT * FROM run_command_on_workers($$
+    SELECT u.rolname
+      FROM pg_type t
+      JOIN pg_roles u
+        ON (t.typowner = u.oid)
+     WHERE t.oid = 'distributed_domain.alter_domain_owner'::regtype;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success |    result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | domain_owner
+ localhost |    57638 | t       | domain_owner
+(2 rows)
+
+DROP DOMAIN alter_domain_owner;
+SET citus.enable_ddl_propagation TO off;
+CREATE DOMAIN alter_domain_owner AS int;
+ALTER DOMAIN alter_domain_owner OWNER TO domain_owner;
+RESET citus.enable_ddl_propagation;
+CREATE TABLE use_alter_domain_owner (a int, b alter_domain_owner);
+SELECT create_distributed_table('use_alter_domain_owner', 'a', shard_count => 4);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT u.rolname
+FROM pg_type t
+         JOIN pg_roles u
+              ON (t.typowner = u.oid)
+WHERE t.oid = 'distributed_domain.alter_domain_owner'::regtype;
+   rolname
+---------------------------------------------------------------------
+ domain_owner
+(1 row)
+
+SELECT * FROM run_command_on_workers($$
+    SELECT u.rolname
+      FROM pg_type t
+      JOIN pg_roles u
+        ON (t.typowner = u.oid)
+     WHERE t.oid = 'distributed_domain.alter_domain_owner'::regtype;
+$$) ORDER BY 1,2;
+ nodename  | nodeport | success |    result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | domain_owner
+ localhost |    57638 | t       | domain_owner
+(2 rows)
+
+-- rename the domain
+ALTER DOMAIN alter_domain_owner RENAME TO renamed_domain;
+SELECT * FROM run_command_on_workers($$ SELECT NULL::distributed_domain.renamed_domain; $$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       |
+ localhost |    57638 | t       |
+(2 rows)
+
+-- move schema
+SET citus.enable_ddl_propagation TO off;
+CREATE SCHEMA distributed_domain_moved;
+RESET citus.enable_ddl_propagation;
+ALTER DOMAIN renamed_domain SET SCHEMA distributed_domain_moved;
+-- test collation
+CREATE COLLATION german_phonebook (provider = icu, locale = 'de-u-co-phonebk');
+CREATE DOMAIN with_collation AS text COLLATE german_phonebook NOT NULL;
+SELECT run_command_on_workers($$ SELECT typcollation::regcollation FROM pg_type WHERE oid = 'distributed_domain.with_collation'::regtype; $$);
+                 run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,distributed_domain.german_phonebook)
+ (localhost,57638,t,distributed_domain.german_phonebook)
+(2 rows)
+
+DROP DOMAIN with_collation;
+SET citus.enable_ddl_propagation TO off;
+CREATE DOMAIN with_collation AS text COLLATE german_phonebook NOT NULL;
+RESET citus.enable_ddl_propagation;
+CREATE TABLE use_with_collation (a int, b with_collation);
+SELECT create_reference_table('use_with_collation');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT run_command_on_workers($$ SELECT typcollation::regcollation FROM pg_type WHERE oid = 'distributed_domain.with_collation'::regtype; $$);
+                 run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,distributed_domain.german_phonebook)
+ (localhost,57638,t,distributed_domain.german_phonebook)
+(2 rows)
+
+INSERT INTO use_with_collation VALUES (1, U&'\00E4sop'), (2, 'Vossr');
+SELECT * FROM use_with_collation WHERE b < 'b';
+ a |  b
+---------------------------------------------------------------------
+ 1 | äsop
+(1 row)
+
+-- test domain backed by array
+CREATE DOMAIN domain_array AS int[] NOT NULL CHECK (array_length(value,1) >= 2);
+SELECT * FROM run_command_on_workers($$ SELECT NULL::distributed_domain.domain_array; $$) ORDER BY 1,2;
+ nodename  | nodeport | success |                                  result
+---------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  domain distributed_domain.domain_array does not allow null values
+ localhost |    57638 | f       | ERROR:  domain distributed_domain.domain_array does not allow null values
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$ SELECT ARRAY[1]::distributed_domain.domain_array; $$) ORDER BY 1,2;
+ nodename  | nodeport | success |                                                 result
+---------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  value for domain distributed_domain.domain_array violates check constraint "domain_array_check"
+ localhost |    57638 | f       | ERROR:  value for domain distributed_domain.domain_array violates check constraint "domain_array_check"
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$ SELECT ARRAY[1,2]::distributed_domain.domain_array; $$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | {1,2}
+ localhost |    57638 | t       | {1,2}
+(2 rows)
+
+DROP DOMAIN domain_array;
+SET citus.enable_ddl_propagation TO off;
+CREATE DOMAIN domain_array AS int[] NOT NULL CHECK (array_length(value,1) >= 2);
+RESET citus.enable_ddl_propagation;
+CREATE TABLE use_domain_array (a int, b domain_array);
+SELECT create_distributed_table('use_domain_array', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO use_domain_array VALUES (1, NULL);
+ERROR:  domain distributed_domain.domain_array does not allow null values
+CONTEXT:  while executing command on localhost:xxxxx
+INSERT INTO use_domain_array VALUES (2, ARRAY[1]);
+ERROR:  value for domain distributed_domain.domain_array violates check constraint "domain_array_check"
+CONTEXT:  while executing command on localhost:xxxxx
+INSERT INTO use_domain_array VALUES (3, ARRAY[1,2]);
+SELECT * FROM use_domain_array ORDER BY 1;
+ a |   b
+---------------------------------------------------------------------
+ 3 | {1,2}
+(1 row)
+
+-- add nameless constraint
+CREATE DOMAIN nameless_constraint AS int;
+ALTER DOMAIN nameless_constraint ADD CHECK (value > 0);
+SELECT * FROM run_command_on_workers($$ SELECT NULL::distributed_domain.nameless_constraint; $$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       |
+ localhost |    57638 | t       |
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$ SELECT 1::distributed_domain.nameless_constraint; $$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 1
+ localhost |    57638 | t       | 1
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$ SELECT (-1)::distributed_domain.nameless_constraint; $$) ORDER BY 1,2;
+ nodename  | nodeport | success |                                                        result
+---------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  value for domain distributed_domain.nameless_constraint violates check constraint "nameless_constraint_check"
+ localhost |    57638 | f       | ERROR:  value for domain distributed_domain.nameless_constraint violates check constraint "nameless_constraint_check"
+(2 rows)
+
+-- Test domains over domains
+create domain vchar4 varchar(4);
+create domain dinter vchar4 check (substring(VALUE, 1, 1) = 'x');
+create domain dtop dinter check (substring(VALUE, 2, 1) = '1');
+create table dtest(f1 dtop, id bigserial);
+SELECT create_distributed_table('dtest', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+insert into dtest values('x123');
+insert into dtest values('123');
+ERROR:  value for domain dtop violates check constraint "dinter_check"
+insert into dtest values('x234');
+ERROR:  value for domain dtop violates check constraint "dtop_check"
+DROP TABLE dtest;
+DROP DOMAIN IF EXISTS dtop;
+DROP DOMAIN vchar4;
+ERROR:  cannot drop type vchar4 because other objects depend on it
+DETAIL:  type dinter depends on type vchar4
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+DROP DOMAIN vchar4 CASCADE;
+NOTICE:  drop cascades to type dinter
+-- drop multiple domains at once, for which one is not distributed
+CREATE DOMAIN domain1 AS int;
+CREATE DOMAIN domain2 AS text;
+SET citus.enable_ddl_propagation TO off;
+CREATE DOMAIN domain3 AS text;
+RESET citus.enable_ddl_propagation;
+SELECT * FROM run_command_on_workers($$ SELECT 1::distributed_domain.domain1; $$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 1
+ localhost |    57638 | t       | 1
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$ SELECT '1'::distributed_domain.domain2; $$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | 1
+ localhost |    57638 | t       | 1
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$ SELECT '1'::distributed_domain.domain3; $$) ORDER BY 1,2;
+ nodename  | nodeport | success |                          result
+---------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  type "distributed_domain.domain3" does not exist
+ localhost |    57638 | f       | ERROR:  type "distributed_domain.domain3" does not exist
+(2 rows)
+
+DROP DOMAIN domain1, domain2, domain3;
+SELECT * FROM run_command_on_workers($$ SELECT 1::distributed_domain.domain1; $$) ORDER BY 1,2;
+ nodename  | nodeport | success |                          result
+---------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  type "distributed_domain.domain1" does not exist
+ localhost |    57638 | f       | ERROR:  type "distributed_domain.domain1" does not exist
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$ SELECT '1'::distributed_domain.domain2; $$) ORDER BY 1,2;
+ nodename  | nodeport | success |                          result
+---------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  type "distributed_domain.domain2" does not exist
+ localhost |    57638 | f       | ERROR:  type "distributed_domain.domain2" does not exist
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$ SELECT '1'::distributed_domain.domain3; $$) ORDER BY 1,2;
+ nodename  | nodeport | success |                          result
+---------------------------------------------------------------------
+ localhost |    57637 | f       | ERROR:  type "distributed_domain.domain3" does not exist
+ localhost |    57638 | f       | ERROR:  type "distributed_domain.domain3" does not exist
+(2 rows)
+
+SET client_min_messages TO warning;
+DROP SCHEMA distributed_domain, distributed_domain_moved CASCADE;
