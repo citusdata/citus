@@ -2,6 +2,7 @@ SET citus.log_remote_commands TO OFF;
 DROP SCHEMA IF EXISTS distributed_triggers CASCADE;
 CREATE SCHEMA distributed_triggers;
 SET search_path TO 'distributed_triggers';
+SET citus.max_cached_conns_per_worker TO 0;
 SET citus.shard_replication_factor = 1;
 SET citus.shard_count = 32;
 SET citus.next_shard_id TO 800000;
@@ -175,7 +176,6 @@ DROP TRIGGER bad_shardkey_record_change_trigger ON data;
 
 CREATE OR REPLACE FUNCTION remote_shardkey_record_change()
 RETURNS trigger
-SET search_path = 'distributed_triggers'
 LANGUAGE plpgsql
 AS $$
 DECLARE
@@ -193,7 +193,6 @@ FOR EACH ROW EXECUTE FUNCTION distributed_triggers.remote_shardkey_record_change
 CREATE FUNCTION insert_document(key text, id text)
 RETURNS void
 LANGUAGE plpgsql
-SET search_path = 'distributed_triggers'
 AS $fn$
 BEGIN
 	INSERT INTO distributed_triggers.data VALUES (key, id, '{"id1":"id2"}');

@@ -3,6 +3,7 @@ DROP SCHEMA IF EXISTS distributed_triggers CASCADE;
 NOTICE:  schema "distributed_triggers" does not exist, skipping
 CREATE SCHEMA distributed_triggers;
 SET search_path TO 'distributed_triggers';
+SET citus.max_cached_conns_per_worker TO 0;
 SET citus.shard_replication_factor = 1;
 SET citus.shard_count = 32;
 SET citus.next_shard_id TO 800000;
@@ -274,7 +275,7 @@ INSERT INTO data VALUES ('hello6','world6','{"hello6":"world6"}');
 ERROR:  cannot execute a distributed query from a query on a shard
 CONTEXT:  SQL statement "INSERT INTO distributed_triggers.data_changes (shard_key_value, object_id, change_id, operation_type, new_value)
     VALUES ('BAD', NEW.object_id, COALESCE(last_change_id + 1, 1), TG_OP, NEW.value)"
-PL/pgSQL function bad_shardkey_record_change() line XX at SQL statement
+PL/pgSQL function distributed_triggers.bad_shardkey_record_change() line XX at SQL statement
 while executing command on localhost:xxxxx
 -- Bad trigger fired from SQL inside a force-delegated function
 -- Incorrect distribution key exception should catch this
@@ -314,7 +315,6 @@ ORDER BY shard_key_value, object_id, change_id;
 DROP TRIGGER bad_shardkey_record_change_trigger ON data;
 CREATE OR REPLACE FUNCTION remote_shardkey_record_change()
 RETURNS trigger
-SET search_path = 'distributed_triggers'
 LANGUAGE plpgsql
 AS $$
 DECLARE
@@ -330,7 +330,6 @@ FOR EACH ROW EXECUTE FUNCTION distributed_triggers.remote_shardkey_record_change
 CREATE FUNCTION insert_document(key text, id text)
 RETURNS void
 LANGUAGE plpgsql
-SET search_path = 'distributed_triggers'
 AS $fn$
 BEGIN
 	INSERT INTO distributed_triggers.data VALUES (key, id, '{"id1":"id2"}');
@@ -351,7 +350,7 @@ BEGIN;
 SELECT insert_document('hello7', 'world7');
 ERROR:  cannot execute a distributed query from a query on a shard
 CONTEXT:  SQL statement "UPDATE distributed_triggers.data_changes SET operation_type = TG_OP"
-PL/pgSQL function remote_shardkey_record_change() line XX at SQL statement
+PL/pgSQL function distributed_triggers.remote_shardkey_record_change() line XX at SQL statement
 while executing command on localhost:xxxxx
 SQL statement "INSERT INTO distributed_triggers.data VALUES (key, id, '{"id1":"id2"}')"
 PL/pgSQL function insert_document(text,text) line XX at SQL statement
@@ -359,9 +358,9 @@ END;
 SELECT insert_document('hello7', 'world7');
 ERROR:  cannot execute a distributed query from a query on a shard
 CONTEXT:  SQL statement "UPDATE distributed_triggers.data_changes SET operation_type = TG_OP"
-PL/pgSQL function remote_shardkey_record_change() line XX at SQL statement
+PL/pgSQL function distributed_triggers.remote_shardkey_record_change() line XX at SQL statement
 SQL statement "INSERT INTO distributed_triggers.data VALUES (key, id, '{"id1":"id2"}')"
-PL/pgSQL function insert_document(text,text) line XX at SQL statement
+PL/pgSQL function distributed_triggers.insert_document(text,text) line XX at SQL statement
 while executing command on localhost:xxxxx
 SELECT * FROM data
 ORDER BY shard_key_value, object_id;
@@ -502,7 +501,7 @@ AFTER INSERT OR UPDATE OR DELETE ON emptest
 INSERT INTO emptest VALUES ('test5', 1);
 ERROR:  cannot execute a distributed query from a query on a shard
 CONTEXT:  SQL statement "INSERT INTO distributed_triggers.record_op SELECT 'dummy', TG_OP, now()"
-PL/pgSQL function record_emp() line XX at SQL statement
+PL/pgSQL function distributed_triggers.record_emp() line XX at SQL statement
 while executing command on localhost:xxxxx
 DELETE FROM emptest;
 ERROR:  cannot execute a distributed query from a query on a shard
@@ -546,14 +545,14 @@ ERROR:  cannot execute a distributed query from a query on a shard
 CONTEXT:  SQL statement "SELECT change_id                           FROM distributed_triggers.data_changes
       WHERE shard_key_value = NEW.shard_key_value AND object_id = NEW.object_id
       ORDER BY change_id DESC LIMIT 1"
-PL/pgSQL function record_change() line XX at SQL statement
+PL/pgSQL function distributed_triggers.record_change() line XX at SQL statement
 while executing command on localhost:xxxxx
 INSERT INTO data_ref_table VALUES ('hello2','world2','{"ref":"table"}');
 ERROR:  cannot execute a distributed query from a query on a shard
 CONTEXT:  SQL statement "SELECT change_id                           FROM distributed_triggers.data_changes
       WHERE shard_key_value = NEW.shard_key_value AND object_id = NEW.object_id
       ORDER BY change_id DESC LIMIT 1"
-PL/pgSQL function record_change() line XX at SQL statement
+PL/pgSQL function distributed_triggers.record_change() line XX at SQL statement
 while executing command on localhost:xxxxx
 DELETE FROM data_ref_table where shard_key_value = 'hello';
 BEGIN;
@@ -590,7 +589,7 @@ INSERT INTO data_ref_table VALUES ('hello','world','{"ref":"table"}');
 ERROR:  cannot execute a distributed query from a query on a shard
 CONTEXT:  SQL statement "INSERT INTO distributed_triggers.data_changes (shard_key_value, object_id, change_id, operation_type, new_value)
       VALUES (NEW.shard_key_value, NEW.object_id, COALESCE(last_change_id + 1, 1), TG_OP, NEW.value)"
-PL/pgSQL function record_change() line XX at SQL statement
+PL/pgSQL function distributed_triggers.record_change() line XX at SQL statement
 while executing command on localhost:xxxxx
 TABLE data_changes ORDER BY shard_key_value, object_id, change_id;
  shard_key_value | object_id | change_id | change_time | operation_type | new_value
