@@ -1738,11 +1738,10 @@ ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade)
 		return;
 	}
 
-	RelationOpenSmgr(rel);
-	BlockNumber nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+	BlockNumber nblocks = smgrnblocks(RelationGetSmgr(rel), MAIN_FORKNUM);
 	if (nblocks < 2)
 	{
-		ColumnarStorageInit(rel->rd_smgr, ColumnarMetadataNewStorageId());
+		ColumnarStorageInit(RelationGetSmgr(rel), ColumnarMetadataNewStorageId());
 		return;
 	}
 

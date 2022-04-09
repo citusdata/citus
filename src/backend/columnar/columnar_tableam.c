@@ -913,8 +913,7 @@ columnar_relation_nontransactional_truncate(Relation rel)
 	RelationTruncate(rel, 0);
 
 	uint64 storageId = ColumnarMetadataNewStorageId();
-	RelationOpenSmgr(rel);
-	ColumnarStorageInit(rel->rd_smgr, storageId);
+	ColumnarStorageInit(RelationGetSmgr(rel), storageId);
 }
 
 
@@ -1136,8 +1135,7 @@ LogRelationStats(Relation rel, int elevel)
 		totalStripeLength += stripe->dataLength;
 	}
 
-	RelationOpenSmgr(rel);
-	uint64 relPages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+	uint64 relPages = smgrnblocks(RelationGetSmgr(rel), MAIN_FORKNUM);
 	RelationCloseSmgr(rel);
 
 	Datum storageId = DirectFunctionCall1(columnar_relation_storageid,
@@ -1239,8 +1237,7 @@ TruncateColumnar(Relation rel, int elevel)
 	uint64 newDataReservation = Max(GetHighestUsedAddress(rel->rd_node) + 1,
 									ColumnarFirstLogicalOffset);
 
-	RelationOpenSmgr(rel);
-	BlockNumber old_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+	BlockNumber old_rel_pages = smgrnblocks(RelationGetSmgr(rel), MAIN_FORKNUM);
 
 	if (!ColumnarStorageTruncate(rel, newDataReservation))
 	{
@@ -1248,8 +1245,7 @@ TruncateColumnar(Relation rel, int elevel)
 		return;
 	}
 
-	RelationOpenSmgr(rel);
-	BlockNumber new_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+	BlockNumber new_rel_pages = smgrnblocks(RelationGetSmgr(rel), MAIN_FORKNUM);
 
 	/*
 	 * We can release the exclusive lock as soon as we have truncated.
@@ -1784,20 +1780,17 @@ columnar_relation_size(Relation rel, ForkNumber forkNumber)
 
 	uint64 nblocks = 0;
 
-	/* Open it at the smgr level if not already done */
-	RelationOpenSmgr(rel);
-
 	/* InvalidForkNumber indicates returning the size for all forks */
 	if (forkNumber == InvalidForkNumber)
 	{
 		for (int i = 0; i < MAX_FORKNUM; i++)
 		{
-			nblocks += smgrnblocks(rel->rd_smgr, i);
+			nblocks += smgrnblocks(RelationGetSmgr(rel), i);
 		}
 	}
 	else
 	{
-		nblocks = smgrnblocks(rel->rd_smgr, forkNumber);
+		nblocks = smgrnblocks(RelationGetSmgr(rel), forkNumber);
 	}
 
 	return nblocks * BLCKSZ;
@@ -1819,8 +1812,7 @@ columnar_estimate_rel_size(Relation rel, int32 *attr_widths,
 						   double *allvisfrac)
 {
 	CheckCitusColumnarVersion(ERROR);
-	RelationOpenSmgr(rel);
-	*pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+	*pages = smgrnblocks(RelationGetSmgr(rel), MAIN_FORKNUM);
 	*tuples = ColumnarTableRowCount(rel);
 
 	/*
