@@ -13,6 +13,25 @@
 
 #include "distributed/pg_version_constants.h"
 
+#if PG_VERSION_NUM >= PG_VERSION_15
+#else
+
+#include "storage/smgr.h"
+#include "utils/rel.h"
+
+static inline SMgrRelation
+RelationGetSmgr(Relation rel)
+{
+	if (unlikely(rel->rd_smgr == NULL))
+	{
+		smgrsetowner(&(rel->rd_smgr), smgropen(rel->rd_node, rel->rd_backend));
+	}
+	return rel->rd_smgr;
+}
+
+
+#endif
+
 #if PG_VERSION_NUM >= PG_VERSION_14
 #define AlterTableStmtObjType_compat(a) ((a)->objtype)
 #define getObjectTypeDescription_compat(a, b) getObjectTypeDescription(a, b)
