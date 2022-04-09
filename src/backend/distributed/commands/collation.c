@@ -60,11 +60,29 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 
 	Form_pg_collation collationForm = (Form_pg_collation) GETSTRUCT(heapTuple);
 	char collprovider = collationForm->collprovider;
-	const char *collcollate = NameStr(collationForm->collcollate);
-	const char *collctype = NameStr(collationForm->collctype);
 	Oid collnamespace = collationForm->collnamespace;
 	const char *collname = NameStr(collationForm->collname);
 	bool collisdeterministic = collationForm->collisdeterministic;
+
+#if PG_VERSION_NUM >= PG_VERSION_15
+	bool isnull;
+	Datum datum = SysCacheGetAttr(COLLOID, heapTuple, Anum_pg_collation_collcollate,
+								  &isnull);
+	Assert(!isnull);
+	char *collcollate = TextDatumGetCString(datum);
+	datum = SysCacheGetAttr(COLLOID, heapTuple, Anum_pg_collation_collctype, &isnull);
+	Assert(!isnull);
+	char *collctype = TextDatumGetCString(datum);
+#else
+
+	/*
+	 * In versions before 15, collcollate and collctype were type "name". Use
+	 * pstrdup() to match the interface of 15 so that we consistently free the
+	 * result later.
+	 */
+	char *collcollate = pstrdup(NameStr(collationForm->collcollate));
+	char *collctype = pstrdup(NameStr(collationForm->collctype));
+#endif
 
 	if (collowner != NULL)
 	{
@@ -102,6 +120,9 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 						 quote_literal_cstr(collcollate),
 						 quote_literal_cstr(collctype));
 	}
+
+	pfree(collcollate);
+	pfree(collctype);
 
 	if (!collisdeterministic)
 	{
