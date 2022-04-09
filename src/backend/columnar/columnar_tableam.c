@@ -2292,18 +2292,30 @@ detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isnull)
 static void
 ColumnarCheckLogicalReplication(Relation rel)
 {
+	bool pubActionInsert = false;
+
 	if (!is_publishable_relation(rel))
 	{
 		return;
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_15
+	{
+		PublicationDesc pubdesc;
+
+		RelationBuildPublicationDesc(rel, &pubdesc);
+		pubActionInsert = pubdesc.pubactions.pubinsert;
+	}
+#else
 	if (rel->rd_pubactions == NULL)
 	{
 		GetRelationPublicationActions(rel);
 		Assert(rel->rd_pubactions != NULL);
 	}
+	pubActionInsert = rel->rd_pubactions->pubinsert;
+#endif
 
-	if (rel->rd_pubactions->pubinsert)
+	if (pubActionInsert)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg(
