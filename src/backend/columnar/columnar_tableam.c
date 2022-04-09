@@ -881,7 +881,7 @@ columnar_relation_set_new_filenode(Relation rel,
 
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
-	SMgrRelation srel = RelationCreateStorage(*newrnode, persistence);
+	SMgrRelation srel = RelationCreateStorage_compat(*newrnode, persistence, true);
 
 	ColumnarStorageInit(srel, ColumnarMetadataNewStorageId());
 	InitColumnarOptions(rel->rd_id);
