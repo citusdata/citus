@@ -396,18 +396,18 @@ AppendVarSetValue(StringInfo buf, VariableSetStmt *setStmt)
 			appendStringInfo(buf, " SET %s =", quote_identifier(setStmt->name));
 		}
 
-		Value value = varArgConst->val;
-		switch (value.type)
+		Node *value = (Node *) &varArgConst->val;
+		switch (value->type)
 		{
 			case T_Integer:
 			{
-				appendStringInfo(buf, " %d", intVal(&value));
+				appendStringInfo(buf, " %d", intVal(value));
 				break;
 			}
 
 			case T_Float:
 			{
-				appendStringInfo(buf, " %s", strVal(&value));
+				appendStringInfo(buf, " %s", strVal(value));
 				break;
 			}
 
@@ -428,7 +428,7 @@ AppendVarSetValue(StringInfo buf, VariableSetStmt *setStmt)
 
 					Datum interval =
 						DirectFunctionCall3(interval_in,
-											CStringGetDatum(strVal(&value)),
+											CStringGetDatum(strVal(value)),
 											ObjectIdGetDatum(InvalidOid),
 											Int32GetDatum(typmod));
 
@@ -440,7 +440,7 @@ AppendVarSetValue(StringInfo buf, VariableSetStmt *setStmt)
 				else
 				{
 					appendStringInfo(buf, " %s", quote_literal_cstr(strVal(
-																		&value)));
+																		value)));
 				}
 				break;
 			}

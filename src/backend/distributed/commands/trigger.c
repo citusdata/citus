@@ -44,8 +44,8 @@
 
 /* local function forward declarations */
 static bool IsCreateCitusTruncateTriggerStmt(CreateTrigStmt *createTriggerStmt);
-static Value * GetAlterTriggerDependsTriggerNameValue(AlterObjectDependsStmt *
-													  alterTriggerDependsStmt);
+static String * GetAlterTriggerDependsTriggerNameValue(AlterObjectDependsStmt *
+													   alterTriggerDependsStmt);
 static void ErrorIfUnsupportedDropTriggerCommand(DropStmt *dropTriggerStmt);
 static RangeVar * GetDropTriggerStmtRelation(DropStmt *dropTriggerStmt);
 static void ExtractDropStmtTriggerAndRelationName(DropStmt *dropTriggerStmt,
@@ -416,7 +416,7 @@ PreprocessAlterTriggerDependsStmt(Node *node, const char *queryString,
 	 * workers
 	 */
 
-	Value *triggerNameValue =
+	String *triggerNameValue =
 		GetAlterTriggerDependsTriggerNameValue(alterTriggerDependsStmt);
 	ereport(ERROR, (errmsg(
 						"Triggers \"%s\" on distributed tables and local tables added to metadata "
@@ -454,7 +454,7 @@ PostprocessAlterTriggerDependsStmt(Node *node, const char *queryString)
 	EnsureCoordinator();
 	ErrorOutForTriggerIfNotSupported(relationId);
 
-	Value *triggerNameValue =
+	String *triggerNameValue =
 		GetAlterTriggerDependsTriggerNameValue(alterTriggerDependsStmt);
 	return CitusCreateTriggerCommandDDLJob(relationId, strVal(triggerNameValue),
 										   queryString);
@@ -476,7 +476,7 @@ AlterTriggerDependsEventExtendNames(AlterObjectDependsStmt *alterTriggerDependsS
 	char **relationName = &(relation->relname);
 	AppendShardIdToName(relationName, shardId);
 
-	Value *triggerNameValue =
+	String *triggerNameValue =
 		GetAlterTriggerDependsTriggerNameValue(alterTriggerDependsStmt);
 	AppendShardIdToName(&strVal(triggerNameValue), shardId);
 
@@ -489,7 +489,7 @@ AlterTriggerDependsEventExtendNames(AlterObjectDependsStmt *alterTriggerDependsS
  * GetAlterTriggerDependsTriggerName returns Value object for the trigger
  * name that given AlterObjectDependsStmt is executed for.
  */
-static Value *
+static String *
 GetAlterTriggerDependsTriggerNameValue(AlterObjectDependsStmt *alterTriggerDependsStmt)
 {
 	List *triggerObjectNameList = (List *) alterTriggerDependsStmt->object;
@@ -503,7 +503,7 @@ GetAlterTriggerDependsTriggerNameValue(AlterObjectDependsStmt *alterTriggerDepen
 	 * be the name of the trigger in either before or after standard process
 	 * utility.
 	 */
-	Value *triggerNameValue = llast(triggerObjectNameList);
+	String *triggerNameValue = llast(triggerObjectNameList);
 	return triggerNameValue;
 }
 
@@ -642,12 +642,12 @@ DropTriggerEventExtendNames(DropStmt *dropTriggerStmt, char *schemaName, uint64 
 	ExtractDropStmtTriggerAndRelationName(dropTriggerStmt, &triggerName, &relationName);
 
 	AppendShardIdToName(&triggerName, shardId);
-	Value *triggerNameValue = makeString(triggerName);
+	String *triggerNameValue = makeString(triggerName);
 
 	AppendShardIdToName(&relationName, shardId);
-	Value *relationNameValue = makeString(relationName);
+	String *relationNameValue = makeString(relationName);
 
-	Value *schemaNameValue = makeString(pstrdup(schemaName));
+	String *schemaNameValue = makeString(pstrdup(schemaName));
 
 	List *shardTriggerNameList =
 		list_make3(schemaNameValue, relationNameValue, triggerNameValue);

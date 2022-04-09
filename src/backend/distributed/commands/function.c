@@ -1893,7 +1893,7 @@ AlterFunctionSchemaStmtObjectAddress(Node *node, bool missing_ok)
 		 */
 
 		/* the name of the function is the last in the list of names */
-		Value *funcNameStr = lfirst(list_tail(names));
+		String *funcNameStr = lfirst(list_tail(names));
 		List *newNames = list_make2(makeString(stmt->newschema), funcNameStr);
 
 		/*
@@ -1938,8 +1938,8 @@ GenerateBackupNameForProcCollision(const ObjectAddress *address)
 	char *newName = palloc0(NAMEDATALEN);
 	char suffix[NAMEDATALEN] = { 0 };
 	int count = 0;
-	Value *namespace = makeString(get_namespace_name(get_func_namespace(
-														 address->objectId)));
+	String *namespace = makeString(get_namespace_name(get_func_namespace(
+														  address->objectId)));
 	char *baseName = get_func_name(address->objectId);
 	int baseLength = strlen(baseName);
 	Oid *argtypes = NULL;

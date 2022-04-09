@@ -1353,7 +1353,7 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 	TargetEntry *targetEntry = NULL;
 	foreach_ptr(targetEntry, customScan->scan.plan.targetlist)
 	{
-		Value *columnName = makeString(targetEntry->resname);
+		String *columnName = makeString(targetEntry->resname);
 		columnNameList = lappend(columnNameList, columnName);
 	}
 

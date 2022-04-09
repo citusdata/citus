@@ -295,7 +295,7 @@ PostprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString)
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_STATISTIC_EXT);
 
-	Value *statName = llast((List *) stmt->object);
+	String *statName = llast((List *) stmt->object);
 	Oid statsOid = get_statistics_object_oid(list_make2(makeString(stmt->newschema),
 														statName), false);
 	Oid relationId = GetRelIdByStatsOid(statsOid);
@@ -328,7 +328,7 @@ AlterStatisticsSchemaStmtObjectAddress(Node *node, bool missingOk)
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 
 	ObjectAddress address = { 0 };
-	Value *statName = llast((List *) stmt->object);
+	String *statName = llast((List *) stmt->object);
 	Oid statsOid = get_statistics_object_oid(list_make2(makeString(stmt->newschema),
 														statName), missingOk);
 	ObjectAddressSet(address, StatisticExtRelationId, statsOid);

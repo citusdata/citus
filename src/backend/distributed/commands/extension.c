@@ -295,7 +295,7 @@ FilterDistributedExtensions(List *extensionObjectList)
 {
 	List *extensionNameList = NIL;
 
-	Value *objectName = NULL;
+	String *objectName = NULL;
 	foreach_ptr(objectName, extensionObjectList)
 	{
 		const char *extensionName = strVal(objectName);
@@ -334,7 +334,7 @@ ExtensionNameListToObjectAddressList(List *extensionObjectList)
 {
 	List *extensionObjectAddressList = NIL;
 
-	Value *objectName;
+	String *objectName;
 	foreach_ptr(objectName, extensionObjectList)
 	{
 		/*
@@ -671,7 +671,7 @@ IsDropCitusExtensionStmt(Node *parseTree)
 	}
 
 	/* now that we have a DropStmt, check if citus extension is among the objects to dropped */
-	Value *objectName;
+	String *objectName;
 	foreach_ptr(objectName, dropStmt->objects)
 	{
 		const char *extensionName = strVal(objectName);

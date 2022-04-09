@@ -18,10 +18,12 @@
 #define RelationCreateStorage_compat(a, b, c) RelationCreateStorage(a, b, c)
 #else
 
+#include "nodes/value.h"
 #include "storage/smgr.h"
 #include "utils/int8.h"
 #include "utils/rel.h"
 
+typedef Value String;
 
 #ifdef HAVE_LONG_INT_64
 #define strtoi64(str, endptr, base) ((int64) strtol(str, endptr, base))
