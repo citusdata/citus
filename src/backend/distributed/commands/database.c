@@ -115,7 +115,7 @@ AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok)
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Assert(stmt->objectType == OBJECT_DATABASE);
 
-	Oid databaseOid = get_database_oid(strVal((Value *) stmt->object), missing_ok);
+	Oid databaseOid = get_database_oid(strVal((String *) stmt->object), missing_ok);
 	ObjectAddress address = { 0 };
 	ObjectAddressSet(address, DatabaseRelationId, databaseOid);
 

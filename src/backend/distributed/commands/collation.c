@@ -10,6 +10,8 @@
  */
 #include "postgres.h"
 
+#include "pg_version_compat.h"
+
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/pg_collation.h"
@@ -521,7 +523,7 @@ GenerateBackupNameForCollationCollision(const ObjectAddress *address)
 		return NULL;
 	}
 	Form_pg_collation collationForm = (Form_pg_collation) GETSTRUCT(collationTuple);
-	Value *namespace = makeString(get_namespace_name(collationForm->collnamespace));
+	String *namespace = makeString(get_namespace_name(collationForm->collnamespace));
 	ReleaseSysCache(collationTuple);
 
 	while (true)

@@ -878,7 +878,7 @@ AlterTypeSchemaStmtObjectAddress(Node *node, bool missing_ok)
 		 */
 
 		/* typename is the last in the list of names */
-		Value *typeNameStr = lfirst(list_tail(names));
+		String *typeNameStr = lfirst(list_tail(names));
 
 		/*
 		 * we don't error here either, as the error would be not a good user facing

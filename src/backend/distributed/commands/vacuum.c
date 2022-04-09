@@ -432,7 +432,7 @@ DeparseVacuumColumnNames(List *columnNameList)
 
 	appendStringInfoString(columnNames, " (");
 
-	Value *columnName = NULL;
+	String *columnName = NULL;
 	foreach_ptr(columnName, columnNameList)
 	{
 		appendStringInfo(columnNames, "%s,", strVal(columnName));
