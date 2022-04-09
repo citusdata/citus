@@ -326,7 +326,7 @@ fake_relation_set_new_filenode(Relation rel,
 	 */
 	*minmulti = GetOldestMultiXactId();
 
-	SMgrRelation srel = RelationCreateStorage(*newrnode, persistence);
+	SMgrRelation srel = RelationCreateStorage_compat(*newrnode, persistence, true);
 
 	/*
 	 * If required, set up an init fork for an unlogged table so that it can

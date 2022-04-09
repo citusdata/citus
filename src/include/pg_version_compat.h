@@ -14,10 +14,14 @@
 #include "distributed/pg_version_constants.h"
 
 #if PG_VERSION_NUM >= PG_VERSION_15
+#define ProcessCompletedNotifies()
+#define RelationCreateStorage_compat(a, b, c) RelationCreateStorage(a, b, c)
 #else
 
 #include "storage/smgr.h"
 #include "utils/rel.h"
+
+#define RelationCreateStorage_compat(a, b, c) RelationCreateStorage(a, b)
 
 static inline SMgrRelation
 RelationGetSmgr(Relation rel)
