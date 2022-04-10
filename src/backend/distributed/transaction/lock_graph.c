@@ -309,7 +309,7 @@ ParseIntField(PGresult *result, int rowIndex, int colIndex)
 
 	char *resultString = PQgetvalue(result, rowIndex, colIndex);
 
-	return pg_strtouint64(resultString, NULL, 10);
+	return strtou64(resultString, NULL, 10);
 }
 
 

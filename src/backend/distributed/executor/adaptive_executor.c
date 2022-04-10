@@ -171,7 +171,6 @@
 #include "storage/fd.h"
 #include "storage/latch.h"
 #include "utils/builtins.h"
-#include "utils/int8.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/syscache.h"
@@ -4513,7 +4512,7 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 			/* if there are multiple replicas, make sure to consider only one */
 			if (storeRows && *currentAffectedTupleString != '\0')
 			{
-				scanint8(currentAffectedTupleString, false, &currentAffectedTupleCount);
+				currentAffectedTupleCount = pg_strtoint64(currentAffectedTupleString);
 				Assert(currentAffectedTupleCount >= 0);
 				execution->rowsProcessed += currentAffectedTupleCount;
 			}

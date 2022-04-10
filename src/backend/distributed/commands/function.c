@@ -490,7 +490,7 @@ GetDistributionArgIndex(Oid functionOid, char *distributionArgumentName,
 		distributionArgumentName++;
 
 		/* throws error if the input is not an integer */
-		distributionArgumentIndex = pg_atoi(distributionArgumentName, 4, 0);
+		distributionArgumentIndex = pg_strtoint32(distributionArgumentName);
 
 		if (distributionArgumentIndex < 1 || distributionArgumentIndex > numberOfArgs)
 		{

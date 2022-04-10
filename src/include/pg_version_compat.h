@@ -19,9 +19,27 @@
 #else
 
 #include "storage/smgr.h"
+#include "utils/int8.h"
 #include "utils/rel.h"
 
+
+#ifdef HAVE_LONG_INT_64
+#define strtoi64(str, endptr, base) ((int64) strtol(str, endptr, base))
+#define strtou64(str, endptr, base) ((uint64) strtoul(str, endptr, base))
+#else
+#define strtoi64(str, endptr, base) ((int64) strtoll(str, endptr, base))
+#define strtou64(str, endptr, base) ((uint64) strtoull(str, endptr, base))
+#endif
 #define RelationCreateStorage_compat(a, b, c) RelationCreateStorage(a, b)
+
+static inline int64
+pg_strtoint64(char *s)
+{
+	int64 result;
+	(void) scanint8(s, false, &result);
+	return result;
+}
+
 
 static inline SMgrRelation
 RelationGetSmgr(Relation rel)
