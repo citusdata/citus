@@ -54,7 +54,6 @@
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
-#include "utils/int8.h"
 #include "utils/json.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
@@ -1396,9 +1395,9 @@ GetShardStatistics(MultiConnection *connection, HTAB *shardIds)
 	for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
 	{
 		char *shardIdString = PQgetvalue(result, rowIndex, 0);
-		uint64 shardId = pg_strtouint64(shardIdString, NULL, 10);
+		uint64 shardId = strtou64(shardIdString, NULL, 10);
 		char *sizeString = PQgetvalue(result, rowIndex, 1);
-		uint64 totalSize = pg_strtouint64(sizeString, NULL, 10);
+		uint64 totalSize = strtou64(sizeString, NULL, 10);
 
 		ShardStatistics *statistics =
 			hash_search(shardStatistics, &shardId, HASH_ENTER, NULL);

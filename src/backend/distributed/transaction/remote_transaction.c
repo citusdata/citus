@@ -1408,7 +1408,7 @@ ParsePreparedTransactionName(char *preparedTransactionName,
 	/* step ahead of the current '_' character */
 	++currentCharPointer;
 
-	*transactionNumber = pg_strtouint64(currentCharPointer, NULL, 10);
+	*transactionNumber = strtou64(currentCharPointer, NULL, 10);
 	if ((*transactionNumber == 0 && errno != 0) ||
 		(*transactionNumber == ULLONG_MAX && errno == ERANGE))
 	{
