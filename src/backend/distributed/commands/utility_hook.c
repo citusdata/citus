@@ -75,6 +75,7 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+#include "distributed/listutils.h"
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
 int CreateObjectPropagationMode = CREATE_OBJECT_PROPAGATION_IMMEDIATE;
@@ -163,7 +164,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	parsetree = pstmt->utilityStmt;
 
 	if (IsA(parsetree, TransactionStmt) ||
-		IsA(parsetree, LockStmt) ||
 		IsA(parsetree, ListenStmt) ||
 		IsA(parsetree, NotifyStmt) ||
 		IsA(parsetree, ExecuteStmt) ||
@@ -466,6 +466,36 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	if (IsA(parsetree, TruncateStmt))
 	{
 		PreprocessTruncateStatement((TruncateStmt *) parsetree);
+	}
+
+	if (IsA(parsetree, LockStmt))
+	{
+		LockStmt *stmt = (LockStmt *) parsetree;
+		List *distributedRelationList = NIL;
+
+		RangeVar *rangeVar = NULL;
+		foreach_ptr(rangeVar, stmt->relations)
+		{
+			Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
+
+			if (!IsCitusTable(relationId))
+			{
+				continue;
+			}
+
+			if (list_member_oid(distributedRelationList, relationId))
+			{
+				continue;
+			}
+
+			distributedRelationList = lappend_oid(distributedRelationList, relationId);
+		}
+
+		if (distributedRelationList != NIL)
+		{
+			AcquireDistributedLockOnRelations(distributedRelationList, stmt->mode,
+											  stmt->nowait);
+		}
 	}
 
 	/*

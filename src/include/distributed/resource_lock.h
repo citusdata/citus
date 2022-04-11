@@ -110,6 +110,10 @@ typedef enum CitusOperations
 						 ADV_LOCKTAG_CLASS_CITUS_PLACEMENT_CLEANUP)
 
 
+#define LOCK_RELATION_IF_EXISTS "SELECT lock_relation_if_exists(%s, '%s');"
+#define LOCK_RELATION_IF_EXISTS_NOWAIT \
+	"SELECT lock_relation_if_exists(%s, '%s', nowait => true);"
+
 /* Lock shard/relation metadata for safe modifications */
 extern void LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
 extern void LockPlacementCleanup(void);
@@ -151,5 +155,6 @@ extern void LockParentShardResourceIfPartition(List *shardIntervalList,
 /* Lock mode translation between text and enum */
 extern LOCKMODE LockModeTextToLockMode(const char *lockModeName);
 extern const char * LockModeToLockModeText(LOCKMODE lockMode);
-
+extern void AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode,
+											  bool nowait);
 #endif /* RESOURCE_LOCK_H */

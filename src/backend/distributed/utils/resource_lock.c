@@ -975,6 +975,15 @@ lock_relation_if_exists(PG_FUNCTION_ARGS)
 	text *lockModeText = PG_GETARG_TEXT_P(1);
 	char *lockModeCString = text_to_cstring(lockModeText);
 
+	bool nowait = false;
+	if (!PG_ARGISNULL(2))
+	{
+		nowait = PG_GETARG_BOOL(2);
+	}
+
+	ereport(NOTICE, errmsg("%s %s %s", text_to_cstring(relationName), text_to_cstring(
+							   lockModeText), nowait ? "nowait" : "wait"));
+
 	/* ensure that we're in a transaction block */
 	RequireTransactionBlock(true, "lock_relation_if_exists");
 
@@ -985,8 +994,11 @@ lock_relation_if_exists(PG_FUNCTION_ARGS)
 	List *relationNameList = textToQualifiedNameList(relationName);
 	RangeVar *relation = makeRangeVarFromNameList(relationNameList);
 
+	uint32 nowaitFlag = nowait ? RVR_NOWAIT : 0;
+
 	/* lock the relation with the lock mode */
-	Oid relationId = RangeVarGetRelidExtended(relation, lockMode, RVR_MISSING_OK,
+	Oid relationId = RangeVarGetRelidExtended(relation, lockMode, RVR_MISSING_OK |
+											  nowaitFlag,
 											  CitusRangeVarCallbackForLockTable,
 											  (void *) &lockMode);
 	bool relationExists = OidIsValid(relationId);
@@ -1059,4 +1071,79 @@ CitusLockTableAclCheck(Oid relationId, LOCKMODE lockmode, Oid userId)
 	AclResult aclResult = pg_class_aclcheck(relationId, userId, aclMask);
 
 	return aclResult;
+}
+
+
+/*
+ * AcquireDistributedLockOnRelations acquire a distributed lock on worker nodes
+ * for given list of relations ids. Relation id list and worker node list
+ * sorted so that the lock is acquired in the same order regardless of which
+ * node it was run on. Notice that no lock is acquired on coordinator node.
+ *
+ * Notice that the locking functions is sent to all workers regardless of if
+ * it has metadata or not. This is because a worker node only knows itself
+ * and previous workers that has metadata sync turned on. The node does not
+ * know about other nodes that have metadata sync turned on afterwards.
+ */
+void
+AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode, bool nowait)
+{
+	Oid relationId = InvalidOid;
+	List *workerNodeList = ActivePrimaryNodeList(NoLock);
+
+	const char *lockModeText = LockModeToLockModeText(lockMode);
+
+	/*
+	 * We want to acquire locks in the same order across the nodes.
+	 * Although relation ids may change, their ordering will not.
+	 */
+	relationIdList = SortList(relationIdList, CompareOids);
+	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
+
+	UseCoordinatedTransaction();
+
+	int32 localGroupId = GetLocalGroupId();
+
+	foreach_oid(relationId, relationIdList)
+	{
+		/*
+		 * We only acquire distributed lock on relation if
+		 * the relation is sync'ed between mx nodes.
+		 *
+		 * Even if users disable metadata sync, we cannot
+		 * allow them not to acquire the remote locks.
+		 * Hence, we have !IsCoordinator() check.
+		 */
+		if (ShouldSyncTableMetadata(relationId) || !IsCoordinator())
+		{
+			char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+			StringInfo lockRelationCommand = makeStringInfo();
+
+			char *lockCommand = nowait ? LOCK_RELATION_IF_EXISTS_NOWAIT :
+								LOCK_RELATION_IF_EXISTS;
+			appendStringInfo(lockRelationCommand, lockCommand,
+							 quote_literal_cstr(qualifiedRelationName),
+							 lockModeText);
+
+			WorkerNode *workerNode = NULL;
+			foreach_ptr(workerNode, workerNodeList)
+			{
+				const char *nodeName = workerNode->workerName;
+				int nodePort = workerNode->workerPort;
+
+				/* if local node is one of the targets, acquire the lock locally */
+				if (workerNode->groupId == localGroupId)
+				{
+					DirectFunctionCall3(
+						lock_relation_if_exists,
+						(Datum) cstring_to_text(qualifiedRelationName),
+						(Datum) cstring_to_text(lockModeText),
+						(Datum) nowait);
+					continue;
+				}
+
+				SendCommandToWorker(nodeName, nodePort, lockRelationCommand->data);
+			}
+		}
+	}
 }

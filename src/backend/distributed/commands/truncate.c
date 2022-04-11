@@ -39,16 +39,11 @@
 #include "utils/regproc.h"
 #include "utils/rel.h"
 
-
-#define LOCK_RELATION_IF_EXISTS "SELECT lock_relation_if_exists(%s, '%s');"
-
-
 /* Local functions forward declarations for unsupported command checks */
 static void ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement);
 static void ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command);
 static void EnsurePartitionTableNotReplicatedForTruncate(TruncateStmt *truncateStatement);
 static void LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement);
-static void AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode);
 static List * TruncateTaskList(Oid relationId);
 
 
@@ -402,74 +397,8 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 
 	if (distributedRelationList != NIL)
 	{
-		AcquireDistributedLockOnRelations(distributedRelationList, AccessExclusiveLock);
-	}
-}
-
-
-/*
- * AcquireDistributedLockOnRelations acquire a distributed lock on worker nodes
- * for given list of relations ids. Relation id list and worker node list
- * sorted so that the lock is acquired in the same order regardless of which
- * node it was run on. Notice that no lock is acquired on coordinator node.
- *
- * Notice that the locking functions is sent to all workers regardless of if
- * it has metadata or not. This is because a worker node only knows itself
- * and previous workers that has metadata sync turned on. The node does not
- * know about other nodes that have metadata sync turned on afterwards.
- */
-static void
-AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
-{
-	Oid relationId = InvalidOid;
-	List *workerNodeList = ActivePrimaryNodeList(NoLock);
-	const char *lockModeText = LockModeToLockModeText(lockMode);
-
-	/*
-	 * We want to acquire locks in the same order across the nodes.
-	 * Although relation ids may change, their ordering will not.
-	 */
-	relationIdList = SortList(relationIdList, CompareOids);
-	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
-
-	UseCoordinatedTransaction();
-
-	int32 localGroupId = GetLocalGroupId();
-
-	foreach_oid(relationId, relationIdList)
-	{
-		/*
-		 * We only acquire distributed lock on relation if
-		 * the relation is sync'ed between mx nodes.
-		 *
-		 * Even if users disable metadata sync, we cannot
-		 * allow them not to acquire the remote locks.
-		 * Hence, we have !IsCoordinator() check.
-		 */
-		if (ShouldSyncTableMetadata(relationId) || !IsCoordinator())
-		{
-			char *qualifiedRelationName = generate_qualified_relation_name(relationId);
-			StringInfo lockRelationCommand = makeStringInfo();
-
-			appendStringInfo(lockRelationCommand, LOCK_RELATION_IF_EXISTS,
-							 quote_literal_cstr(qualifiedRelationName),
-							 lockModeText);
-
-			WorkerNode *workerNode = NULL;
-			foreach_ptr(workerNode, workerNodeList)
-			{
-				const char *nodeName = workerNode->workerName;
-				int nodePort = workerNode->workerPort;
-
-				/* if local node is one of the targets, acquire the lock locally */
-				if (workerNode->groupId == localGroupId)
-				{
-					LockRelationOid(relationId, lockMode);
-					continue;
-				}
-
-				SendCommandToWorker(nodeName, nodePort, lockRelationCommand->data);
-			}
-		}
+		bool nowait = false;
+		AcquireDistributedLockOnRelations(distributedRelationList, AccessExclusiveLock,
+										  nowait);
 	}
 }
