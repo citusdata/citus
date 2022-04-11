@@ -16,6 +16,8 @@
 #if PG_VERSION_NUM >= PG_VERSION_15
 #define ProcessCompletedNotifies()
 #define RelationCreateStorage_compat(a, b, c) RelationCreateStorage(a, b, c)
+#define parse_analyze_varparams_compat(a, b, c, d, e) parse_analyze_varparams(a, b, c, d, \
+																			  e)
 #else
 
 #include "nodes/value.h"
@@ -33,6 +35,7 @@ typedef Value String;
 #define strtou64(str, endptr, base) ((uint64) strtoull(str, endptr, base))
 #endif
 #define RelationCreateStorage_compat(a, b, c) RelationCreateStorage(a, b)
+#define parse_analyze_varparams_compat(a, b, c, d, e) parse_analyze_varparams(a, b, c, d)
 #define pgstat_init_relation(r) pgstat_initstats(r)
 #define pg_analyze_and_rewrite_fixedparams(a, b, c, d, e) pg_analyze_and_rewrite(a, b, c, \
 																				 d, e)
