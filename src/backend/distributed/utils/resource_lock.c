@@ -981,9 +981,6 @@ lock_relation_if_exists(PG_FUNCTION_ARGS)
 		nowait = PG_GETARG_BOOL(2);
 	}
 
-	ereport(NOTICE, errmsg("%s %s %s", text_to_cstring(relationName), text_to_cstring(
-							   lockModeText), nowait ? "nowait" : "wait"));
-
 	/* ensure that we're in a transaction block */
 	RequireTransactionBlock(true, "lock_relation_if_exists");
 
