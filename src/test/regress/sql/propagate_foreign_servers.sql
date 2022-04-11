@@ -55,9 +55,8 @@ CREATE SERVER foreign_server_to_drop
         FOREIGN DATA WRAPPER postgres_fdw
         OPTIONS (host 'test');
 
---should error
-DROP SERVER foreign_server_dependent_schema, foreign_server_to_drop;
 DROP FOREIGN TABLE foreign_table;
+DROP SERVER foreign_server_dependent_schema, foreign_server_to_drop;
 SELECT citus_remove_node('localhost', :master_port);
 
 SET client_min_messages TO ERROR;

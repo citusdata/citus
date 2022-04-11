@@ -183,43 +183,6 @@ PreprocessGrantOnSchemaStmt(Node *node, const char *queryString,
 
 
 /*
- * PreprocessAlterSchemaRenameStmt is called when the user is renaming a schema.
- * The invocation happens before the statement is applied locally.
- *
- * As the schema already exists we have access to the ObjectAddress for the schema, this
- * is used to check if the schmea is distributed. If the schema is distributed the rename
- * is executed on all the workers to keep the schemas in sync across the cluster.
- */
-List *
-PreprocessAlterSchemaRenameStmt(Node *node, const char *queryString,
-								ProcessUtilityContext processUtilityContext)
-{
-	ObjectAddress schemaAddress = GetObjectAddressFromParseTree(node, false);
-	if (!ShouldPropagateObject(&schemaAddress))
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-
-	/* fully qualify */
-	QualifyTreeNode(node);
-
-	/* deparse sql*/
-	const char *renameStmtSql = DeparseTreeNode(node);
-
-	EnsureSequentialMode(OBJECT_SCHEMA);
-
-	/* to prevent recursion with mx we disable ddl propagation */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) renameStmtSql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
  * CreateSchemaStmtObjectAddress returns the ObjectAddress of the schema that is
  * the object of the CreateSchemaStmt. Errors if missing_ok is false.
  */
