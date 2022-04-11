@@ -153,8 +153,8 @@ extern void LockParentShardResourceIfPartition(List *shardIntervalList,
 											   LOCKMODE lockMode);
 
 /* Lock mode translation between text and enum */
-extern LOCKMODE LockModeTextToLockMode(const char *lockModeName);
-extern const char * LockModeToLockModeText(LOCKMODE lockMode);
+extern LOCKMODE LockModeCStringToLockMode(const char *lockModeName);
+extern const char * LockModeToLockModeCString(LOCKMODE lockMode);
 extern void AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode,
 											  bool nowait);
 #endif /* RESOURCE_LOCK_H */
