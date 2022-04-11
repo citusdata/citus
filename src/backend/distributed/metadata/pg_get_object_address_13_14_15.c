@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * pg_get_object_address_12_13_14.c
+ * pg_get_object_address_13_14_15.c
  *
  * Copied functions from Postgres pg_get_object_address with acl/owner check.
  * Since we need to use intermediate data types Relation and Node from
@@ -39,11 +39,6 @@ static void ErrorIfCurrentUserCanNotDistributeObject(ObjectType type,
 													 Node *node,
 													 Relation *relation);
 static List * textarray_to_strvaluelist(ArrayType *arr);
-
-/* It is defined on PG >= 13 versions by default */
-#if PG_VERSION_NUM < PG_VERSION_13
-	#define TYPALIGN_INT 'i'
-#endif
 
 /*
  * PgGetObjectAddress gets the object address. This function is mostly copied from
@@ -283,6 +278,9 @@ PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr)
 		case OBJECT_FDW:
 		case OBJECT_FOREIGN_SERVER:
 		case OBJECT_LANGUAGE:
+#if PG_VERSION_NUM >= PG_VERSION_15
+		case OBJECT_PARAMETER_ACL:
+#endif
 		case OBJECT_PUBLICATION:
 		case OBJECT_ROLE:
 		case OBJECT_SCHEMA:
@@ -320,6 +318,9 @@ PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr)
 			break;
 		}
 
+#if PG_VERSION_NUM >= PG_VERSION_15
+		case OBJECT_PUBLICATION_NAMESPACE:
+#endif
 		case OBJECT_USER_MAPPING:
 		{
 			objnode = (Node *) list_make2(linitial(name), linitial(args));
