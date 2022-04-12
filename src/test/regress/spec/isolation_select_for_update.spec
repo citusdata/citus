@@ -10,7 +10,9 @@ setup
 	SELECT create_distributed_table('test_table_1_rf1','id');
 	INSERT INTO test_table_1_rf1 values(1,2),(2,3),(3,4);
 
+	SET citus.enable_ddl_propagation TO OFF;
 	CREATE VIEW test_1 AS SELECT * FROM test_table_1_rf1 WHERE val_1 = 2;
+	RESET citus.enable_ddl_propagation;
 
 	CREATE TABLE test_table_2_rf1(id int, val_1 int);
 	SELECT create_distributed_table('test_table_2_rf1','id');
