@@ -2231,15 +2231,6 @@ NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_
 (1 row)
 
 ROLLBACK;
--- same without transaction block
-WITH cte_1 AS (UPDATE another_schema_table SET b = b + 1 WHERE a = 1 RETURNING *)
-SELECT coordinated_transaction_should_use_2PC() FROM cte_1;
-NOTICE:  executing the command locally: WITH cte_1 AS (UPDATE single_node.another_schema_table_90630515 another_schema_table SET b = (another_schema_table.b OPERATOR(pg_catalog.+) 1) WHERE (another_schema_table.a OPERATOR(pg_catalog.=) 1) RETURNING another_schema_table.a, another_schema_table.b) SELECT single_node.coordinated_transaction_should_use_2pc() AS coordinated_transaction_should_use_2pc FROM cte_1
- coordinated_transaction_should_use_2pc
----------------------------------------------------------------------
- t
-(1 row)
-
 -- if the local execution is disabled, we cannot failover to
 -- local execution and the queries would fail
 SET citus.enable_local_execution TO  false;

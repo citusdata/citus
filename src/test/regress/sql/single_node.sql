@@ -1102,10 +1102,6 @@ BEGIN;
 	SELECT coordinated_transaction_should_use_2PC();
 ROLLBACK;
 
--- same without transaction block
-WITH cte_1 AS (UPDATE another_schema_table SET b = b + 1 WHERE a = 1 RETURNING *)
-SELECT coordinated_transaction_should_use_2PC() FROM cte_1;
-
 -- if the local execution is disabled, we cannot failover to
 -- local execution and the queries would fail
 SET citus.enable_local_execution TO  false;
