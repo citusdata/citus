@@ -340,6 +340,25 @@ drop cascades to view undis_view2
 drop cascades to view another_schema.undis_view3
 CONTEXT:  SQL statement "DROP TABLE undistribute_table.view_table CASCADE"
 NOTICE:  renaming the new table to undistribute_table.view_table
+WARNING:  "view undis_view1" has dependency to "table view_table" that is not in Citus' metadata
+DETAIL:  "view undis_view1" will be created only locally
+HINT:  Distribute "table view_table" first to distribute "view undis_view1"
+CONTEXT:  SQL statement "CREATE VIEW undistribute_table.undis_view1 AS  SELECT view_table.a,
+    view_table.b
+   FROM view_table;"
+WARNING:  "view undis_view2" has dependency to "table view_table" that is not in Citus' metadata
+DETAIL:  "view undis_view2" will be created only locally
+HINT:  Distribute "table view_table" first to distribute "view undis_view2"
+CONTEXT:  SQL statement "CREATE VIEW undistribute_table.undis_view2 AS  SELECT view_table.a,
+    view_table.c
+   FROM view_table;"
+WARNING:  "view another_schema.undis_view3" has dependency to "table view_table" that is not in Citus' metadata
+DETAIL:  "view another_schema.undis_view3" will be created only locally
+HINT:  Distribute "table view_table" first to distribute "view another_schema.undis_view3"
+CONTEXT:  SQL statement "CREATE VIEW another_schema.undis_view3 AS  SELECT undis_view1.b,
+    undis_view2.c
+   FROM (undis_view1
+     JOIN undis_view2 ON ((undis_view1.a = undis_view2.a)));"
  undistribute_table
 ---------------------------------------------------------------------
 

@@ -575,6 +575,9 @@ CREATE TABLE local(a int, b bigserial, c int default nextval('c_seq'));
 INSERT INTO local VALUES (3);
 create materialized view m_local as select * from local;
 create view v_local as select * from local;
+WARNING:  "view v_local" has dependency to "table local" that is not in Citus' metadata
+DETAIL:  "view v_local" will be created only locally
+HINT:  Distribute "table local" first to distribute "view v_local"
 CREATE TABLE ref(a int);
 SELECT create_Reference_table('ref');
  create_reference_table
@@ -604,6 +607,13 @@ DETAIL:  drop cascades to materialized view m_local
 drop cascades to view v_local
 CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.local CASCADE"
 NOTICE:  renaming the new table to alter_table_set_access_method.local
+WARNING:  "view v_local" has dependency to "table local" that is not in Citus' metadata
+DETAIL:  "view v_local" will be created only locally
+HINT:  Distribute "table local" first to distribute "view v_local"
+CONTEXT:  SQL statement "CREATE VIEW alter_table_set_access_method.v_local AS  SELECT local.a,
+    local.b,
+    local.c
+   FROM local;"
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -623,6 +633,8 @@ NOTICE:  renaming the new table to alter_table_set_access_method.ref
 
 (1 row)
 
+-- (TODO: CHECK) Since there is a dependent view, we must use sequential mode
+SET citus.multi_shard_modify_mode TO 'sequential';
 select alter_table_set_access_method('dist','columnar');
 NOTICE:  creating a new table for alter_table_set_access_method.dist
 NOTICE:  moving the data of alter_table_set_access_method.dist
@@ -651,6 +663,7 @@ NOTICE:  renaming the new table to alter_table_set_access_method.dist
 
 (1 row)
 
+RESET citus.multi_shard_modify_mode;
 select alter_table_set_access_method('local','heap');
 NOTICE:  creating a new table for alter_table_set_access_method.local
 NOTICE:  moving the data of alter_table_set_access_method.local
@@ -660,6 +673,13 @@ DETAIL:  drop cascades to materialized view m_local
 drop cascades to view v_local
 CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.local CASCADE"
 NOTICE:  renaming the new table to alter_table_set_access_method.local
+WARNING:  "view v_local" has dependency to "table local" that is not in Citus' metadata
+DETAIL:  "view v_local" will be created only locally
+HINT:  Distribute "table local" first to distribute "view v_local"
+CONTEXT:  SQL statement "CREATE VIEW alter_table_set_access_method.v_local AS  SELECT local.a,
+    local.b,
+    local.c
+   FROM local;"
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -679,6 +699,8 @@ NOTICE:  renaming the new table to alter_table_set_access_method.ref
 
 (1 row)
 
+-- (TODO: CHECK) Since there is a dependent view, we must use sequential mode
+SET citus.multi_shard_modify_mode TO 'sequential';
 select alter_table_set_access_method('dist','heap');
 NOTICE:  creating a new table for alter_table_set_access_method.dist
 NOTICE:  moving the data of alter_table_set_access_method.dist
@@ -693,6 +715,7 @@ NOTICE:  renaming the new table to alter_table_set_access_method.dist
 
 (1 row)
 
+RESET citus.multi_shard_modify_mode;
 SELECT * FROM m_local;
  a | b | c
 ---------------------------------------------------------------------

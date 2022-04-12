@@ -785,7 +785,6 @@ SELECT count(*) FROM events_table WHERE user_id NOT IN
 -- make sure that non-colocated subquery joins work fine in
 -- modifications
 CREATE TABLE table1 (id int, tenant_id int);
-CREATE VIEW table1_view AS SELECT * from table1 where id < 100;
 CREATE TABLE table2 (id int, tenant_id int) partition by range(tenant_id);
 CREATE TABLE table2_p1 PARTITION OF table2 FOR VALUES FROM (1) TO (10);
 
@@ -794,6 +793,8 @@ SET citus.shard_replication_factor TO 1;
 
 SELECT create_distributed_table('table2','tenant_id');
 SELECT create_distributed_table('table1','tenant_id');
+
+CREATE VIEW table1_view AS SELECT * from table1 where id < 100;
 
 -- all of the above queries are non-colocated subquery joins
 -- because the views are replaced with subqueries

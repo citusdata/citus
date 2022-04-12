@@ -4302,6 +4302,8 @@ WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%
 
 -- should work properly - no names clashes
 SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+NOTICE:  Replicating postgres objects to node localhost:xxxxx
+DETAIL:  There are 106 objects to replicate, depending on your environment this might take a while
  ?column?
 ---------------------------------------------------------------------
                    1

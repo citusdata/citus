@@ -16,6 +16,8 @@ SELECT
      	users_table.user_id = events_table.user_id AND
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed view is run. To make sure subsequent commands see the view correctly we need to make sure to use only one connection for all future commands
 SELECT
 	*
 FROM
@@ -42,6 +44,8 @@ SELECT
      event_type IN (1,2,3,4)
      ORDER BY 1 DESC
      LIMIT 5;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed view is run. To make sure subsequent commands see the view correctly we need to make sure to use only one connection for all future commands
 SELECT
 	*
 FROM
@@ -74,6 +78,8 @@ FROM
      ORDER BY 1 DESC LIMIT 5
      ) as foo
     ORDER BY 1 DESC;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed view is run. To make sure subsequent commands see the view correctly we need to make sure to use only one connection for all future commands	
 SELECT * FROM subquery_limit ORDER BY 1 DESC;
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
@@ -102,6 +108,8 @@ FROM
      ORDER BY 1
      ) as foo
      ORDER BY 1 DESC;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed view is run. To make sure subsequent commands see the view correctly we need to make sure to use only one connection for all future commands
 SELECT * FROM subquery_non_p_key_group_by ORDER BY 1 DESC;
 DEBUG:  generating subplan XXX_1 for subquery SELECT DISTINCT users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.value_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT value_1 FROM (SELECT foo.value_1 FROM (SELECT intermediate_result.value_1 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer)) foo ORDER BY foo.value_1 DESC) subquery_non_p_key_group_by ORDER BY value_1 DESC
@@ -141,6 +149,8 @@ FROM
      ) as bar
 	WHERE foo.value_2 = bar.value_3
 	ORDER BY 2 DESC, 1;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed view is run. To make sure subsequent commands see the view correctly we need to make sure to use only one connection for all future commands
 SELECT * FROM final_query_router ORDER BY 1;
 DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2, 3, 4]))) GROUP BY users_table.value_2 ORDER BY users_table.value_2 DESC
 DEBUG:  generating subplan XXX_2 for subquery SELECT users_table.value_3 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8]))) GROUP BY users_table.value_3 ORDER BY users_table.value_3 DESC
@@ -181,6 +191,8 @@ FROM
 	WHERE foo.value_2 = bar.user_id
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 3;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed view is run. To make sure subsequent commands see the view correctly we need to make sure to use only one connection for all future commands
 SELECT
 	DISTINCT ON (users_table.value_2) users_table.value_2, time, value_3
 FROM
@@ -206,6 +218,8 @@ SELECT DISTINCT user_id
 FROM users_table
 WHERE
 	user_id IN (SELECT DISTINCT value_2 FROM users_table WHERE value_1 >= 1 AND value_1 <= 20 ORDER BY 1 LIMIT 5);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed view is run. To make sure subsequent commands see the view correctly we need to make sure to use only one connection for all future commands
 SELECT
 	*
 FROM
@@ -248,6 +262,8 @@ FROM (
   ) t
   GROUP BY user_id
 ) q;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed view is run. To make sure subsequent commands see the view correctly we need to make sure to use only one connection for all future commands
 SELECT
 	*
 FROM
@@ -281,6 +297,9 @@ FROM
 							) as baz
 									WHERE baz.user_id = users_table.user_id
 	) as sub1;
+WARNING:  "view subquery_from_from_where_local_table" has dependency to "table events_table_local" that is not in Citus' metadata
+DETAIL:  "view subquery_from_from_where_local_table" will be created only locally
+HINT:  Distribute "table events_table_local" first to distribute "view subquery_from_from_where_local_table"
 SELECT
 	*
 FROM
@@ -308,6 +327,8 @@ FROM
 	SELECT user_id FROM users_table
 ) as bar
 WHERE foo.value_2 = bar.user_id;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed view is run. To make sure subsequent commands see the view correctly we need to make sure to use only one connection for all future commands
 SELECT
 	*
 FROM
@@ -337,6 +358,9 @@ FROM
 	SELECT user_id FROM users_table_local WHERE user_id = 2
 ) baw
 WHERE foo.value_2 = bar.user_id AND baz.value_2 = bar.user_id AND bar.user_id = baw.user_id;
+WARNING:  "view all_executors_view" has dependency to "table users_table_local" that is not in Citus' metadata
+DETAIL:  "view all_executors_view" will be created only locally
+HINT:  Distribute "table users_table_local" first to distribute "view all_executors_view"
 SELECT
 	*
 FROM
@@ -390,6 +414,9 @@ FROM
      ) as foo
 	  WHERE foo.user_id = cte.user_id
 ) as foo, users_table WHERE foo.cnt > users_table.value_2;
+WARNING:  "view subquery_and_ctes" has dependency to "table users_table_local" that is not in Citus' metadata
+DETAIL:  "view subquery_and_ctes" will be created only locally
+HINT:  Distribute "table users_table_local" first to distribute "view subquery_and_ctes"
 SELECT * FROM subquery_and_ctes
 ORDER BY 3 DESC, 1 DESC, 2 DESC, 4 DESC
 LIMIT 5;
@@ -437,6 +464,9 @@ SELECT time, event_type, value_2, value_3 FROM
 			events_table
 		WHERE
 			foo.user_id = events_table.value_2;
+WARNING:  "view subquery_and_ctes_second" has dependency to "table users_table_local" that is not in Citus' metadata
+DETAIL:  "view subquery_and_ctes_second" will be created only locally
+HINT:  Distribute "table users_table_local" first to distribute "view subquery_and_ctes_second"
 SELECT * FROM subquery_and_ctes_second
 ORDER BY 3 DESC, 2 DESC, 1 DESC
 LIMIT 5;
@@ -499,6 +529,8 @@ FROM
 		) as level_6, users_table WHERE users_table.user_id = level_6.min
 	GROUP BY users_table.value_1
 	) as bar;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed view is run. To make sure subsequent commands see the view correctly we need to make sure to use only one connection for all future commands
 SELECT
 	*
 FROM
@@ -530,6 +562,8 @@ FROM
      ORDER BY 1 DESC LIMIT 5
      ) as foo
     ORDER BY 1 DESC;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed view is run. To make sure subsequent commands see the view correctly we need to make sure to use only one connection for all future commands
 SELECT
 	*
 FROM
