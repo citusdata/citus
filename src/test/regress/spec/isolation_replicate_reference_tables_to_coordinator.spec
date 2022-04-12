@@ -94,7 +94,8 @@ step "s2-view-worker"
       ('%dump_local_%'),
       ('%citus_internal_local_blocked_processes%'),
       ('%add_node%'),
-      ('%csa_from_one_node%'))
+      ('%csa_from_one_node%'),
+      ('%pg_locks%'))
     AND is_worker_query = true
     AND backend_type = 'client backend'
     AND query != ''

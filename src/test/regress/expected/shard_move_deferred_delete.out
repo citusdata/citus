@@ -233,22 +233,27 @@ SET search_path TO shard_move_deferred_delete;
 SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
 ERROR:  not enough empty space on node if the shard is moved, actual available space after move will be 108 bytes, desired available space after move is 850 bytes,estimated size increase on node after move is 8192 bytes.
 HINT:  consider lowering citus.desired_percent_disk_available_after_move.
--- Restore the original function
-SELECT run_command_on_workers($cmd$
-    CREATE OR REPLACE FUNCTION pg_catalog.citus_local_disk_space_stats(
-    OUT available_disk_size bigint,
-    OUT total_disk_size bigint)
-    RETURNS record
-    LANGUAGE C STRICT
-    AS 'citus', $$citus_local_disk_space_stats$$;
-    COMMENT ON FUNCTION pg_catalog.citus_local_disk_space_stats()
-    IS 'returns statistics on available disk space on the local node';
-$cmd$);
-        run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE FUNCTION")
- (localhost,57638,t,"CREATE FUNCTION")
-(2 rows)
-
+-- Restore the original function on workers
+\c - - - :worker_1_port
+SET citus.enable_metadata_sync TO OFF;
+CREATE OR REPLACE FUNCTION pg_catalog.citus_local_disk_space_stats(
+OUT available_disk_size bigint,
+OUT total_disk_size bigint)
+RETURNS record
+LANGUAGE C STRICT
+AS 'citus', $$citus_local_disk_space_stats$$;
+COMMENT ON FUNCTION pg_catalog.citus_local_disk_space_stats()
+IS 'returns statistics on available disk space on the local node';
+\c - - - :worker_2_port
+SET citus.enable_metadata_sync TO OFF;
+CREATE OR REPLACE FUNCTION pg_catalog.citus_local_disk_space_stats(
+OUT available_disk_size bigint,
+OUT total_disk_size bigint)
+RETURNS record
+LANGUAGE C STRICT
+AS 'citus', $$citus_local_disk_space_stats$$;
+COMMENT ON FUNCTION pg_catalog.citus_local_disk_space_stats()
+IS 'returns statistics on available disk space on the local node';
+\c - - - :master_port
 DROP SCHEMA shard_move_deferred_delete CASCADE;
-NOTICE:  drop cascades to table t1
+NOTICE:  drop cascades to table shard_move_deferred_delete.t1

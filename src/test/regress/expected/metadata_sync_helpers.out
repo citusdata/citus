@@ -694,6 +694,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
     SET application_name to 'citus_internal gpid=10000000001';
     \set VERBOSITY terse
+	SET citus.enable_ddl_propagation TO OFF;
     CREATE FUNCTION distribution_test_function(int) RETURNS int
     AS $$ SELECT $1 $$
     LANGUAGE SQL;

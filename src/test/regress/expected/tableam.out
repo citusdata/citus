@@ -12,6 +12,7 @@ SET citus.shard_count TO 4;
 create schema test_tableam;
 set search_path to test_tableam;
 SELECT public.run_command_on_coordinator_and_workers($Q$
+  SET citus.enable_ddl_propagation TO off;
 	CREATE FUNCTION fake_am_handler(internal)
 	RETURNS table_am_handler
 	AS 'citus'
@@ -26,8 +27,6 @@ $Q$);
 -- Since Citus assumes access methods are part of the extension, make fake_am
 -- owned manually to be able to pass checks on Citus while distributing tables.
 ALTER EXTENSION citus ADD ACCESS METHOD fake_am;
-NOTICE:  Citus does not propagate adding/dropping member objects
-HINT:  You can add/drop the member objects on the workers as well.
 --
 -- Hash distributed table using a non-default table access method
 --

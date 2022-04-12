@@ -524,7 +524,7 @@ citus_disable_node(PG_FUNCTION_ARGS)
 	TransactionModifiedNodeMetadata = true;
 
 	/*
-	 * We have not propagated the metadata changes yet, make sure that all the
+	 * We have not propagated the node metadata changes yet, make sure that all the
 	 * active nodes get the metadata updates. We defer this operation to the
 	 * background worker to make it possible disabling nodes when multiple nodes
 	 * are down.
@@ -537,7 +537,7 @@ citus_disable_node(PG_FUNCTION_ARGS)
 	 */
 	if (UnsetMetadataSyncedForAll())
 	{
-		TriggerMetadataSyncOnCommit();
+		TriggerNodeMetadataSyncOnCommit();
 	}
 
 	PG_RETURN_VOID();
@@ -1321,7 +1321,7 @@ citus_update_node(PG_FUNCTION_ARGS)
 	 */
 	if (UnsetMetadataSyncedForAll())
 	{
-		TriggerMetadataSyncOnCommit();
+		TriggerNodeMetadataSyncOnCommit();
 	}
 
 	if (handle != NULL)

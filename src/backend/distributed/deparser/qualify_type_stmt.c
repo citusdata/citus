@@ -31,13 +31,10 @@
 #include "utils/syscache.h"
 #include "utils/lsyscache.h"
 
-static char * GetTypeNamespaceNameByNameList(List *names);
-static Oid TypeOidGetNamespaceOid(Oid typeOid);
-
 /*
  * GetTypeNamespaceNameByNameList resolved the schema name of a type by its namelist.
  */
-static char *
+char *
 GetTypeNamespaceNameByNameList(List *names)
 {
 	TypeName *typeName = makeTypeNameFromNameList(names);
@@ -51,7 +48,7 @@ GetTypeNamespaceNameByNameList(List *names)
 /*
  * TypeOidGetNamespaceOid resolves the namespace oid for a type identified by its type oid
  */
-static Oid
+Oid
 TypeOidGetNamespaceOid(Oid typeOid)
 {
 	HeapTuple typeTuple = SearchSysCache1(TYPEOID, typeOid);

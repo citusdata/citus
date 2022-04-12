@@ -2,6 +2,7 @@
 // ready for testing MX functionalities.
 setup
 {
+    SET citus.enable_metadata_sync TO off;
     CREATE OR REPLACE FUNCTION start_session_level_connection_to_node(text, integer)
         RETURNS void
         LANGUAGE C STRICT VOLATILE
@@ -26,6 +27,7 @@ setup
         RETURNS void
         LANGUAGE C STRICT VOLATILE
         AS 'citus', $$stop_session_level_connection_to_node$$;
+    RESET citus.enable_metadata_sync;
 
     SELECT citus_internal.replace_isolation_tester_func();
     SELECT citus_internal.refresh_isolation_tester_prepared_statement();
