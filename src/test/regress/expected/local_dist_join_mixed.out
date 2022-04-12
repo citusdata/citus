@@ -358,7 +358,12 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 CREATE VIEW local_regular_view AS SELECT * FROM local;
+WARNING:  "view local_regular_view" has dependency to "table local" that is not in Citus' metadata
+DETAIL:  "view local_regular_view" will be created only locally
+HINT:  Distribute "table local" first to distribute "view local_regular_view"
 CREATE VIEW dist_regular_view AS SELECT * FROM distributed;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed view is run. To make sure subsequent commands see the view correctly we need to make sure to use only one connection for all future commands
 SELECT count(*) FROM distributed JOIN local_regular_view USING (id);
 DEBUG:  generating subplan XXX_1 for subquery SELECT local.id, local.title FROM local_dist_join_mixed.local
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed JOIN (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text)) local_regular_view USING (id))
@@ -1612,3 +1617,11 @@ drop cascades to table unlogged_local
 drop cascades to materialized view mat_view
 drop cascades to view local_regular_view
 drop cascades to view dist_regular_view
+DEBUG:  drop cascades to view local_dist_join_mixed.dist_regular_view
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+DEBUG:  drop cascades to view local_dist_join_mixed.dist_regular_view
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM

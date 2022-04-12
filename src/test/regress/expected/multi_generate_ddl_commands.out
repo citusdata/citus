@@ -166,8 +166,11 @@ SELECT master_get_table_ddl_events('fiddly_table');
  ALTER TABLE public.fiddly_table OWNER TO postgres
 (3 rows)
 
--- propagating views is not supported
+-- propagating views is not supported if local table dependency exists
 CREATE VIEW local_view AS SELECT * FROM simple_table;
+WARNING:  "view local_view" has dependency to "table simple_table" that is not in Citus' metadata
+DETAIL:  "view local_view" will be created only locally
+HINT:  Distribute "table simple_table" first to distribute "view local_view"
 SELECT master_get_table_ddl_events('local_view');
 ERROR:  local_view is not a regular, foreign or partitioned table
 -- clean up
