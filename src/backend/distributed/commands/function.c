@@ -1263,12 +1263,7 @@ ShouldPropagateCreateFunction(CreateFunctionStmt *stmt)
 		return false;
 	}
 
-	/*
-	 * If the create command is a part of a multi-statement transaction that is not in
-	 * sequential mode, don't propagate.
-	 */
-	if (IsMultiStatementTransaction() &&
-		MultiShardConnectionType != SEQUENTIAL_CONNECTION)
+	if (!ShouldPropagateCreateInCoordinatedTransction())
 	{
 		return false;
 	}

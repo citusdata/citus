@@ -33,18 +33,18 @@ NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_comm
 ---------------------------------------------------------------------
 BEGIN;
     CREATE TABLE distributed_table(value int);
-    SELECT create_distributed_table('distributed_table', 'value');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
     CREATE FUNCTION insert_42() RETURNS trigger AS $insert_42$
     BEGIN
         INSERT INTO distributed_table VALUES (42);
         RETURN NEW;
     END;
     $insert_42$ LANGUAGE plpgsql;
+    SELECT create_distributed_table('distributed_table', 'value');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
     CREATE TRIGGER insert_42_trigger
     AFTER DELETE ON citus_local_table
     FOR EACH ROW EXECUTE FUNCTION insert_42();

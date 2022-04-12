@@ -153,6 +153,14 @@ static DistributeObjectOps Any_CompositeType = {
 	.address = CompositeTypeStmtObjectAddress,
 	.markDistributed = true,
 };
+static DistributeObjectOps Any_CreateDomain = {
+	.deparse = DeparseCreateDomainStmt,
+	.qualify = QualifyCreateDomainStmt,
+	.preprocess = PreprocessCreateDomainStmt,
+	.postprocess = PostprocessCreateDomainStmt,
+	.address = CreateDomainStmtObjectAddress,
+	.markDistributed = true,
+};
 static DistributeObjectOps Any_CreateEnum = {
 	.deparse = DeparseCreateEnumStmt,
 	.qualify = QualifyCreateEnumStmt,
@@ -311,6 +319,55 @@ static DistributeObjectOps Database_AlterOwner = {
 	.preprocess = PreprocessAlterDatabaseOwnerStmt,
 	.postprocess = PostprocessAlterDatabaseOwnerStmt,
 	.address = AlterDatabaseOwnerObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps Domain_Alter = {
+	.deparse = DeparseAlterDomainStmt,
+	.qualify = QualifyAlterDomainStmt,
+	.preprocess = PreprocessAlterDomainStmt,
+	.postprocess = PostprocessAlterDomainStmt,
+	.address = AlterDomainStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps Domain_AlterObjectSchema = {
+	.deparse = DeparseAlterDomainSchemaStmt,
+	.qualify = QualifyAlterDomainSchemaStmt,
+	.preprocess = PreprocessAlterDomainSchemaStmt,
+	.postprocess = PostprocessAlterDomainSchemaStmt,
+	.address = AlterTypeSchemaStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps Domain_AlterOwner = {
+	.deparse = DeparseAlterDomainOwnerStmt,
+	.qualify = QualifyAlterDomainOwnerStmt,
+	.preprocess = PreprocessAlterDomainOwnerStmt,
+	.postprocess = PostprocessAlterDomainOwnerStmt,
+	.address = AlterDomainOwnerStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps Domain_Drop = {
+	.deparse = DeparseDropDomainStmt,
+	.qualify = QualifyDropDomainStmt,
+	.preprocess = PreprocessDropDomainStmt,
+	.postprocess = NULL,
+	.address = NULL,
+	.markDistributed = false,
+};
+static DistributeObjectOps Domain_Rename = {
+	.deparse = DeparseRenameDomainStmt,
+	.qualify = QualifyRenameDomainStmt,
+	.preprocess = PreprocessRenameDomainStmt,
+	.postprocess = NULL,
+	.address = RenameDomainStmtObjectAddress,
+	.markDistributed = false,
+};
+
+static DistributeObjectOps Domain_RenameConstraint = {
+	.deparse = DeparseDomainRenameConstraintStmt,
+	.qualify = QualifyDomainRenameConstraintStmt,
+	.preprocess = PreprocessDomainRenameConstraintStmt,
+	.postprocess = NULL,
+	.address = DomainRenameConstraintStmtObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps Extension_AlterObjectSchema = {
@@ -831,6 +888,11 @@ GetDistributeObjectOps(Node *node)
 {
 	switch (nodeTag(node))
 	{
+		case T_AlterDomainStmt:
+		{
+			return &Domain_Alter;
+		}
+
 		case T_AlterEnumStmt:
 		{
 			return &Any_AlterEnum;
@@ -901,6 +963,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_COLLATION:
 				{
 					return &Collation_AlterObjectSchema;
+				}
+
+				case OBJECT_DOMAIN:
+				{
+					return &Domain_AlterObjectSchema;
 				}
 
 				case OBJECT_EXTENSION:
@@ -979,6 +1046,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_DATABASE:
 				{
 					return &Database_AlterOwner;
+				}
+
+				case OBJECT_DOMAIN:
+				{
+					return &Domain_AlterOwner;
 				}
 
 				case OBJECT_FOREIGN_SERVER:
@@ -1139,6 +1211,11 @@ GetDistributeObjectOps(Node *node)
 			return &Any_CompositeType;
 		}
 
+		case T_CreateDomainStmt:
+		{
+			return &Any_CreateDomain;
+		}
+
 		case T_CreateEnumStmt:
 		{
 			return &Any_CreateEnum;
@@ -1224,6 +1301,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_COLLATION:
 				{
 					return &Collation_Drop;
+				}
+
+				case OBJECT_DOMAIN:
+				{
+					return &Domain_Drop;
 				}
 
 				case OBJECT_EXTENSION:
@@ -1363,6 +1445,16 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_COLLATION:
 				{
 					return &Collation_Rename;
+				}
+
+				case OBJECT_DOMAIN:
+				{
+					return &Domain_Rename;
+				}
+
+				case OBJECT_DOMCONSTRAINT:
+				{
+					return &Domain_RenameConstraint;
 				}
 
 				case OBJECT_FOREIGN_SERVER:

@@ -50,6 +50,23 @@ extern void QualifyRenameCollationStmt(Node *stmt);
 extern void QualifyAlterCollationSchemaStmt(Node *stmt);
 extern void QualifyAlterCollationOwnerStmt(Node *stmt);
 
+/* forward declarations for deparse_domain_stmts.c */
+extern char * DeparseCreateDomainStmt(Node *node);
+extern char * DeparseDropDomainStmt(Node *node);
+extern char * DeparseAlterDomainStmt(Node *node);
+extern char * DeparseDomainRenameConstraintStmt(Node *node);
+extern char * DeparseAlterDomainOwnerStmt(Node *node);
+extern char * DeparseRenameDomainStmt(Node *node);
+extern char * DeparseAlterDomainSchemaStmt(Node *node);
+
+extern void QualifyCreateDomainStmt(Node *node);
+extern void QualifyDropDomainStmt(Node *node);
+extern void QualifyAlterDomainStmt(Node *node);
+extern void QualifyDomainRenameConstraintStmt(Node *node);
+extern void QualifyAlterDomainOwnerStmt(Node *node);
+extern void QualifyRenameDomainStmt(Node *node);
+extern void QualifyAlterDomainSchemaStmt(Node *node);
+
 /* forward declarations for deparse_foreign_server_stmts.c */
 extern char * DeparseCreateForeignServerStmt(Node *node);
 extern char * DeparseAlterForeignServerStmt(Node *node);
@@ -121,11 +138,15 @@ extern void QualifyCreateEnumStmt(Node *stmt);
 extern void QualifyAlterTypeSchemaStmt(Node *stmt);
 extern void QualifyAlterTypeOwnerStmt(Node *stmt);
 
-extern void QualifyDropViewStmt(Node *node);
-extern void AddViewDefinitionToCreateViewCommand(StringInfo buf, Oid viewOid);
+extern char * GetTypeNamespaceNameByNameList(List *names);
+extern Oid TypeOidGetNamespaceOid(Oid typeOid);
 
 extern ObjectAddress GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok);
 extern ObjectAddress RenameAttributeStmtObjectAddress(Node *stmt, bool missing_ok);
+
+/* forward declarations for deparse_view_stmts.c */
+extern void QualifyDropViewStmt(Node *node);
+extern void AddViewDefinitionToCreateViewCommand(StringInfo buf, Oid viewOid);
 
 /* forward declarations for deparse_function_stmts.c */
 extern char * DeparseDropFunctionStmt(Node *stmt);
