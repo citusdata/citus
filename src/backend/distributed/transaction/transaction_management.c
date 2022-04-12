@@ -205,8 +205,17 @@ InCoordinatedTransaction(void)
 void
 Use2PCForCoordinatedTransaction(void)
 {
-	Assert(InCoordinatedTransaction());
-
+	/*
+	 * If this transaction is also a coordinated
+	 * transaction, use 2PC. Otherwise, this
+	 * state change does nothing.
+	 *
+	 * In other words, when this flag is set,
+	 * we "should" use 2PC when needed (e.g.,
+	 * we are in a coordinated transaction and
+	 * the coordinated transaction does a remote
+	 * modification).
+	 */
 	ShouldCoordinatedTransactionUse2PC = true;
 }
 
