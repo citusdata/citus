@@ -28,23 +28,42 @@ CREATE TABLE warnings (
     id int primary key,
     message text
 );
+
 SELECT create_distributed_table('warnings', 'id');
 INSERT INTO warnings VALUES (1, 'hello arbitrary config tests');
 
-CREATE FUNCTION warning(text)
+CREATE FUNCTION warning(int, text)
 RETURNS void
 LANGUAGE plpgsql AS $$
 BEGIN
-    RAISE WARNING '%', $1;
+    RAISE WARNING '%', $2;
 END;
 $$;
 
+SELECT create_distributed_function('warning(int,text)','$1');
+
 SET client_min_messages TO WARNING;
-SELECT warning(message) FROM warnings WHERE id = 1;
+SELECT warning(id, message) FROM warnings WHERE id = 1;
 RESET client_min_messages;
 
 -- verify that the function definition is consistent in the cluster
-SELECT verify_function_is_same_on_workers('function_create.warning(text)');
+SELECT verify_function_is_same_on_workers('function_create.warning(int,text)');
+
+-- test a function that performs operation on the single shard of a reference table
+CREATE TABLE monotonic_series(used_values int);
+SELECT create_reference_table('monotonic_series');
+INSERT INTO monotonic_series VALUES (1), (3), (5);
+
+CREATE FUNCTION add_new_item_to_series()
+RETURNS int
+LANGUAGE SQL
+AS $func$
+INSERT INTO monotonic_series SELECT max(used_values)+1 FROM monotonic_series RETURNING used_values;
+$func$;
+
+SELECT add_new_item_to_series();
+SELECT add_new_item_to_series();
+SELECT add_new_item_to_series();
 
 -- Create and distribute a simple function
 CREATE FUNCTION eq(macaddr, macaddr) RETURNS bool
@@ -76,3 +95,103 @@ ALTER FUNCTION eq(macaddr,macaddr) RESET search_path;
 -- rename function and make sure the new name can be used on the workers
 ALTER FUNCTION eq(macaddr,macaddr) RENAME TO eq2;
 SELECT verify_function_is_same_on_workers('function_create.eq2(macaddr,macaddr)');
+
+-- user-defined aggregates with & without strict
+create function sum2_sfunc_strict(state int, x int)
+returns int immutable strict language plpgsql as $$
+begin return state + x;
+end;
+$$;
+
+create function sum2_finalfunc_strict(state int)
+returns int immutable strict language plpgsql as $$
+begin return state * 2;
+end;
+$$;
+
+create function sum2_sfunc(state int, x int)
+returns int immutable language plpgsql as $$
+begin return state + x;
+end;
+$$;
+
+create function sum2_finalfunc(state int)
+returns int immutable language plpgsql as $$
+begin return state * 2;
+end;
+$$;
+
+create aggregate sum2 (int) (
+    sfunc = sum2_sfunc,
+    stype = int,
+    finalfunc = sum2_finalfunc,
+    combinefunc = sum2_sfunc,
+    initcond = '0'
+);
+
+create aggregate sum2_strict (int) (
+    sfunc = sum2_sfunc_strict,
+    stype = int,
+    finalfunc = sum2_finalfunc_strict,
+    combinefunc = sum2_sfunc_strict
+);
+
+-- user-defined aggregates with multiple-parameters
+create function psum_sfunc(s int, x int, y int)
+returns int immutable language plpgsql as $$
+begin return coalesce(s,0) + coalesce(x*y+3,1);
+end;
+$$;
+
+create  function psum_sfunc_strict(s int, x int, y int)
+returns int immutable strict language plpgsql as $$
+begin return coalesce(s,0) + coalesce(x*y+3,1);
+end;
+$$;
+
+create function psum_combinefunc(s1 int, s2 int)
+returns int immutable language plpgsql as $$
+begin return coalesce(s1,0) + coalesce(s2,0);
+end;
+$$;
+
+create function psum_combinefunc_strict(s1 int, s2 int)
+returns int immutable strict language plpgsql as $$
+begin return coalesce(s1,0) + coalesce(s2,0);
+end;
+$$;
+
+create function psum_finalfunc(x int)
+returns int immutable language plpgsql as $$
+begin return x * 2;
+end;
+$$;
+
+create function psum_finalfunc_strict(x int)
+returns int immutable strict language plpgsql as $$
+begin return x * 2;
+end;
+$$;
+
+create aggregate psum(int, int)(
+    sfunc=psum_sfunc,
+    combinefunc=psum_combinefunc,
+    finalfunc=psum_finalfunc,
+    stype=int
+);
+
+create aggregate psum_strict(int, int)(
+    sfunc=psum_sfunc_strict,
+    combinefunc=psum_combinefunc_strict,
+    finalfunc=psum_finalfunc_strict,
+    stype=int,
+    initcond=0
+);
+
+-- generate test data
+create table aggdata (id int, key int, val int, valf float8);
+select create_distributed_table('aggdata', 'id');
+insert into aggdata (id, key, val, valf) values (1, 1, 2, 11.2), (2, 1, NULL, 2.1), (3, 2, 2, 3.22), (4, 2, 3, 4.23), (5, 2, 5, 5.25), (6, 3, 4, 63.4), (7, 5, NULL, 75), (8, 6, NULL, NULL), (9, 6, NULL, 96), (10, 7, 8, 1078), (11, 9, 0, 1.19);
+
+select key, sum2(val), sum2_strict(val), stddev(valf)::numeric(10,5), psum(val, valf::int), psum_strict(val, valf::int) from aggdata group by key order by key;
+
