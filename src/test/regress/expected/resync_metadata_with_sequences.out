@@ -141,6 +141,8 @@ INSERT INTO sensors_news VALUES (DEFAULT, DEFAULT, '2021-01-01') RETURNING *;
 
 \c - - - :master_port
 SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+NOTICE:  Replicating postgres objects to node localhost:xxxxx
+DETAIL:  There are 102 objects to replicate, depending on your environment this might take a while
  ?column?
 ---------------------------------------------------------------------
         1

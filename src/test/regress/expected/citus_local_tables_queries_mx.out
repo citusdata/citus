@@ -683,11 +683,13 @@ SELECT count(*) FROM distributed_table WHERE b in
      0
 (1 row)
 
+SET citus.enable_ddl_propagation TO OFF;
 CREATE VIEW view_2 AS
 SELECT count(*)
 FROM citus_local_table
 JOIN citus_local_table_2 USING (a)
 JOIN distributed_table USING (a);
+RESET citus.enable_ddl_propagation;
 -- should fail as view contains direct local dist join
 SELECT count(*) FROM view_2;
  count
@@ -695,11 +697,13 @@ SELECT count(*) FROM view_2;
      1
 (1 row)
 
+SET citus.enable_ddl_propagation TO OFF;
 CREATE VIEW view_3
 AS SELECT count(*)
 FROM citus_local_table_2
 JOIN reference_table
 USING (a);
+RESET citus.enable_ddl_propagation;
 -- ok
 SELECT count(*) FROM view_3;
  count
