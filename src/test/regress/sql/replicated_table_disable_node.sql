@@ -52,8 +52,11 @@ SELECT count(*) FROM replicated;
 SELECT count(*) FROM replicated;
 
 -- now, we should be able to replicate the shards back
-SET client_min_messages TO ERROR;
+SET client_min_messages TO DEBUG4;
+SET citus.log_remote_commands TO true;
 SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+RESET citus.log_remote_commands;
+SET client_min_messages TO ERROR;
 SELECT 1 FROM replicate_table_shards('replicated', shard_replication_factor:=2, shard_transfer_mode:='block_writes');
 RESET client_min_messages;
 
