@@ -159,7 +159,7 @@ wait_until_metadata_sync(PG_FUNCTION_ARGS)
 Datum
 trigger_metadata_sync(PG_FUNCTION_ARGS)
 {
-	TriggerMetadataSyncOnCommit();
+	TriggerNodeMetadataSyncOnCommit();
 	PG_RETURN_VOID();
 }
 

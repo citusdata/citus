@@ -157,7 +157,6 @@ PreprocessDropViewStmt(Node *node, const char *queryString, ProcessUtilityContex
 					   processUtilityContext)
 {
 	DropStmt *stmt = castNode(DropStmt, node);
-	List *distributedViews = NIL;
 
 	if (!ShouldPropagate())
 	{
@@ -170,7 +169,8 @@ PreprocessDropViewStmt(Node *node, const char *queryString, ProcessUtilityContex
 	 */
 	QualifyTreeNode((Node *) stmt);
 
-	distributedViews = FilterNameListForDistributedViews(stmt->objects, stmt->missing_ok);
+	List *distributedViews = FilterNameListForDistributedViews(stmt->objects,
+															   stmt->missing_ok);
 
 	if (list_length(distributedViews) < 1)
 	{

@@ -612,6 +612,11 @@ CreateTypeStmtByObjectAddress(const ObjectAddress *address)
 			return (Node *) RecreateCompositeTypeStmt(address->objectId);
 		}
 
+		case TYPTYPE_DOMAIN:
+		{
+			return (Node *) RecreateDomainStmt(address->objectId);
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported type to generate create statement for"),
@@ -854,7 +859,7 @@ ObjectAddress
 AlterTypeSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
-	Assert(stmt->objectType == OBJECT_TYPE);
+	Assert(stmt->objectType == OBJECT_TYPE || stmt->objectType == OBJECT_DOMAIN);
 
 	List *names = (List *) stmt->object;
 

@@ -171,6 +171,35 @@ extern List * PostprocessAlterDatabaseOwnerStmt(Node *node, const char *queryStr
 extern ObjectAddress AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok);
 extern List * DatabaseOwnerDDLCommands(const ObjectAddress *address);
 
+/* domain.c - forward declarations */
+extern List * PreprocessCreateDomainStmt(Node *node, const char *queryString,
+										 ProcessUtilityContext processUtilityContext);
+extern List * PostprocessCreateDomainStmt(Node *node, const char *queryString);
+extern List * PreprocessDropDomainStmt(Node *node, const char *queryString,
+									   ProcessUtilityContext processUtilityContext);
+extern List * PreprocessAlterDomainStmt(Node *node, const char *queryString,
+										ProcessUtilityContext processUtilityContext);
+extern List * PostprocessAlterDomainStmt(Node *node, const char *queryString);
+extern List * PreprocessDomainRenameConstraintStmt(Node *node, const char *queryString,
+												   ProcessUtilityContext
+												   processUtilityContext);
+extern List * PreprocessAlterDomainOwnerStmt(Node *node, const char *queryString,
+											 ProcessUtilityContext processUtilityContext);
+extern List * PostprocessAlterDomainOwnerStmt(Node *node, const char *queryString);
+extern List * PreprocessRenameDomainStmt(Node *node, const char *queryString,
+										 ProcessUtilityContext processUtilityContext);
+extern List * PreprocessAlterDomainSchemaStmt(Node *node, const char *queryString,
+											  ProcessUtilityContext processUtilityContext);
+extern List * PostprocessAlterDomainSchemaStmt(Node *node, const char *queryString);
+extern ObjectAddress CreateDomainStmtObjectAddress(Node *node, bool missing_ok);
+extern ObjectAddress AlterDomainStmtObjectAddress(Node *node, bool missing_ok);
+extern ObjectAddress DomainRenameConstraintStmtObjectAddress(Node *node,
+															 bool missing_ok);
+extern ObjectAddress AlterDomainOwnerStmtObjectAddress(Node *node, bool missing_ok);
+extern ObjectAddress RenameDomainStmtObjectAddress(Node *node, bool missing_ok);
+extern CreateDomainStmt * RecreateDomainStmt(Oid domainOid);
+extern Oid get_constraint_typid(Oid conoid);
+
 /* extension.c - forward declarations */
 extern bool IsDropCitusExtensionStmt(Node *parsetree);
 extern bool IsCreateAlterExtensionUpdateCitusStmt(Node *parsetree);

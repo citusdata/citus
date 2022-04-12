@@ -763,6 +763,11 @@ GetObjectTypeString(ObjectType objType)
 			return "database";
 		}
 
+		case OBJECT_DOMAIN:
+		{
+			return "domain";
+		}
+
 		case OBJECT_EXTENSION:
 		{
 			return "extension";

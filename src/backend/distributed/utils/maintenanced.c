@@ -86,7 +86,7 @@ typedef struct MaintenanceDaemonDBData
 	Oid userOid;
 	pid_t workerPid;
 	bool daemonStarted;
-	bool triggerMetadataSync;
+	bool triggerNodeMetadataSync;
 	Latch *latch; /* pointer to the background worker's latch */
 } MaintenanceDaemonDBData;
 
@@ -233,7 +233,7 @@ InitializeMaintenanceDaemonBackend(void)
 		dbData->daemonStarted = true;
 		dbData->userOid = extensionOwner;
 		dbData->workerPid = 0;
-		dbData->triggerMetadataSync = false;
+		dbData->triggerNodeMetadataSync = false;
 		LWLockRelease(&MaintenanceDaemonControl->lock);
 
 		pid_t pid;
@@ -926,11 +926,11 @@ StopMaintenanceDaemon(Oid databaseId)
 
 
 /*
- * TriggerMetadataSync triggers the maintenance daemon to do a metadata sync for
- * the given database.
+ * TriggerMetadataSync triggers the maintenance daemon to do
+ * a node metadata sync for the given database.
  */
 void
-TriggerMetadataSync(Oid databaseId)
+TriggerNodeMetadataSync(Oid databaseId)
 {
 	bool found = false;
 
@@ -942,7 +942,7 @@ TriggerMetadataSync(Oid databaseId)
 		HASH_FIND, &found);
 	if (found)
 	{
-		dbData->triggerMetadataSync = true;
+		dbData->triggerNodeMetadataSync = true;
 
 		/* set latch to wake-up the maintenance loop */
 		SetLatch(dbData->latch);
@@ -961,8 +961,8 @@ MetadataSyncTriggeredCheckAndReset(MaintenanceDaemonDBData *dbData)
 {
 	LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
 
-	bool metadataSyncTriggered = dbData->triggerMetadataSync;
-	dbData->triggerMetadataSync = false;
+	bool metadataSyncTriggered = dbData->triggerNodeMetadataSync;
+	dbData->triggerNodeMetadataSync = false;
 
 	LWLockRelease(&MaintenanceDaemonControl->lock);
 
