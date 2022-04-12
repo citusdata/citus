@@ -314,7 +314,7 @@ AppendAliasesToCreateViewCommandForExistingView(StringInfo createViewCommand, Oi
 																	  ForwardScanDirection)))
 	{
 		Form_pg_attribute att = (Form_pg_attribute) GETSTRUCT(attributeTuple);
-		char *aliasName = NameStr(att->attname);
+		const char *aliasName = quote_identifier(NameStr(att->attname));
 
 		if (isInitialAlias)
 		{

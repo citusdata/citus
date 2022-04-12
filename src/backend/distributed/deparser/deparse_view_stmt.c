@@ -103,7 +103,7 @@ AddAliasesToCreateViewCommand(StringInfo buf, ViewStmt *stmt)
 	ListCell *aliasItem;
 	foreach(aliasItem, stmt->aliases)
 	{
-		char *columnAliasName = pstrdup(strVal(lfirst(aliasItem)));
+		char *columnAliasName = pstrdup(quote_identifier(strVal(lfirst(aliasItem))));
 
 		if (isFirstAlias)
 		{
