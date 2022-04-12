@@ -46,15 +46,6 @@ SELECT create_distributed_function('warning(int,text)','$1');
 
 (1 row)
 
-SET client_min_messages TO WARNING;
-SELECT warning(id, message) FROM warnings WHERE id = 1;
-WARNING:  hello arbitrary config tests
- warning
----------------------------------------------------------------------
-
-(1 row)
-
-RESET client_min_messages;
 -- verify that the function definition is consistent in the cluster
 SELECT verify_function_is_same_on_workers('function_create.warning(int,text)');
  verify_function_is_same_on_workers
@@ -77,24 +68,6 @@ LANGUAGE SQL
 AS $func$
 INSERT INTO monotonic_series SELECT max(used_values)+1 FROM monotonic_series RETURNING used_values;
 $func$;
-SELECT add_new_item_to_series();
- add_new_item_to_series
----------------------------------------------------------------------
-                      6
-(1 row)
-
-SELECT add_new_item_to_series();
- add_new_item_to_series
----------------------------------------------------------------------
-                      7
-(1 row)
-
-SELECT add_new_item_to_series();
- add_new_item_to_series
----------------------------------------------------------------------
-                      8
-(1 row)
-
 -- Create and distribute a simple function
 CREATE FUNCTION eq(macaddr, macaddr) RETURNS bool
     AS 'select $1 = $2;'
@@ -247,17 +220,4 @@ select create_distributed_table('aggdata', 'id');
 ---------------------------------------------------------------------
 
 (1 row)
-
-insert into aggdata (id, key, val, valf) values (1, 1, 2, 11.2), (2, 1, NULL, 2.1), (3, 2, 2, 3.22), (4, 2, 3, 4.23), (5, 2, 5, 5.25), (6, 3, 4, 63.4), (7, 5, NULL, 75), (8, 6, NULL, NULL), (9, 6, NULL, 96), (10, 7, 8, 1078), (11, 9, 0, 1.19);
-select key, sum2(val), sum2_strict(val), stddev(valf)::numeric(10,5), psum(val, valf::int), psum_strict(val, valf::int) from aggdata group by key order by key;
- key | sum2 | sum2_strict | stddev  | psum  | psum_strict
----------------------------------------------------------------------
-   1 |      |           4 | 6.43467 |    52 |          50
-   2 |   20 |          20 | 1.01500 |   104 |         104
-   3 |    8 |           8 |         |   510 |         510
-   5 |      |             |         |     2 |           0
-   6 |      |             |         |     4 |           0
-   7 |   16 |          16 |         | 17254 |       17254
-   9 |    0 |           0 |         |     6 |           6
-(7 rows)
 

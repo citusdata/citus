@@ -42,10 +42,6 @@ $$;
 
 SELECT create_distributed_function('warning(int,text)','$1');
 
-SET client_min_messages TO WARNING;
-SELECT warning(id, message) FROM warnings WHERE id = 1;
-RESET client_min_messages;
-
 -- verify that the function definition is consistent in the cluster
 SELECT verify_function_is_same_on_workers('function_create.warning(int,text)');
 
@@ -60,10 +56,6 @@ LANGUAGE SQL
 AS $func$
 INSERT INTO monotonic_series SELECT max(used_values)+1 FROM monotonic_series RETURNING used_values;
 $func$;
-
-SELECT add_new_item_to_series();
-SELECT add_new_item_to_series();
-SELECT add_new_item_to_series();
 
 -- Create and distribute a simple function
 CREATE FUNCTION eq(macaddr, macaddr) RETURNS bool
@@ -191,7 +183,3 @@ create aggregate psum_strict(int, int)(
 -- generate test data
 create table aggdata (id int, key int, val int, valf float8);
 select create_distributed_table('aggdata', 'id');
-insert into aggdata (id, key, val, valf) values (1, 1, 2, 11.2), (2, 1, NULL, 2.1), (3, 2, 2, 3.22), (4, 2, 3, 4.23), (5, 2, 5, 5.25), (6, 3, 4, 63.4), (7, 5, NULL, 75), (8, 6, NULL, NULL), (9, 6, NULL, 96), (10, 7, 8, 1078), (11, 9, 0, 1.19);
-
-select key, sum2(val), sum2_strict(val), stddev(valf)::numeric(10,5), psum(val, valf::int), psum_strict(val, valf::int) from aggdata group by key order by key;
-
