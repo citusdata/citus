@@ -22,7 +22,6 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 
-static void AddQualifiedViewNameToCreateViewCommand(StringInfo buf, Oid viewOid);
 static void AddAliasesToCreateViewCommand(StringInfo buf, ViewStmt *stmt);
 static void AddOptionsToCreateViewCommand(StringInfo buf, ViewStmt *stmt);
 static void AppendDropViewStmt(StringInfo buf, DropStmt *stmt);
@@ -42,19 +41,12 @@ DeparseViewStmt(Node *node)
 
 	if (stmt->replace)
 	{
-		appendStringInfoString(viewString, "CREATE OR REPLACE ");
+		appendStringInfoString(viewString, "CREATE OR REPLACE VIEW ");
 	}
 	else
 	{
-		appendStringInfoString(viewString, "CREATE ");
+		appendStringInfoString(viewString, "CREATE VIEW ");
 	}
-
-	if (stmt->view->relpersistence == RELPERSISTENCE_TEMP)
-	{
-		appendStringInfoString(viewString, "TEMPORARY ");
-	}
-
-	appendStringInfo(viewString, "VIEW ");
 
 	AddQualifiedViewNameToCreateViewCommand(viewString, viewOid);
 	AddAliasesToCreateViewCommand(viewString, stmt);
@@ -74,9 +66,9 @@ DeparseViewStmt(Node *node)
 
 /*
  * AddQualifiedViewNameToCreateViewCommand adds the qualified view of the given view
- * statement to the given create view command.
+ * oid to the given create view command.
  */
-static void
+void
 AddQualifiedViewNameToCreateViewCommand(StringInfo buf, Oid viewOid)
 {
 	char *viewName = get_rel_name(viewOid);
@@ -125,7 +117,7 @@ AddAliasesToCreateViewCommand(StringInfo buf, ViewStmt *stmt)
 /*
  * AddOptionsToCreateViewCommand appends options (if exists) of the given view statement
  * to the given create view command. Note that this function also handles
- * WITH [CASCADED | LOCAL] CHECK OPTION part of the CREATE VIEW command as well.
+ * WITH [CASCADED | LOCAL] CHECK OPTION part of the CREATE VIEW command.
  */
 static void
 AddOptionsToCreateViewCommand(StringInfo buf, ViewStmt *stmt)
@@ -152,7 +144,7 @@ AddOptionsToCreateViewCommand(StringInfo buf, ViewStmt *stmt)
 		}
 
 		appendStringInfoString(buf, option->defname);
-		appendStringInfoString(buf, " = ");
+		appendStringInfoString(buf, "=");
 		appendStringInfoString(buf, defGetString(option));
 	}
 
@@ -169,8 +161,7 @@ AddViewDefinitionToCreateViewCommand(StringInfo buf, Oid viewOid)
 {
 	/*
 	 * Set search_path to NIL so that all objects outside of pg_catalog will be
-	 * schema-prefixed. pg_catalog will be added automatically when we call
-	 * PushOverrideSearchPath(), since we set addCatalog to true;
+	 * schema-prefixed.
 	 */
 	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
 	overridePath->schemas = NIL;

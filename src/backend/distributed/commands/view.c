@@ -42,9 +42,6 @@ static void AppendAliasesToCreateViewCommandForExistingView(StringInfo createVie
 /*
  * PreprocessViewStmt is called during the planning phase for CREATE OR REPLACE VIEW
  * before it is created on the local node internally.
- *
- * We do our basic housekeeping where we make sure we are on the coordinator and
- * qualify the given statement.
  */
 List *
 PreprocessViewStmt(Node *node, const char *queryString,
@@ -256,12 +253,8 @@ CreateViewDDLCommandsIdempotent(const ObjectAddress *viewAddress)
 	char *schemaName = get_namespace_name(schemaOid);
 
 	appendStringInfoString(createViewCommand, "CREATE OR REPLACE VIEW ");
-	char *qualifiedViewName = NameListToQuotedString(list_make2(makeString(schemaName),
-																makeString(viewName)));
 
-	appendStringInfo(createViewCommand, "%s ", qualifiedViewName);
-
-	/* Add column aliases to create view command */
+	AddQualifiedViewNameToCreateViewCommand(createViewCommand, viewOid);
 	AppendAliasesToCreateViewCommandForExistingView(createViewCommand, viewOid);
 
 	/* Add rel options to create view command */
@@ -277,7 +270,10 @@ CreateViewDDLCommandsIdempotent(const ObjectAddress *viewAddress)
 
 	/* Add alter owner commmand */
 	StringInfo alterOwnerCommand = makeStringInfo();
+
 	char *viewOwnerName = TableOwner(viewOid);
+	char *qualifiedViewName = NameListToQuotedString(list_make2(makeString(schemaName),
+																makeString(viewName)));
 	appendStringInfo(alterOwnerCommand,
 					 "ALTER VIEW %s OWNER TO %s", qualifiedViewName,
 					 quote_identifier(viewOwnerName));
