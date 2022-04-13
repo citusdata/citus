@@ -4,6 +4,10 @@ SET search_path TO views_create;
 CREATE TABLE view_test_table(a INT NOT NULL PRIMARY KEY, b BIGINT, c text);
 SELECT create_distributed_table('view_test_table', 'a');
 
+SHOW citus.enable_metadata_sync;
+SELECT * FROM pg_dist_partition;
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object;
+
 CREATE OR REPLACE VIEW select_filtered_view AS
     SELECT * FROM view_test_table WHERE c = 'testing'
     WITH CASCADED CHECK OPTION;
