@@ -895,7 +895,9 @@ GetUndistributableDependency(const ObjectAddress *objectAddress)
 		{
 			char relKind = get_rel_relkind(dependency->objectId);
 
-			if (relKind == RELKIND_SEQUENCE || relKind == RELKIND_COMPOSITE_TYPE)
+			if (relKind == RELKIND_SEQUENCE ||
+				relKind == RELKIND_COMPOSITE_TYPE ||
+				relKind == RELKIND_VIEW)
 			{
 				/* citus knows how to auto-distribute these dependencies */
 				continue;
