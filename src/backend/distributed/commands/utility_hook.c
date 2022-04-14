@@ -40,6 +40,7 @@
 #include "catalog/dependency.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
+#include "commands/extension.h"
 #include "commands/tablecmds.h"
 #include "distributed/adaptive_executor.h"
 #include "distributed/colocation_utils.h"
@@ -191,6 +192,21 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	if (EnableVersionChecks && isCreateAlterExtensionUpdateCitusStmt)
 	{
 		ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
+	}
+
+	if (IsA(parsetree, CreateExtensionStmt))
+	{
+		CreateExtensionStmt *createExtensionStmt = castNode(CreateExtensionStmt, parsetree);
+		if (strcmp(createExtensionStmt->extname, "citus") == 0)
+		{
+			CreateExtensionStmt *createCitusStmt = makeNode(CreateExtensionStmt);
+			createCitusStmt->extname = "foo";
+			createCitusStmt->if_not_exists = true;
+			createCitusStmt->options = NIL;
+
+			CreateExtension(NULL, createCitusStmt);
+			CommandCounterIncrement();
+		}
 	}
 
 	if (!CitusHasBeenLoaded())
