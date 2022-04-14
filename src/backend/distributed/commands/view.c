@@ -102,7 +102,11 @@ PostprocessViewStmt(Node *node, const char *queryString)
 
 	if (errMsg != NULL)
 	{
-		RaiseDeferredError(errMsg, WARNING);
+		if (HasAnyNodes())
+		{
+			RaiseDeferredError(errMsg, WARNING);
+		}
+
 		return NIL;
 	}
 
