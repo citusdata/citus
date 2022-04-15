@@ -12,6 +12,7 @@
 #include "miscadmin.h"
 
 
+#include "distributed/colocation_utils.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/commands.h"
 #include "distributed/metadata_utility.h"
@@ -70,6 +71,8 @@ master_remove_partition_metadata(PG_FUNCTION_ARGS)
 	char *schemaName = text_to_cstring(schemaNameText);
 	char *tableName = text_to_cstring(tableNameText);
 
+	uint32 colocationId = ColocationIdViaCatalog(relationId);
+
 	/*
 	 * The SQL_DROP trigger calls this function even for tables that are
 	 * not distributed. In that case, silently ignore. This is not very
@@ -86,6 +89,8 @@ master_remove_partition_metadata(PG_FUNCTION_ARGS)
 	CheckTableSchemaNameForDrop(relationId, &schemaName, &tableName);
 
 	DeletePartitionRow(relationId);
+
+	DeleteColocationGroupIfNoTablesBelong(colocationId);
 
 	PG_RETURN_VOID();
 }
