@@ -44,8 +44,8 @@ WARNING:  "view prop_view_3" has dependency to "table view_table_3" that is not 
 DETAIL:  "view prop_view_3" will be created only locally
 HINT:  Distribute "table view_table_3" first to distribute "view prop_view_3"
 SELECT 1 FROM citus_add_node('localhost', :master_port, groupid=>0);
-NOTICE:  Replicating reference table "view_table_2" to the node localhost:57636
-NOTICE:  localhost:57636 is the coordinator and already contains metadata, skipping syncing the metadata
+NOTICE:  Replicating reference table "view_table_2" to the node localhost:xxxxx
+NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  ?column?
 ---------------------------------------------------------------------
         1
@@ -67,7 +67,17 @@ CREATE VIEW prop_view_5 AS
 -- Try to create table depending on a local table from another schema, then try to create it again after distributing the table
 CREATE SCHEMA view_prop_schema_inner;
 SET search_path TO view_prop_schema_inner;
+-- Create local table for tests below
 CREATE TABLE view_table_4(id int, val_1 text);
+-- Create a distributed table and view to test drop view below
+CREATE TABLE inner_view_table(id int);
+SELECT create_distributed_table('inner_view_table','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE VIEW inner_view_prop AS SELECT * FROM inner_view_table;
 SET search_path to view_prop_schema;
 CREATE VIEW prop_view_6 AS
     SELECT vt1.id, vt4.val_1 FROM view_table_1 AS vt1
@@ -190,10 +200,105 @@ SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as
  (view,"{view_prop_schema,prop_view_10}",{})
 (1 row)
 
+-- Create view with different options
+CREATE TABLE view_table_6(id int, val_1 text);
+SELECT create_distributed_table('view_table_6','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- TEMP VIEW is not supported. View will be created locally.
+CREATE TEMP VIEW temp_prop_view AS SELECT * FROM view_table_6;
+WARNING:  "view temp_prop_view" has dependency on unsupported object "schema pg_temp_xxx"
+DETAIL:  "view temp_prop_view" will be created only locally
+-- Recursive views are supported
+CREATE RECURSIVE VIEW nums_1_100_prop_view (n) AS
+    VALUES (1)
+UNION ALL
+    SELECT n+1 FROM nums_1_100_prop_view WHERE n < 100;
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%nums_1_100_prop_view%';
+                   obj_identifier
+---------------------------------------------------------------------
+ (view,"{view_prop_schema,nums_1_100_prop_view}",{})
+(1 row)
+
+-- Aliases are supported
+CREATE VIEW aliased_opt_prop_view(alias_1, alias_2) AS SELECT * FROM view_table_6;
+-- View options are supported
+CREATE VIEW opt_prop_view
+    WITH(check_option=CASCADED, security_barrier=true)
+    AS SELECT * FROM view_table_6;
+CREATE VIEW sep_opt_prop_view
+    AS SELECT * FROM view_table_6
+    WITH LOCAL CHECK OPTION;
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%opt_prop_view%';
+                    obj_identifier
+---------------------------------------------------------------------
+ (view,"{view_prop_schema,aliased_opt_prop_view}",{})
+ (view,"{view_prop_schema,opt_prop_view}",{})
+ (view,"{view_prop_schema,sep_opt_prop_view}",{})
+(3 rows)
+
+-- Check definitions of views are correct on workers
+\c - - - :worker_1_port
+SET search_path to view_prop_schema;
+\d+ aliased_opt_prop_view
+                View "view_prop_schema.aliased_opt_prop_view"
+ Column  |  Type   | Collation | Nullable | Default | Storage  | Description
+---------------------------------------------------------------------
+ alias_1 | integer |           |          |         | plain    |
+ alias_2 | text    |           |          |         | extended |
+View definition:
+ SELECT view_table_6.id AS alias_1,
+    view_table_6.val_1 AS alias_2
+   FROM view_table_6;
+
+\d+ opt_prop_view
+                   View "view_prop_schema.opt_prop_view"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Description
+---------------------------------------------------------------------
+ id     | integer |           |          |         | plain    |
+ val_1  | text    |           |          |         | extended |
+View definition:
+ SELECT view_table_6.id,
+    view_table_6.val_1
+   FROM view_table_6;
+Options: check_option=cascaded, security_barrier=true
+
+\d+ sep_opt_prop_view
+                 View "view_prop_schema.sep_opt_prop_view"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Description
+---------------------------------------------------------------------
+ id     | integer |           |          |         | plain    |
+ val_1  | text    |           |          |         | extended |
+View definition:
+ SELECT view_table_6.id,
+    view_table_6.val_1
+   FROM view_table_6;
+Options: check_option=local
+
+-- Drop views and check metadata afterwards
+\c - - - :master_port
+SET search_path to view_prop_schema;
+DROP VIEW prop_view_9 CASCADE;
+NOTICE:  drop cascades to view prop_view_10
+DROP VIEW opt_prop_view, aliased_opt_prop_view, view_prop_schema_inner.inner_view_prop, sep_opt_prop_view;
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%inner_view_prop%';
+ obj_identifier
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%opt_prop_view%';
+ obj_identifier
+---------------------------------------------------------------------
+(0 rows)
+
 DROP SCHEMA view_prop_schema_inner CASCADE;
-NOTICE:  drop cascades to 2 other objects
+NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table view_prop_schema_inner.view_table_4
 drop cascades to view prop_view_6
+drop cascades to table view_prop_schema_inner.inner_view_table
 DROP SCHEMA view_prop_schema CASCADE;
 NOTICE:  drop cascades to 17 other objects
 DETAIL:  drop cascades to table view_table_1

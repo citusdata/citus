@@ -53,7 +53,15 @@ CREATE VIEW prop_view_5 AS
 -- Try to create table depending on a local table from another schema, then try to create it again after distributing the table
 CREATE SCHEMA view_prop_schema_inner;
 SET search_path TO view_prop_schema_inner;
+
+-- Create local table for tests below
 CREATE TABLE view_table_4(id int, val_1 text);
+
+-- Create a distributed table and view to test drop view below
+CREATE TABLE inner_view_table(id int);
+SELECT create_distributed_table('inner_view_table','id');
+CREATE VIEW inner_view_prop AS SELECT * FROM inner_view_table;
+
 SET search_path to view_prop_schema;
 
 CREATE VIEW prop_view_6 AS
@@ -117,6 +125,53 @@ CREATE OR REPLACE VIEW prop_view_10 AS SELECT * FROM prop_view_9;
 
 SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%prop_view_9%';
 SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%prop_view_10%';
+
+-- Create view with different options
+
+CREATE TABLE view_table_6(id int, val_1 text);
+SELECT create_distributed_table('view_table_6','id');
+
+-- TEMP VIEW is not supported. View will be created locally.
+CREATE TEMP VIEW temp_prop_view AS SELECT * FROM view_table_6;
+
+-- Recursive views are supported
+CREATE RECURSIVE VIEW nums_1_100_prop_view (n) AS
+    VALUES (1)
+UNION ALL
+    SELECT n+1 FROM nums_1_100_prop_view WHERE n < 100;
+
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%nums_1_100_prop_view%';
+
+-- Aliases are supported
+CREATE VIEW aliased_opt_prop_view(alias_1, alias_2) AS SELECT * FROM view_table_6;
+
+-- View options are supported
+CREATE VIEW opt_prop_view
+    WITH(check_option=CASCADED, security_barrier=true)
+    AS SELECT * FROM view_table_6;
+
+CREATE VIEW sep_opt_prop_view
+    AS SELECT * FROM view_table_6
+    WITH LOCAL CHECK OPTION;
+
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%opt_prop_view%';
+
+-- Check definitions of views are correct on workers
+\c - - - :worker_1_port
+SET search_path to view_prop_schema;
+\d+ aliased_opt_prop_view
+\d+ opt_prop_view
+\d+ sep_opt_prop_view
+
+-- Drop views and check metadata afterwards
+\c - - - :master_port
+SET search_path to view_prop_schema;
+
+DROP VIEW prop_view_9 CASCADE;
+DROP VIEW opt_prop_view, aliased_opt_prop_view, view_prop_schema_inner.inner_view_prop, sep_opt_prop_view;
+
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%inner_view_prop%';
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%opt_prop_view%';
 
 DROP SCHEMA view_prop_schema_inner CASCADE;
 DROP SCHEMA view_prop_schema CASCADE;
