@@ -236,7 +236,7 @@ SELECT * FROM pg_dist_colocation WHERE colocationid = 4;
 
 -- check to see whether metadata is synced
 SELECT nodeport, unnest(result::jsonb[]) FROM run_command_on_workers($$
-SELECT array_agg(row_to_json(c)) FROM pg_dist_colocation c WHERE colocationid = 4
+SELECT coalesce(array_agg(row_to_json(c)), '{}') FROM pg_dist_colocation c WHERE colocationid = 4
 $$);
 
 -- create dropped colocation group again

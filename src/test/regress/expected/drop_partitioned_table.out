@@ -368,6 +368,8 @@ NOTICE:  issuing SELECT worker_drop_distributed_table('drop_partitioned_table.pa
 NOTICE:  issuing DROP TABLE IF EXISTS drop_partitioned_table.parent_xxxxx CASCADE
 NOTICE:  issuing SELECT worker_drop_distributed_table('drop_partitioned_table.child1')
 NOTICE:  issuing SELECT worker_drop_distributed_table('drop_partitioned_table.child1')
+NOTICE:  issuing SELECT pg_catalog.citus_internal_delete_colocation_metadata(100046)
+NOTICE:  issuing SELECT pg_catalog.citus_internal_delete_colocation_metadata(100046)
 ROLLBACK;
 NOTICE:  issuing ROLLBACK
 NOTICE:  issuing ROLLBACK
@@ -389,6 +391,8 @@ NOTICE:  issuing DROP TABLE IF EXISTS drop_partitioned_table.parent_xxxxx CASCAD
 NOTICE:  issuing SELECT worker_drop_distributed_table('drop_partitioned_table.child1')
 NOTICE:  issuing SELECT worker_drop_distributed_table('drop_partitioned_table.child1')
 NOTICE:  issuing DROP TABLE IF EXISTS drop_partitioned_table.child1_xxxxx CASCADE
+NOTICE:  issuing SELECT pg_catalog.citus_internal_delete_colocation_metadata(100046)
+NOTICE:  issuing SELECT pg_catalog.citus_internal_delete_colocation_metadata(100046)
 ROLLBACK;
 NOTICE:  issuing ROLLBACK
 NOTICE:  issuing ROLLBACK

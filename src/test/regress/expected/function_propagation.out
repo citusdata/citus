@@ -1119,7 +1119,7 @@ SELECT create_distributed_function('func_to_colocate(int)', colocate_with:='tbl_
 SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catalog.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
  distribution_argument_index | colocationid | force_delegation
 ---------------------------------------------------------------------
-                             |        10003 |
+                             |          161 |
 (1 row)
 
 -- convert to non-delegated
@@ -1147,7 +1147,7 @@ SELECT create_distributed_function('func_to_colocate(int)','$1','tbl_to_colocate
 SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catalog.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
  distribution_argument_index | colocationid | force_delegation
 ---------------------------------------------------------------------
-                           0 |        10005 |
+                           0 |          162 |
 (1 row)
 
 -- try create or replace the same func
@@ -1156,7 +1156,7 @@ CREATE OR REPLACE FUNCTION func_to_colocate (a int) returns int as $$select 1;$$
 SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catalog.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
  distribution_argument_index | colocationid | force_delegation
 ---------------------------------------------------------------------
-                           0 |        10005 |
+                           0 |          162 |
 (1 row)
 
 -- convert to non-delegated
@@ -1184,7 +1184,7 @@ SELECT create_distributed_function('func_to_colocate(int)','$1','tbl_to_colocate
 SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catalog.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
  distribution_argument_index | colocationid | force_delegation
 ---------------------------------------------------------------------
-                           0 |        10005 | t
+                           0 |          162 | t
 (1 row)
 
 -- convert to non-delegated
