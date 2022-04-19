@@ -316,5 +316,5 @@ drop cascades to view prop_view_7
 drop cascades to type type_for_view_prop
 drop cascades to view prop_view_8
 drop cascades to table view_table_5
-drop cascades to view prop_view_9
-drop cascades to view prop_view_10
+drop cascades to table view_table_6
+drop cascades to view nums_1_100_prop_view
