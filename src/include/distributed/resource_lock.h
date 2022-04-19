@@ -163,5 +163,5 @@ extern LOCKMODE LockModeCStringToLockMode(const char *lockModeName);
 extern const char * LockModeToLockModeCString(LOCKMODE lockMode);
 extern void AcquireDistributedLockOnRelations(List *relationList, LOCKMODE lockMode,
 											  uint32 configs);
-extern void ErrorIfUnsupportedLockStmt(LockStmt *stmt);
+extern void ErrorIfUnsupportedLockStmt(LockStmt *stmt, bool isTopLevel);
 #endif /* RESOURCE_LOCK_H */

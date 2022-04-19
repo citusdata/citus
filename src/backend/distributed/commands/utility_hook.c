@@ -472,9 +472,9 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	{
 		LockStmt *stmt = (LockStmt *) parsetree;
 
-		ereport(NOTICE, errmsg("Processing LOCK command."));
+		bool isTopLevel = context == PROCESS_UTILITY_TOPLEVEL;
+		ErrorIfUnsupportedLockStmt(stmt, isTopLevel);
 
-		ErrorIfUnsupportedLockStmt(stmt);
 		uint32 nowaitFlag = stmt->nowait ? DIST_LOCK_NOWAIT : 0;
 		AcquireDistributedLockOnRelations(stmt->relations, stmt->mode,
 										  DIST_LOCK_VIEWS_RECUR | nowaitFlag);

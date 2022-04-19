@@ -1253,9 +1253,9 @@ AcquireDistributedLockOnRelations(List *relationList, LOCKMODE lockMode, uint32 
  * - Locking shard, but citus.enable_manual_changes_to_shards is false
  */
 void
-ErrorIfUnsupportedLockStmt(LockStmt *stmt)
+ErrorIfUnsupportedLockStmt(LockStmt *stmt, bool isTopLevel)
 {
-	RequireTransactionBlock(true, "LOCK TABLE");
+	RequireTransactionBlock(isTopLevel, "LOCK TABLE");
 
 	RangeVar *rangeVar = NULL;
 	foreach_ptr(rangeVar, stmt->relations)
