@@ -43,7 +43,6 @@
 static void ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement);
 static void ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command);
 static void EnsurePartitionTableNotReplicatedForTruncate(TruncateStmt *truncateStatement);
-static void LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement);
 static List * TruncateTaskList(Oid relationId);
 
 
@@ -243,7 +242,8 @@ PreprocessTruncateStatement(TruncateStmt *truncateStatement)
 	ErrorIfUnsupportedTruncateStmt(truncateStatement);
 	EnsurePartitionTableNotReplicatedForTruncate(truncateStatement);
 	ExecuteTruncateStmtSequentialIfNecessary(truncateStatement);
-	LockTruncatedRelationMetadataInWorkers(truncateStatement);
+	AcquireDistributedLockOnRelations(truncateStatement->relations, AccessExclusiveLock,
+									  DIST_LOCK_REFERENCING_TABLES);
 }
 
 
@@ -338,67 +338,5 @@ ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command)
 			/* nothing to do more */
 			return;
 		}
-	}
-}
-
-
-/*
- * LockTruncatedRelationMetadataInWorkers determines if distributed
- * lock is necessary for truncated relations, and acquire locks.
- *
- * LockTruncatedRelationMetadataInWorkers handles distributed locking
- * of truncated tables before standard utility takes over.
- *
- * Actual distributed truncation occurs inside truncate trigger.
- *
- * This is only for distributed serialization of truncate commands.
- * The function assumes that there is no foreign key relation between
- * non-distributed and distributed relations.
- */
-static void
-LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
-{
-	List *distributedRelationList = NIL;
-
-	/* nothing to do if there is no metadata at worker nodes */
-	if (!ClusterHasKnownMetadataWorkers())
-	{
-		return;
-	}
-
-	RangeVar *rangeVar = NULL;
-	foreach_ptr(rangeVar, truncateStatement->relations)
-	{
-		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
-		Oid referencingRelationId = InvalidOid;
-
-		if (!IsCitusTable(relationId))
-		{
-			continue;
-		}
-
-		if (list_member_oid(distributedRelationList, relationId))
-		{
-			continue;
-		}
-
-		distributedRelationList = lappend_oid(distributedRelationList, relationId);
-
-		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		Assert(cacheEntry != NULL);
-
-		List *referencingTableList = cacheEntry->referencingRelationsViaForeignKey;
-		foreach_oid(referencingRelationId, referencingTableList)
-		{
-			distributedRelationList = list_append_unique_oid(distributedRelationList,
-															 referencingRelationId);
-		}
-	}
-
-	if (distributedRelationList != NIL)
-	{
-		bool nowait = false;
-		AcquireDistributedLockOnRelations(distributedRelationList, AccessExclusiveLock,
-										  nowait);
 	}
 }

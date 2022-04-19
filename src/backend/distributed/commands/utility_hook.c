@@ -471,31 +471,13 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	if (IsA(parsetree, LockStmt))
 	{
 		LockStmt *stmt = (LockStmt *) parsetree;
-		List *distributedRelationList = NIL;
 
-		RangeVar *rangeVar = NULL;
-		foreach_ptr(rangeVar, stmt->relations)
-		{
-			Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
+		ereport(NOTICE, errmsg("Processing LOCK command."));
 
-			if (!IsCitusTable(relationId))
-			{
-				continue;
-			}
-
-			if (list_member_oid(distributedRelationList, relationId))
-			{
-				continue;
-			}
-
-			distributedRelationList = lappend_oid(distributedRelationList, relationId);
-		}
-
-		if (distributedRelationList != NIL)
-		{
-			AcquireDistributedLockOnRelations(distributedRelationList, stmt->mode,
-											  stmt->nowait);
-		}
+		ErrorIfUnsupportedLockStmt(stmt);
+		uint32 nowaitFlag = stmt->nowait ? DIST_LOCK_NOWAIT : 0;
+		AcquireDistributedLockOnRelations(stmt->relations, stmt->mode,
+										  DIST_LOCK_VIEWS_RECUR | nowaitFlag);
 	}
 
 	/*

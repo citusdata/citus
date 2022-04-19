@@ -16,6 +16,7 @@
 #include "distributed/worker_transaction.h"
 #include "nodes/pg_list.h"
 #include "storage/lock.h"
+#include "tcop/utility.h"
 
 
 /*
@@ -110,9 +111,14 @@ typedef enum CitusOperations
 						 ADV_LOCKTAG_CLASS_CITUS_PLACEMENT_CLEANUP)
 
 
-#define LOCK_RELATION_IF_EXISTS "SELECT lock_relation_if_exists(%s, '%s');"
+#define DIST_LOCK_DEFAULT 0
+#define DIST_LOCK_VIEWS_RECUR 1 << 0
+#define DIST_LOCK_REFERENCING_TABLES 1 << 1
+#define DIST_LOCK_NOWAIT 1 << 2
+
+#define LOCK_RELATION_IF_EXISTS "SELECT pg_catalog.lock_relation_if_exists(%s, '%s');"
 #define LOCK_RELATION_IF_EXISTS_NOWAIT \
-	"SELECT lock_relation_if_exists(%s, '%s', nowait => true);"
+	"SELECT pg_catalog.lock_relation_if_exists(%s, '%s', nowait => true);"
 
 /* Lock shard/relation metadata for safe modifications */
 extern void LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
@@ -155,6 +161,7 @@ extern void LockParentShardResourceIfPartition(List *shardIntervalList,
 /* Lock mode translation between text and enum */
 extern LOCKMODE LockModeCStringToLockMode(const char *lockModeName);
 extern const char * LockModeToLockModeCString(LOCKMODE lockMode);
-extern void AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode,
-											  bool nowait);
+extern void AcquireDistributedLockOnRelations(List *relationList, LOCKMODE lockMode,
+											  uint32 configs);
+extern void ErrorIfUnsupportedLockStmt(LockStmt *stmt);
 #endif /* RESOURCE_LOCK_H */

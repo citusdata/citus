@@ -13,6 +13,7 @@
 #define CITUS_LISTUTILS_H
 
 #include "postgres.h"
+#include "storage/lock.h"
 #include "c.h"
 
 #include "nodes/pg_list.h"

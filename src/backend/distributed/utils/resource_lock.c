@@ -36,6 +36,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/worker_shard_visibility.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/version_compat.h"
 #include "storage/lmgr.h"
@@ -1006,7 +1007,7 @@ lock_relation_if_exists(PG_FUNCTION_ARGS)
 	char *lockModeCString = text_to_cstring(lockModeText);
 
 	bool nowait = false;
-	if (!PG_ARGISNULL(2))
+	if (PG_NARGS() == 3)
 	{
 		nowait = PG_GETARG_BOOL(2);
 	}
@@ -1088,32 +1089,31 @@ CitusLockTableAclCheck(Oid relationId, LOCKMODE lockmode, Oid userId)
 
 
 /*
- * AcquireDistributedLockOnRelations acquire a distributed lock on worker nodes
- * for given list of relations ids. Relation id list and worker node list
- * sorted so that the lock is acquired in the same order regardless of which
- * node it was run on. Notice that no lock is acquired on coordinator node.
+ * AcquireDistributedLockOnRelations_Internal acquire a distributed lock on worker nodes
+ * for given list of relations ids. Worker node list is sorted so that the lock
+ * is acquired in the same order regardless of which node it was run on.
+ * Notice that no lock is acquired on coordinator node if the coordinator is not
+ * added to the metadata.
  *
- * Notice that the locking functions is sent to all workers regardless of if
- * it has metadata or not. This is because a worker node only knows itself
- * and previous workers that has metadata sync turned on. The node does not
- * know about other nodes that have metadata sync turned on afterwards.
+ * Notice that no validation is done on the relationIds, that is the responsibility of
+ * AcquireDistributedLockOnRelations.
  *
  * A nowait flag is used to require the locks to be available immediately
  * and if that is not the case, an error will be thrown
  */
-void
-AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode, bool nowait)
+static void
+AcquireDistributedLockOnRelations_Internal(List *relationIdList, LOCKMODE lockMode, bool
+										   nowait)
 {
 	Oid relationId = InvalidOid;
 	List *workerNodeList = ActivePrimaryNodeList(NoLock);
+	Oid userId = GetUserId();
 
 	const char *lockModeCString = LockModeToLockModeCString(lockMode);
 
 	/*
 	 * We want to acquire locks in the same order across the nodes.
-	 * Although relation ids may change, their ordering will not.
 	 */
-	relationIdList = SortList(relationIdList, CompareOids);
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	UseCoordinatedTransaction();
@@ -1122,44 +1122,153 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode, bool 
 
 	foreach_oid(relationId, relationIdList)
 	{
-		/*
-		 * We only acquire distributed lock on relation if
-		 * the relation is sync'ed between mx nodes.
-		 *
-		 * Even if users disable metadata sync, we cannot
-		 * allow them not to acquire the remote locks.
-		 * Hence, we have !IsCoordinator() check.
-		 */
-		if (ShouldSyncTableMetadata(relationId) || !IsCoordinator())
+		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+		StringInfo lockRelationCommand = makeStringInfo();
+
+		char *lockCommand = nowait ? LOCK_RELATION_IF_EXISTS_NOWAIT :
+							LOCK_RELATION_IF_EXISTS;
+		appendStringInfo(lockRelationCommand, lockCommand,
+						 quote_literal_cstr(qualifiedRelationName),
+						 lockModeCString);
+
+		/* preemptive permission check so a worker connection is not */
+		/* established if the user is not allowed to acquire the lock */
+		CitusLockTableAclCheck(relationId, lockMode, userId);
+
+		WorkerNode *workerNode = NULL;
+		foreach_ptr(workerNode, workerNodeList)
 		{
-			char *qualifiedRelationName = generate_qualified_relation_name(relationId);
-			StringInfo lockRelationCommand = makeStringInfo();
+			const char *nodeName = workerNode->workerName;
+			int nodePort = workerNode->workerPort;
 
-			char *lockCommand = nowait ? LOCK_RELATION_IF_EXISTS_NOWAIT :
-								LOCK_RELATION_IF_EXISTS;
-			appendStringInfo(lockRelationCommand, lockCommand,
-							 quote_literal_cstr(qualifiedRelationName),
-							 lockModeCString);
-
-			WorkerNode *workerNode = NULL;
-			foreach_ptr(workerNode, workerNodeList)
+			/* if local node is one of the targets, acquire the lock locally */
+			if (workerNode->groupId == localGroupId)
 			{
-				const char *nodeName = workerNode->workerName;
-				int nodePort = workerNode->workerPort;
+				LockRelationIfExists(
+					cstring_to_text(qualifiedRelationName),
+					lockModeCString,
+					nowait);
 
-				/* if local node is one of the targets, acquire the lock locally */
-				if (workerNode->groupId == localGroupId)
-				{
-					LockRelationIfExists(
-						cstring_to_text(qualifiedRelationName),
-						lockModeCString,
-						nowait
-						);
-					continue;
-				}
+				continue;
+			}
 
-				SendCommandToWorker(nodeName, nodePort, lockRelationCommand->data);
+			SendCommandToWorker(nodeName, nodePort, lockRelationCommand->data);
+		}
+	}
+}
+
+
+/*
+ * AcquireDistributedLockOnRelations filters relations before passing them to
+ * AcquireDistributedLockOnRelations_Internal to acquire the locks.
+ *
+ * Only tables, views, and foreign tables can be locked with this function. Other relations
+ * will cause an error.
+ *
+ * Gracefully locks relations so no errors are thrown for things like invalid id-s
+ * or missing relations on worker nodes.
+ *
+ * Considers different types of relations based on a 'configs' parameter:
+ * - DIST_LOCK_DEFAULT: locks citus tables
+ * - DIST_LOCK_VIEWS_RECUR: locks citus tables that locked views are dependent on recursively
+ * - DIST_LOCK_REFERENCING_TABLES: locks tables that refer to locked citus tables with a foreign key
+ * - DIST_LOCK_NOWAIT: throws an error if the lock is not immediately available
+ */
+void
+AcquireDistributedLockOnRelations(List *relationList, LOCKMODE lockMode, uint32 configs)
+{
+	/* nothing to do if there is no metadata at worker nodes */
+	if (!ClusterHasKnownMetadataWorkers())
+	{
+		return;
+	}
+
+	List *distributedRelationList = NIL;
+
+	RangeVar *rangeVar = NULL;
+	List *relations = list_copy(relationList);
+	foreach_ptr(rangeVar, relations)
+	{
+		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
+
+		if ((configs & DIST_LOCK_VIEWS_RECUR) > 0 && get_rel_relkind(relationId) ==
+			RELKIND_VIEW)
+		{
+			ObjectAddress viewAddress = { 0 };
+			Oid schemaOid = RangeVarGetCreationNamespace(rangeVar);
+			ObjectAddressSet(viewAddress, schemaOid, relationId);
+
+			List *distDependencies = GetDistributableDependenciesForObject(&viewAddress);
+
+			ObjectAddress *address = NULL;
+			foreach_ptr(address, distDependencies)
+			{
+				distributedRelationList = list_append_unique_oid(distributedRelationList,
+																 address->objectId);
+			}
+
+			continue;
+		}
+
+		if (!IsCitusTable(relationId))
+		{
+			continue;
+		}
+
+		if (list_member_oid(distributedRelationList, relationId))
+		{
+			continue;
+		}
+
+		distributedRelationList = lappend_oid(distributedRelationList, relationId);
+
+		if ((configs & DIST_LOCK_REFERENCING_TABLES) > 0)
+		{
+			Oid referencingRelationId = InvalidOid;
+			CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+			Assert(cacheEntry != NULL);
+
+			List *referencingTableList = cacheEntry->referencingRelationsViaForeignKey;
+			foreach_oid(referencingRelationId, referencingTableList)
+			{
+				distributedRelationList = list_append_unique_oid(distributedRelationList,
+																 referencingRelationId);
 			}
 		}
+	}
+
+	if (distributedRelationList != NIL)
+	{
+		bool nowait = (configs & DIST_LOCK_NOWAIT) > 0;
+		AcquireDistributedLockOnRelations_Internal(distributedRelationList, lockMode,
+												   nowait);
+	}
+}
+
+
+/*
+ * ErrorIfUnsupportedLockStmt errors out if:
+ * - The lock statement is not in a transaction block
+ * - The relation id-s being locked do not exist
+ * - Locking shard, but citus.enable_manual_changes_to_shards is false
+ */
+void
+ErrorIfUnsupportedLockStmt(LockStmt *stmt)
+{
+	RequireTransactionBlock(true, "LOCK TABLE");
+
+	RangeVar *rangeVar = NULL;
+	foreach_ptr(rangeVar, stmt->relations)
+	{
+		bool missingOk = false;
+		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, missingOk);
+
+		/* Note that allowing the user to lock shards could lead to */
+		/* distributed deadlocks due to shards not being locked when */
+		/* a distributed table is locked. */
+		/* However, because citus.enable_manual_changes_to_shards */
+		/* is a guc which is not visible by default, whoever is using this */
+		/* guc will hopefully know what they're doing and avoid such scenarios. */
+		ErrorIfIllegallyChangingKnownShard(relationId);
 	}
 }
