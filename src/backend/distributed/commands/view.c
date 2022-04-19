@@ -38,6 +38,8 @@
 static List * FilterNameListForDistributedViews(List *viewNamesList, bool missing_ok);
 static void AppendAliasesToCreateViewCommandForExistingView(StringInfo createViewCommand,
 															Oid viewOid);
+static void AddOptionsToCreateViewCommandForExistingView(StringInfo createViewCommand,
+														 Oid viewOid);
 
 /*
  * PreprocessViewStmt is called during the planning phase for CREATE OR REPLACE VIEW
@@ -69,7 +71,8 @@ PreprocessViewStmt(Node *node, const char *queryString,
  *
  * If view depends on any undistributable object, Citus can not distribute it. In order to
  * not to prevent users from creating local views on the coordinator WARNING message will
- * be sent to the customer about the case instead of erroring out.
+ * be sent to the customer about the case instead of erroring out. If no worker nodes exist
+ * at all, view will be created locally without any WARNING message.
  *
  * Besides creating the plan we also make sure all (new) dependencies of the view are
  * created on all nodes.
@@ -124,8 +127,7 @@ PostprocessViewStmt(Node *node, const char *queryString)
 
 /*
  * ViewStmtObjectAddress returns the ObjectAddress for the subject of the
- * CREATE [OR REPLACE] VIEW statement. If missing_ok is false it will error with the
- * normal postgres error for unfound views.
+ * CREATE [OR REPLACE] VIEW statement.
  */
 ObjectAddress
 ViewStmtObjectAddress(Node *node, bool missing_ok)
@@ -257,16 +259,7 @@ CreateViewDDLCommandsIdempotent(const ObjectAddress *viewAddress)
 
 	AddQualifiedViewNameToCreateViewCommand(createViewCommand, viewOid);
 	AppendAliasesToCreateViewCommandForExistingView(createViewCommand, viewOid);
-
-	/* Add rel options to create view command */
-	char *relOptions = flatten_reloptions(viewOid);
-	if (relOptions != NULL)
-	{
-		appendStringInfo(createViewCommand, "WITH (%s) ", relOptions);
-		pfree(relOptions);
-	}
-
-	/* Add view definition to create view command */
+	AddOptionsToCreateViewCommandForExistingView(createViewCommand, viewOid);
 	AddViewDefinitionToCreateViewCommand(createViewCommand, viewOid);
 
 	/* Add alter owner commmand */
@@ -336,4 +329,21 @@ AppendAliasesToCreateViewCommandForExistingView(StringInfo createViewCommand, Oi
 	systable_endscan_ordered(pgAttributeScan);
 	index_close(mapidx, AccessShareLock);
 	table_close(maprel, AccessShareLock);
+}
+
+
+/*
+ * AddOptionsToCreateViewCommandForExistingView add relation options to create view command
+ * for an existing view
+ */
+static void
+AddOptionsToCreateViewCommandForExistingView(StringInfo createViewCommand, Oid viewOid)
+{
+	/* Add rel options to create view command */
+	char *relOptions = flatten_reloptions(viewOid);
+	if (relOptions != NULL)
+	{
+		appendStringInfo(createViewCommand, "WITH (%s) ", relOptions);
+		pfree(relOptions);
+	}
 }

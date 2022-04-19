@@ -223,19 +223,12 @@ create view v_dist as select * from dist;
 select alter_table_set_access_method('local','columnar');
 select alter_table_set_access_method('ref','columnar');
 
--- (TODO: CHECK) Since there is a dependent view, we must use sequential mode
-SET citus.multi_shard_modify_mode TO 'sequential';
 select alter_table_set_access_method('dist','columnar');
 SELECT alter_distributed_table('dist', shard_count:=1, cascade_to_colocated:=false);
-RESET citus.multi_shard_modify_mode;
 
 select alter_table_set_access_method('local','heap');
 select alter_table_set_access_method('ref','heap');
-
--- (TODO: CHECK) Since there is a dependent view, we must use sequential mode
-SET citus.multi_shard_modify_mode TO 'sequential';
 select alter_table_set_access_method('dist','heap');
-RESET citus.multi_shard_modify_mode;
 
 SELECT * FROM m_local;
 SELECT * FROM m_ref;

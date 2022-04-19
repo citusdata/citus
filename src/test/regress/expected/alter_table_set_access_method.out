@@ -633,8 +633,6 @@ NOTICE:  renaming the new table to alter_table_set_access_method.ref
 
 (1 row)
 
--- (TODO: CHECK) Since there is a dependent view, we must use sequential mode
-SET citus.multi_shard_modify_mode TO 'sequential';
 select alter_table_set_access_method('dist','columnar');
 NOTICE:  creating a new table for alter_table_set_access_method.dist
 NOTICE:  moving the data of alter_table_set_access_method.dist
@@ -663,7 +661,6 @@ NOTICE:  renaming the new table to alter_table_set_access_method.dist
 
 (1 row)
 
-RESET citus.multi_shard_modify_mode;
 select alter_table_set_access_method('local','heap');
 NOTICE:  creating a new table for alter_table_set_access_method.local
 NOTICE:  moving the data of alter_table_set_access_method.local
@@ -699,8 +696,6 @@ NOTICE:  renaming the new table to alter_table_set_access_method.ref
 
 (1 row)
 
--- (TODO: CHECK) Since there is a dependent view, we must use sequential mode
-SET citus.multi_shard_modify_mode TO 'sequential';
 select alter_table_set_access_method('dist','heap');
 NOTICE:  creating a new table for alter_table_set_access_method.dist
 NOTICE:  moving the data of alter_table_set_access_method.dist
@@ -715,7 +710,6 @@ NOTICE:  renaming the new table to alter_table_set_access_method.dist
 
 (1 row)
 
-RESET citus.multi_shard_modify_mode;
 SELECT * FROM m_local;
  a | b | c
 ---------------------------------------------------------------------
