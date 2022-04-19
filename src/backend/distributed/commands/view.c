@@ -110,8 +110,6 @@ PostprocessViewStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	EnsureSequentialMode(OBJECT_VIEW);
-
 	EnsureDependenciesExistOnAllNodes(&viewAddress);
 
 	const char *sql = DeparseTreeNode((Node *) stmt);
@@ -180,7 +178,6 @@ PreprocessDropViewStmt(Node *node, const char *queryString, ProcessUtilityContex
 	}
 
 	EnsureCoordinator();
-	EnsureSequentialMode(OBJECT_VIEW);
 
 	/*
 	 * Swap the list of objects before deparsing and restore the old list after. This

@@ -1996,8 +1996,6 @@ DEBUG:  Creating router plan
 -- views internally become subqueries, so not fast-path router query
 CREATE VIEW test_view AS
 	SELECT * FROM articles_hash WHERE author_id = 1;
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A command for a distributed view is run. To make sure subsequent commands see the view correctly we need to make sure to use only one connection for all future commands	
 SELECT * FROM test_view;
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 1

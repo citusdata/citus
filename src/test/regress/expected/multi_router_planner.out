@@ -1611,8 +1611,6 @@ DEBUG:  Creating router plan
 -- same scenario with a view
 CREATE VIEW num_db AS
 SELECT s.datid FROM number1() s LEFT JOIN pg_database d ON s.datid = d.oid;
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A command for a distributed view is run. To make sure subsequent commands see the view correctly we need to make sure to use only one connection for all future commands
 SELECT 1 FROM authors_reference r JOIN num_db ON (r.id = num_db.datid) LIMIT 1;
 DEBUG:  found no worker with all shard placements
 DEBUG:  function does not have co-located tables

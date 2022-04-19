@@ -978,8 +978,6 @@ DEBUG:  Creating router plan
 SET citus.enable_repartition_joins TO OFF;
 -- this should be recursively planned
 CREATE VIEW set_view_recursive AS (SELECT y FROM test) UNION (SELECT y FROM test);
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A command for a distributed view is run. To make sure subsequent commands see the view correctly we need to make sure to use only one connection for all future commands
 SELECT * FROM set_view_recursive ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -998,8 +996,6 @@ DEBUG:  Creating router plan
 
 -- this should be pushed down
 CREATE VIEW set_view_pushdown AS (SELECT x FROM test) UNION (SELECT x FROM test);
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A command for a distributed view is run. To make sure subsequent commands see the view correctly we need to make sure to use only one connection for all future commands
 SELECT * FROM set_view_pushdown ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
  x
@@ -1010,8 +1006,6 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 
 -- this should be recursively planned
 CREATE VIEW set_view_recursive_second AS SELECT u.x, test.y FROM ((SELECT x, y FROM test) UNION (SELECT 1, 1 FROM test)) u JOIN test USING (x) ORDER BY 1,2;
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A command for a distributed view is run. To make sure subsequent commands see the view correctly we need to make sure to use only one connection for all future commands
 SELECT * FROM set_view_recursive_second ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries

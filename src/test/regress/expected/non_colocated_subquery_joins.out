@@ -1093,7 +1093,6 @@ SELECT create_distributed_table('table1','tenant_id');
 (1 row)
 
 CREATE VIEW table1_view AS SELECT * from table1 where id < 100;
-DEBUG:  switching to sequential query execution mode
 -- all of the above queries are non-colocated subquery joins
 -- because the views are replaced with subqueries
 UPDATE table2 SET id=20 FROM table1_view WHERE table1_view.id=table2.id;
