@@ -40,6 +40,7 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_log_messages.h"
 #include "distributed/commands.h"
+#include "distributed/metadata_cache.h"
 #include "utils/hsearch.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
@@ -363,6 +364,11 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			ResetGlobalVariables();
 
 			/*
+			 * Clear Cache table
+			 */
+			InvalidateMetadataSystemCache();
+
+			/*
 			 * Make sure that we give the shared connections back to the shared
 			 * pool if any. This operation is a no-op if the reserved connections
 			 * are already given away.
@@ -630,6 +636,11 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 				CoordinatedRemoteTransactionsSavepointRollback(subId);
 			}
 			PopSubXact(subId);
+
+			/*
+			 * Clear Cache Table
+			 */
+			InvalidateMetadataSystemCache();
 
 			break;
 		}
