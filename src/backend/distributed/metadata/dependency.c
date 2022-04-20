@@ -820,15 +820,16 @@ DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 
 		if (IsObjectDistributed(objectAddress))
 		{
-			appendStringInfo(hintInfo, "Distribute \"%s\" first to update \"%s\" on worker nodes",
-					dependencyDescription,
-					objectDescription);
+			appendStringInfo(hintInfo,
+							 "Distribute \"%s\" first to update \"%s\" on worker nodes",
+							 dependencyDescription,
+							 objectDescription);
 		}
 		else
 		{
 			appendStringInfo(hintInfo, "Distribute \"%s\" first to distribute \"%s\"",
-					dependencyDescription,
-					objectDescription);
+							 dependencyDescription,
+							 objectDescription);
 		}
 
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,

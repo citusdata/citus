@@ -144,8 +144,11 @@ AddOptionsToCreateViewCommand(StringInfo buf, ViewStmt *stmt)
 		}
 
 		appendStringInfoString(buf, option->defname);
-		appendStringInfoString(buf, "=");
-		appendStringInfoString(buf, defGetString(option));
+		if (option->arg != NULL)
+		{
+			appendStringInfoString(buf, "=");
+			appendStringInfoString(buf, defGetString(option));
+		}
 	}
 
 	appendStringInfoString(buf, ") ");
