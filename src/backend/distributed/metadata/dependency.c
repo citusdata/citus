@@ -803,8 +803,11 @@ DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 	 * Otherwise, callers are expected to throw the error returned from this
 	 * function as a hard one by ignoring the detail part.
 	 */
-	appendStringInfo(detailInfo, "\"%s\" will be created only locally",
-					 objectDescription);
+	if (!IsObjectDistributed(objectAddress))
+	{
+		appendStringInfo(detailInfo, "\"%s\" will be created only locally",
+						 objectDescription);
+	}
 
 	if (SupportedDependencyByCitus(undistributableDependency))
 	{
@@ -815,9 +818,18 @@ DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 						 objectDescription,
 						 dependencyDescription);
 
-		appendStringInfo(hintInfo, "Distribute \"%s\" first to distribute \"%s\"",
-						 dependencyDescription,
-						 objectDescription);
+		if (IsObjectDistributed(objectAddress))
+		{
+			appendStringInfo(hintInfo, "Distribute \"%s\" first to update \"%s\" on worker nodes",
+					dependencyDescription,
+					objectDescription);
+		}
+		else
+		{
+			appendStringInfo(hintInfo, "Distribute \"%s\" first to distribute \"%s\"",
+					dependencyDescription,
+					objectDescription);
+		}
 
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 errorInfo->data, detailInfo->data, hintInfo->data);

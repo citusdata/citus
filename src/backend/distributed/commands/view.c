@@ -93,6 +93,11 @@ PostprocessViewStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
+	if (!HasAnyNodes())
+	{
+		return NIL;
+	}
+
 	ObjectAddress viewAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
 
 	if (IsObjectAddressOwnedByExtension(&viewAddress, NULL))
@@ -105,12 +110,15 @@ PostprocessViewStmt(Node *node, const char *queryString)
 
 	if (errMsg != NULL)
 	{
-		if (HasAnyNodes())
+		if (IsObjectDistributed(&viewAddress))
+		{
+			RaiseDeferredError(errMsg, ERROR);
+		}
+		else
 		{
 			RaiseDeferredError(errMsg, WARNING);
+			return NIL;
 		}
-
-		return NIL;
 	}
 
 	EnsureDependenciesExistOnAllNodes(&viewAddress);
