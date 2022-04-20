@@ -134,8 +134,7 @@ ViewStmtObjectAddress(Node *node, bool missing_ok)
 {
 	ViewStmt *stmt = castNode(ViewStmt, node);
 
-	Oid schemaOid = RangeVarGetCreationNamespace(stmt->view);
-	Oid viewOid = get_relname_relid(stmt->view->relname, schemaOid);
+	Oid viewOid = RangeVarGetRelid(stmt->view, NoLock, missing_ok);
 
 	ObjectAddress viewAddress = { 0 };
 	ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
