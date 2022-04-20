@@ -1034,8 +1034,9 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 11.1-1
 ALTER EXTENSION citus UPDATE TO '11.1-1';
 SELECT * FROM multi_extension.print_extension_changes();
-                                    previous_object                                     | current_object
+                                    previous_object                                     |                       current_object
 ---------------------------------------------------------------------
+ function lock_relation_if_exists(text,text) boolean                                    |
  function worker_cleanup_job_schema_cache() void                                        |
  function worker_create_schema(bigint,text) void                                        |
  function worker_fetch_foreign_file(text,text,bigint,text[],integer[]) void             |
@@ -1044,7 +1045,8 @@ SELECT * FROM multi_extension.print_extension_changes();
  function worker_merge_files_into_table(bigint,integer,text[],text[]) void              |
  function worker_range_partition_table(bigint,integer,text,text,oid,anyarray) void      |
  function worker_repartition_cleanup(bigint) void                                       |
-(8 rows)
+                                                                                        | function lock_relation_if_exists(text,text,boolean) boolean
+(10 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

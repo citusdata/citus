@@ -372,3 +372,4 @@ DROP FUNCTION pg_catalog.citus_nodeid_for_gpid(bigint);
 DROP FUNCTION pg_catalog.citus_pid_for_gpid(bigint);
 
 DROP FUNCTION pg_catalog.citus_coordinator_nodeid();
+

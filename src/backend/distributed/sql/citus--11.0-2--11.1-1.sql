@@ -6,3 +6,6 @@ DROP FUNCTION pg_catalog.worker_hash_partition_table(bigint, integer, text, text
 DROP FUNCTION pg_catalog.worker_merge_files_into_table(bigint, integer, text[], text[]);
 DROP FUNCTION pg_catalog.worker_range_partition_table(bigint, integer, text, text, oid, anyarray);
 DROP FUNCTION pg_catalog.worker_repartition_cleanup(bigint);
+DROP FUNCTION pg_catalog.lock_relation_if_exists(text, text);
+
+#include "udfs/lock_relation_if_exists/11.1-1.sql"

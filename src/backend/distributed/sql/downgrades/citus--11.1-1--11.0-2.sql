@@ -45,3 +45,12 @@ CREATE FUNCTION pg_catalog.worker_repartition_cleanup(bigint)
  LANGUAGE c
  STRICT
 AS 'MODULE_PATHNAME', $function$worker_repartition_cleanup$function$
+
+DROP FUNCTION pg_catalog.lock_relation_if_exists(text, text, boolean);
+
+CREATE OR REPLACE FUNCTION pg_catalog.lock_relation_if_exists(table_name text, lock_mode text)
+RETURNS BOOL
+LANGUAGE C STRICT as 'MODULE_PATHNAME',
+$$lock_relation_if_exists$$;
+COMMENT ON FUNCTION pg_catalog.lock_relation_if_exists(table_name text, lock_mode text)
+IS 'locks relation in the lock_mode if the relation exists';

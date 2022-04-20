@@ -105,5 +105,3 @@ GRANT SELECT ON pg_catalog.pg_dist_object TO public;
 #include "udfs/citus_pid_for_gpid/11.0-1.sql"
 
 #include "udfs/citus_coordinator_nodeid/11.0-1.sql"
-
-#include "udfs/lock_relation_if_exists/11.0-1.sql"

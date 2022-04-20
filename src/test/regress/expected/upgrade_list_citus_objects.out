@@ -158,7 +158,7 @@ ORDER BY 1;
  function isolate_tenant_to_new_shard(regclass,"any",text)
  function json_cat_agg(json)
  function jsonb_cat_agg(jsonb)
- function lock_relation_if_exists(text,text)
+ function lock_relation_if_exists(text,text,boolean)
  function lock_shard_metadata(integer,bigint[])
  function lock_shard_resources(integer,bigint[])
  function master_activate_node(text,integer)
