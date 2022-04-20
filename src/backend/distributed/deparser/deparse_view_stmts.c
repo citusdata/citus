@@ -22,8 +22,8 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 
-static void AddAliasesToCreateViewCommand(StringInfo buf, ViewStmt *stmt);
-static void AddOptionsToCreateViewCommand(StringInfo buf, ViewStmt *stmt);
+static void AppendAliasesFromViewStmtToCreateViewCommand(StringInfo buf, ViewStmt *stmt);
+static void AppendOptionsFromViewStmtToCreateViewCommand(StringInfo buf, ViewStmt *stmt);
 static void AppendDropViewStmt(StringInfo buf, DropStmt *stmt);
 static void AppendViewNameList(StringInfo buf, List *objects);
 
@@ -36,8 +36,7 @@ DeparseViewStmt(Node *node)
 	ViewStmt *stmt = castNode(ViewStmt, node);
 	StringInfo viewString = makeStringInfo();
 
-	Oid schemaOid = RangeVarGetCreationNamespace(stmt->view);
-	Oid viewOid = get_relname_relid(stmt->view->relname, schemaOid);
+	Oid viewOid = RangeVarGetRelid(stmt->view, NoLock, false);
 
 	if (stmt->replace)
 	{
@@ -48,9 +47,9 @@ DeparseViewStmt(Node *node)
 		appendStringInfoString(viewString, "CREATE VIEW ");
 	}
 
-	AddQualifiedViewNameToCreateViewCommand(viewString, viewOid);
-	AddAliasesToCreateViewCommand(viewString, stmt);
-	AddOptionsToCreateViewCommand(viewString, stmt);
+	AppendQualifiedViewNameToCreateViewCommand(viewString, viewOid);
+	AppendAliasesFromViewStmtToCreateViewCommand(viewString, stmt);
+	AppendOptionsFromViewStmtToCreateViewCommand(viewString, stmt);
 
 	/*
 	 * Note that Postgres converts CREATE RECURSIVE VIEW commands to
@@ -58,18 +57,18 @@ DeparseViewStmt(Node *node)
 	 * So, we don't need to RECURSIVE views separately while obtaining the
 	 * view creation command
 	 */
-	AddViewDefinitionToCreateViewCommand(viewString, viewOid);
+	AppendViewDefinitionToCreateViewCommand(viewString, viewOid);
 
 	return viewString->data;
 }
 
 
 /*
- * AddQualifiedViewNameToCreateViewCommand adds the qualified view of the given view
+ * AppendQualifiedViewNameToCreateViewCommand adds the qualified view of the given view
  * oid to the given create view command.
  */
 void
-AddQualifiedViewNameToCreateViewCommand(StringInfo buf, Oid viewOid)
+AppendQualifiedViewNameToCreateViewCommand(StringInfo buf, Oid viewOid)
 {
 	char *viewName = get_rel_name(viewOid);
 	char *schemaName = get_namespace_name(get_rel_namespace(viewOid));
@@ -80,11 +79,11 @@ AddQualifiedViewNameToCreateViewCommand(StringInfo buf, Oid viewOid)
 
 
 /*
- * AddAliasesToCreateViewCommand appends aliases (if exists) of the given view statement
+ * AppendAliasesFromViewStmtToCreateViewCommand appends aliases (if exists) of the given view statement
  * to the given create view command.
  */
 static void
-AddAliasesToCreateViewCommand(StringInfo buf, ViewStmt *stmt)
+AppendAliasesFromViewStmtToCreateViewCommand(StringInfo buf, ViewStmt *stmt)
 {
 	if (stmt->aliases == NIL)
 	{
@@ -95,7 +94,7 @@ AddAliasesToCreateViewCommand(StringInfo buf, ViewStmt *stmt)
 	ListCell *aliasItem;
 	foreach(aliasItem, stmt->aliases)
 	{
-		char *columnAliasName = pstrdup(quote_identifier(strVal(lfirst(aliasItem))));
+		const char *columnAliasName = quote_identifier(strVal(lfirst(aliasItem)));
 
 		if (isFirstAlias)
 		{
@@ -115,12 +114,12 @@ AddAliasesToCreateViewCommand(StringInfo buf, ViewStmt *stmt)
 
 
 /*
- * AddOptionsToCreateViewCommand appends options (if exists) of the given view statement
+ * AppendOptionsFromViewStmtToCreateViewCommand appends options (if exists) of the given view statement
  * to the given create view command. Note that this function also handles
  * WITH [CASCADED | LOCAL] CHECK OPTION part of the CREATE VIEW command.
  */
 static void
-AddOptionsToCreateViewCommand(StringInfo buf, ViewStmt *stmt)
+AppendOptionsFromViewStmtToCreateViewCommand(StringInfo buf, ViewStmt *stmt)
 {
 	if (list_length(stmt->options) == 0)
 	{
@@ -156,11 +155,11 @@ AddOptionsToCreateViewCommand(StringInfo buf, ViewStmt *stmt)
 
 
 /*
- * AddViewDefinitionToCreateViewCommand adds the definition of the given view to the
+ * AppendViewDefinitionToCreateViewCommand adds the definition of the given view to the
  * given create view command.
  */
 void
-AddViewDefinitionToCreateViewCommand(StringInfo buf, Oid viewOid)
+AppendViewDefinitionToCreateViewCommand(StringInfo buf, Oid viewOid)
 {
 	/*
 	 * Set search_path to NIL so that all objects outside of pg_catalog will be

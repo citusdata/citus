@@ -36,10 +36,8 @@
 #include "utils/syscache.h"
 
 static List * FilterNameListForDistributedViews(List *viewNamesList, bool missing_ok);
-static void AppendAliasesToCreateViewCommandForExistingView(StringInfo createViewCommand,
-															Oid viewOid);
-static void AddOptionsToCreateViewCommandForExistingView(StringInfo createViewCommand,
-														 Oid viewOid);
+static void AppendAliasesToCreateViewCommand(StringInfo createViewCommand, Oid viewOid);
+static void AppendOptionsToCreateViewCommand(StringInfo createViewCommand, Oid viewOid);
 
 /*
  * PreprocessViewStmt is called during the planning phase for CREATE OR REPLACE VIEW
@@ -67,7 +65,8 @@ PreprocessViewStmt(Node *node, const char *queryString,
 
 
 /*
- * PostprocessViewStmt actually creates the plan we need to execute for view propagation.
+ * PostprocessViewStmt actually creates the commmands we need to run on workers to
+ * propagate views.
  *
  * If view depends on any undistributable object, Citus can not distribute it. In order to
  * not to prevent users from creating local views on the coordinator WARNING message will
@@ -219,11 +218,6 @@ FilterNameListForDistributedViews(List *viewNamesList, bool missing_ok)
 	List *qualifiedViewName = NULL;
 	foreach_ptr(qualifiedViewName, viewNamesList)
 	{
-		/*
-		 * Name of the view must be qualified before calling this function
-		 */
-		Assert(list_length(qualifiedViewName) == 2);
-
 		char *schemaName = strVal(linitial(qualifiedViewName));
 		char *viewName = strVal(lsecond(qualifiedViewName));
 
@@ -264,10 +258,10 @@ CreateViewDDLCommandsIdempotent(const ObjectAddress *viewAddress)
 
 	appendStringInfoString(createViewCommand, "CREATE OR REPLACE VIEW ");
 
-	AddQualifiedViewNameToCreateViewCommand(createViewCommand, viewOid);
-	AppendAliasesToCreateViewCommandForExistingView(createViewCommand, viewOid);
-	AddOptionsToCreateViewCommandForExistingView(createViewCommand, viewOid);
-	AddViewDefinitionToCreateViewCommand(createViewCommand, viewOid);
+	AppendQualifiedViewNameToCreateViewCommand(createViewCommand, viewOid);
+	AppendAliasesToCreateViewCommand(createViewCommand, viewOid);
+	AppendOptionsToCreateViewCommand(createViewCommand, viewOid);
+	AppendViewDefinitionToCreateViewCommand(createViewCommand, viewOid);
 
 	/* Add alter owner commmand */
 	StringInfo alterOwnerCommand = makeStringInfo();
@@ -285,11 +279,11 @@ CreateViewDDLCommandsIdempotent(const ObjectAddress *viewAddress)
 
 
 /*
- * AppendAliasesToCreateViewCommandForExistingView appends aliases to the create view
+ * AppendAliasesToCreateViewCommand appends aliases to the create view
  * command for the existing view.
  */
 static void
-AppendAliasesToCreateViewCommandForExistingView(StringInfo createViewCommand, Oid viewOid)
+AppendAliasesToCreateViewCommand(StringInfo createViewCommand, Oid viewOid)
 {
 	/* Get column name aliases from pg_attribute */
 	ScanKeyData key[1];
@@ -298,7 +292,6 @@ AppendAliasesToCreateViewCommandForExistingView(StringInfo createViewCommand, Oi
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(viewOid));
 
-	/* TODO: Check the lock */
 	Relation maprel = table_open(AttributeRelationId, AccessShareLock);
 	Relation mapidx = index_open(AttributeRelidNumIndexId, AccessShareLock);
 	SysScanDesc pgAttributeScan = systable_beginscan_ordered(maprel, mapidx, NULL, 1,
@@ -340,17 +333,16 @@ AppendAliasesToCreateViewCommandForExistingView(StringInfo createViewCommand, Oi
 
 
 /*
- * AddOptionsToCreateViewCommandForExistingView add relation options to create view command
+ * AppendOptionsToCreateViewCommand add relation options to create view command
  * for an existing view
  */
 static void
-AddOptionsToCreateViewCommandForExistingView(StringInfo createViewCommand, Oid viewOid)
+AppendOptionsToCreateViewCommand(StringInfo createViewCommand, Oid viewOid)
 {
 	/* Add rel options to create view command */
 	char *relOptions = flatten_reloptions(viewOid);
 	if (relOptions != NULL)
 	{
 		appendStringInfo(createViewCommand, "WITH (%s) ", relOptions);
-		pfree(relOptions);
 	}
 }

@@ -130,6 +130,11 @@ $$;');
 
 CREATE TYPE post_11_upgrade.my_type AS (a int);
 
+CREATE VIEW post_11_upgrade.view_for_upgrade_test AS SELECT * FROM sensors;
+
+SELECT run_command_on_workers('SET citus.enable_ddl_propagation TO off;
+CREATE VIEW post_11_upgrade.view_for_upgrade_test AS SELECT * FROM sensors;');
+
 RESET citus.enable_ddl_propagation;
 
 CREATE TABLE sensors_parser(

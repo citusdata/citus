@@ -5,6 +5,9 @@ SET search_path to view_prop_schema;
 -- Check creating views depending on different types of tables
 -- and from multiple schemas
 
+-- Check the most basic one
+CREATE VIEW prop_view_basic AS SELECT 1;
+
 -- Try to create view depending local table, then try to recreate it after distributing the table
 CREATE TABLE view_table_1(id int, val_1 text);
 CREATE VIEW prop_view_1 AS
@@ -31,7 +34,9 @@ CREATE VIEW prop_view_3 AS
     SELECT * FROM view_table_1 WHERE id IN
     (SELECT view_table_2.id FROM view_table_2 INNER JOIN view_table_3 ON view_table_2.id = view_table_3.id);
 
+SET client_min_messages TO WARNING;
 SELECT 1 FROM citus_add_node('localhost', :master_port, groupid=>0);
+RESET client_min_messages;
 
 ALTER TABLE view_table_3
 ADD CONSTRAINT f_key_for_local_table
@@ -74,7 +79,7 @@ CREATE OR REPLACE VIEW prop_view_6 AS
     INNER JOIN view_prop_schema_inner.view_table_4 AS vt4 ON vt1.id = vt4.id;
 
 -- Show that all views are propagated as distributed object
-SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%prop_view_%';
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%prop_view_%' ORDER BY 1;
 
 -- Check creating views depending various kind of objects
 -- Tests will also check propagating dependent objects
@@ -142,6 +147,17 @@ UNION ALL
 
 SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%nums_1_100_prop_view%';
 
+-- Sequences are supported as dependency
+CREATE SEQUENCE sequence_to_prop;
+CREATE VIEW seq_view_prop AS SELECT sequence_to_prop.is_called FROM sequence_to_prop;
+
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%sequence_to_prop%';
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%seq_view_prop%';
+
+-- Views depend on temp sequences will be created locally
+CREATE TEMPORARY SEQUENCE temp_sequence_to_drop;
+CREATE VIEW temp_seq_view_prop AS SELECT temp_sequence_to_drop.is_called FROM temp_sequence_to_drop;
+
 -- Aliases are supported
 CREATE VIEW aliased_opt_prop_view(alias_1, alias_2) AS SELECT * FROM view_table_6;
 
@@ -154,7 +170,7 @@ CREATE VIEW sep_opt_prop_view
     AS SELECT * FROM view_table_6
     WITH LOCAL CHECK OPTION;
 
-SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%opt_prop_view%';
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%opt_prop_view%' ORDER BY 1;
 
 -- Check definitions of views are correct on workers
 \c - - - :worker_1_port
@@ -172,6 +188,27 @@ DROP VIEW opt_prop_view, aliased_opt_prop_view, view_prop_schema_inner.inner_vie
 
 SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%inner_view_prop%';
 SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%opt_prop_view%';
+
+-- Drop a column that view depends on
+ALTER TABLE view_table_1 DROP COLUMN val_1 CASCADE;
+
+-- Since prop_view_3 depends on the view_table_1's val_1 column, it should be dropped
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%prop_view_3%';
+
+-- Drop a table that view depends on
+DROP TABLE view_table_2 CASCADE;
+
+-- Since prop_view_2 depends on the view_table_2, it should be dropped
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%prop_view_2%';
+
+-- Show that unsupported CREATE OR REPLACE VIEW commands are catched by PG on the coordinator
+CREATE TABLE table_to_test_unsup_view(id int, val1 text);
+SELECT create_distributed_table('table_to_test_unsup_view', 'id');
+
+CREATE VIEW view_for_unsup_commands AS SELECT * FROM table_to_test_unsup_view;
+
+CREATE OR REPLACE VIEW view_for_unsup_commands(a,b) AS SELECT * FROM table_to_test_unsup_view;
+CREATE OR REPLACE VIEW view_for_unsup_commands AS SELECT id FROM table_to_test_unsup_view;
 
 DROP SCHEMA view_prop_schema_inner CASCADE;
 DROP SCHEMA view_prop_schema CASCADE;

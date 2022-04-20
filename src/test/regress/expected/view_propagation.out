@@ -3,6 +3,8 @@ CREATE SCHEMA view_prop_schema;
 SET search_path to view_prop_schema;
 -- Check creating views depending on different types of tables
 -- and from multiple schemas
+-- Check the most basic one
+CREATE VIEW prop_view_basic AS SELECT 1;
 -- Try to create view depending local table, then try to recreate it after distributing the table
 CREATE TABLE view_table_1(id int, val_1 text);
 CREATE VIEW prop_view_1 AS
@@ -43,14 +45,14 @@ CREATE VIEW prop_view_3 AS
 WARNING:  "view prop_view_3" has dependency to "table view_table_3" that is not in Citus' metadata
 DETAIL:  "view prop_view_3" will be created only locally
 HINT:  Distribute "table view_table_3" first to distribute "view prop_view_3"
+SET client_min_messages TO WARNING;
 SELECT 1 FROM citus_add_node('localhost', :master_port, groupid=>0);
-NOTICE:  Replicating reference table "view_table_2" to the node localhost:xxxxx
-NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
+RESET client_min_messages;
 ALTER TABLE view_table_3
 ADD CONSTRAINT f_key_for_local_table
 FOREIGN KEY(id)
@@ -95,7 +97,7 @@ CREATE OR REPLACE VIEW prop_view_6 AS
     SELECT vt1.id, vt4.val_1 FROM view_table_1 AS vt1
     INNER JOIN view_prop_schema_inner.view_table_4 AS vt4 ON vt1.id = vt4.id;
 -- Show that all views are propagated as distributed object
-SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%prop_view_%';
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%prop_view_%' ORDER BY 1;
                obj_identifier
 ---------------------------------------------------------------------
  (view,"{view_prop_schema,prop_view_1}",{})
@@ -104,7 +106,8 @@ SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as
  (view,"{view_prop_schema,prop_view_4}",{})
  (view,"{view_prop_schema,prop_view_5}",{})
  (view,"{view_prop_schema,prop_view_6}",{})
-(6 rows)
+ (view,"{view_prop_schema,prop_view_basic}",{})
+(7 rows)
 
 -- Check creating views depending various kind of objects
 -- Tests will also check propagating dependent objects
@@ -223,6 +226,27 @@ SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as
  (view,"{view_prop_schema,nums_1_100_prop_view}",{})
 (1 row)
 
+-- Sequences are supported as dependency
+CREATE SEQUENCE sequence_to_prop;
+CREATE VIEW seq_view_prop AS SELECT sequence_to_prop.is_called FROM sequence_to_prop;
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%sequence_to_prop%';
+                   obj_identifier
+---------------------------------------------------------------------
+ (sequence,"{view_prop_schema,sequence_to_prop}",{})
+(1 row)
+
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%seq_view_prop%';
+                obj_identifier
+---------------------------------------------------------------------
+ (view,"{view_prop_schema,seq_view_prop}",{})
+(1 row)
+
+-- Views depend on temp sequences will be created locally
+CREATE TEMPORARY SEQUENCE temp_sequence_to_drop;
+CREATE VIEW temp_seq_view_prop AS SELECT temp_sequence_to_drop.is_called FROM temp_sequence_to_drop;
+NOTICE:  view "temp_seq_view_prop" will be a temporary view
+WARNING:  "view temp_seq_view_prop" has dependency on unsupported object "schema pg_temp_xxx"
+DETAIL:  "view temp_seq_view_prop" will be created only locally
 -- Aliases are supported
 CREATE VIEW aliased_opt_prop_view(alias_1, alias_2) AS SELECT * FROM view_table_6;
 -- View options are supported
@@ -232,7 +256,7 @@ CREATE VIEW opt_prop_view
 CREATE VIEW sep_opt_prop_view
     AS SELECT * FROM view_table_6
     WITH LOCAL CHECK OPTION;
-SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%opt_prop_view%';
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%opt_prop_view%' ORDER BY 1;
                     obj_identifier
 ---------------------------------------------------------------------
  (view,"{view_prop_schema,aliased_opt_prop_view}",{})
@@ -294,27 +318,66 @@ SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as
 ---------------------------------------------------------------------
 (0 rows)
 
+-- Drop a column that view depends on
+ALTER TABLE view_table_1 DROP COLUMN val_1 CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to view prop_view_1
+drop cascades to view prop_view_3
+drop cascades to view prop_view_8
+-- Since prop_view_3 depends on the view_table_1's val_1 column, it should be dropped
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%prop_view_3%';
+ obj_identifier
+---------------------------------------------------------------------
+(0 rows)
+
+-- Drop a table that view depends on
+DROP TABLE view_table_2 CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to view prop_view_2
+drop cascades to constraint f_key_for_local_table on table view_table_3
+NOTICE:  drop cascades to constraint f_key_for_local_table_1410200 on table view_prop_schema.view_table_3_1410200
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  removing table view_prop_schema.view_table_3 from metadata as it is not connected to any reference tables via foreign keys
+-- Since prop_view_2 depends on the view_table_2, it should be dropped
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%prop_view_2%';
+ obj_identifier
+---------------------------------------------------------------------
+(0 rows)
+
+-- Show that unsupported CREATE OR REPLACE VIEW commands are catched by PG on the coordinator
+CREATE TABLE table_to_test_unsup_view(id int, val1 text);
+SELECT create_distributed_table('table_to_test_unsup_view', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE VIEW view_for_unsup_commands AS SELECT * FROM table_to_test_unsup_view;
+CREATE OR REPLACE VIEW view_for_unsup_commands(a,b) AS SELECT * FROM table_to_test_unsup_view;
+ERROR:  cannot change name of view column "id" to "a"
+HINT:  Use ALTER VIEW ... RENAME COLUMN ... to change name of view column instead.
+CREATE OR REPLACE VIEW view_for_unsup_commands AS SELECT id FROM table_to_test_unsup_view;
+ERROR:  cannot drop columns from view
 DROP SCHEMA view_prop_schema_inner CASCADE;
 NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table view_prop_schema_inner.view_table_4
 drop cascades to view prop_view_6
 drop cascades to table view_prop_schema_inner.inner_view_table
 DROP SCHEMA view_prop_schema CASCADE;
-NOTICE:  drop cascades to 17 other objects
-DETAIL:  drop cascades to table view_table_1
-drop cascades to view prop_view_1
-drop cascades to table view_table_2
-drop cascades to view prop_view_2
-drop cascades to table view_table_3_1410200
-drop cascades to table view_table_2_1410199
-drop cascades to table view_table_3
-drop cascades to view prop_view_3
+NOTICE:  drop cascades to 15 other objects
+DETAIL:  drop cascades to view prop_view_basic
+drop cascades to table view_table_1
 drop cascades to view prop_view_4
 drop cascades to view prop_view_5
 drop cascades to function func_1_for_view(integer)
 drop cascades to view prop_view_7
 drop cascades to type type_for_view_prop
-drop cascades to view prop_view_8
 drop cascades to table view_table_5
 drop cascades to table view_table_6
 drop cascades to view nums_1_100_prop_view
+drop cascades to sequence sequence_to_prop
+drop cascades to view seq_view_prop
+drop cascades to table view_table_3
+drop cascades to table table_to_test_unsup_view
+drop cascades to view view_for_unsup_commands

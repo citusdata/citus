@@ -500,7 +500,7 @@ BEGIN;
 
     ALTER TABLE table_to_dist ADD COLUMN col_1 int default function_propagation_schema.non_dist_func(NULL::non_dist_table_for_function);
 ERROR:  "table table_to_dist" has dependency to "table non_dist_table_for_function" that is not in Citus' metadata
-HINT:  Distribute "table non_dist_table_for_function" first to distribute "table table_to_dist"
+HINT:  Distribute "table non_dist_table_for_function" first to update "table table_to_dist" on worker nodes
 ROLLBACK;
 -- Adding multiple columns with default values should propagate the function
 BEGIN;
