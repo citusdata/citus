@@ -1562,6 +1562,8 @@ CitusAddWaitEventSetToSet(WaitEventSet *set, uint32 events, pgsocket fd,
 	volatile int waitEventSetIndex = WAIT_EVENT_SET_INDEX_NOT_INITIALIZED;
 	MemoryContext savedContext = CurrentMemoryContext;
 
+	events |= WL_SOCKET_CLOSED;
+
 	PG_TRY();
 	{
 		waitEventSetIndex =

@@ -2783,6 +2783,11 @@ ProcessWaitEvents(DistributedExecution *execution, WaitEvent *events, int eventC
 			ereport(ERROR, (errmsg("postmaster was shut down, exiting")));
 		}
 
+		if (event->events & WL_SOCKET_CLOSED)
+		{
+			ereport(WARNING, (errmsg("Connection closed detected")));
+		}
+
 		if (event->events & WL_LATCH_SET)
 		{
 			ResetLatch(MyLatch);
@@ -2807,6 +2812,7 @@ ProcessWaitEvents(DistributedExecution *execution, WaitEvent *events, int eventC
 
 		WorkerSession *session = (WorkerSession *) event->user_data;
 		session->latestUnconsumedWaitEvents = event->events;
+
 
 		ConnectionStateMachine(session);
 	}
@@ -4158,6 +4164,8 @@ UpdateConnectionWaitFlags(WorkerSession *session, int waitFlags)
 	MultiConnection *connection = session->connection;
 	DistributedExecution *execution = session->workerPool->distributedExecution;
 
+	waitFlags |= WL_SOCKET_CLOSED;
+
 	/* do not take any actions if the flags not changed */
 	if (connection->waitFlags == waitFlags)
 	{
@@ -4200,6 +4208,11 @@ CheckConnectionReady(WorkerSession *session)
 	{
 		/* more data to send, wait for socket to become writable */
 		waitFlags = waitFlags | WL_SOCKET_WRITEABLE;
+	}
+
+	if ((session->latestUnconsumedWaitEvents & WL_SOCKET_CLOSED) != 0)
+	{
+		elog(WARNING, "DETECT SOCKET CLOSED");
 	}
 
 	if ((session->latestUnconsumedWaitEvents & WL_SOCKET_READABLE) != 0)

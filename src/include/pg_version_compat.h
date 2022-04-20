@@ -62,6 +62,12 @@ RelationGetSmgr(Relation rel)
 }
 
 
+/*
+ * Postgres 15+ supports detecting the remote connection closed. For earlier version,
+ * we simply ignore that.
+ */
+#define WL_SOCKET_CLOSED 0
+
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_14
