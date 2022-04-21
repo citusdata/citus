@@ -77,7 +77,7 @@ SetupTuplestore(FunctionCallInfo fcinfo, TupleDesc *tupleDescriptor)
 
 	MemoryContext oldContext = MemoryContextSwitchTo(perQueryContext);
 	Tuplestorestate *tupstore = tuplestore_begin_heap(true, false, work_mem);
-	resultSet->returnMode = SFRM_Materialize;
+	resultSet->returnMode = SFRM_ValuePerCall;
 	resultSet->setResult = tupstore;
 	resultSet->setDesc = *tupleDescriptor;
 	MemoryContextSwitchTo(oldContext);
