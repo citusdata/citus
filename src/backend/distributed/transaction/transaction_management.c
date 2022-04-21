@@ -364,9 +364,12 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			ResetGlobalVariables();
 
 			/*
-			 * Clear Cache table
+			 * Clear MetadataCache table if we're aborting from a CREATE EXTENSION Citus
 			 */
-			InvalidateMetadataSystemCache();
+			if (IsCreatingCitus())
+			{
+				InvalidateMetadataSystemCache();
+			}
 
 			/*
 			 * Make sure that we give the shared connections back to the shared
@@ -638,10 +641,12 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			PopSubXact(subId);
 
 			/*
-			 * Clear Cache Table
+			 * Clear MetadataCache Table if we're aborting from CREATE EXTENSION Citus
 			 */
-			InvalidateMetadataSystemCache();
-
+			if (IsCreatingCitus())
+			{
+				InvalidateMetadataSystemCache();
+			}
 			break;
 		}
 

@@ -186,6 +186,8 @@ bool EnableVersionChecks = true; /* version checks are enabled */
 
 static bool citusVersionKnownCompatible = false;
 
+static bool creatingCitus = false;
+
 /* Hash table for informations about each partition */
 static HTAB *DistTableCacheHash = NULL;
 static List *DistTableCacheExpired = NIL;
@@ -1969,6 +1971,7 @@ CitusHasBeenLoadedInternal(void)
 	if (citusExtensionOid == InvalidOid)
 	{
 		/* Citus extension does not exist yet */
+		creatingCitus = false;
 		return false;
 	}
 
@@ -1977,12 +1980,26 @@ CitusHasBeenLoadedInternal(void)
 		/*
 		 * We do not use Citus hooks during CREATE/ALTER EXTENSION citus
 		 * since the objects used by the C code might be not be there yet.
+		 * We set creatingCitus to true in case of a rollback so that we clear
+		 * MetadataCache
 		 */
+		creatingCitus = true;
 		return false;
 	}
 
 	/* citus extension exists and has been created */
+	creatingCitus = false;
 	return true;
+}
+
+
+/*
+ * IsCreatingCitus returns true if the citus extension is being created, otherwise return false.
+ */
+bool
+IsCreatingCitus(void)
+{
+	return creatingCitus;
 }
 
 
