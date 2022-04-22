@@ -35,7 +35,14 @@ DROP FUNCTION IF EXISTS pg_catalog.citus_total_relation_size(regclass);
 #include "udfs/worker_change_sequence_dependency/10.0-1.sql"
 #include "udfs/remove_local_tables_from_metadata/10.0-1.sql"
 
-#include "../../columnar/sql/columnar--9.5-1--10.0-1.sql"
+--#include "../../columnar/sql/columnar--9.5-1--10.0-1.sql"
+DO $check_columnar$
+BEGIN
+  IF NOT EXISTS (select 1 from pg_extension where extname='citus_columnar') THEN  
+    #include "../../columnar/sql/columnar--9.5-1--10.0-1.sql"
+  END IF;
+END;
+$check_columnar$;
 
 #include "udfs/time_partition_range/10.0-1.sql"
 #include "udfs/time_partitions/10.0-1.sql"
