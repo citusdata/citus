@@ -9,7 +9,14 @@ INSERT INTO citus.pg_dist_object SELECT
   0 as objsubid
 ON CONFLICT DO NOTHING;
 
-#include "../../columnar/sql/columnar--10.0-3--10.1-1.sql"
+--#include "../../columnar/sql/columnar--10.0-3--10.1-1.sql"
+DO $check_columnar$
+BEGIN
+  IF NOT EXISTS (select 1 from pg_extension where extname='citus_columnar') THEN  
+      #include "../../columnar/sql/columnar--10.0-3--10.1-1.sql"
+  END IF;
+END;
+$check_columnar$;
 #include "udfs/create_distributed_table/10.1-1.sql";
 #include "udfs/worker_partitioned_relation_total_size/10.1-1.sql"
 #include "udfs/worker_partitioned_relation_size/10.1-1.sql"

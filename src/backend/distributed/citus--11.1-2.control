@@ -1,4 +1,0 @@
-# Citus extension 11.1-2
-relocatable = false
-schema = pg_catalog
-requires = 'citus_columnar'

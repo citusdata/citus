@@ -28,5 +28,5 @@ $$;
 #include "udfs/downgrade_columnar_storage/10.2-1.sql"
 
 -- upgrade storage for all columnar relations
-SELECT citus_internal.upgrade_columnar_storage(c.oid) FROM pg_class c, pg_am a
+PERFORM citus_internal.upgrade_columnar_storage(c.oid) FROM pg_class c, pg_am a
   WHERE c.relam = a.oid AND amname = 'columnar';

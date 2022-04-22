@@ -38,8 +38,10 @@
 #endif
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
+#include "citus_version.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
+#include "commands/extension.h"
 #include "commands/tablecmds.h"
 #include "distributed/adaptive_executor.h"
 #include "distributed/backend_data.h"
@@ -72,6 +74,7 @@
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
+#include "nodes/makefuncs.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -192,6 +195,20 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	if (EnableVersionChecks && isCreateAlterExtensionUpdateCitusStmt)
 	{
 		ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
+	}
+
+	if (IsA(parsetree, CreateExtensionStmt))
+	{
+		/*CREATE EXTENSION CITUS (version Z) */
+		CreateExtensionStmt *createExtensionStmt = castNode(CreateExtensionStmt,
+															parsetree);
+		if (strcmp(createExtensionStmt->extname, "citus") == 0)
+		{
+			if (get_extension_oid("citus_columnar", true) == InvalidOid)
+			{
+				CreateExtensionWithVersion("citus_columnar", NULL);
+			}
+		}
 	}
 
 	if (!CitusHasBeenLoaded())
@@ -616,10 +633,64 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		if (isAlterExtensionUpdateCitusStmt)
 		{
 			citusCanBeUpdatedToAvailableVersion = !InstalledAndAvailableVersionsSame();
+
+			/*upgrade citus */
+			DefElem *newVersionValue = GetExtensionOption(
+				((AlterExtensionStmt *) parsetree)->options, "new_version");
+			Oid citusExtensionOid = get_extension_oid("citus", true);
+			char *curExtensionVersion = get_extension_version(citusExtensionOid);
+			Oid citusColumnarOid = get_extension_oid("citus_columnar", true);
+			if (newVersionValue)
+			{
+				const char *newVersion = defGetString(newVersionValue);
+
+				/*alter extension citus update to 11.2-1, and no citus_columnar installed */
+				if (strcmp(newVersion, "11.2-1") == 0 && citusColumnarOid == InvalidOid)
+				{
+					/*it's upgrade citus to 11.2-1 */
+					CreateExtensionWithVersion("citus_columnar", "11.1-0");
+				}
+				else if (strcmp(curExtensionVersion, "11.2-1") == 0 && citusColumnarOid !=
+						 InvalidOid)
+				{
+					/*downgrade citus_columnar to Y */
+					AlterExtensionUpdateStmt("citus_columnar", "11.1-0");
+				}
+			}
 		}
 
 		PrevProcessUtility_compat(pstmt, queryString, false, context,
 								  params, queryEnv, dest, completionTag);
+
+		if (isAlterExtensionUpdateCitusStmt)
+		{
+			DefElem *newVersionValue = GetExtensionOption(
+				((AlterExtensionStmt *) parsetree)->options, "new_version");
+			Oid citusColumnarOid = get_extension_oid("citus_columnar", true);
+			if (newVersionValue)
+			{
+				const char *newVersion = defGetString(newVersionValue);
+				if (strcmp(newVersion, "11.2-1") == 0 && citusColumnarOid != InvalidOid)
+				{
+					/*after "ALTER EXTENSION citus" updates citus_columnar Y to version Z. */
+					char *curColumnarVersion = get_extension_version(citusColumnarOid);
+					if (strcmp(curColumnarVersion, "11.1-0") == 0)
+					{
+						AlterExtensionUpdateStmt("citus_columnar", "11.2-1");
+					}
+				}
+				else if (strcmp(newVersion, "11.1-1") == 0 && citusColumnarOid !=
+						 InvalidOid)
+				{
+					/*after "ALTER EXTENSION citus" drops citus_columnar extension */
+					char *curColumnarVersion = get_extension_version(citusColumnarOid);
+					if (strcmp(curColumnarVersion, "11.1-0") == 0)
+					{
+						RemoveExtensionById(citusColumnarOid);
+					}
+				}
+			}
+		}
 
 		/*
 		 * if we are running ALTER EXTENSION citus UPDATE (to "<version>") command, we may need

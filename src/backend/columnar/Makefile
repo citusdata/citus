@@ -9,7 +9,8 @@ OBJS += \
 
 MODULE_big = citus_columnar
 EXTENSION = citus_columnar
-DATA = $(wildcard sql/*--*.sql)
+DATA = $(wildcard sql/*--*.sql) \
+		$(wildcard sql/downgrades/*--*.sql)
 PG_CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include
 
 ifdef USE_PGXS

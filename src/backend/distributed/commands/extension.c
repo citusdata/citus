@@ -11,6 +11,7 @@
 #include "postgres.h"
 
 #include "access/genam.h"
+#include "access/xact.h"
 #include "citus_version.h"
 #include "catalog/pg_extension_d.h"
 #include "commands/defrem.h"
@@ -975,4 +976,68 @@ AlterExtensionUpdateStmtObjectAddress(Node *node, bool missing_ok)
 	ObjectAddressSet(address, ExtensionRelationId, extensionOid);
 
 	return address;
+}
+
+
+/*
+ * CreateExtensionWithVersion builds and execute create extension statements
+ * per given extension name and extension verision
+ */
+void
+CreateExtensionWithVersion(const char *extname, const char *extVersion)
+{
+	CreateExtensionStmt *createExtensionStmt = makeNode(CreateExtensionStmt);
+
+	/* set location to -1 as it is unknown */
+	int location = -1;
+
+	/* set extension name and if_not_exists fields */
+	createExtensionStmt->extname = extname;
+	createExtensionStmt->if_not_exists = true;
+
+	if (extVersion == NULL)
+	{
+		createExtensionStmt->options = NIL;
+	}
+	else
+	{
+		Node *extensionVersionArg = (Node *) makeString(extVersion);
+		DefElem *extensionVersionElement = makeDefElem("new_version", extensionVersionArg,
+													   location);
+		createExtensionStmt->options = lappend(createExtensionStmt->options,
+											   extensionVersionElement);
+	}
+
+	CreateExtension(NULL, createExtensionStmt);
+	CommandCounterIncrement();
+}
+
+
+/*
+ * AlterExtensionUpdateStmt builds and execute Alter extension statements
+ * per given extension name and updates extension verision
+ */
+void
+AlterExtensionUpdateStmt(const char *extname, const char *extVersion)
+{
+	AlterExtensionStmt *alterExtensionStmt = makeNode(AlterExtensionStmt);
+
+	/* set location to -1 as it is unknown */
+	int location = -1;
+	alterExtensionStmt->extname = extname;
+
+	if (extVersion == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT),
+						errmsg("alter extension \"%s\" should not be empty",
+							   extVersion)));
+	}
+
+	Node *extensionVersionArg = (Node *) makeString(extVersion);
+	DefElem *extensionVersionElement = makeDefElem("new_version", extensionVersionArg,
+												   location);
+	alterExtensionStmt->options = lappend(alterExtensionStmt->options,
+										  extensionVersionElement);
+	ExecAlterExtensionStmt(NULL, alterExtensionStmt);
+	CommandCounterIncrement();
 }
