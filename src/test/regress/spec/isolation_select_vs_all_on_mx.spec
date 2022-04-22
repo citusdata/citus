@@ -99,9 +99,9 @@ step "s2-select-for-update"
 	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM select_table WHERE id = 6 FOR UPDATE');
 }
 
-step "s2-coordinator-create-index-concurrently"
+step "s2-flaky-coordinator-create-index-concurrently"
 {
-	CREATE INDEX CONCURRENTLY select_table_index ON select_table(id);
+	CREATE INDEX CONCURRENTLY flaky_select_table_index ON select_table(id);
 }
 
 step "s2-commit-worker"
@@ -135,4 +135,4 @@ permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-copy" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-select-count"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select" "s2-begin" "s2-index" "s1-commit-worker" "s2-commit" "s1-stop-connection"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-select-for-update" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection"
-permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-disable-binary-protocol-on-worker" "s1-select" "s2-coordinator-create-index-concurrently" "s1-commit-worker" "s1-stop-connection"
+permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-disable-binary-protocol-on-worker" "s1-select" "s2-flaky-coordinator-create-index-concurrently" "s1-commit-worker" "s1-stop-connection"
