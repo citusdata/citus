@@ -235,7 +235,7 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select-for-update s2-coordinator-create-index-concurrently s1-commit-worker s1-stop-connection
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select-for-update s2-flaky-coordinator-create-index-concurrently s1-commit-worker s1-stop-connection
 step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
 
@@ -260,8 +260,8 @@ run_commands_on_session_level_connection_to_node
 
 (1 row)
 
-step s2-coordinator-create-index-concurrently:
- CREATE INDEX CONCURRENTLY dist_table_index_conc ON dist_table(id);
+step s2-flaky-coordinator-create-index-concurrently:
+ CREATE INDEX CONCURRENTLY flaky_dist_table_index_conc ON dist_table(id);
 
 step s1-commit-worker:
  SELECT run_commands_on_session_level_connection_to_node('COMMIT');
