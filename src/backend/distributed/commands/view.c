@@ -36,8 +36,10 @@
 #include "utils/syscache.h"
 
 static List * FilterNameListForDistributedViews(List *viewNamesList, bool missing_ok);
+static void AppendQualifiedViewNameToCreateViewCommand(StringInfo buf, Oid viewOid);
 static void AppendAliasesToCreateViewCommand(StringInfo createViewCommand, Oid viewOid);
 static void AppendOptionsToCreateViewCommand(StringInfo createViewCommand, Oid viewOid);
+static StringInfo CreateAlterViewOwnerCommand(Oid viewOid);
 
 /*
  * PreprocessViewStmt is called during the planning phase for CREATE OR REPLACE VIEW
@@ -92,11 +94,6 @@ PostprocessViewStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	if (!HasAnyNodes())
-	{
-		return NIL;
-	}
-
 	ObjectAddress viewAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
 
 	if (IsObjectAddressOwnedByExtension(&viewAddress, NULL))
@@ -109,6 +106,22 @@ PostprocessViewStmt(Node *node, const char *queryString)
 
 	if (errMsg != NULL)
 	{
+		/*
+		 * Don't need to give any warning/error messages if there is no worker nodes in
+		 * the cluster as user's experience won't be affected on the single node even
+		 * if the view won't be distributed.
+		 */
+		if (!HasAnyNodes())
+		{
+			return NIL;
+		}
+
+		/*
+		 * If the view is already distributed, we should provide an error to not have
+		 * different definition of view on coordinator and worker nodes. If the view
+		 * is not distributed yet, we can create it locally to not affect user's local
+		 * usage experience.
+		 */
 		if (IsObjectDistributed(&viewAddress))
 		{
 			RaiseDeferredError(errMsg, ERROR);
@@ -122,11 +135,10 @@ PostprocessViewStmt(Node *node, const char *queryString)
 
 	EnsureDependenciesExistOnAllNodes(&viewAddress);
 
-	const char *sql = DeparseTreeNode((Node *) stmt);
-
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
+	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
+	commands = list_concat(commands,
+						   CreateViewDDLCommandsIdempotent(viewAddress.objectId));
+	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
@@ -246,15 +258,9 @@ FilterNameListForDistributedViews(List *viewNamesList, bool missing_ok)
  * executed on a node to recreate the view addressed by the viewAddress.
  */
 List *
-CreateViewDDLCommandsIdempotent(const ObjectAddress *viewAddress)
+CreateViewDDLCommandsIdempotent(Oid viewOid)
 {
 	StringInfo createViewCommand = makeStringInfo();
-
-	Oid viewOid = viewAddress->objectId;
-
-	char *viewName = get_rel_name(viewOid);
-	Oid schemaOid = get_rel_namespace(viewOid);
-	char *schemaName = get_namespace_name(schemaOid);
 
 	appendStringInfoString(createViewCommand, "CREATE OR REPLACE VIEW ");
 
@@ -263,18 +269,25 @@ CreateViewDDLCommandsIdempotent(const ObjectAddress *viewAddress)
 	AppendOptionsToCreateViewCommand(createViewCommand, viewOid);
 	AppendViewDefinitionToCreateViewCommand(createViewCommand, viewOid);
 
-	/* Add alter owner commmand */
-	StringInfo alterOwnerCommand = makeStringInfo();
-
-	char *viewOwnerName = TableOwner(viewOid);
-	char *qualifiedViewName = NameListToQuotedString(list_make2(makeString(schemaName),
-																makeString(viewName)));
-	appendStringInfo(alterOwnerCommand,
-					 "ALTER VIEW %s OWNER TO %s", qualifiedViewName,
-					 quote_identifier(viewOwnerName));
+	StringInfo alterOwnerCommand = CreateAlterViewOwnerCommand(viewOid);
 
 	return list_make2(createViewCommand->data,
 					  alterOwnerCommand->data);
+}
+
+
+/*
+ * AppendQualifiedViewNameToCreateViewCommand adds the qualified view of the given view
+ * oid to the given create view command.
+ */
+static void
+AppendQualifiedViewNameToCreateViewCommand(StringInfo buf, Oid viewOid)
+{
+	char *viewName = get_rel_name(viewOid);
+	char *schemaName = get_namespace_name(get_rel_namespace(viewOid));
+	char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
+
+	appendStringInfo(buf, "%s ", qualifiedViewName);
 }
 
 
@@ -345,4 +358,61 @@ AppendOptionsToCreateViewCommand(StringInfo createViewCommand, Oid viewOid)
 	{
 		appendStringInfo(createViewCommand, "WITH (%s) ", relOptions);
 	}
+}
+
+
+/*
+ * AppendViewDefinitionToCreateViewCommand adds the definition of the given view to the
+ * given create view command.
+ */
+void
+AppendViewDefinitionToCreateViewCommand(StringInfo buf, Oid viewOid)
+{
+	/*
+	 * Set search_path to NIL so that all objects outside of pg_catalog will be
+	 * schema-prefixed.
+	 */
+	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+	overridePath->schemas = NIL;
+	overridePath->addCatalog = true;
+	PushOverrideSearchPath(overridePath);
+
+	/*
+	 * Push the transaction snapshot to be able to get vief definition with pg_get_viewdef
+	 */
+	PushActiveSnapshot(GetTransactionSnapshot());
+
+	Datum viewDefinitionDatum = DirectFunctionCall1(pg_get_viewdef,
+													ObjectIdGetDatum(viewOid));
+	char *viewDefinition = TextDatumGetCString(viewDefinitionDatum);
+
+	PopActiveSnapshot();
+	PopOverrideSearchPath();
+
+	appendStringInfo(buf, "AS %s ", viewDefinition);
+}
+
+
+/*
+ * CreateAlterViewOwnerCommand creates the command to alter view owner command for the
+ * given view oid.
+ */
+static StringInfo
+CreateAlterViewOwnerCommand(Oid viewOid)
+{
+	/* Add alter owner commmand */
+	StringInfo alterOwnerCommand = makeStringInfo();
+
+	char *viewName = get_rel_name(viewOid);
+	Oid schemaOid = get_rel_namespace(viewOid);
+	char *schemaName = get_namespace_name(schemaOid);
+
+	char *viewOwnerName = TableOwner(viewOid);
+	char *qualifiedViewName = NameListToQuotedString(list_make2(makeString(schemaName),
+																makeString(viewName)));
+	appendStringInfo(alterOwnerCommand,
+					 "ALTER VIEW %s OWNER TO %s", qualifiedViewName,
+					 quote_identifier(viewOwnerName));
+
+	return alterOwnerCommand;
 }

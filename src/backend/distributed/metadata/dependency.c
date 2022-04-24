@@ -165,7 +165,7 @@ static bool FollowAllDependencies(ObjectAddressCollector *collector,
 								  DependencyDefinition *definition);
 static void ApplyAddToDependencyList(ObjectAddressCollector *collector,
 									 DependencyDefinition *definition);
-static List * GetRelationRuleReferenceDependencyList(Oid relationId);
+static List * GetViewRuleReferenceDependencyList(Oid relationId);
 static List * ExpandCitusSupportedTypes(ObjectAddressCollector *collector,
 										ObjectAddress target);
 static ViewDependencyNode * BuildViewDependencyGraph(Oid relationId, HTAB *nodeMap);
@@ -1328,14 +1328,18 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			result = list_concat(result, indexDependencyList);
 
 			/*
-			 * Get the dependencies of the rule for the given relation. PG keeps internal
-			 * dependency between relation and rule. As it is stated on the PG doc, if
+			 * Get the dependencies of the rule for the given view. PG keeps internal
+			 * dependency between view and rule. As it is stated on the PG doc, if
 			 * there is an internal dependency, NORMAL and AUTO dependencies of the
 			 * dependent object behave much like they were dependencies of the referenced
 			 * object.
 			 */
-			List *ruleRefDepList = GetRelationRuleReferenceDependencyList(relationId);
-			result = list_concat(result, ruleRefDepList);
+			char relKind = get_rel_relkind(relationId);
+			if (relKind == RELKIND_VIEW)
+			{
+				List *ruleRefDepList = GetViewRuleReferenceDependencyList(relationId);
+				result = list_concat(result, ruleRefDepList);
+			}
 		}
 
 		default:
@@ -1349,15 +1353,15 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 
 
 /*
- * GetRelationRuleReferenceDependencyList returns the dependencies of the relation's
+ * GetViewRuleReferenceDependencyList returns the dependencies of the view's
  * internal rule dependencies.
  */
 static List *
-GetRelationRuleReferenceDependencyList(Oid relationId)
+GetViewRuleReferenceDependencyList(Oid relationId)
 {
 	List *dependencyTupleList = GetPgDependTuplesForDependingObjects(RelationRelationId,
 																	 relationId);
-	List *nonInternalRuleDependencies = NIL;
+	List *nonInternalDependenciesOfDependingRules = NIL;
 
 	HeapTuple depTup = NULL;
 	foreach_ptr(depTup, dependencyTupleList)
@@ -1388,13 +1392,13 @@ GetRelationRuleReferenceDependencyList(Oid relationId)
 					continue;
 				}
 
-				nonInternalRuleDependencies = lappend(nonInternalRuleDependencies,
-													  dependencyDef);
+				nonInternalDependenciesOfDependingRules =
+					lappend(nonInternalDependenciesOfDependingRules, dependencyDef);
 			}
 		}
 	}
 
-	return nonInternalRuleDependencies;
+	return nonInternalDependenciesOfDependingRules;
 }
 
 

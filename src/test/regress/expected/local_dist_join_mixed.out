@@ -1604,22 +1604,5 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
    101
 (1 row)
 
+SET client_min_messages TO ERROR;
 DROP SCHEMA local_dist_join_mixed CASCADE;
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A command for a distributed schema is run. To make sure subsequent commands see the schema correctly we need to make sure to use only one connection for all future commands
-NOTICE:  drop cascades to 7 other objects
-DETAIL:  drop cascades to table distributed
-drop cascades to table reference
-drop cascades to table local
-drop cascades to table unlogged_local
-drop cascades to materialized view mat_view
-drop cascades to view local_regular_view
-drop cascades to view dist_regular_view
-DEBUG:  drop cascades to view local_dist_join_mixed.dist_regular_view
-DETAIL:  from localhost:xxxxx
-CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-DEBUG:  drop cascades to view local_dist_join_mixed.dist_regular_view
-DETAIL:  from localhost:xxxxx
-CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line XX at PERFORM

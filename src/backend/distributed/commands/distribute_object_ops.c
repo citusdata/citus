@@ -186,7 +186,7 @@ static DistributeObjectOps Any_CreateFunction = {
 	.markDistributed = true,
 };
 static DistributeObjectOps Any_View = {
-	.deparse = DeparseViewStmt,
+	.deparse = NULL,
 	.qualify = NULL,
 	.preprocess = PreprocessViewStmt,
 	.postprocess = PostprocessViewStmt,
