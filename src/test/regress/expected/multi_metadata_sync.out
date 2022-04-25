@@ -1780,7 +1780,8 @@ ERROR:  localhost:xxxxx is a metadata node, but is out of sync
 HINT:  If the node is up, wait until metadata gets synced to it and try again.
 SELECT citus_disable_node_and_wait('localhost', :worker_1_port);
 ERROR:  disabling the first worker node in the metadata is not allowed
-HINT:  You can force disabling node, but this operation might cause replicated shards to diverge: SELECT citus_disable_node('localhost', 57637, force:=true);
+DETAIL:  Citus uses the first worker node in the metadata for certain internal operations when replicated tables are modified. Synchronous mode ensures the first worker node is accurately visible to all nodes.
+HINT:  You can force disabling node, SELECT citus_disable_node('localhost', 57637, force:=true, synchronous:=true); Passing synchronous:=false might cause replicated shards to diverge.
 CONTEXT:  SQL statement "SELECT pg_catalog.citus_disable_node(nodename, nodeport, force)"
 PL/pgSQL function citus_disable_node_and_wait(text,integer,boolean) line XX at PERFORM
 SELECT citus_disable_node_and_wait('localhost', :worker_2_port);

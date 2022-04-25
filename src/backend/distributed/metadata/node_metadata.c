@@ -453,6 +453,7 @@ citus_disable_node(PG_FUNCTION_ARGS)
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 	bool forceDisableNode = PG_GETARG_BOOL(2);
+	bool synchronousDisableNode = PG_GETARG_BOOL(3);
 
 	char *nodeName = text_to_cstring(nodeNameText);
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
@@ -483,11 +484,16 @@ citus_disable_node(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("disabling the first worker node in the "
 							   "metadata is not allowed"),
-						errhint("You can force disabling node, but this operation "
-								"might cause replicated shards to diverge: SELECT "
-								"citus_disable_node('%s', %d, force:=true);",
-								workerNode->workerName,
-								nodePort)));
+						errhint("You can force disabling node, SELECT "
+								"citus_disable_node('%s', %d, force:=true, "
+								"synchronous:=true); "
+								"Passing synchronous:=false might cause replicated shards "
+								"to diverge.",workerNode->workerName, nodePort),
+						errdetail("Citus uses the first worker node in the "
+								  "metadata for certain internal operations when "
+								  "replicated tables are modified. Synchronous mode "
+								  "ensures the first worker node is accurately "
+								  "visible to all nodes.")));
 	}
 
 	/*
@@ -524,20 +530,40 @@ citus_disable_node(PG_FUNCTION_ARGS)
 
 	TransactionModifiedNodeMetadata = true;
 
-	/*
-	 * We have not propagated the node metadata changes yet, make sure that all the
-	 * active nodes get the metadata updates. We defer this operation to the
-	 * background worker to make it possible disabling nodes when multiple nodes
-	 * are down.
-	 *
-	 * Note that the active placements reside on the active nodes. Hence, when
-	 * Citus finds active placements, it filters out the placements that are on
-	 * the disabled nodes. That's why, we don't have to change/sync placement
-	 * metadata at this point. Instead, we defer that to citus_activate_node()
-	 * where we expect all nodes up and running.
-	 */
-	if (UnsetMetadataSyncedForAllWorkers())
+	if (synchronousDisableNode)
 	{
+		/*
+		 * The user might pick between sync vs async options.
+		 *      - Pros for the sync option:
+		 *          (a) the changes become visible on the cluster immediately
+		 *          (b) even if the first worker node is disabled, there is no
+		 *              risk of divergence of the placements of replicated shards
+		 *      - Cons for the sync options:
+		 *          (a) Does not work within 2PC transaction (e.g., BEGIN;
+		 *              citus_disable_node(); PREPARE TRANSACTION ...);
+		 *          (b) If there are multiple node failures (e.g., one another node
+		 *              than the current node being disabled), the sync option would
+		 *              fail because it'd try to sync the metadata changes to a node
+		 *              that is not up and running.
+		 *
+		 */
+		SyncNodeMetadataToNodes();
+	}
+	else if (UnsetMetadataSyncedForAllWorkers())
+	{
+		/*
+		 * We have not propagated the node metadata changes yet, make sure that all the
+		 * active nodes get the metadata updates. We defer this operation to the
+		 * background worker to make it possible disabling nodes when multiple nodes
+		 * are down.
+		 *
+		 * Note that the active placements reside on the active nodes. Hence, when
+		 * Citus finds active placements, it filters out the placements that are on
+		 * the disabled nodes. That's why, we don't have to change/sync placement
+		 * metadata at this point. Instead, we defer that to citus_activate_node()
+		 * where we expect all nodes up and running.
+		 */
+
 		TriggerNodeMetadataSyncOnCommit();
 	}
 

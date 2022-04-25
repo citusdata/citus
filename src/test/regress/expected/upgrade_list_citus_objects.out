@@ -47,7 +47,7 @@ ORDER BY 1;
  function citus_coordinator_nodeid()
  function citus_copy_shard_placement(bigint,text,integer,text,integer,boolean,citus.shard_transfer_mode)
  function citus_create_restore_point(text)
- function citus_disable_node(text,integer,boolean)
+ function citus_disable_node(text,integer,boolean,boolean)
  function citus_dist_local_group_cache_invalidate()
  function citus_dist_node_cache_invalidate()
  function citus_dist_object_cache_invalidate()
