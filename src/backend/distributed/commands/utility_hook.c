@@ -470,14 +470,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 
 	if (IsA(parsetree, LockStmt))
 	{
-		LockStmt *stmt = (LockStmt *) parsetree;
-
-		bool isTopLevel = context == PROCESS_UTILITY_TOPLEVEL;
-		ErrorIfUnsupportedLockStmt(stmt, isTopLevel);
-
-		uint32 nowaitFlag = stmt->nowait ? DIST_LOCK_NOWAIT : 0;
-		AcquireDistributedLockOnRelations(stmt->relations, stmt->mode,
-										  DIST_LOCK_VIEWS_RECUR | nowaitFlag);
+		PreprocessLockStatement((LockStmt *) parsetree, context);
 	}
 
 	/*

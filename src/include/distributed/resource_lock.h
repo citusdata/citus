@@ -116,9 +116,10 @@ typedef enum CitusOperations
 #define DIST_LOCK_REFERENCING_TABLES 1 << 1
 #define DIST_LOCK_NOWAIT 1 << 2
 
-#define LOCK_RELATION_IF_EXISTS "SELECT pg_catalog.lock_relation_if_exists(%s, '%s');"
+#define LOCK_RELATION_IF_EXISTS \
+	"SELECT pg_catalog.lock_relation_if_exists(%s, quote_literal_cstr(%s));"
 #define LOCK_RELATION_IF_EXISTS_NOWAIT \
-	"SELECT pg_catalog.lock_relation_if_exists(%s, '%s', nowait => true);"
+	"SELECT pg_catalog.lock_relation_if_exists(%s, quote_literal_cstr(%s), nowait => true);"
 
 /* Lock shard/relation metadata for safe modifications */
 extern void LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
@@ -163,5 +164,5 @@ extern LOCKMODE LockModeCStringToLockMode(const char *lockModeName);
 extern const char * LockModeToLockModeCString(LOCKMODE lockMode);
 extern void AcquireDistributedLockOnRelations(List *relationList, LOCKMODE lockMode,
 											  uint32 configs);
-extern void ErrorIfUnsupportedLockStmt(LockStmt *stmt, bool isTopLevel);
+extern void PreprocessLockStatement(LockStmt *stmt, ProcessUtilityContext context);
 #endif /* RESOURCE_LOCK_H */

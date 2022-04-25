@@ -1239,6 +1239,17 @@ AcquireDistributedLockOnRelations(List *relationList, LOCKMODE lockMode, uint32 
 
 	if (distributedRelationList != NIL)
 	{
+		if (!IsCoordinator() && !CoordinatorAddedAsWorkerNode())
+		{
+			ereport(ERROR,
+					(errmsg(
+						 "Cannot acquire a distributed lock from a worker node since the "
+						 "coordinator is not in the metadata."),
+					 errhint(
+						 "Either run this command on the coordinator or add the coordinator "
+						 "in the metadata by using: SELECT citus_set_coordinator_host('<hostname>', <port>);")));
+		}
+
 		bool nowait = (configs & DIST_LOCK_NOWAIT) > 0;
 		AcquireDistributedLockOnRelations_Internal(distributedRelationList, lockMode,
 												   nowait);
@@ -1252,7 +1263,7 @@ AcquireDistributedLockOnRelations(List *relationList, LOCKMODE lockMode, uint32 
  * - The relation id-s being locked do not exist
  * - Locking shard, but citus.enable_manual_changes_to_shards is false
  */
-void
+static void
 ErrorIfUnsupportedLockStmt(LockStmt *stmt, bool isTopLevel)
 {
 	RequireTransactionBlock(isTopLevel, "LOCK TABLE");
@@ -1271,4 +1282,22 @@ ErrorIfUnsupportedLockStmt(LockStmt *stmt, bool isTopLevel)
 		/* guc will hopefully know what they're doing and avoid such scenarios. */
 		ErrorIfIllegallyChangingKnownShard(relationId);
 	}
+}
+
+
+/**
+ * PreprocessLockStatement makes sure that the lock is allowed
+ * before calling AcquireDistributedLockOnRelations on the locked tables/views
+ * with flags DIST_LOCK_VIEWS_RECUR and DIST_LOCK_NOWAIT if nowait is true for
+ * the lock statement
+ */
+void
+PreprocessLockStatement(LockStmt *stmt, ProcessUtilityContext context)
+{
+	bool isTopLevel = context == PROCESS_UTILITY_TOPLEVEL;
+	ErrorIfUnsupportedLockStmt(stmt, isTopLevel);
+
+	uint32 nowaitFlag = stmt->nowait ? DIST_LOCK_NOWAIT : 0;
+	AcquireDistributedLockOnRelations(stmt->relations, stmt->mode,
+									  DIST_LOCK_VIEWS_RECUR | nowaitFlag);
 }
