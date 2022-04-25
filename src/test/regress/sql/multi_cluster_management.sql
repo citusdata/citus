@@ -56,6 +56,19 @@ ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
 
 SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
 
+-- disable node with sync/force options
+SELECT citus_disable_node('localhost', :worker_1_port);
+SELECT citus_disable_node('localhost', :worker_1_port, synchronous:=true);
+SELECT run_command_on_workers($$SELECT array_agg(isactive ORDER BY nodeport) FROM pg_dist_node WHERE hasmetadata and noderole='primary'::noderole AND nodecluster='default'$$);
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+
+-- disable node with sync/force options
+SELECT citus_disable_node('localhost', :worker_2_port, synchronous:=true);
+SELECT run_command_on_workers($$SELECT array_agg(isactive ORDER BY nodeport) FROM pg_dist_node WHERE hasmetadata and noderole='primary'::noderole AND nodecluster='default'$$);
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
 SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
 

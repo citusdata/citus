@@ -110,6 +110,7 @@ static void SyncDistributedObjectsToNode(WorkerNode *workerNode);
 static void UpdateLocalGroupIdOnNode(WorkerNode *workerNode);
 static void SyncPgDistTableMetadataToNode(WorkerNode *workerNode);
 static List * InterTableRelationshipCommandList();
+static void BlockDistributedQueriesOnMetadataNodes(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static List * PropagateNodeWideObjectsCommandList();
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
@@ -452,7 +453,7 @@ citus_disable_node(PG_FUNCTION_ARGS)
 {
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
-	bool forceDisableNode = PG_GETARG_BOOL(2);
+	bool synchronousDisableNode = PG_GETARG_BOOL(2);
 
 	char *nodeName = text_to_cstring(nodeNameText);
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
@@ -463,8 +464,10 @@ citus_disable_node(PG_FUNCTION_ARGS)
 									   "isactive");
 
 	WorkerNode *firstWorkerNode = GetFirstPrimaryWorkerNode();
-	if (!forceDisableNode && firstWorkerNode &&
-		firstWorkerNode->nodeId == workerNode->nodeId)
+	bool disablingFirstNode =
+		(firstWorkerNode && firstWorkerNode->nodeId == workerNode->nodeId);
+
+	if (disablingFirstNode && !synchronousDisableNode)
 	{
 		/*
 		 * We sync metadata async and optionally in the background worker,
@@ -478,16 +481,21 @@ citus_disable_node(PG_FUNCTION_ARGS)
 		 * possibility of diverged shard placements for the same shard.
 		 *
 		 * To prevent that, we currently do not allow disabling the first
-		 * worker node.
+		 * worker node unless it is explicitly opted synchronous.
 		 */
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("disabling the first worker node in the "
 							   "metadata is not allowed"),
-						errhint("You can force disabling node, but this operation "
-								"might cause replicated shards to diverge: SELECT "
-								"citus_disable_node('%s', %d, force:=true);",
-								workerNode->workerName,
-								nodePort)));
+						errhint("You can force disabling node, SELECT "
+								"citus_disable_node('%s', %d, "
+								"synchronous:=true);", workerNode->workerName,
+								nodePort),
+						errdetail("Citus uses the first worker node in the "
+								  "metadata for certain internal operations when "
+								  "replicated tables are modified. Synchronous mode "
+								  "ensures that all nodes have the same view of the "
+								  "first worker node, which is used for certain "
+								  "locking operations.")));
 	}
 
 	/*
@@ -506,42 +514,86 @@ citus_disable_node(PG_FUNCTION_ARGS)
 		 * for any given shard.
 		 */
 		ErrorIfNodeContainsNonRemovablePlacements(workerNode);
-
-		bool onlyConsiderActivePlacements = false;
-		if (NodeGroupHasShardPlacements(workerNode->groupId,
-										onlyConsiderActivePlacements))
-		{
-			ereport(NOTICE, (errmsg(
-								 "Node %s:%d has active shard placements. Some queries "
-								 "may fail after this operation. Use "
-								 "SELECT citus_activate_node('%s', %d) to activate this "
-								 "node back.",
-								 workerNode->workerName, nodePort,
-								 workerNode->workerName,
-								 nodePort)));
-		}
 	}
 
 	TransactionModifiedNodeMetadata = true;
 
-	/*
-	 * We have not propagated the metadata changes yet, make sure that all the
-	 * active nodes get the metadata updates. We defer this operation to the
-	 * background worker to make it possible disabling nodes when multiple nodes
-	 * are down.
-	 *
-	 * Note that the active placements reside on the active nodes. Hence, when
-	 * Citus finds active placements, it filters out the placements that are on
-	 * the disabled nodes. That's why, we don't have to change/sync placement
-	 * metadata at this point. Instead, we defer that to citus_activate_node()
-	 * where we expect all nodes up and running.
-	 */
-	if (UnsetMetadataSyncedForAllWorkers())
+	if (synchronousDisableNode)
 	{
+		/*
+		 * The user might pick between sync vs async options.
+		 *      - Pros for the sync option:
+		 *          (a) the changes become visible on the cluster immediately
+		 *          (b) even if the first worker node is disabled, there is no
+		 *              risk of divergence of the placements of replicated shards
+		 *      - Cons for the sync options:
+		 *          (a) Does not work within 2PC transaction (e.g., BEGIN;
+		 *              citus_disable_node(); PREPARE TRANSACTION ...);
+		 *          (b) If there are multiple node failures (e.g., one another node
+		 *              than the current node being disabled), the sync option would
+		 *              fail because it'd try to sync the metadata changes to a node
+		 *              that is not up and running.
+		 */
+		if (firstWorkerNode && firstWorkerNode->nodeId == workerNode->nodeId)
+		{
+			/*
+			 * We cannot let any modification query on a replicated table to run
+			 * concurrently with citus_disable_node() on the first worker node. If
+			 * we let that, some worker nodes might calculate FirstWorkerNode()
+			 * different than others. See LockShardListResourcesOnFirstWorker()
+			 * for the details.
+			 */
+			BlockDistributedQueriesOnMetadataNodes();
+		}
+
+		SyncNodeMetadataToNodes();
+	}
+	else if (UnsetMetadataSyncedForAllWorkers())
+	{
+		/*
+		 * We have not propagated the node metadata changes yet, make sure that all the
+		 * active nodes get the metadata updates. We defer this operation to the
+		 * background worker to make it possible disabling nodes when multiple nodes
+		 * are down.
+		 *
+		 * Note that the active placements reside on the active nodes. Hence, when
+		 * Citus finds active placements, it filters out the placements that are on
+		 * the disabled nodes. That's why, we don't have to change/sync placement
+		 * metadata at this point. Instead, we defer that to citus_activate_node()
+		 * where we expect all nodes up and running.
+		 */
+
 		TriggerMetadataSyncOnCommit();
 	}
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * BlockDistributedQueriesOnMetadataNodes blocks all the modification queries on
+ * all nodes. Hence, should be used with caution.
+ */
+static void
+BlockDistributedQueriesOnMetadataNodes(void)
+{
+	/* first, block on the coordinator */
+	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
+
+	/*
+	 * Note that we might re-design this lock to be more granular than
+	 * pg_dist_node, scoping only for modifications on the replicated
+	 * tables. However, we currently do not have any such mechanism and
+	 * given that citus_disable_node() runs instantly, it seems acceptable
+	 * to block reads (or modifications on non-replicated tables) for
+	 * a while.
+	 */
+
+	/* only superuser can disable node */
+	Assert(superuser());
+
+	SendCommandToWorkersWithMetadata(
+		"LOCK TABLE pg_catalog.pg_dist_node IN EXCLUSIVE MODE;");
 }
 
 

@@ -95,6 +95,7 @@ static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 static void CreateShellTableOnWorkers(Oid relationId);
 static void CreateTableMetadataOnWorkers(Oid relationId);
+static NodeMetadataSyncResult SyncNodeMetadataToNodesOptional(void);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 											bool citusTableWithNoDistKey);
 static bool SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
@@ -2217,16 +2218,16 @@ DetachPartitionCommandList(void)
 
 
 /*
- * SyncNodeMetadataToNodes tries recreating the metadata snapshot in the
- * metadata workers that are out of sync. Returns the result of
- * synchronization.
+ * SyncNodeMetadataToNodesOptional tries recreating the metadata
+ * snapshot in the metadata workers that are out of sync.
+ * Returns the result of synchronization.
  *
  * This function must be called within coordinated transaction
  * since updates on the pg_dist_node metadata must be rollbacked if anything
  * goes wrong.
  */
 static NodeMetadataSyncResult
-SyncNodeMetadataToNodes(void)
+SyncNodeMetadataToNodesOptional(void)
 {
 	NodeMetadataSyncResult result = NODE_METADATA_SYNC_SUCCESS;
 	if (!IsCoordinator())
@@ -2287,6 +2288,46 @@ SyncNodeMetadataToNodes(void)
 
 
 /*
+ * SyncNodeMetadataToNodes recreates the node metadata snapshot in all the
+ * metadata workers.
+ *
+ * This function runs within a coordinated transaction since updates on
+ * the pg_dist_node metadata must be rollbacked if anything
+ * goes wrong.
+ */
+void
+SyncNodeMetadataToNodes(void)
+{
+	EnsureCoordinator();
+
+	/*
+	 * Request a RowExclusiveLock so we don't run concurrently with other
+	 * functions updating pg_dist_node, but allow concurrency with functions
+	 * which are just reading from pg_dist_node.
+	 */
+	if (!ConditionalLockRelationOid(DistNodeRelationId(), RowExclusiveLock))
+	{
+		ereport(ERROR, (errmsg("cannot sync metadata because a concurrent "
+							   "metadata syncing operation is in progress")));
+	}
+
+	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerList)
+	{
+		if (workerNode->hasMetadata)
+		{
+			SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_metadatasynced,
+									 BoolGetDatum(true));
+
+			bool raiseOnError = true;
+			SyncNodeMetadataSnapshotToNode(workerNode, raiseOnError);
+		}
+	}
+}
+
+
+/*
  * SyncNodeMetadataToNodesMain is the main function for syncing node metadata to
  * MX nodes. It retries until success and then exits.
  */
@@ -2332,7 +2373,7 @@ SyncNodeMetadataToNodesMain(Datum main_arg)
 		{
 			UseCoordinatedTransaction();
 
-			NodeMetadataSyncResult result = SyncNodeMetadataToNodes();
+			NodeMetadataSyncResult result = SyncNodeMetadataToNodesOptional();
 			syncedAllNodes = (result == NODE_METADATA_SYNC_SUCCESS);
 
 			/* we use LISTEN/NOTIFY to wait for metadata syncing in tests */

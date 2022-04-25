@@ -63,6 +63,7 @@ extern TableDDLCommand * TruncateTriggerCreateCommand(Oid relationId);
 extern void CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId);
 extern List * InterTableRelationshipOfRelationCommandList(Oid relationId);
 extern List * DetachPartitionCommandList(void);
+extern void SyncNodeMetadataToNodes(void);
 extern BackgroundWorkerHandle * SpawnSyncNodeMetadataToNodes(Oid database, Oid owner);
 extern void SyncNodeMetadataToNodesMain(Datum main_arg);
 extern void SignalMetadataSyncDaemon(Oid database, int sig);
