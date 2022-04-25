@@ -523,17 +523,22 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 			resultingObjectAddresses = lappend(resultingObjectAddresses, addressPointer);
 
 			List *viewList = GetDependingViews(citusTableId);
+			elog(WARNING, "size: %d", list_length(viewList));
+
+
 			Oid viewOid = InvalidOid;
 			foreach_oid(viewOid, viewList)
 			{
 				ObjectAddress viewAddress = { 0 };
 				ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
-
-				if (DeferErrorIfHasUnsupportedDependency(&viewAddress) == NULL)
+				DeferredErrorMessage *msg = DeferErrorIfHasUnsupportedDependency(&viewAddress);
+				if (msg == NULL)
 				{
 					/* as of Citus 11, tables that should be synced are also considered object */
 					resultingObjectAddresses = lappend(resultingObjectAddresses, addressPointer);
 				}
+				else
+					RaiseDeferredErrorInternal(msg, WARNING);
 			}
 		}
 
