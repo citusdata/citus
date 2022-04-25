@@ -133,6 +133,8 @@ PostprocessViewStmt(Node *node, const char *queryString)
 		}
 	}
 
+	EnsureSequentialMode(OBJECT_VIEW);
+
 	EnsureDependenciesExistOnAllNodes(&viewAddress);
 
 	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
@@ -198,6 +200,9 @@ PreprocessDropViewStmt(Node *node, const char *queryString, ProcessUtilityContex
 	}
 
 	EnsureCoordinator();
+
+
+	EnsureSequentialMode(OBJECT_VIEW);
 
 	/*
 	 * Swap the list of objects before deparsing and restore the old list after. This
