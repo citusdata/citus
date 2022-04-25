@@ -529,7 +529,7 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 				ObjectAddress viewAddress = { 0 };
 				ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
 
-				if (DeferErrorIfHasUnsupportedDependency(viewAddress) == NULL)
+				if (DeferErrorIfHasUnsupportedDependency(&viewAddress) == NULL)
 				{
 					/* as of Citus 11, tables that should be synced are also considered object */
 					resultingObjectAddresses = lappend(resultingObjectAddresses, addressPointer);
