@@ -1129,7 +1129,7 @@ AcquireDistributedLockOnRelations_Internal(List *relationIdList, LOCKMODE lockMo
 							LOCK_RELATION_IF_EXISTS;
 		appendStringInfo(lockRelationCommand, lockCommand,
 						 quote_literal_cstr(qualifiedRelationName),
-						 lockModeCString);
+						 quote_literal_cstr(lockModeCString));
 
 		/* preemptive permission check so a worker connection is not */
 		/* established if the user is not allowed to acquire the lock */

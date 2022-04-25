@@ -117,9 +117,9 @@ typedef enum CitusOperations
 #define DIST_LOCK_NOWAIT 1 << 2
 
 #define LOCK_RELATION_IF_EXISTS \
-	"SELECT pg_catalog.lock_relation_if_exists(%s, quote_literal_cstr(%s));"
+	"SELECT pg_catalog.lock_relation_if_exists(%s, %s);"
 #define LOCK_RELATION_IF_EXISTS_NOWAIT \
-	"SELECT pg_catalog.lock_relation_if_exists(%s, quote_literal_cstr(%s), nowait => true);"
+	"SELECT pg_catalog.lock_relation_if_exists(%s, %s, nowait => true);"
 
 /* Lock shard/relation metadata for safe modifications */
 extern void LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
