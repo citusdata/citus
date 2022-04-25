@@ -54,7 +54,6 @@ ORDER BY placementid;
 (2 rows)
 
 SELECT citus_disable_node('localhost', :worker_2_proxy_port, true);
-NOTICE:  Node localhost:xxxxx has active shard placements. Some queries may fail after this operation. Use SELECT citus_activate_node('localhost', 9060) to activate this node back.
  citus_disable_node
 ---------------------------------------------------------------------
 

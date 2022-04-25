@@ -7,12 +7,12 @@ create_reference_table
 (1 row)
 
 step s1-begin:
- BEGIN;
- SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-create-distributed:
- CREATE TABLE test_create_distributed_table (test_id integer NOT NULL, data text);
- SELECT create_distributed_table('test_create_distributed_table', 'test_id');
+	CREATE TABLE test_create_distributed_table (test_id integer NOT NULL, data text);
+	SELECT create_distributed_table('test_create_distributed_table', 'test_id');
 
 create_distributed_table
 ---------------------------------------------------------------------
@@ -20,10 +20,10 @@ create_distributed_table
 (1 row)
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-create-restore: <... completed>
 ?column?
@@ -39,14 +39,14 @@ create_reference_table
 (1 row)
 
 step s1-begin:
- BEGIN;
- SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-insert:
- INSERT INTO restore_table VALUES (1,'hello');
+	INSERT INTO restore_table VALUES (1,'hello');
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
 
 ?column?
 ---------------------------------------------------------------------
@@ -54,7 +54,7 @@ step s2-create-restore:
 (1 row)
 
 step s1-commit:
- COMMIT;
+	COMMIT;
 
 
 starting permutation: s1-begin s1-modify-multiple s2-create-restore s1-commit
@@ -64,14 +64,14 @@ create_reference_table
 (1 row)
 
 step s1-begin:
- BEGIN;
- SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-modify-multiple:
- UPDATE restore_table SET data = 'world';
+	UPDATE restore_table SET data = 'world';
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
 
 ?column?
 ---------------------------------------------------------------------
@@ -79,7 +79,7 @@ step s2-create-restore:
 (1 row)
 
 step s1-commit:
- COMMIT;
+	COMMIT;
 
 
 starting permutation: s1-begin s1-ddl s2-create-restore s1-commit
@@ -89,17 +89,17 @@ create_reference_table
 (1 row)
 
 step s1-begin:
- BEGIN;
- SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-ddl:
- ALTER TABLE restore_table ADD COLUMN x int;
+	ALTER TABLE restore_table ADD COLUMN x int;
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-create-restore: <... completed>
 ?column?
@@ -115,14 +115,14 @@ create_reference_table
 (1 row)
 
 step s1-begin:
- BEGIN;
- SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-copy:
- COPY restore_table FROM PROGRAM 'echo 1,hello' WITH CSV;
+	COPY restore_table FROM PROGRAM 'echo 1,hello' WITH CSV;
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
 
 ?column?
 ---------------------------------------------------------------------
@@ -130,7 +130,7 @@ step s2-create-restore:
 (1 row)
 
 step s1-commit:
- COMMIT;
+	COMMIT;
 
 
 starting permutation: s1-begin s1-recover s2-create-restore s1-commit
@@ -140,11 +140,11 @@ create_reference_table
 (1 row)
 
 step s1-begin:
- BEGIN;
- SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-recover:
- SELECT recover_prepared_transactions();
+	SELECT recover_prepared_transactions();
 
 recover_prepared_transactions
 ---------------------------------------------------------------------
@@ -152,10 +152,10 @@ recover_prepared_transactions
 (1 row)
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-create-restore: <... completed>
 ?column?
@@ -171,17 +171,17 @@ create_reference_table
 (1 row)
 
 step s1-begin:
- BEGIN;
- SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-drop:
- DROP TABLE restore_table;
+	DROP TABLE restore_table;
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-create-restore: <... completed>
 ?column?
@@ -197,11 +197,11 @@ create_reference_table
 (1 row)
 
 step s1-begin:
- BEGIN;
- SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-add-node:
- SELECT 1 FROM master_add_inactive_node('localhost', 9999);
+	SELECT 1 FROM master_add_inactive_node('localhost', 9999);
 
 ?column?
 ---------------------------------------------------------------------
@@ -209,10 +209,10 @@ step s1-add-node:
 (1 row)
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-create-restore: <... completed>
 ?column?
@@ -228,11 +228,11 @@ create_reference_table
 (1 row)
 
 step s1-begin:
- BEGIN;
- SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-remove-node:
- SELECT master_remove_node('localhost', 9999);
+	SELECT master_remove_node('localhost', 9999);
 
 master_remove_node
 ---------------------------------------------------------------------
@@ -240,10 +240,10 @@ master_remove_node
 (1 row)
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-create-restore: <... completed>
 ?column?
@@ -259,11 +259,11 @@ create_reference_table
 (1 row)
 
 step s1-begin:
- BEGIN;
- SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test-2');
+	SELECT 1 FROM citus_create_restore_point('citus-test-2');
 
 ?column?
 ---------------------------------------------------------------------
@@ -271,10 +271,10 @@ step s1-create-restore:
 (1 row)
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-create-restore: <... completed>
 ?column?
@@ -290,10 +290,10 @@ create_reference_table
 (1 row)
 
 step s2-begin:
- BEGIN;
+	BEGIN;
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
 
 ?column?
 ---------------------------------------------------------------------
@@ -301,10 +301,10 @@ step s2-create-restore:
 (1 row)
 
 step s1-modify-multiple:
- UPDATE restore_table SET data = 'world';
+	UPDATE restore_table SET data = 'world';
  <waiting ...>
 step s2-commit: 
- COMMIT;
+	COMMIT;
 
 step s1-modify-multiple: <... completed>
 
@@ -315,10 +315,10 @@ create_reference_table
 (1 row)
 
 step s2-begin:
- BEGIN;
+	BEGIN;
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
 
 ?column?
 ---------------------------------------------------------------------
@@ -326,10 +326,10 @@ step s2-create-restore:
 (1 row)
 
 step s1-ddl:
- ALTER TABLE restore_table ADD COLUMN x int;
+	ALTER TABLE restore_table ADD COLUMN x int;
  <waiting ...>
 step s2-commit: 
- COMMIT;
+	COMMIT;
 
 step s1-ddl: <... completed>
 
@@ -340,10 +340,10 @@ create_reference_table
 (1 row)
 
 step s2-begin:
- BEGIN;
+	BEGIN;
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
 
 ?column?
 ---------------------------------------------------------------------
@@ -351,14 +351,14 @@ step s2-create-restore:
 (1 row)
 
 step s1-multi-statement:
- SET citus.multi_shard_commit_protocol TO '2pc';
- BEGIN;
- INSERT INTO restore_table VALUES (1,'hello');
- INSERT INTO restore_table VALUES (2,'hello');
- COMMIT;
+	SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	INSERT INTO restore_table VALUES (1,'hello');
+	INSERT INTO restore_table VALUES (2,'hello');
+	COMMIT;
  <waiting ...>
 step s2-commit: 
- COMMIT;
+	COMMIT;
 
 step s1-multi-statement: <... completed>
 
@@ -369,12 +369,12 @@ create_reference_table
 (1 row)
 
 step s1-begin:
- BEGIN;
- SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-create-reference:
- CREATE TABLE test_create_reference_table (test_id integer NOT NULL, data text);
- SELECT create_reference_table('test_create_reference_table');
+	CREATE TABLE test_create_reference_table (test_id integer NOT NULL, data text);
+	SELECT create_reference_table('test_create_reference_table');
 
 create_reference_table
 ---------------------------------------------------------------------
@@ -382,10 +382,10 @@ create_reference_table
 (1 row)
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-create-restore: <... completed>
 ?column?
@@ -401,22 +401,23 @@ create_reference_table
 (1 row)
 
 step s1-begin:
- BEGIN;
- SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-insert-ref:
- INSERT INTO restore_ref_table VALUES (1,'hello');
+	INSERT INTO restore_ref_table VALUES (1,'hello');
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
 
+step s2-create-restore: <... completed>
 ?column?
 ---------------------------------------------------------------------
        1
 (1 row)
-
-step s1-commit:
- COMMIT;
 
 
 starting permutation: s1-begin s1-modify-multiple-ref s2-create-restore s1-commit
@@ -426,22 +427,23 @@ create_reference_table
 (1 row)
 
 step s1-begin:
- BEGIN;
- SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-modify-multiple-ref:
- UPDATE restore_ref_table SET data = 'world';
+	UPDATE restore_ref_table SET data = 'world';
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
 
+step s2-create-restore: <... completed>
 ?column?
 ---------------------------------------------------------------------
        1
 (1 row)
-
-step s1-commit:
- COMMIT;
 
 
 starting permutation: s1-begin s1-ddl-ref s2-create-restore s1-commit
@@ -451,17 +453,17 @@ create_reference_table
 (1 row)
 
 step s1-begin:
- BEGIN;
- SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-ddl-ref:
- ALTER TABLE restore_ref_table ADD COLUMN x int;
+	ALTER TABLE restore_ref_table ADD COLUMN x int;
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-create-restore: <... completed>
 ?column?
@@ -477,22 +479,23 @@ create_reference_table
 (1 row)
 
 step s1-begin:
- BEGIN;
- SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-copy-ref:
- COPY restore_ref_table FROM PROGRAM 'echo 1,hello' WITH CSV;
+	COPY restore_ref_table FROM PROGRAM 'echo 1,hello' WITH CSV;
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
 
+step s2-create-restore: <... completed>
 ?column?
 ---------------------------------------------------------------------
        1
 (1 row)
-
-step s1-commit:
- COMMIT;
 
 
 starting permutation: s1-begin s1-drop-ref s2-create-restore s1-commit
@@ -502,17 +505,17 @@ create_reference_table
 (1 row)
 
 step s1-begin:
- BEGIN;
- SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-drop-ref:
- DROP TABLE restore_ref_table;
+	DROP TABLE restore_ref_table;
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-create-restore: <... completed>
 ?column?
@@ -528,10 +531,10 @@ create_reference_table
 (1 row)
 
 step s2-begin:
- BEGIN;
+	BEGIN;
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
 
 ?column?
 ---------------------------------------------------------------------
@@ -539,10 +542,10 @@ step s2-create-restore:
 (1 row)
 
 step s1-modify-multiple-ref:
- UPDATE restore_ref_table SET data = 'world';
+	UPDATE restore_ref_table SET data = 'world';
  <waiting ...>
 step s2-commit: 
- COMMIT;
+	COMMIT;
 
 step s1-modify-multiple-ref: <... completed>
 
@@ -553,10 +556,10 @@ create_reference_table
 (1 row)
 
 step s2-begin:
- BEGIN;
+	BEGIN;
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
 
 ?column?
 ---------------------------------------------------------------------
@@ -564,10 +567,10 @@ step s2-create-restore:
 (1 row)
 
 step s1-ddl-ref:
- ALTER TABLE restore_ref_table ADD COLUMN x int;
+	ALTER TABLE restore_ref_table ADD COLUMN x int;
  <waiting ...>
 step s2-commit: 
- COMMIT;
+	COMMIT;
 
 step s1-ddl-ref: <... completed>
 
@@ -578,10 +581,10 @@ create_reference_table
 (1 row)
 
 step s2-begin:
- BEGIN;
+	BEGIN;
 
 step s2-create-restore:
- SELECT 1 FROM citus_create_restore_point('citus-test');
+	SELECT 1 FROM citus_create_restore_point('citus-test');
 
 ?column?
 ---------------------------------------------------------------------
@@ -589,13 +592,13 @@ step s2-create-restore:
 (1 row)
 
 step s1-multi-statement-ref:
- SET citus.multi_shard_commit_protocol TO '2pc';
- BEGIN;
- INSERT INTO restore_ref_table VALUES (1,'hello');
- INSERT INTO restore_ref_table VALUES (2,'hello');
- COMMIT;
+	SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	INSERT INTO restore_ref_table VALUES (1,'hello');
+	INSERT INTO restore_ref_table VALUES (2,'hello');
+	COMMIT;
  <waiting ...>
 step s2-commit: 
- COMMIT;
+	COMMIT;
 
 step s1-multi-statement-ref: <... completed>
