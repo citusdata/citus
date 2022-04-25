@@ -978,6 +978,12 @@ ORDER BY shardid ASC;
 (0 rows)
 
 \c - - - :master_port
+SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 SELECT citus_disable_node('localhost', :worker_2_port);
  citus_disable_node
 ---------------------------------------------------------------------
@@ -995,6 +1001,19 @@ SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count
 ---------------------------------------------------------------------
      1
+(1 row)
+
+-- never mark coordinator metadatasynced = false
+SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport = :master_port;
+ hasmetadata | metadatasynced
+---------------------------------------------------------------------
+ t           | t
+(1 row)
+
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
 (1 row)
 
 SELECT

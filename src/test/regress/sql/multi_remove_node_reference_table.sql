@@ -580,12 +580,18 @@ WHERE
 ORDER BY shardid ASC;
 
 \c - - - :master_port
-
+SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
 SELECT citus_disable_node('localhost', :worker_2_port);
 SELECT public.wait_until_metadata_sync();
 
 -- status after citus_disable_node_and_wait
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
+
+-- never mark coordinator metadatasynced = false
+SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport = :master_port;
+
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
+
 
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
