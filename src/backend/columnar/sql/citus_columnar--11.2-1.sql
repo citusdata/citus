@@ -28,7 +28,9 @@ CREATE TABLE IF NOT EXISTS stripe (
     chunk_row_count int NOT NULL,
     row_count bigint NOT NULL,
     chunk_group_count int NOT NULL,
-    PRIMARY KEY (storage_id, stripe_num)
+    first_row_number bigint NOT NULL,
+    PRIMARY KEY (storage_id, stripe_num),
+    CONSTRAINT stripe_first_row_number_idx UNIQUE (storage_id, first_row_number)
 ) WITH (user_catalog_table = true);
 
 COMMENT ON TABLE stripe IS 'Columnar per stripe metadata';
@@ -38,8 +40,7 @@ CREATE TABLE IF NOT EXISTS chunk_group (
     stripe_num bigint NOT NULL,
     chunk_group_num int NOT NULL,
     row_count bigint NOT NULL,
-    PRIMARY KEY (storage_id, stripe_num, chunk_group_num),
-    FOREIGN KEY (storage_id, stripe_num) REFERENCES stripe(storage_id, stripe_num) ON DELETE CASCADE
+    PRIMARY KEY (storage_id, stripe_num, chunk_group_num)
 );
 
 COMMENT ON TABLE chunk_group IS 'Columnar chunk group metadata';
@@ -59,8 +60,7 @@ CREATE TABLE IF NOT EXISTS chunk (
     value_compression_level int NOT NULL,
     value_decompressed_length bigint NOT NULL,
     value_count bigint NOT NULL,
-    PRIMARY KEY (storage_id, stripe_num, attr_num, chunk_group_num),
-    FOREIGN KEY (storage_id, stripe_num, chunk_group_num) REFERENCES chunk_group(storage_id, stripe_num, chunk_group_num) ON DELETE CASCADE
+    PRIMARY KEY (storage_id, stripe_num, attr_num, chunk_group_num)
 ) WITH (user_catalog_table = true);
 
 COMMENT ON TABLE chunk IS 'Columnar per chunk metadata';
@@ -139,57 +139,6 @@ CREATE SCHEMA IF NOT EXISTS citus_internal;
 
 -- (this function being dropped in 10.0.3)->#include "udfs/columnar_ensure_objects_exist/10.0-1.sql"
 
--- citus_internal.columnar_ensure_objects_exist is an internal helper function to create
--- missing objects, anything related to the table access methods.
--- Since the API for table access methods is only available in PG12 we can't create these
--- objects when Citus is installed in PG11. Once citus is installed on PG11 the user can
--- upgrade their database to PG12. Now they require the table access method objects that
--- we couldn't create before.
--- This internal function is called from `citus_finish_pg_upgrade` which the user is
--- required to call after a PG major upgrade.
--- CREATE OR REPLACE FUNCTION citus_internal.columnar_ensure_objects_exist()
---     RETURNS void
---     LANGUAGE plpgsql
---     SET search_path = pg_catalog
--- AS $ceoe$
--- BEGIN
-
--- when postgres is version 12 or above we need to create the tableam. If the tableam
--- exist we assume all objects have been created.
--- IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
--- IF NOT EXISTS (SELECT 1 FROM pg_am WHERE amname = 'columnar') THEN
-
--- --#include "../columnar_handler/10.0-1.sql"
-
--- --#include "../alter_columnar_table_set/10.0-1.sql"
-
--- --#include "../alter_columnar_table_reset/10.0-1.sql"
-
---     -- add the missing objects to the extension
---     ALTER EXTENSION citus ADD FUNCTION columnar.columnar_handler(internal);
---     ALTER EXTENSION citus ADD ACCESS METHOD columnar;
---     ALTER EXTENSION citus ADD FUNCTION pg_catalog.alter_columnar_table_set(
---         table_name regclass,
---         chunk_group_row_limit int,
---         stripe_row_limit int,
---         compression name,
---         compression_level int);
---     ALTER EXTENSION citus ADD FUNCTION pg_catalog.alter_columnar_table_reset(
---         table_name regclass,
---         chunk_group_row_limit bool,
---         stripe_row_limit bool,
---         compression bool,
---         compression_level bool);
-
--- END IF;
--- END IF;
--- END;
--- $ceoe$;
-
---COMMENT ON FUNCTION citus_internal.columnar_ensure_objects_exist()
---     IS 'internal function to be called by pg_catalog.citus_finish_pg_upgrade responsible for creating the columnar objects';
-
-
 RESET search_path;
 
 -- columnar--10.0.-1 --10.0.2
@@ -199,35 +148,14 @@ GRANT SELECT ON ALL tables IN SCHEMA columnar TO PUBLIC ;
 -- columnar--10.0-3--10.1-1.sql
 
 -- Drop foreign keys between columnar metadata tables.
--- Postgres assigns different names to those foreign keys in PG11, so act accordingly.
-DO $proc$
-BEGIN
-IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
-  EXECUTE $$
-ALTER TABLE columnar.chunk DROP CONSTRAINT IF EXISTS chunk_storage_id_stripe_num_chunk_group_num_fkey;
-ALTER TABLE columnar.chunk_group DROP CONSTRAINT IF EXISTS chunk_group_storage_id_stripe_num_fkey;
-  $$;
-ELSE
-  EXECUTE $$
-ALTER TABLE columnar.chunk DROP CONSTRAINT IF EXISTS chunk_storage_id_fkey;
-ALTER TABLE columnar.chunk_group DROP CONSTRAINT IF EXISTS chunk_group_storage_id_fkey;
-  $$;
-END IF;
-END$proc$;
 
--- since we dropped pg11 support, we don't need to worry about missing
--- columnar objects when upgrading postgres
--- DROP FUNCTION citus_internal.columnar_ensure_objects_exist();
-
---10.1-1 -- 10.2-1
 
 -- columnar--10.1-1--10.2-1.sql
 
 -- For a proper mapping between tid & (stripe, row_num), add a new column to
 -- columnar.stripe and define a BTREE index on this column.
 -- Also include storage_id column for per-relation scans.
-ALTER TABLE columnar.stripe ADD COLUMN first_row_number bigint;
-CREATE INDEX stripe_first_row_number_idx ON columnar.stripe USING BTREE(storage_id, first_row_number);
+
 
 -- Populate first_row_number column of columnar.stripe table.
 --
@@ -290,9 +218,6 @@ REVOKE SELECT ON columnar.chunk FROM PUBLIC;
 --
 -- To do that, drop stripe_first_row_number_idx and create a unique
 -- constraint with the same name to keep the code change at minimum.
-DROP INDEX columnar.stripe_first_row_number_idx;
-ALTER TABLE columnar.stripe ADD CONSTRAINT stripe_first_row_number_idx
-UNIQUE (storage_id, first_row_number);
 
 -- columnar--10.2-3--10.2-4.sql
 
