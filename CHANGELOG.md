@@ -1,3 +1,22 @@
+### citus v11.0.1_beta (April 11, 2022) ###
+
+* Adds propagation of `DOMAIN` objects
+
+* Adds support for `TABLESAMPLE`
+
+* Allows adding a unique constraint with an index
+
+* Fixes a bug that could cause `EXPLAIN ANALYZE` to fail for prepared statements
+  with custom type
+
+* Fixes a bug that could cause Citus not to create function in transaction block
+  properly
+
+* Fixes a bug that could cause returning invalid JSON when running
+  `EXPLAIN ANALYZE` with subplans
+
+* Fixes a bug that prevents non-client backends from accessing shards
+
 ### citus v11.0.0_beta (March 22, 2022) ###
 
 * Drops support for PostgreSQL 12

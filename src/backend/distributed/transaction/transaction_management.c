@@ -115,8 +115,8 @@ AllowedDistributionColumn AllowedDistributionColumnValue;
 /* if disabled, distributed statements in a function may run as separate transactions */
 bool FunctionOpensTransactionBlock = true;
 
-/* if true, we should trigger metadata sync on commit */
-bool MetadataSyncOnCommit = false;
+/* if true, we should trigger node metadata sync on commit */
+bool NodeMetadataSyncOnCommit = false;
 
 
 /* transaction management functions */
@@ -205,8 +205,17 @@ InCoordinatedTransaction(void)
 void
 Use2PCForCoordinatedTransaction(void)
 {
-	Assert(InCoordinatedTransaction());
-
+	/*
+	 * If this transaction is also a coordinated
+	 * transaction, use 2PC. Otherwise, this
+	 * state change does nothing.
+	 *
+	 * In other words, when this flag is set,
+	 * we "should" use 2PC when needed (e.g.,
+	 * we are in a coordinated transaction and
+	 * the coordinated transaction does a remote
+	 * modification).
+	 */
 	ShouldCoordinatedTransactionUse2PC = true;
 }
 
@@ -288,11 +297,11 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			/*
 			 * Changes to catalog tables are now visible to the metadata sync
-			 * daemon, so we can trigger metadata sync if necessary.
+			 * daemon, so we can trigger node metadata sync if necessary.
 			 */
-			if (MetadataSyncOnCommit)
+			if (NodeMetadataSyncOnCommit)
 			{
-				TriggerMetadataSync(MyDatabaseId);
+				TriggerNodeMetadataSync(MyDatabaseId);
 			}
 
 			ResetGlobalVariables();
@@ -554,7 +563,7 @@ ResetGlobalVariables()
 	activeSetStmts = NULL;
 	ShouldCoordinatedTransactionUse2PC = false;
 	TransactionModifiedNodeMetadata = false;
-	MetadataSyncOnCommit = false;
+	NodeMetadataSyncOnCommit = false;
 	InTopLevelDelegatedFunctionCall = false;
 	ResetWorkerErrorIndication();
 	memset(&AllowedDistributionColumnValue, 0,
@@ -800,14 +809,14 @@ MaybeExecutingUDF(void)
 
 
 /*
- * TriggerMetadataSyncOnCommit sets a flag to do metadata sync on commit.
- * This is because new metadata only becomes visible to the metadata sync
- * daemon after commit happens.
+ * TriggerNodeMetadataSyncOnCommit sets a flag to do node metadata sync
+ * on commit. This is because new metadata only becomes visible to the
+ * metadata sync daemon after commit happens.
  */
 void
-TriggerMetadataSyncOnCommit(void)
+TriggerNodeMetadataSyncOnCommit(void)
 {
-	MetadataSyncOnCommit = true;
+	NodeMetadataSyncOnCommit = true;
 }
 
 

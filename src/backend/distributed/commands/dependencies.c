@@ -358,6 +358,15 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 			return CreateCollationDDLsIdempotent(dependency->objectId);
 		}
 
+		case OCLASS_CONSTRAINT:
+		{
+			/*
+			 * Constraints can only be reached by domains, they resolve functions.
+			 * Constraints themself are recreated by the domain recreation.
+			 */
+			return NIL;
+		}
+
 		case OCLASS_DATABASE:
 		{
 			List *databaseDDLCommands = NIL;

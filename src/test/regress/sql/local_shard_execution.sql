@@ -925,6 +925,17 @@ SELECT create_distributed_table('event_responses', 'event_id');
 
 INSERT INTO event_responses VALUES (1, 1, 'yes'), (2, 2, 'yes'), (3, 3, 'no'), (4, 4, 'no');
 
+
+CREATE TABLE event_responses_no_pkey (
+  event_id int,
+  user_id int,
+  response invite_resp
+);
+
+SELECT create_distributed_table('event_responses_no_pkey', 'event_id');
+
+
+
 CREATE OR REPLACE FUNCTION regular_func(p invite_resp)
 RETURNS int AS $$
 DECLARE
@@ -1116,6 +1127,281 @@ DO UPDATE SET response = EXCLUDED.response RETURNING *;
 INSERT INTO event_responses VALUES (16, 666, 'maybe'), (17, 777, 'no')
 ON CONFLICT (event_id, user_id)
 DO UPDATE SET response = EXCLUDED.response RETURNING *;
+
+-- set back to sane settings
+RESET citus.enable_local_execution;
+RESET citus.enable_fast_path_router_planner;
+
+
+-- we'll test some 2PC states
+SET citus.enable_metadata_sync TO OFF;
+
+-- coordinated_transaction_should_use_2PC prints the internal
+-- state for 2PC decision on Citus. However, even if 2PC is decided,
+-- we may not necessarily use 2PC over a connection unless it does
+-- a modification
+CREATE OR REPLACE FUNCTION coordinated_transaction_should_use_2PC()
+RETURNS BOOL LANGUAGE C STRICT VOLATILE AS 'citus',
+$$coordinated_transaction_should_use_2PC$$;
+
+-- make tests consistent
+SET citus.max_adaptive_executor_pool_size TO 1;
+
+RESET citus.enable_metadata_sync;
+SELECT recover_prepared_transactions();
+
+
+SET citus.log_remote_commands TO ON;
+
+-- we use event_id = 2 for local execution and event_id = 1 for reemote execution
+--show it here, if anything changes here, all the tests below might be broken
+-- we prefer this to avoid excessive logging below
+SELECT * FROM event_responses_no_pkey WHERE event_id = 2;
+SELECT * FROM event_responses_no_pkey WHERE event_id = 1;
+RESET citus.log_remote_commands;
+RESET citus.log_local_commands;
+RESET client_min_messages;
+
+-- single shard local command without transaction block does set the
+-- internal state for 2PC, but does not require any actual entries
+WITH cte_1 AS (INSERT INTO event_responses_no_pkey VALUES (2, 2, 'yes') RETURNING *)
+SELECT coordinated_transaction_should_use_2PC() FROM cte_1;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- two local commands without transaction block set the internal 2PC state
+-- but does not use remotely
+WITH cte_1 AS (INSERT INTO event_responses_no_pkey VALUES (2, 2, 'yes') RETURNING *),
+	 cte_2 AS (INSERT INTO event_responses_no_pkey VALUES (2, 2, 'yes') RETURNING *)
+SELECT bool_or(coordinated_transaction_should_use_2PC()) FROM cte_1, cte_2;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- single shard local modification followed by another single shard
+-- local modification sets the 2PC state, but does not use remotely
+BEGIN;
+	INSERT INTO event_responses_no_pkey VALUES (2, 2, 'yes') RETURNING *;
+	INSERT INTO event_responses_no_pkey VALUES (2, 2, 'yes') RETURNING *;
+	SELECT coordinated_transaction_should_use_2PC();
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- single shard local modification followed by a single shard
+-- remote modification uses 2PC because multiple nodes involved
+-- in the modification
+BEGIN;
+	INSERT INTO event_responses_no_pkey VALUES (2, 2, 'yes') RETURNING *;
+	INSERT INTO event_responses_no_pkey VALUES (1, 2, 'yes') RETURNING *;
+	SELECT coordinated_transaction_should_use_2PC();
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- single shard local modification followed by a single shard
+-- remote modification uses 2PC even if it is not in an explicit
+-- tx block as multiple nodes involved in the modification
+WITH cte_1 AS (INSERT INTO event_responses_no_pkey VALUES (2, 2, 'yes') RETURNING *),
+	 cte_2 AS (INSERT INTO event_responses_no_pkey VALUES (1, 1, 'yes') RETURNING *)
+SELECT bool_or(coordinated_transaction_should_use_2PC()) FROM cte_1, cte_2;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+
+-- single shard remote modification followed by a single shard
+-- local modification uses 2PC as multiple nodes involved
+-- in the modification
+BEGIN;
+	INSERT INTO event_responses_no_pkey VALUES (1, 2, 'yes') RETURNING *;
+	INSERT INTO event_responses_no_pkey VALUES (2, 2, 'yes') RETURNING *;
+	SELECT coordinated_transaction_should_use_2PC();
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- single shard remote modification followed by a single shard
+-- local modification uses 2PC even if it is not in an explicit
+-- tx block
+WITH cte_1 AS (INSERT INTO event_responses_no_pkey VALUES (1, 1, 'yes') RETURNING *),
+	 cte_2 AS (INSERT INTO event_responses_no_pkey VALUES (2, 2, 'yes') RETURNING *)
+SELECT bool_or(coordinated_transaction_should_use_2PC()) FROM cte_1, cte_2;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- single shard local SELECT command without transaction block does not set the
+-- internal state for 2PC
+WITH cte_1 AS (SELECT * FROM event_responses_no_pkey WHERE event_id = 2)
+SELECT coordinated_transaction_should_use_2PC() FROM cte_1;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- two local SELECT commands without transaction block does not set the internal 2PC state
+-- and does not use remotely
+WITH cte_1 AS (SELECT count(*) FROM event_responses_no_pkey WHERE event_id = 2),
+	 cte_2 AS (SELECT count(*) FROM event_responses_no_pkey WHERE event_id = 2)
+SELECT count(*) FROM cte_1, cte_2;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- two local SELECT commands without transaction block does not set the internal 2PC state
+-- and does not use remotely
+BEGIN;
+	SELECT count(*) FROM event_responses_no_pkey WHERE event_id = 2;
+	SELECT count(*) FROM event_responses_no_pkey WHERE event_id = 2;
+	SELECT coordinated_transaction_should_use_2PC();
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- a local SELECT followed by a remote SELECT does not require to
+-- use actual 2PC
+BEGIN;
+	SELECT count(*) FROM event_responses_no_pkey WHERE event_id = 2;
+	SELECT count(*) FROM event_responses_no_pkey;
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- single shard local SELECT followed by a single shard
+-- remote modification does not use 2PC, because only a single
+-- machine involved in the modification
+BEGIN;
+	SELECT * FROM event_responses_no_pkey WHERE event_id = 2;
+	INSERT INTO event_responses_no_pkey VALUES (1, 2, 'yes') RETURNING *;
+	SELECT coordinated_transaction_should_use_2PC();
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- single shard local SELECT followed by a single shard
+-- remote modification does not use 2PC, because only a single
+-- machine involved in the modification
+WITH cte_1 AS (SELECT * FROM event_responses_no_pkey WHERE event_id = 2),
+	 cte_2 AS (INSERT INTO event_responses_no_pkey VALUES (1, 1, 'yes') RETURNING *)
+SELECT bool_or(coordinated_transaction_should_use_2PC()) FROM cte_1, cte_2;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- single shard remote modification followed by a single shard
+-- local SELECT does not use 2PC, because only a single
+-- machine involved in the modification
+BEGIN;
+	INSERT INTO event_responses_no_pkey VALUES (1, 2, 'yes') RETURNING *;
+	SELECT count(*) FROM event_responses_no_pkey WHERE event_id = 2;
+	SELECT coordinated_transaction_should_use_2PC();
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- single shard remote modification followed by a single shard
+-- local SELECT does not use 2PC, because only a single
+-- machine involved in the modification
+WITH cte_1 AS (INSERT INTO event_responses_no_pkey VALUES (1, 1, 'yes') RETURNING *),
+	 cte_2 AS (SELECT * FROM event_responses_no_pkey WHERE event_id = 2)
+SELECT bool_or(coordinated_transaction_should_use_2PC()) FROM cte_1, cte_2;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- multi shard local SELECT command without transaction block does not set the
+-- internal state for 2PC
+WITH cte_1 AS (SELECT count(*) FROM event_responses_no_pkey)
+SELECT coordinated_transaction_should_use_2PC() FROM cte_1;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- two multi-shard SELECT commands without transaction block does not set the internal 2PC state
+-- and does not use remotely
+WITH cte_1 AS (SELECT count(*) FROM event_responses_no_pkey),
+	 cte_2 AS (SELECT count(*) FROM event_responses_no_pkey)
+SELECT bool_or(coordinated_transaction_should_use_2PC()) FROM cte_1, cte_2;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- two multi-shard SELECT commands without transaction block does not set the internal 2PC state
+-- and does not use remotely
+BEGIN;
+	SELECT count(*) FROM event_responses_no_pkey;
+	SELECT count(*) FROM event_responses_no_pkey;
+	SELECT coordinated_transaction_should_use_2PC();
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- multi-shard shard SELECT followed by a single shard
+-- remote modification does not use 2PC, because only a single
+-- machine involved in the modification
+BEGIN;
+	SELECT count(*) FROM event_responses_no_pkey;
+	INSERT INTO event_responses_no_pkey VALUES (1, 2, 'yes') RETURNING *;
+	SELECT coordinated_transaction_should_use_2PC();
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- multi shard SELECT followed by a single shard
+-- remote single shard modification does not use 2PC, because only a single
+-- machine involved in the modification
+WITH cte_1 AS (SELECT count(*) FROM event_responses_no_pkey),
+	 cte_2 AS (INSERT INTO event_responses_no_pkey VALUES (1, 1, 'yes') RETURNING *)
+SELECT bool_or(coordinated_transaction_should_use_2PC()) FROM cte_1, cte_2;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- single shard remote modification followed by a multi shard
+-- SELECT does not use 2PC, because only a single
+-- machine involved in the modification
+BEGIN;
+	INSERT INTO event_responses_no_pkey VALUES (1, 2, 'yes') RETURNING *;
+	SELECT count(*) FROM event_responses_no_pkey;
+	SELECT coordinated_transaction_should_use_2PC();
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- single shard remote modification followed by a multi shard
+-- SELECT does not use 2PC, because only a single
+-- machine involved in the modification
+WITH cte_1 AS (INSERT INTO event_responses_no_pkey VALUES (1, 1, 'yes') RETURNING *),
+	 cte_2 AS (SELECT count(*) FROM event_responses_no_pkey)
+SELECT bool_or(coordinated_transaction_should_use_2PC()) FROM cte_1, cte_2;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- single shard local modification followed by remote multi-shard
+-- modification uses 2PC as multiple nodes are involved in modifications
+WITH cte_1 AS (INSERT INTO event_responses_no_pkey VALUES (2, 2, 'yes') RETURNING *),
+	 cte_2 AS (UPDATE event_responses_no_pkey SET user_id = 1000 RETURNING *)
+SELECT bool_or(coordinated_transaction_should_use_2PC()) FROM cte_1, cte_2;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- a local SELECT followed by a remote multi-shard UPDATE requires to
+-- use actual 2PC as multiple nodes are involved in modifications
+BEGIN;
+	SELECT count(*) FROM event_responses_no_pkey WHERE event_id = 2;
+	UPDATE event_responses_no_pkey SET user_id = 1;
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- a local SELECT followed by a remote single-shard UPDATE does not require to
+-- use actual 2PC. This is because a single node is involved in modification
+BEGIN;
+	SELECT count(*) FROM event_responses_no_pkey WHERE event_id = 2;
+	UPDATE event_responses_no_pkey SET user_id = 1 WHERE event_id = 1;
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- a remote single-shard UPDATE followed by a local single shard SELECT
+-- does not require to use actual 2PC. This is because a single node
+-- is involved in modification
+BEGIN;
+	UPDATE event_responses_no_pkey SET user_id = 1 WHERE event_id = 1;
+	SELECT count(*) FROM event_responses_no_pkey WHERE event_id = 2;
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
 
 \c - - - :master_port
 

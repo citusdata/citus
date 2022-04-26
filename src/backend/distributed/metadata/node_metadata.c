@@ -116,7 +116,7 @@ static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
 static bool NodeIsLocal(WorkerNode *worker);
 static void SetLockTimeoutLocally(int32 lock_cooldown);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
-static bool UnsetMetadataSyncedForAll(void);
+static bool UnsetMetadataSyncedForAllWorkers(void);
 static char * GetMetadataSyncCommandToSetNodeColumn(WorkerNode *workerNode,
 													int columnIndex,
 													Datum value);
@@ -524,7 +524,7 @@ citus_disable_node(PG_FUNCTION_ARGS)
 	TransactionModifiedNodeMetadata = true;
 
 	/*
-	 * We have not propagated the metadata changes yet, make sure that all the
+	 * We have not propagated the node metadata changes yet, make sure that all the
 	 * active nodes get the metadata updates. We defer this operation to the
 	 * background worker to make it possible disabling nodes when multiple nodes
 	 * are down.
@@ -535,9 +535,9 @@ citus_disable_node(PG_FUNCTION_ARGS)
 	 * metadata at this point. Instead, we defer that to citus_activate_node()
 	 * where we expect all nodes up and running.
 	 */
-	if (UnsetMetadataSyncedForAll())
+	if (UnsetMetadataSyncedForAllWorkers())
 	{
-		TriggerMetadataSyncOnCommit();
+		TriggerNodeMetadataSyncOnCommit();
 	}
 
 	PG_RETURN_VOID();
@@ -1319,9 +1319,9 @@ citus_update_node(PG_FUNCTION_ARGS)
 	 * early, but that's fine, since this will start a retry loop with
 	 * 5 second intervals until sync is complete.
 	 */
-	if (UnsetMetadataSyncedForAll())
+	if (UnsetMetadataSyncedForAllWorkers())
 	{
-		TriggerMetadataSyncOnCommit();
+		TriggerNodeMetadataSyncOnCommit();
 	}
 
 	if (handle != NULL)
@@ -2646,15 +2646,15 @@ DatumToString(Datum datum, Oid dataType)
 
 
 /*
- * UnsetMetadataSyncedForAll sets the metadatasynced column of all metadata
- * nodes to false. It returns true if it updated at least a node.
+ * UnsetMetadataSyncedForAllWorkers sets the metadatasynced column of all metadata
+ * worker nodes to false. It returns true if it updated at least a node.
  */
 static bool
-UnsetMetadataSyncedForAll(void)
+UnsetMetadataSyncedForAllWorkers(void)
 {
 	bool updatedAtLeastOne = false;
-	ScanKeyData scanKey[2];
-	int scanKeyCount = 2;
+	ScanKeyData scanKey[3];
+	int scanKeyCount = 3;
 	bool indexOK = false;
 
 	/*
@@ -2668,6 +2668,11 @@ UnsetMetadataSyncedForAll(void)
 				BTEqualStrategyNumber, F_BOOLEQ, BoolGetDatum(true));
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_node_metadatasynced,
 				BTEqualStrategyNumber, F_BOOLEQ, BoolGetDatum(true));
+
+	/* coordinator always has the up to date metadata */
+	ScanKeyInit(&scanKey[2], Anum_pg_dist_node_groupid,
+				BTGreaterStrategyNumber, F_INT4GT,
+				Int32GetDatum(COORDINATOR_GROUP_ID));
 
 	CatalogIndexState indstate = CatalogOpenIndexes(relation);
 

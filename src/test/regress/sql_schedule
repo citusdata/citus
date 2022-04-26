@@ -8,6 +8,7 @@ test: local_dist_join
 test: connectivity_checks citus_run_command
 test: schemas
 test: sequences
+test: functions
 test: arbitrary_configs_truncate
 test: arbitrary_configs_truncate_cascade
 test: arbitrary_configs_truncate_partition

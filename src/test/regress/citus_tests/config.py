@@ -321,11 +321,14 @@ class CitusShardReplicationFactorClusterConfig(CitusDefaultClusterConfig):
         self.new_settings = {"citus.shard_replication_factor": 2}
         self.skip_tests = [
             # citus does not support foreign keys in distributed tables
-            # when citus.shard_replication_factor > 2
+            # when citus.shard_replication_factor >= 2
             "arbitrary_configs_truncate_partition_create", "arbitrary_configs_truncate_partition",
             # citus does not support modifying a partition when
-            # citus.shard_replication_factor > 2
-            "arbitrary_configs_truncate_cascade_create", "arbitrary_configs_truncate_cascade"]
+            # citus.shard_replication_factor >= 2
+            "arbitrary_configs_truncate_cascade_create", "arbitrary_configs_truncate_cascade",
+            # citus does not support colocating functions with distributed tables when
+            # citus.shard_replication_factor >= 2
+            "function_create", "functions"]
 
 
 class CitusSingleShardClusterConfig(CitusDefaultClusterConfig):
