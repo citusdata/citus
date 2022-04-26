@@ -18,6 +18,8 @@
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
 
+static void QualifyViewRangeVar(RangeVar *view);
+
 /*
  * QualifyDropViewStmt quailifies the view names of the DROP VIEW statement.
  */
@@ -51,4 +53,55 @@ QualifyDropViewStmt(Node *node)
 	}
 
 	stmt->objects = qualifiedViewNames;
+}
+
+
+/*
+ * QualifyAlterViewStmt quailifies the view name of the ALTER VIEW statement.
+ */
+void
+QualifyAlterViewStmt(Node *node)
+{
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
+	RangeVar *view = stmt->relation;
+	QualifyViewRangeVar(view);
+}
+
+
+/*
+ * QualifyRenameViewStmt quailifies the view name of the ALTER VIEW ... RENAME statement.
+ */
+void
+QualifyRenameViewStmt(Node *node)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	RangeVar *view = stmt->relation;
+	QualifyViewRangeVar(view);
+}
+
+
+/*
+ * QualifyAlterViewSchemaStmt quailifies the view name of the ALTER VIEW ... SET SCHEMA statement.
+ */
+void
+QualifyAlterViewSchemaStmt(Node *node)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	RangeVar *view = stmt->relation;
+	QualifyViewRangeVar(view);
+}
+
+
+/*
+ * QualifyViewRangeVar qualifies the given view RangeVar if it is not qualified.
+ */
+static void
+QualifyViewRangeVar(RangeVar *view)
+{
+	if (view->schemaname == NULL)
+	{
+		Oid viewOid = RelnameGetRelid(view->relname);
+		Oid schemaOid = get_rel_namespace(viewOid);
+		view->schemaname = get_namespace_name(schemaOid);
+	}
 }

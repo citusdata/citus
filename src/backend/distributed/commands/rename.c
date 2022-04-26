@@ -36,11 +36,12 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 
 	/*
 	 * We only support some of the PostgreSQL supported RENAME statements, and
-	 * our list include only renaming table and index (related) objects.
+	 * our list include only renaming table, index, policy and view (related) objects.
 	 */
 	if (!IsAlterTableRenameStmt(renameStmt) &&
 		!IsIndexRenameStmt(renameStmt) &&
-		!IsPolicyRenameStmt(renameStmt))
+		!IsPolicyRenameStmt(renameStmt) &&
+		!IsViewRenameStmt(renameStmt))
 	{
 		return NIL;
 	}
@@ -48,7 +49,7 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 	/*
 	 * The lock levels here should be same as the ones taken in
 	 * RenameRelation(), renameatt() and RenameConstraint(). However, since all
-	 * three statements have identical lock levels, we just use a single statement.
+	 * four statements have identical lock levels, we just use a single statement.
 	 */
 	objectRelationId = RangeVarGetRelid(renameStmt->relation,
 										AccessExclusiveLock,
@@ -63,13 +64,30 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 		return NIL;
 	}
 
-	/* check whether we are dealing with a sequence here */
-	if (get_rel_relkind(objectRelationId) == RELKIND_SEQUENCE)
+	/*
+	 * Check whether we are dealing with a sequence or view here and route queries
+	 * accordingly to the right processor function. We need to check both objects here
+	 * since PG supports targeting sequences and views with ALTER TABLE commands.
+	 */
+	char relKind = get_rel_relkind(objectRelationId);
+	if (relKind == RELKIND_SEQUENCE)
 	{
 		RenameStmt *stmtCopy = copyObject(renameStmt);
 		stmtCopy->renameType = OBJECT_SEQUENCE;
 		return PreprocessRenameSequenceStmt((Node *) stmtCopy, renameCommand,
 											processUtilityContext);
+	}
+	else if (relKind == RELKIND_VIEW)
+	{
+		RenameStmt *stmtCopy = copyObject(renameStmt);
+		stmtCopy->relationType = OBJECT_VIEW;
+		if (stmtCopy->renameType == OBJECT_TABLE)
+		{
+			stmtCopy->renameType = OBJECT_VIEW;
+		}
+
+		return PreprocessRenameViewStmt((Node *) stmtCopy, renameCommand,
+										processUtilityContext);
 	}
 
 	/* we have no planning to do unless the table is distributed */
