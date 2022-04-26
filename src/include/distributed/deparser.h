@@ -146,7 +146,14 @@ extern ObjectAddress RenameAttributeStmtObjectAddress(Node *stmt, bool missing_o
 
 /* forward declarations for deparse_view_stmts.c */
 extern void QualifyDropViewStmt(Node *node);
-extern void AppendViewDefinitionToCreateViewCommand(StringInfo buf, Oid viewOid);
+extern void QualifyAlterViewStmt(Node *node);
+extern void QualifyRenameViewStmt(Node *node);
+extern void QualifyAlterViewSchemaStmt(Node *node);
+extern char * DeparseRenameViewStmt(Node *stmt);
+extern char * DeparseAlterViewStmt(Node *node);
+extern char * DeparseDropViewStmt(Node *node);
+extern char * DeparseAlterViewSchemaStmt(Node *node);
+
 
 /* forward declarations for deparse_function_stmts.c */
 extern char * DeparseDropFunctionStmt(Node *stmt);

@@ -767,6 +767,58 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 
 
 /*
+ * ErrorOrWarnIfObjectHasUnsupportedDependency returns false without throwing any message if
+ * object doesn't have any unsupported dependency, else throws a message with proper level
+ * (except the cluster doesn't have any node) and return true.
+ */
+bool
+ErrorOrWarnIfObjectHasUnsupportedDependency(ObjectAddress *objectAddress)
+{
+	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(objectAddress);
+	if (errMsg != NULL)
+	{
+		/*
+		 * Don't need to give any messages if there is no worker nodes in
+		 * the cluster as user's experience won't be affected on the single node even
+		 * if the object won't be distributed.
+		 */
+		if (!HasAnyNodes())
+		{
+			return true;
+		}
+
+		/*
+		 * Since Citus drops and recreates some object while converting a table type
+		 * giving a DEBUG1 message is enough if the process in table type conversion
+		 * function call
+		 */
+		if (InTableTypeConversionFunctionCall)
+		{
+			RaiseDeferredError(errMsg, DEBUG1);
+		}
+		/*
+		 * If the view is object distributed, we should provide an error to not have
+		 * different definition of object on coordinator and worker nodes. If the object
+		 * is not distributed yet, we can create it locally to not affect user's local
+		 * usage experience.
+		 */
+		else if (IsObjectDistributed(objectAddress))
+		{
+			RaiseDeferredError(errMsg, ERROR);
+		}
+		else
+		{
+			RaiseDeferredError(errMsg, WARNING);
+		}
+
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
  * DeferErrorIfHasUnsupportedDependency returns deferred error message if the given
  * object has any undistributable dependency.
  */

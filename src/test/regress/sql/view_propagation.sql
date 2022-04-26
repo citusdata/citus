@@ -268,6 +268,94 @@ CREATE VIEW view_for_unsup_commands AS SELECT * FROM table_to_test_unsup_view;
 CREATE OR REPLACE VIEW view_for_unsup_commands(a,b) AS SELECT * FROM table_to_test_unsup_view;
 CREATE OR REPLACE VIEW view_for_unsup_commands AS SELECT id FROM table_to_test_unsup_view;
 
+-- ALTER VIEW PROPAGATION
+CREATE TABLE alter_view_table(id int, val1 text);
+SELECT create_distributed_table('alter_view_table','id');
+
+CREATE VIEW alter_view_1 AS SELECT * FROM alter_view_table;
+
+-- Set/drop default value is not supported by Citus
+ALTER VIEW alter_view_1 ALTER COLUMN val1 SET DEFAULT random()::text;
+ALTER TABLE alter_view_1 ALTER COLUMN val1 SET DEFAULT random()::text;
+
+ALTER VIEW alter_view_1 ALTER COLUMN val1 DROP DEFAULT;
+ALTER TABLE alter_view_1 ALTER COLUMN val1 DROP DEFAULT;
+
+-- Set/reset options view alter view/alter table commands
+ALTER VIEW alter_view_1 SET (check_option=cascaded);
+ALTER VIEW alter_view_1 SET (security_barrier);
+ALTER VIEW alter_view_1 SET (check_option=cascaded, security_barrier);
+ALTER VIEW alter_view_1 SET (check_option=cascaded, security_barrier = true);
+
+ALTER TABLE alter_view_1 SET (check_option=cascaded);
+ALTER TABLE alter_view_1 SET (security_barrier);
+ALTER TABLE alter_view_1 SET (check_option=cascaded, security_barrier);
+ALTER TABLE alter_view_1 SET (check_option=cascaded, security_barrier = true);
+
+-- Check the definition on both coordinator and worker node
+SELECT definition FROM pg_views WHERE viewname = 'alter_view_1';
+
+SELECT relname, reloptions
+FROM pg_class
+WHERE oid = 'view_prop_schema.alter_view_1'::regclass::oid;
+
+\c - - - :worker_1_port
+SELECT definition FROM pg_views WHERE viewname = 'alter_view_1';
+
+SELECT relname, reloptions
+FROM pg_class
+WHERE oid = 'view_prop_schema.alter_view_1'::regclass::oid;
+
+\c - - - :master_port
+SET search_path to view_prop_schema;
+
+ALTER TABLE alter_view_1 RESET (check_option, security_barrier);
+ALTER VIEW alter_view_1 RESET (check_option, security_barrier);
+
+-- Change the schema of the view
+ALTER TABLE alter_view_1 SET SCHEMA view_prop_schema_inner;
+ALTER VIEW view_prop_schema_inner.alter_view_1 SET SCHEMA view_prop_schema;
+
+-- Rename view and view's column name
+ALTER VIEW alter_view_1 RENAME COLUMN val1 TO val2;
+ALTER VIEW alter_view_1 RENAME val2 TO val1;
+ALTER VIEW alter_view_1 RENAME TO alter_view_2;
+
+ALTER TABLE alter_view_2 RENAME COLUMN val1 TO val2;
+ALTER TABLE alter_view_2 RENAME val2 TO val1;
+ALTER TABLE alter_view_2 RENAME TO alter_view_1;
+
+-- Alter owner vith alter view/alter table
+SET client_min_messages TO ERROR;
+CREATE USER alter_view_user;
+SELECT 1 FROM run_command_on_workers($$CREATE USER alter_view_user;$$);
+RESET client_min_messages;
+ALTER VIEW alter_view_1 OWNER TO alter_view_user;
+ALTER TABLE alter_view_1 OWNER TO alter_view_user;
+
+-- Alter view owned by extension
+CREATE TABLE table_for_ext_owned_view(id int);
+CREATE VIEW extension_owned_view AS SELECT * FROM table_for_ext_owned_view;
+
+CREATE EXTENSION seg;
+ALTER EXTENSION seg ADD VIEW extension_owned_view;
+
+SELECT create_distributed_table('table_for_ext_owned_view','id');
+CREATE OR REPLACE VIEW extension_owned_view AS SELECT * FROM table_for_ext_owned_view;
+
+-- Since the view is owned by extension Citus shouldn't propagate it
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%extension_owned_view%';
+
+-- Try syncing metadata after running ALTER VIEW commands
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+
+-- Alter non-existing view
+ALTER VIEW IF EXISTS non_existing_view ALTER COLUMN val1 SET DEFAULT random()::text;
+ALTER VIEW IF EXISTS non_existing_view SET (check_option=cascaded);
+ALTER VIEW IF EXISTS non_existing_view RENAME COLUMN val1 TO val2;
+ALTER VIEW IF EXISTS non_existing_view RENAME val2 TO val1;
+ALTER VIEW IF EXISTS non_existing_view SET SCHEMA view_prop_schema;
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA view_prop_schema_inner CASCADE;
 DROP SCHEMA view_prop_schema CASCADE;
