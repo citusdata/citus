@@ -96,6 +96,13 @@ BEGIN;
 (1 row)
 
 ROLLBACK;
+-- add coordinator to metadata so the TRUNCATE from workers does not fail
+SELECT citus_set_coordinator_host('localhost', :master_port);
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
 \c - - - :worker_1_port
 SET search_path TO 'truncate_from_workers';
 -- make sure that TRUNCATE workes expected from the worker node
@@ -213,6 +220,13 @@ BEGIN;
 ROLLBACK;
 RESET client_min_messages;
 \c - - - :master_port
+-- remove coordinator from metadata
+SELECT citus_remove_node('localhost', :master_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
 -- also test the infrastructure that is used for supporting
 -- TRUNCATE from worker nodes
 -- should fail since it is not in transaction block

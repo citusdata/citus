@@ -1,4 +1,4 @@
-Parsed test spec with 3 sessions
+Parsed test spec with 4 sessions
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select-for-update s2-start-session-level-connection s2-begin-on-worker s2-select-for-update s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
 create_reference_table
@@ -568,8 +568,16 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select-for-update s2-start-session-level-connection s2-begin-on-worker s2-truncate s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
+starting permutation: add-coordinator-to-metadata s1-start-session-level-connection s1-begin-on-worker s1-select-for-update s2-start-session-level-connection s2-begin-on-worker s2-truncate s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection remove-coordinator-from-metadata
 create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step add-coordinator-to-metadata:
+ SELECT citus_set_coordinator_host('localhost', 57636);
+
+citus_set_coordinator_host
 ---------------------------------------------------------------------
 
 (1 row)
@@ -651,6 +659,14 @@ step s2-stop-connection:
         SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step remove-coordinator-from-metadata:
+ SELECT citus_remove_node('localhost', 57636);
+
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)

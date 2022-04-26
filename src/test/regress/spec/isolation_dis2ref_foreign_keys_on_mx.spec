@@ -18,6 +18,19 @@ teardown
 	SELECT citus_internal.restore_isolation_tester_func();
 }
 
+// coordinator session
+session "s0"
+
+step "add-coordinator-to-metadata"
+{
+	SELECT citus_set_coordinator_host('localhost', 57636);
+}
+
+step "remove-coordinator-from-metadata"
+{
+	SELECT citus_remove_node('localhost', 57636);
+}
+
 session "s1"
 
 step "s1-start-session-level-connection"
@@ -126,6 +139,6 @@ permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-delete"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-delete" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-insert-select" "s1-rollback-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-display"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-update" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-update" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-display"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-update" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-copy" "s1-rollback-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-display"
-permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-update" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-truncate" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-display"
+permutation "add-coordinator-to-metadata" "s1-start-session-level-connection" "s1-begin-on-worker" "s1-update" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-truncate" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-display" "remove-coordinator-from-metadata"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-delete" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-select-for-udpate" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-display"
 //permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-update" "s2-coordinator-create-index-concurrently" "s1-commit-worker" "s1-stop-connection" "s3-display"

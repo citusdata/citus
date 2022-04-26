@@ -1,6 +1,9 @@
 CREATE SCHEMA local_shard_execution_replicated;
 SET search_path TO local_shard_execution_replicated;
 
+-- add coordinator to metadata so the TRUNCATE from workers does not fail
+SELECT citus_set_coordinator_host('localhost', :master_port);
+
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 2;
 SET citus.next_shard_id TO 1500000;
@@ -1088,6 +1091,9 @@ ON CONFLICT (event_id, user_id)
 DO UPDATE SET response = EXCLUDED.response RETURNING *;
 
 \c - - - :master_port
+
+-- remove coordinator from metadata
+SELECT citus_remove_node('localhost', :master_port);
 
 SET client_min_messages TO ERROR;
 SET search_path TO public;

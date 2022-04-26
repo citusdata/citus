@@ -35,19 +35,17 @@ teardown
 	SELECT citus_internal.restore_isolation_tester_func();
 }
 
-session "deadlock-checker"
-
-step "deadlock-checker-call"
-{
-  SELECT check_distributed_deadlocks();
-}
-
 // coordinator session
 session "s1"
 
 step "s1-add-coordinator-to-metadata"
 {
 	SELECT citus_set_coordinator_host('localhost', 57636);
+}
+
+step "s1-remove-coordinator-from-metadata"
+{
+	SELECT citus_remove_node('localhost', 57636);
 }
 
 step "s1-begin"
@@ -127,13 +125,9 @@ step "s2-acquire-aggressive-lock-dist-table" {
 	SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
 }
 
-step "s2-acquire-aggressive-lock-dist-table-nowait" {
-	SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE NOWAIT');
-}
-
 step "s2-lock-reference-table"
 {
-	LOCK ref_table IN ACCESS EXCLUSIVE MODE;
+	SELECT run_commands_on_session_level_connection_to_node('LOCK ref_table IN ACCESS EXCLUSIVE MODE');
 }
 
 step "s2-rollback"
@@ -149,7 +143,6 @@ step "s2-stop-connection"
 // worker 2 xact session
 session "s3"
 
-
 step "s3-start-session-level-connection"
 {
     SELECT start_session_level_connection_to_node('localhost', 57638);
@@ -160,17 +153,8 @@ step "s3-begin"
 	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 }
 
-step "s3-read-dist-table"
-{
-	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table');
-}
-
 step "s3-acquire-aggressive-lock-dist-table" {
 	SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
-}
-
-step "s3-acquire-aggressive-lock-dist-table-nowait" {
-	SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE NOWAIT');
 }
 
 step "s3-rollback"
@@ -184,15 +168,13 @@ step "s3-stop-connection"
 }
 
 permutation "s1-begin" "s1-acquire-aggresive-lock-on-dist-table" "s2-start-session-level-connection" "s2-begin" "s2-read-dist-table" "s1-rollback" "s2-rollback" "s2-stop-connection"
-permutation "s1-add-coordinator-to-metadata" "s1-begin" "s1-acquire-aggresive-lock-on-dist-table" "s2-start-session-level-connection" "s2-begin" "s2-acquire-aggressive-lock-dist-table" "s1-rollback" "s1-read-dist-table" "s2-rollback" "s2-stop-connection"
-permutation "s1-add-coordinator-to-metadata" "s1-begin" "s1-acquire-aggresive-lock-on-dist-table" "s2-start-session-level-connection" "s2-begin" "s2-acquire-aggressive-lock-dist-table-nowait" "s2-rollback" "s1-rollback" "s2-stop-connection"
-permutation "s1-add-coordinator-to-metadata" "s2-start-session-level-connection" "s2-begin" "s2-acquire-aggressive-lock-dist-table-nowait" "s1-begin" "s1-acquire-aggresive-lock-on-dist-table-nowait" "s1-rollback" "s2-rollback" "s2-stop-connection"
-permutation "s1-add-coordinator-to-metadata" "s2-start-session-level-connection" "s2-begin" "s3-start-session-level-connection" "s3-begin" "s2-acquire-aggressive-lock-dist-table" "s3-acquire-aggressive-lock-dist-table" "s2-rollback" "s2-read-dist-table" "s3-rollback" "s2-stop-connection" "s3-stop-connection"
-permutation "s1-add-coordinator-to-metadata" "s3-start-session-level-connection" "s3-begin" "s3-read-dist-table" "s2-start-session-level-connection" "s2-begin" "s2-acquire-aggressive-lock-dist-table" "s3-acquire-aggressive-lock-dist-table" "deadlock-checker-call" "s2-rollback" "s3-rollback" "s2-stop-connection" "s3-stop-connection"
-permutation "s1-add-coordinator-to-metadata" "s1-begin" "s1-acquire-weak-lock-on-dist-table" "s2-start-session-level-connection" "s2-begin" "s2-read-dist-table" "s2-acquire-aggressive-lock-dist-table" "s1-rollback" "s2-rollback" "s2-stop-connection"
-permutation "s1-add-coordinator-to-metadata" "s2-start-session-level-connection" "s2-begin" "s2-lock-reference-table" "s1-begin" "s1-read-ref-table" "s2-rollback" "s1-rollback" "s2-stop-connection"
+permutation "s1-add-coordinator-to-metadata" "s1-begin" "s1-acquire-aggresive-lock-on-dist-table" "s2-start-session-level-connection" "s2-begin" "s2-acquire-aggressive-lock-dist-table" "s1-rollback" "s1-read-dist-table" "s2-rollback" "s2-stop-connection" "s1-remove-coordinator-from-metadata"
+permutation "s1-add-coordinator-to-metadata" "s2-start-session-level-connection" "s2-begin" "s2-acquire-aggressive-lock-dist-table" "s1-begin" "s1-acquire-aggresive-lock-on-dist-table-nowait" "s1-rollback" "s2-rollback" "s2-stop-connection" "s1-remove-coordinator-from-metadata"
+permutation "s1-add-coordinator-to-metadata" "s2-start-session-level-connection" "s2-begin" "s3-start-session-level-connection" "s3-begin" "s2-acquire-aggressive-lock-dist-table" "s3-acquire-aggressive-lock-dist-table" "s2-rollback" "s2-read-dist-table" "s3-rollback" "s2-stop-connection" "s3-stop-connection" "s1-remove-coordinator-from-metadata"
+permutation "s1-add-coordinator-to-metadata" "s1-begin" "s1-acquire-weak-lock-on-dist-table" "s2-start-session-level-connection" "s2-begin" "s2-read-dist-table" "s2-acquire-aggressive-lock-dist-table" "s1-rollback" "s2-rollback" "s2-stop-connection" "s1-remove-coordinator-from-metadata"
+permutation "s1-add-coordinator-to-metadata" "s2-start-session-level-connection" "s2-begin" "s2-lock-reference-table" "s1-begin" "s1-read-ref-table" "s2-rollback" "s1-rollback" "s2-stop-connection" "s1-remove-coordinator-from-metadata"
 permutation "s1-begin" "s1-acquire-aggresive-lock-on-view" "s2-start-session-level-connection" "s2-begin" "s2-read-dist-table" "s1-rollback" "s2-rollback" "s2-stop-connection"
-permutation "s1-add-coordinator-to-metadata" "s1-begin" "s1-acquire-aggresive-lock-on-view" "s2-start-session-level-connection" "s2-begin" "s2-acquire-aggressive-lock-dist-table" "s1-rollback" "s2-rollback" "s2-stop-connection"
+permutation "s1-add-coordinator-to-metadata" "s1-begin" "s1-acquire-aggresive-lock-on-view" "s2-start-session-level-connection" "s2-begin" "s2-acquire-aggressive-lock-dist-table" "s1-rollback" "s2-rollback" "s2-stop-connection" "s1-remove-coordinator-from-metadata"
 permutation "s1-begin" "s1-acquire-aggresive-lock-on-view" "s2-start-session-level-connection" "s2-begin" "s2-read-ref-table" "s1-rollback" "s2-rollback" "s2-stop-connection"
-permutation "s1-add-coordinator-to-metadata" "s2-start-session-level-connection" "s2-begin" "s2-acquire-aggressive-lock-dist-table" "s1-acquire-aggresive-lock-on-view-nowait" "s1-rollback" "s2-rollback" "s2-stop-connection"
-permutation "s1-begin" "s1-lock-all" "s2-start-session-level-connection" "s2-begin" "s2-read-ref-table" "s3-start-session-level-connection" "s3-begin" "s3-acquire-aggressive-lock-dist-table-nowait" "s1-rollback" "s2-rollback" "s3-rollback" "s2-stop-connection" "s3-stop-connection"
+permutation "s1-add-coordinator-to-metadata" "s2-start-session-level-connection" "s2-begin" "s2-acquire-aggressive-lock-dist-table" "s1-begin" "s1-acquire-aggresive-lock-on-view-nowait" "s1-rollback" "s2-rollback" "s2-stop-connection" "s1-remove-coordinator-from-metadata"
+permutation "s1-add-coordinator-to-metadata" "s1-begin" "s1-lock-all" "s2-start-session-level-connection" "s2-begin" "s2-read-ref-table" "s1-rollback" "s2-rollback" "s2-stop-connection" "s1-remove-coordinator-from-metadata"

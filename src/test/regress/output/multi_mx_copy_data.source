@@ -1,6 +1,13 @@
 --
 -- MULTI_MX_COPY_DATA
 --
+-- add coordinator to metadata so the TRUNCATE from workers does not fail
+SELECT citus_set_coordinator_host('localhost', :master_port);
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
 \COPY nation_hash FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
 SET search_path TO citus_mx_test_schema;
 \COPY nation_hash FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
@@ -128,3 +135,10 @@ SET search_path TO public;
 \COPY nation_mx FROM '@abs_srcdir@/data/nation.data' with delimiter '|'
 \COPY part_mx FROM '@abs_srcdir@/data/part.data' with delimiter '|'
 \COPY supplier_mx FROM '@abs_srcdir@/data/supplier.data' with delimiter '|'
+-- remove coordinator from metadata
+SELECT citus_remove_node('localhost', :master_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+

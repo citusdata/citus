@@ -2,6 +2,8 @@
 
 setup
 {
+  SELECT citus_set_coordinator_host('localhost', 57636);
+
   CREATE OR REPLACE FUNCTION trigger_metadata_sync()
     RETURNS void
     LANGUAGE C STRICT
@@ -26,6 +28,8 @@ teardown
   DROP TABLE deadlock_detection_test;
   DROP TABLE t2;
   SET citus.shard_replication_factor = 1;
+  SELECT citus_remove_node('localhost', 57636);
+
   SELECT citus_internal.restore_isolation_tester_func();
 }
 

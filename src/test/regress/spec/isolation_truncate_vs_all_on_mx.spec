@@ -2,6 +2,8 @@
 
 setup
 {
+	SELECT citus_set_coordinator_host('localhost', 57636);
+
 	CREATE TABLE truncate_table(id integer, value integer);
 	SELECT create_distributed_table('truncate_table', 'id');
 	COPY truncate_table FROM PROGRAM 'echo 1, 10 && echo 2, 20 && echo 3, 30 && echo 4, 40 && echo 5, 50' WITH CSV;
@@ -12,6 +14,8 @@ setup
 teardown
 {
         DROP TABLE IF EXISTS truncate_table CASCADE;
+		SELECT citus_remove_node('localhost', 57636);
+
         SELECT citus_internal.restore_isolation_tester_func();
 }
 

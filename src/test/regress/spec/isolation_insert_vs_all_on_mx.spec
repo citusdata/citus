@@ -15,6 +15,18 @@ teardown
         SELECT citus_internal.restore_isolation_tester_func();
 }
 
+// coordinator session
+session "s0"
+
+step "add-coordinator-to-metadata"
+{
+	SELECT citus_set_coordinator_host('localhost', 57636);
+}
+
+step "remove-coordinator-from-metadata"
+{
+	SELECT citus_remove_node('localhost', 57636);
+}
 
 session "s1"
 
@@ -140,7 +152,7 @@ permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-insert"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-insert" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-update" "s1-commit-worker" "s2-commit-worker" "s3-select-count" "s1-stop-connection" "s2-stop-connection"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-insert-multi-row" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-update-multi-row" "s1-commit-worker" "s2-commit-worker" "s3-select-count" "s1-stop-connection" "s2-stop-connection"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-insert" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-copy" "s1-commit-worker" "s2-commit-worker" "s3-select-count" "s1-stop-connection" "s2-stop-connection"
-permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-insert" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-truncate" "s1-commit-worker" "s2-commit-worker" "s3-select-count" "s1-stop-connection" "s2-stop-connection"
+permutation "add-coordinator-to-metadata" "s1-start-session-level-connection" "s1-begin-on-worker" "s1-insert" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-truncate" "s1-commit-worker" "s2-commit-worker" "s3-select-count" "s1-stop-connection" "s2-stop-connection" "remove-coordinator-from-metadata"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-insert" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-select-for-update" "s1-commit-worker" "s2-commit-worker" "s3-select-count" "s1-stop-connection" "s2-stop-connection"
 //Not able to test the next permutation, until issue with CREATE INDEX CONCURRENTLY's locks is resolved. Issue #2966
 //permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-insert" "s2-coordinator-create-index-concurrently" "s1-commit-worker" "s3-select-count" "s1-stop-connection"

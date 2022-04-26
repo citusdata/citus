@@ -60,6 +60,8 @@ BEGIN;
 	SELECT count(*) FROM replicated_table;
 ROLLBACK;
 
+-- add coordinator to metadata so the TRUNCATE from workers does not fail
+SELECT citus_set_coordinator_host('localhost', :master_port);
 
 \c - - - :worker_1_port
 SET search_path TO 'truncate_from_workers';
@@ -142,6 +144,9 @@ ROLLBACK;
 RESET client_min_messages;
 
 \c - - - :master_port
+
+-- remove coordinator from metadata
+SELECT citus_remove_node('localhost', :master_port);
 
 -- also test the infrastructure that is used for supporting
 -- TRUNCATE from worker nodes

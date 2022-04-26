@@ -14,6 +14,19 @@ teardown
         SELECT citus_internal.restore_isolation_tester_func();
 }
 
+// coordinator session
+session "s0"
+
+step "add-coordinator-to-metadata"
+{
+	SELECT citus_set_coordinator_host('localhost', 57636);
+}
+
+step "remove-coordinator-from-metadata"
+{
+	SELECT citus_remove_node('localhost', 57636);
+}
+
 session "s1"
 
 // We do not need to begin a transaction on coordinator, since it will be open on workers.
@@ -125,5 +138,5 @@ permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-for-update" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-insert-select-ref-table" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-for-update" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-copy" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-select-count"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-for-update" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-alter" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection"
-permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-for-update" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-truncate" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection"
+permutation "add-coordinator-to-metadata" "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-for-update" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-truncate" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "remove-coordinator-from-metadata"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-for-update" "s2-coordinator-create-index-concurrently" "s1-commit-worker" "s1-stop-connection"

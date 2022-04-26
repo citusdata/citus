@@ -174,7 +174,26 @@ SELECT create_distributed_table('data', 'key');
 
 COPY data FROM STDIN WITH (format csv, delimiter '|', escape '\');
 -- run pg_dump on worker (which has shards)
+-- fails due to the coordinator not being in the metadata
 \COPY output FROM PROGRAM 'PGAPPNAME=pg_dump pg_dump -f results/pg_dump.tmp -h localhost -p 57637 -U postgres -d regression -n dumper --quote-all-identifiers'
+pg_dump: error: query failed: ERROR:  Cannot acquire a distributed lock from a worker node since the coordinator is not in the metadata.
+HINT:  Either run this command on the coordinator or add the coordinator in the metadata by using: SELECT citus_set_coordinator_host('<hostname>', <port>);
+pg_dump: error: query was: LOCK TABLE "dumper"."data" IN ACCESS SHARE MODE
+PGAPPNAME=pg_dump pg_dump -f results/pg_dump.tmp -h localhost -p 57637 -U postgres -d regression -n dumper --quote-all-identifiers: child process exited with exit code 1
+SELECT citus_set_coordinator_host('localhost', :master_port);
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
+-- succeeds
+\COPY output FROM PROGRAM 'PGAPPNAME=pg_dump pg_dump -f results/pg_dump.tmp -h localhost -p 57637 -U postgres -d regression -n dumper --quote-all-identifiers'
+SELECT citus_remove_node('localhost', :master_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
 -- restore pg_dump from worker via coordinator
 DROP SCHEMA dumper CASCADE;
 NOTICE:  drop cascades to table data

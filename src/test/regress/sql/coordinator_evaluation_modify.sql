@@ -269,6 +269,9 @@ EXECUTE router_with_only_function;
 INSERT INTO user_info_data VALUES(1, ('test', 1)::user_data);
 EXECUTE router_with_only_function;
 
+-- add coordinator to metadata so the TRUNCATE from workers does not fail
+SELECT citus_set_coordinator_host('localhost', :master_port);
+
 \c - - - :worker_2_port
 
 SET citus.log_local_commands TO ON;
@@ -546,5 +549,9 @@ EXECUTE router_with_only_function;
 
 -- suppress notices
 \c - - - :master_port
+
+-- remove coordinator from metadata
+SELECT citus_remove_node('localhost', :master_port);
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA coordinator_evaluation_combinations_modify CASCADE;

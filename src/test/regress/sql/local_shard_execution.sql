@@ -1,6 +1,9 @@
 CREATE SCHEMA local_shard_execution;
 SET search_path TO local_shard_execution;
 
+-- add coordinator to metadata so the TRUNCATE from workers does not fail
+SELECT citus_set_coordinator_host('localhost', :master_port);
+
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 1470000;
@@ -1130,6 +1133,9 @@ WITH cte_1 AS (SELECT * FROM event_responses LIMIT 1) SELECT count(*) FROM cte_1
 ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();
 SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
+
+-- remove coordinator from metadata
+SELECT citus_remove_node('localhost', :master_port);
 
 SET client_min_messages TO ERROR;
 SET search_path TO public;

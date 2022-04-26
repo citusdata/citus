@@ -116,7 +116,14 @@ COPY data FROM STDIN WITH (format csv, delimiter '|', escape '\');
 \.
 
 -- run pg_dump on worker (which has shards)
+-- fails due to the coordinator not being in the metadata
 \COPY output FROM PROGRAM 'PGAPPNAME=pg_dump pg_dump -f results/pg_dump.tmp -h localhost -p 57637 -U postgres -d regression -n dumper --quote-all-identifiers'
+
+SELECT citus_set_coordinator_host('localhost', :master_port);
+-- succeeds
+\COPY output FROM PROGRAM 'PGAPPNAME=pg_dump pg_dump -f results/pg_dump.tmp -h localhost -p 57637 -U postgres -d regression -n dumper --quote-all-identifiers'
+
+SELECT citus_remove_node('localhost', :master_port);
 
 -- restore pg_dump from worker via coordinator
 DROP SCHEMA dumper CASCADE;
