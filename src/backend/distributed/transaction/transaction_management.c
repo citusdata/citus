@@ -319,6 +319,13 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			/* empty the CommitContext to ensure we're not leaking memory */
 			MemoryContextSwitchTo(previousContext);
 			MemoryContextReset(CommitContext);
+
+			/* Set CachedDuringCitusCreation to false */
+
+			if (IsTransactionCreatingCitus())
+			{
+				SetCachedDuringCitusCreation(false);
+			}
 			break;
 		}
 
@@ -644,7 +651,7 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			/*
 			 * Clear MetadataCache Table if we're aborting from CREATE EXTENSION Citus
 			 * so that any created OIDs from the table are cleared and invalidated
-			*/
+			 */
 			if (IsTransactionCreatingCitus())
 			{
 				InvalidateMetadataSystemCache();
