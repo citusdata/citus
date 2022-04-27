@@ -219,6 +219,14 @@ s/^(ERROR:  child table is missing constraint "\w+)_([0-9])+"/\1_xxxxxx"/g
     }
 }
 
+# Ignore all logs after a FATAL error in isolation_master_update_node
+# After we match the error message /FATAL:  terminating connection due to administrator command/
+# in a loop (:a)
+# read the next line (N)
+# remove the new line that was read only if it was nonempty (s/\n.+//)
+# continue in the next iteration of the loop only when we had a match in the last step (ta)
+/FATAL:  terminating connection due to administrator command/ { :a; N; s/\n.+//; ta; }
+
 # normalize long table shard name errors for alter_table_set_access_method and alter_distributed_table
 s/^(ERROR:  child table is missing constraint "\w+)_([0-9])+"/\1_xxxxxx"/g
 s/^(DEBUG:  the name of the shard \(abcde_01234567890123456789012345678901234567890_f7ff6612)_([0-9])+/\1_xxxxxx/g
