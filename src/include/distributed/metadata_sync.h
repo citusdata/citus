@@ -13,6 +13,7 @@
 #define METADATA_SYNC_H
 
 
+#include "distributed/commands/utility_hook.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "nodes/pg_list.h"
@@ -34,6 +35,7 @@ extern void SyncCitusTableMetadata(Oid relationId);
 extern void EnsureSequentialModeMetadataOperations(void);
 extern bool ClusterHasKnownMetadataWorkers(void);
 extern char * LocalGroupIdUpdateCommand(int32 groupId);
+extern bool ShouldSyncUserCommandForObject(ObjectAddress objectAddress);
 extern bool ShouldSyncTableMetadata(Oid relationId);
 extern bool ShouldSyncTableMetadataViaCatalog(Oid relationId);
 extern List * NodeMetadataCreateCommands(void);
