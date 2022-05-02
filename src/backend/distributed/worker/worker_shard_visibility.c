@@ -40,8 +40,8 @@ typedef enum HideShardsMode
 bool OverrideTableVisibility = true;
 bool EnableManualChangesToShards = false;
 
-/* hide shards when the application_name starts with one of: */
-char *HideShardsFromAppNamePrefixes = "*";
+/* show shards when the application_name starts with one of: */
+char *ShowShardsForAppNamePrefixes = "";
 
 /* cache of whether or not to hide shards */
 static HideShardsMode HideShards = CHECK_APPLICATION_NAME;
@@ -271,8 +271,8 @@ RelationIsAKnownShard(Oid shardRelationId)
 
 /*
  * HideShardsFromSomeApplications transforms queries to pg_class to
- * filter out known shards if the application_name matches any of
- * the prefixes in citus.hide_shards_from_app_name_prefixes.
+ * filter out known shards if the application_name does not match any of
+ * the prefixes in citus.show_shards_for_app_name_prefix.
  */
 void
 HideShardsFromSomeApplications(Query *query)
@@ -294,7 +294,7 @@ HideShardsFromSomeApplications(Query *query)
  * ShouldHideShards returns whether we should hide shards in the current
  * session. It only checks the application_name once and then uses a
  * cached response unless either the application_name or
- * citus.hide_shards_from_app_name_prefixes changes.
+ * citus.show_shards_for_app_name_prefix changes.
  */
 static bool
 ShouldHideShards(void)
@@ -367,32 +367,33 @@ ShouldHideShardsInternal(void)
 	List *prefixList = NIL;
 
 	/* SplitGUCList scribbles on the input */
-	char *splitCopy = pstrdup(HideShardsFromAppNamePrefixes);
+	char *splitCopy = pstrdup(ShowShardsForAppNamePrefixes);
 
 	if (!SplitGUCList(splitCopy, ',', &prefixList))
 	{
 		/* invalid GUC value, ignore */
-		return false;
+		return true;
 	}
 
 	char *appNamePrefix = NULL;
 	foreach_ptr(appNamePrefix, prefixList)
 	{
-		/* always hide shards when one of the prefixes is * */
+		/* never hide shards when one of the prefixes is * */
 		if (strcmp(appNamePrefix, "*") == 0)
 		{
-			return true;
+			return false;
 		}
 
 		/* compare only the first first <prefixLength> characters */
 		int prefixLength = strlen(appNamePrefix);
 		if (strncmp(application_name, appNamePrefix, prefixLength) == 0)
 		{
-			return true;
+			return false;
 		}
 	}
 
-	return false;
+	/* default behaviour: hide shards */
+	return true;
 }
 
 
