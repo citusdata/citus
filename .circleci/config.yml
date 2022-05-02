@@ -6,13 +6,16 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-vabaecad'
+    default: '-dev-6385a38'
   pg13_version:
     type: string
     default: '13.4'
   pg14_version:
     type: string
     default: '14.0'
+  pg15_version:
+    type: string
+    default: '15devel'
   upgrade_pg_versions:
     type: string
     default: '13.4-14.0'
@@ -537,7 +540,7 @@ workflows:
       - build:
           name: build-15
           pg_major: 15
-          image_tag: '15-source-dev-202205021637'
+          image_tag: '<< pipeline.parameters.pg15_version >>'
 
       - check-style
       - check-sql-snapshots
