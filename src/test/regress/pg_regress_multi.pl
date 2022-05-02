@@ -466,7 +466,7 @@ push(@pgOptions, "citus.explain_analyze_sort_method='taskId'");
 push(@pgOptions, "citus.enable_manual_changes_to_shards=on");
 
 # Some tests look at shards in pg_class, make sure we can usually see them:
-push(@pgOptions, "citus.hide_shards_from_app_name_prefixes='psql,pg_dump'");
+push(@pgOptions, "citus.show_shards_for_app_name_prefixes='pg_regress'");
 
 # we disable slow start by default to encourage parallelism within tests
 push(@pgOptions, "citus.executor_slow_start_interval=0ms");

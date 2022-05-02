@@ -127,9 +127,9 @@ static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
 static bool WarnIfReplicationModelIsSet(int *newval, void **extra, GucSource source);
 static bool NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source);
-static bool HideShardsFromAppNamePrefixesCheckHook(char **newval, void **extra,
-												   GucSource source);
-static void HideShardsFromAppNamePrefixesAssignHook(const char *newval, void *extra);
+static bool ShowShardsForAppNamePrefixesCheckHook(char **newval, void **extra,
+												  GucSource source);
+static void ShowShardsForAppNamePrefixesAssignHook(const char *newval, void *extra);
 static void ApplicationNameAssignHook(const char *newval, void *extra);
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
@@ -1121,24 +1121,6 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
-	DefineCustomStringVariable(
-		"citus.hide_shards_from_app_name_prefixes",
-		gettext_noop("If application_name starts with one of these values, hide shards"),
-		gettext_noop("Citus places distributed tables and shards in the same schema. "
-					 "That can cause confusion when inspecting the list of tables on "
-					 "a node with shards. This GUC can be used to hide the shards from "
-					 "pg_class for certain applications based on the application_name "
-					 "of the connection. The default is *, which hides shards from all "
-					 "applications. This behaviour can be overridden using the "
-					 "citus.override_table_visibility setting"),
-		&HideShardsFromAppNamePrefixes,
-		"*",
-		PGC_USERSET,
-		GUC_STANDARD,
-		HideShardsFromAppNamePrefixesCheckHook,
-		HideShardsFromAppNamePrefixesAssignHook,
-		NULL);
-
 	DefineCustomIntVariable(
 		"citus.isolation_test_session_process_id",
 		NULL,
@@ -1677,6 +1659,25 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomStringVariable(
+		"citus.show_shards_for_app_name_prefixes",
+		gettext_noop("If application_name starts with one of these values, show shards"),
+		gettext_noop("Citus places distributed tables and shards in the same schema. "
+					 "That can cause confusion when inspecting the list of tables on "
+					 "a node with shards. By default the shards are hidden from "
+					 "pg_class. This GUC can be used to show the shards to certain "
+					 "applications based on the application_name of the connection. "
+					 "The default is empty string, which hides shards from all "
+					 "applications. This behaviour can be overridden using the "
+					 "citus.override_table_visibility setting"),
+		&ShowShardsForAppNamePrefixes,
+		"",
+		PGC_USERSET,
+		GUC_STANDARD,
+		ShowShardsForAppNamePrefixesCheckHook,
+		ShowShardsForAppNamePrefixesAssignHook,
+		NULL);
+
 	DefineCustomBoolVariable(
 		"citus.sort_returning",
 		gettext_noop("Sorts the RETURNING clause to get consistent test output"),
@@ -1946,12 +1947,12 @@ WarnIfReplicationModelIsSet(int *newval, void **extra, GucSource source)
 
 
 /*
- * HideShardsFromAppNamePrefixesCheckHook ensures that the
- * citus.hide_shards_from_app_name_prefixes holds a valid list of application_name
+ * ShowShardsForAppNamePrefixesCheckHook ensures that the
+ * citus.show_shards_for_app_name_prefixes holds a valid list of application_name
  * values.
  */
 static bool
-HideShardsFromAppNamePrefixesCheckHook(char **newval, void **extra, GucSource source)
+ShowShardsForAppNamePrefixesCheckHook(char **newval, void **extra, GucSource source)
 {
 	List *prefixList = NIL;
 
@@ -1981,7 +1982,7 @@ HideShardsFromAppNamePrefixesCheckHook(char **newval, void **extra, GucSource so
 
 		if (strcmp(prefixAscii, appNamePrefix) != 0)
 		{
-			GUC_check_errdetail("prefix %s in citus.hide_shards_from_app_name_prefixes "
+			GUC_check_errdetail("prefix %s in citus.show_shards_for_app_name_prefixes "
 								"contains non-ascii characters", appNamePrefix);
 			return false;
 		}
@@ -1992,12 +1993,12 @@ HideShardsFromAppNamePrefixesCheckHook(char **newval, void **extra, GucSource so
 
 
 /*
- * HideShardsFromAppNamePrefixesAssignHook ensures changes to
- * citus.hide_shards_from_app_name_prefixes are reflected in the decision
+ * ShowShardsForAppNamePrefixesAssignHook ensures changes to
+ * citus.show_shards_for_app_name_prefixes are reflected in the decision
  * whether or not to show shards.
  */
 static void
-HideShardsFromAppNamePrefixesAssignHook(const char *newval, void *extra)
+ShowShardsForAppNamePrefixesAssignHook(const char *newval, void *extra)
 {
 	ResetHideShardsDecision();
 }
