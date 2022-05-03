@@ -534,6 +534,10 @@ workflows:
           name: build-14
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
+      - build:
+          name: build-15
+          pg_major: 15
+          image_tag: '15-source-dev-202205021637'
 
       - check-style
       - check-sql-snapshots
