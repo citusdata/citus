@@ -15,7 +15,7 @@
 
 extern bool OverrideTableVisibility;
 extern bool EnableManualChangesToShards;
-extern char *HideShardsFromAppNamePrefixes;
+extern char *ShowShardsForAppNamePrefixes;
 
 
 extern void HideShardsFromSomeApplications(Query *query);
