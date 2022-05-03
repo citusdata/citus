@@ -10,6 +10,12 @@ source ci/ci_helpers.sh
 # read pg major version, error if not provided
 PG_MAJOR=${PG_MAJOR:?please provide the postgres major version}
 
+EXTRA_CONFIGURE_FLAGS=
+if [ $PG_MAJOR -eq 15 ]
+then
+  EXTRA_CONFIGURE_FLAGS+='--without-pg-version-check'
+fi
+
 # get codename from release file
 . /etc/os-release
 codename=${VERSION#*(}
@@ -33,7 +39,7 @@ build_ext() {
   # do everything in a subdirectory to avoid clutter in current directory
   mkdir -p "${builddir}" && cd "${builddir}"
 
-  CFLAGS=-Werror "${basedir}/configure" PG_CONFIG="/usr/lib/postgresql/${pg_major}/bin/pg_config" --enable-coverage --with-security-flags
+  CFLAGS=-Werror "${basedir}/configure" PG_CONFIG="/usr/lib/postgresql/${pg_major}/bin/pg_config" --enable-coverage --with-security-flags $EXTRA_CONFIGURE_FLAGS
 
   installdir="${builddir}/install"
   make -j$(nproc) && mkdir -p "${installdir}" && { make DESTDIR="${installdir}" install-all || make DESTDIR="${installdir}" install ; }
