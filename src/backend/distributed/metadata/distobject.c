@@ -46,7 +46,6 @@
 #include "utils/rel.h"
 
 
-static void MarkObjectDistributedLocally(const ObjectAddress *distAddress);
 static char * CreatePgDistObjectEntryCommand(const ObjectAddress *objectAddress);
 static int ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 									 Datum *paramValues);
@@ -195,7 +194,7 @@ MarkObjectDistributedViaSuperUser(const ObjectAddress *distAddress)
  * This function should never be called alone, MarkObjectDistributed() or
  * MarkObjectDistributedViaSuperUser() should be called.
  */
-static void
+void
 MarkObjectDistributedLocally(const ObjectAddress *distAddress)
 {
 	int paramCount = 3;

@@ -516,19 +516,70 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 		/* refrain reading the metadata cache for all tables */
 		if (ShouldSyncTableMetadataViaCatalog(citusTableId))
 		{
-			/* we need to pass pointer allocated in the heap */
-			ObjectAddress *addressPointer = palloc0(sizeof(ObjectAddress));
-			*addressPointer = tableAddress;
+			/*
+			 * All the distributable dependencies of a table should be marked as
+			 * distributed.
+			 */
+			List *distributableDependencyObjectAddresses =
+				GetDistributableDependenciesForObject(&tableAddress);
 
-			/* as of Citus 11, tables that should be synced are also considered object */
-			resultingObjectAddresses = lappend(resultingObjectAddresses, addressPointer);
+			resultingObjectAddresses =
+				list_concat(resultingObjectAddresses,
+							distributableDependencyObjectAddresses);
+
+
+			/*
+			 * We mark tables distributed immediately because we also need to mark
+			 * views as distributed. We check whether the views that depend on
+			 * the table has any auto-distirbutable dependencies below. Citus
+			 * currently cannot "auto" distribute tables as dependencies, so we
+			 * mark them distributed immediately.
+			 *
+			 * If a view depends on multiple tables, that view will be marked
+			 * as distributed while it is processed for the last citus
+			 * table.
+			 */
+			MarkObjectDistributedLocally(&tableAddress);
+
+			/*
+			 * As of Citus 11, views on Citus tables that do not have any unsupported
+			 * dependency should also be distributed.
+			 */
+			List *viewList = GetDependingViews(citusTableId);
+			Oid viewOid = InvalidOid;
+			foreach_oid(viewOid, viewList)
+			{
+				ObjectAddress viewAddress = { 0 };
+				ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
+
+				if (DeferErrorIfHasUnsupportedDependency(&viewAddress) != NULL)
+				{
+					/* this view has unsupported dependencies, skip */
+					continue;
+				}
+
+				/*
+				 * Now, mark the view and its dependencies as distributed as
+				 * well. For example, a type could only be depending to a
+				 * view.
+				 */
+
+				/* we need to pass pointer allocated in the heap */
+				ObjectAddress *addressPointer = palloc0(sizeof(ObjectAddress));
+				*addressPointer = viewAddress;
+
+				/* */
+				resultingObjectAddresses =
+					lappend(resultingObjectAddresses, addressPointer);
+
+				distributableDependencyObjectAddresses =
+					GetDistributableDependenciesForObject(&viewAddress);
+
+				resultingObjectAddresses =
+					list_concat(resultingObjectAddresses,
+								distributableDependencyObjectAddresses);
+			}
 		}
-
-		List *distributableDependencyObjectAddresses =
-			GetDistributableDependenciesForObject(&tableAddress);
-
-		resultingObjectAddresses = list_concat(resultingObjectAddresses,
-											   distributableDependencyObjectAddresses);
 	}
 
 	/* resolve dependencies of the objects in pg_dist_object*/

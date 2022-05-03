@@ -3411,12 +3411,19 @@ ColocationGroupCreateCommandList(void)
 					 "distributioncolumncollationschema)  AS (VALUES ");
 
 	Relation pgDistColocation = table_open(DistColocationRelationId(), AccessShareLock);
+	Relation colocationIdIndexRel = index_open(DistColocationIndexId(), AccessShareLock);
 
-	bool indexOK = false;
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistColocation, InvalidOid, indexOK,
-													NULL, 0, NULL);
+	/*
+	 * It is not strictly necessary to read the tuples in order.
+	 * However, it is useful to get consistent behavior, both for regression
+	 * tests and also in production systems.
+	 */
+	SysScanDesc scanDescriptor =
+		systable_beginscan_ordered(pgDistColocation, colocationIdIndexRel,
+								   NULL, 0, NULL);
 
-	HeapTuple colocationTuple = systable_getnext(scanDescriptor);
+	HeapTuple colocationTuple = systable_getnext_ordered(scanDescriptor,
+														 ForwardScanDirection);
 
 	while (HeapTupleIsValid(colocationTuple))
 	{
@@ -3474,10 +3481,11 @@ ColocationGroupCreateCommandList(void)
 							 "NULL, NULL)");
 		}
 
-		colocationTuple = systable_getnext(scanDescriptor);
+		colocationTuple = systable_getnext_ordered(scanDescriptor, ForwardScanDirection);
 	}
 
-	systable_endscan(scanDescriptor);
+	systable_endscan_ordered(scanDescriptor);
+	index_close(colocationIdIndexRel, AccessShareLock);
 	table_close(pgDistColocation, AccessShareLock);
 
 	if (!hasColocations)
