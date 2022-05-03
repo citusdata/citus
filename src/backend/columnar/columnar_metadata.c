@@ -1820,7 +1820,15 @@ ColumnarChunkGroupIndexRelationId(void)
 static Oid
 ColumnarNamespaceId(void)
 {
-	return get_namespace_oid("columnar", false);
+	Oid namespace = get_namespace_oid("columnar_internal", true);
+
+	/* if schema is earlier than 11.1-1 */
+	if (!OidIsValid(namespace))
+	{
+		namespace = get_namespace_oid("columnar", false);
+	}
+
+	return namespace;
 }
 
 
@@ -1862,6 +1870,13 @@ columnar_relation_storageid(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 	Relation relation = relation_open(relationId, AccessShareLock);
+
+	if (!pg_class_ownercheck(relationId, GetUserId()))
+	{
+		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLE,
+					   get_rel_name(relationId));
+	}
+
 	if (!IsColumnarTableAmTable(relationId))
 	{
 		elog(ERROR, "relation \"%s\" is not a columnar table",

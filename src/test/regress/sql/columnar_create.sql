@@ -29,14 +29,14 @@ INSERT INTO columnar_table_1 VALUES (1);
 CREATE MATERIALIZED VIEW columnar_table_1_mv USING columnar
 AS SELECT * FROM columnar_table_1;
 
-SELECT columnar_test_helpers.columnar_relation_storageid(oid) AS columnar_table_1_mv_storage_id
+SELECT columnar.get_storage_id(oid) AS columnar_table_1_mv_storage_id
 FROM pg_class WHERE relname='columnar_table_1_mv' \gset
 
 -- test columnar_relation_set_new_filenode
 REFRESH MATERIALIZED VIEW columnar_table_1_mv;
 SELECT columnar_test_helpers.columnar_metadata_has_storage_id(:columnar_table_1_mv_storage_id);
 
-SELECT columnar_test_helpers.columnar_relation_storageid(oid) AS columnar_table_1_storage_id
+SELECT columnar.get_storage_id(oid) AS columnar_table_1_storage_id
 FROM pg_class WHERE relname='columnar_table_1' \gset
 
 BEGIN;
@@ -60,7 +60,7 @@ CREATE TEMPORARY TABLE columnar_temp(i int) USING columnar;
 -- reserve some chunks and a stripe
 INSERT INTO columnar_temp SELECT i FROM generate_series(1,5) i;
 
-SELECT columnar_test_helpers.columnar_relation_storageid(oid) AS columnar_temp_storage_id
+SELECT columnar.get_storage_id(oid) AS columnar_temp_storage_id
 FROM pg_class WHERE relname='columnar_temp' \gset
 
 SELECT pg_backend_pid() AS val INTO old_backend_pid;
@@ -85,7 +85,7 @@ INSERT INTO columnar_temp SELECT i FROM generate_series(1,5) i;
 -- test basic select
 SELECT COUNT(*) FROM columnar_temp WHERE i < 5;
 
-SELECT columnar_test_helpers.columnar_relation_storageid(oid) AS columnar_temp_storage_id
+SELECT columnar.get_storage_id(oid) AS columnar_temp_storage_id
 FROM pg_class WHERE relname='columnar_temp' \gset
 
 BEGIN;
@@ -107,7 +107,7 @@ BEGIN;
   -- force flushing stripe
   INSERT INTO columnar_temp SELECT i FROM generate_series(1,150000) i;
 
-  SELECT columnar_test_helpers.columnar_relation_storageid(oid) AS columnar_temp_storage_id
+  SELECT columnar.get_storage_id(oid) AS columnar_temp_storage_id
   FROM pg_class WHERE relname='columnar_temp' \gset
 COMMIT;
 
@@ -120,7 +120,7 @@ BEGIN;
   -- force flushing stripe
   INSERT INTO columnar_temp SELECT i FROM generate_series(1,150000) i;
 
-  SELECT columnar_test_helpers.columnar_relation_storageid(oid) AS columnar_temp_storage_id
+  SELECT columnar.get_storage_id(oid) AS columnar_temp_storage_id
   FROM pg_class WHERE relname='columnar_temp' \gset
 COMMIT;
 

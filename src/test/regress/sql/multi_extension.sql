@@ -92,7 +92,7 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar')
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal')
 ORDER BY 1, 2;
 
 
@@ -490,7 +490,7 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar')
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal')
 ORDER BY 1, 2;
 
 -- see incompatible version errors out

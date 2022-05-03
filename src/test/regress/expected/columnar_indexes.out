@@ -545,11 +545,11 @@ DETAIL:  Key (a)=(16999) already exists.
 -- since second INSERT already failed, should not throw a "duplicate key" error
 REINDEX TABLE aborted_write_test;
 BEGIN;
-  ALTER TABLE columnar.stripe SET (autovacuum_enabled = false);
-  ALTER TABLE columnar.chunk SET (autovacuum_enabled = false);
-  ALTER TABLE columnar.chunk_group SET (autovacuum_enabled = false);
+  ALTER TABLE columnar_internal.stripe SET (autovacuum_enabled = false);
+  ALTER TABLE columnar_internal.chunk SET (autovacuum_enabled = false);
+  ALTER TABLE columnar_internal.chunk_group SET (autovacuum_enabled = false);
   DROP TABLE aborted_write_test;
-  TRUNCATE columnar.stripe, columnar.chunk, columnar.chunk_group;
+  TRUNCATE columnar_internal.stripe, columnar_internal.chunk, columnar_internal.chunk_group;
   CREATE TABLE aborted_write_test (a INT) USING columnar;
   SAVEPOINT svpt;
     INSERT INTO aborted_write_test SELECT i FROM generate_series(1, 2) i;
@@ -559,12 +559,13 @@ BEGIN;
 (2 rows)
 
   ROLLBACK TO SAVEPOINT svpt;
-  -- Already disabled autovacuum for all three metadata tables.
-  -- Here we truncate columnar.chunk and columnar.chunk_group but not
-  -- columnar.stripe to make sure that we properly handle dead tuples
-  -- in columnar.stripe, i.e. stripe metadata entries for aborted
-  -- transactions.
-  TRUNCATE columnar.chunk, columnar.chunk_group;
+  -- Already disabled autovacuum for all three metadata tables.  Here
+  -- we truncate columnar_internal.chunk and
+  -- columnar.chunk_group but not columnar.stripe to
+  -- make sure that we properly handle dead tuples in
+  -- columnar.stripe, i.e. stripe metadata entries for
+  -- aborted transactions.
+  TRUNCATE columnar_internal.chunk, columnar_internal.chunk_group;
   CREATE INDEX ON aborted_write_test (a);
 ROLLBACK;
 create table events (event_id bigserial, event_time timestamptz default now(), payload text) using columnar;
@@ -611,7 +612,7 @@ begin;
 rollback;
 insert into uniq select generate_series(1,100);
 SELECT COUNT(*)=1 FROM columnar.stripe cs
-WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+WHERE cs.storage_id = columnar.get_storage_id('columnar_indexes.uniq'::regclass);
  ?column?
 ---------------------------------------------------------------------
  t
@@ -630,7 +631,7 @@ begin;
 rollback;
 insert into uniq select generate_series(1,100);
 SELECT COUNT(*)=1 FROM columnar.stripe cs
-WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+WHERE cs.storage_id = columnar.get_storage_id('columnar_indexes.uniq'::regclass);
  ?column?
 ---------------------------------------------------------------------
  t
@@ -644,7 +645,7 @@ begin;
 rollback;
 insert into uniq select generate_series(1,100);
 SELECT COUNT(*)=1 FROM columnar.stripe cs
-WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+WHERE cs.storage_id = columnar.get_storage_id('columnar_indexes.uniq'::regclass);
  ?column?
 ---------------------------------------------------------------------
  t
@@ -663,7 +664,7 @@ begin;
 rollback;
 insert into uniq select generate_series(1,100);
 SELECT COUNT(*)=1 FROM columnar.stripe cs
-WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+WHERE cs.storage_id = columnar.get_storage_id('columnar_indexes.uniq'::regclass);
  ?column?
 ---------------------------------------------------------------------
  t
@@ -680,7 +681,7 @@ begin;
   insert into uniq select generate_series(1,100);
   -- didn't flush anything yet, but should see the in progress stripe-write
   SELECT stripe_num, first_row_number, row_count FROM columnar.stripe cs
-  WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+  WHERE cs.storage_id = columnar.get_storage_id('columnar_indexes.uniq'::regclass);
  stripe_num | first_row_number | row_count
 ---------------------------------------------------------------------
           2 |           150001 |         0
@@ -689,7 +690,7 @@ begin;
 commit;
 -- should have completed the stripe reservation
 SELECT stripe_num, first_row_number, row_count FROM columnar.stripe cs
-WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+WHERE cs.storage_id = columnar.get_storage_id('columnar_indexes.uniq'::regclass);
  stripe_num | first_row_number | row_count
 ---------------------------------------------------------------------
           2 |           150001 |       100

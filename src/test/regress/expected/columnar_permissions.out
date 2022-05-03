@@ -1,11 +1,16 @@
 create table no_access (i int) using columnar;
+insert into no_access values(1);
+insert into no_access values(2);
+insert into no_access values(3);
 select current_user \gset
 create user columnar_user;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 \c - columnar_user
+-- owned by columnar_user
 create table columnar_permissions(i int) using columnar;
 insert into columnar_permissions values(1);
+insert into columnar_permissions values(2);
 alter table columnar_permissions add column j int;
 alter table columnar_permissions reset (columnar.compression);
 alter table columnar_permissions set (columnar.compression = none);
@@ -21,17 +26,58 @@ select alter_columnar_table_set('columnar_permissions', stripe_row_limit => 2222
 
 (1 row)
 
-select * from columnar.options where regclass = 'columnar_permissions'::regclass;
-       regclass       | chunk_group_row_limit | stripe_row_limit | compression_level | compression
+select 1 from columnar.get_storage_id('columnar_permissions'::regclass);
+ ?column?
 ---------------------------------------------------------------------
- columnar_permissions |                 10000 |             2222 |                 3 | none
+        1
 (1 row)
 
-insert into columnar_permissions values(2,20);
-vacuum columnar_permissions;
+-- error
+select 1 from columnar.get_storage_id('no_access'::regclass);
+ERROR:  must be owner of table no_access
+-- only tuples related to columnar_permissions should be visible
+select relation, chunk_group_row_limit, stripe_row_limit, compression, compression_level
+  from columnar.options
+  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass);
+       relation       | chunk_group_row_limit | stripe_row_limit | compression | compression_level
+---------------------------------------------------------------------
+ columnar_permissions |                 10000 |             2222 | none        |                 3
+(1 row)
+
+select relation, stripe_num, row_count, first_row_number
+  from columnar.stripe
+  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass);
+       relation       | stripe_num | row_count | first_row_number
+---------------------------------------------------------------------
+ columnar_permissions |          1 |         1 |                1
+ columnar_permissions |          2 |         1 |           150001
+(2 rows)
+
+select relation, stripe_num, attr_num, chunk_group_num, value_count
+  from columnar.chunk
+  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass);
+       relation       | stripe_num | attr_num | chunk_group_num | value_count
+---------------------------------------------------------------------
+ columnar_permissions |          1 |        1 |               0 |           1
+ columnar_permissions |          2 |        1 |               0 |           1
+(2 rows)
+
+select relation, stripe_num, chunk_group_num, row_count
+  from columnar.chunk_group
+  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass);
+       relation       | stripe_num | chunk_group_num | row_count
+---------------------------------------------------------------------
+ columnar_permissions |          1 |               0 |         1
+ columnar_permissions |          2 |               0 |         1
+(2 rows)
+
 truncate columnar_permissions;
-drop table columnar_permissions;
--- should error
+insert into columnar_permissions values(2,20);
+insert into columnar_permissions values(2,30);
+insert into columnar_permissions values(4,40);
+insert into columnar_permissions values(5,50);
+vacuum columnar_permissions;
+-- error: columnar_user can't alter no_access
 alter table no_access reset (columnar.stripe_row_limit);
 ERROR:  must be owner of table no_access
 alter table no_access set (columnar.stripe_row_limit = 12000);
@@ -45,3 +91,61 @@ ERROR:  must be owner of table no_access
 CONTEXT:  SQL statement "ALTER TABLE no_access SET (columnar.chunk_group_row_limit=1111)"
 PL/pgSQL function alter_columnar_table_set(regclass,integer,integer,name,integer) line XX at EXECUTE
 \c - :current_user
+-- should see tuples from both columnar_permissions and no_access
+select relation, chunk_group_row_limit, stripe_row_limit, compression, compression_level
+  from columnar.options
+  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass);
+       relation       | chunk_group_row_limit | stripe_row_limit | compression | compression_level
+---------------------------------------------------------------------
+ no_access            |                 10000 |           150000 | zstd        |                 3
+ columnar_permissions |                 10000 |             2222 | none        |                 3
+(2 rows)
+
+select relation, stripe_num, row_count, first_row_number
+  from columnar.stripe
+  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass);
+       relation       | stripe_num | row_count | first_row_number
+---------------------------------------------------------------------
+ no_access            |          1 |         1 |                1
+ no_access            |          2 |         1 |           150001
+ no_access            |          3 |         1 |           300001
+ columnar_permissions |          1 |         1 |                1
+ columnar_permissions |          2 |         1 |             2223
+ columnar_permissions |          3 |         1 |             4445
+ columnar_permissions |          4 |         1 |             6667
+(7 rows)
+
+select relation, stripe_num, attr_num, chunk_group_num, value_count
+  from columnar.chunk
+  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass);
+       relation       | stripe_num | attr_num | chunk_group_num | value_count
+---------------------------------------------------------------------
+ no_access            |          1 |        1 |               0 |           1
+ no_access            |          2 |        1 |               0 |           1
+ no_access            |          3 |        1 |               0 |           1
+ columnar_permissions |          1 |        1 |               0 |           1
+ columnar_permissions |          1 |        2 |               0 |           1
+ columnar_permissions |          2 |        1 |               0 |           1
+ columnar_permissions |          2 |        2 |               0 |           1
+ columnar_permissions |          3 |        1 |               0 |           1
+ columnar_permissions |          3 |        2 |               0 |           1
+ columnar_permissions |          4 |        1 |               0 |           1
+ columnar_permissions |          4 |        2 |               0 |           1
+(11 rows)
+
+select relation, stripe_num, chunk_group_num, row_count
+  from columnar.chunk_group
+  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass);
+       relation       | stripe_num | chunk_group_num | row_count
+---------------------------------------------------------------------
+ no_access            |          1 |               0 |         1
+ no_access            |          2 |               0 |         1
+ no_access            |          3 |               0 |         1
+ columnar_permissions |          1 |               0 |         1
+ columnar_permissions |          2 |               0 |         1
+ columnar_permissions |          3 |               0 |         1
+ columnar_permissions |          4 |               0 |         1
+(7 rows)
+
+drop table columnar_permissions;
+drop table no_access;

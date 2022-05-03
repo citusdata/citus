@@ -7,42 +7,42 @@ INSERT INTO table_options SELECT generate_series(1,100);
 
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 -- test changing the compression
 ALTER TABLE table_options SET (columnar.compression = pglz);
 
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 -- test changing the compression level
 ALTER TABLE table_options SET (columnar.compression_level = 5);
 
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 -- test changing the chunk_group_row_limit
 ALTER TABLE table_options SET (columnar.chunk_group_row_limit = 2000);
 
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 -- test changing the chunk_group_row_limit
 ALTER TABLE table_options SET (columnar.stripe_row_limit = 4000);
 
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 -- VACUUM FULL creates a new table, make sure it copies settings from the table you are vacuuming
 VACUUM FULL table_options;
 
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 -- set all settings at the same time
 ALTER TABLE table_options SET
@@ -53,30 +53,30 @@ ALTER TABLE table_options SET
 
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 -- make sure table options are not changed when VACUUM a table
 VACUUM table_options;
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 -- make sure table options are not changed when VACUUM FULL a table
 VACUUM FULL table_options;
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 -- make sure table options are not changed when truncating a table
 TRUNCATE table_options;
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 ALTER TABLE table_options ALTER COLUMN a TYPE bigint;
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 -- reset settings one by one to the version of the GUC's
 SET columnar.chunk_group_row_limit TO 1000;
@@ -87,30 +87,30 @@ SET columnar.compression_level TO 11;
 -- verify setting the GUC's didn't change the settings
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 ALTER TABLE table_options RESET (columnar.chunk_group_row_limit);
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 ALTER TABLE table_options RESET (columnar.stripe_row_limit);
 
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 ALTER TABLE table_options RESET (columnar.compression);
 
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 ALTER TABLE table_options RESET (columnar.compression_level);
 
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 -- verify resetting all settings at once work
 SET columnar.chunk_group_row_limit TO 10000;
@@ -120,7 +120,7 @@ SET columnar.compression_level TO 13;
 
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 ALTER TABLE table_options RESET
   (columnar.chunk_group_row_limit,
@@ -130,7 +130,7 @@ ALTER TABLE table_options RESET
 
 -- show table_options settings
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 -- verify edge cases
 -- first start with a table that is not a columnar table
@@ -168,7 +168,7 @@ ALTER TABLE table_options
   SET (columnar.compression_level = 6);
 
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 ALTER TABLE table_options
   SET (columnar.compression = pglz, columnar.stripe_row_limit = 7777),
@@ -176,7 +176,7 @@ ALTER TABLE table_options
   SET (columnar.chunk_group_row_limit = 5555);
 
 SELECT * FROM columnar.options
-WHERE regclass = 'table_options'::regclass;
+WHERE relation = 'table_options'::regclass;
 
 -- a no-op; shouldn't throw an error
 ALTER TABLE IF EXISTS what SET (columnar.compression = lz4);
@@ -187,9 +187,9 @@ CREATE TABLE IF NOT EXISTS table_options(a int) USING columnar
 
 -- test old interface based on functions
 SELECT alter_columnar_table_reset('table_options', compression => true);
-SELECT * FROM columnar.options WHERE regclass = 'table_options'::regclass;
+SELECT * FROM columnar.options WHERE relation = 'table_options'::regclass;
 SELECT alter_columnar_table_set('table_options', compression_level => 1);
-SELECT * FROM columnar.options WHERE regclass = 'table_options'::regclass;
+SELECT * FROM columnar.options WHERE relation = 'table_options'::regclass;
 
 -- error: set columnar options on heap tables
 CREATE TABLE heap_options(i int) USING heap;
@@ -204,7 +204,7 @@ DROP TABLE heap_options;
 -- verify options are removed when table is dropped
 DROP TABLE table_options;
 -- we expect no entries in çstore.options for anything not found int pg_class
-SELECT * FROM columnar.options o WHERE o.regclass NOT IN (SELECT oid FROM pg_class);
+SELECT * FROM columnar.options o WHERE o.relation NOT IN (SELECT oid FROM pg_class);
 
 SET client_min_messages TO warning;
 DROP SCHEMA am_tableoptions CASCADE;

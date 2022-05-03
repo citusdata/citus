@@ -144,15 +144,15 @@ select
   from columnar_test_helpers.columnar_storage_info('zero_col');
 
 SELECT relname, stripe_num, chunk_group_count, row_count FROM columnar.stripe a, pg_class b
-WHERE columnar_test_helpers.columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
+WHERE columnar.get_storage_id(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3,4;
 
 SELECT relname, stripe_num, value_count FROM columnar.chunk a, pg_class b
-WHERE columnar_test_helpers.columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
+WHERE columnar.get_storage_id(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3;
 
 SELECT relname, stripe_num, chunk_group_num, row_count FROM columnar.chunk_group a, pg_class b
-WHERE columnar_test_helpers.columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
+WHERE columnar.get_storage_id(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3,4;
 
 CREATE TABLE selfinsert(x int) USING columnar;

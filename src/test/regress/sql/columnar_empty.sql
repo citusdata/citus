@@ -11,7 +11,7 @@ ALTER TABLE t_compressed SET (columnar.compression = pglz);
 ALTER TABLE t_compressed SET (columnar.stripe_row_limit = 2000);
 ALTER TABLE t_compressed SET (columnar.chunk_group_row_limit = 1000);
 
-SELECT * FROM columnar.options WHERE regclass = 't_compressed'::regclass;
+SELECT * FROM columnar.options WHERE relation = 't_compressed'::regclass;
 
 -- select
 select * from t_uncompressed;

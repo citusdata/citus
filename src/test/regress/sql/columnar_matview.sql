@@ -19,23 +19,23 @@ SELECT * FROM t_view a ORDER BY a;
 
 -- show columnar options for materialized view
 SELECT * FROM columnar.options
-WHERE regclass = 't_view'::regclass;
+WHERE relation = 't_view'::regclass;
 
 -- show we can set options on a materialized view
 ALTER TABLE t_view SET (columnar.compression = pglz);
 SELECT * FROM columnar.options
-WHERE regclass = 't_view'::regclass;
+WHERE relation = 't_view'::regclass;
 
 REFRESH MATERIALIZED VIEW t_view;
 
 -- verify options have not been changed
 SELECT * FROM columnar.options
-WHERE regclass = 't_view'::regclass;
+WHERE relation = 't_view'::regclass;
 
 SELECT * FROM t_view a ORDER BY a;
 
 -- verify that we have created metadata entries for the materialized view
-SELECT columnar_test_helpers.columnar_relation_storageid(oid) AS storageid
+SELECT columnar.get_storage_id(oid) AS storageid
 FROM pg_class WHERE relname='t_view' \gset
 
 SELECT count(*) FROM columnar.stripe WHERE storage_id=:storageid;
