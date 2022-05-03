@@ -24,6 +24,7 @@ extern bool IsObjectDistributed(const ObjectAddress *address);
 extern bool ClusterHasDistributedFunctionWithDistArgument(void);
 extern void MarkObjectDistributed(const ObjectAddress *distAddress);
 extern void MarkObjectDistributedViaSuperUser(const ObjectAddress *distAddress);
+extern void MarkObjectDistributedLocally(const ObjectAddress *distAddress);
 extern void UnmarkObjectDistributed(const ObjectAddress *address);
 extern bool IsTableOwnedByExtension(Oid relationId);
 extern bool IsObjectAddressOwnedByExtension(const ObjectAddress *target,

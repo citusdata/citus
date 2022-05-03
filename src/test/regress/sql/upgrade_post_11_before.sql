@@ -104,6 +104,19 @@ INSERT INTO colocated_dist_table SELECT i FROM generate_series(0,1000)i;
 INSERT INTO colocated_partitioned_table SELECT i, '2020-01-05' FROM generate_series(0,1000)i;
 INSERT INTO sensors SELECT i, '2020-01-05', '{}' FROM generate_series(0,1000)i;
 
+-- table for recursive view
+CREATE TABLE employees (employee_id int, manager_id int, full_name text);
+SELECT create_distributed_table('employees', 'employee_id');
+
+-- table for owned_by_extension
+-- note that tables owned by extension are
+-- not added to the pg_dist_object, and assumed
+-- to exists on all nodes via the extension
+CREATE TABLE owned_by_extension_table (employee_id int, manager_id int, full_name text);
+ALTER EXTENSION plpgsql ADD TABLE post_11_upgrade.owned_by_extension_table;
+SELECT create_distributed_table('owned_by_extension_table', 'employee_id');
+SELECT run_command_on_workers($$CREATE TABLE post_11_upgrade.owned_by_extension_table (employee_id int, manager_id int, full_name text);$$);
+SELECT run_command_on_workers($$ALTER EXTENSION plpgsql ADD TABLE post_11_upgrade.owned_by_extension_table;$$);
 
 SET citus.enable_ddl_propagation TO off;
 CREATE TEXT SEARCH CONFIGURATION post_11_upgrade.partial_index_test_config ( parser = default );
@@ -129,6 +142,83 @@ END;
 $$;');
 
 CREATE TYPE post_11_upgrade.my_type AS (a int);
+CREATE VIEW post_11_upgrade.view_for_upgrade_test AS SELECT * FROM sensors;
+
+-- one normally would not need views on the workers pre-11, but still
+-- nice test to have
+SELECT run_command_on_workers('SET citus.enable_ddl_propagation TO off;
+CREATE VIEW post_11_upgrade.view_for_upgrade_test AS SELECT * FROM sensors;');
+
+
+-- a non-distributed type dependency to a view
+-- both the view and the type should be distributed after the upgrade
+CREATE TYPE post_11_upgrade.my_type_for_view AS (a int);
+CREATE VIEW post_11_upgrade.view_for_upgrade_test_my_type (casted) AS SELECT row(measureid)::post_11_upgrade.my_type_for_view FROM sensors;
+
+-- a local type, table and view, should not be distributed
+-- after the upgrade
+CREATE TYPE post_11_upgrade.local_type AS (a int);
+CREATE TABLE post_11_upgrade.non_dist_table_for_view(a int, b post_11_upgrade.local_type);
+CREATE VIEW post_11_upgrade.non_dist_upgrade_test_view AS SELECT * FROM non_dist_table_for_view;
+
+-- a local table joined with a distributed table. In other words, the view has a local table dependency
+-- and should not be distributed after the upgrade
+CREATE TABLE post_11_upgrade.non_dist_dist_table_for_view(a int);
+CREATE VIEW post_11_upgrade.non_dist_upgrade_test_view_local_join AS SELECT * FROM non_dist_table_for_view JOIN sensors ON (true);
+
+-- a view selecting from multiple
+-- distributed/reference tables should be marked as distributed
+CREATE VIEW post_11_upgrade.non_dist_upgrade_multiple_dist_view AS SELECT colocated_dist_table.* FROM colocated_dist_table JOIN sensors ON (true) JOIN reference_table ON (true);
+
+-- a view selecting from reference table should be fine
+CREATE VIEW post_11_upgrade.non_dist_upgrade_ref_view AS SELECT * FROM reference_table;
+
+-- a view selecting from another (distributed) view should also be distributed
+CREATE VIEW post_11_upgrade.non_dist_upgrade_ref_view_2 AS SELECT * FROM non_dist_upgrade_ref_view;
+
+-- materialized views never becomes distributed
+CREATE MATERIALIZED VIEW post_11_upgrade.materialized_view AS SELECT * FROM reference_table;
+
+CREATE VIEW post_11_upgrade.owned_by_extension_view AS SELECT * FROM reference_table;
+ALTER EXTENSION plpgsql ADD VIEW post_11_upgrade.owned_by_extension_view;
+
+-- temporary views should not be marked as distributed
+CREATE VIEW pg_temp.temp_view_1 AS SELECT * FROM reference_table;
+CREATE temporary VIEW temp_view_2 AS SELECT * FROM reference_table;
+
+-- we should be able to distribute recursive views
+CREATE OR REPLACE RECURSIVE VIEW reporting_line (employee_id, subordinates) AS
+SELECT employee_id,
+       full_name AS subordinates
+FROM employees
+WHERE manager_id IS NULL
+UNION ALL
+SELECT e.employee_id,
+       (rl.subordinates || ' > ' || e.full_name) AS subordinates
+FROM employees e
+INNER JOIN reporting_line rl ON e.manager_id = rl.employee_id;
+
+-- v_test_1 and v_test_2 becomes circularly dependend views
+-- so we should not try to distribute any of the views
+CREATE VIEW post_11_upgrade.v_test_1 AS SELECT * FROM sensors;
+CREATE VIEW post_11_upgrade.v_test_2 AS SELECT * FROM sensors;
+CREATE OR REPLACE VIEW post_11_upgrade.v_test_1 AS SELECT sensors.* FROM sensors JOIN v_test_2 USING (measureid);
+CREATE OR REPLACE VIEW post_11_upgrade.v_test_2 AS SELECT sensors.* FROM sensors JOIN v_test_1 USING (measureid);
+
+-- views that do not depeend on anything should be distributed
+CREATE VIEW post_11_upgrade.depends_on_nothing_1 AS SELECT * FROM (VALUES (1)) as values;
+CREATE VIEW post_11_upgrade.depends_on_nothing_2 AS SELECT 1;
+
+-- views depends pg/citus objects should be distributed
+CREATE VIEW post_11_upgrade.depends_on_pg AS SELECT * FROM pg_class;
+CREATE VIEW post_11_upgrade.depends_on_citus AS SELECT * FROM pg_dist_partition;
+
+-- views depend on sequences only should be distributed
+CREATE SEQUENCE post_11_upgrade.seq_bigint AS bigint INCREMENT BY 3 CACHE 10 CYCLE;
+CREATE VIEW post_11_upgrade.depends_on_seq AS SELECT nextval('post_11_upgrade.seq_bigint');
+
+-- views depend on a sequence and a local table should not be distributed
+CREATE VIEW post_11_upgrade.depends_on_seq_and_no_support AS SELECT nextval('post_11_upgrade.seq_bigint') FROM post_11_upgrade.non_dist_table_for_view;
 
 RESET citus.enable_ddl_propagation;
 
