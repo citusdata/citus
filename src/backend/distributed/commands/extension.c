@@ -513,7 +513,8 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 		ObjectAddress tableAddress = { 0 };
 		ObjectAddressSet(tableAddress, RelationRelationId, citusTableId);
 
-		if (ShouldSyncTableMetadata(citusTableId))
+		/* refrain reading the metadata cache for all tables */
+		if (ShouldSyncTableMetadataViaCatalog(citusTableId))
 		{
 			/* we need to pass pointer allocated in the heap */
 			ObjectAddress *addressPointer = palloc0(sizeof(ObjectAddress));
