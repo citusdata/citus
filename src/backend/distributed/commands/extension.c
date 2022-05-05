@@ -510,7 +510,7 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	Oid citusTableId = InvalidOid;
 	foreach_oid(citusTableId, citusTableIdList)
 	{
-		if (!IsTableOwnedByExtension(citusTableId))
+		if (IsTableOwnedByExtension(citusTableId))
 		{
 			/*
 			 * We let extensions handle its objects by themselves. This includes
