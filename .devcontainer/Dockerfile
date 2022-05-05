@@ -65,6 +65,7 @@ FROM base AS pg12
 RUN pgenv build 12.10
 RUN rm .pgenv/src/*.tar*
 # TODO remove excessive artifacts for smaller images
+RUN find .pgenv/src/ -name "*.o" | xargs rm
 #RUN #make -C .pgenv/src/postgresql-*/ clean
 
 # create a staging directory with all files we want to copy from our pgenv build
@@ -72,12 +73,12 @@ RUN rm .pgenv/src/*.tar*
 RUN mkdir .pgenv-staging/
 RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
-RUN ls -alh .pgenv-staging/
 
 FROM base AS pg13
 RUN pgenv build 13.6
 RUN rm .pgenv/src/*.tar*
 # TODO remove excessive artifacts for smaller images
+RUN find .pgenv/src/ -name "*.o" | xargs rm
 #RUN make -C .pgenv/src/postgresql-*/ clean
 
 # create a staging directory with all files we want to copy from our pgenv build
@@ -85,11 +86,11 @@ RUN rm .pgenv/src/*.tar*
 RUN mkdir .pgenv-staging/
 RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
-RUN ls -alh .pgenv-staging/
 
 FROM base AS pg14
 RUN pgenv build 14.2
 RUN rm .pgenv/src/*.tar*
+RUN find .pgenv/src/ -name "*.o" | xargs rm
 # TODO remove excessive artifacts for smaller images
 #RUN make -C .pgenv/src/postgresql-*/ clean
 
@@ -98,7 +99,6 @@ RUN rm .pgenv/src/*.tar*
 RUN mkdir .pgenv-staging/
 RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
-RUN ls -alh .pgenv-staging/
 
 # assemble the final container by copying over the artifacts from separately build containers
 FROM base AS devcontainer
