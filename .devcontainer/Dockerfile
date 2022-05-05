@@ -1,8 +1,10 @@
-FROM ubuntu:20.04 AS base
+FROM ubuntu:22.04 AS base
 
 # environment is to make python pass an interactive shell, probably not the best timezone given a wide variety of colleagues
 ENV TZ=Europe/Amsterdam
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+RUN yes | unminimize
 
 RUN apt update && apt install -y \
     autoconf \
@@ -27,10 +29,13 @@ RUN apt update && apt install -y \
     libzstd-dev \
     locales \
     make \
+    man\
+    pkg-config \
     pspg \
     python3 \
     python3-pip \
     sudo \
+    # TODO install specific version of uncrustify
     uncrustify \
     uuid-dev \
     vim \
@@ -48,44 +53,59 @@ RUN usermod -aG sudo citus
 WORKDIR /home/citus
 USER citus
 
-RUN git clone --branch feature/configure https://github.com/thanodnl/pgenv.git .pgenv
+RUN git clone --branch feature/switch https://github.com/thanodnl/pgenv.git .pgenv
+COPY --chown=citus:citus pgenv/config/ .pgenv/config/
 ENV PATH="/home/citus/.pgenv/bin:${PATH}"
 ENV PATH="/home/citus/.pgenv/pgsql/bin:${PATH}"
-
-COPY --chown=citus:citus configure.flags .pgenv/
-# COPY --chown=citus:citus *.tar.bz2 .pgenv/src/
 
 USER citus
 
 # build postgres versions separately for effective parrallelism and caching of already built versions when changing only certain versions
 FROM base AS pg12
-RUN pgenv build 12.9
+RUN pgenv build 12.10
 RUN rm .pgenv/src/*.tar*
 # TODO remove excessive artifacts for smaller images
 RUN make -C .pgenv/src/postgresql-*/ clean
+
+# create a staging directory with all files we want to copy from our pgenv build
+# we will copy the contents of the staged folder into the final image at once
+RUN mkdir .pgenv-staging/
+RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
+RUN rm .pgenv-staging/config/default.conf
+RUN ls -alh .pgenv-staging/
 
 FROM base AS pg13
-RUN pgenv build 13.5
+RUN pgenv build 13.6
 RUN rm .pgenv/src/*.tar*
 # TODO remove excessive artifacts for smaller images
 RUN make -C .pgenv/src/postgresql-*/ clean
 
+# create a staging directory with all files we want to copy from our pgenv build
+# we will copy the contents of the staged folder into the final image at once
+RUN mkdir .pgenv-staging/
+RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
+RUN rm .pgenv-staging/config/default.conf
+RUN ls -alh .pgenv-staging/
+
 FROM base AS pg14
-RUN pgenv build 14.1
+RUN pgenv build 14.2
 RUN rm .pgenv/src/*.tar*
 # TODO remove excessive artifacts for smaller images
 RUN make -C .pgenv/src/postgresql-*/ clean
+
+# create a staging directory with all files we want to copy from our pgenv build
+# we will copy the contents of the staged folder into the final image at once
+RUN mkdir .pgenv-staging/
+RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
+RUN rm .pgenv-staging/config/default.conf
+RUN ls -alh .pgenv-staging/
 
 # assemble the final container by copying over the artifacts from separately build containers
 FROM base AS devcontainer
-COPY --from=pg12 /home/citus/.pgenv/src /home/citus/.pgenv/src
-COPY --from=pg12 /home/citus/.pgenv/pgsql-12.9 /home/citus/.pgenv/pgsql-12.9
 
-COPY --from=pg13 /home/citus/.pgenv/src /home/citus/.pgenv/src
-COPY --from=pg13 /home/citus/.pgenv/pgsql-13.5 /home/citus/.pgenv/pgsql-13.5
-
-COPY --from=pg14 /home/citus/.pgenv/src /home/citus/.pgenv/src
-COPY --from=pg14 /home/citus/.pgenv/pgsql-14.1 /home/citus/.pgenv/pgsql-14.1
+COPY --from=pg12 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --from=pg13 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+COPY --from=pg14 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 
 # add some common tools to the final container
 # bin directory for user tools
@@ -93,21 +113,21 @@ RUN mkdir .bin
 ENV PATH="/home/citus/.bin:${PATH}"
 
 # install citus-dev
-RUN git clone https://github.com/citusdata/tools.git citus-tools
-RUN pip3 install -r citus-tools/citus_dev/requirements.txt
-RUN ln -s /home/citus/citus-tools/citus_dev/citus_dev .bin/
-RUN sudo make -C citus-tools/uncrustify install bindir=/usr/local/bin pkgsysconfdir=/usr/local/etc/
+RUN git clone https://github.com/citusdata/tools.git citus-tools \
+ && pip3 install -r citus-tools/citus_dev/requirements.txt \
+ && ln -s /home/citus/citus-tools/citus_dev/citus_dev .bin/ \
+ && sudo make -C citus-tools/uncrustify install bindir=/usr/local/bin pkgsysconfdir=/usr/local/etc/
 
 # TODO some LC_ALL errors, possibly solved by locale-gen
-RUN git clone https://github.com/so-fancy/diff-so-fancy.git
-RUN ln -s /home/citus/diff-so-fancy/diff-so-fancy .bin/
+RUN git clone https://github.com/so-fancy/diff-so-fancy.git \
+ && ln -s /home/citus/diff-so-fancy/diff-so-fancy .bin/
 
 # place to run your cluster with citus_dev
 VOLUME /data
-RUN sudo mkdir /data
-RUN sudo chown citus:citus /data
+RUN sudo mkdir /data \
+ && sudo chown citus:citus /data
 
 COPY --chown=citus:citus .psqlrc .
 
 # sets default pg version
-RUN pgenv switch 14.1
+RUN pgenv switch latest 14

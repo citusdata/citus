@@ -1,8 +1,0 @@
---enable-debug
---enable-depend
---enable-cassert
-CFLAGS=-ggdb -Og -g3 -fno-omit-frame-pointer
---with-libxml
---with-libxslt
---with-uuid=e2fs
---with-openssl
