@@ -556,6 +556,7 @@ ResetGlobalVariables()
 	TransactionModifiedNodeMetadata = false;
 	NodeMetadataSyncOnCommit = false;
 	InTopLevelDelegatedFunctionCall = false;
+	InTableTypeConversionFunctionCall = false;
 	ResetWorkerErrorIndication();
 	memset(&AllowedDistributionColumnValue, 0,
 		   sizeof(AllowedDistributionColumn));

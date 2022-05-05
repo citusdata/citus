@@ -41,6 +41,12 @@
 
 #define SHARD_SIZES_COLUMN_COUNT (3)
 
+/*
+ * Flag to keep track of whether the process is currently in a function converting the
+ * type of the table.
+ */
+extern bool InTableTypeConversionFunctionCall;
+
 /* In-memory representation of a typed tuple in pg_dist_shard. */
 typedef struct ShardInterval
 {

@@ -117,6 +117,16 @@ PostprocessViewStmt(Node *node, const char *queryString)
 		}
 
 		/*
+		 * Since Citus drops and recreates views while converting a table type, giving a
+		 * NOTICE message is enough if the process in table type conversion function call
+		 */
+		if (InTableTypeConversionFunctionCall)
+		{
+			RaiseDeferredError(errMsg, NOTICE);
+			return NIL;
+		}
+
+		/*
 		 * If the view is already distributed, we should provide an error to not have
 		 * different definition of view on coordinator and worker nodes. If the view
 		 * is not distributed yet, we can create it locally to not affect user's local

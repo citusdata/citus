@@ -607,7 +607,7 @@ DETAIL:  drop cascades to materialized view m_local
 drop cascades to view v_local
 CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.local CASCADE"
 NOTICE:  renaming the new table to alter_table_set_access_method.local
-WARNING:  "view v_local" has dependency to "table local" that is not in Citus' metadata
+NOTICE:  "view v_local" has dependency to "table local" that is not in Citus' metadata
 DETAIL:  "view v_local" will be created only locally
 HINT:  Distribute "table local" first to distribute "view v_local"
 CONTEXT:  SQL statement "CREATE VIEW alter_table_set_access_method.v_local AS  SELECT local.a,
@@ -670,7 +670,7 @@ DETAIL:  drop cascades to materialized view m_local
 drop cascades to view v_local
 CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.local CASCADE"
 NOTICE:  renaming the new table to alter_table_set_access_method.local
-WARNING:  "view v_local" has dependency to "table local" that is not in Citus' metadata
+NOTICE:  "view v_local" has dependency to "table local" that is not in Citus' metadata
 DETAIL:  "view v_local" will be created only locally
 HINT:  Distribute "table local" first to distribute "view v_local"
 CONTEXT:  SQL statement "CREATE VIEW alter_table_set_access_method.v_local AS  SELECT local.a,
