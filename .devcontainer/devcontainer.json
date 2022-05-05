@@ -12,5 +12,6 @@
     ],
     "mounts": [
         "type=volume,target=/data",
-    ]
+    ],
+    "updateContentCommand": "./configure"
 }
