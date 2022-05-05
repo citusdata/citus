@@ -1,0 +1,16 @@
+{
+  "configurations": [
+    {
+      "name": "Citus Development Configuration",
+      "includePath": [
+        "/usr/local/include",
+        "${workspaceFolder}/**",
+        "/home/citus/.pgenv/src/postgresql-14.2/src/",
+        "/home/citus/.pgenv/src/postgresql-14.2/src/include/",
+        "/home/citus/.pgenv/src/postgresql-14.2/src/interfaces/libpq/",
+        "${workspaceFolder}/src/include/",
+      ]
+    }
+  ],
+  "version": 4
+}

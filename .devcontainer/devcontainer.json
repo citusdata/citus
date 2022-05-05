@@ -13,5 +13,6 @@
     "mounts": [
         "type=volume,target=/data",
     ],
-    "updateContentCommand": "./configure"
+    "updateContentCommand": "./configure",
+    "postCreateCommand": "make -C .devcontainer/",
 }

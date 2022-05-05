@@ -65,7 +65,7 @@ FROM base AS pg12
 RUN pgenv build 12.10
 RUN rm .pgenv/src/*.tar*
 # TODO remove excessive artifacts for smaller images
-RUN make -C .pgenv/src/postgresql-*/ clean
+#RUN #make -C .pgenv/src/postgresql-*/ clean
 
 # create a staging directory with all files we want to copy from our pgenv build
 # we will copy the contents of the staged folder into the final image at once
@@ -78,7 +78,7 @@ FROM base AS pg13
 RUN pgenv build 13.6
 RUN rm .pgenv/src/*.tar*
 # TODO remove excessive artifacts for smaller images
-RUN make -C .pgenv/src/postgresql-*/ clean
+#RUN make -C .pgenv/src/postgresql-*/ clean
 
 # create a staging directory with all files we want to copy from our pgenv build
 # we will copy the contents of the staged folder into the final image at once
@@ -91,7 +91,7 @@ FROM base AS pg14
 RUN pgenv build 14.2
 RUN rm .pgenv/src/*.tar*
 # TODO remove excessive artifacts for smaller images
-RUN make -C .pgenv/src/postgresql-*/ clean
+#RUN make -C .pgenv/src/postgresql-*/ clean
 
 # create a staging directory with all files we want to copy from our pgenv build
 # we will copy the contents of the staged folder into the final image at once
