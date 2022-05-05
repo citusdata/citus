@@ -122,6 +122,34 @@ SELECT create_distributed_table('employees', 'employee_id');
 
 (1 row)
 
+-- table for owned_by_extension
+-- note that tables owned by extension are
+-- not added to the pg_dist_object, and assumed
+-- to exists on all nodes via the extension
+CREATE TABLE owned_by_extension_table (employee_id int, manager_id int, full_name text);
+ALTER EXTENSION plpgsql ADD TABLE post_11_upgrade.owned_by_extension_table;
+NOTICE:  Citus does not propagate adding/dropping member objects
+HINT:  You can add/drop the member objects on the workers as well.
+SELECT create_distributed_table('owned_by_extension_table', 'employee_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT run_command_on_workers($$CREATE TABLE post_11_upgrade.owned_by_extension_table (employee_id int, manager_id int, full_name text);$$);
+       run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57636,t,"CREATE TABLE")
+ (localhost,57637,t,"CREATE TABLE")
+(2 rows)
+
+SELECT run_command_on_workers($$ALTER EXTENSION plpgsql ADD TABLE post_11_upgrade.owned_by_extension_table;$$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57636,t,"ALTER EXTENSION")
+ (localhost,57637,t,"ALTER EXTENSION")
+(2 rows)
+
 SET citus.enable_ddl_propagation TO off;
 CREATE TEXT SEARCH CONFIGURATION post_11_upgrade.partial_index_test_config ( parser = default );
 SELECT 1 FROM run_command_on_workers($$CREATE TEXT SEARCH CONFIGURATION post_11_upgrade.partial_index_test_config ( parser = default );$$);
@@ -186,6 +214,10 @@ CREATE VIEW post_11_upgrade.non_dist_upgrade_multiple_dist_view AS SELECT coloca
 CREATE VIEW post_11_upgrade.non_dist_upgrade_ref_view AS SELECT * FROM reference_table;
 -- a view selecting from another (distributed) view should also be distributed
 CREATE VIEW post_11_upgrade.non_dist_upgrade_ref_view_2 AS SELECT * FROM non_dist_upgrade_ref_view;
+-- materialized views never becomes distributed
+CREATE MATERIALIZED VIEW post_11_upgrade.materialized_view AS SELECT * FROM reference_table;
+CREATE VIEW post_11_upgrade.owned_by_extension_view AS SELECT * FROM reference_table;
+ALTER EXTENSION plpgsql ADD VIEW post_11_upgrade.owned_by_extension_view;
 -- temporary views should not be marked as distributed
 CREATE VIEW pg_temp.temp_view_1 AS SELECT * FROM reference_table;
 CREATE temporary VIEW temp_view_2 AS SELECT * FROM reference_table;
@@ -240,4 +272,3 @@ SELECT create_distributed_table('test_propagate_collate', 'id');
 ---------------------------------------------------------------------
 
 (1 row)
-

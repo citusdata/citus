@@ -108,6 +108,16 @@ INSERT INTO sensors SELECT i, '2020-01-05', '{}' FROM generate_series(0,1000)i;
 CREATE TABLE employees (employee_id int, manager_id int, full_name text);
 SELECT create_distributed_table('employees', 'employee_id');
 
+-- table for owned_by_extension
+-- note that tables owned by extension are
+-- not added to the pg_dist_object, and assumed
+-- to exists on all nodes via the extension
+CREATE TABLE owned_by_extension_table (employee_id int, manager_id int, full_name text);
+ALTER EXTENSION plpgsql ADD TABLE post_11_upgrade.owned_by_extension_table;
+SELECT create_distributed_table('owned_by_extension_table', 'employee_id');
+SELECT run_command_on_workers($$CREATE TABLE post_11_upgrade.owned_by_extension_table (employee_id int, manager_id int, full_name text);$$);
+SELECT run_command_on_workers($$ALTER EXTENSION plpgsql ADD TABLE post_11_upgrade.owned_by_extension_table;$$);
+
 SET citus.enable_ddl_propagation TO off;
 CREATE TEXT SEARCH CONFIGURATION post_11_upgrade.partial_index_test_config ( parser = default );
 SELECT 1 FROM run_command_on_workers($$CREATE TEXT SEARCH CONFIGURATION post_11_upgrade.partial_index_test_config ( parser = default );$$);
@@ -165,6 +175,12 @@ CREATE VIEW post_11_upgrade.non_dist_upgrade_ref_view AS SELECT * FROM reference
 
 -- a view selecting from another (distributed) view should also be distributed
 CREATE VIEW post_11_upgrade.non_dist_upgrade_ref_view_2 AS SELECT * FROM non_dist_upgrade_ref_view;
+
+-- materialized views never becomes distributed
+CREATE MATERIALIZED VIEW post_11_upgrade.materialized_view AS SELECT * FROM reference_table;
+
+CREATE VIEW post_11_upgrade.owned_by_extension_view AS SELECT * FROM reference_table;
+ALTER EXTENSION plpgsql ADD VIEW post_11_upgrade.owned_by_extension_view;
 
 -- temporary views should not be marked as distributed
 CREATE VIEW pg_temp.temp_view_1 AS SELECT * FROM reference_table;
