@@ -272,3 +272,4 @@ SELECT create_distributed_table('test_propagate_collate', 'id');
 ---------------------------------------------------------------------
 
 (1 row)
+
