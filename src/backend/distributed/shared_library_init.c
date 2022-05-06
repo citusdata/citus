@@ -664,6 +664,23 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.allow_nested_distributed_execution",
+		gettext_noop("Enables distributed execution within a task "
+					 "of another distributed execution."),
+		gettext_noop("Nested distributed execution can happen when Citus "
+					 "pushes down a call to a user-defined function within "
+					 "a distributed query, and the function contains another "
+					 "distributed query. In this scenario, Citus makes no "
+					 "guarantess with regards to correctness and it is therefore "
+					 "disallowed by default. This setting can be used to allow "
+					 "nested distributed execution."),
+		&AllowNestedDistributedExecution,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.allow_unsafe_locks_from_workers",
 		gettext_noop("Enables acquiring a distributed lock from a worker "
 					 "when the coordinator is not in the metadata"),
