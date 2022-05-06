@@ -723,6 +723,24 @@ ReferenceTableShardId(uint64 shardId)
 
 
 /*
+ * DistributedTableShardId returns true if the given shardId belongs to
+ * a distributed table.
+ */
+bool
+DistributedTableShardId(uint64 shardId)
+{
+	if (shardId == INVALID_SHARD_ID)
+	{
+		return false;
+	}
+
+	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
+	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
+	return IsCitusTableTypeCacheEntry(tableEntry, DISTRIBUTED_TABLE);
+}
+
+
+/*
  * LoadGroupShardPlacement returns the cached shard placement metadata
  *
  * The return value is a copy of the cached GroupShardPlacement struct and may

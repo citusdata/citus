@@ -423,7 +423,7 @@ NOTICE:  executing the command locally: SELECT value FROM citus_local_table_trig
 (2 rows)
 
 ROLLBACK;
--- cannot perform remote execution from a trigger on a Citus local table
+-- can perform remote execution from a trigger on a Citus local table
 BEGIN;
     -- update should actually update something to test ON UPDATE CASCADE logic
     INSERT INTO another_citus_local_table VALUES (600);
@@ -444,7 +444,8 @@ NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1
     FOR EACH STATEMENT EXECUTE FUNCTION insert_100();')
     UPDATE another_citus_local_table SET value=value-1;;
 NOTICE:  executing the command locally: UPDATE citus_local_table_triggers.another_citus_local_table_1507009 another_citus_local_table SET value = (value OPERATOR(pg_catalog.-) 1)
-ERROR:  cannot execute a distributed query from a query on a shard
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_triggers.reference_table_1507010 (value) VALUES (100)
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_triggers.reference_table_1507010 (value) VALUES (100)
 ROLLBACK;
 -- can perform regular execution from a trigger on a Citus local table
 BEGIN;
