@@ -1321,7 +1321,8 @@ StartDistributedExecution(DistributedExecution *execution)
 	/* make sure we are not doing remote execution from within a task */
 	if (execution->remoteTaskList != NIL)
 	{
-		EnsureRemoteTaskExecutionAllowed();
+		bool isRemote = true;
+		EnsureTaskExecutionAllowed(isRemote);
 	}
 }
 

@@ -51,6 +51,7 @@
 #include "tcop/dest.h"
 #include "tcop/pquery.h"
 #include "tcop/utility.h"
+#include "utils/fmgrprotos.h"
 #include "utils/snapmgr.h"
 #include "utils/memutils.h"
 
@@ -62,6 +63,12 @@
 int MultiShardConnectionType = PARALLEL_CONNECTION;
 bool WritableStandbyCoordinator = false;
 bool AllowModificationsFromWorkersToReplicatedTables = true;
+
+/*
+ * Setting that controls whether distributed queries should be
+ * allowed within a task execution.
+ */
+bool AllowNestedDistributedExecution = false;
 
 /*
  * Pointer to bound parameters of the current ongoing call to ExecutorRun.
@@ -88,6 +95,11 @@ static bool AlterTableConstraintCheck(QueryDesc *queryDesc);
 static List * FindCitusCustomScanStates(PlanState *planState);
 static bool CitusCustomScanStateWalker(PlanState *planState,
 									   List **citusCustomScanStates);
+static bool IsTaskExecutionAllowed(bool isRemote);
+static bool InLocalTaskExecutionOnShard(void);
+static bool MaybeInRemoteTaskExecution(void);
+static bool InTrigger(void);
+
 
 /*
  * CitusExecutorStart is the ExecutorStart_hook that gets called when
@@ -871,43 +883,146 @@ ExecutorBoundParams(void)
 
 
 /*
- * EnsureRemoteTaskExecutionAllowed ensures that we do not perform remote
+ * EnsureTaskExecutionAllowed ensures that we do not perform remote
  * execution from within a task. That could happen when the user calls
  * a function in a query that gets pushed down to the worker, and the
  * function performs a query on a distributed table.
  */
 void
-EnsureRemoteTaskExecutionAllowed(void)
+EnsureTaskExecutionAllowed(bool isRemote)
 {
-	if (!InTaskExecution())
+	if (IsTaskExecutionAllowed(isRemote))
 	{
-		/* we are not within a task, distributed execution is allowed */
 		return;
 	}
 
 	ereport(ERROR, (errmsg("cannot execute a distributed query from a query on a "
-						   "shard")));
+						   "shard"),
+					errdetail("Executing a distributed query in a function call that "
+							  "may be pushed to a remote node can lead to incorrect "
+							  "results."),
+					errhint("Avoid nesting of distributed queries or use alter user "
+							"current_user set citus.allow_nested_distributed_execution "
+							"to on to allow it with possible incorrectness.")));
 }
 
 
 /*
- * InTaskExecution determines whether we are currently in a task execution.
+ * IsTaskExecutionAllowed determines whether task execution is currently allowed.
+ * In general, nested distributed execution is not allowed, except in a few cases
+ * (forced function call delegation, triggers).
+ *
+ * We distinguish between local and remote tasks because triggers only disallow
+ * remote task execution.
  */
-bool
-InTaskExecution(void)
+static bool
+IsTaskExecutionAllowed(bool isRemote)
 {
-	if (LocalExecutorLevel > 0)
+	if (AllowNestedDistributedExecution)
 	{
-		/* in a local task */
+		/* user explicitly allows nested execution */
 		return true;
 	}
 
-	/*
-	 * Normally, any query execution within a citus-initiated backend
-	 * is considered a task execution, but an exception is when we
-	 * are in a delegated function/procedure call.
-	 */
-	return IsCitusInternalBackend() &&
-		   !InTopLevelDelegatedFunctionCall &&
-		   !InDelegatedProcedureCall;
+	if (!isRemote)
+	{
+		if (AllowedDistributionColumnValue.isActive)
+		{
+			/*
+			 * When we are in a forced delegated function call, we explicitly check
+			 * whether local tasks use the same distribution column value in
+			 * EnsureForceDelegationDistributionKey.
+			 */
+			return true;
+		}
+
+		if (InTrigger())
+		{
+			/*
+			 * In triggers on shards we only disallow remote tasks. This has a few
+			 * reasons:
+			 *
+			 * - We want to enable access to co-located shards, but do not have additional
+			 *   checks yet.
+			 * - Users need to explicitly set enable_unsafe_triggers in order to create
+			 *   triggers on distributed tables.
+			 * - Triggers on Citus local tables should be able to access other Citus local
+			 *   tables.
+			 */
+			return true;
+		}
+	}
+
+	return !InLocalTaskExecutionOnShard() && !MaybeInRemoteTaskExecution();
+}
+
+
+/*
+ * InLocalTaskExecutionOnShard returns whether we are currently in the local executor
+ * and it is working on a shard of a distributed table.
+ *
+ * In general, we can allow distributed queries inside of local executor, because
+ * we can correctly assign tasks to connections. However, we preemptively protect
+ * against distributed queries inside of queries on shards of a distributed table,
+ * because those might start failing after a shard move.
+ */
+static bool
+InLocalTaskExecutionOnShard(void)
+{
+	if (LocalExecutorShardId == INVALID_SHARD_ID)
+	{
+		/* local executor is not active or is processing a task without shards */
+		return false;
+	}
+
+	if (!DistributedTableShardId(LocalExecutorShardId))
+	{
+		/*
+		 * Local executor is processing a query on a shard, but the shard belongs
+		 * to a reference table or Citus local table. We do not expect those to
+		 * move.
+		 */
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * MaybeInRemoteTaskExecution returns whether we could in a remote task execution.
+ *
+ * We consider anything that happens in a Citus-internal backend, except deleged
+ * function or procedure calls as a potential task execution.
+ *
+ * This function will also return true in other scenarios, such as during metadata
+ * syncing. However, since this function is mainly used for restricting (dangerous)
+ * nested executions, it is good to be pessimistic.
+ */
+static bool
+MaybeInRemoteTaskExecution(void)
+{
+	if (!IsCitusInternalBackend())
+	{
+		/* in a regular, client-initiated backend doing a regular task */
+		return false;
+	}
+
+	if (InTopLevelDelegatedFunctionCall || InDelegatedProcedureCall)
+	{
+		/* in a citus-initiated backend, but also in a delegated a procedure call */
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * InTrigger returns whether the execution is currently in a trigger.
+ */
+static bool
+InTrigger(void)
+{
+	return DatumGetInt32(pg_trigger_depth(NULL)) > 0;
 }

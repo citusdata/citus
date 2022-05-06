@@ -153,8 +153,10 @@ ErrorIfRelationIsAKnownShard(Oid relationId)
 void
 ErrorIfIllegallyChangingKnownShard(Oid relationId)
 {
-	if (LocalExecutorLevel > 0 ||
-		(IsCitusInternalBackend() || IsRebalancerInternalBackend()) ||
+	/* allow Citus to make changes, and allow the user if explicitly enabled */
+	if (LocalExecutorShardId != INVALID_SHARD_ID ||
+		IsCitusInternalBackend() ||
+		IsRebalancerInternalBackend() ||
 		EnableManualChangesToShards)
 	{
 		return;
