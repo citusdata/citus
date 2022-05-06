@@ -1044,16 +1044,20 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 	EnsureCoordinator();
 
-	Oid targetRelationId = ddlJob->targetRelationId;
+	ObjectAddress targetObjectAddress = ddlJob->targetObjectAddress;
 
-	if (OidIsValid(targetRelationId))
+	if (OidIsValid(targetObjectAddress.classId))
 	{
 		/*
-		 * Only for ddlJobs that are targetting a relation (table) we want to sync
-		 * its metadata and verify some properties around the table.
+		 * Only for ddlJobs that are targetting an object we want to sync
+		 * its metadata.
 		 */
-		shouldSyncMetadata = ShouldSyncTableMetadata(targetRelationId);
-		EnsurePartitionTableNotReplicated(targetRelationId);
+		shouldSyncMetadata = ShouldSyncUserCommandForObject(targetObjectAddress);
+
+		if (targetObjectAddress.classId == RelationRelationId)
+		{
+			EnsurePartitionTableNotReplicated(targetObjectAddress.objectId);
+		}
 	}
 
 	bool localExecutionSupported = true;
@@ -1304,7 +1308,7 @@ CreateCustomDDLTaskList(Oid relationId, TableDDLCommand *command)
 	}
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
-	ddlJob->targetRelationId = relationId;
+	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->metadataSyncCommand = GetTableDDLCommand(command);
 	ddlJob->taskList = taskList;
 
@@ -1555,7 +1559,7 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 	}
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
-	ddlJob->targetRelationId = InvalidOid;
+	ddlJob->targetObjectAddress = InvalidObjectAddress;
 	ddlJob->metadataSyncCommand = NULL;
 	ddlJob->taskList = list_make1(task);
 

@@ -92,7 +92,7 @@ PreprocessCreateStatisticsStmt(Node *node, const char *queryString,
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
-	ddlJob->targetRelationId = relationId;
+	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->startNewTransaction = false;
 	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
@@ -197,7 +197,7 @@ PreprocessDropStatisticsStmt(Node *node, const char *queryString,
 
 		DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
-		ddlJob->targetRelationId = relationId;
+		ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 		ddlJob->startNewTransaction = false;
 		ddlJob->metadataSyncCommand = ddlCommand;
 		ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
@@ -236,7 +236,7 @@ PreprocessAlterStatisticsRenameStmt(Node *node, const char *queryString,
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
-	ddlJob->targetRelationId = relationId;
+	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->startNewTransaction = false;
 	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
@@ -274,7 +274,7 @@ PreprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString,
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
-	ddlJob->targetRelationId = relationId;
+	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->startNewTransaction = false;
 	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
@@ -376,7 +376,7 @@ PreprocessAlterStatisticsStmt(Node *node, const char *queryString,
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
-	ddlJob->targetRelationId = relationId;
+	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->startNewTransaction = false;
 	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
@@ -416,7 +416,7 @@ PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString,
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
-	ddlJob->targetRelationId = relationId;
+	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->startNewTransaction = false;
 	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
