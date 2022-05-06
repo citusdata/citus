@@ -3,6 +3,17 @@
 --
 -- Tests around dropping and recreating the extension
 
+BEGIN;
+CREATE EXTENSION citus;
+ROLLBACK;
+CREATE EXTENSION citus;
+DROP EXTENSION citus;
+
+BEGIN;
+BEGIN;
+CREATE EXTENSION citus;
+ROLLBACK;
+CREATE EXTENSION citus;
 
 SET citus.next_shard_id TO 550000;
 

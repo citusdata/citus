@@ -143,8 +143,9 @@ extern List * AllCitusTableIds(void);
 extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
 extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);
-extern void SetCachedDuringCitusCreation(bool);
-extern bool IsTransactionCreatingCitus(void);
+
+extern void SetCachedDuringCitusCreation(Oid transactionId);
+extern Oid IsTransactionCreatingCitus(void);
 extern bool IsCitusTable(Oid relationId);
 extern bool IsCitusTableViaCatalog(Oid relationId);
 extern char PgDistPartitionViaCatalog(Oid relationId);

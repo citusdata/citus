@@ -320,11 +320,11 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			MemoryContextSwitchTo(previousContext);
 			MemoryContextReset(CommitContext);
 
-			/* Set CachedDuringCitusCreation to false */
+			/* Set CachedDuringCitusCreation to an InvalidOid to represent citus creation is done */
 
-			if (IsTransactionCreatingCitus())
+			if (IsTransactionCreatingCitus() == GetCurrentTransactionIdIfAny())
 			{
-				SetCachedDuringCitusCreation(false);
+				SetCachedDuringCitusCreation(InvalidOid);
 			}
 			break;
 		}
@@ -372,11 +372,14 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			/*
 			 * Clear MetadataCache table if we're aborting from a CREATE EXTENSION Citus
-			 * so that any created OIDs from the table are cleared and invalidated
+			 * so that any created OIDs from the table are cleared and invalidated. We
+			 * also set CachedDuringCitusCreation to InvalidOid as that process is no longer
+			 * happening
 			 */
-			if (IsTransactionCreatingCitus())
+			if (IsTransactionCreatingCitus() == GetCurrentTransactionIdIfAny())
 			{
 				InvalidateMetadataSystemCache();
+				SetCachedDuringCitusCreation(InvalidOid);
 			}
 
 			/*
@@ -626,6 +629,13 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 				CoordinatedRemoteTransactionsSavepointRelease(subId);
 			}
 			PopSubXact(subId);
+
+			/* Set CachedDuringCitusCreation to an InvalidOid to represent citus creation is done */
+
+			if (IsTransactionCreatingCitus() == subId)
+			{
+				SetCachedDuringCitusCreation(InvalidOid);
+			}
 			break;
 		}
 
@@ -649,12 +659,15 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			PopSubXact(subId);
 
 			/*
-			 * Clear MetadataCache Table if we're aborting from CREATE EXTENSION Citus
-			 * so that any created OIDs from the table are cleared and invalidated
+			 * Clear MetadataCache table if we're aborting from a CREATE EXTENSION Citus
+			 * so that any created OIDs from the table are cleared and invalidated. We
+			 * also set CachedDuringCitusCreation to InvalidOid as that process is no longer
+			 * happening
 			 */
-			if (IsTransactionCreatingCitus())
+			if (IsTransactionCreatingCitus() == subId)
 			{
 				InvalidateMetadataSystemCache();
+				SetCachedDuringCitusCreation(InvalidOid);
 			}
 			break;
 		}

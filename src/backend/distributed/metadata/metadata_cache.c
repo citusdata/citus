@@ -89,6 +89,7 @@
 /* user configuration */
 int ReadFromSecondaries = USE_SECONDARY_NODES_NEVER;
 
+
 /*
  * CitusTableCacheEntrySlot is entry type for DistTableCacheHash,
  * entry data outlives slot on invalidation, so requires indirection.
@@ -186,7 +187,7 @@ bool EnableVersionChecks = true; /* version checks are enabled */
 static bool citusVersionKnownCompatible = false;
 
 /* Variable to determine if we are in the process of creating citus */
-static bool CachedDuringCitusCreation = false;
+static Oid CachedDuringCitusCreation = InvalidOid;
 
 /* Hash table for informations about each partition */
 static HTAB *DistTableCacheHash = NULL;
@@ -1971,7 +1972,6 @@ CitusHasBeenLoadedInternal(void)
 	if (citusExtensionOid == InvalidOid)
 	{
 		/* Citus extension does not exist yet */
-		CachedDuringCitusCreation = false;
 		return false;
 	}
 
@@ -1980,8 +1980,6 @@ CitusHasBeenLoadedInternal(void)
 		/*
 		 * We do not use Citus hooks during CREATE/ALTER EXTENSION citus
 		 * since the objects used by the C code might be not be there yet.
-		 * We set creatingCitus to true in case of a rollback so that we clear
-		 * MetadataCache
 		 */
 		return false;
 	}
@@ -1992,9 +1990,9 @@ CitusHasBeenLoadedInternal(void)
 
 
 /*
- * IsTransactionCreatingCitus returns true if the citus extension is being created, otherwise return false.
+ * IsTransactionCreatingCitus returns the Oid of the transaction creating citus
  */
-bool
+Oid
 IsTransactionCreatingCitus(void)
 {
 	return CachedDuringCitusCreation;
@@ -2002,10 +2000,10 @@ IsTransactionCreatingCitus(void)
 
 
 /*
- * Sets the value of CachedDuringCitusCreation based on argument received
+ * Sets the value of CachedDuringCitusCreation based on Oid received
  */
 void
-SetCachedDuringCitusCreation(bool val)
+SetCachedDuringCitusCreation(Oid val)
 {
 	CachedDuringCitusCreation = val;
 }
@@ -4221,7 +4219,6 @@ InvalidateMetadataSystemCache(void)
 	workerNodeHashValid = false;
 	LocalGroupId = -1;
 	LocalNodeId = -1;
-	CachedDuringCitusCreation = false;
 }
 
 
@@ -4763,7 +4760,7 @@ CachedRelationNamespaceLookupExtended(const char *relationName, Oid relnamespace
 
 	if (creating_extension && CurrentExtensionObject == citusExtensionOid)
 	{
-		CachedDuringCitusCreation = true;
+		CachedDuringCitusCreation = GetCurrentTransactionId();
 	}
 
 	if (*cachedOid == InvalidOid)

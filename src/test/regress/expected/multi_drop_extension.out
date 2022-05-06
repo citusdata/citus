@@ -2,6 +2,21 @@
 -- MULTI_DROP_EXTENSION
 --
 -- Tests around dropping and recreating the extension
+DROP EXTENSION citus CASCADE;
+
+BEGIN;
+CREATE EXTENSION citus;
+ROLLBACK;
+CREATE EXTENSION citus;
+DROP EXTENSION citus;
+
+BEGIN;
+BEGIN;
+WARNING:  there is already a transaction in progress
+CREATE EXTENSION citus;
+ROLLBACK;
+CREATE EXTENSION citus;
+
 SET citus.next_shard_id TO 550000;
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
 SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
