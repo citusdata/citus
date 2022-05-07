@@ -190,7 +190,7 @@ PreprocessDropForeignServerStmt(Node *node, const char *queryString,
 
 	Assert(list_length(stmt->objects) == 1);
 
-	Value *serverValue = linitial(stmt->objects);
+	String *serverValue = linitial(stmt->objects);
 	ObjectAddress address = GetObjectAddressByServerName(strVal(serverValue), false);
 
 	/* unmark distributed server */
@@ -362,7 +362,7 @@ RecreateForeignServerStmt(Oid serverId)
 static bool
 NameListHasDistributedServer(List *serverNames)
 {
-	Value *serverValue = NULL;
+	String *serverValue = NULL;
 	foreach_ptr(serverValue, serverNames)
 	{
 		ObjectAddress address = GetObjectAddressByServerName(strVal(serverValue), false);

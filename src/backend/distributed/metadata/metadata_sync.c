@@ -426,6 +426,22 @@ ClusterHasKnownMetadataWorkers()
 
 
 /*
+ * ShouldSyncUserCommandForObject checks if the user command should be synced to the
+ * worker nodes for the given object.
+ */
+bool
+ShouldSyncUserCommandForObject(ObjectAddress objectAddress)
+{
+	if (objectAddress.classId == RelationRelationId)
+	{
+		return ShouldSyncTableMetadata(objectAddress.objectId);
+	}
+
+	return false;
+}
+
+
+/*
  * ShouldSyncTableMetadata checks if the metadata of a distributed table should be
  * propagated to metadata workers, i.e. the table is a hash distributed table or
  * reference/citus local table.

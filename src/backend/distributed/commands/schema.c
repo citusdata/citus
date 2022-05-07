@@ -107,7 +107,7 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString,
 
 	EnsureSequentialMode(OBJECT_SCHEMA);
 
-	Value *schemaVal = NULL;
+	String *schemaVal = NULL;
 	foreach_ptr(schemaVal, distributedSchemas)
 	{
 		if (SchemaHasDistributedTableWithFKey(strVal(schemaVal)))
@@ -288,7 +288,7 @@ FilterDistributedSchemas(List *schemas)
 {
 	List *distributedSchemas = NIL;
 
-	Value *schemaValue = NULL;
+	String *schemaValue = NULL;
 	foreach_ptr(schemaValue, schemas)
 	{
 		const char *schemaName = strVal(schemaValue);

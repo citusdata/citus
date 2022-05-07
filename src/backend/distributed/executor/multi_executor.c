@@ -617,7 +617,8 @@ RewriteRawQueryStmt(RawStmt *rawStmt, const char *queryString, Oid *paramOids, i
 					numParams)
 {
 	List *queryTreeList =
-		pg_analyze_and_rewrite(rawStmt, queryString, paramOids, numParams, NULL);
+		pg_analyze_and_rewrite_fixedparams(rawStmt, queryString, paramOids, numParams,
+										   NULL);
 
 	if (list_length(queryTreeList) != 1)
 	{

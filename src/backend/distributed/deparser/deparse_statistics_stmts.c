@@ -200,10 +200,10 @@ AppendAlterStatisticsOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 static void
 AppendStatisticsName(StringInfo buf, CreateStatsStmt *stmt)
 {
-	Value *schemaNameVal = (Value *) linitial(stmt->defnames);
+	String *schemaNameVal = (String *) linitial(stmt->defnames);
 	const char *schemaName = quote_identifier(strVal(schemaNameVal));
 
-	Value *statNameVal = (Value *) lsecond(stmt->defnames);
+	String *statNameVal = (String *) lsecond(stmt->defnames);
 	const char *statName = quote_identifier(strVal(statNameVal));
 
 	appendStringInfo(buf, "%s.%s", schemaName, statName);
@@ -220,7 +220,7 @@ AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt)
 
 	appendStringInfoString(buf, " (");
 
-	Value *statType = NULL;
+	String *statType = NULL;
 	foreach_ptr(statType, stmt->stat_types)
 	{
 		appendStringInfoString(buf, strVal(statType));

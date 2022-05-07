@@ -127,7 +127,7 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 	}
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
-	ddlJob->targetRelationId = tableRelationId;
+	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, tableRelationId);
 	ddlJob->metadataSyncCommand = renameCommand;
 	ddlJob->taskList = DDLTaskList(tableRelationId, renameCommand);
 

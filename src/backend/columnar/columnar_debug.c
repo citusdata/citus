@@ -115,8 +115,6 @@ columnar_storage_info(PG_FUNCTION_ARGS)
 							   RelationGetRelationName(rel))));
 	}
 
-	RelationOpenSmgr(rel);
-
 	Datum values[STORAGE_INFO_NATTS] = { 0 };
 	bool nulls[STORAGE_INFO_NATTS] = { 0 };
 

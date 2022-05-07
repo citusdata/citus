@@ -917,7 +917,7 @@ try_relation_open_nolock(Oid relationId)
 		return NULL;
 	}
 
-	pgstat_initstats(relation);
+	pgstat_init_relation(relation);
 
 	return relation;
 }

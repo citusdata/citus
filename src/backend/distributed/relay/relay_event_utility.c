@@ -326,8 +326,8 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			if (objectType == OBJECT_TABLE || objectType == OBJECT_INDEX ||
 				objectType == OBJECT_FOREIGN_TABLE || objectType == OBJECT_FOREIGN_SERVER)
 			{
-				Value *relationSchemaNameValue = NULL;
-				Value *relationNameValue = NULL;
+				String *relationSchemaNameValue = NULL;
+				String *relationNameValue = NULL;
 
 				uint32 dropCount = list_length(dropStmt->objects);
 				if (dropCount > 1)
@@ -381,11 +381,11 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				/* prefix with schema name if it is not added already */
 				if (relationSchemaNameValue == NULL)
 				{
-					Value *schemaNameValue = makeString(pstrdup(schemaName));
+					String *schemaNameValue = makeString(pstrdup(schemaName));
 					relationNameList = lcons(schemaNameValue, relationNameList);
 				}
 
-				char **relationName = &(relationNameValue->val.str);
+				char **relationName = &(strVal(relationNameValue));
 				AppendShardIdToName(relationName, shardId);
 			}
 			else if (objectType == OBJECT_POLICY)
@@ -750,10 +750,10 @@ UpdateWholeRowColumnReferencesWalker(Node *node, uint64 *shardId)
 			 * extend the penultimate element with the shardId.
 			 */
 			int colrefFieldCount = list_length(columnRef->fields);
-			Value *relnameValue = list_nth(columnRef->fields, colrefFieldCount - 2);
+			String *relnameValue = list_nth(columnRef->fields, colrefFieldCount - 2);
 			Assert(IsA(relnameValue, String));
 
-			AppendShardIdToName(&relnameValue->val.str, *shardId);
+			AppendShardIdToName(&strVal(relnameValue), *shardId);
 		}
 
 		/* might be more than one ColumnRef to visit */

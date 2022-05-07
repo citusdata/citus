@@ -464,7 +464,7 @@ DeparseTextSearchDictionaryCommentStmt(Node *node)
 static void
 AppendStringInfoTokentypeList(StringInfo buf, List *tokentypes)
 {
-	Value *tokentype = NULL;
+	String *tokentype = NULL;
 	bool first = true;
 	foreach_ptr(tokentype, tokentypes)
 	{

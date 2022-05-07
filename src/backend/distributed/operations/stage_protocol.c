@@ -923,7 +923,7 @@ WorkerShardStats(ShardPlacement *placement, Oid relationId, const char *shardNam
 	}
 
 	errno = 0;
-	uint64 tableSize = pg_strtouint64(tableSizeString, &tableSizeStringEnd, 0);
+	uint64 tableSize = strtou64(tableSizeString, &tableSizeStringEnd, 0);
 	if (errno != 0 || (*tableSizeStringEnd) != '\0')
 	{
 		PQclear(queryResult);

@@ -1952,7 +1952,7 @@ BuildReadIntermediateResultsQuery(List *targetEntryList, List *columnAliasList,
 		 */
 		if (columnAliasCount >= columnNumber)
 		{
-			Value *columnAlias = (Value *) list_nth(columnAliasList, columnNumber - 1);
+			String *columnAlias = (String *) list_nth(columnAliasList, columnNumber - 1);
 			Assert(IsA(columnAlias, String));
 			newTargetEntry->resname = strVal(columnAlias);
 		}

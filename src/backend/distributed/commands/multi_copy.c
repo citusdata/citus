@@ -2009,7 +2009,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	foreach(columnNameCell, columnNameList)
 	{
 		char *columnName = (char *) lfirst(columnNameCell);
-		Value *columnNameValue = makeString(columnName);
+		String *columnNameValue = makeString(columnName);
 
 		attributeList = lappend(attributeList, columnNameValue);
 	}

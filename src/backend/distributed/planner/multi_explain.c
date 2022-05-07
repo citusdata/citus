@@ -1062,8 +1062,8 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	}
 
 	/* resolve OIDs of unknown (user-defined) types */
-	Query *analyzedQuery = parse_analyze_varparams(parseTree, queryString,
-												   &paramTypes, &numParams);
+	Query *analyzedQuery = parse_analyze_varparams_compat(parseTree, queryString,
+														  &paramTypes, &numParams, NULL);
 
 #if PG_VERSION_NUM >= PG_VERSION_14
 
