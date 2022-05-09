@@ -397,7 +397,7 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 		List *referencingTableList = cacheEntry->referencingRelationsViaForeignKey;
 		foreach_oid(referencingRelationId, referencingTableList)
 		{
-			referencingRelationIds = list_append_oid(referencingRelationIds,
+			referencingRelationIds = lappend_oid(referencingRelationIds,
 													 referencingRelationId);
 		}
 	}
