@@ -451,15 +451,18 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 
 	foreach_oid(relationId, relationIdList)
 	{
+		CitusTableCacheEntry *relationCacheEntry = GetCitusTableCacheEntry(relationId);
+
 		/*
 		 * We only acquire distributed lock on relation if
 		 * the relation is sync'ed between mx nodes.
 		 */
-		if (ShouldSyncTableMetadata(relationId))
+		if (ShouldSyncTableMetadata(relationId) &&
+			relationCacheEntry->shardIntervalArrayLength > 0)
 		{
 			char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 
-			if (list_length(relationIdsToLock))
+			if (list_length(relationIdsToLock) > 0)
 			{
 				appendStringInfo(lockRelationsCommand, ", %s", qualifiedRelationName);
 			}
