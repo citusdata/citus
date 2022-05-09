@@ -5,19 +5,12 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "cppdbg",
             "name": "Attach Citus (devcontainer)",
+            "type": "cppdbg",
             "request": "attach",
-            "program": "/home/citus/.pgenv/pgsql/bin/postgres",
             "processId": "${command:pickProcess}",
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ],
+            "program": "/home/citus/.pgenv/pgsql/bin/postgres",
+            "additionalSOLibSearchPath": "/home/citus/.pgenv/pgsql/lib",
         },
     ]
 }
