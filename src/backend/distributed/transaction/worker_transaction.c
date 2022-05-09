@@ -149,7 +149,7 @@ List *
 TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 {
 	List *workerNodeList = NIL;
-	if (targetWorkerSet == ALL_SHARD_NODES || targetWorkerSet == ALL_METADATA_SHARD_NODES)
+	if (targetWorkerSet == ALL_SHARD_NODES || targetWorkerSet == METADATA_NODES)
 	{
 		workerNodeList = ActivePrimaryNodeList(lockMode);
 	}
@@ -163,7 +163,7 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 	foreach_ptr(workerNode, workerNodeList)
 	{
 		if ((targetWorkerSet == NON_COORDINATOR_METADATA_NODES || targetWorkerSet ==
-			 ALL_METADATA_SHARD_NODES) &&
+			 METADATA_NODES) &&
 			!workerNode->hasMetadata)
 		{
 			continue;

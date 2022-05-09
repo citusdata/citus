@@ -1060,3 +1060,105 @@ CitusLockTableAclCheck(Oid relationId, LOCKMODE lockmode, Oid userId)
 
 	return aclResult;
 }
+
+
+/*
+ * AcquireDistributedLockOnRelations acquire a distributed lock on worker nodes
+ * for given list of relations ids. Relation id list and worker node list
+ * sorted so that the lock is acquired in the same order regardless of which
+ * node it was run on. Notice that no lock is acquired on coordinator node.
+ *
+ * Notice that the locking functions is sent to all workers regardless of if
+ * it has metadata or not. This is because a worker node only knows itself
+ * and previous workers that has metadata sync turned on. The node does not
+ * know about other nodes that have metadata sync turned on afterwards.
+ */
+void
+AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
+{
+	Oid relationId = InvalidOid;
+	List *workerNodeList = TargetWorkerSetNodeList(METADATA_NODES, NoLock);
+	const char *lockModeText = LockModeToLockModeText(lockMode);
+
+	/*
+	 * We want to acquire locks in the same order across the nodes.
+	 * Although relation ids may change, their ordering will not.
+	 */
+	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
+
+	UseCoordinatedTransaction();
+
+	int32 localGroupId = GetLocalGroupId();
+
+	StringInfo lockRelationsCommand = makeStringInfo();
+	appendStringInfo(lockRelationsCommand, "%s; ", DISABLE_DDL_PROPAGATION);
+	appendStringInfo(lockRelationsCommand, "LOCK");
+
+	List *relationIdsToLock = NIL;
+
+	foreach_oid(relationId, relationIdList)
+	{
+		CitusTableCacheEntry *relationCacheEntry = GetCitusTableCacheEntry(relationId);
+
+		/*
+		 * We only acquire distributed lock on relation if
+		 * the relation is sync'ed between mx nodes.
+		 */
+		if (ShouldSyncTableMetadata(relationId) &&
+			relationCacheEntry->shardIntervalArrayLength > 0)
+		{
+			/* check permissions */
+			AclResult aclResult = CitusLockTableAclCheck(relationId, lockMode,
+														 GetUserId());
+
+			if (aclResult != ACLCHECK_OK)
+			{
+				aclcheck_error(aclResult, get_relkind_objtype(get_rel_relkind(
+																  relationId)),
+							   get_rel_name(relationId));
+			}
+
+			char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+
+			if (list_length(relationIdsToLock) > 0)
+			{
+				appendStringInfo(lockRelationsCommand, ", %s", qualifiedRelationName);
+			}
+			else
+			{
+				appendStringInfo(lockRelationsCommand, " %s", qualifiedRelationName);
+			}
+
+			relationIdsToLock = lappend_oid(relationIdsToLock, relationId);
+		}
+	}
+
+	if (list_length(relationIdsToLock) == 0)
+	{
+		return;
+	}
+
+	appendStringInfo(lockRelationsCommand, " IN %s MODE; ", lockModeText);
+	appendStringInfo(lockRelationsCommand, ENABLE_DDL_PROPAGATION);
+	const char *lockCommand = lockRelationsCommand->data;
+
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
+	{
+		const char *nodeName = workerNode->workerName;
+		int nodePort = workerNode->workerPort;
+
+		/* if local node is one of the targets, acquire the lock locally */
+		if (workerNode->groupId == localGroupId)
+		{
+			foreach_oid(relationId, relationIdsToLock)
+			{
+				LockRelationOid(relationId, lockMode);
+			}
+
+			continue;
+		}
+
+		SendCommandToWorker(nodeName, nodePort, lockCommand);
+	}
+}
