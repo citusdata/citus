@@ -1,5 +1,5 @@
 {
-    "image": "citus/devcontainer:dev-20220505",
+    "image": "citus/devcontainer:dev-20220509",
     "runArgs": [
         "--cap-add=SYS_PTRACE",
         "--security-opt",

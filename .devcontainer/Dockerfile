@@ -35,8 +35,6 @@ RUN apt update && apt install -y \
     python3 \
     python3-pip \
     sudo \
-    # TODO install specific version of uncrustify
-    uncrustify \
     uuid-dev \
     vim \
     zlib1g-dev \
@@ -100,12 +98,30 @@ RUN mkdir .pgenv-staging/
 RUN cp -r .pgenv/src .pgenv/pgsql-* .pgenv/config .pgenv-staging/
 RUN rm .pgenv-staging/config/default.conf
 
+FROM base AS uncrustify-builder
+
+RUN sudo apt update && sudo apt install -y cmake tree
+
+WORKDIR /uncrustify
+RUN curl -L https://github.com/uncrustify/uncrustify/archive/uncrustify-0.68.1.tar.gz | tar xz
+WORKDIR /uncrustify/uncrustify-uncrustify-0.68.1/
+RUN mkdir build
+WORKDIR /uncrustify/uncrustify-uncrustify-0.68.1/build/
+RUN cmake ..
+RUN make -sj8
+
+RUN make install DESTDIR=/uncrustify
+RUN echo "cachebuster"
+RUN tree /uncrustify/usr
+
 # assemble the final container by copying over the artifacts from separately build containers
 FROM base AS devcontainer
 
 COPY --from=pg12 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 COPY --from=pg13 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 COPY --from=pg14 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
+
+COPY --from=uncrustify-builder /uncrustify/usr/ /usr/
 
 # add some common tools to the final container
 # bin directory for user tools
