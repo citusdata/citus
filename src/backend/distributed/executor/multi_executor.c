@@ -917,53 +917,41 @@ IsTaskExecutionAllowed(bool isRemote)
 		return true;
 	}
 
-	if (!isRemote)
-	{
-		if (AllowedDistributionColumnValue.isActive)
-		{
-			/*
-			 * When we are in a forced delegated function call, we explicitly check
-			 * whether local tasks use the same distribution column value in
-			 * EnsureForceDelegationDistributionKey.
-			 */
-			return true;
-		}
+	bool locallyNestedExecutionOnDistributedTable =
+		(InLocalQueryOnShard != INVALID_SHARD_ID && DistributedTableShardId(
+			 InLocalQueryOnShard));
+	bool remotelyNestedExecution = IsCitusInternalBackend() &&
+								   !(InTopLevelDelegatedFunctionCall ||
+									 InDelegatedProcedureCall);
 
-		if (InTrigger())
-		{
-			/*
-			 * In triggers on shards we only disallow remote tasks. This has a few
-			 * reasons:
-			 *
-			 * - We want to enable access to co-located shards, but do not have additional
-			 *   checks yet.
-			 * - Users need to explicitly set enable_unsafe_triggers in order to create
-			 *   triggers on distributed tables.
-			 * - Triggers on Citus local tables should be able to access other Citus local
-			 *   tables.
-			 */
-			return true;
-		}
-	}
-
-	if (InLocalQueryOnShard != INVALID_SHARD_ID &&
-		DistributedTableShardId(InLocalQueryOnShard))
+	if (!(locallyNestedExecutionOnDistributedTable || remotelyNestedExecution))
 	{
-		/* executing a local query on a shard, nested execution is not allowed */
-		return false;
-	}
-
-	if (!IsCitusInternalBackend())
-	{
-		/* in a regular, client-initiated backend doing a regular task */
+		/* we are only interested in nested executions */
 		return true;
 	}
 
-	if (InTopLevelDelegatedFunctionCall || InDelegatedProcedureCall)
+	/* for nested execution, we allow triggers */
+	if (!isRemote && InTrigger())
 	{
-		/* in a citus-initiated backend, but als in a delegated a procedure call */
+		/*
+		 * In triggers on shards we only disallow remote tasks. This has a few
+		 * reasons:
+		 *
+		 * - We want to enable access to co-located shards, but do not have additional
+		 *   checks yet.
+		 * - Users need to explicitly set enable_unsafe_triggers in order to create
+		 *   triggers on distributed tables.
+		 * - Triggers on Citus local tables should be able to access other Citus local
+		 *   tables.
+		 */
 		return true;
 	}
+
+	if (!isRemote && AllowedDistributionColumnValue.isActive)
+	{
+		return true;
+	}
+
 
 	return false;
 }
