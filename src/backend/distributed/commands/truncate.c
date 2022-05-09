@@ -363,6 +363,7 @@ ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command)
 static void
 LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 {
+	Oid relationId = InvalidOid;
 	List *distributedRelationList = NIL;
 
 	/* nothing to do if there is no metadata at worker nodes */
@@ -372,9 +373,10 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 	}
 
 	RangeVar *rangeVar = NULL;
+	List *referencingRelationIds = NIL;
 	foreach_ptr(rangeVar, truncateStatement->relations)
 	{
-		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
+		relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 		Oid referencingRelationId = InvalidOid;
 
 		if (!IsCitusTable(relationId))
@@ -395,9 +397,13 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 		List *referencingTableList = cacheEntry->referencingRelationsViaForeignKey;
 		foreach_oid(referencingRelationId, referencingTableList)
 		{
-			distributedRelationList = list_append_unique_oid(distributedRelationList,
-															 referencingRelationId);
+			referencingRelationIds = list_append_oid(referencingRelationIds, referencingRelationId);
 		}
+	}
+
+	foreach_oid(relationId, referencingRelationIds)
+	{
+		distributedRelationList = list_append_unique_oid(distributedRelationList, relationId);
 	}
 
 	if (distributedRelationList != NIL)
@@ -422,54 +428,73 @@ static void
 AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 {
 	Oid relationId = InvalidOid;
-	List *workerNodeList = ActivePrimaryNodeList(NoLock);
+	List *workerNodeList = TargetWorkerSetNodeList(ALL_METADATA_SHARD_NODES, NoLock);
 	const char *lockModeText = LockModeToLockModeText(lockMode);
 
 	/*
 	 * We want to acquire locks in the same order across the nodes.
 	 * Although relation ids may change, their ordering will not.
 	 */
-	relationIdList = SortList(relationIdList, CompareOids);
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	UseCoordinatedTransaction();
 
 	int32 localGroupId = GetLocalGroupId();
 
+	StringInfo lockRelationsCommand = makeStringInfo();
+	appendStringInfo(lockRelationsCommand, "%s; ", DISABLE_DDL_PROPAGATION);
+	appendStringInfo(lockRelationsCommand, "LOCK");
+
+	List *relationIdsToLock = NIL;
+
 	foreach_oid(relationId, relationIdList)
 	{
 		/*
 		 * We only acquire distributed lock on relation if
 		 * the relation is sync'ed between mx nodes.
-		 *
-		 * Even if users disable metadata sync, we cannot
-		 * allow them not to acquire the remote locks.
-		 * Hence, we have !IsCoordinator() check.
 		 */
-		if (ShouldSyncTableMetadata(relationId) || !IsCoordinator())
+		if (ShouldSyncTableMetadata(relationId))
 		{
 			char *qualifiedRelationName = generate_qualified_relation_name(relationId);
-			StringInfo lockRelationCommand = makeStringInfo();
 
-			appendStringInfo(lockRelationCommand, LOCK_RELATION_IF_EXISTS,
-							 quote_literal_cstr(qualifiedRelationName),
-							 lockModeText);
-
-			WorkerNode *workerNode = NULL;
-			foreach_ptr(workerNode, workerNodeList)
+			if(list_length(relationIdsToLock))
 			{
-				const char *nodeName = workerNode->workerName;
-				int nodePort = workerNode->workerPort;
-
-				/* if local node is one of the targets, acquire the lock locally */
-				if (workerNode->groupId == localGroupId)
-				{
-					LockRelationOid(relationId, lockMode);
-					continue;
-				}
-
-				SendCommandToWorker(nodeName, nodePort, lockRelationCommand->data);
+				appendStringInfo(lockRelationsCommand, ", %s", qualifiedRelationName);
 			}
+			else {
+				appendStringInfo(lockRelationsCommand, " %s", qualifiedRelationName);
+			}
+
+			relationIdsToLock = lappend_oid(relationIdsToLock, relationId);
 		}
+	}
+
+	if(list_length(relationIdsToLock) == 0)
+	{
+		return;
+	}
+
+	appendStringInfo(lockRelationsCommand, " IN %s MODE; ", lockModeText);
+	appendStringInfo(lockRelationsCommand, ENABLE_DDL_PROPAGATION);
+	const char *lockCommand = lockRelationsCommand->data;
+
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
+	{
+		const char *nodeName = workerNode->workerName;
+		int nodePort = workerNode->workerPort;
+
+		/* if local node is one of the targets, acquire the lock locally */
+		if (workerNode->groupId == localGroupId)
+		{
+			foreach_oid(relationId, relationIdsToLock)
+			{
+				LockRelationOid(relationId, lockMode);
+			}
+
+			continue;
+		}
+
+		SendCommandToWorker(nodeName, nodePort, lockCommand);
 	}
 }
