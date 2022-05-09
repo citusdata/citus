@@ -397,13 +397,15 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 		List *referencingTableList = cacheEntry->referencingRelationsViaForeignKey;
 		foreach_oid(referencingRelationId, referencingTableList)
 		{
-			referencingRelationIds = list_append_oid(referencingRelationIds, referencingRelationId);
+			referencingRelationIds = list_append_oid(referencingRelationIds,
+													 referencingRelationId);
 		}
 	}
 
 	foreach_oid(relationId, referencingRelationIds)
 	{
-		distributedRelationList = list_append_unique_oid(distributedRelationList, relationId);
+		distributedRelationList = list_append_unique_oid(distributedRelationList,
+														 relationId);
 	}
 
 	if (distributedRelationList != NIL)
@@ -457,11 +459,12 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 		{
 			char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 
-			if(list_length(relationIdsToLock))
+			if (list_length(relationIdsToLock))
 			{
 				appendStringInfo(lockRelationsCommand, ", %s", qualifiedRelationName);
 			}
-			else {
+			else
+			{
 				appendStringInfo(lockRelationsCommand, " %s", qualifiedRelationName);
 			}
 
@@ -469,7 +472,7 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 		}
 	}
 
-	if(list_length(relationIdsToLock) == 0)
+	if (list_length(relationIdsToLock) == 0)
 	{
 		return;
 	}
