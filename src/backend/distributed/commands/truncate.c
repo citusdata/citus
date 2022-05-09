@@ -398,7 +398,7 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 		foreach_oid(referencingRelationId, referencingTableList)
 		{
 			referencingRelationIds = lappend_oid(referencingRelationIds,
-													 referencingRelationId);
+												 referencingRelationId);
 		}
 	}
 
