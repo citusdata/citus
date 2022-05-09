@@ -4,17 +4,13 @@ FROM ubuntu:22.04 AS base
 ENV TZ=Europe/Amsterdam
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-RUN yes | unminimize
-
+# install build tools
 RUN apt update && apt install -y \
-    autoconf \
     bzip2 \
     curl \
     flex \
     gcc \
-    gdb \
     git \
-    htop \
     libcurl4-gnutls-dev \
     libicu-dev \
     libkrb5-dev \
@@ -29,24 +25,20 @@ RUN apt update && apt install -y \
     libzstd-dev \
     locales \
     make \
-    man\
     pkg-config \
-    pspg \
     python3 \
     python3-pip \
     sudo \
     uuid-dev \
-    vim \
     zlib1g-dev \
  && apt clean
 
 RUN locale-gen en_US.UTF-8
 
-# allow all sudoers to login without a password prompt
-RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-
-RUN useradd -ms /bin/bash citus
-RUN usermod -aG sudo citus
+# add the citus user to sudoers and allow all sudoers to login without a password prompt
+RUN useradd -ms /bin/bash citus \
+ && usermod -aG sudo citus \
+ && echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 WORKDIR /home/citus
 USER citus
@@ -111,11 +103,23 @@ RUN cmake ..
 RUN make -sj8
 
 RUN make install DESTDIR=/uncrustify
-RUN echo "cachebuster"
-RUN tree /uncrustify/usr
 
 # assemble the final container by copying over the artifacts from separately build containers
 FROM base AS devcontainer
+
+RUN yes | sudo unminimize
+
+# install developer productivity tools
+RUN sudo apt update \
+ && sudo apt install -y \
+    autoconf \
+    bash-completion \
+    gdb \
+    htop \
+    man \
+    pspg \
+    vim \
+ && sudo apt clean
 
 COPY --from=pg12 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
 COPY --from=pg13 /home/citus/.pgenv-staging/ /home/citus/.pgenv/
