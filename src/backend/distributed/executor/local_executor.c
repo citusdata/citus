@@ -437,7 +437,7 @@ LocallyExecuteUtilityTask(Task *task)
 	PG_END_TRY();
 
 	InLocalQueryOnShard = prevInLocalQueryOnShard;
-	if (InLocalQueryOnShard > 0 ) elog(WARNING, "InLocalQueryOnShard: %d", InLocalQueryOnShard);
+	if (InLocalQueryOnShard > 0 ) elog(WARNING, "InLocalQueryOnShard: %lu", InLocalQueryOnShard);
 
 }
 
@@ -659,7 +659,7 @@ LocallyExecuteTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	PG_END_TRY();
 
 	InLocalQueryOnShard = prevInLocalQueryOnShard;
-if (InLocalQueryOnShard > 0 ) elog(WARNING, "InLocalQueryOnShard: %d", InLocalQueryOnShard);
+if (InLocalQueryOnShard > 0 ) elog(WARNING, "InLocalQueryOnShard: %lu", InLocalQueryOnShard);
 	return processedRows;
 }
 
