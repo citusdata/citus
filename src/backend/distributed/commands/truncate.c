@@ -40,9 +40,6 @@
 #include "utils/rel.h"
 
 
-#define LOCK_RELATION_IF_EXISTS "SELECT lock_relation_if_exists(%s, '%s');"
-
-
 /* Local functions forward declarations for unsupported command checks */
 static void ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement);
 static void ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command);
@@ -362,9 +359,6 @@ ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command)
 static void
 LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 {
-	Oid relationId = InvalidOid;
-	List *distributedRelationList = NIL;
-
 	/* nothing to do if there is no metadata at worker nodes */
 	if (!ClusterHasKnownMetadataWorkers())
 	{
@@ -372,7 +366,10 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 	}
 
 	RangeVar *rangeVar = NULL;
+	Oid relationId = InvalidOid;
+	List *distributedRelationList = NIL;
 	List *referencingRelationIds = NIL;
+
 	foreach_ptr(rangeVar, truncateStatement->relations)
 	{
 		relationId = RangeVarGetRelid(rangeVar, NoLock, false);
@@ -383,12 +380,8 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 			continue;
 		}
 
-		if (list_member_oid(distributedRelationList, relationId))
-		{
-			continue;
-		}
-
-		distributedRelationList = lappend_oid(distributedRelationList, relationId);
+		distributedRelationList = list_append_unique_oid(distributedRelationList,
+														 relationId);
 
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 		Assert(cacheEntry != NULL);

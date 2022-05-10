@@ -31,7 +31,7 @@ session "s1"
 setup
 {
     DEALLOCATE all;
-    TRUNCATE test_dml_vs_repair;
+    DELETE FROM test_dml_vs_repair;
     PREPARE insertone AS INSERT INTO test_dml_vs_repair VALUES(1, 1);
     PREPARE insertall AS INSERT INTO test_dml_vs_repair SELECT test_id, data+1 FROM test_dml_vs_repair;
 }

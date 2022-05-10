@@ -43,6 +43,7 @@
 #include "utils/lsyscache.h"
 #include "utils/varlena.h"
 
+#define LOCK_RELATION_IF_EXISTS "SELECT lock_relation_if_exists(%s, %s);"
 
 /* static definition and declarations */
 struct LockModeToStringType
@@ -1063,74 +1064,97 @@ CitusLockTableAclCheck(Oid relationId, LOCKMODE lockmode, Oid userId)
 
 
 /*
+ * EnsureCanAcquireLock checks if currect user has the permissions
+ * to acquire a lock on the table and throws an error if the user does
+ * not have the permissions
+ */
+static void
+EnsureCanAcquireLock(Oid relationId, LOCKMODE lockMode)
+{
+	AclResult aclResult = CitusLockTableAclCheck(relationId, lockMode,
+												 GetUserId());
+	if (aclResult != ACLCHECK_OK)
+	{
+		aclcheck_error(aclResult,
+					   get_relkind_objtype(get_rel_relkind(relationId)),
+					   get_rel_name(relationId));
+	}
+}
+
+
+/*
  * AcquireDistributedLockOnRelations acquire a distributed lock on worker nodes
- * for given list of relations ids. Relation id list and worker node list
- * sorted so that the lock is acquired in the same order regardless of which
- * node it was run on. Notice that no lock is acquired on coordinator node.
- *
- * Notice that the locking functions is sent to all workers regardless of if
- * it has metadata or not. This is because a worker node only knows itself
- * and previous workers that has metadata sync turned on. The node does not
- * know about other nodes that have metadata sync turned on afterwards.
+ * for given list of relations ids. Worker node list is sorted so that the lock
+ * is acquired in the same order regardless of which node it was run on. Notice
+ * that no lock is acquired on coordinator node if the coordinator is not added
+ * to the metadata.
  */
 void
 AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 {
-	Oid relationId = InvalidOid;
-	List *workerNodeList = TargetWorkerSetNodeList(METADATA_NODES, NoLock);
-	const char *lockModeText = LockModeToLockModeText(lockMode);
+	if (!EnableMetadataSync)
+	{
+		return;
+	}
 
-	/*
-	 * We want to acquire locks in the same order across the nodes.
-	 * Although relation ids may change, their ordering will not.
-	 */
-	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
+	const char *lockModeText = LockModeToLockModeText(lockMode);
 
 	UseCoordinatedTransaction();
 
-	int32 localGroupId = GetLocalGroupId();
-
 	StringInfo lockRelationsCommand = makeStringInfo();
-	appendStringInfo(lockRelationsCommand, "%s; ", DISABLE_DDL_PROPAGATION);
-	appendStringInfo(lockRelationsCommand, "LOCK");
+	appendStringInfo(lockRelationsCommand, "%s;\n", DISABLE_DDL_PROPAGATION);
 
 	List *relationIdsToLock = NIL;
+	bool partialLockStmt = false;
 
+	Oid relationId = InvalidOid;
 	foreach_oid(relationId, relationIdList)
 	{
-		CitusTableCacheEntry *relationCacheEntry = GetCitusTableCacheEntry(relationId);
+		EnsureCanAcquireLock(relationId, lockMode);
+
+		CitusTableCacheEntry *tableCacheEntry = GetCitusTableCacheEntry(relationId);
+
+		/* skip citus tables which are not seen by workers */
+		if (tableCacheEntry->partitionMethod == DISTRIBUTE_BY_RANGE ||
+			tableCacheEntry->partitionMethod == DISTRIBUTE_BY_APPEND)
+		{
+			continue;
+		}
+
+		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 
 		/*
-		 * We only acquire distributed lock on relation if
-		 * the relation is sync'ed between mx nodes.
+		 * As of pg14 we cannot use LOCK to lock a FOREIGN TABLE
+		 * so we have to use the lock_relation_if_exist udf
 		 */
-		if (ShouldSyncTableMetadata(relationId) &&
-			relationCacheEntry->shardIntervalArrayLength > 0)
+		if (get_rel_relkind(relationId) == RELKIND_FOREIGN_TABLE)
 		{
-			/* check permissions */
-			AclResult aclResult = CitusLockTableAclCheck(relationId, lockMode,
-														 GetUserId());
-
-			if (aclResult != ACLCHECK_OK)
+			/* finish the partial lock statement */
+			if (partialLockStmt)
 			{
-				aclcheck_error(aclResult, get_relkind_objtype(get_rel_relkind(
-																  relationId)),
-							   get_rel_name(relationId));
+				appendStringInfo(lockRelationsCommand, " IN %s MODE;\n", lockModeText);
+				partialLockStmt = false;
 			}
 
-			char *qualifiedRelationName = generate_qualified_relation_name(relationId);
-
-			if (list_length(relationIdsToLock) > 0)
-			{
-				appendStringInfo(lockRelationsCommand, ", %s", qualifiedRelationName);
-			}
-			else
-			{
-				appendStringInfo(lockRelationsCommand, " %s", qualifiedRelationName);
-			}
-
-			relationIdsToLock = lappend_oid(relationIdsToLock, relationId);
+			/* use lock_relation_if_exits to lock foreign table */
+			appendStringInfo(lockRelationsCommand, LOCK_RELATION_IF_EXISTS,
+							 quote_literal_cstr(qualifiedRelationName),
+							 quote_literal_cstr(lockModeText));
+			appendStringInfoChar(lockRelationsCommand, '\n');
 		}
+		else if (partialLockStmt)
+		{
+			/* append relation to partial lock statement */
+			appendStringInfo(lockRelationsCommand, ", %s", qualifiedRelationName);
+		}
+		else
+		{
+			/* start a partial lock statement */
+			appendStringInfo(lockRelationsCommand, "LOCK %s", qualifiedRelationName);
+			partialLockStmt = true;
+		}
+
+		relationIdsToLock = lappend_oid(relationIdsToLock, relationId);
 	}
 
 	if (list_length(relationIdsToLock) == 0)
@@ -1138,9 +1162,24 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 		return;
 	}
 
-	appendStringInfo(lockRelationsCommand, " IN %s MODE; ", lockModeText);
+	if (partialLockStmt)
+	{
+		appendStringInfo(lockRelationsCommand, " IN %s MODE;\n", lockModeText);
+	}
+
 	appendStringInfo(lockRelationsCommand, ENABLE_DDL_PROPAGATION);
 	const char *lockCommand = lockRelationsCommand->data;
+
+
+	List *workerNodeList = TargetWorkerSetNodeList(METADATA_NODES, NoLock);
+
+	/*
+	 * We want to acquire locks in the same order across the nodes.
+	 * Although relation ids may change, their ordering will not.
+	 */
+	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
+
+	int32 localGroupId = GetLocalGroupId();
 
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
