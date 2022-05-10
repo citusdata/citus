@@ -165,6 +165,7 @@ static bool FollowAllDependencies(ObjectAddressCollector *collector,
 								  DependencyDefinition *definition);
 static void ApplyAddToDependencyList(ObjectAddressCollector *collector,
 									 DependencyDefinition *definition);
+static List * GetViewRuleReferenceDependencyList(Oid relationId);
 static List * ExpandCitusSupportedTypes(ObjectAddressCollector *collector,
 										ObjectAddress target);
 static ViewDependencyNode * BuildViewDependencyGraph(Oid relationId, HTAB *nodeMap);
@@ -425,7 +426,7 @@ DependencyDefinitionFromPgDepend(ObjectAddress target)
 
 
 /*
- * DependencyDefinitionFromPgDepend loads all pg_shdepend records describing the
+ * DependencyDefinitionFromPgShDepend loads all pg_shdepend records describing the
  * dependencies of target.
  */
 static List *
@@ -747,7 +748,8 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 				relKind == RELKIND_FOREIGN_TABLE ||
 				relKind == RELKIND_SEQUENCE ||
 				relKind == RELKIND_INDEX ||
-				relKind == RELKIND_PARTITIONED_INDEX)
+				relKind == RELKIND_PARTITIONED_INDEX ||
+				relKind == RELKIND_VIEW)
 			{
 				return true;
 			}
@@ -801,8 +803,11 @@ DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 	 * Otherwise, callers are expected to throw the error returned from this
 	 * function as a hard one by ignoring the detail part.
 	 */
-	appendStringInfo(detailInfo, "\"%s\" will be created only locally",
-					 objectDescription);
+	if (!IsObjectDistributed(objectAddress))
+	{
+		appendStringInfo(detailInfo, "\"%s\" will be created only locally",
+						 objectDescription);
+	}
 
 	if (SupportedDependencyByCitus(undistributableDependency))
 	{
@@ -813,9 +818,19 @@ DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 						 objectDescription,
 						 dependencyDescription);
 
-		appendStringInfo(hintInfo, "Distribute \"%s\" first to distribute \"%s\"",
-						 dependencyDescription,
-						 objectDescription);
+		if (IsObjectDistributed(objectAddress))
+		{
+			appendStringInfo(hintInfo,
+							 "Distribute \"%s\" first to modify \"%s\" on worker nodes",
+							 dependencyDescription,
+							 objectDescription);
+		}
+		else
+		{
+			appendStringInfo(hintInfo, "Distribute \"%s\" first to distribute \"%s\"",
+							 dependencyDescription,
+							 objectDescription);
+		}
 
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 errorInfo->data, detailInfo->data, hintInfo->data);
@@ -893,7 +908,9 @@ GetUndistributableDependency(const ObjectAddress *objectAddress)
 		{
 			char relKind = get_rel_relkind(dependency->objectId);
 
-			if (relKind == RELKIND_SEQUENCE || relKind == RELKIND_COMPOSITE_TYPE)
+			if (relKind == RELKIND_SEQUENCE ||
+				relKind == RELKIND_COMPOSITE_TYPE ||
+				relKind == RELKIND_VIEW)
 			{
 				/* citus knows how to auto-distribute these dependencies */
 				continue;
@@ -1307,9 +1324,26 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			 * create all objects required by the indices before we create the table
 			 * including indices.
 			 */
-
 			List *indexDependencyList = GetRelationIndicesDependencyList(relationId);
 			result = list_concat(result, indexDependencyList);
+
+			/*
+			 * Get the dependencies of the rule for the given view. PG keeps internal
+			 * dependency between view and rule. As it is stated on the PG doc, if
+			 * there is an internal dependency, dependencies of the dependent object
+			 * behave much like they were dependencies of the referenced object.
+			 *
+			 * We need to expand dependencies by including dependencies of the rule
+			 * internally dependent to the view. PG doesn't keep any dependencies
+			 * from view to any object, but it keeps an internal dependency to the
+			 * rule and that rule has dependencies to other objects.
+			 */
+			char relKind = get_rel_relkind(relationId);
+			if (relKind == RELKIND_VIEW)
+			{
+				List *ruleRefDepList = GetViewRuleReferenceDependencyList(relationId);
+				result = list_concat(result, ruleRefDepList);
+			}
 		}
 
 		default:
@@ -1319,6 +1353,64 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 		}
 	}
 	return result;
+}
+
+
+/*
+ * GetViewRuleReferenceDependencyList returns the dependencies of the view's
+ * internal rule dependencies.
+ */
+static List *
+GetViewRuleReferenceDependencyList(Oid viewId)
+{
+	List *dependencyTupleList = GetPgDependTuplesForDependingObjects(RelationRelationId,
+																	 viewId);
+	List *nonInternalDependenciesOfDependingRules = NIL;
+
+	HeapTuple depTup = NULL;
+	foreach_ptr(depTup, dependencyTupleList)
+	{
+		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
+
+		/*
+		 * Dependencies of the internal rule dependency should be handled as the dependency
+		 * of referenced view object.
+		 *
+		 * PG doesn't keep dependency relation between views and dependent objects directly
+		 * but it keeps an internal dependency relation between the view and the rule, then
+		 * keeps the dependent objects of the view as non-internal dependencies of the
+		 * internally dependent rule object.
+		 */
+		if (pg_depend->deptype == DEPENDENCY_INTERNAL && pg_depend->classid ==
+			RewriteRelationId)
+		{
+			ObjectAddress ruleAddress = { 0 };
+			ObjectAddressSet(ruleAddress, RewriteRelationId, pg_depend->objid);
+
+			/* Expand results with the noninternal dependencies of it */
+			List *ruleDependencies = DependencyDefinitionFromPgDepend(ruleAddress);
+
+			DependencyDefinition *dependencyDef = NULL;
+			foreach_ptr(dependencyDef, ruleDependencies)
+			{
+				/*
+				 * Follow all dependencies of the internally dependent rule dependencies
+				 * except it is an internal dependency of view itself.
+				 */
+				if (dependencyDef->data.pg_depend.deptype == DEPENDENCY_INTERNAL ||
+					(dependencyDef->data.pg_depend.refclassid == RelationRelationId &&
+					 dependencyDef->data.pg_depend.refobjid == viewId))
+				{
+					continue;
+				}
+
+				nonInternalDependenciesOfDependingRules =
+					lappend(nonInternalDependenciesOfDependingRules, dependencyDef);
+			}
+		}
+	}
+
+	return nonInternalDependenciesOfDependingRules;
 }
 
 

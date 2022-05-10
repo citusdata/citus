@@ -334,7 +334,9 @@ NOTICE:  executing the command locally: SELECT key, value FROM local_shard_execu
 -- Put row back for other tests
 INSERT INTO distributed_table VALUES (1, '22', 20);
 NOTICE:  executing the command locally: INSERT INTO local_shard_execution_replicated.distributed_table_1500001 (key, value, age) VALUES (1, '22'::text, 20)
+SET citus.enable_ddl_propagation TO OFF;
 CREATE VIEW abcd_view AS SELECT * FROM abcd;
+RESET citus.enable_ddl_propagation;
 SELECT * FROM abcd first join abcd second on first.b = second.b ORDER BY 1,2,3,4;
  b | c | d | b | c | d
 ---------------------------------------------------------------------
@@ -1650,8 +1652,10 @@ NOTICE:  executing the command locally: DELETE FROM local_shard_execution_replic
 ROLLBACK;
 -- probably not a realistic case since views are not very
 -- well supported with MX
+SET citus.enable_ddl_propagation TO OFF;
 CREATE VIEW v_local_query_execution AS
 SELECT * FROM distributed_table WHERE key = 500;
+RESET citus.enable_ddl_propagation;
 SELECT * FROM v_local_query_execution;
 NOTICE:  executing the command locally: SELECT key, value, age FROM (SELECT distributed_table.key, distributed_table.value, distributed_table.age FROM local_shard_execution_replicated.distributed_table_1500003 distributed_table WHERE (distributed_table.key OPERATOR(pg_catalog.=) 500)) v_local_query_execution
  key | value | age
@@ -1661,8 +1665,10 @@ NOTICE:  executing the command locally: SELECT key, value, age FROM (SELECT dist
 
 -- similar test, but this time the view itself is a non-local
 -- query, but the query on the view is local
+SET citus.enable_ddl_propagation TO OFF;
 CREATE VIEW v_local_query_execution_2 AS
 SELECT * FROM distributed_table;
+RESET citus.enable_ddl_propagation;
 SELECT * FROM v_local_query_execution_2 WHERE key = 500;
 NOTICE:  executing the command locally: SELECT key, value, age FROM (SELECT distributed_table.key, distributed_table.value, distributed_table.age FROM local_shard_execution_replicated.distributed_table_1500003 distributed_table) v_local_query_execution_2 WHERE (key OPERATOR(pg_catalog.=) 500)
  key | value | age

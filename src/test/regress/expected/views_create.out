@@ -1,6 +1,15 @@
 CREATE SCHEMA views_create;
 SET search_path TO views_create;
 CREATE TABLE view_test_table(a INT NOT NULL PRIMARY KEY, b BIGINT, c text);
+SELECT create_distributed_table('view_test_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Since creating view distributed or locally depends on the arbitrary config
+-- set client_min_messages to ERROR to get consistent result.
+SET client_min_messages TO ERROR;
 CREATE OR REPLACE VIEW select_filtered_view AS
     SELECT * FROM view_test_table WHERE c = 'testing'
     WITH CASCADED CHECK OPTION;
@@ -9,12 +18,7 @@ CREATE OR REPLACE VIEW select_all_view AS
     WITH LOCAL CHECK OPTION;
 CREATE OR REPLACE VIEW count_view AS
     SELECT COUNT(*) FROM view_test_table;
-SELECT create_distributed_table('view_test_table', 'a');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
+RESET client_min_messages;
 INSERT INTO view_test_table VALUES (1,1,'testing'), (2,1,'views');
 SELECT * FROM count_view;
  count
@@ -42,6 +46,8 @@ SELECT * FROM select_filtered_view;
 
 -- dummy temp recursive view
 CREATE TEMP RECURSIVE VIEW recursive_defined_non_recursive_view(c) AS (SELECT 1);
+WARNING:  "view recursive_defined_non_recursive_view" has dependency on unsupported object "schema pg_temp_xxx"
+DETAIL:  "view recursive_defined_non_recursive_view" will be created only locally
 CREATE MATERIALIZED VIEW select_all_matview AS
     SELECT * FROM view_test_table
     WITH DATA;
