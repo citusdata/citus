@@ -365,15 +365,13 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 		return;
 	}
 
-	RangeVar *rangeVar = NULL;
-	Oid relationId = InvalidOid;
 	List *distributedRelationList = NIL;
 	List *referencingRelationIds = NIL;
 
+	RangeVar *rangeVar = NULL;
 	foreach_ptr(rangeVar, truncateStatement->relations)
 	{
-		relationId = RangeVarGetRelid(rangeVar, NoLock, false);
-		Oid referencingRelationId = InvalidOid;
+		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 
 		if (!IsCitusTable(relationId))
 		{
@@ -387,6 +385,8 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 		Assert(cacheEntry != NULL);
 
 		List *referencingTableList = cacheEntry->referencingRelationsViaForeignKey;
+
+		Oid referencingRelationId = InvalidOid;
 		foreach_oid(referencingRelationId, referencingTableList)
 		{
 			referencingRelationIds = lappend_oid(referencingRelationIds,
@@ -394,11 +394,8 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 		}
 	}
 
-	foreach_oid(relationId, referencingRelationIds)
-	{
-		distributedRelationList = list_append_unique_oid(distributedRelationList,
-														 relationId);
-	}
+	distributedRelationList = list_concat_unique_oid(distributedRelationList,
+													 referencingRelationIds);
 
 	if (distributedRelationList != NIL)
 	{
