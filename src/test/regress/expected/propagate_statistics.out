@@ -70,12 +70,12 @@ CREATE STATISTICS s5 ON a,b FROM test_stats4;
 -- s6 doesn't exist
 DROP STATISTICS IF EXISTS s3, sc2.s4, s6;
 DROP STATISTICS s5,s6;
-ERROR:  statistics object "statistics'Test.s6" does not exist
+ERROR:  statistics object "s6" does not exist
 DROP STATISTICS IF EXISTS s5,s5,s6,s6;
 -- test renaming statistics
 CREATE STATISTICS s6 ON a,b FROM test_stats4;
 DROP STATISTICS s7;
-ERROR:  statistics object "statistics'Test.s7" does not exist
+ERROR:  statistics object "s7" does not exist
 ALTER STATISTICS s6 RENAME TO s7;
 ALTER STATISTICS sc1.st1 RENAME TO st1_new;
 -- test altering stats schema

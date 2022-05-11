@@ -15,14 +15,18 @@
 #include "postgres.h"
 
 #include "catalog/namespace.h"
+#include "catalog/pg_statistic_ext.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "nodes/parsenodes.h"
 #include "nodes/value.h"
+#include "utils/syscache.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
+
+static Oid GetStatsNamespaceOid(Oid statsOid);
 
 void
 QualifyCreateStatisticsStmt(Node *node)
@@ -68,8 +72,14 @@ QualifyDropStatisticsStmt(Node *node)
 
 		if (stat->schemaname == NULL)
 		{
-			Oid schemaOid = RangeVarGetCreationNamespace(stat);
-			stat->schemaname = get_namespace_name(schemaOid);
+			Oid statsOid = get_statistics_object_oid(objectNameList,
+													 dropStatisticsStmt->missing_ok);
+
+			if (OidIsValid(statsOid))
+			{
+				Oid schemaOid = GetStatsNamespaceOid(statsOid);
+				stat->schemaname = get_namespace_name(schemaOid);
+			}
 		}
 
 		objectNameListWithSchema = lappend(objectNameListWithSchema,
@@ -94,7 +104,14 @@ QualifyAlterStatisticsRenameStmt(Node *node)
 	if (list_length(nameList) == 1)
 	{
 		RangeVar *stat = makeRangeVarFromNameList(nameList);
-		Oid schemaOid = RangeVarGetCreationNamespace(stat);
+		Oid statsOid = get_statistics_object_oid(nameList, renameStmt->missing_ok);
+
+		if (!OidIsValid(statsOid))
+		{
+			return;
+		}
+
+		Oid schemaOid = GetStatsNamespaceOid(statsOid);
 		stat->schemaname = get_namespace_name(schemaOid);
 		renameStmt->object = (Node *) MakeNameListFromRangeVar(stat);
 	}
@@ -115,7 +132,14 @@ QualifyAlterStatisticsSchemaStmt(Node *node)
 	if (list_length(nameList) == 1)
 	{
 		RangeVar *stat = makeRangeVarFromNameList(nameList);
-		Oid schemaOid = RangeVarGetCreationNamespace(stat);
+		Oid statsOid = get_statistics_object_oid(nameList, stmt->missing_ok);
+
+		if (!OidIsValid(statsOid))
+		{
+			return;
+		}
+
+		Oid schemaOid = GetStatsNamespaceOid(statsOid);
 		stat->schemaname = get_namespace_name(schemaOid);
 		stmt->object = (Node *) MakeNameListFromRangeVar(stat);
 	}
@@ -136,7 +160,14 @@ QualifyAlterStatisticsStmt(Node *node)
 	if (list_length(stmt->defnames) == 1)
 	{
 		RangeVar *stat = makeRangeVarFromNameList(stmt->defnames);
-		Oid schemaOid = RangeVarGetCreationNamespace(stat);
+		Oid statsOid = get_statistics_object_oid(stmt->defnames, stmt->missing_ok);
+
+		if (!OidIsValid(statsOid))
+		{
+			return;
+		}
+
+		Oid schemaOid = GetStatsNamespaceOid(statsOid);
 		stat->schemaname = get_namespace_name(schemaOid);
 		stmt->defnames = MakeNameListFromRangeVar(stat);
 	}
@@ -159,8 +190,40 @@ QualifyAlterStatisticsOwnerStmt(Node *node)
 	if (list_length(nameList) == 1)
 	{
 		RangeVar *stat = makeRangeVarFromNameList(nameList);
-		Oid schemaOid = RangeVarGetCreationNamespace(stat);
+		Oid statsOid = get_statistics_object_oid(nameList, /* missing_ok */ true);
+
+		if (!OidIsValid(statsOid))
+		{
+			return;
+		}
+
+		Oid schemaOid = GetStatsNamespaceOid(statsOid);
 		stat->schemaname = get_namespace_name(schemaOid);
 		stmt->object = (Node *) MakeNameListFromRangeVar(stat);
 	}
+}
+
+
+/*
+ * GetStatsNamespaceOid takes the id of a Statistics object and returns
+ * the id of the schema that the statistics object belongs to.
+ * Errors out if the stats object is not found.
+ */
+static Oid
+GetStatsNamespaceOid(Oid statsOid)
+{
+	HeapTuple heapTuple = SearchSysCache1(STATEXTOID, ObjectIdGetDatum(statsOid));
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("cache lookup failed for statistics "
+							   "object with oid %u", statsOid)));
+	}
+	FormData_pg_statistic_ext *statisticsForm =
+		(FormData_pg_statistic_ext *) GETSTRUCT(heapTuple);
+
+	Oid result = statisticsForm->stxnamespace;
+
+	ReleaseSysCache(heapTuple);
+
+	return result;
 }
