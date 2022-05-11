@@ -146,8 +146,8 @@ RESET client_min_messages;
 -- also test the infrastructure that is used for supporting
 -- TRUNCATE from worker nodes
 
--- should fail since it is not in transaction block
-SELECT lock_relation_if_exists('on_update_fkey_table', 'ACCESS SHARE');
+-- should pass since we don't check for xact block in lock_relation_if_exists
+SELECT lock_relation_if_exists('truncate_from_workers.on_update_fkey_table', 'ACCESS SHARE');
 
 BEGIN;
 	-- should fail since the schema is not provided

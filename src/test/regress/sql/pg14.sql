@@ -671,6 +671,36 @@ SELECT citus_add_local_table_to_metadata('foreign_table');
 
 SELECT count(*) FROM foreign_table;
 TRUNCATE foreign_table;
+
+-- test truncating foreign tables in the same statement with
+-- other distributed tables
+
+CREATE TABLE foreign_table_test_2 (id integer NOT NULL, data text, a bigserial);
+CREATE FOREIGN TABLE foreign_table_2
+(
+    id integer NOT NULL,
+    data text,
+    a bigserial
+)
+        SERVER foreign_server
+        OPTIONS (schema_name 'pg14', table_name 'foreign_table_test_2');
+
+SELECT citus_add_local_table_to_metadata('foreign_table_2');
+
+CREATE TABLE dist_table_1(a int);
+CREATE TABLE dist_table_2(a int);
+CREATE TABLE dist_table_3(a int);
+
+SELECT create_distributed_table('dist_table_1', 'a');
+SELECT create_distributed_table('dist_table_2', 'a');
+SELECT create_reference_table('dist_table_3');
+
+TRUNCATE foreign_table, foreign_table_2;
+TRUNCATE dist_table_1, foreign_table, dist_table_2, foreign_table_2, dist_table_3;
+TRUNCATE dist_table_1, dist_table_2, foreign_table, dist_table_3;
+TRUNCATE dist_table_1, foreign_table, foreign_table_2, dist_table_3;
+TRUNCATE dist_table_1, foreign_table, foreign_table_2, dist_table_3, dist_table_2;
+
 \c - - - :worker_1_port
 set search_path to pg14;
 -- verify the foreign table is truncated

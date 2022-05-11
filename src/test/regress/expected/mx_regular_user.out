@@ -89,7 +89,6 @@ INSERT INTO super_user_owned_regular_user_granted VALUES (1, 1), (2, 1) ON CONFL
 ERROR:  permission denied for table super_user_owned_regular_user_granted
 TRUNCATE super_user_owned_regular_user_granted;
 ERROR:  permission denied for table super_user_owned_regular_user_granted
-CONTEXT:  while executing command on localhost:xxxxx
 DELETE FROM super_user_owned_regular_user_granted;
 ERROR:  permission denied for table super_user_owned_regular_user_granted
 UPDATE super_user_owned_regular_user_granted SET a = 1;

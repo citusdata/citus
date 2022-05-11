@@ -37,11 +37,13 @@
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
+#include "distributed/local_executor.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/varlena.h"
 
+#define LOCK_RELATION_IF_EXISTS "SELECT lock_relation_if_exists(%s, %s);"
 
 /* static definition and declarations */
 struct LockModeToStringType
@@ -974,9 +976,6 @@ lock_relation_if_exists(PG_FUNCTION_ARGS)
 	text *lockModeText = PG_GETARG_TEXT_P(1);
 	char *lockModeCString = text_to_cstring(lockModeText);
 
-	/* ensure that we're in a transaction block */
-	RequireTransactionBlock(true, "lock_relation_if_exists");
-
 	/* get the lock mode */
 	LOCKMODE lockMode = LockModeTextToLockMode(lockModeCString);
 
@@ -1058,4 +1057,141 @@ CitusLockTableAclCheck(Oid relationId, LOCKMODE lockmode, Oid userId)
 	AclResult aclResult = pg_class_aclcheck(relationId, userId, aclMask);
 
 	return aclResult;
+}
+
+
+/*
+ * EnsureCanAcquireLock checks if currect user has the permissions
+ * to acquire a lock on the table and throws an error if the user does
+ * not have the permissions
+ */
+static void
+EnsureCanAcquireLock(Oid relationId, LOCKMODE lockMode)
+{
+	AclResult aclResult = CitusLockTableAclCheck(relationId, lockMode,
+												 GetUserId());
+	if (aclResult != ACLCHECK_OK)
+	{
+		aclcheck_error(aclResult,
+					   get_relkind_objtype(get_rel_relkind(relationId)),
+					   get_rel_name(relationId));
+	}
+}
+
+
+/*
+ * AcquireDistributedLockOnRelations acquire a distributed lock on worker nodes
+ * for given list of relations ids. Worker node list is sorted so that the lock
+ * is acquired in the same order regardless of which node it was run on. Notice
+ * that no lock is acquired on coordinator node if the coordinator is not added
+ * to the metadata.
+ */
+void
+AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
+{
+	const char *lockModeText = LockModeToLockModeText(lockMode);
+
+	UseCoordinatedTransaction();
+
+	StringInfo lockRelationsCommand = makeStringInfo();
+	appendStringInfo(lockRelationsCommand, "%s;\n", DISABLE_DDL_PROPAGATION);
+
+	/*
+	 * In the following loop, when there are foreign tables, we need to switch from
+	 * LOCK * statement to lock_relation_if_exists() and vice versa since pg
+	 * does not support using LOCK on foreign tables.
+	 */
+	bool startedLockCommand = false;
+
+	int lockedRelations = 0;
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, relationIdList)
+	{
+		/*
+		 * we want to prevent under privileged users to trigger establishing connections,
+		 * that's why we have this additional check. Otherwise, we'd get the errors as
+		 * soon as we execute the command on any node
+		 */
+		EnsureCanAcquireLock(relationId, lockMode);
+
+		if (!ShouldSyncTableMetadata(relationId))
+		{
+			continue;
+		}
+
+		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+
+		/*
+		 * As of pg14 we cannot use LOCK to lock a FOREIGN TABLE
+		 * so we have to use the lock_relation_if_exist udf
+		 */
+		if (get_rel_relkind(relationId) == RELKIND_FOREIGN_TABLE)
+		{
+			/* finish the partial lock statement */
+			if (startedLockCommand)
+			{
+				appendStringInfo(lockRelationsCommand, " IN %s MODE;\n", lockModeText);
+				startedLockCommand = false;
+			}
+
+			/* use lock_relation_if_exits to lock foreign table */
+			appendStringInfo(lockRelationsCommand, LOCK_RELATION_IF_EXISTS,
+							 quote_literal_cstr(qualifiedRelationName),
+							 quote_literal_cstr(lockModeText));
+			appendStringInfoChar(lockRelationsCommand, '\n');
+		}
+		else if (startedLockCommand)
+		{
+			/* append relation to partial lock statement */
+			appendStringInfo(lockRelationsCommand, ", %s", qualifiedRelationName);
+		}
+		else
+		{
+			/* start a new partial lock statement */
+			appendStringInfo(lockRelationsCommand, "LOCK %s", qualifiedRelationName);
+			startedLockCommand = true;
+		}
+
+		lockedRelations++;
+	}
+
+	if (lockedRelations == 0)
+	{
+		return;
+	}
+
+	if (startedLockCommand)
+	{
+		appendStringInfo(lockRelationsCommand, " IN %s MODE;\n", lockModeText);
+	}
+
+	appendStringInfo(lockRelationsCommand, ENABLE_DDL_PROPAGATION);
+	const char *lockCommand = lockRelationsCommand->data;
+
+
+	List *workerNodeList = TargetWorkerSetNodeList(METADATA_NODES, NoLock);
+
+	/*
+	 * We want to acquire locks in the same order across the nodes.
+	 * Although relation ids may change, their ordering will not.
+	 */
+	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
+
+	int32 localGroupId = GetLocalGroupId();
+
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
+	{
+		const char *nodeName = workerNode->workerName;
+		int nodePort = workerNode->workerPort;
+
+		/* if local node is one of the targets, acquire the lock locally */
+		if (workerNode->groupId == localGroupId)
+		{
+			ExecuteUtilityCommand(lockCommand);
+			continue;
+		}
+
+		SendCommandToWorker(nodeName, nodePort, lockCommand);
+	}
 }
