@@ -977,9 +977,6 @@ lock_relation_if_exists(PG_FUNCTION_ARGS)
 	text *lockModeText = PG_GETARG_TEXT_P(1);
 	char *lockModeCString = text_to_cstring(lockModeText);
 
-	/* ensure that we're in a transaction block */
-	RequireTransactionBlock(true, "lock_relation_if_exists");
-
 	/* get the lock mode */
 	LOCKMODE lockMode = LockModeTextToLockMode(lockModeCString);
 
