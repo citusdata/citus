@@ -1108,6 +1108,11 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, relationIdList)
 	{
+		/*
+		 * we want to prevent under privileged users to trigger establishing connections,
+		 * that's why we have this additional check. Otherwise, we'd get the errors as
+		 * soon as we execute the command on any node
+		 */
 		EnsureCanAcquireLock(relationId, lockMode);
 
 		if (!ShouldSyncTableMetadata(relationId))
