@@ -434,7 +434,9 @@ ShouldSyncUserCommandForObject(ObjectAddress objectAddress)
 {
 	if (objectAddress.classId == RelationRelationId)
 	{
-		return ShouldSyncTableMetadata(objectAddress.objectId);
+		Oid relOid = objectAddress.objectId;
+		return ShouldSyncTableMetadata(relOid) ||
+			   get_rel_relkind(relOid) == RELKIND_VIEW;
 	}
 
 	return false;

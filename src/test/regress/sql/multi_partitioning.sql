@@ -1992,7 +1992,9 @@ SELECT tablename, indexname FROM pg_indexes
 WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%' ORDER BY 1, 2;
 
 -- should work properly - no names clashes
+SET client_min_messages TO WARNING;
 SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+RESET client_min_messages;
 
 \c - - - :worker_1_port
 -- check that indexes are named properly

@@ -224,7 +224,6 @@ select alter_table_set_access_method('local','columnar');
 select alter_table_set_access_method('ref','columnar');
 select alter_table_set_access_method('dist','columnar');
 
-
 SELECT alter_distributed_table('dist', shard_count:=1, cascade_to_colocated:=false);
 
 select alter_table_set_access_method('local','heap');

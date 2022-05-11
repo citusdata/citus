@@ -382,6 +382,9 @@ $Q$);
 (2 rows)
 
 CREATE VIEW local_table_v AS SELECT * FROM local_table WHERE a BETWEEN 1 AND 10;
+WARNING:  "view local_table_v" has dependency to "table local_table" that is not in Citus' metadata
+DETAIL:  "view local_table_v" will be created only locally
+HINT:  Distribute "table local_table" first to distribute "view local_table_v"
 SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT * FROM squares JOIN local_table_v ON squares.a = local_table_v.a;
