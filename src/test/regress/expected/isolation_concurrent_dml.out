@@ -1,7 +1,7 @@
 Parsed test spec with 2 sessions
 
 starting permutation: s1-begin s1-insert s2-update s1-commit
-master_create_worker_shards
+create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
@@ -26,7 +26,7 @@ restore_isolation_tester_func
 
 
 starting permutation: s1-insert s2-update
-master_create_worker_shards
+create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
@@ -44,7 +44,7 @@ restore_isolation_tester_func
 
 
 starting permutation: s1-begin s1-multi-insert s2-update s1-commit
-master_create_worker_shards
+create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
@@ -69,7 +69,7 @@ restore_isolation_tester_func
 
 
 starting permutation: s1-begin s1-multi-insert s2-multi-insert-overlap s1-commit
-master_create_worker_shards
+create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
@@ -93,7 +93,7 @@ restore_isolation_tester_func
 
 
 starting permutation: s1-begin s2-begin s1-multi-insert s2-multi-insert s1-commit s2-commit
-master_create_worker_shards
+create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)

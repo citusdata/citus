@@ -22,9 +22,27 @@
  */
 typedef enum TargetWorkerSet
 {
+	/*
+	 * All the active primary nodes in the metadata which have metadata
+	 * except the coordinator
+	 */
 	NON_COORDINATOR_METADATA_NODES,
+
+	/*
+	 * All the active primary nodes in the metadata except the coordinator
+	 */
 	NON_COORDINATOR_NODES,
-	ALL_SHARD_NODES
+
+	/*
+	 * All active primary nodes in the metadata
+	 */
+	ALL_SHARD_NODES,
+
+	/*
+	 * All the active primary nodes in the metadata which have metadata
+	 * (includes the coodinator if it is added)
+	 */
+	METADATA_NODES
 } TargetWorkerSet;
 
 

@@ -282,14 +282,11 @@ DELETE FROM the_table;
 ERROR:  cannot assign TransactionIds during recovery
 -- DDL is not possible
 TRUNCATE the_table;
-ERROR:  cannot acquire lock mode AccessExclusiveLock on database objects while recovery is in progress
-HINT:  Only RowExclusiveLock or less can be acquired on database objects during recovery.
+ERROR:  cannot execute LOCK TABLE during recovery
 TRUNCATE reference_table;
-ERROR:  cannot acquire lock mode AccessExclusiveLock on database objects while recovery is in progress
-HINT:  Only RowExclusiveLock or less can be acquired on database objects during recovery.
+ERROR:  cannot execute LOCK TABLE during recovery
 TRUNCATE citus_local_table;
-ERROR:  cannot acquire lock mode AccessExclusiveLock on database objects while recovery is in progress
-HINT:  Only RowExclusiveLock or less can be acquired on database objects during recovery.
+ERROR:  cannot execute LOCK TABLE during recovery
 ALTER TABLE the_table ADD COLUMN c int;
 ERROR:  cannot acquire lock mode AccessExclusiveLock on database objects while recovery is in progress
 HINT:  Only RowExclusiveLock or less can be acquired on database objects during recovery.

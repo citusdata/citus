@@ -117,6 +117,7 @@ extern bool TryLockPlacementCleanup(void);
 extern void EnsureShardOwner(uint64 shardId, bool missingOk);
 extern void LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList);
 extern void BlockWritesToShardList(List *shardList);
+extern void AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode);
 
 /* Lock shard/relation metadata of the referenced reference table if exists */
 extern void LockReferencedReferenceShardDistributionMetadata(uint64 shardId,
