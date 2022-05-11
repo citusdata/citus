@@ -360,12 +360,17 @@ static void
 LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 {
 	/* nothing to do if there is no metadata at worker nodes */
-	if (!ClusterHasKnownMetadataWorkers())
+	if (!ClusterHasKnownMetadataWorkers() || !EnableMetadataSync)
 	{
 		return;
 	}
 
 	List *distributedRelationList = NIL;
+
+	/*
+	 * this is used to enforce the lock order:
+	 * [...TruncatedTables], [...TablesTruncatedFromCascadingOnTruncatedTables]
+	 */
 	List *referencingRelationIds = NIL;
 
 	RangeVar *rangeVar = NULL;

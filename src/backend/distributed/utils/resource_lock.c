@@ -38,6 +38,7 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/version_compat.h"
+#include "distributed/local_executor.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -1092,11 +1093,6 @@ EnsureCanAcquireLock(Oid relationId, LOCKMODE lockMode)
 void
 AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 {
-	if (!EnableMetadataSync)
-	{
-		return;
-	}
-
 	const char *lockModeText = LockModeToLockModeText(lockMode);
 
 	UseCoordinatedTransaction();
@@ -1104,19 +1100,20 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 	StringInfo lockRelationsCommand = makeStringInfo();
 	appendStringInfo(lockRelationsCommand, "%s;\n", DISABLE_DDL_PROPAGATION);
 
-	List *relationIdsToLock = NIL;
-	bool partialLockStmt = false;
+	/*
+	 * In the following loop, when there are foreign tables, we need to switch from
+	 * LOCK * statement to lock_relation_if_exists() and vice versa since pg
+	 * does not support using LOCK on foreign tables.
+	 */
+	bool startedLockCommand = false;
 
+	int lockedRelations = 0;
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, relationIdList)
 	{
 		EnsureCanAcquireLock(relationId, lockMode);
 
-		CitusTableCacheEntry *tableCacheEntry = GetCitusTableCacheEntry(relationId);
-
-		/* skip citus tables which are not seen by workers */
-		if (tableCacheEntry->partitionMethod == DISTRIBUTE_BY_RANGE ||
-			tableCacheEntry->partitionMethod == DISTRIBUTE_BY_APPEND)
+		if (!ShouldSyncTableMetadata(relationId))
 		{
 			continue;
 		}
@@ -1130,10 +1127,10 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 		if (get_rel_relkind(relationId) == RELKIND_FOREIGN_TABLE)
 		{
 			/* finish the partial lock statement */
-			if (partialLockStmt)
+			if (startedLockCommand)
 			{
 				appendStringInfo(lockRelationsCommand, " IN %s MODE;\n", lockModeText);
-				partialLockStmt = false;
+				startedLockCommand = false;
 			}
 
 			/* use lock_relation_if_exits to lock foreign table */
@@ -1142,27 +1139,27 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 							 quote_literal_cstr(lockModeText));
 			appendStringInfoChar(lockRelationsCommand, '\n');
 		}
-		else if (partialLockStmt)
+		else if (startedLockCommand)
 		{
 			/* append relation to partial lock statement */
 			appendStringInfo(lockRelationsCommand, ", %s", qualifiedRelationName);
 		}
 		else
 		{
-			/* start a partial lock statement */
+			/* start a new partial lock statement */
 			appendStringInfo(lockRelationsCommand, "LOCK %s", qualifiedRelationName);
-			partialLockStmt = true;
+			startedLockCommand = true;
 		}
 
-		relationIdsToLock = lappend_oid(relationIdsToLock, relationId);
+		lockedRelations++;
 	}
 
-	if (list_length(relationIdsToLock) == 0)
+	if (lockedRelations == 0)
 	{
 		return;
 	}
 
-	if (partialLockStmt)
+	if (startedLockCommand)
 	{
 		appendStringInfo(lockRelationsCommand, " IN %s MODE;\n", lockModeText);
 	}
@@ -1190,11 +1187,7 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 		/* if local node is one of the targets, acquire the lock locally */
 		if (workerNode->groupId == localGroupId)
 		{
-			foreach_oid(relationId, relationIdsToLock)
-			{
-				LockRelationOid(relationId, lockMode);
-			}
-
+			ExecuteUtilityCommand(lockCommand);
 			continue;
 		}
 
