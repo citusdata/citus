@@ -20,6 +20,7 @@
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/index.h"
+#include "catalog/namespace.h"
 #include "catalog/objectaccess.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_publication.h"
@@ -116,6 +117,8 @@ static void ColumnarTriggerCreateHook(Oid tgid);
 static void ColumnarTableAMObjectAccessHook(ObjectAccessType access, Oid classId,
 											Oid objectId, int subId,
 											void *arg);
+static RangeVar * ColumnarProcessAlterTable(AlterTableStmt *alterTableStmt,
+											List **columnarOptions);
 static void ColumnarProcessUtility(PlannedStmt *pstmt,
 								   const char *queryString,
 #if PG_VERSION_NUM >= PG_VERSION_14
@@ -2081,6 +2084,71 @@ ColumnarTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid object
 
 
 /*
+ * ColumnarProcessAlterTable - if modifying a columnar table, extract columnar
+ * options and return the table's RangeVar.
+ */
+static RangeVar *
+ColumnarProcessAlterTable(AlterTableStmt *alterTableStmt, List **columnarOptions)
+{
+	RangeVar *columnarRangeVar = NULL;
+	Relation rel = relation_openrv_extended(alterTableStmt->relation, AccessShareLock,
+											alterTableStmt->missing_ok);
+
+	if (rel == NULL)
+	{
+		return NULL;
+	}
+
+	/* track separately in case of ALTER TABLE ... SET ACCESS METHOD */
+	bool srcIsColumnar = rel->rd_tableam == GetColumnarTableAmRoutine();
+	bool destIsColumnar = srcIsColumnar;
+
+	ListCell *lc = NULL;
+	foreach(lc, alterTableStmt->cmds)
+	{
+		AlterTableCmd *alterTableCmd = castNode(AlterTableCmd, lfirst(lc));
+
+		if (alterTableCmd->subtype == AT_SetRelOptions ||
+			alterTableCmd->subtype == AT_ResetRelOptions)
+		{
+			List *options = castNode(List, alterTableCmd->def);
+
+			alterTableCmd->def = (Node *) ExtractColumnarRelOptions(
+				options, columnarOptions);
+
+			if (destIsColumnar)
+			{
+				columnarRangeVar = alterTableStmt->relation;
+			}
+		}
+#if PG_VERSION_NUM >= PG_VERSION_15
+		else if (alterTableCmd->subtype == AT_SetAccessMethod)
+		{
+			if (columnarRangeVar || *columnarOptions)
+			{
+				ereport(ERROR, (errmsg(
+									"ALTER TABLE cannot alter the access method after altering storage parameters"),
+								errhint(
+									"Specify SET ACCESS METHOD before storage parameters, or use separate ALTER TABLE commands.")));
+			}
+
+			destIsColumnar = (strcmp(alterTableCmd->name, COLUMNAR_AM_NAME) == 0);
+
+			if (srcIsColumnar && !destIsColumnar)
+			{
+				DeleteColumnarTableOptions(RelationGetRelid(rel), true);
+			}
+		}
+#endif /* PG_VERSION_15 */
+	}
+
+	relation_close(rel, NoLock);
+
+	return columnarRangeVar;
+}
+
+
+/*
  * Utility hook for columnar tables.
  */
 static void
@@ -2104,31 +2172,116 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 
 	Node *parsetree = pstmt->utilityStmt;
 
-	if (IsA(parsetree, IndexStmt))
+	RangeVar *columnarRangeVar = NULL;
+	List *columnarOptions = NIL;
+
+	switch (nodeTag(parsetree))
 	{
-		IndexStmt *indexStmt = (IndexStmt *) parsetree;
-
-		Relation rel = relation_openrv(indexStmt->relation,
-									   indexStmt->concurrent ? ShareUpdateExclusiveLock :
-									   ShareLock);
-
-		if (rel->rd_tableam == GetColumnarTableAmRoutine())
+		case T_IndexStmt:
 		{
-			CheckCitusColumnarVersion(ERROR);
-			if (!ColumnarSupportsIndexAM(indexStmt->accessMethod))
+			IndexStmt *indexStmt = (IndexStmt *) parsetree;
+
+			Relation rel = relation_openrv(indexStmt->relation,
+										   indexStmt->concurrent ?
+										   ShareUpdateExclusiveLock :
+										   ShareLock);
+
+			if (rel->rd_tableam == GetColumnarTableAmRoutine())
 			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("unsupported access method for the "
-									   "index on columnar table %s",
-									   RelationGetRelationName(rel))));
+				CheckCitusColumnarVersion(ERROR);
+				if (!ColumnarSupportsIndexAM(indexStmt->accessMethod))
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("unsupported access method for the "
+										   "index on columnar table %s",
+										   RelationGetRelationName(rel))));
+				}
 			}
+
+			RelationClose(rel);
+			break;
 		}
 
-		RelationClose(rel);
+		case T_CreateStmt:
+		{
+			CreateStmt *createStmt = castNode(CreateStmt, parsetree);
+			bool no_op = false;
+
+			if (createStmt->if_not_exists)
+			{
+				Oid existing_relid;
+
+				/* use same check as transformCreateStmt */
+				(void) RangeVarGetAndCheckCreationNamespace(
+					createStmt->relation, AccessShareLock, &existing_relid);
+
+				no_op = OidIsValid(existing_relid);
+			}
+
+			if (!no_op && createStmt->accessMethod != NULL &&
+				!strcmp(createStmt->accessMethod, COLUMNAR_AM_NAME))
+			{
+				columnarRangeVar = createStmt->relation;
+				createStmt->options = ExtractColumnarRelOptions(createStmt->options,
+																&columnarOptions);
+			}
+			break;
+		}
+
+		case T_CreateTableAsStmt:
+		{
+			CreateTableAsStmt *createTableAsStmt = castNode(CreateTableAsStmt, parsetree);
+			IntoClause *into = createTableAsStmt->into;
+			bool no_op = false;
+
+			if (createTableAsStmt->if_not_exists)
+			{
+				Oid existing_relid;
+
+				/* use same check as transformCreateStmt */
+				(void) RangeVarGetAndCheckCreationNamespace(
+					into->rel, AccessShareLock, &existing_relid);
+
+				no_op = OidIsValid(existing_relid);
+			}
+
+			if (!no_op && into->accessMethod != NULL &&
+				!strcmp(into->accessMethod, COLUMNAR_AM_NAME))
+			{
+				columnarRangeVar = into->rel;
+				into->options = ExtractColumnarRelOptions(into->options,
+														  &columnarOptions);
+			}
+			break;
+		}
+
+		case T_AlterTableStmt:
+		{
+			AlterTableStmt *alterTableStmt = castNode(AlterTableStmt, parsetree);
+			columnarRangeVar = ColumnarProcessAlterTable(alterTableStmt,
+														 &columnarOptions);
+			break;
+		}
+
+		default:
+
+			/* FALL THROUGH */
+			break;
+	}
+
+	if (columnarOptions != NIL && columnarRangeVar == NULL)
+	{
+		ereport(ERROR,
+				(errmsg("columnar storage parameters specified on non-columnar table")));
 	}
 
 	PrevProcessUtilityHook_compat(pstmt, queryString, false, context,
 								  params, queryEnv, dest, completionTag);
+
+	if (columnarOptions != NIL)
+	{
+		SetColumnarRelOptions(columnarRangeVar, columnarOptions);
+	}
 }
 
 

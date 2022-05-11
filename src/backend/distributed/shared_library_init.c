@@ -334,9 +334,6 @@ _PG_init(void)
 	/* intercept planner */
 	planner_hook = distributed_planner;
 
-	/* register utility hook */
-	ProcessUtility_hook = multi_ProcessUtility;
-
 	/* register for planner hook */
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
 	set_join_pathlist_hook = multi_join_restriction_hook;
@@ -386,6 +383,17 @@ _PG_init(void)
 
 	/* ensure columnar module is loaded at the right time */
 	load_file(COLUMNAR_MODULE_NAME, false);
+
+	/*
+	 * Register utility hook. This must be done after loading columnar, so
+	 * that the citus hook is called first, followed by the columnar hook,
+	 * followed by standard_ProcessUtility. That allows citus to distribute
+	 * ALTER TABLE commands before columnar strips out the columnar-specific
+	 * options.
+	 */
+	PrevProcessUtility = (ProcessUtility_hook != NULL) ?
+						 ProcessUtility_hook : standard_ProcessUtility;
+	ProcessUtility_hook = multi_ProcessUtility;
 
 	/*
 	 * Now, acquire symbols from columnar module. First, acquire

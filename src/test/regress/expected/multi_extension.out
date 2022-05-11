@@ -759,9 +759,9 @@ DROP TABLE columnar_table;
 ERROR:  loaded Citus library version differs from installed extension version
 CREATE INDEX ON columnar_table (a);
 ERROR:  loaded Citus library version differs from installed extension version
-SELECT alter_columnar_table_set('columnar_table', compression => 'pglz');
+ALTER TABLE columnar_table SET (columnar.compression = pglz);
 ERROR:  loaded Citus library version differs from installed extension version
-SELECT alter_columnar_table_reset('columnar_table');
+ALTER TABLE columnar_table RESET (columnar.compression);
 ERROR:  loaded Citus library version differs from installed extension version
 INSERT INTO columnar_table SELECT * FROM columnar_table;
 ERROR:  loaded Citus library version differs from installed extension version

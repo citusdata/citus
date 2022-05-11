@@ -1,3 +1,4 @@
+create table no_access (i int) using columnar;
 select current_user \gset
 create user columnar_user;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
@@ -6,8 +7,37 @@ HINT:  Connect to worker nodes directly to manually create all necessary users a
 create table columnar_permissions(i int) using columnar;
 insert into columnar_permissions values(1);
 alter table columnar_permissions add column j int;
+alter table columnar_permissions reset (columnar.compression);
+alter table columnar_permissions set (columnar.compression = none);
+select alter_columnar_table_reset('columnar_permissions', stripe_row_limit => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+select alter_columnar_table_set('columnar_permissions', stripe_row_limit => 2222);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+select * from columnar.options where regclass = 'columnar_permissions'::regclass;
+       regclass       | chunk_group_row_limit | stripe_row_limit | compression_level | compression
+---------------------------------------------------------------------
+ columnar_permissions |                 10000 |             2222 |                 3 | none
+(1 row)
+
 insert into columnar_permissions values(2,20);
 vacuum columnar_permissions;
 truncate columnar_permissions;
 drop table columnar_permissions;
+-- should error
+alter table no_access reset (columnar.stripe_row_limit);
+ERROR:  must be owner of table no_access
+alter table no_access set (columnar.stripe_row_limit = 12000);
+ERROR:  must be owner of table no_access
+select alter_columnar_table_reset('no_access', chunk_group_row_limit => true);
+ERROR:  must be owner of table no_access
+select alter_columnar_table_set('no_access', chunk_group_row_limit => 1111);
+ERROR:  must be owner of table no_access
 \c - :current_user

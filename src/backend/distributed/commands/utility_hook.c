@@ -85,6 +85,7 @@ static int activeDropSchemaOrDBs = 0;
 static bool ConstraintDropped = false;
 
 
+ProcessUtility_hook_type PrevProcessUtility = NULL;
 int UtilityHookLevel = 0;
 
 
@@ -179,8 +180,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * that state. Since we never need to intercept transaction statements,
 		 * skip our checks and immediately fall into standard_ProcessUtility.
 		 */
-		standard_ProcessUtility_compat(pstmt, queryString, false, context,
-									   params, queryEnv, dest, completionTag);
+		PrevProcessUtility_compat(pstmt, queryString, false, context,
+								  params, queryEnv, dest, completionTag);
 
 		return;
 	}
@@ -198,8 +199,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * Ensure that utility commands do not behave any differently until CREATE
 		 * EXTENSION is invoked.
 		 */
-		standard_ProcessUtility_compat(pstmt, queryString, false, context,
-									   params, queryEnv, dest, completionTag);
+		PrevProcessUtility_compat(pstmt, queryString, false, context,
+								  params, queryEnv, dest, completionTag);
 
 		return;
 	}
@@ -230,8 +231,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		PG_TRY();
 		{
-			standard_ProcessUtility_compat(pstmt, queryString, false, context,
-										   params, queryEnv, dest, completionTag);
+			PrevProcessUtility_compat(pstmt, queryString, false, context,
+									  params, queryEnv, dest, completionTag);
 
 			StoredProcedureLevel -= 1;
 
@@ -264,8 +265,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		PG_TRY();
 		{
-			standard_ProcessUtility_compat(pstmt, queryString, false, context,
-										   params, queryEnv, dest, completionTag);
+			PrevProcessUtility_compat(pstmt, queryString, false, context,
+									  params, queryEnv, dest, completionTag);
 
 			DoBlockLevel -= 1;
 		}
@@ -616,8 +617,8 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			citusCanBeUpdatedToAvailableVersion = !InstalledAndAvailableVersionsSame();
 		}
 
-		standard_ProcessUtility_compat(pstmt, queryString, false, context,
-									   params, queryEnv, dest, completionTag);
+		PrevProcessUtility_compat(pstmt, queryString, false, context,
+								  params, queryEnv, dest, completionTag);
 
 		/*
 		 * if we are running ALTER EXTENSION citus UPDATE (to "<version>") command, we may need

@@ -315,8 +315,8 @@ VACUUM columnar_table;
 TRUNCATE columnar_table;
 DROP TABLE columnar_table;
 CREATE INDEX ON columnar_table (a);
-SELECT alter_columnar_table_set('columnar_table', compression => 'pglz');
-SELECT alter_columnar_table_reset('columnar_table');
+ALTER TABLE columnar_table SET(columnar.compression = pglz);
+ALTER TABLE columnar_table RESET (columnar.compression);
 INSERT INTO columnar_table SELECT * FROM columnar_table;
 
 SELECT 1 FROM columnar_table; -- columnar custom scan

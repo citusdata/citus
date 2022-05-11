@@ -137,15 +137,15 @@ SET columnar.chunk_group_row_limit = 1050;
 -- create columnar table
 CREATE TABLE columnar_table (a int) USING columnar;
 -- alter a columnar table that is created by that unprivileged user
-SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 2000);
+ALTER TABLE columnar_table SET (columnar.chunk_group_row_limit = 2000);
 -- insert some data and read
 INSERT INTO columnar_table VALUES (1), (1);
 SELECT * FROM columnar_table;
 -- Fail to alter a columnar table that is created by a different user
 SET ROLE full_access;
-SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 2000);
+ALTER TABLE columnar_table SET (columnar.chunk_group_row_limit = 2000);
 -- Fail to reset a columnar table value created by a different user
-SELECT alter_columnar_table_reset('columnar_table', chunk_group_row_limit => true);
+ALTER TABLE columnar_table RESET (columnar.chunk_group_row_limit);
 SET ROLE read_access;
 -- and drop it
 DROP TABLE columnar_table;

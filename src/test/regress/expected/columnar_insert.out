@@ -171,12 +171,7 @@ DROP TABLE test_toast_columnar;
 -- We support writing into zero column tables, but not reading from them.
 -- We test that metadata makes sense so we can fix the read path in future.
 CREATE TABLE zero_col() USING columnar;
-SELECT alter_columnar_table_set('zero_col', chunk_group_row_limit => 1000);
- alter_columnar_table_set
----------------------------------------------------------------------
-
-(1 row)
-
+ALTER TABLE zero_col SET (columnar.chunk_group_row_limit = 1000);
 INSERT INTO zero_col DEFAULT VALUES;
 INSERT INTO zero_col DEFAULT VALUES;
 INSERT INTO zero_col DEFAULT VALUES;
@@ -231,12 +226,7 @@ ORDER BY 1,2,3,4;
 (5 rows)
 
 CREATE TABLE selfinsert(x int) USING columnar;
-SELECT alter_columnar_table_set('selfinsert', stripe_row_limit => 1000);
- alter_columnar_table_set
----------------------------------------------------------------------
-
-(1 row)
-
+ALTER TABLE selfinsert SET (columnar.stripe_row_limit = 1000);
 BEGIN;
   INSERT INTO selfinsert SELECT generate_series(1,1010);
   INSERT INTO selfinsert SELECT * FROM selfinsert;

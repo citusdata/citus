@@ -27,6 +27,7 @@ test: columnar_clean
 test: columnar_types_without_comparison
 test: columnar_chunk_filtering
 test: columnar_join
+test: columnar_pg15
 test: columnar_trigger
 test: columnar_tableoptions
 test: columnar_recursive
