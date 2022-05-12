@@ -8,7 +8,6 @@
 --
 -- CREATE TEST TABLES
 --
-
 CREATE SCHEMA multi_index_statements;
 CREATE SCHEMA multi_index_statements_2;
 SET search_path TO multi_index_statements;
@@ -22,7 +21,7 @@ SELECT master_create_empty_shard('index_test_range');
 
 SET citus.shard_count TO 8;
 SET citus.shard_replication_factor TO 2;
-CREATE TABLE index_test_hash(a int, b int, c int);
+CREATE TABLE index_test_hash(a int, b int, c int, a_text text, b_text text);
 SELECT create_distributed_table('index_test_hash', 'a', 'hash');
 
 CREATE TABLE index_test_append(a int, b int, c int);
@@ -74,9 +73,27 @@ END;
 $$ LANGUAGE plpgsql;
 SELECT create_distributed_function('multi_index_statements_2.value_plus_one(int)');
 
+CREATE FUNCTION predicate_stable() RETURNS bool IMMUTABLE
+LANGUAGE plpgsql AS $$
+BEGIN
+  EXECUTE 'SELECT txid_current()';
+  RETURN true;
+END; $$;
+
 CREATE INDEX ON index_test_hash ((value_plus_one(b)));
+CREATE INDEX ON index_test_hash ((value_plus_one(b) + value_plus_one(c))) WHERE value_plus_one(c) > 10;
+CREATE INDEX ON index_test_hash (a) WHERE value_plus_one(c) > 10;
+CREATE INDEX ON index_test_hash (abs(a)) WHERE value_plus_one(c) > 10;
+CREATE INDEX ON index_test_hash (value_plus_one(a)) WHERE c > 10;
 CREATE INDEX ON index_test_hash ((multi_index_statements.value_plus_one(b)));
 CREATE INDEX ON index_test_hash ((multi_index_statements_2.value_plus_one(b)));
+CREATE INDEX ON index_test_hash (a) INCLUDE (b) WHERE value_plus_one(c) > 10;
+CREATE INDEX ON index_test_hash (c, (c+0)) INCLUDE (a);
+CREATE INDEX ON index_test_hash (value_plus_one(a)) INCLUDE (c,b) WHERE value_plus_one(c) > 10;
+CREATE INDEX ON index_test_hash ((a_text || b_text));
+CREATE INDEX ON index_test_hash ((a_text || b_text)) WHERE value_plus_one(c) > 10;
+CREATE INDEX ON index_test_hash ((a_text || b_text)) WHERE (a_text || b_text) = 'ttt';
+CREATE INDEX CONCURRENTLY ON index_test_hash (a) WHERE predicate_stable();
 
 -- Verify that we handle if not exists statements correctly
 CREATE INDEX lineitem_orderkey_index on public.lineitem(l_orderkey);
@@ -104,13 +121,7 @@ CLUSTER local_table USING local_table_index;
 
 DROP TABLE local_table;
 
--- Verify that all indexes got created on the master node and one of the workers
-SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
-\c - - - :worker_1_port
-SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_%' ORDER BY relname LIMIT 1);
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash_%';
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range_%';
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append_%';
+
 \c - - - :master_port
 SET search_path TO multi_index_statements, public;
 
@@ -137,9 +148,6 @@ CREATE INDEX try_index ON lineitem (non_existent_column);
 CREATE INDEX ON lineitem (l_orderkey);
 CREATE UNIQUE INDEX ON index_test_hash(a);
 CREATE INDEX CONCURRENTLY ON lineitem USING hash (l_shipdate);
-
--- Verify that none of failed indexes got created on the master node
-SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
 
 --
 -- REINDEX
@@ -182,6 +190,30 @@ DROP INDEX index_test_hash_index_a_b_partial;
 
 -- Verify that we can drop indexes concurrently
 DROP INDEX CONCURRENTLY lineitem_concurrently_index;
+
+-- Verify that all indexes got created on the coordinator node and on the workers
+-- by dropping the indexes. We do this because in different PG versions,
+-- the expression indexes are named differently
+-- and, being able to drop the index ensures that the index names are
+-- proper
+CREATE OR REPLACE FUNCTION drop_all_indexes(table_name regclass) RETURNS INTEGER AS $$
+DECLARE
+  i RECORD;
+BEGIN
+  FOR i IN
+    (SELECT indexrelid::regclass::text as relname FROM pg_index
+     WHERE indrelid = table_name and indexrelid::regclass::text not ilike '%pkey%')
+  LOOP
+    EXECUTE 'DROP INDEX ' || i.relname;
+  END LOOP;
+RETURN 1;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT drop_all_indexes('public.lineitem');
+SELECT drop_all_indexes('index_test_range');
+SELECT drop_all_indexes('index_test_hash');
+SELECT drop_all_indexes('index_test_append');
 
 -- Verify that all the indexes are dropped from the master and one worker node.
 -- As there's a primary key, so exclude those from this check.
