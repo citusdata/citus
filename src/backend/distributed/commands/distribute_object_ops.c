@@ -564,7 +564,7 @@ static DistributeObjectOps Sequence_AlterOwner = {
 };
 static DistributeObjectOps Sequence_Drop = {
 	.deparse = DeparseDropSequenceStmt,
-	.qualify = NULL,
+	.qualify = QualifyDropSequenceStmt,
 	.preprocess = PreprocessDropSequenceStmt,
 	.postprocess = NULL,
 	.address = NULL,
