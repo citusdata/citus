@@ -1039,6 +1039,14 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function citus_is_coordinator() boolean
 (1 row)
 
+-- Test downgrade script (result should be empty)
+ALTER EXTENSION citus UPDATE TO '11.0-1';
+ALTER EXTENSION citus UPDATE TO '11.0-2';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
 -- Snapshot of state at 11.1-1
 ALTER EXTENSION citus UPDATE TO '11.1-1';
 SELECT * FROM multi_extension.print_extension_changes();
@@ -1053,6 +1061,14 @@ SELECT * FROM multi_extension.print_extension_changes();
  function worker_range_partition_table(bigint,integer,text,text,oid,anyarray) void      |
  function worker_repartition_cleanup(bigint) void                                       |
 (8 rows)
+
+-- Test downgrade script (result should be empty)
+ALTER EXTENSION citus UPDATE TO '11.0-2';
+ALTER EXTENSION citus UPDATE TO '11.1-1';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
