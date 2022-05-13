@@ -1,6 +1,11 @@
 Parsed test spec with 3 sessions
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert s2-start-session-level-connection s2-begin-on-worker s2-alter s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+refresh_isolation_tester_prepared_statement
+---------------------------------------------------------------------
+
+(1 row)
+
 step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
 
@@ -85,13 +90,18 @@ count
     6
 (1 row)
 
-restore_isolation_tester_func
+restore_isolation_tester_func_skip_self_local_blocks
 ---------------------------------------------------------------------
 
 (1 row)
 
 
 starting permutation: s1-begin s1-index s2-start-session-level-connection s2-begin-on-worker s2-select-for-update s1-commit s2-commit-worker s2-stop-connection
+refresh_isolation_tester_prepared_statement
+---------------------------------------------------------------------
+
+(1 row)
+
 step s1-begin:
  BEGIN;
 
@@ -141,13 +151,18 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+restore_isolation_tester_func_skip_self_local_blocks
 ---------------------------------------------------------------------
 
 (1 row)
 
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select-for-update s2-start-session-level-connection s2-begin-on-worker s2-select-for-update s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
+refresh_isolation_tester_prepared_statement
+---------------------------------------------------------------------
+
+(1 row)
+
 step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
 
@@ -229,13 +244,18 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+restore_isolation_tester_func_skip_self_local_blocks
 ---------------------------------------------------------------------
 
 (1 row)
 
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select-for-update s2-coordinator-create-index-concurrently s1-commit-worker s1-stop-connection
+refresh_isolation_tester_prepared_statement
+---------------------------------------------------------------------
+
+(1 row)
+
 step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
 
@@ -279,7 +299,7 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+restore_isolation_tester_func_skip_self_local_blocks
 ---------------------------------------------------------------------
 
 (1 row)

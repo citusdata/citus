@@ -81,7 +81,7 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+restore_isolation_tester_func_skip_self_local_blocks
 ---------------------------------------------------------------------
 
 (1 row)
@@ -176,7 +176,7 @@ count
    10
 (1 row)
 
-restore_isolation_tester_func
+restore_isolation_tester_func_skip_self_local_blocks
 ---------------------------------------------------------------------
 
 (1 row)
@@ -271,7 +271,7 @@ count
     4
 (1 row)
 
-restore_isolation_tester_func
+restore_isolation_tester_func_skip_self_local_blocks
 ---------------------------------------------------------------------
 
 (1 row)
@@ -366,7 +366,7 @@ count
     7
 (1 row)
 
-restore_isolation_tester_func
+restore_isolation_tester_func_skip_self_local_blocks
 ---------------------------------------------------------------------
 
 (1 row)
@@ -422,7 +422,7 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+restore_isolation_tester_func_skip_self_local_blocks
 ---------------------------------------------------------------------
 
 (1 row)
@@ -509,7 +509,7 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+restore_isolation_tester_func_skip_self_local_blocks
 ---------------------------------------------------------------------
 
 (1 row)
@@ -568,7 +568,7 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+restore_isolation_tester_func_skip_self_local_blocks
 ---------------------------------------------------------------------
 
 (1 row)

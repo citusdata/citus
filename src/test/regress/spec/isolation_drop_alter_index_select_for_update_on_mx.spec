@@ -5,14 +5,18 @@ setup
 	CREATE TABLE dist_table(id integer, value integer);
 	SELECT create_distributed_table('dist_table', 'id');
 	COPY dist_table FROM PROGRAM 'echo 1, 10 && echo 2, 20 && echo 3, 30 && echo 4, 40 && echo 5, 50' WITH CSV;
+
+	SELECT citus_internal.restore_isolation_tester_func();
+	SELECT citus_internal.replace_isolation_tester_func_skip_self_local_blocks();
+	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 }
 
 // Create and use UDF to close the connection opened in the setup step. Also return the cluster
 // back to the initial state.
 teardown
 {
-        DROP TABLE IF EXISTS dist_table CASCADE;
-        SELECT citus_internal.restore_isolation_tester_func();
+	DROP TABLE IF EXISTS dist_table CASCADE;
+	SELECT citus_internal.restore_isolation_tester_func_skip_self_local_blocks();
 }
 
 session "s1"

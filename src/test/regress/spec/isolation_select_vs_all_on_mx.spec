@@ -2,6 +2,10 @@
 
 setup
 {
+	SELECT citus_internal.restore_isolation_tester_func();
+	SELECT citus_internal.replace_isolation_tester_func_skip_self_local_blocks();
+	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
+
 	CREATE TABLE select_table(id integer, value integer);
 	SELECT create_distributed_table('select_table', 'id');
 	COPY select_table FROM PROGRAM 'echo 1, 10 && echo 2, 20 && echo 3, 30 && echo 4, 40 && echo 5, 50' WITH CSV;
@@ -11,8 +15,8 @@ setup
 // back to the initial state.
 teardown
 {
-        DROP TABLE IF EXISTS select_table CASCADE;
-        SELECT citus_internal.restore_isolation_tester_func();
+	DROP TABLE IF EXISTS select_table CASCADE;
+	SELECT citus_internal.restore_isolation_tester_func_skip_self_local_blocks();
 }
 
 session "s1"
