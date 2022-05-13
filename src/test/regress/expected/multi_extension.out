@@ -1039,6 +1039,14 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function citus_is_coordinator() boolean
 (1 row)
 
+-- Test downgrade script (result should be empty)
+ALTER EXTENSION citus UPDATE TO '11.0-1';
+ALTER EXTENSION citus UPDATE TO '11.0-2';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
 SHOW citus.version;
