@@ -71,6 +71,15 @@ jobs:
           name: 'Check for banned C API usage'
           command: ci/banned.h.sh
 
+  check-sql-snapshots:
+    docker:
+      - image: 'citus/extbuilder:latest'
+    steps:
+      - checkout
+      - run:
+          name: 'Check Snapshots'
+          command: ci/check_sql_snapshots.sh
+
   test-pg-upgrade:
     description: Runs postgres upgrade tests
     parameters:
@@ -356,6 +365,7 @@ workflows:
           image_tag: '12.4'
 
       - check-style
+      - check-sql-snapshots
 
       - test-citus:
           name: 'test-11_check-multi'
