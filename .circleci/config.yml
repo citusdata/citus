@@ -424,7 +424,7 @@ workflows:
           make: check-multi
           requires: [build-12]
       - test-citus:
-          name: 'test-11_check-task-tracker'
+          name: 'test-12_check-task-tracker'
           pg_major: 12
           image_tag: '12.4'
           make: check-multi-task-tracker-extra
