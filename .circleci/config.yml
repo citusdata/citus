@@ -104,7 +104,7 @@ jobs:
           name: 'Configure'
           command: |
             chown -R circleci .
-            gosu circleci ./configure
+            PG_CONFIG=/usr/lib/postgresql/<< parameters.new_pg_major >>/bin/pg_config gosu circleci ./configure
       - run:
           name: 'Enable core dumps'
           command: |
