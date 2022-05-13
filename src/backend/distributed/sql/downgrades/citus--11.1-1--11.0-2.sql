@@ -45,3 +45,5 @@ CREATE FUNCTION pg_catalog.worker_repartition_cleanup(bigint)
  LANGUAGE c
  STRICT
 AS 'MODULE_PATHNAME', $function$worker_repartition_cleanup$function$
+
+DROP FUNCTION pg_catalog.citus_is_coordinator();
