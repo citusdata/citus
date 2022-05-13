@@ -199,6 +199,7 @@ ORDER BY 1;
  function role_exists(name)
  function run_command_on_all_nodes(text,boolean,boolean)
  function run_command_on_colocated_placements(regclass,regclass,text,boolean)
+ function run_command_on_coordinator(text,boolean)
  function run_command_on_placements(regclass,text,boolean)
  function run_command_on_shards(regclass,text,boolean)
  function run_command_on_workers(text,boolean)
@@ -284,5 +285,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(268 rows)
+(269 rows)
 
