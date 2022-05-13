@@ -22,6 +22,7 @@ extern List * GetUniqueDependenciesList(List *objectAddressesList);
 extern List * GetDependenciesForObject(const ObjectAddress *target);
 extern List * GetAllSupportedDependenciesForObject(const ObjectAddress *target);
 extern List * GetAllDependenciesForObject(const ObjectAddress *target);
+extern bool ErrorOrWarnIfObjectHasUnsupportedDependency(ObjectAddress *objectAddress);
 extern DeferredErrorMessage * DeferErrorIfHasUnsupportedDependency(const
 																   ObjectAddress *
 																   objectAddress);

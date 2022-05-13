@@ -828,6 +828,22 @@ static DistributeObjectOps Type_AlterObjectSchema = {
 	.address = AlterTypeSchemaStmtObjectAddress,
 	.markDistributed = false,
 };
+
+/*
+ * PreprocessAlterViewSchemaStmt and PostprocessAlterViewSchemaStmt functions can be called
+ * internally by ALTER TABLE view_name SET SCHEMA ... if the ALTER TABLE command targets a
+ * view. In other words ALTER VIEW view_name SET SCHEMA will use the View_AlterObjectSchema
+ * but ALTER TABLE view_name SET SCHEMA will use Table_AlterObjectSchema but call process
+ * functions of View_AlterObjectSchema internally.
+ */
+static DistributeObjectOps View_AlterObjectSchema = {
+	.deparse = DeparseAlterViewSchemaStmt,
+	.qualify = QualifyAlterViewSchemaStmt,
+	.preprocess = PreprocessAlterViewSchemaStmt,
+	.postprocess = PostprocessAlterViewSchemaStmt,
+	.address = AlterViewSchemaStmtObjectAddress,
+	.markDistributed = false,
+};
 static DistributeObjectOps Type_AlterOwner = {
 	.deparse = DeparseAlterTypeOwnerStmt,
 	.qualify = QualifyAlterTypeOwnerStmt,
@@ -842,6 +858,22 @@ static DistributeObjectOps Type_AlterTable = {
 	.preprocess = PreprocessAlterTypeStmt,
 	.postprocess = NULL,
 	.address = AlterTypeStmtObjectAddress,
+	.markDistributed = false,
+};
+
+/*
+ * PreprocessAlterViewStmt and PostprocessAlterViewStmt functions can be called internally
+ * by ALTER TABLE view_name SET/RESET ... if the ALTER TABLE command targets a view. In
+ * other words ALTER VIEW view_name SET/RESET will use the View_AlterView
+ * but ALTER TABLE view_name SET/RESET will use Table_AlterTable but call process
+ * functions of View_AlterView internally.
+ */
+static DistributeObjectOps View_AlterView = {
+	.deparse = DeparseAlterViewStmt,
+	.qualify = QualifyAlterViewStmt,
+	.preprocess = PreprocessAlterViewStmt,
+	.postprocess = PostprocessAlterViewStmt,
+	.address = AlterViewStmtObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps Type_Drop = {
@@ -866,6 +898,21 @@ static DistributeObjectOps Type_Rename = {
 	.preprocess = PreprocessRenameTypeStmt,
 	.postprocess = NULL,
 	.address = RenameTypeStmtObjectAddress,
+	.markDistributed = false,
+};
+
+/*
+ * PreprocessRenameViewStmt function can be called internally by ALTER TABLE view_name
+ * RENAME ... if the ALTER TABLE command targets a view or a view's column. In other words
+ * ALTER VIEW view_name RENAME will use the View_Rename but ALTER TABLE view_name RENAME
+ * will use Any_Rename but call process functions of View_Rename internally.
+ */
+static DistributeObjectOps View_Rename = {
+	.deparse = DeparseRenameViewStmt,
+	.qualify = QualifyRenameViewStmt,
+	.preprocess = PreprocessRenameViewStmt,
+	.postprocess = NULL,
+	.address = RenameViewStmtObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps Trigger_Rename = {
@@ -1021,6 +1068,11 @@ GetDistributeObjectOps(Node *node)
 					return &Type_AlterObjectSchema;
 				}
 
+				case OBJECT_VIEW:
+				{
+					return &View_AlterObjectSchema;
+				}
+
 				default:
 				{
 					return &NoDistributeOps;
@@ -1155,6 +1207,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_SEQUENCE:
 				{
 					return &Sequence_AlterOwner;
+				}
+
+				case OBJECT_VIEW:
+				{
+					return &View_AlterView;
 				}
 
 				default:
@@ -1510,6 +1567,27 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_TRIGGER:
 				{
 					return &Trigger_Rename;
+				}
+
+				case OBJECT_VIEW:
+				{
+					return &View_Rename;
+				}
+
+				case OBJECT_COLUMN:
+				{
+					switch (stmt->relationType)
+					{
+						case OBJECT_VIEW:
+						{
+							return &View_Rename;
+						}
+
+						default:
+						{
+							return &Any_Rename;
+						}
+					}
 				}
 
 				default:

@@ -37,6 +37,7 @@
 
 static List * FilterNameListForDistributedViews(List *viewNamesList, bool missing_ok);
 static void AppendQualifiedViewNameToCreateViewCommand(StringInfo buf, Oid viewOid);
+static void AppendViewDefinitionToCreateViewCommand(StringInfo buf, Oid viewOid);
 static void AppendAliasesToCreateViewCommand(StringInfo createViewCommand, Oid viewOid);
 static void AppendOptionsToCreateViewCommand(StringInfo createViewCommand, Oid viewOid);
 
@@ -101,45 +102,9 @@ PostprocessViewStmt(Node *node, const char *queryString)
 	}
 
 	/* If the view has any unsupported dependency, create it locally */
-	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(&viewAddress);
-
-	if (errMsg != NULL)
+	if (ErrorOrWarnIfObjectHasUnsupportedDependency(&viewAddress))
 	{
-		/*
-		 * Don't need to give any warning/error messages if there is no worker nodes in
-		 * the cluster as user's experience won't be affected on the single node even
-		 * if the view won't be distributed.
-		 */
-		if (!HasAnyNodes())
-		{
-			return NIL;
-		}
-
-		/*
-		 * Since Citus drops and recreates views while converting a table type, giving a
-		 * NOTICE message is enough if the process in table type conversion function call
-		 */
-		if (InTableTypeConversionFunctionCall)
-		{
-			RaiseDeferredError(errMsg, DEBUG1);
-			return NIL;
-		}
-
-		/*
-		 * If the view is already distributed, we should provide an error to not have
-		 * different definition of view on coordinator and worker nodes. If the view
-		 * is not distributed yet, we can create it locally to not affect user's local
-		 * usage experience.
-		 */
-		if (IsObjectDistributed(&viewAddress))
-		{
-			RaiseDeferredError(errMsg, ERROR);
-		}
-		else
-		{
-			RaiseDeferredError(errMsg, WARNING);
-			return NIL;
-		}
+		return NIL;
 	}
 
 	EnsureDependenciesExistOnAllNodes(&viewAddress);
@@ -409,7 +374,7 @@ AppendOptionsToCreateViewCommand(StringInfo createViewCommand, Oid viewOid)
  * AppendViewDefinitionToCreateViewCommand adds the definition of the given view to the
  * given create view command.
  */
-void
+static void
 AppendViewDefinitionToCreateViewCommand(StringInfo buf, Oid viewOid)
 {
 	/*
@@ -459,4 +424,251 @@ AlterViewOwnerCommand(Oid viewOid)
 					 quote_identifier(viewOwnerName));
 
 	return alterOwnerCommand->data;
+}
+
+
+/*
+ * PreprocessAlterViewStmt is invoked for alter view statements.
+ */
+List *
+PreprocessAlterViewStmt(Node *node, const char *queryString, ProcessUtilityContext
+						processUtilityContext)
+{
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
+
+	ObjectAddress viewAddress = GetObjectAddressFromParseTree((Node *) stmt, true);
+	if (!ShouldPropagateObject(&viewAddress))
+	{
+		return NIL;
+	}
+
+	QualifyTreeNode((Node *) stmt);
+
+	EnsureCoordinator();
+	EnsureSequentialMode(OBJECT_VIEW);
+
+	/* reconstruct alter statement in a portable fashion */
+	const char *alterViewStmtSql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) alterViewStmtSql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * PostprocessAlterViewStmt is invoked for alter view statements.
+ */
+List *
+PostprocessAlterViewStmt(Node *node, const char *queryString)
+{
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
+	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_VIEW);
+
+	ObjectAddress viewAddress = GetObjectAddressFromParseTree((Node *) stmt, true);
+	if (!ShouldPropagateObject(&viewAddress))
+	{
+		return NIL;
+	}
+
+	if (IsObjectAddressOwnedByExtension(&viewAddress, NULL))
+	{
+		return NIL;
+	}
+
+	/* If the view has any unsupported dependency, create it locally */
+	if (ErrorOrWarnIfObjectHasUnsupportedDependency(&viewAddress))
+	{
+		return NIL;
+	}
+
+	EnsureDependenciesExistOnAllNodes(&viewAddress);
+
+	return NIL;
+}
+
+
+/*
+ * AlterViewStmtObjectAddress returns the ObjectAddress for the subject of the
+ * ALTER VIEW statement.
+ */
+ObjectAddress
+AlterViewStmtObjectAddress(Node *node, bool missing_ok)
+{
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
+	Oid viewOid = RangeVarGetRelid(stmt->relation, NoLock, missing_ok);
+
+	ObjectAddress viewAddress = { 0 };
+	ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
+
+	return viewAddress;
+}
+
+
+/*
+ * PreprocessRenameViewStmt is called when the user is renaming the view or the column of
+ * the view.
+ */
+List *
+PreprocessRenameViewStmt(Node *node, const char *queryString,
+						 ProcessUtilityContext processUtilityContext)
+{
+	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, true);
+	if (!ShouldPropagateObject(&typeAddress))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	/* fully qualify */
+	QualifyTreeNode(node);
+
+	/* deparse sql*/
+	const char *renameStmtSql = DeparseTreeNode(node);
+
+	EnsureSequentialMode(OBJECT_VIEW);
+
+	/* to prevent recursion with mx we disable ddl propagation */
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) renameStmtSql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * RenameViewStmtObjectAddress returns the ObjectAddress of the view that is the object
+ * of the RenameStmt. Errors if missing_ok is false.
+ */
+ObjectAddress
+RenameViewStmtObjectAddress(Node *node, bool missing_ok)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+
+	Oid viewOid = RangeVarGetRelid(stmt->relation, NoLock, missing_ok);
+
+	ObjectAddress viewAddress = { 0 };
+	ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
+
+	return viewAddress;
+}
+
+
+/*
+ * PreprocessAlterViewSchemaStmt is executed before the statement is applied to the local
+ * postgres instance.
+ */
+List *
+PreprocessAlterViewSchemaStmt(Node *node, const char *queryString,
+							  ProcessUtilityContext processUtilityContext)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+
+	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, true);
+	if (!ShouldPropagateObject(&typeAddress))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+	EnsureSequentialMode(OBJECT_VIEW);
+
+	QualifyTreeNode((Node *) stmt);
+
+	const char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * PostprocessAlterViewSchemaStmt is executed after the change has been applied locally, we
+ * can now use the new dependencies of the view to ensure all its dependencies exist on
+ * the workers before we apply the commands remotely.
+ */
+List *
+PostprocessAlterViewSchemaStmt(Node *node, const char *queryString)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+
+	ObjectAddress viewAddress = GetObjectAddressFromParseTree((Node *) stmt, true);
+	if (!ShouldPropagateObject(&viewAddress))
+	{
+		return NIL;
+	}
+
+	/* dependencies have changed (schema) let's ensure they exist */
+	EnsureDependenciesExistOnAllNodes(&viewAddress);
+
+	return NIL;
+}
+
+
+/*
+ * AlterViewSchemaStmtObjectAddress returns the ObjectAddress of the view that is the object
+ * of the alter schema statement.
+ */
+ObjectAddress
+AlterViewSchemaStmtObjectAddress(Node *node, bool missing_ok)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+
+	Oid viewOid = RangeVarGetRelid(stmt->relation, NoLock, true);
+
+	/*
+	 * Since it can be called both before and after executing the standardProcess utility,
+	 * we need to check both old and new schemas
+	 */
+	if (viewOid == InvalidOid)
+	{
+		Oid schemaId = get_namespace_oid(stmt->newschema, missing_ok);
+		viewOid = get_relname_relid(stmt->relation->relname, schemaId);
+
+		/*
+		 * if the view is still invalid we couldn't find the view, error with the same
+		 * message postgres would error with it missing_ok is false (not ok to miss)
+		 */
+		if (!missing_ok && viewOid == InvalidOid)
+		{
+			ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT),
+							errmsg("view \"%s\" does not exist",
+								   stmt->relation->relname)));
+		}
+	}
+
+	ObjectAddress viewAddress = { 0 };
+	ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
+
+	return viewAddress;
+}
+
+
+/*
+ * IsViewRenameStmt returns whether the passed-in RenameStmt is the following
+ * form:
+ *
+ *   - ALTER VIEW RENAME
+ *   - ALTER VIEW RENAME COLUMN
+ */
+bool
+IsViewRenameStmt(RenameStmt *renameStmt)
+{
+	bool isViewRenameStmt = false;
+
+	if (renameStmt->renameType == OBJECT_VIEW ||
+		(renameStmt->renameType == OBJECT_COLUMN &&
+		 renameStmt->relationType == OBJECT_VIEW))
+	{
+		isViewRenameStmt = true;
+	}
+
+	return isViewRenameStmt;
 }

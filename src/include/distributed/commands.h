@@ -658,12 +658,25 @@ extern List * PreprocessViewStmt(Node *node, const char *queryString,
 								 ProcessUtilityContext processUtilityContext);
 extern List * PostprocessViewStmt(Node *node, const char *queryString);
 extern ObjectAddress ViewStmtObjectAddress(Node *node, bool missing_ok);
+extern ObjectAddress AlterViewStmtObjectAddress(Node *node, bool missing_ok);
 extern List * PreprocessDropViewStmt(Node *node, const char *queryString,
 									 ProcessUtilityContext processUtilityContext);
 extern char * CreateViewDDLCommand(Oid viewOid);
 extern char * AlterViewOwnerCommand(Oid viewOid);
 extern char * DeparseViewStmt(Node *node);
 extern char * DeparseDropViewStmt(Node *node);
+extern List * CreateViewDDLCommandsIdempotent(Oid viewOid);
+extern List * PreprocessAlterViewStmt(Node *node, const char *queryString,
+									  ProcessUtilityContext processUtilityContext);
+extern List * PostprocessAlterViewStmt(Node *node, const char *queryString);
+extern List * PreprocessRenameViewStmt(Node *node, const char *queryString,
+									   ProcessUtilityContext processUtilityContext);
+extern ObjectAddress RenameViewStmtObjectAddress(Node *node, bool missing_ok);
+extern List * PreprocessAlterViewSchemaStmt(Node *node, const char *queryString,
+											ProcessUtilityContext processUtilityContext);
+extern List * PostprocessAlterViewSchemaStmt(Node *node, const char *queryString);
+extern ObjectAddress AlterViewSchemaStmtObjectAddress(Node *node, bool missing_ok);
+extern bool IsViewRenameStmt(RenameStmt *renameStmt);
 
 /* trigger.c - forward declarations */
 extern List * GetExplicitTriggerCommandList(Oid relationId);
