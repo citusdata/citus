@@ -140,7 +140,9 @@ RUN git clone https://github.com/citusdata/tools.git citus-tools \
 
 # TODO some LC_ALL errors, possibly solved by locale-gen
 RUN git clone https://github.com/so-fancy/diff-so-fancy.git \
- && ln -s /home/citus/diff-so-fancy/diff-so-fancy .bin/
+ && ln -s /home/citus/diff-so-fancy/diff-so-fancy .bin/ \
+ && git config --global core.pager "diff-so-fancy | less --tabs=4 -RFX" \
+ && git config --global interactive.diffFilter "diff-so-fancy --patch"
 
 # place to run your cluster with citus_dev
 VOLUME /data
