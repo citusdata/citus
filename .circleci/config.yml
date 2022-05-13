@@ -354,10 +354,6 @@ workflows:
           name: build-12
           pg_major: 12
           image_tag: '12.4'
-      - build:
-          name: build-13
-          pg_major: 13
-          image_tag: '13.0'
 
       - check-style
 
@@ -449,64 +445,12 @@ workflows:
           make: check-failure
           requires: [build-12]
 
-      - test-citus:
-          name: 'test-13_check-multi'
-          pg_major: 13
-          image_tag: '13.0'
-          make: check-multi
-          requires: [build-13]
-      - test-citus:
-          name: 'test-13_check-mx'
-          pg_major: 13
-          image_tag: '13.0'
-          make: check-multi-mx
-          requires: [build-13]
-      - test-citus:
-          name: 'test-13_check-vanilla'
-          pg_major: 13
-          image_tag: '13.0'
-          make: check-vanilla
-          requires: [build-13]
-      - test-citus:
-          name: 'test-13_check-isolation'
-          pg_major: 13
-          image_tag: '13.0'
-          make: check-isolation
-          requires: [build-13]
-      - test-citus:
-          name: 'test-13_check-worker'
-          pg_major: 13
-          image_tag: '13.0'
-          make: check-worker
-          requires: [build-13]
-      - test-citus:
-          name: 'test-13_check-follower-cluster'
-          pg_major: 13
-          image_tag: '13.0'
-          make: check-follower-cluster
-          requires: [build-13]
-
-      - test-citus:
-          name: 'test-13_check-failure'
-          pg_major: 13
-          image: citus/failtester
-          image_tag: '13.0'
-          make: check-failure
-          requires: [build-13]
-
       - test-pg-upgrade:
           name: 'test-11-12_check-pg-upgrade'
           old_pg_major: 11
           new_pg_major: 12
           image_tag: latest
           requires: [build-11,build-12]
-
-      - test-pg-upgrade:
-          name: 'test-12-13_check-pg-upgrade'
-          old_pg_major: 12
-          new_pg_major: 13
-          image_tag: latest
-          requires: [build-12,build-13]
 
       - test-citus-upgrade:
           name: test-11_check-citus-upgrade
@@ -515,13 +459,13 @@ workflows:
           requires: [build-11]
 
       - ch_benchmark:
-          requires: [build-13]
+          requires: [build-12]
           filters:
             branches:
               only:
                 - /ch_benchmark\/.*/ # match with ch_benchmark/ prefix
       - tpcc_benchmark:
-          requires: [build-13]
+          requires: [build-12]
           filters:
             branches:
               only:
