@@ -12,3 +12,4 @@ COMMENT ON FUNCTION pg_catalog.citus_disable_node(nodename text, nodeport intege
 REVOKE ALL ON FUNCTION pg_catalog.citus_disable_node(text,int, bool) FROM PUBLIC;
 
 DROP FUNCTION pg_catalog.citus_is_coordinator();
+DROP FUNCTION pg_catalog.run_command_on_coordinator(text,boolean);
