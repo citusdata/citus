@@ -10,3 +10,4 @@ DROP FUNCTION pg_catalog.worker_repartition_cleanup(bigint);
 #include "../../columnar/sql/columnar--11.0-2--11.1-1.sql"
 #include "udfs/citus_split_shard_by_split_points/11.0-2.sql"
 #include "udfs/worker_split_copy/11.0-2.sql"
+#include "udfs/split_shard_replication_setup/11.0-2.sql"

@@ -29,8 +29,23 @@ typedef enum SplitOperation
 } SplitOperation;
 
 /*
- * SplitShard API to split a given shard (or shard group) using split mode and
- * specified split points to a set of destination nodes.
+ * In-memory representation of a split child shard.
+ */
+typedef struct ShardSplitInfo
+{
+	Oid distributedTableOid;     /* citus distributed table Oid */
+	int partitionColumnIndex;
+	Oid sourceShardOid;          /* parent shard Oid */
+	Oid splitChildShardOid;      /* child shard Oid */
+	int32 shardMinValue;
+	int32 shardMaxValue;
+	uint64 nodeId;               /* node where child shard is to be placed */
+	char slotName[NAMEDATALEN];  /* replication slot name belonging to this node */
+} ShardSplitInfo;
+
+/*
+ * SplitShard API to split a given shard (or shard group) in blocking / non-blocking fashion
+ * based on specified split points to a set of destination nodes.
  */
 extern void SplitShard(SplitMode splitMode,
 					   SplitOperation splitOperation,

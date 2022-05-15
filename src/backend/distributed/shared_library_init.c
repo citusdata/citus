@@ -105,9 +105,6 @@
 
 #include "columnar/columnar.h"
 
-/* marks shared object as one loadable by the postgres version compiled against */
-PG_MODULE_MAGIC;
-
 ColumnarSupportsIndexAM_type extern_ColumnarSupportsIndexAM = NULL;
 CompressionTypeStr_type extern_CompressionTypeStr = NULL;
 IsColumnarTableAmTable_type extern_IsColumnarTableAmTable = NULL;
