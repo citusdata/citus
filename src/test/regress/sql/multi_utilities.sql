@@ -170,13 +170,10 @@ WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
 \c - - :master_host :master_port
 SET citus.log_remote_commands TO ON;
 
--- verify warning for unqualified VACUUM
-VACUUM;
-
 -- check for multiple table vacuum
 VACUUM dustbunnies, second_dustbunnies;
 
--- and warning when using targeted VACUUM without DDL propagation
+-- and do not propagate when using targeted VACUUM without DDL propagation
 SET citus.enable_ddl_propagation to false;
 VACUUM dustbunnies;
 ANALYZE dustbunnies;
@@ -198,3 +195,78 @@ SELECT worker_create_or_alter_role(NULL, 'create role dontcrash', NULL);
 
 -- confirm that citus_create_restore_point works
 SELECT 1 FROM citus_create_restore_point('regression-test');
+
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 970000;
+
+SET citus.log_remote_commands TO OFF;
+
+CREATE TABLE local_vacuum_table(id int);
+
+CREATE TABLE reference_vacuum_table(id int);
+SELECT create_reference_table('reference_vacuum_table');
+
+CREATE TABLE distributed_vacuum_table(id int);
+SELECT create_distributed_table('distributed_vacuum_table', 'id');
+
+SET citus.log_remote_commands TO ON;
+
+-- should propagate to all workers because no table is specified
+VACUUM;
+
+-- should not propagate because no distributed table is specified
+VACUUM local_vacuum_table;
+
+-- should propagate to all workers because table is reference table
+VACUUM reference_vacuum_table;
+
+-- should propagate to all workers because table is distributed table
+VACUUM distributed_vacuum_table;
+
+-- only distributed_vacuum_table and reference_vacuum_table should propagate
+VACUUM distributed_vacuum_table, local_vacuum_table, reference_vacuum_table;
+
+-- only reference_vacuum_table should propagate
+VACUUM local_vacuum_table, reference_vacuum_table;
+
+-- should not propagate because ddl propagation is disabled
+SET citus.enable_ddl_propagation TO OFF;
+VACUUM distributed_vacuum_table;
+SET citus.enable_ddl_propagation TO ON;
+
+SET citus.log_remote_commands TO OFF;
+
+-- ANALYZE tests
+CREATE TABLE local_analyze_table(id int);
+
+CREATE TABLE reference_analyze_table(id int);
+SELECT create_reference_table('reference_analyze_table');
+
+CREATE TABLE distributed_analyze_table(id int);
+SELECT create_distributed_table('distributed_analyze_table', 'id');
+
+SET citus.log_remote_commands TO ON;
+
+-- should propagate to all workers because no table is specified
+ANALYZE;
+
+-- should not propagate because no distributed table is specified
+ANALYZE local_analyze_table;
+
+-- should propagate to all workers because table is reference table
+ANALYZE reference_analyze_table;
+
+-- should propagate to all workers because table is distributed table
+ANALYZE distributed_analyze_table;
+
+-- only distributed_analyze_table and reference_analyze_table should propagate
+ANALYZE distributed_analyze_table, local_analyze_table, reference_analyze_table;
+
+-- only reference_analyze_table should propagate
+ANALYZE local_analyze_table, reference_analyze_table;
+
+-- should not propagate because ddl propagation is disabled
+SET citus.enable_ddl_propagation TO OFF;
+ANALYZE distributed_analyze_table;
+SET citus.enable_ddl_propagation TO ON;

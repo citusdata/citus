@@ -246,10 +246,6 @@ WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
 
 \c - - :master_host :master_port
 SET citus.log_remote_commands TO ON;
--- verify warning for unqualified VACUUM
-VACUUM;
-WARNING:  not propagating VACUUM command to worker nodes
-HINT:  Provide a specific table in order to VACUUM distributed tables.
 -- check for multiple table vacuum
 VACUUM dustbunnies, second_dustbunnies;
 NOTICE:  issuing VACUUM public.dustbunnies_990002
@@ -260,14 +256,10 @@ NOTICE:  issuing VACUUM public.second_dustbunnies_990003
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing VACUUM public.second_dustbunnies_990003
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
--- and warning when using targeted VACUUM without DDL propagation
+-- and do not propagate when using targeted VACUUM without DDL propagation
 SET citus.enable_ddl_propagation to false;
 VACUUM dustbunnies;
-WARNING:  not propagating VACUUM command to worker nodes
-HINT:  Set citus.enable_ddl_propagation to true in order to send targeted VACUUM commands to worker nodes.
 ANALYZE dustbunnies;
-WARNING:  not propagating ANALYZE command to worker nodes
-HINT:  Set citus.enable_ddl_propagation to true in order to send targeted ANALYZE commands to worker nodes.
 SET citus.enable_ddl_propagation to DEFAULT;
 -- test worker_hash
 SELECT worker_hash(123);
@@ -314,3 +306,177 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
         1
 (1 row)
 
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 970000;
+SET citus.log_remote_commands TO OFF;
+CREATE TABLE local_vacuum_table(id int);
+CREATE TABLE reference_vacuum_table(id int);
+SELECT create_reference_table('reference_vacuum_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE distributed_vacuum_table(id int);
+SELECT create_distributed_table('distributed_vacuum_table', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.log_remote_commands TO ON;
+-- should propagate to all workers because no table is specified
+VACUUM;
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- should not propagate because no distributed table is specified
+VACUUM local_vacuum_table;
+-- should propagate to all workers because table is reference table
+VACUUM reference_vacuum_table;
+NOTICE:  issuing VACUUM public.reference_vacuum_table_970000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM public.reference_vacuum_table_970000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- should propagate to all workers because table is distributed table
+VACUUM distributed_vacuum_table;
+NOTICE:  issuing VACUUM public.distributed_vacuum_table_970001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- only distributed_vacuum_table and reference_vacuum_table should propagate
+VACUUM distributed_vacuum_table, local_vacuum_table, reference_vacuum_table;
+NOTICE:  issuing VACUUM public.distributed_vacuum_table_970001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM public.reference_vacuum_table_970000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM public.reference_vacuum_table_970000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- only reference_vacuum_table should propagate
+VACUUM local_vacuum_table, reference_vacuum_table;
+NOTICE:  issuing VACUUM public.reference_vacuum_table_970000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM public.reference_vacuum_table_970000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- should not propagate because ddl propagation is disabled
+SET citus.enable_ddl_propagation TO OFF;
+VACUUM distributed_vacuum_table;
+SET citus.enable_ddl_propagation TO ON;
+SET citus.log_remote_commands TO OFF;
+-- ANALYZE tests
+CREATE TABLE local_analyze_table(id int);
+CREATE TABLE reference_analyze_table(id int);
+SELECT create_reference_table('reference_analyze_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE distributed_analyze_table(id int);
+SELECT create_distributed_table('distributed_analyze_table', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.log_remote_commands TO ON;
+-- should propagate to all workers because no table is specified
+ANALYZE;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ANALYZE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ANALYZE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- should not propagate because no distributed table is specified
+ANALYZE local_analyze_table;
+-- should propagate to all workers because table is reference table
+ANALYZE reference_analyze_table;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ANALYZE public.reference_analyze_table_970002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ANALYZE public.reference_analyze_table_970002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- should propagate to all workers because table is distributed table
+ANALYZE distributed_analyze_table;
+NOTICE:  issuing ANALYZE public.distributed_analyze_table_970003
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- only distributed_analyze_table and reference_analyze_table should propagate
+ANALYZE distributed_analyze_table, local_analyze_table, reference_analyze_table;
+NOTICE:  issuing ANALYZE public.distributed_analyze_table_970003
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ANALYZE public.reference_analyze_table_970002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ANALYZE public.reference_analyze_table_970002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- only reference_analyze_table should propagate
+ANALYZE local_analyze_table, reference_analyze_table;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ANALYZE public.reference_analyze_table_970002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ANALYZE public.reference_analyze_table_970002
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- should not propagate because ddl propagation is disabled
+SET citus.enable_ddl_propagation TO OFF;
+ANALYZE distributed_analyze_table;
+SET citus.enable_ddl_propagation TO ON;

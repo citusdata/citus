@@ -1024,6 +1024,14 @@ static DistributeObjectOps Type_Rename = {
 	.address = RenameTypeStmtObjectAddress,
 	.markDistributed = false,
 };
+static DistributeObjectOps Vacuum_Analyze = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessVacuumStmt,
+	.address = NULL,
+	.markDistributed = false,
+};
 
 /*
  * PreprocessRenameViewStmt function can be called internally by ALTER TABLE view_name
@@ -1651,6 +1659,11 @@ GetDistributeObjectOps(Node *node)
 		case T_ReindexStmt:
 		{
 			return &Any_Reindex;
+		}
+
+		case T_VacuumStmt:
+		{
+			return &Vacuum_Analyze;
 		}
 
 		case T_RenameStmt:

@@ -75,7 +75,7 @@ SELECT citus_table_size('customer_copy_hash'),
        citus_table_size('supplier');
  citus_table_size | citus_table_size | citus_table_size
 ---------------------------------------------------------------------
-           548864 |           548864 |           425984
+           548864 |           548864 |           442368
 (1 row)
 
 CREATE INDEX index_1 on customer_copy_hash(c_custkey);
