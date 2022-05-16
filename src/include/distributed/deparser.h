@@ -202,6 +202,7 @@ extern char * DeparseAlterSequenceOwnerStmt(Node *node);
 
 /* forward declarations for qualify_sequence_stmt.c */
 extern void QualifyRenameSequenceStmt(Node *node);
+extern void QualifyDropSequenceStmt(Node *node);
 extern void QualifyAlterSequenceSchemaStmt(Node *node);
 extern void QualifyAlterSequenceOwnerStmt(Node *node);
 
