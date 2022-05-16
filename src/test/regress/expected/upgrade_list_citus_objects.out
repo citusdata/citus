@@ -83,6 +83,7 @@ ORDER BY 1;
  function citus_internal_local_blocked_processes()
  function citus_internal_update_placement_metadata(bigint,integer,integer)
  function citus_internal_update_relation_colocation(oid,integer)
+ function citus_is_coordinator()
  function citus_isolation_test_session_is_blocked(integer,integer[])
  function citus_json_concatenate(json,json)
  function citus_json_concatenate_final(json)
@@ -275,5 +276,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(259 rows)
+(260 rows)
 

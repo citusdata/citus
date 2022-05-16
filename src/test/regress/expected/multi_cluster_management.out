@@ -15,6 +15,21 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
         1
 (1 row)
 
+-- I am coordinator
+SELECT citus_is_coordinator();
+ citus_is_coordinator
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- workers are not coordinator
+SELECT result FROM run_command_on_workers('SELECT citus_is_coordinator()');
+ result
+---------------------------------------------------------------------
+ f
+ f
+(2 rows)
+
 -- get the active nodes
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes
