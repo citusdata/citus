@@ -38,7 +38,7 @@ DROP FUNCTION IF EXISTS pg_catalog.citus_total_relation_size(regclass);
 --#include "../../columnar/sql/columnar--9.5-1--10.0-1.sql"
 DO $check_columnar$
 BEGIN
-  IF NOT EXISTS (select 1 from pg_extension where extname='citus_columnar') THEN  
+  IF NOT EXISTS (select 1 from pg_extension where extname='citus_columnar') THEN
     #include "../../columnar/sql/columnar--9.5-1--10.0-1.sql"
   END IF;
 END;

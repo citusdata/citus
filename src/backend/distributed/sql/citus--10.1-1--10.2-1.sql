@@ -12,7 +12,7 @@ ALTER TABLE pg_catalog.pg_dist_placement ADD CONSTRAINT placement_shardid_groupi
 --#include "../../columnar/sql/columnar--10.1-1--10.2-1.sql"
 DO $check_columnar$
 BEGIN
-  IF NOT EXISTS (select 1 from pg_extension where extname='citus_columnar') THEN  
+  IF NOT EXISTS (select 1 from pg_extension where extname='citus_columnar') THEN
       #include "../../columnar/sql/columnar--10.1-1--10.2-1.sql"
   END IF;
 END;
