@@ -451,7 +451,8 @@ SELECT * FROM pg_dist_colocation
             5 |          2 |                 1 |                     23 |                           0
             6 |          2 |                 2 |                     25 |                         100
             7 |          8 |                 2 |                     23 |                           0
-(4 rows)
+           22 |          1 |                -1 |                      0 |                           0
+(5 rows)
 
 -- check to see whether metadata is synced
 SELECT nodeport, unnest(result::jsonb[]) FROM run_command_on_workers($$
@@ -464,11 +465,13 @@ $$);
     57637 | {"shardcount": 2, "colocationid": 5, "replicationfactor": 1, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
     57637 | {"shardcount": 2, "colocationid": 6, "replicationfactor": 2, "distributioncolumntype": "25", "distributioncolumncollation": "100"}
     57637 | {"shardcount": 8, "colocationid": 7, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57637 | {"shardcount": 1, "colocationid": 22, "replicationfactor": -1, "distributioncolumntype": "0", "distributioncolumncollation": "0"}
     57638 | {"shardcount": 2, "colocationid": 4, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
     57638 | {"shardcount": 2, "colocationid": 5, "replicationfactor": 1, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
     57638 | {"shardcount": 2, "colocationid": 6, "replicationfactor": 2, "distributioncolumntype": "25", "distributioncolumncollation": "100"}
     57638 | {"shardcount": 8, "colocationid": 7, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
-(8 rows)
+    57638 | {"shardcount": 1, "colocationid": 22, "replicationfactor": -1, "distributioncolumntype": "0", "distributioncolumncollation": "0"}
+(10 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
@@ -508,18 +511,15 @@ DROP TABLE table2_groupA;
 SELECT * FROM pg_dist_colocation WHERE colocationid = 4;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-            4 |          2 |                 2 |                     23 |                           0
-(1 row)
+(0 rows)
 
 -- check to see whether metadata is synced
 SELECT nodeport, unnest(result::jsonb[]) FROM run_command_on_workers($$
-SELECT array_agg(row_to_json(c)) FROM pg_dist_colocation c WHERE colocationid = 4
+SELECT coalesce(array_agg(row_to_json(c)), '{}') FROM pg_dist_colocation c WHERE colocationid = 4
 $$);
- nodeport |                                                              unnest
+ nodeport | unnest
 ---------------------------------------------------------------------
-    57637 | {"shardcount": 2, "colocationid": 4, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
-    57638 | {"shardcount": 2, "colocationid": 4, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
-(2 rows)
+(0 rows)
 
 -- create dropped colocation group again
 SET citus.shard_count = 2;
@@ -606,33 +606,36 @@ SELECT * FROM pg_dist_colocation
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-            4 |          2 |                 2 |                     23 |                           0
             5 |          2 |                 1 |                     23 |                           0
             6 |          2 |                 2 |                     25 |                         100
             7 |          8 |                 2 |                     23 |                           0
+            8 |          2 |                 2 |                     23 |                           0
+            9 |          2 |                 2 |                     23 |                           0
+           10 |          2 |                 2 |                     23 |                           0
            11 |          3 |                 2 |                     23 |                           0
-(5 rows)
+           22 |          1 |                -1 |                      0 |                           0
+(8 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid, logicalrelid;
           logicalrelid           | colocationid
 ---------------------------------------------------------------------
- table1_groupe                   |            4
- table2_groupe                   |            4
- table3_groupe                   |            4
- schema_colocation.table4_groupe |            4
- table4_groupe                   |            4
  table1_groupb                   |            5
  table2_groupb                   |            5
  table1_groupc                   |            6
  table2_groupc                   |            6
  table1_groupd                   |            7
  table2_groupd                   |            7
- table1_group_none_1             |            8
- table2_group_none_1             |            8
- table1_group_none_2             |            9
- table1_group_none_3             |           10
+ table1_groupe                   |            8
+ table2_groupe                   |            8
+ table3_groupe                   |            8
+ schema_colocation.table4_groupe |            8
+ table4_groupe                   |            8
+ table1_group_none_1             |            9
+ table2_group_none_1             |            9
+ table1_group_none_2             |           10
+ table1_group_none_3             |           11
  table1_group_default            |           11
 (16 rows)
 
@@ -699,12 +702,15 @@ SELECT * FROM pg_dist_colocation
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-            4 |          2 |                 2 |                     23 |                           0
             5 |          2 |                 1 |                     23 |                           0
             6 |          2 |                 2 |                     25 |                         100
             7 |          8 |                 2 |                     23 |                           0
+            8 |          2 |                 2 |                     23 |                           0
+            9 |          2 |                 2 |                     23 |                           0
+           10 |          2 |                 2 |                     23 |                           0
            11 |          3 |                 2 |                     23 |                           0
-(5 rows)
+           22 |          1 |                -1 |                      0 |                           0
+(8 rows)
 
 -- cross check with internal colocation API
 SELECT
@@ -739,8 +745,9 @@ ORDER BY
  table3_groupe                   | table4_groupe                   | t
  schema_colocation.table4_groupe | table4_groupe                   | t
  table1_group_none_1             | table2_group_none_1             | t
+ table1_group_none_3             | table1_group_default            | t
  table1_groupf                   | table2_groupf                   | t
-(16 rows)
+(17 rows)
 
 -- check created shards
 SELECT
@@ -979,7 +986,10 @@ SELECT * FROM pg_dist_colocation
             3 |          8 |                 2 |                     23 |                           0
             4 |          2 |                 2 |                     23 |                           0
             5 |          2 |                 2 |                     23 |                           0
-(5 rows)
+            6 |          2 |                 2 |                     23 |                           0
+            7 |          1 |                -1 |                      0 |                           0
+            8 |          2 |                 2 |                     23 |                           0
+(8 rows)
 
 -- check to see whether metadata is synced
 SELECT nodeport, unnest(result::jsonb[]) FROM run_command_on_workers($$
@@ -993,12 +1003,18 @@ $$);
     57637 | {"shardcount": 8, "colocationid": 3, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
     57637 | {"shardcount": 2, "colocationid": 4, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
     57637 | {"shardcount": 2, "colocationid": 5, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57637 | {"shardcount": 2, "colocationid": 6, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57637 | {"shardcount": 1, "colocationid": 7, "replicationfactor": -1, "distributioncolumntype": "0", "distributioncolumncollation": "0"}
+    57637 | {"shardcount": 2, "colocationid": 8, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
     57638 | {"shardcount": 2, "colocationid": 1, "replicationfactor": 1, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
     57638 | {"shardcount": 2, "colocationid": 2, "replicationfactor": 2, "distributioncolumntype": "25", "distributioncolumncollation": "100"}
     57638 | {"shardcount": 8, "colocationid": 3, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
     57638 | {"shardcount": 2, "colocationid": 4, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
     57638 | {"shardcount": 2, "colocationid": 5, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
-(10 rows)
+    57638 | {"shardcount": 2, "colocationid": 6, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57638 | {"shardcount": 1, "colocationid": 7, "replicationfactor": -1, "distributioncolumntype": "0", "distributioncolumncollation": "0"}
+    57638 | {"shardcount": 2, "colocationid": 8, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+(16 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
@@ -1015,7 +1031,7 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
  table1_groupe     |            5
  table3_groupe     |            5
  table1_group_none |            6
- table2_group_none |            7
+ table2_group_none |            8
 (11 rows)
 
 -- move the all tables in colocation group 5 to colocation group 7
@@ -1073,7 +1089,9 @@ SELECT * FROM pg_dist_colocation
             3 |          8 |                 2 |                     23 |                           0
             4 |          2 |                 2 |                     23 |                           0
             5 |          2 |                 2 |                     23 |                           0
-(5 rows)
+            7 |          1 |                -1 |                      0 |                           0
+            8 |          2 |                 2 |                     23 |                           0
+(7 rows)
 
 -- check to see whether metadata is synced
 SELECT nodeport, unnest(result::jsonb[]) FROM run_command_on_workers($$
@@ -1087,12 +1105,16 @@ $$);
     57637 | {"shardcount": 8, "colocationid": 3, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
     57637 | {"shardcount": 2, "colocationid": 4, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
     57637 | {"shardcount": 2, "colocationid": 5, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57637 | {"shardcount": 1, "colocationid": 7, "replicationfactor": -1, "distributioncolumntype": "0", "distributioncolumncollation": "0"}
+    57637 | {"shardcount": 2, "colocationid": 8, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
     57638 | {"shardcount": 2, "colocationid": 1, "replicationfactor": 1, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
     57638 | {"shardcount": 2, "colocationid": 2, "replicationfactor": 2, "distributioncolumntype": "25", "distributioncolumncollation": "100"}
     57638 | {"shardcount": 8, "colocationid": 3, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
     57638 | {"shardcount": 2, "colocationid": 4, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
     57638 | {"shardcount": 2, "colocationid": 5, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
-(10 rows)
+    57638 | {"shardcount": 1, "colocationid": 7, "replicationfactor": -1, "distributioncolumntype": "0", "distributioncolumncollation": "0"}
+    57638 | {"shardcount": 2, "colocationid": 8, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+(14 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
@@ -1108,8 +1130,8 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
  table2_groupe     |            4
  table1_groupe     |            5
  table3_groupe     |            5
- table1_group_none |            7
- table2_group_none |            7
+ table1_group_none |            8
+ table2_group_none |            8
 (11 rows)
 
 -- try to colocate different replication models
@@ -1443,3 +1465,84 @@ DROP TABLE range_table;
 DROP TABLE none;
 DROP TABLE ref;
 DROP TABLE local_table;
+CREATE TABLE tbl_1 (a INT, b INT);
+CREATE TABLE tbl_2 (a INT, b INT);
+CREATE TABLE tbl_3 (a INT, b INT);
+SELECT create_distributed_table('tbl_1', 'a', shard_count:=4);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('tbl_2', 'a', shard_count:=4);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('tbl_3', 'a', shard_count:=4, colocate_with:='NONE');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT colocation_id AS col_id_1 FROM citus_tables WHERE table_name::text = 'tbl_1' \gset
+SELECT colocation_id AS col_id_2 FROM citus_tables WHERE table_name::text = 'tbl_2' \gset
+SELECT colocation_id AS col_id_3 FROM citus_tables WHERE table_name::text = 'tbl_3' \gset
+-- check that tables are colocated correctly
+SELECT :col_id_1 = :col_id_2;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT :col_id_1 = :col_id_3;
+ ?column?
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- check that there are separate rows for both colocation groups in pg_dist_colocation
+SELECT result FROM run_command_on_all_nodes('
+    SELECT count(*) FROM pg_dist_colocation WHERE colocationid = ' || :col_id_1
+);
+ result
+---------------------------------------------------------------------
+ 1
+ 1
+ 1
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes('
+    SELECT count(*) FROM pg_dist_colocation WHERE colocationid = ' || :col_id_3
+);
+ result
+---------------------------------------------------------------------
+ 1
+ 1
+ 1
+(3 rows)
+
+DROP TABLE tbl_1, tbl_3;
+-- check that empty colocation group is dropped and non-empty is not
+SELECT result FROM run_command_on_all_nodes('
+    SELECT count(*) FROM pg_dist_colocation WHERE colocationid = ' || :col_id_1
+);
+ result
+---------------------------------------------------------------------
+ 1
+ 1
+ 1
+(3 rows)
+
+SELECT result FROM run_command_on_all_nodes('
+    SELECT count(*) FROM pg_dist_colocation WHERE colocationid = ' || :col_id_3
+);
+ result
+---------------------------------------------------------------------
+ 0
+ 0
+ 0
+(3 rows)
+
+DROP TABLE tbl_2;

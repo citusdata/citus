@@ -597,6 +597,45 @@ PartitionColumnViaCatalog(Oid relationId)
 
 
 /*
+ * ColocationIdViaCatalog gets a relationId and returns the colocation
+ * id column from pg_dist_partition via reading from catalog.
+ */
+uint32
+ColocationIdViaCatalog(Oid relationId)
+{
+	HeapTuple partitionTuple = PgDistPartitionTupleViaCatalog(relationId);
+	if (!HeapTupleIsValid(partitionTuple))
+	{
+		return INVALID_COLOCATION_ID;
+	}
+
+	Datum datumArray[Natts_pg_dist_partition];
+	bool isNullArray[Natts_pg_dist_partition];
+
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
+
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	heap_deform_tuple(partitionTuple, tupleDescriptor, datumArray, isNullArray);
+
+	if (isNullArray[Anum_pg_dist_partition_colocationid - 1])
+	{
+		/* colocation id cannot be NULL, still let's make sure */
+		heap_freetuple(partitionTuple);
+		table_close(pgDistPartition, NoLock);
+		return INVALID_COLOCATION_ID;
+	}
+
+	Datum colocationIdDatum = datumArray[Anum_pg_dist_partition_colocationid - 1];
+	uint32 colocationId = DatumGetUInt32(colocationIdDatum);
+
+	heap_freetuple(partitionTuple);
+	table_close(pgDistPartition, NoLock);
+
+	return colocationId;
+}
+
+
+/*
  * PgDistPartitionTupleViaCatalog is a helper function that searches
  * pg_dist_partition for the given relationId. The caller is responsible
  * for ensuring that the returned heap tuple is valid before accessing
