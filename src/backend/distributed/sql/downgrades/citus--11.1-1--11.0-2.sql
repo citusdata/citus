@@ -45,7 +45,3 @@ CREATE FUNCTION pg_catalog.worker_repartition_cleanup(bigint)
  LANGUAGE c
  STRICT
 AS 'MODULE_PATHNAME', $function$worker_repartition_cleanup$function$
-
-DROP FUNCTION citus_internal.citus_isolation_test_session_is_blocked_skip_self_local_blocks(integer,integer[]);
-DROP FUNCTION citus_internal.replace_isolation_tester_func_skip_self_local_blocks();
-DROP FUNCTION citus_internal.restore_isolation_tester_func_skip_self_local_blocks();
