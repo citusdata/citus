@@ -86,12 +86,6 @@ AppendSequenceNameList(StringInfo buf, List *objects, ObjectType objtype)
 
 		RangeVar *seq = makeRangeVarFromNameList((List *) lfirst(objectCell));
 
-		if (seq->schemaname == NULL)
-		{
-			Oid schemaOid = RangeVarGetCreationNamespace(seq);
-			seq->schemaname = get_namespace_name(schemaOid);
-		}
-
 		char *qualifiedSequenceName = quote_qualified_identifier(seq->schemaname,
 																 seq->relname);
 		appendStringInfoString(buf, qualifiedSequenceName);
