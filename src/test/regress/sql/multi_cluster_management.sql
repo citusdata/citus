@@ -58,7 +58,7 @@ SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
 
 -- disable node with sync/force options
 SELECT citus_disable_node('localhost', :worker_1_port);
-SELECT citus_disable_node('localhost', :worker_1_port, force:=true, synchronous:=true);
+SELECT citus_disable_node('localhost', :worker_1_port, synchronous:=true);
 SELECT run_command_on_workers($$SELECT array_agg(isactive ORDER BY nodeport) FROM pg_dist_node WHERE hasmetadata and noderole='primary'::noderole AND nodecluster='default'$$);
 SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 
@@ -112,7 +112,7 @@ GRANT EXECUTE ON FUNCTION master_activate_node(text,int) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_inactive_node(text,int,int,noderole,name) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_node(text,int,int,noderole,name) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_secondary_node(text,int,text,int,name) TO node_metadata_user;
-GRANT EXECUTE ON FUNCTION citus_disable_node(text,int,bool,bool) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION citus_disable_node(text,int,bool) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION citus_disable_node_and_wait(text,int,bool) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_remove_node(text,int) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_update_node(int,text,int,bool,int) TO node_metadata_user;
