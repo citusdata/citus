@@ -2021,7 +2021,7 @@ columnar_tableam_init()
 		NULL,
 		&EnableVersionChecksColumnar,
 		true,
-		PGC_USERSET,
+		PGC_SUSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 }

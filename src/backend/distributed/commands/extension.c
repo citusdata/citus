@@ -984,7 +984,7 @@ AlterExtensionUpdateStmtObjectAddress(Node *node, bool missing_ok)
  * per given extension name and extension verision
  */
 void
-CreateExtensionWithVersion(const char *extname, const char *extVersion)
+CreateExtensionWithVersion(const char *extname, char *extVersion)
 {
 	CreateExtensionStmt *createExtensionStmt = makeNode(CreateExtensionStmt);
 
@@ -1018,7 +1018,7 @@ CreateExtensionWithVersion(const char *extname, const char *extVersion)
  * per given extension name and updates extension verision
  */
 void
-AlterExtensionUpdateStmt(const char *extname, const char *extVersion)
+AlterExtensionUpdateStmt(const char *extname, char *extVersion)
 {
 	AlterExtensionStmt *alterExtensionStmt = makeNode(AlterExtensionStmt);
 

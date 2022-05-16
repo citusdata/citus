@@ -205,8 +205,8 @@ extern ObjectAddress AlterExtensionSchemaStmtObjectAddress(Node *stmt,
 														   bool missing_ok);
 extern ObjectAddress AlterExtensionUpdateStmtObjectAddress(Node *stmt,
 														   bool missing_ok);
-extern void CreateExtensionWithVersion(const char *extname, const char *extVersion);
-extern void AlterExtensionUpdateStmt(const char *extname, const char *extVersion);
+extern void CreateExtensionWithVersion(const char *extname, char *extVersion);
+extern void AlterExtensionUpdateStmt(const char *extname, char *extVersion);
 
 /* foreign_constraint.c - forward declarations */
 extern bool ConstraintIsAForeignKeyToReferenceTable(char *constraintName,
