@@ -1,16 +1,16 @@
 --  bump version to 11.2-1
---  drop columnar objects if they exists in citus extension 
+--  drop columnar objects if they exists in citus extension
 
 DO $check_citus$
 BEGIN
-IF EXISTS (SELECT 1 FROM pg_catalog.pg_extension AS e 
+IF EXISTS (SELECT 1 FROM pg_catalog.pg_extension AS e
 INNER JOIN pg_catalog.pg_depend AS d ON (d.refobjid = e.oid)
 INNER JOIN pg_catalog.pg_proc AS p ON (p.oid = d.objid)
 WHERE e.extname='citus' and p.proname = 'columnar_handler'
 ) THEN
 ALTER EXTENSION citus DROP SCHEMA columnar;
 ALTER EXTENSION citus DROP SEQUENCE columnar.storageid_seq;
-    
+
 -- columnar tables
 ALTER EXTENSION citus DROP TABLE columnar.options;
 ALTER EXTENSION citus DROP TABLE columnar.stripe;
