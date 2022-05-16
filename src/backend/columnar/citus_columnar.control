@@ -3,4 +3,4 @@ comment = 'Citus Columnar extension'
 default_version = '11.2-1'
 module_pathname = '$libdir/citus_columnar'
 relocatable = false
-schema = pg_catalog 
+schema = pg_catalog
