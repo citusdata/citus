@@ -30,6 +30,7 @@ step "setup"
 		SELECT 1 FROM citus_internal_global_blocked_processes()
 			WHERE waiting_global_pid = mBlockedGlobalPid
 			AND blocking_global_pid != waiting_global_pid
+			AND blocking_global_pid != 0
 		) OR EXISTS (
 		-- Check on the workers if any logical replication job spawned by the
 		-- current PID is blocked, by checking it's application name
