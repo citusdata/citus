@@ -42,6 +42,7 @@ SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.schemata
 -- Note: Schema should be created in workers because Citus
 -- does not check for interrupts until GetRemoteCommandResult is called.
 -- Since we already sent the command at this stage, the schemas get created in workers
+set citus.log_remote_commands to on;
 SELECT citus.mitmproxy('conn.onQuery(query="^CREATE SCHEMA").cancel(' ||  pg_backend_pid() || ')');
 SELECT create_distributed_table('test_table', 'id');
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
