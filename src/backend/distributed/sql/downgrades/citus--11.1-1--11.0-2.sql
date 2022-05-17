@@ -45,3 +45,5 @@ CREATE FUNCTION pg_catalog.worker_repartition_cleanup(bigint)
  LANGUAGE c
  STRICT
 AS 'MODULE_PATHNAME', $function$worker_repartition_cleanup$function$
+
+#include "../../../columnar/sql/downgrades/columnar--11.1-1--11.0-2.sql"

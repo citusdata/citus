@@ -38,6 +38,10 @@ alter table no_access set (columnar.stripe_row_limit = 12000);
 ERROR:  must be owner of table no_access
 select alter_columnar_table_reset('no_access', chunk_group_row_limit => true);
 ERROR:  must be owner of table no_access
+CONTEXT:  SQL statement "ALTER TABLE no_access RESET (columnar.chunk_group_row_limit)"
+PL/pgSQL function alter_columnar_table_reset(regclass,boolean,boolean,boolean,boolean) line XX at EXECUTE
 select alter_columnar_table_set('no_access', chunk_group_row_limit => 1111);
 ERROR:  must be owner of table no_access
+CONTEXT:  SQL statement "ALTER TABLE no_access SET (columnar.chunk_group_row_limit=1111)"
+PL/pgSQL function alter_columnar_table_set(regclass,integer,integer,name,integer) line XX at EXECUTE
 \c - :current_user
