@@ -1235,7 +1235,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s2-create-table-for-colocation s1-add-worker s2-create-schema s2-begin s3-begin s3-use-schema s2-create-table s3-create-table s2-commit s3-commit s2-print-distributed-objects s3-drop-coordinator-schemas
+starting permutation: s1-print-distributed-objects s1-add-worker s2-create-schema s2-begin s3-begin s3-use-schema s2-create-table s3-create-table s2-commit s3-commit s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -1306,16 +1306,6 @@ master_remove_node
 
 (1 row)
 
-step s2-create-table-for-colocation:
-    CREATE SCHEMA col_schema;
-    CREATE TABLE col_schema.col_tbl (a INT, b INT);
-    SELECT create_distributed_table('col_schema.col_tbl', 'a');
-
-create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
 step s1-add-worker:
     SELECT 1 FROM master_add_node('localhost', 57638);
 
@@ -1382,13 +1372,11 @@ pg_identify_object_as_address
 ---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
-(schema,{col_schema},{})
 (schema,{myschema},{})
 (schema,{public},{})
-(table,"{col_schema,col_tbl}",{})
 (table,"{myschema,t1}",{})
 (table,"{myschema,t2}",{})
-(8 rows)
+(6 rows)
 
 count
 ---------------------------------------------------------------------
@@ -2151,7 +2139,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s2-create-table-for-colocation s1-begin s1-add-worker s2-public-schema s2-distribute-function s1-commit s2-begin s2-commit s3-wait-for-metadata-sync s2-print-distributed-objects s3-drop-coordinator-schemas
+starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-distribute-function s1-commit s2-begin s2-commit s3-wait-for-metadata-sync s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -2218,16 +2206,6 @@ run_command_on_workers
 (2 rows)
 
 master_remove_node
----------------------------------------------------------------------
-
-(1 row)
-
-step s2-create-table-for-colocation:
-    CREATE SCHEMA col_schema;
-    CREATE TABLE col_schema.col_tbl (a INT, b INT);
-    SELECT create_distributed_table('col_schema.col_tbl', 'a');
-
-create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
@@ -2291,10 +2269,8 @@ pg_identify_object_as_address
 (database,{regression},{})
 (function,"{public,add}","{integer,integer}")
 (role,{postgres},{})
-(schema,{col_schema},{})
 (schema,{public},{})
-(table,"{col_schema,col_tbl}",{})
-(6 rows)
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -2346,7 +2322,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s2-create-table-for-colocation s1-begin s2-public-schema s2-distribute-function s2-begin s2-commit s3-wait-for-metadata-sync s1-add-worker s1-commit s3-wait-for-metadata-sync s2-print-distributed-objects s3-drop-coordinator-schemas
+starting permutation: s1-print-distributed-objects s1-begin s2-public-schema s2-distribute-function s2-begin s2-commit s3-wait-for-metadata-sync s1-add-worker s1-commit s3-wait-for-metadata-sync s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -2413,16 +2389,6 @@ run_command_on_workers
 (2 rows)
 
 master_remove_node
----------------------------------------------------------------------
-
-(1 row)
-
-step s2-create-table-for-colocation:
-    CREATE SCHEMA col_schema;
-    CREATE TABLE col_schema.col_tbl (a INT, b INT);
-    SELECT create_distributed_table('col_schema.col_tbl', 'a');
-
-create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
@@ -2493,10 +2459,8 @@ pg_identify_object_as_address
 (database,{regression},{})
 (function,"{public,add}","{integer,integer}")
 (role,{postgres},{})
-(schema,{col_schema},{})
 (schema,{public},{})
-(table,"{col_schema,col_tbl}",{})
-(6 rows)
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -2548,7 +2512,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s2-create-table-for-colocation s2-begin s2-create-schema s2-distribute-function s2-commit s3-wait-for-metadata-sync s1-begin s1-add-worker s1-commit s3-wait-for-metadata-sync s2-print-distributed-objects s3-drop-coordinator-schemas
+starting permutation: s1-print-distributed-objects s2-begin s2-create-schema s2-distribute-function s2-commit s3-wait-for-metadata-sync s1-begin s1-add-worker s1-commit s3-wait-for-metadata-sync s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -2615,16 +2579,6 @@ run_command_on_workers
 (2 rows)
 
 master_remove_node
----------------------------------------------------------------------
-
-(1 row)
-
-step s2-create-table-for-colocation:
-    CREATE SCHEMA col_schema;
-    CREATE TABLE col_schema.col_tbl (a INT, b INT);
-    SELECT create_distributed_table('col_schema.col_tbl', 'a');
-
-create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
@@ -2696,11 +2650,9 @@ pg_identify_object_as_address
 (database,{regression},{})
 (function,"{myschema,add}","{integer,integer}")
 (role,{postgres},{})
-(schema,{col_schema},{})
 (schema,{myschema},{})
 (schema,{public},{})
-(table,"{col_schema,col_tbl}",{})
-(7 rows)
+(5 rows)
 
 count
 ---------------------------------------------------------------------

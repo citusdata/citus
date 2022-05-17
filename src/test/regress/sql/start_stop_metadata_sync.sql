@@ -1,7 +1,6 @@
 CREATE SCHEMA start_stop_metadata_sync;
 SET search_path TO "start_stop_metadata_sync";
 SET citus.next_shard_id TO 980000;
-ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 980000;
 SET client_min_messages TO WARNING;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;

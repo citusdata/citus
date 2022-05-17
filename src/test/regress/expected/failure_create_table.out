@@ -90,12 +90,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 SELECT create_distributed_table('test_table','id');
-WARNING:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -356,12 +353,9 @@ SELECT citus.mitmproxy('conn.kill()');
 
 BEGIN;
 SELECT create_distributed_table('test_table','id');
-WARNING:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  failure on connection marked as essential: localhost:xxxxx
 ROLLBACK;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -395,12 +389,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 
 BEGIN;
 SELECT create_distributed_table('test_table','id');
-WARNING:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  failure on connection marked as essential: localhost:xxxxx
 ROLLBACK;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -474,12 +465,9 @@ SELECT citus.mitmproxy('conn.kill()');
 
 BEGIN;
 SELECT create_distributed_table('test_table','id');
-WARNING:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  failure on connection marked as essential: localhost:xxxxx
 ROLLBACK;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -545,12 +533,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 
 BEGIN;
 SELECT create_distributed_table('test_table','id');
-WARNING:  server closed the connection unexpectedly
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  failure on connection marked as essential: localhost:xxxxx
 ROLLBACK;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy

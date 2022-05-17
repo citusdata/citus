@@ -8,7 +8,6 @@ SET citus.next_shard_id TO 910000;
 SET citus.shard_replication_factor TO 1;
 CREATE SCHEMA fix_idx_names;
 SET search_path TO fix_idx_names, public;
-ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1370000;
 -- stop metadata sync for one of the worker nodes so we test both cases
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 NOTICE:  dropping metadata on the node (localhost,57637)
