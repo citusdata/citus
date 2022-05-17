@@ -1,6 +1,5 @@
 CREATE SCHEMA function_propagation_schema;
 SET search_path TO 'function_propagation_schema';
-ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 10000;
 
 -- Check whether supported dependencies can be distributed while propagating functions
 

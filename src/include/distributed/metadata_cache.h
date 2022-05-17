@@ -150,7 +150,6 @@ extern char PgDistPartitionViaCatalog(Oid relationId);
 extern List * LookupDistShardTuples(Oid relationId);
 extern char PartitionMethodViaCatalog(Oid relationId);
 extern Var * PartitionColumnViaCatalog(Oid relationId);
-extern uint32 ColocationIdViaCatalog(Oid relationId);
 extern bool IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel);
 extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
