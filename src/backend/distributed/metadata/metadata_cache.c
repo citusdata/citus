@@ -2000,7 +2000,8 @@ GetCitusCreationLevel(void)
 
 
 /*
- * Sets the value of CreateCitusTransactionLevel based on int received
+ * Sets the value of CreateCitusTransactionLevel based on int received which represents the
+ * nesting level of the transaction that created the Citus extension
  */
 void
 SetCreateCitusTransactionLevel(int val)

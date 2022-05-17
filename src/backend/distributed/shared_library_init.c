@@ -2338,6 +2338,12 @@ IsSuperuser(char *roleName)
 }
 
 
+/*
+ * CitusObjectAccessHook is called when an object is created.
+ *
+ * We currently use it to track CREATE EXTENSION citus; operations to make sure we
+ * clear the metadata if the transaction is rolled back.
+ */
 static void
 CitusObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int subId,
 					  void *arg)

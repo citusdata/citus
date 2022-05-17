@@ -320,11 +320,15 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			MemoryContextSwitchTo(previousContext);
 			MemoryContextReset(CommitContext);
 
-			/* Set CreateCitusTransactionLevel to one level lower to represent citus creation is done */
+			/* Set CreateCitusTransactionLevel to 0 since original transaction is about to be
+			 * committed.
+			 */
 
-			if (GetCitusCreationLevel() == GetCurrentTransactionNestLevel())
+			if (GetCitusCreationLevel() > 0)
 			{
-				SetCreateCitusTransactionLevel(GetCitusCreationLevel() - 1);
+				/* Check CitusCreationLevel was correctly decremented to 1 */
+				Assert(GetCitusCreationLevel() == 1);
+				SetCreateCitusTransactionLevel(0);
 			}
 			break;
 		}
@@ -375,8 +379,11 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * so that any created OIDs from the table are cleared and invalidated. We
 			 * also set CreateCitusTransactionLevel to 0 since that process has been aborted
 			 */
-			if (GetCitusCreationLevel() == GetCurrentTransactionNestLevel())
+			if (GetCitusCreationLevel() > 0)
 			{
+				/* Checks CitusCreationLevel correctly decremented to 1 */
+				Assert(GetCitusCreationLevel() == 1);
+
 				InvalidateMetadataSystemCache();
 				SetCreateCitusTransactionLevel(0);
 			}
@@ -631,7 +638,7 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 
 			/* Set CachedDuringCitusCreation to one level lower to represent citus creation is done */
 
-			if (GetCitusCreationLevel() == subId)
+			if (GetCitusCreationLevel() == GetCurrentTransactionNestLevel())
 			{
 				SetCreateCitusTransactionLevel(GetCitusCreationLevel() - 1);
 			}
@@ -662,7 +669,7 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			 * so that any created OIDs from the table are cleared and invalidated. We
 			 * also set CreateCitusTransactionLevel to 0 since subtransaction has been aborted
 			 */
-			if (GetCitusCreationLevel() == subId)
+			if (GetCitusCreationLevel() == GetCurrentTransactionNestLevel())
 			{
 				InvalidateMetadataSystemCache();
 				SetCreateCitusTransactionLevel(0);

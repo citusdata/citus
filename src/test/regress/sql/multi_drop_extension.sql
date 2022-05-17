@@ -3,32 +3,6 @@
 --
 -- Tests around dropping and recreating the extension
 
--- Test if metadatacache is cleared after a rollback
-BEGIN;
-CREATE EXTENSION citus;
-ROLLBACK;
-CREATE EXTENSION citus;
-DROP EXTENSION citus;
-
--- Test if metadatacache is cleared for rollback subtransations
-BEGIN;
-CREATE TABLE foo (i int);
-SAVEPOINT my_savepoint;
-CREATE EXTENSION citus;
-ROLLBACK TO SAVEPOINT my_savepoint;
-CREATE EXTENSION citus;
-COMMIT;
-DROP EXTENSION citus;
-
--- Test if metadatacache is cleared if subX commits but parent rollsback
-BEGIN;
-CREATE TABLE foo (i int);
-SAVEPOINT my_savepoint;
-CREATE EXTENSION citus;
-RELEASE SAVEPOINT my_savepoint;
-ROLLBACK;
-CREATE EXTENSION citus;
-DROP EXTENSION citus;
 
 SET citus.next_shard_id TO 550000;
 
@@ -93,6 +67,73 @@ DROP SCHEMA test_schema CASCADE;
 DROP EXTENSION citus CASCADE;
 \set VERBOSITY DEFAULT
 
+-- Test if metadatacache is cleared after a rollback
+BEGIN;
+CREATE EXTENSION citus;
+ROLLBACK;
+CREATE EXTENSION citus;
+DROP EXTENSION citus;
+
+-- Test if metadatacache is cleared for rollback subtransations
+BEGIN;
+SAVEPOINT my_savepoint;
+CREATE EXTENSION citus;
+ROLLBACK TO SAVEPOINT my_savepoint;
+CREATE EXTENSION citus;
+COMMIT;
+DROP EXTENSION citus;
+
+-- Test if metadatacache is cleared if subtransaction commits but parent rollsback
+BEGIN;
+SAVEPOINT my_savepoint;
+CREATE EXTENSION citus;
+RELEASE SAVEPOINT my_savepoint;
+ROLLBACK;
+CREATE EXTENSION citus;
+DROP EXTENSION citus;
+
+-- Test if metadatacache is cleared if we release a savepoint and rollback
+BEGIN;
+SAVEPOINT s1;
+SAVEPOINT s2;
+CREATE EXTENSION citus;
+RELEASE SAVEPOINT s1;
+ROLLBACK;
+CREATE EXTENSION citus;
+DROP EXTENSION citus;
+
+-- Test if metadatacache is cleared on a rollback in a nested subtransaction
+BEGIN;
+SAVEPOINT s1;
+SAVEPOINT s2;
+CREATE EXTENSION citus;
+ROLLBACK TO s1;
+CREATE EXTENSION citus;
+COMMIT;
+DROP EXTENSION citus;
+
+-- Test if metadatacache is cleared after columnar table is made and rollback happens
+BEGIN;
+SAVEPOINT s1;
+CREATE EXTENSION citus;
+SAVEPOINT s2;
+CREATE TABLE foo1 (i int) using columnar;
+SAVEPOINT s3;
+ROLLBACK TO SAVEPOINT s1;
+ROLLBACK;
+CREATE EXTENSION citus;
+DROP EXTENSION citus;
+
+-- Test with a release and rollback in transactions
+BEGIN;
+SAVEPOINT s1;
+SAVEPOINT s2;
+CREATE EXTENSION citus;
+RELEASE SAVEPOINT s1;
+SAVEPOINT s3;
+SAVEPOINT s4;
+ROLLBACK TO  SAVEPOINT s3;
+ROLLBACK;
 CREATE EXTENSION citus;
 
 -- this function is dropped in Citus10, added here for tests
