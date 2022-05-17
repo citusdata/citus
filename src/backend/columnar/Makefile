@@ -10,10 +10,11 @@ OBJS += \
 MODULE_big = citus_columnar
 EXTENSION = citus_columnar
 
-DATA = sql/columnar--9.5-1--10.0-1.sql
+template_sql_files = $(patsubst $(citus_abs_srcdir)/%,%,$(wildcard $(citus_abs_srcdir)/sql/*.sql))
 
 #DATA = $(wildcard sql/*--*.sql) 
 #		$(wildcard sql/downgrades/*--*.sql)
+DATA = $(template_sql_files)
 
 PG_CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include
 

@@ -644,13 +644,13 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			{
 				const char *newVersion = defGetString(newVersionValue);
 
-				/*alter extension citus update to 11.2-1, and no citus_columnar installed */
-				if (strcmp(newVersion, "11.2-1") == 0 && citusColumnarOid == InvalidOid)
+				/*alter extension citus update to 11.1-1, and no citus_columnar installed */
+				if (strcmp(newVersion, "11.1-1") == 0 && citusColumnarOid == InvalidOid)
 				{
-					/*it's upgrade citus to 11.2-1 */
+					/*it's upgrade citus to 11.1-1 */
 					CreateExtensionWithVersion("citus_columnar", "11.1-0");
 				}
-				else if (strcmp(curExtensionVersion, "11.2-1") == 0 && citusColumnarOid !=
+				else if (strcmp(curExtensionVersion, "11.1-1") == 0 && citusColumnarOid !=
 						 InvalidOid)
 				{
 					/*downgrade citus_columnar to Y */
@@ -670,16 +670,16 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			if (newVersionValue)
 			{
 				const char *newVersion = defGetString(newVersionValue);
-				if (strcmp(newVersion, "11.2-1") == 0 && citusColumnarOid != InvalidOid)
+				if (strcmp(newVersion, "11.1-1") == 0 && citusColumnarOid != InvalidOid)
 				{
 					/*after "ALTER EXTENSION citus" updates citus_columnar Y to version Z. */
 					char *curColumnarVersion = get_extension_version(citusColumnarOid);
 					if (strcmp(curColumnarVersion, "11.1-0") == 0)
 					{
-						AlterExtensionUpdateStmt("citus_columnar", "11.2-1");
+						AlterExtensionUpdateStmt("citus_columnar", "11.1-1");
 					}
 				}
-				else if (strcmp(newVersion, "11.1-1") == 0 && citusColumnarOid !=
+				else if (strcmp(newVersion, "11.0-2") == 0 && citusColumnarOid !=
 						 InvalidOid)
 				{
 					/*after "ALTER EXTENSION citus" drops citus_columnar extension */

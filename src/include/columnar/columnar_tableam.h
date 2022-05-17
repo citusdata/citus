@@ -59,5 +59,7 @@ extern int64 ColumnarScanChunkGroupsFiltered(ColumnarScanDesc columnarScanDesc);
 extern bool ColumnarSupportsIndexAM(char *indexAMName);
 extern bool IsColumnarTableAmTable(Oid relationId);
 
+extern DefElem * GetExtensionOption(List *extensionOptions,
+									const char *defname);
 
 #endif /* COLUMNAR_TABLEAM_H */

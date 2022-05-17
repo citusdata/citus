@@ -59,7 +59,6 @@
 #include "columnar/columnar_tableam.h"
 #include "columnar/columnar_version_compat.h"
 #include "distributed/listutils.h"
-#include "distributed/deparser.h"
 
 /*
  * Timing parameters for truncate locking heuristics.
@@ -2387,7 +2386,7 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 			if (get_extension_oid("citus", true) != InvalidOid)
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("must upgrade citus to version 11.2-1 first")));
+								errmsg("must upgrade citus to version 11.1-1 first")));
 			}
 		}
 	}
@@ -3031,4 +3030,24 @@ InstalledExtensionVersionColumnar(void)
 	table_close(relation, AccessShareLock);
 
 	return installedExtensionVersion;
+}
+
+
+/*
+ * GetExtensionOption returns DefElem * node with "defname" from "options" list
+ */
+DefElem *
+GetExtensionOption(List *extensionOptions, const char *defname)
+{
+	DefElem *defElement = NULL;
+	foreach_ptr(defElement, extensionOptions)
+	{
+		if (IsA(defElement, DefElem) &&
+			strncmp(defElement->defname, defname, NAMEDATALEN) == 0)
+		{
+			return defElement;
+		}
+	}
+
+	return NULL;
 }
