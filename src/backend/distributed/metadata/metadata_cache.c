@@ -187,7 +187,7 @@ bool EnableVersionChecks = true; /* version checks are enabled */
 static bool citusVersionKnownCompatible = false;
 
 /* Variable to determine if we are in the process of creating citus */
-static TransactionId CachedDuringCitusCreation = InvalidTransactionId;
+static int CreateCitusTransactionLevel = 0;
 
 /* Hash table for informations about each partition */
 static HTAB *DistTableCacheHash = NULL;
@@ -1990,22 +1990,22 @@ CitusHasBeenLoadedInternal(void)
 
 
 /*
- * IsTransactionCreatingCitus returns the Oid of the transaction creating citus
+ * GetCitusCreationLevel returns the level of the transaction creating citus
  */
-TransactionId
-IsTransactionCreatingCitus(void)
+int
+GetCitusCreationLevel(void)
 {
-	return CachedDuringCitusCreation;
+	return CreateCitusTransactionLevel;
 }
 
 
 /*
- * Sets the value of CachedDuringCitusCreation based on Oid received
+ * Sets the value of CreateCitusTransactionLevel based on int received
  */
 void
-SetCachedDuringCitusCreation(TransactionId val)
+SetCreateCitusTransactionLevel(int val)
 {
-	CachedDuringCitusCreation = val;
+	CreateCitusTransactionLevel = val;
 }
 
 
@@ -4756,12 +4756,6 @@ CachedRelationNamespaceLookupExtended(const char *relationName, Oid relnamespace
 {
 	/* force callbacks to be registered, so we always get notified upon changes */
 	InitializeCaches();
-	Oid citusExtensionOid = get_extension_oid("citus", true);
-
-	if (creating_extension && CurrentExtensionObject == citusExtensionOid)
-	{
-		CachedDuringCitusCreation = GetCurrentTransactionId();
-	}
 
 	if (*cachedOid == InvalidOid)
 	{

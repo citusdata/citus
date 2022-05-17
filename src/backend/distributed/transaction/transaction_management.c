@@ -320,11 +320,11 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			MemoryContextSwitchTo(previousContext);
 			MemoryContextReset(CommitContext);
 
-			/* Set CachedDuringCitusCreation to an InvalidTransactionId to represent citus creation is done */
+			/* Set CreateCitusTransactionLevel to one level lower to represent citus creation is done */
 
-			if (IsTransactionCreatingCitus() == GetCurrentTransactionIdIfAny())
+			if (GetCitusCreationLevel() == GetCurrentTransactionNestLevel())
 			{
-				SetCachedDuringCitusCreation(InvalidTransactionId);
+				SetCreateCitusTransactionLevel(GetCitusCreationLevel() - 1);
 			}
 			break;
 		}
@@ -373,13 +373,12 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			/*
 			 * Clear MetadataCache table if we're aborting from a CREATE EXTENSION Citus
 			 * so that any created OIDs from the table are cleared and invalidated. We
-			 * also set CachedDuringCitusCreation to InvalidTransactionId as that process is no longer
-			 * happening
+			 * also set CreateCitusTransactionLevel to 0 since that process has been aborted
 			 */
-			if (IsTransactionCreatingCitus() == GetCurrentTransactionIdIfAny())
+			if (GetCitusCreationLevel() == GetCurrentTransactionNestLevel())
 			{
 				InvalidateMetadataSystemCache();
-				SetCachedDuringCitusCreation(InvalidTransactionId);
+				SetCreateCitusTransactionLevel(0);
 			}
 
 			/*
@@ -630,11 +629,11 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			}
 			PopSubXact(subId);
 
-			/* Set CachedDuringCitusCreation to an InvalidTransactionId to represent citus creation is done */
+			/* Set CachedDuringCitusCreation to one level lower to represent citus creation is done */
 
-			if (IsTransactionCreatingCitus() == subId)
+			if (GetCitusCreationLevel() == subId)
 			{
-				SetCachedDuringCitusCreation(InvalidTransactionId);
+				SetCreateCitusTransactionLevel(GetCitusCreationLevel() - 1);
 			}
 			break;
 		}
@@ -661,13 +660,12 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			/*
 			 * Clear MetadataCache table if we're aborting from a CREATE EXTENSION Citus
 			 * so that any created OIDs from the table are cleared and invalidated. We
-			 * also set CachedDuringCitusCreation to InvalidTransactionId as that process is no longer
-			 * happening
+			 * also set CreateCitusTransactionLevel to 0 since subtransaction has been aborted
 			 */
-			if (IsTransactionCreatingCitus() == subId)
+			if (GetCitusCreationLevel() == subId)
 			{
 				InvalidateMetadataSystemCache();
-				SetCachedDuringCitusCreation(InvalidTransactionId);
+				SetCreateCitusTransactionLevel(0);
 			}
 			break;
 		}

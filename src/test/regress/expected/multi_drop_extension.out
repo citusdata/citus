@@ -1,23 +1,37 @@
 --
 -- MULTI_DROP_EXTENSION
 --
--- Tests around dropping and recreating the extension
-DROP EXTENSION citus CASCADE;
+-- Tests around rollback and recreating the extension
 
+-- Test if metadatacache is cleared after a rollback
 BEGIN;
 CREATE EXTENSION citus;
 ROLLBACK;
 CREATE EXTENSION citus;
 DROP EXTENSION citus;
 
+-- Test if metadatacache is cleared for rollback subtransations
 BEGIN;
-BEGIN;
-WARNING:  there is already a transaction in progress
+CREATE TABLE foo (i int);
+SAVEPOINT my_savepoint;
 CREATE EXTENSION citus;
+ROLLBACK TO SAVEPOINT my_savepoint;
+CREATE EXTENSION citus;
+COMMIT;
+DROP EXTENSION citus;
+
+-- Test if metadatacache is cleared if subX commits but parent rollsback
+BEGIN;
+CREATE TABLE foo (i int);
+SAVEPOINT my_savepoint;
+CREATE EXTENSION citus;
+RELEASE SAVEPOINT my_savepoint;
 ROLLBACK;
 CREATE EXTENSION citus;
+DROP EXTENSION citus;
 
 SET citus.next_shard_id TO 550000;
+
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
 SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
  create_distributed_table
