@@ -396,21 +396,6 @@ _PG_init(void)
 	ProcessUtility_hook = multi_ProcessUtility;
 
 	/*
-	 * Now, acquire symbols from columnar module. First, acquire
-	 * the address of the set options hook, and set it so that we
-	 * can propagate options changes.
-	 */
-	ColumnarTableSetOptions_hook_type **ColumnarTableSetOptions_hook_ptr =
-		(ColumnarTableSetOptions_hook_type **) find_rendezvous_variable(
-			COLUMNAR_SETOPTIONS_HOOK_SYM);
-
-	/* rendezvous variable registered during columnar initialization */
-	Assert(ColumnarTableSetOptions_hook_ptr != NULL);
-	Assert(*ColumnarTableSetOptions_hook_ptr != NULL);
-
-	**ColumnarTableSetOptions_hook_ptr = ColumnarTableSetOptionsHook;
-
-	/*
 	 * Acquire symbols for columnar functions that citus calls.
 	 */
 	void *handle = NULL;

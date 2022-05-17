@@ -1613,26 +1613,3 @@ DropSchemaOrDBInProgress(void)
 {
 	return activeDropSchemaOrDBs > 0;
 }
-
-
-/*
- * ColumnarTableSetOptionsHook propagates columnar table options to shards, if
- * necessary.
- */
-void
-ColumnarTableSetOptionsHook(Oid relationId, ColumnarOptions options)
-{
-	if (EnableDDLPropagation && IsCitusTable(relationId))
-	{
-		/* when a columnar table is distributed update all settings on the shards */
-		Oid namespaceId = get_rel_namespace(relationId);
-		char *schemaName = get_namespace_name(namespaceId);
-		char *relationName = get_rel_name(relationId);
-		TableDDLCommand *command = ColumnarGetCustomTableOptionsDDL(schemaName,
-																	relationName,
-																	options);
-		DDLJob *ddljob = CreateCustomDDLTaskList(relationId, command);
-
-		ExecuteDistributedDDLJob(ddljob);
-	}
-}

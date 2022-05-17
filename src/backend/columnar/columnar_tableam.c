@@ -104,9 +104,6 @@ typedef struct IndexFetchColumnarData
 	MemoryContext scanContext;
 } IndexFetchColumnarData;
 
-/* available to other extensions using find_rendezvous_variable() */
-static ColumnarTableSetOptions_hook_type ColumnarTableSetOptions_hook = NULL;
-
 static object_access_hook_type PrevObjectAccessHook = NULL;
 static ProcessUtility_hook_type PrevProcessUtilityHook = NULL;
 
@@ -1905,11 +1902,6 @@ ColumnarSubXactCallback(SubXactEvent event, SubTransactionId mySubid,
 void
 columnar_tableam_init()
 {
-	ColumnarTableSetOptions_hook_type **ColumnarTableSetOptions_hook_ptr =
-		(ColumnarTableSetOptions_hook_type **) find_rendezvous_variable(
-			COLUMNAR_SETOPTIONS_HOOK_SYM);
-	*ColumnarTableSetOptions_hook_ptr = &ColumnarTableSetOptions_hook;
-
 	RegisterXactCallback(ColumnarXactCallback, NULL);
 	RegisterSubXactCallback(ColumnarSubXactCallback, NULL);
 
