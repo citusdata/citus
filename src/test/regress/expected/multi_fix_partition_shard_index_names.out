@@ -648,7 +648,7 @@ NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_apply_shard_ddl_command (915002, 'fix_idx_names', 'CREATE TABLE fix_idx_names.p2 (dist_col integer NOT NULL, another_col integer, partition_col timestamp without time zone NOT NULL, name text) USING columnar')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT alter_columnar_table_set('fix_idx_names.p2_915002', chunk_group_row_limit => 10000, stripe_row_limit => 150000, compression_level => 3, compression => 'zstd');
+NOTICE:  issuing ALTER TABLE fix_idx_names.p2_915002 SET (columnar.chunk_group_row_limit = 10000, columnar.stripe_row_limit = 150000, columnar.compression_level = 3, columnar.compression = 'zstd');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_apply_shard_ddl_command (915002, 'fix_idx_names', 'ALTER TABLE fix_idx_names.p2 OWNER TO postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -662,9 +662,9 @@ NOTICE:  issuing CREATE TABLE fix_idx_names.p2 (dist_col integer NOT NULL, anoth
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing CREATE TABLE fix_idx_names.p2 (dist_col integer NOT NULL, another_col integer, partition_col timestamp without time zone NOT NULL, name text) USING columnar
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT alter_columnar_table_set('fix_idx_names.p2', chunk_group_row_limit => 10000, stripe_row_limit => 150000, compression_level => 3, compression => 'zstd');
+NOTICE:  issuing ALTER TABLE fix_idx_names.p2 SET (columnar.chunk_group_row_limit = 10000, columnar.stripe_row_limit = 150000, columnar.compression_level = 3, columnar.compression = 'zstd');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT alter_columnar_table_set('fix_idx_names.p2', chunk_group_row_limit => 10000, stripe_row_limit => 150000, compression_level => 3, compression => 'zstd');
+NOTICE:  issuing ALTER TABLE fix_idx_names.p2 SET (columnar.chunk_group_row_limit = 10000, columnar.stripe_row_limit = 150000, columnar.compression_level = 3, columnar.compression = 'zstd');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ALTER TABLE fix_idx_names.p2 OWNER TO postgres
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
