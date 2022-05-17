@@ -28,7 +28,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    7
+    8
 (1 row)
 
 extname|extversion|nspname
@@ -89,7 +89,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    7
+    8
 (1 row)
 
 extname|extversion|nspname
@@ -158,7 +158,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    6
+    7
 (1 row)
 
 extname|extversion|nspname
@@ -214,7 +214,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    7
+    8
 (1 row)
 
 extname|extversion|nspname
@@ -275,7 +275,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    6
+    7
 (1 row)
 
 extname|extversion|nspname
@@ -346,7 +346,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    7
+    8
 (1 row)
 
 extname|extversion|nspname
@@ -414,7 +414,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    7
+    8
 (1 row)
 
 extname|extversion|nspname
@@ -490,7 +490,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    7
+    8
 (1 row)
 
 extname|extversion|nspname
@@ -573,7 +573,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    7
+    8
 (1 row)
 
 extname|extversion|nspname
@@ -642,7 +642,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    6
+    7
 (1 row)
 
 extname|extversion|nspname
@@ -698,7 +698,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    7
+    8
 (1 row)
 
 extname|extversion|nspname
@@ -773,7 +773,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    7
+    8
 (1 row)
 
 extname|extversion|nspname
@@ -841,7 +841,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    7
+    8
 (1 row)
 
 extname|extversion|nspname
@@ -920,7 +920,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    6
+    7
 (1 row)
 
 extname|extversion|nspname
