@@ -226,7 +226,6 @@ PreprocessDropSequenceStmt(Node *node, const char *queryString,
 						   ProcessUtilityContext processUtilityContext)
 {
 	DropStmt *stmt = castNode(DropStmt, node);
-	List *deletingSequencesList = stmt->objects;
 	List *distributedSequencesList = NIL;
 	List *distributedSequenceAddresses = NIL;
 
@@ -259,6 +258,7 @@ PreprocessDropSequenceStmt(Node *node, const char *queryString,
 	 * iterate over all sequences to be dropped and filter to keep only distributed
 	 * sequences.
 	 */
+	List *deletingSequencesList = stmt->objects;
 	List *objectNameList = NULL;
 	foreach_ptr(objectNameList, deletingSequencesList)
 	{
