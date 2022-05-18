@@ -161,10 +161,8 @@ PostprocessCompositeTypeStmt(Node *node, const char *queryString)
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
 
 	/* If the type has any unsupported dependency, create it locally */
-	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(&typeAddress);
-	if (errMsg != NULL)
+	if (ErrorOrWarnIfObjectHasUnsupportedDependency(&typeAddress))
 	{
-		RaiseDeferredError(errMsg, WARNING);
 		return NIL;
 	}
 
@@ -283,10 +281,8 @@ PostprocessCreateEnumStmt(Node *node, const char *queryString)
 	/* lookup type address of just created type */
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
 
-	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(&typeAddress);
-	if (errMsg != NULL)
+	if (ErrorOrWarnIfObjectHasUnsupportedDependency(&typeAddress))
 	{
-		RaiseDeferredError(errMsg, WARNING);
 		return NIL;
 	}
 

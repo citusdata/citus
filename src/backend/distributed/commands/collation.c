@@ -612,11 +612,8 @@ PostprocessDefineCollationStmt(Node *node, const char *queryString)
 	ObjectAddress collationAddress =
 		DefineCollationStmtObjectAddress(node, false);
 
-	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(
-		&collationAddress);
-	if (errMsg != NULL)
+	if (ErrorOrWarnIfObjectHasUnsupportedDependency(&collationAddress))
 	{
-		RaiseDeferredError(errMsg, WARNING);
 		return NIL;
 	}
 

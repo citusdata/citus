@@ -93,10 +93,8 @@ PostprocessCreateTextSearchConfigurationStmt(Node *node, const char *queryString
 
 	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
 
-	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(&address);
-	if (errMsg != NULL)
+	if (ErrorOrWarnIfObjectHasUnsupportedDependency(&address))
 	{
-		RaiseDeferredError(errMsg, WARNING);
 		return NIL;
 	}
 
@@ -142,10 +140,8 @@ PostprocessCreateTextSearchDictionaryStmt(Node *node, const char *queryString)
 
 	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
 
-	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(&address);
-	if (errMsg != NULL)
+	if (ErrorOrWarnIfObjectHasUnsupportedDependency(&address))
 	{
-		RaiseDeferredError(errMsg, WARNING);
 		return NIL;
 	}
 

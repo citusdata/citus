@@ -1369,11 +1369,8 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 	}
 
 	/* If the function has any unsupported dependency, create it locally */
-	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(&functionAddress);
-
-	if (errMsg != NULL)
+	if (ErrorOrWarnIfObjectHasUnsupportedDependency(&functionAddress))
 	{
-		RaiseDeferredError(errMsg, WARNING);
 		return NIL;
 	}
 

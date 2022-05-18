@@ -70,11 +70,8 @@ PostprocessDefineAggregateStmt(Node *node, const char *queryString)
 	EnsureSequentialMode(OBJECT_AGGREGATE);
 
 	/* If the aggregate has any unsupported dependency, create it locally */
-	DeferredErrorMessage *depError = DeferErrorIfHasUnsupportedDependency(&address);
-
-	if (depError != NULL)
+	if (ErrorOrWarnIfObjectHasUnsupportedDependency(&address))
 	{
-		RaiseDeferredError(depError, WARNING);
 		return NIL;
 	}
 
