@@ -112,12 +112,14 @@ SET citus.shard_replication_factor TO 1;
 -- metadata sync will succeed even if we have rep > 1 tables
 INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'public.articles'::regclass::oid, 0);
 INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'public.articles_single_shard'::regclass::oid, 0);
+SET client_min_messages TO warning;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------
 
 (1 row)
 
+RESET client_min_messages;
 CREATE TABLE mx_table(a int);
 SELECT create_distributed_table('mx_table', 'a');
  create_distributed_table
