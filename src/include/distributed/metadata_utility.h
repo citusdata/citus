@@ -263,6 +263,7 @@ extern DeferredErrorMessage * DeferErrorIfCircularDependencyExists(const
 																   ObjectAddress *
 																   objectAddress);
 extern List * GetDistributableDependenciesForObject(const ObjectAddress *target);
+extern List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 extern bool ShouldPropagate(void);
 extern bool ShouldPropagateCreateInCoordinatedTransction(void);
 extern bool ShouldPropagateObject(const ObjectAddress *address);

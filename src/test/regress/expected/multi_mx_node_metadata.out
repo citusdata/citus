@@ -642,7 +642,6 @@ SELECT verify_metadata('localhost', :worker_1_port),
 -- Don't drop the reference table so it has shards on the nodes being disabled
 DROP TABLE dist_table_1, dist_table_2;
 SELECT pg_catalog.citus_disable_node('localhost', :worker_2_port);
-NOTICE:  Node localhost:xxxxx has active shard placements. Some queries may fail after this operation. Use SELECT citus_activate_node('localhost', 57638) to activate this node back.
  citus_disable_node
 ---------------------------------------------------------------------
 
