@@ -2478,219 +2478,38 @@ ColumnarCheckLogicalReplication(Relation rel)
 
 
 /*
- * alter_columnar_table_set is a UDF exposed in postgres to change settings on a columnar
- * table. Calling this function on a non-columnar table gives an error.
+ * alter_columnar_table_set()
  *
- * sql syntax:
- *   pg_catalog.alter_columnar_table_set(
- *        table_name regclass,
- *        chunk_group_row_limit int DEFAULT NULL,
- *        stripe_row_limit int DEFAULT NULL,
- *        compression name DEFAULT null)
+ * Deprecated in 11.1-1: should issue ALTER TABLE ... SET instead. Function
+ * still available, but implemented in PL/pgSQL instead of C.
  *
- * All arguments except the table name are optional. The UDF is supposed to be called
- * like:
- *   SELECT alter_columnar_table_set('table', compression => 'pglz');
- *
- * This will only update the compression of the table, keeping all other settings the
- * same. Multiple settings can be changed at the same time by providing multiple
- * arguments. Calling the argument with the NULL value will be interperted as not having
- * provided the argument.
+ * C code is removed -- the symbol may still be required in some
+ * upgrade/downgrade paths, but it should not be called.
  */
 PG_FUNCTION_INFO_V1(alter_columnar_table_set);
 Datum
 alter_columnar_table_set(PG_FUNCTION_ARGS)
 {
-	CheckCitusColumnarVersion(ERROR);
-
-	Oid relationId = PG_GETARG_OID(0);
-
-	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
-	if (!IsColumnarTableAmTable(relationId))
-	{
-		ereport(ERROR, (errmsg("table %s is not a columnar table",
-							   quote_identifier(RelationGetRelationName(rel)))));
-	}
-
-	if (!pg_class_ownercheck(relationId, GetUserId()))
-	{
-		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLE,
-					   get_rel_name(relationId));
-	}
-
-	ColumnarOptions options = { 0 };
-	if (!ReadColumnarOptions(relationId, &options))
-	{
-		ereport(ERROR, (errmsg("unable to read current options for table")));
-	}
-
-	/* chunk_group_row_limit => not null */
-	if (!PG_ARGISNULL(1))
-	{
-		options.chunkRowCount = PG_GETARG_INT32(1);
-		if (options.chunkRowCount < CHUNK_ROW_COUNT_MINIMUM ||
-			options.chunkRowCount > CHUNK_ROW_COUNT_MAXIMUM)
-		{
-			ereport(ERROR, (errmsg("chunk group row count limit out of range"),
-							errhint("chunk group row count limit must be between "
-									UINT64_FORMAT " and " UINT64_FORMAT,
-									(uint64) CHUNK_ROW_COUNT_MINIMUM,
-									(uint64) CHUNK_ROW_COUNT_MAXIMUM)));
-		}
-		ereport(DEBUG1,
-				(errmsg("updating chunk row count to %d", options.chunkRowCount)));
-	}
-
-	/* stripe_row_limit => not null */
-	if (!PG_ARGISNULL(2))
-	{
-		options.stripeRowCount = PG_GETARG_INT32(2);
-		if (options.stripeRowCount < STRIPE_ROW_COUNT_MINIMUM ||
-			options.stripeRowCount > STRIPE_ROW_COUNT_MAXIMUM)
-		{
-			ereport(ERROR, (errmsg("stripe row count limit out of range"),
-							errhint("stripe row count limit must be between "
-									UINT64_FORMAT " and " UINT64_FORMAT,
-									(uint64) STRIPE_ROW_COUNT_MINIMUM,
-									(uint64) STRIPE_ROW_COUNT_MAXIMUM)));
-		}
-		ereport(DEBUG1, (errmsg(
-							 "updating stripe row count to " UINT64_FORMAT,
-							 options.stripeRowCount)));
-	}
-
-	/* compression => not null */
-	if (!PG_ARGISNULL(3))
-	{
-		Name compressionName = PG_GETARG_NAME(3);
-		options.compressionType = ParseCompressionType(NameStr(*compressionName));
-		if (options.compressionType == COMPRESSION_TYPE_INVALID)
-		{
-			ereport(ERROR, (errmsg("unknown compression type for columnar table: %s",
-								   quote_identifier(NameStr(*compressionName)))));
-		}
-		ereport(DEBUG1, (errmsg("updating compression to %s",
-								CompressionTypeStr(options.compressionType))));
-	}
-
-	/* compression_level => not null */
-	if (!PG_ARGISNULL(4))
-	{
-		options.compressionLevel = PG_GETARG_INT32(4);
-		if (options.compressionLevel < COMPRESSION_LEVEL_MIN ||
-			options.compressionLevel > COMPRESSION_LEVEL_MAX)
-		{
-			ereport(ERROR, (errmsg("compression level out of range"),
-							errhint("compression level must be between %d and %d",
-									COMPRESSION_LEVEL_MIN,
-									COMPRESSION_LEVEL_MAX)));
-		}
-
-		ereport(DEBUG1, (errmsg("updating compression level to %d",
-								options.compressionLevel)));
-	}
-
-	if (ColumnarTableSetOptions_hook != NULL)
-	{
-		ColumnarTableSetOptions_hook(relationId, options);
-	}
-
-	SetColumnarOptions(relationId, &options);
-
-	table_close(rel, NoLock);
-
-	PG_RETURN_VOID();
+	ereport(ERROR, (errmsg("alter_columnar_table_set is deprecated"),
+					errhint("Use ALTER TABLE ... SET instead.")));
 }
 
 
 /*
- * alter_columnar_table_reset is a UDF exposed in postgres to reset the settings on a
- * columnar table. Calling this function on a non-columnar table gives an error.
+ * alter_columnar_table_reset()
  *
- * sql syntax:
- *   pg_catalog.alter_columnar_table_re
- *   teset(
- *        table_name regclass,
- *        chunk_group_row_limit bool DEFAULT FALSE,
- *        stripe_row_limit bool DEFAULT FALSE,
- *        compression bool DEFAULT FALSE)
+ * Deprecated in 11.1-1: should issue ALTER TABLE ... RESET instead. Function
+ * still available, but implemented in PL/pgSQL instead of C.
  *
- * All arguments except the table name are optional. The UDF is supposed to be called
- * like:
- *   SELECT alter_columnar_table_set('table', compression => true);
- *
- * All options set to true will be reset to the default system value.
+ * C code is removed -- the symbol may still be required in some
+ * upgrade/downgrade paths, but it should not be called.
  */
 PG_FUNCTION_INFO_V1(alter_columnar_table_reset);
 Datum
 alter_columnar_table_reset(PG_FUNCTION_ARGS)
 {
-	CheckCitusColumnarVersion(ERROR);
-
-	Oid relationId = PG_GETARG_OID(0);
-
-	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
-	if (!IsColumnarTableAmTable(relationId))
-	{
-		ereport(ERROR, (errmsg("table %s is not a columnar table",
-							   quote_identifier(RelationGetRelationName(rel)))));
-	}
-
-	if (!pg_class_ownercheck(relationId, GetUserId()))
-	{
-		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLE,
-					   get_rel_name(relationId));
-	}
-
-	ColumnarOptions options = { 0 };
-	if (!ReadColumnarOptions(relationId, &options))
-	{
-		ereport(ERROR, (errmsg("unable to read current options for table")));
-	}
-
-	/* chunk_group_row_limit => true */
-	if (!PG_ARGISNULL(1) && PG_GETARG_BOOL(1))
-	{
-		options.chunkRowCount = columnar_chunk_group_row_limit;
-		ereport(DEBUG1,
-				(errmsg("resetting chunk row count to %d", options.chunkRowCount)));
-	}
-
-	/* stripe_row_limit => true */
-	if (!PG_ARGISNULL(2) && PG_GETARG_BOOL(2))
-	{
-		options.stripeRowCount = columnar_stripe_row_limit;
-		ereport(DEBUG1,
-				(errmsg("resetting stripe row count to " UINT64_FORMAT,
-						options.stripeRowCount)));
-	}
-
-	/* compression => true */
-	if (!PG_ARGISNULL(3) && PG_GETARG_BOOL(3))
-	{
-		options.compressionType = columnar_compression;
-		ereport(DEBUG1, (errmsg("resetting compression to %s",
-								CompressionTypeStr(options.compressionType))));
-	}
-
-	/* compression_level => true */
-	if (!PG_ARGISNULL(4) && PG_GETARG_BOOL(4))
-	{
-		options.compressionLevel = columnar_compression_level;
-		ereport(DEBUG1, (errmsg("reseting compression level to %d",
-								columnar_compression_level)));
-	}
-
-	if (ColumnarTableSetOptions_hook != NULL)
-	{
-		ColumnarTableSetOptions_hook(relationId, options);
-	}
-
-	SetColumnarOptions(relationId, &options);
-
-	table_close(rel, NoLock);
-
-	PG_RETURN_VOID();
+	ereport(ERROR, (errmsg("alter_columnar_table_reset is deprecated"),
+					errhint("Use ALTER TABLE ... RESET instead.")));
 }
 
 
