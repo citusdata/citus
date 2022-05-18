@@ -42,6 +42,7 @@
 #include "lib/stringinfo.h"
 #include "miscadmin.h"
 #include "nodes/parsenodes.h"
+#include "parser/parse_utilcmd.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -184,9 +185,18 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand,
 		 */
 		ErrorIfCreateIndexHasTooManyColumns(createIndexStatement);
 
+		/*
+		 * If there are expressions on the index, we should first transform
+		 * the statement as the default index name depends on that. We do
+		 * it on a copy not to interfere with standard process utility.
+		 */
+		IndexStmt *copyCreateIndexStatement =
+			transformIndexStmt(relation->rd_id, copyObject(createIndexStatement),
+							   createIndexCommand);
+
 		/* ensure we copy string into proper context */
 		MemoryContext relationContext = GetMemoryChunkContext(relationRangeVar);
-		char *defaultIndexName = GenerateDefaultIndexName(createIndexStatement);
+		char *defaultIndexName = GenerateDefaultIndexName(copyCreateIndexStatement);
 		createIndexStatement->idxname = MemoryContextStrdup(relationContext,
 															defaultIndexName);
 	}
