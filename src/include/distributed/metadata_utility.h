@@ -250,6 +250,7 @@ extern TableConversionReturn * UndistributeTable(TableConversionParameters *para
 
 extern void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
 extern List * GetDistributableDependenciesForObject(const ObjectAddress *target);
+extern List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 extern bool ShouldPropagate(void);
 extern bool ShouldPropagateCreateInCoordinatedTransction(void);
 extern bool ShouldPropagateObject(const ObjectAddress *address);

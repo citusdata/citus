@@ -525,6 +525,20 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		parsetree = pstmt->utilityStmt;
 		ops = GetDistributeObjectOps(parsetree);
 
+		/*
+		 * For some statements Citus defines a Qualify function. The goal of this function
+		 * is to take any ambiguity from the statement that is contextual on either the
+		 * search_path or current settings.
+		 * Instead of relying on the search_path and settings we replace any deduced bits
+		 * and fill them out how postgres would resolve them. This makes subsequent
+		 * deserialize calls for the statement portable to other postgres servers, the
+		 * workers in our case.
+		 */
+		if (ops && ops->qualify)
+		{
+			ops->qualify(parsetree);
+		}
+
 		if (ops && ops->preprocess)
 		{
 			ddlJobs = ops->preprocess(parsetree, queryString, context);

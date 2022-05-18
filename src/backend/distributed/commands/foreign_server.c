@@ -25,236 +25,7 @@
 #include "nodes/primnodes.h"
 
 static Node * RecreateForeignServerStmt(Oid serverId);
-static bool NameListHasDistributedServer(List *serverNames);
 static ObjectAddress GetObjectAddressByServerName(char *serverName, bool missing_ok);
-
-
-/*
- * PreprocessCreateForeignServerStmt is called during the planning phase for
- * CREATE SERVER.
- */
-List *
-PreprocessCreateForeignServerStmt(Node *node, const char *queryString,
-								  ProcessUtilityContext processUtilityContext)
-{
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	/* check creation against multi-statement transaction policy */
-	if (!ShouldPropagateCreateInCoordinatedTransction())
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-	EnsureSequentialMode(OBJECT_FOREIGN_SERVER);
-
-	char *sql = DeparseTreeNode(node);
-
-	/* to prevent recursion with mx we disable ddl propagation */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
- * PreprocessAlterForeignServerStmt is called during the planning phase for
- * ALTER SERVER .. OPTIONS ..
- */
-List *
-PreprocessAlterForeignServerStmt(Node *node, const char *queryString,
-								 ProcessUtilityContext processUtilityContext)
-{
-	AlterForeignServerStmt *stmt = castNode(AlterForeignServerStmt, node);
-
-	ObjectAddress address = GetObjectAddressByServerName(stmt->servername, false);
-
-	if (!ShouldPropagateObject(&address))
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-
-	char *sql = DeparseTreeNode(node);
-
-	/* to prevent recursion with mx we disable ddl propagation */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
- * PreprocessRenameForeignServerStmt is called during the planning phase for
- * ALTER SERVER RENAME.
- */
-List *
-PreprocessRenameForeignServerStmt(Node *node, const char *queryString,
-								  ProcessUtilityContext processUtilityContext)
-{
-	RenameStmt *stmt = castNode(RenameStmt, node);
-	Assert(stmt->renameType == OBJECT_FOREIGN_SERVER);
-
-	ObjectAddress address = GetObjectAddressByServerName(strVal(stmt->object), false);
-
-	/* filter distributed servers */
-	if (!ShouldPropagateObject(&address))
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-
-	char *sql = DeparseTreeNode(node);
-
-	/* to prevent recursion with mx we disable ddl propagation */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
- * PreprocessAlterForeignServerOwnerStmt is called during the planning phase for
- * ALTER SERVER .. OWNER TO.
- */
-List *
-PreprocessAlterForeignServerOwnerStmt(Node *node, const char *queryString,
-									  ProcessUtilityContext processUtilityContext)
-{
-	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
-	Assert(stmt->objectType == OBJECT_FOREIGN_SERVER);
-
-	ObjectAddress address = GetObjectAddressByServerName(strVal(stmt->object), false);
-
-	/* filter distributed servers */
-	if (!ShouldPropagateObject(&address))
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-
-	char *sql = DeparseTreeNode(node);
-
-	/* to prevent recursion with mx we disable ddl propagation */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
- * PreprocessDropForeignServerStmt is called during the planning phase for
- * DROP SERVER.
- */
-List *
-PreprocessDropForeignServerStmt(Node *node, const char *queryString,
-								ProcessUtilityContext processUtilityContext)
-{
-	DropStmt *stmt = castNode(DropStmt, node);
-	Assert(stmt->removeType == OBJECT_FOREIGN_SERVER);
-
-	bool includesDistributedServer = NameListHasDistributedServer(stmt->objects);
-
-	if (!includesDistributedServer)
-	{
-		return NIL;
-	}
-
-	if (list_length(stmt->objects) > 1)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot drop distributed server with other servers"),
-						errhint("Try dropping each object in a separate DROP command")));
-	}
-
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-
-	Assert(list_length(stmt->objects) == 1);
-
-	Value *serverValue = linitial(stmt->objects);
-	ObjectAddress address = GetObjectAddressByServerName(strVal(serverValue), false);
-
-	/* unmark distributed server */
-	UnmarkObjectDistributed(&address);
-
-	const char *deparsedStmt = DeparseTreeNode((Node *) stmt);
-
-	/*
-	 * To prevent recursive propagation in mx architecture, we disable ddl
-	 * propagation before sending the command to workers.
-	 */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) deparsedStmt,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
- * PostprocessCreateForeignServerStmt is called after a CREATE SERVER command has
- * been executed by standard process utility.
- */
-List *
-PostprocessCreateForeignServerStmt(Node *node, const char *queryString)
-{
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	/* check creation against multi-statement transaction policy */
-	if (!ShouldPropagateCreateInCoordinatedTransction())
-	{
-		return NIL;
-	}
-
-	const bool missingOk = false;
-	ObjectAddress address = GetObjectAddressFromParseTree(node, missingOk);
-	EnsureDependenciesExistOnAllNodes(&address);
-
-	return NIL;
-}
-
-
-/*
- * PostprocessAlterForeignServerOwnerStmt is called after a ALTER SERVER OWNER command
- * has been executed by standard process utility.
- */
-List *
-PostprocessAlterForeignServerOwnerStmt(Node *node, const char *queryString)
-{
-	const bool missingOk = false;
-	ObjectAddress address = GetObjectAddressFromParseTree(node, missingOk);
-
-	if (!ShouldPropagateObject(&address))
-	{
-		return NIL;
-	}
-
-	EnsureDependenciesExistOnAllNodes(&address);
-
-	return NIL;
-}
 
 
 /*
@@ -271,6 +42,41 @@ CreateForeignServerStmtObjectAddress(Node *node, bool missing_ok)
 	CreateForeignServerStmt *stmt = castNode(CreateForeignServerStmt, node);
 
 	return GetObjectAddressByServerName(stmt->servername, missing_ok);
+}
+
+
+/*
+ * AlterForeignServerStmtObjectAddress finds the ObjectAddress for the server that is
+ * changed by given AlterForeignServerStmt. If missingOk is false and if
+ * the server does not exist, then it errors out.
+ *
+ * Never returns NULL, but the objid in the address can be invalid if missingOk
+ * was set to true.
+ */
+ObjectAddress
+AlterForeignServerStmtObjectAddress(Node *node, bool missing_ok)
+{
+	AlterForeignServerStmt *stmt = castNode(AlterForeignServerStmt, node);
+
+	return GetObjectAddressByServerName(stmt->servername, missing_ok);
+}
+
+
+/*
+ * RenameForeignServerStmtObjectAddress finds the ObjectAddress for the server that is
+ * renamed by given RenmaeStmt. If missingOk is false and if the server does not exist,
+ * then it errors out.
+ *
+ * Never returns NULL, but the objid in the address can be invalid if missingOk
+ * was set to true.
+ */
+ObjectAddress
+RenameForeignServerStmtObjectAddress(Node *node, bool missing_ok)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	Assert(stmt->renameType == OBJECT_FOREIGN_SERVER);
+
+	return GetObjectAddressByServerName(strVal(stmt->object), missing_ok);
 }
 
 
@@ -352,28 +158,6 @@ RecreateForeignServerStmt(Oid serverId)
 	}
 
 	return (Node *) createStmt;
-}
-
-
-/*
- * NameListHasDistributedServer takes a namelist of servers and returns true if at least
- * one of them is distributed. Returns false otherwise.
- */
-static bool
-NameListHasDistributedServer(List *serverNames)
-{
-	Value *serverValue = NULL;
-	foreach_ptr(serverValue, serverNames)
-	{
-		ObjectAddress address = GetObjectAddressByServerName(strVal(serverValue), false);
-
-		if (IsObjectDistributed(&address))
-		{
-			return true;
-		}
-	}
-
-	return false;
 }
 
 

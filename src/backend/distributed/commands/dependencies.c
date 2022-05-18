@@ -34,7 +34,6 @@ typedef bool (*AddressPredicate)(const ObjectAddress *);
 static void EnsureDependenciesCanBeDistributed(const ObjectAddress *relationAddress);
 static void ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress);
 static int ObjectAddressComparator(const void *a, const void *b);
-static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static List * FilterObjectAddressListByPredicate(List *objectAddressList,
 												 AddressPredicate predicate);
 
@@ -289,7 +288,7 @@ GetDistributableDependenciesForObject(const ObjectAddress *target)
  * GetDependencyCreateDDLCommands returns a list (potentially empty or NIL) of ddl
  * commands to execute on a worker to create the object.
  */
-static List *
+List *
 GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 {
 	switch (getObjectClass(dependency))
