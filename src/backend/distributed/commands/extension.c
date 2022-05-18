@@ -10,6 +10,7 @@
 
 #include "postgres.h"
 
+#include "access/genam.h"
 #include "citus_version.h"
 #include "catalog/pg_extension_d.h"
 #include "commands/defrem.h"
@@ -37,6 +38,8 @@ static void AddSchemaFieldIfMissing(CreateExtensionStmt *stmt);
 static List * FilterDistributedExtensions(List *extensionObjectList);
 static List * ExtensionNameListToObjectAddressList(List *extensionObjectList);
 static void MarkExistingObjectDependenciesDistributedIfSupported(void);
+static List * GetAllViews(void);
+static bool ShouldMarkRelationDistributedOnUpgrade(Oid relationId);
 static bool ShouldPropagateExtensionCommand(Node *parseTree);
 static bool IsAlterExtensionSetSchemaCitus(Node *parseTree);
 static Node * RecreateExtensionStmt(Oid extensionOid);
@@ -510,26 +513,77 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	Oid citusTableId = InvalidOid;
 	foreach_oid(citusTableId, citusTableIdList)
 	{
-		ObjectAddress tableAddress = { 0 };
-		ObjectAddressSet(tableAddress, RelationRelationId, citusTableId);
+		if (!ShouldMarkRelationDistributedOnUpgrade(citusTableId))
+		{
+			continue;
+		}
 
 		/* refrain reading the metadata cache for all tables */
 		if (ShouldSyncTableMetadataViaCatalog(citusTableId))
 		{
-			/* we need to pass pointer allocated in the heap */
-			ObjectAddress *addressPointer = palloc0(sizeof(ObjectAddress));
-			*addressPointer = tableAddress;
+			ObjectAddress tableAddress = { 0 };
+			ObjectAddressSet(tableAddress, RelationRelationId, citusTableId);
 
-			/* as of Citus 11, tables that should be synced are also considered object */
-			resultingObjectAddresses = lappend(resultingObjectAddresses, addressPointer);
+			/*
+			 * We mark tables distributed immediately because we also need to mark
+			 * views as distributed. We check whether the views that depend on
+			 * the table has any auto-distirbutable dependencies below. Citus
+			 * currently cannot "auto" distribute tables as dependencies, so we
+			 * mark them distributed immediately.
+			 */
+			MarkObjectDistributedLocally(&tableAddress);
+
+			/*
+			 * All the distributable dependencies of a table should be marked as
+			 * distributed.
+			 */
+			List *distributableDependencyObjectAddresses =
+				GetDistributableDependenciesForObject(&tableAddress);
+
+			resultingObjectAddresses =
+				list_concat(resultingObjectAddresses,
+							distributableDependencyObjectAddresses);
+		}
+	}
+
+	/*
+	 * As of Citus 11, views on Citus tables that do not have any unsupported
+	 * dependency should also be distributed.
+	 *
+	 * In general, we mark views distributed as long as it does not have
+	 * any unsupported dependencies.
+	 */
+	List *viewList = GetAllViews();
+	Oid viewOid = InvalidOid;
+	foreach_oid(viewOid, viewList)
+	{
+		if (!ShouldMarkRelationDistributedOnUpgrade(viewOid))
+		{
+			continue;
 		}
 
-		List *distributableDependencyObjectAddresses =
-			GetDistributableDependenciesForObject(&tableAddress);
+		ObjectAddress viewAddress = { 0 };
+		ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
 
-		resultingObjectAddresses = list_concat(resultingObjectAddresses,
-											   distributableDependencyObjectAddresses);
+		/*
+		 * If a view depends on multiple views, that view will be marked
+		 * as distributed while it is processed for the last view
+		 * table.
+		 */
+		MarkObjectDistributedLocally(&viewAddress);
+
+		/* we need to pass pointer allocated in the heap */
+		ObjectAddress *addressPointer = palloc0(sizeof(ObjectAddress));
+		*addressPointer = viewAddress;
+
+		List *distributableDependencyObjectAddresses =
+			GetDistributableDependenciesForObject(&viewAddress);
+
+		resultingObjectAddresses =
+			list_concat(resultingObjectAddresses,
+						distributableDependencyObjectAddresses);
 	}
+
 
 	/* resolve dependencies of the objects in pg_dist_object*/
 	List *distributedObjectAddressList = GetDistributedObjectAddressList();
@@ -563,6 +617,85 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	}
 
 	SetLocalEnableMetadataSync(prevMetadataSyncValue);
+}
+
+
+/*
+ * GetAllViews returns list of view oids that exists on this server.
+ */
+static List *
+GetAllViews(void)
+{
+	List *viewOidList = NIL;
+
+	Relation pgClass = table_open(RelationRelationId, AccessShareLock);
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgClass, InvalidOid, false, NULL,
+													0, NULL);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_class relationForm = (Form_pg_class) GETSTRUCT(heapTuple);
+
+		/* we're only interested in views */
+		if (relationForm->relkind == RELKIND_VIEW)
+		{
+			viewOidList = lappend_oid(viewOidList, relationForm->oid);
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgClass, NoLock);
+
+	return viewOidList;
+}
+
+
+/*
+ * ShouldMarkRelationDistributedOnUpgrade is a helper function that
+ * decides whether the input relation should be marked as distributed
+ * during the upgrade.
+ */
+static bool
+ShouldMarkRelationDistributedOnUpgrade(Oid relationId)
+{
+	if (!EnableMetadataSync)
+	{
+		/*
+		 * Just in case anything goes wrong, we should still be able
+		 * to continue to the version upgrade.
+		 */
+		return false;
+	}
+
+	ObjectAddress relationAddress = { 0 };
+	ObjectAddressSet(relationAddress, RelationRelationId, relationId);
+
+	bool pgObject = (relationId < FirstNormalObjectId);
+	bool ownedByExtension = IsTableOwnedByExtension(relationId);
+	bool alreadyDistributed = IsObjectDistributed(&relationAddress);
+	bool hasUnsupportedDependency =
+		DeferErrorIfHasUnsupportedDependency(&relationAddress) != NULL;
+	bool hasCircularDependency =
+		DeferErrorIfCircularDependencyExists(&relationAddress) != NULL;
+
+	/*
+	 * pgObject: Citus never marks pg objects as distributed
+	 * ownedByExtension: let extensions manage its own objects
+	 * alreadyDistributed: most likely via earlier versions
+	 * hasUnsupportedDependency: Citus doesn't know how to distribute its dependencies
+	 * hasCircularDependency: Citus cannot handle circular dependencies
+	 */
+	if (pgObject || ownedByExtension || alreadyDistributed ||
+		hasUnsupportedDependency || hasCircularDependency)
+	{
+		return false;
+	}
+
+	return true;
 }
 
 

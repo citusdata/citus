@@ -23,6 +23,7 @@
 #include "catalog/objectaddress.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/connection_management.h"
+#include "distributed/errormessage.h"
 #include "distributed/relay_utility.h"
 #include "utils/acl.h"
 #include "utils/relcache.h"
@@ -258,6 +259,9 @@ extern void CreateTruncateTrigger(Oid relationId);
 extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
 
 extern void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
+extern DeferredErrorMessage * DeferErrorIfCircularDependencyExists(const
+																   ObjectAddress *
+																   objectAddress);
 extern List * GetDistributableDependenciesForObject(const ObjectAddress *target);
 extern bool ShouldPropagate(void);
 extern bool ShouldPropagateCreateInCoordinatedTransction(void);

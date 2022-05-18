@@ -166,11 +166,28 @@ EnsureDependenciesCanBeDistributed(const ObjectAddress *objectAddress)
 
 
 /*
- * ErrorIfCircularDependencyExists checks whether given object has circular dependency
- * with itself via existing objects of pg_dist_object.
+ * ErrorIfCircularDependencyExists is a wrapper around
+ * DeferErrorIfCircularDependencyExists(), and throws error
+ * if circular dependency exists.
  */
 static void
 ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
+{
+	DeferredErrorMessage *depError =
+		DeferErrorIfCircularDependencyExists(objectAddress);
+	if (depError != NULL)
+	{
+		RaiseDeferredError(depError, ERROR);
+	}
+}
+
+
+/*
+ * DeferErrorIfCircularDependencyExists checks whether given object has
+ * circular dependency with itself via existing objects of pg_dist_object.
+ */
+DeferredErrorMessage *
+DeferErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
 {
 	List *dependencies = GetAllSupportedDependenciesForObject(objectAddress);
 
@@ -189,13 +206,18 @@ ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
 			objectDescription = getObjectDescription(objectAddress);
 			#endif
 
-			ereport(ERROR, (errmsg("Citus can not handle circular dependencies "
-								   "between distributed objects"),
-							errdetail("\"%s\" circularly depends itself, resolve "
-									  "circular dependency first",
-									  objectDescription)));
+			StringInfo detailInfo = makeStringInfo();
+			appendStringInfo(detailInfo, "\"%s\" circularly depends itself, resolve "
+										 "circular dependency first", objectDescription);
+
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "Citus can not handle circular dependencies "
+								 "between distributed objects", detailInfo->data,
+								 NULL);
 		}
 	}
+
+	return NULL;
 }
 
 
