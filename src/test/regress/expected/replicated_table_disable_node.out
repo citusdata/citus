@@ -20,7 +20,6 @@ INSERT INTO replicated SELECT i,i FROM generate_series(0,10)i;
 INSERT INTO ref SELECT i,i FROM generate_series(0,10)i;
 -- should be successfully disable node
 SELECT citus_disable_node('localhost', :worker_2_port, true);
-NOTICE:  Node localhost:xxxxx has active shard placements. Some queries may fail after this operation. Use SELECT citus_activate_node('localhost', 57638) to activate this node back.
  citus_disable_node
 ---------------------------------------------------------------------
 
