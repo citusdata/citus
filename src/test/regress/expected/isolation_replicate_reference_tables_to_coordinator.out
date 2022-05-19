@@ -91,7 +91,7 @@ step s1-update-ref-table:
     update ref_table set a = a + 1;
 
 step s2-sleep:
-	SELECT pg_sleep(0.5);
+ SELECT pg_sleep(0.5);
 
 pg_sleep
 ---------------------------------------------------------------------
@@ -112,9 +112,10 @@ query                                    |state              |wait_event_type|wa
 (2 rows)
 
 step s2-view-worker:
-	SELECT query, state, wait_event_type, wait_event, usename, datname
+ SELECT query, state, wait_event_type, wait_event, usename, datname
     FROM citus_stat_activity
     WHERE query NOT ILIKE ALL(VALUES
+      ('%application_name%'),
       ('%pg_prepared_xacts%'),
       ('%COMMIT%'),
       ('%dump_local_%'),
@@ -168,9 +169,9 @@ step s1-update-ref-table:
     update ref_table set a = a + 1;
 
 step s2-active-transactions:
-	-- Admin should be able to see all transactions
-	SELECT count(*) FROM get_all_active_transactions() WHERE transaction_number != 0;
-	SELECT count(*) FROM get_global_active_transactions() WHERE transaction_number != 0;
+ -- Admin should be able to see all transactions
+ SELECT count(*) FROM get_all_active_transactions() WHERE transaction_number != 0;
+ SELECT count(*) FROM get_global_active_transactions() WHERE transaction_number != 0;
 
 count
 ---------------------------------------------------------------------

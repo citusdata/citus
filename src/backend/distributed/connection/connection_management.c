@@ -1478,6 +1478,18 @@ IsRebalancerInternalBackend(void)
 
 
 /*
+ * IsCitusRunCommandBackend returns true if we are in a backend that one of
+ * the run_command_on_* functions initiated.
+ */
+bool
+IsCitusRunCommandBackend(void)
+{
+	return application_name &&
+		   strcmp(application_name, CITUS_RUN_COMMAND_APPLICATION_NAME) == 0;
+}
+
+
+/*
  * IsCitusInitiatedRemoteBackend returns true if we are in a backend that citus
  * initiated via remote connection.
  */

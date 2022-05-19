@@ -29,6 +29,9 @@
 #include "utils/builtins.h"
 
 
+#define SET_APPLICATION_NAME_QUERY \
+	"SET application_name TO '" CITUS_RUN_COMMAND_APPLICATION_NAME "'"
+
 PG_FUNCTION_INFO_V1(master_run_on_worker);
 
 static int ParseCommandParameters(FunctionCallInfo fcinfo, StringInfo **nodeNameArray,
@@ -42,15 +45,15 @@ static void ExecuteCommandsInParallelAndStoreResults(StringInfo *nodeNameArray,
 													 int commandCount);
 static bool GetConnectionStatusAndResult(MultiConnection *connection, bool *resultStatus,
 										 StringInfo queryResultString);
-static bool EvaluateQueryResult(MultiConnection *connection, PGresult *queryResult,
-								StringInfo queryResultString);
-static void StoreErrorMessage(MultiConnection *connection, StringInfo queryResultString);
 static void ExecuteCommandsAndStoreResults(StringInfo *nodeNameArray,
 										   int *nodePortArray,
 										   StringInfo *commandStringArray,
 										   bool *statusArray,
 										   StringInfo *resultStringArray,
 										   int commandCount);
+static bool ExecuteOptionalSingleResultCommand(MultiConnection *connection,
+											   char *queryString, StringInfo
+											   queryResultString);
 static Tuplestorestate * CreateTupleStore(TupleDesc tupleDescriptor,
 										  StringInfo *nodeNameArray, int *nodePortArray,
 										  bool *statusArray,
@@ -239,18 +242,66 @@ ExecuteCommandsInParallelAndStoreResults(StringInfo *nodeNameArray, int *nodePor
 
 		FinishConnectionEstablishment(connection);
 
+		/* check whether connection attempt was successful */
 		if (PQstatus(connection->pgConn) != CONNECTION_OK)
 		{
 			appendStringInfo(queryResultString, "failed to connect to %s:%d", nodeName,
-							 (int) nodePort);
+							 nodePort);
 			statusArray[commandIndex] = false;
+			CloseConnection(connection);
 			connectionArray[commandIndex] = NULL;
 			finishedCount++;
+			continue;
 		}
-		else
+
+		/* set the application_name to avoid nested execution checks */
+		int querySent = SendRemoteCommand(connection, SET_APPLICATION_NAME_QUERY);
+		if (querySent == 0)
 		{
-			statusArray[commandIndex] = true;
+			StoreErrorMessage(connection, queryResultString);
+			statusArray[commandIndex] = false;
+			CloseConnection(connection);
+			connectionArray[commandIndex] = NULL;
+			finishedCount++;
+			continue;
 		}
+
+		statusArray[commandIndex] = true;
+	}
+
+	/* send queries at once */
+	for (int commandIndex = 0; commandIndex < commandCount; commandIndex++)
+	{
+		MultiConnection *connection = connectionArray[commandIndex];
+		if (connection == NULL)
+		{
+			continue;
+		}
+
+		bool raiseInterrupts = true;
+		PGresult *queryResult = GetRemoteCommandResult(connection, raiseInterrupts);
+
+		/* write the result value or error message to queryResultString */
+		StringInfo queryResultString = resultStringArray[commandIndex];
+		bool success = EvaluateSingleQueryResult(connection, queryResult,
+												 queryResultString);
+		if (!success)
+		{
+			statusArray[commandIndex] = false;
+			CloseConnection(connection);
+			connectionArray[commandIndex] = NULL;
+			finishedCount++;
+			continue;
+		}
+
+		/* clear results for the next command */
+		PQclear(queryResult);
+
+		bool raiseErrors = false;
+		ClearResults(connection, raiseErrors);
+
+		/* we only care about the SET application_name result on failure */
+		resetStringInfo(queryResultString);
 	}
 
 	/* send queries at once */
@@ -357,101 +408,12 @@ GetConnectionStatusAndResult(MultiConnection *connection, bool *resultStatus,
 
 	/* query result is available at this point */
 	PGresult *queryResult = PQgetResult(connection->pgConn);
-	bool success = EvaluateQueryResult(connection, queryResult, queryResultString);
+	bool success = EvaluateSingleQueryResult(connection, queryResult, queryResultString);
 	PQclear(queryResult);
 
 	*resultStatus = success;
 	finished = true;
 	return true;
-}
-
-
-/*
- * EvaluateQueryResult gets the query result from connection and returns
- * true if the query is executed successfully, false otherwise. A query result
- * or an error message is returned in queryResultString. The function requires
- * that the query returns a single column/single row result. It returns an
- * error otherwise.
- */
-static bool
-EvaluateQueryResult(MultiConnection *connection, PGresult *queryResult,
-					StringInfo queryResultString)
-{
-	bool success = false;
-
-	ExecStatusType resultStatus = PQresultStatus(queryResult);
-	if (resultStatus == PGRES_COMMAND_OK)
-	{
-		char *commandStatus = PQcmdStatus(queryResult);
-		appendStringInfo(queryResultString, "%s", commandStatus);
-		success = true;
-	}
-	else if (resultStatus == PGRES_TUPLES_OK)
-	{
-		int ntuples = PQntuples(queryResult);
-		int nfields = PQnfields(queryResult);
-
-		/* error if query returns more than 1 rows, or more than 1 fields */
-		if (nfields != 1)
-		{
-			appendStringInfo(queryResultString,
-							 "expected a single column in query target");
-		}
-		else if (ntuples > 1)
-		{
-			appendStringInfo(queryResultString,
-							 "expected a single row in query result");
-		}
-		else
-		{
-			int row = 0;
-			int column = 0;
-			if (!PQgetisnull(queryResult, row, column))
-			{
-				char *queryResultValue = PQgetvalue(queryResult, row, column);
-				appendStringInfo(queryResultString, "%s", queryResultValue);
-			}
-			success = true;
-		}
-	}
-	else
-	{
-		StoreErrorMessage(connection, queryResultString);
-	}
-
-	return success;
-}
-
-
-/*
- * StoreErrorMessage gets the error message from connection and stores it
- * in queryResultString. It should be called only when error is present
- * otherwise it would return a default error message.
- */
-static void
-StoreErrorMessage(MultiConnection *connection, StringInfo queryResultString)
-{
-	char *errorMessage = PQerrorMessage(connection->pgConn);
-	if (errorMessage != NULL)
-	{
-		/* copy the error message to a writable memory */
-		errorMessage = pnstrdup(errorMessage, strlen(errorMessage));
-
-		char *firstNewlineIndex = strchr(errorMessage, '\n');
-
-		/* trim the error message at the line break */
-		if (firstNewlineIndex != NULL)
-		{
-			*firstNewlineIndex = '\0';
-		}
-	}
-	else
-	{
-		/* put a default error message if no error message is reported */
-		errorMessage = "An error occurred while running the query";
-	}
-
-	appendStringInfo(queryResultString, "%s", errorMessage);
 }
 
 
@@ -469,63 +431,76 @@ ExecuteCommandsAndStoreResults(StringInfo *nodeNameArray, int *nodePortArray,
 {
 	for (int commandIndex = 0; commandIndex < commandCount; commandIndex++)
 	{
+		CHECK_FOR_INTERRUPTS();
+
 		char *nodeName = nodeNameArray[commandIndex]->data;
 		int32 nodePort = nodePortArray[commandIndex];
 		char *queryString = commandStringArray[commandIndex]->data;
 		StringInfo queryResultString = resultStringArray[commandIndex];
-		bool reportResultError = false;
 
-		bool success = ExecuteRemoteQueryOrCommand(nodeName, nodePort, queryString,
-												   queryResultString, reportResultError);
+		int connectionFlags = FORCE_NEW_CONNECTION;
+		MultiConnection *connection =
+			GetNodeConnection(connectionFlags, nodeName, nodePort);
+
+		/* set the application_name to avoid nested execution checks */
+		bool success = ExecuteOptionalSingleResultCommand(connection,
+														  SET_APPLICATION_NAME_QUERY,
+														  queryResultString);
+		if (!success)
+		{
+			statusArray[commandIndex] = false;
+			CloseConnection(connection);
+			continue;
+		}
+
+		/* we only care about the SET application_name result on failure */
+		resetStringInfo(queryResultString);
+
+		/* send the actual query string */
+		success = ExecuteOptionalSingleResultCommand(connection, queryString,
+													 queryResultString);
 
 		statusArray[commandIndex] = success;
-
-		CHECK_FOR_INTERRUPTS();
+		CloseConnection(connection);
 	}
 }
 
 
 /*
- * ExecuteRemoteQueryOrCommand executes a query at specified remote node using
+ * ExecuteOptionalSingleResultCommand executes a query at specified remote node using
  * the calling user's credentials. The function returns the query status
  * (success/failure), and query result. The query is expected to return a single
  * target containing zero or one rows.
  */
-bool
-ExecuteRemoteQueryOrCommand(char *nodeName, uint32 nodePort, char *queryString,
-							StringInfo queryResultString, bool reportResultError)
+static bool
+ExecuteOptionalSingleResultCommand(MultiConnection *connection, char *queryString,
+								   StringInfo queryResultString)
 {
-	int connectionFlags = FORCE_NEW_CONNECTION;
-	MultiConnection *connection =
-		GetNodeConnection(connectionFlags, nodeName, nodePort);
-	bool raiseInterrupts = true;
-
 	if (PQstatus(connection->pgConn) != CONNECTION_OK)
 	{
-		appendStringInfo(queryResultString, "failed to connect to %s:%d", nodeName,
-						 (int) nodePort);
+		appendStringInfo(queryResultString, "failed to connect to %s:%d",
+						 connection->hostname, connection->port);
 		return false;
 	}
 
 	if (!SendRemoteCommand(connection, queryString))
 	{
-		appendStringInfo(queryResultString, "failed to send query to %s:%d", nodeName,
-						 (int) nodePort);
+		appendStringInfo(queryResultString, "failed to send query to %s:%d",
+						 connection->hostname, connection->port);
 		return false;
 	}
 
+	bool raiseInterrupts = true;
 	PGresult *queryResult = GetRemoteCommandResult(connection, raiseInterrupts);
-	bool success = EvaluateQueryResult(connection, queryResult, queryResultString);
 
-	if (!success && reportResultError)
-	{
-		ReportResultError(connection, queryResult, ERROR);
-	}
+	/* write the result value or error message to queryResultString */
+	bool success = EvaluateSingleQueryResult(connection, queryResult, queryResultString);
 
+	/* clear result and close the connection */
 	PQclear(queryResult);
 
-	/* close the connection */
-	CloseConnection(connection);
+	bool raiseErrors = false;
+	ClearResults(connection, raiseErrors);
 
 	return success;
 }
