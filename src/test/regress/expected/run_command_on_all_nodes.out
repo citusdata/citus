@@ -63,6 +63,7 @@ SELECT result FROM run_command_on_all_nodes('SELECT tablename FROM pg_tables WHE
 (3 rows)
 
 -- break a node and check messages
+BEGIN;
 SELECT nodeid AS worker_1_nodeid FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
 UPDATE pg_dist_node SET nodeport = 0 WHERE nodeid = :worker_1_nodeid;
 SELECT nodeid = :worker_1_nodeid AS "Is Worker 1", success, result FROM run_command_on_all_nodes('SELECT 1') ORDER BY 1;
@@ -83,6 +84,62 @@ CONTEXT:  PL/pgSQL function run_command_on_all_nodes(text,boolean,boolean) line 
  t           | f       | failed to connect to localhost:xxxxx
 (3 rows)
 
-UPDATE pg_dist_node SET nodeport = :worker_1_port WHERE nodeid = :worker_1_nodeid;
+ROLLBACK;
+-- break connection to localhost
+BEGIN;
+UPDATE pg_dist_node SET nodeport = 0 WHERE groupid = 0;
+SELECT success, result
+FROM run_command_on_coordinator('SELECT inet_server_port()') ORDER BY 1;
+ success | result
+---------------------------------------------------------------------
+ t       | 57636
+(1 row)
+
+SELECT success, result
+FROM run_command_on_coordinator('SELECT inet_server_port()', give_warning_for_connection_errors:=true) ORDER BY 1;
+ success | result
+---------------------------------------------------------------------
+ t       | 57636
+(1 row)
+
+ROLLBACK;
+-- we cannot use run_command_on_coordinator from workers if coordinator is not in the metadata
+SELECT success, result FROM run_command_on_all_nodes($$select result from run_command_on_coordinator('select inet_server_port()')$$);
+ success |                        result
+---------------------------------------------------------------------
+ f       | ERROR:  the coordinator is not added to the metadata
+ f       | ERROR:  the coordinator is not added to the metadata
+ t       | 57636
+(3 rows)
+
+-- we can use run_command_on_coordinator from any node if the coordinator is in the metadata
+SELECT citus_set_coordinator_host('localhost');
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT success, result FROM run_command_on_all_nodes($$select result from run_command_on_coordinator('select inet_server_port()')$$);
+ success | result
+---------------------------------------------------------------------
+ t       | 57636
+ t       | 57636
+ t       | 57636
+(3 rows)
+
+SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- check that we fail when pg_dist_node is empty
+BEGIN;
+DELETE FROM pg_dist_node;
+SELECT success, result FROM run_command_on_coordinator('select inet_server_port()');
+ERROR:  the coordinator is not added to the metadata
+HINT:  Add the node as a coordinator by using: SELECT citus_set_coordinator_host('<hostname>')
+CONTEXT:  PL/pgSQL function run_command_on_coordinator(text,boolean) line XX at RAISE
+ROLLBACK;
 DROP SCHEMA run_command_on_all_nodes CASCADE;
 NOTICE:  drop cascades to table run_command_on_all_nodes.tbl
