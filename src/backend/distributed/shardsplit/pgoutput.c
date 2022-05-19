@@ -255,10 +255,11 @@ ShouldSlotHandleChange(char *slotName, ReorderBufferChange *change)
 	return true;
 }
 
+
 /*
-* split_change function emits the incoming tuple change
-* to the appropriate destination shard.
-*/
+ * split_change function emits the incoming tuple change
+ * to the appropriate destination shard.
+ */
 static void
 split_change(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 			 Relation relation, ReorderBufferChange *change)

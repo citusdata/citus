@@ -136,3 +136,16 @@ SET search_path TO citus_split_shard_by_split_points;
 SELECT * from table_to_split_1; -- should alwasy have zero rows
 SELECT * from table_to_split_2;
 SELECT * from table_to_split_3;
+
+-- Delete data from table_to_split_1 from worker1
+\c - - - :worker_1_port
+SET search_path TO citus_split_shard_by_split_points;
+DELETE FROM table_to_split_1;
+SELECT pg_sleep(10);
+
+-- Child shard rows should be deleted
+\c - - - :worker_2_port
+SET search_path TO citus_split_shard_by_split_points;
+SELECT * FROM table_to_split_1;
+SELECT * FROM table_to_split_2;
+SELECT * FROM table_to_split_3;
