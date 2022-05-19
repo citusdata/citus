@@ -205,6 +205,7 @@ ORDER BY 1;
  function run_command_on_shards(regclass,text,boolean)
  function run_command_on_workers(text,boolean)
  function shard_name(regclass,bigint)
+ function start_metadata_sync_to_all_nodes()
  function start_metadata_sync_to_node(text,integer)
  function stop_metadata_sync_to_node(text,integer,boolean)
  function time_partition_range(regclass)
@@ -284,5 +285,5 @@ ORDER BY 1;
  view columnar.stripe
  view pg_dist_shard_placement
  view time_partitions
-(268 rows)
+(269 rows)
 

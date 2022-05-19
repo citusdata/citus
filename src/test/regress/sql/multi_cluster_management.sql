@@ -484,5 +484,10 @@ SELECT * from master_set_node_property('localhost', :worker_2_port, 'bogusproper
 
 DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated;
 
+BEGIN;
+	SELECT start_metadata_sync_to_all_nodes();
+COMMIT;
+SELECT start_metadata_sync_to_all_nodes();
+
 -- verify that at the end of this file, all primary nodes have metadata synced
 SELECT bool_and(hasmetadata) AND bool_and(metadatasynced) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';

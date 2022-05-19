@@ -356,9 +356,10 @@ ReplicateReferenceTableShardToNode(ShardInterval *shardInterval, char *nodeName,
 
 	/* send commands to new workers, the current user should be a superuser */
 	Assert(superuser());
-	SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName, nodePort,
-															CurrentUserName(),
-															ddlCommandList);
+	WorkerNode *workerNode = FindWorkerNode(nodeName, nodePort);
+	SendMetadataCommandListToWorkerListInCoordinatedTransaction(list_make1(workerNode),
+																CurrentUserName(),
+																ddlCommandList);
 	int32 groupId = GroupForNode(nodeName, nodePort);
 
 	uint64 placementId = GetNextPlacementId();
@@ -599,9 +600,8 @@ ReplicateAllReferenceTablesToNode(WorkerNode *workerNode)
 
 			/* send commands to new workers, the current user should be a superuser */
 			Assert(superuser());
-			SendMetadataCommandListToWorkerInCoordinatedTransaction(
-				workerNode->workerName,
-				workerNode->workerPort,
+			SendMetadataCommandListToWorkerListInCoordinatedTransaction(
+				list_make1(workerNode),
 				CurrentUserName(),
 				commandList);
 		}
