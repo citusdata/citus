@@ -358,7 +358,8 @@ ShouldHideShardsInternal(void)
 		return false;
 	}
 
-	if (IsCitusInternalBackend() || IsRebalancerInternalBackend())
+	if (IsCitusInternalBackend() || IsRebalancerInternalBackend() ||
+		IsCitusRunCommandBackend())
 	{
 		/* we never hide shards from Citus */
 		return false;

@@ -66,4 +66,8 @@ extern void WaitForAllConnections(List *connectionList, bool raiseInterrupts);
 
 extern bool SendCancelationRequest(MultiConnection *connection);
 
+extern bool EvaluateSingleQueryResult(MultiConnection *connection, PGresult *queryResult,
+									  StringInfo queryResultString);
+extern void StoreErrorMessage(MultiConnection *connection, StringInfo queryResultString);
+
 #endif /* REMOTE_COMMAND_H */
