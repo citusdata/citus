@@ -78,6 +78,32 @@ QualifyAlterSequenceSchemaStmt(Node *node)
 
 
 /*
+ * QualifyRenameSequenceStmt transforms a
+ * ALTER SEQUENCE .. RENAME TO ..
+ * statement in place and makes the sequence name fully qualified.
+ */
+void
+QualifyRenameSequenceStmt(Node *node)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	Assert(stmt->renameType == OBJECT_SEQUENCE);
+
+	RangeVar *seq = stmt->relation;
+
+	if (seq->schemaname == NULL)
+	{
+		Oid seqOid = RangeVarGetRelid(seq, NoLock, stmt->missing_ok);
+
+		if (OidIsValid(seqOid))
+		{
+			Oid schemaOid = get_rel_namespace(seqOid);
+			seq->schemaname = get_namespace_name(schemaOid);
+		}
+	}
+}
+
+
+/*
  * QualifyDropSequenceStmt transforms a DROP SEQUENCE
  * statement in place and makes the sequence name fully qualified.
  */
@@ -110,25 +136,4 @@ QualifyDropSequenceStmt(Node *node)
 	}
 
 	stmt->objects = objectNameListWithSchema;
-}
-
-
-/*
- * QualifyRenameSequenceStmt transforms a
- * ALTER SEQUENCE .. RENAME TO ..
- * statement in place and makes the sequence name fully qualified.
- */
-void
-QualifyRenameSequenceStmt(Node *node)
-{
-	RenameStmt *stmt = castNode(RenameStmt, node);
-	Assert(stmt->renameType == OBJECT_SEQUENCE);
-
-	RangeVar *seq = stmt->relation;
-
-	if (seq->schemaname == NULL)
-	{
-		Oid schemaOid = RangeVarGetCreationNamespace(seq);
-		seq->schemaname = get_namespace_name(schemaOid);
-	}
 }
