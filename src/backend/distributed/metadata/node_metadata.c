@@ -106,9 +106,9 @@ static void InsertPlaceholderCoordinatorRecord(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetadata
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
-static void SyncDistributedObjectsToNode(WorkerNode *workerNode);
+static void SyncDistributedObjectsToNodeList(List *workerNodeList);
 static void UpdateLocalGroupIdOnNode(WorkerNode *workerNode);
-static void SyncPgDistTableMetadataToNode(WorkerNode *workerNode);
+static void SyncPgDistTableMetadataToNodeList(List *nodeList);
 static List * InterTableRelationshipCommandList();
 static void BlockDistributedQueriesOnMetadataNodes(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
@@ -843,7 +843,7 @@ SyncDistributedObjectsCommandList(WorkerNode *workerNode)
 
 
 /*
- * SyncDistributedObjectsToNode sync the distributed objects to the node. It includes
+ * SyncDistributedObjectsToNodeList sync the distributed objects to the node. It includes
  * - All dependencies (e.g., types, schemas, sequences)
  * - All shell distributed table
  * - Inter relation between those shell tables
@@ -852,17 +852,29 @@ SyncDistributedObjectsCommandList(WorkerNode *workerNode)
  * since all the dependencies should be present in the coordinator already.
  */
 static void
-SyncDistributedObjectsToNode(WorkerNode *workerNode)
+SyncDistributedObjectsToNodeList(List *workerNodeList)
 {
-	if (NodeIsCoordinator(workerNode))
+	List *workerNodesToSync = NIL;
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		/* coordinator has all the objects */
-		return;
+		if (NodeIsCoordinator(workerNode))
+		{
+			/* coordinator has all the objects */
+			continue;
+		}
+
+		if (!NodeIsPrimary(workerNode))
+		{
+			/* secondary nodes gets the objects from their primaries via replication */
+			continue;
+		}
+
+		workerNodesToSync = lappend(workerNodesToSync, workerNode);
 	}
 
-	if (!NodeIsPrimary(workerNode))
+	if (workerNodesToSync == NIL)
 	{
-		/* secondary nodes gets the objects from their primaries via replication */
 		return;
 	}
 
@@ -874,9 +886,8 @@ SyncDistributedObjectsToNode(WorkerNode *workerNode)
 
 	/* send commands to new workers, the current user should be a superuser */
 	Assert(superuser());
-	SendMetadataCommandListToWorkerInCoordinatedTransaction(
-		workerNode->workerName,
-		workerNode->workerPort,
+	SendMetadataCommandListToWorkerListInCoordinatedTransaction(
+		workerNodesToSync,
 		CurrentUserName(),
 		commandList);
 }
@@ -894,9 +905,8 @@ UpdateLocalGroupIdOnNode(WorkerNode *workerNode)
 
 		/* send commands to new workers, the current user should be a superuser */
 		Assert(superuser());
-		SendMetadataCommandListToWorkerInCoordinatedTransaction(
-			workerNode->workerName,
-			workerNode->workerPort,
+		SendMetadataCommandListToWorkerListInCoordinatedTransaction(
+			list_make1(workerNode),
 			CurrentUserName(),
 			commandList);
 	}
@@ -904,25 +914,33 @@ UpdateLocalGroupIdOnNode(WorkerNode *workerNode)
 
 
 /*
- * SyncPgDistTableMetadataToNode syncs the pg_dist_partition, pg_dist_shard
+ * SyncPgDistTableMetadataToNodeList syncs the pg_dist_partition, pg_dist_shard
  * pg_dist_placement and pg_dist_object metadata entries.
  *
  */
 static void
-SyncPgDistTableMetadataToNode(WorkerNode *workerNode)
+SyncPgDistTableMetadataToNodeList(List *nodeList)
 {
-	if (NodeIsPrimary(workerNode) && !NodeIsCoordinator(workerNode))
-	{
-		List *syncPgDistMetadataCommandList = PgDistTableMetadataSyncCommandList();
+	/* send commands to new workers, the current user should be a superuser */
+	Assert(superuser());
 
-		/* send commands to new workers, the current user should be a superuser */
-		Assert(superuser());
-		SendMetadataCommandListToWorkerInCoordinatedTransaction(
-			workerNode->workerName,
-			workerNode->workerPort,
-			CurrentUserName(),
-			syncPgDistMetadataCommandList);
+	List *syncPgDistMetadataCommandList = PgDistTableMetadataSyncCommandList();
+
+	List *nodesWithMetadata = NIL;
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, nodeList)
+	{
+		if (NodeIsPrimary(workerNode) && !NodeIsCoordinator(workerNode))
+		{
+			nodesWithMetadata = lappend(nodesWithMetadata, workerNode);
+		}
 	}
+
+
+	SendMetadataCommandListToWorkerListInCoordinatedTransaction(
+		nodesWithMetadata,
+		CurrentUserName(),
+		syncPgDistMetadataCommandList);
 }
 
 
@@ -1118,15 +1136,14 @@ PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes)
 
 
 /*
- * ActivateNode activates the node with nodeName and nodePort. Currently, activation
- * includes only replicating the reference tables and setting isactive column of the
- * given node.
+ * ActivateNodeList iterates over the nodeList and activates the nodes.
+ * Some part of the node activation is done parallel across the nodes,
+ * such as syncing the metadata. However, reference table replication is
+ * done one by one across nodes.
  */
-int
-ActivateNode(char *nodeName, int nodePort)
+void
+ActivateNodeList(List *nodeList)
 {
-	bool isActive = true;
-
 	/*
 	 * We currently require the object propagation to happen via superuser,
 	 * see #5139. While activating a node, we sync both metadata and object
@@ -1143,85 +1160,129 @@ ActivateNode(char *nodeName, int nodePort)
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
-	/*
-	 * First, locally mark the node is active, if everything goes well,
-	 * we are going to sync this information to all the metadata nodes.
-	 */
-	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
-	if (workerNode == NULL)
-	{
-		ereport(ERROR, (errmsg("node at \"%s:%u\" does not exist", nodeName, nodePort)));
-	}
 
-	/*
-	 * Delete existing reference and replicated table placements on the
-	 * given groupId if the group has been disabled earlier (e.g., isActive
-	 * set to false).
-	 *
-	 * Sync the metadata changes to all existing metadata nodes irrespective
-	 * of the current nodes' metadata sync state. We expect all nodes up
-	 * and running when another node is activated.
-	 */
-	if (!workerNode->isActive && NodeIsPrimary(workerNode))
-	{
-		bool localOnly = false;
-		DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
-														localOnly);
-	}
-
-	workerNode =
-		SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_isactive,
-								 BoolGetDatum(isActive));
-
-	/* TODO: Once all tests will be enabled for MX, we can remove sync by default check */
-	bool syncMetadata = EnableMetadataSync && NodeIsPrimary(workerNode);
-
-	if (syncMetadata)
+	List *nodeToSyncMetadata = NIL;
+	WorkerNode *node = NULL;
+	foreach_ptr(node, nodeList)
 	{
 		/*
-		 * We are going to sync the metadata anyway in this transaction, so do
-		 * not fail just because the current metadata is not synced.
+		 * First, locally mark the node is active, if everything goes well,
+		 * we are going to sync this information to all the metadata nodes.
 		 */
-		SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
-						BoolGetDatum(true));
-
-		/*
-		 * Update local group id first, as object dependency logic requires to have
-		 * updated local group id.
-		 */
-		UpdateLocalGroupIdOnNode(workerNode);
-
-		/*
-		 * Sync distributed objects first. We must sync distributed objects before
-		 * replicating reference tables to the remote node, as reference tables may
-		 * need such objects.
-		 */
-		SyncDistributedObjectsToNode(workerNode);
-
-		/*
-		 * We need to replicate reference tables before syncing node metadata, otherwise
-		 * reference table replication logic would try to get lock on the new node before
-		 * having the shard placement on it
-		 */
-		if (ReplicateReferenceTablesOnActivate)
+		WorkerNode *workerNode =
+			FindWorkerNodeAnyCluster(node->workerName, node->workerPort);
+		if (workerNode == NULL)
 		{
-			ReplicateAllReferenceTablesToNode(workerNode);
+			ereport(ERROR, (errmsg("node at \"%s:%u\" does not exist", node->workerName,
+								   node->workerPort)));
 		}
 
-		/*
-		 * Sync node metadata. We must sync node metadata before syncing table
-		 * related pg_dist_xxx metadata. Since table related metadata requires
-		 * to have right pg_dist_node entries.
-		 */
-		SyncNodeMetadataToNode(nodeName, nodePort);
+		/* both nodes should be the same */
+		Assert(workerNode->nodeId == node->nodeId);
 
 		/*
-		 * As the last step, sync the table related metadata to the remote node.
-		 * We must handle it as the last step because of limitations shared with
-		 * above comments.
+		 * Delete existing reference and replicated table placements on the
+		 * given groupId if the group has been disabled earlier (e.g., isActive
+		 * set to false).
+		 *
+		 * Sync the metadata changes to all existing metadata nodes irrespective
+		 * of the current nodes' metadata sync state. We expect all nodes up
+		 * and running when another node is activated.
 		 */
-		SyncPgDistTableMetadataToNode(workerNode);
+		if (!workerNode->isActive && NodeIsPrimary(workerNode))
+		{
+			bool localOnly = false;
+			DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
+															localOnly);
+		}
+
+		workerNode =
+			SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_isactive,
+									 BoolGetDatum(true));
+
+		/* TODO: Once all tests will be enabled for MX, we can remove sync by default check */
+		bool syncMetadata = EnableMetadataSync && NodeIsPrimary(workerNode);
+		if (syncMetadata)
+		{
+			/*
+			 * We are going to sync the metadata anyway in this transaction, so do
+			 * not fail just because the current metadata is not synced.
+			 */
+			SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
+							BoolGetDatum(true));
+
+			/*
+			 * Update local group id first, as object dependency logic requires to have
+			 * updated local group id.
+			 */
+			UpdateLocalGroupIdOnNode(workerNode);
+
+			nodeToSyncMetadata = lappend(nodeToSyncMetadata, workerNode);
+		}
 	}
+
+	/*
+	 * Sync distributed objects first. We must sync distributed objects before
+	 * replicating reference tables to the remote node, as reference tables may
+	 * need such objects.
+	 */
+	SyncDistributedObjectsToNodeList(nodeToSyncMetadata);
+
+	if (ReplicateReferenceTablesOnActivate)
+	{
+		foreach_ptr(node, nodeList)
+		{
+			/*
+			 * We need to replicate reference tables before syncing node metadata, otherwise
+			 * reference table replication logic would try to get lock on the new node before
+			 * having the shard placement on it
+			 */
+			if (NodeIsPrimary(node))
+			{
+				ReplicateAllReferenceTablesToNode(node);
+			}
+		}
+	}
+
+	/*
+	 * Sync node metadata. We must sync node metadata before syncing table
+	 * related pg_dist_xxx metadata. Since table related metadata requires
+	 * to have right pg_dist_node entries.
+	 */
+	foreach_ptr(node, nodeToSyncMetadata)
+	{
+		SyncNodeMetadataToNode(node->workerName, node->workerPort);
+	}
+
+	/*
+	 * As the last step, sync the table related metadata to the remote node.
+	 * We must handle it as the last step because of limitations shared with
+	 * above comments.
+	 */
+	SyncPgDistTableMetadataToNodeList(nodeToSyncMetadata);
+
+	foreach_ptr(node, nodeList)
+	{
+		bool isActive = true;
+
+		/* finally, let all other active metadata nodes to learn about this change */
+		SetNodeState(node->workerName, node->workerPort, isActive);
+	}
+}
+
+
+/*
+ * ActivateNode activates the node with nodeName and nodePort. Currently, activation
+ * includes only replicating the reference tables and setting isactive column of the
+ * given node.
+ */
+int
+ActivateNode(char *nodeName, int nodePort)
+{
+	bool isActive = true;
+
+	WorkerNode *workreNode = ModifiableWorkerNode(nodeName, nodePort);
+	ActivateNodeList(list_make1(workreNode));
 
 	/* finally, let all other active metadata nodes to learn about this change */
 	WorkerNode *newWorkerNode = SetNodeState(nodeName, nodePort, isActive);

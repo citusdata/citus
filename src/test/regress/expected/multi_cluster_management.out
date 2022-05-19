@@ -1191,6 +1191,20 @@ WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport ORDER
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'bogusproperty', false);
 ERROR:  only the 'shouldhaveshards' property can be set using this function
 DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated;
+BEGIN;
+	SELECT start_metadata_sync_to_all_nodes();
+ start_metadata_sync_to_all_nodes
+---------------------------------------------------------------------
+ t
+(1 row)
+
+COMMIT;
+SELECT start_metadata_sync_to_all_nodes();
+ start_metadata_sync_to_all_nodes
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- verify that at the end of this file, all primary nodes have metadata synced
 SELECT bool_and(hasmetadata) AND bool_and(metadatasynced) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';
  ?column?
