@@ -1,0 +1,9 @@
+# Split Shard tests.
+# Include tests from 'minimal_schedule' for setup.
+test: multi_test_helpers multi_test_helpers_superuser columnar_test_helpers
+test: multi_cluster_management
+test: multi_test_catalog_views
+test: tablespace
+# Split tests go here.
+test: citus_split_shard_by_split_points_negative
+test: citus_split_shard_by_split_points

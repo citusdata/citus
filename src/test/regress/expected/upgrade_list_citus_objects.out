@@ -113,6 +113,7 @@ ORDER BY 1;
  function citus_shard_indexes_on_worker()
  function citus_shard_sizes()
  function citus_shards_on_worker()
+ function citus_split_shard_by_split_points(bigint,integer[],integer[])
  function citus_stat_activity()
  function citus_stat_statements()
  function citus_stat_statements_reset()

@@ -45,7 +45,7 @@ check: check-full check-enterprise-full
 # check-full triggers all tests that ought to be run routinely
 check-full: check-multi check-multi-mx check-multi-1 check-operations check-follower-cluster check-isolation check-failure check-split
 # check-enterprise-full triggers all enterprise specific tests
-check-enterprise-full: check-enterprise check-enterprise-isolation check-enterprise-failure
+check-enterprise-full: check-enterprise check-enterprise-isolation check-enterprise-failure check-enterprise-split
 
 
 ISOLATION_DEPDIR=.deps/isolation
@@ -231,6 +231,10 @@ check-failure-base: all
 check-enterprise-failure: all
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/enterprise_failure_schedule $(EXTRA_TESTS)
+
+check-enterprise-split: all
+	$(pg_regress_multi_check) --load-extension=citus \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/enterprise_split_schedule $(EXTRA_TESTS)
 
 check-pg-upgrade:
 	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir)
