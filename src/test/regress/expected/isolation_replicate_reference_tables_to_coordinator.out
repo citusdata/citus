@@ -129,8 +129,8 @@ step s2-view-worker:
 
 query                                                                         |state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
-UPDATE public.ref_table_1500777 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|idle in transaction|Client         |ClientRead|postgres|regression
-UPDATE public.ref_table_1500777 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|idle in transaction|Client         |ClientRead|postgres|regression
+UPDATE public.ref_table_1500877 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|idle in transaction|Client         |ClientRead|postgres|regression
+UPDATE public.ref_table_1500877 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|idle in transaction|Client         |ClientRead|postgres|regression
 (2 rows)
 
 step s2-end:
