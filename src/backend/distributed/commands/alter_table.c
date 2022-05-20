@@ -206,7 +206,6 @@ static char * CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaNa
 														  char *sourceName,
 														  char *targetSchemaName,
 														  char *targetName);
-static char * GetAccessMethodForMatViewIfExists(Oid viewOid);
 static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
 												   CascadeToColocatedOption cascadeOption);
 static void WarningsForDroppingForeignKeysWithDistributedTables(Oid relationId);
@@ -1263,35 +1262,8 @@ GetViewCreationCommandsOfTable(Oid relationId)
 	Oid viewOid = InvalidOid;
 	foreach_oid(viewOid, views)
 	{
-		Datum viewDefinitionDatum = DirectFunctionCall1(pg_get_viewdef,
-														ObjectIdGetDatum(viewOid));
-		char *viewDefinition = TextDatumGetCString(viewDefinitionDatum);
-		StringInfo query = makeStringInfo();
-		char *viewName = get_rel_name(viewOid);
-		char *schemaName = get_namespace_name(get_rel_namespace(viewOid));
-		char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
-		bool isMatView = get_rel_relkind(viewOid) == RELKIND_MATVIEW;
-
-		/* here we need to get the access method of the view to recreate it */
-		char *accessMethodName = GetAccessMethodForMatViewIfExists(viewOid);
-
-		appendStringInfoString(query, "CREATE ");
-
-		if (isMatView)
-		{
-			appendStringInfoString(query, "MATERIALIZED ");
-		}
-
-		appendStringInfo(query, "VIEW %s ", qualifiedViewName);
-
-		if (accessMethodName)
-		{
-			appendStringInfo(query, "USING %s ", accessMethodName);
-		}
-
-		appendStringInfo(query, "AS %s", viewDefinition);
-
-		commands = lappend(commands, makeTableDDLCommandString(query->data));
+		char *createViewCommand = CreateViewDDLCommand(viewOid);
+		commands = lappend(commands, makeTableDDLCommandString(createViewCommand));
 	}
 
 	return commands;
@@ -1691,32 +1663,6 @@ CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaName, char *sequ
 					 quote_qualified_identifier(sourceSchemaName, sourceName),
 					 quote_qualified_identifier(targetSchemaName, targetName));
 	return query->data;
-}
-
-
-/*
- * GetAccessMethodForMatViewIfExists returns if there's an access method
- * set to the view with the given oid. Returns NULL otherwise.
- */
-static char *
-GetAccessMethodForMatViewIfExists(Oid viewOid)
-{
-	char *accessMethodName = NULL;
-	Relation relation = try_relation_open(viewOid, AccessShareLock);
-	if (relation == NULL)
-	{
-		ereport(ERROR, (errmsg("cannot complete operation "
-							   "because no such view exists")));
-	}
-
-	Oid accessMethodOid = relation->rd_rel->relam;
-	if (OidIsValid(accessMethodOid))
-	{
-		accessMethodName = get_am_name(accessMethodOid);
-	}
-	relation_close(relation, NoLock);
-
-	return accessMethodName;
 }
 
 
