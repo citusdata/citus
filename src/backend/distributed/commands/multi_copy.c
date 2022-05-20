@@ -3430,10 +3430,7 @@ InitializeCopyShardState(CopyShardState *shardState,
 		ereport(ERROR, (errmsg("could not connect to any active placements")));
 	}
 
-	if (hasRemoteCopy)
-	{
-		EnsureRemoteTaskExecutionAllowed();
-	}
+	EnsureTaskExecutionAllowed(hasRemoteCopy);
 
 	/*
 	 * We just error out and code execution should never reach to this

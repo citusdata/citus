@@ -222,19 +222,11 @@ ROLLBACK;
 BEGIN;
 -- Query gets delegated to the node of the shard xx_900001 for the key=1,
 -- and the function inserts value (1+17) locally on the shard xx_900031
+-- which is not allowed because this is not a regular pushdown
 SELECT insert_data(intcol+17) from test_forcepushdown where intcol = 1;
- insert_data
----------------------------------------------------------------------
-
-(1 row)
-
--- This will fail with duplicate error as the function already inserted
--- the value(1+17)
-SELECT insert_data(18);
-DEBUG:  pushing down function call in a multi-statement transaction
-DEBUG:  pushing down the function call
-ERROR:  duplicate key value violates unique constraint "test_forcepushdown_pkey_900031"
-DETAIL:  Key (intcol)=(18) already exists.
+ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (a)"
 PL/pgSQL function forcepushdown_schema.insert_data(integer) line XX at SQL statement
 while executing command on localhost:xxxxx
@@ -524,19 +516,13 @@ END;
 --
 BEGIN;
 -- Query lands on the shard with key = 300(shard __900089) and the function inserts locally
+-- which is not allowed because this is not a regular pushdown
 SELECT inner_force_delegation_function(id) FROM test_nested WHERE id = 300;
-NOTICE:  inner_force_delegation_function():301
-DETAIL:  from localhost:xxxxx
- inner_force_delegation_function
----------------------------------------------------------------------
-                             301
-(1 row)
-
--- Query lands on the shard with key = 300(shard __900089) and the function inserts remotely
-SELECT insert_data_non_distarg(id) FROM test_nested WHERE id = 300;
 ERROR:  cannot execute a distributed query from a query on a shard
-CONTEXT:  SQL statement "INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (a+1)"
-PL/pgSQL function forcepushdown_schema.insert_data_non_distarg(integer) line XX at SQL statement
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
+CONTEXT:  SQL statement "SELECT max(id)::numeric+1               FROM forcepushdown_schema.test_nested WHERE id = $1"
+PL/pgSQL function forcepushdown_schema.inner_force_delegation_function(integer) line XX at SQL statement
 while executing command on localhost:xxxxx
 END;
 --
@@ -544,6 +530,17 @@ END;
 --
 -- Param(PARAM_EXEC) node e.g. SELECT fn((SELECT col from test_nested where col=val))
 BEGIN;
+SELECT inner_force_delegation_function((SELECT id+112 FROM test_nested WHERE id=400));
+ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
+CONTEXT:  SQL statement "SELECT max(id)::numeric+1               FROM forcepushdown_schema.test_nested WHERE id = $1"
+PL/pgSQL function forcepushdown_schema.inner_force_delegation_function(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+END;
+BEGIN;
+SET LOCAL citus.propagate_set_commands TO 'local';
+SET LOCAL citus.allow_nested_distributed_execution TO on;
 SELECT inner_force_delegation_function((SELECT id+112 FROM test_nested WHERE id=400));
 NOTICE:  inner_force_delegation_function():513
 DETAIL:  from localhost:xxxxx
@@ -697,6 +694,8 @@ SELECT insert_select_data(20);
 DEBUG:  pushing down function call in a multi-statement transaction
 DEBUG:  pushing down the function call
 ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "INSERT INTO forcepushdown_schema.test_forcepushdown SELECT(a+1)"
 PL/pgSQL function forcepushdown_schema.insert_select_data(integer) line XX at SQL statement
 while executing command on localhost:xxxxx
@@ -721,6 +720,8 @@ SELECT insert_select_data(22);
 DEBUG:  pushing down function call in a multi-statement transaction
 DEBUG:  pushing down the function call
 ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "INSERT INTO forcepushdown_schema.test_forcepushdown SELECT(a+1)"
 PL/pgSQL function forcepushdown_schema.insert_select_data(integer) line XX at SQL statement
 while executing command on localhost:xxxxx
@@ -776,6 +777,8 @@ SELECT insert_select_data_nonlocal(41);
 DEBUG:  pushing down function call in a multi-statement transaction
 DEBUG:  pushing down the function call
 ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "INSERT INTO forcepushdown_schema.test_forcepushdown(intcol)
 		SELECT intcol FROM forcepushdown_schema.test_forcepushdown_noncolocate"
 PL/pgSQL function forcepushdown_schema.insert_select_data_nonlocal(integer) line XX at SQL statement
@@ -1106,6 +1109,8 @@ SELECT select_data(100);
 DEBUG:  pushing down function call in a multi-statement transaction
 DEBUG:  pushing down the function call
 ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "SELECT result          FROM forcepushdown_schema.test_subquery WHERE data =
 		(SELECT data FROM forcepushdown_schema.test_subquery WHERE data = a)"
 PL/pgSQL function forcepushdown_schema.select_data(integer) line XX at SQL statement
@@ -1223,6 +1228,8 @@ SELECT 1,2,3 FROM select_data(100);
 DEBUG:  pushing down function call in a multi-statement transaction
 DEBUG:  pushing down the function call
 ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "SELECT result          FROM forcepushdown_schema.test_subquery WHERE data =
 		(SELECT data FROM forcepushdown_schema.test_subquery WHERE data = a)"
 PL/pgSQL function forcepushdown_schema.select_data(integer) line XX at SQL statement

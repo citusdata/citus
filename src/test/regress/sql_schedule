@@ -4,7 +4,7 @@ test: ch_benchmarks_1 ch_benchmarks_2 ch_benchmarks_3
 test: ch_benchmarks_4 ch_benchmarks_5 ch_benchmarks_6
 test: intermediate_result_pruning_queries_1 intermediate_result_pruning_queries_2
 test: dropped_columns_1 distributed_planning
-test: local_dist_join
+test: local_dist_join nested_execution
 test: connectivity_checks citus_run_command
 test: schemas
 test: sequences

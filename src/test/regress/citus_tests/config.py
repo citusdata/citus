@@ -186,6 +186,7 @@ class PostgresConfig(CitusDefaultClusterConfig):
         self.new_settings = {
             "citus.use_citus_managed_tables": False,
         }
+        self.skip_tests = ["nested_execution"]
 
 
 class CitusSingleNodeClusterConfig(CitusDefaultClusterConfig):
@@ -342,7 +343,7 @@ class CitusNonMxClusterConfig(CitusDefaultClusterConfig):
         self.is_mx = False
         # citus does not support distributed functions
         # when metadata is not synced
-        self.skip_tests = ["function_create", "functions"]
+        self.skip_tests = ["function_create", "functions", "nested_execution"]
 
 
 class PGUpgradeConfig(CitusBaseClusterConfig):

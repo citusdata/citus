@@ -2,6 +2,7 @@
 
 CREATE SCHEMA multi_mx_function_call_delegation;
 SET search_path TO multi_mx_function_call_delegation, public;
+\set VERBOSITY terse
 
 SET citus.shard_replication_factor TO 2;
 
@@ -256,6 +257,7 @@ select start_metadata_sync_to_node('localhost', :worker_2_port);
 -- worker backend caches inconsistent. Reconnect to coordinator to use
 -- new worker connections, hence new backends.
 \c - - - :master_port
+\set VERBOSITY terse
 SET search_path to multi_mx_function_call_delegation, public;
 SET client_min_messages TO DEBUG1;
 SET citus.shard_replication_factor = 1;
@@ -310,6 +312,7 @@ EXECUTE call_plan(2, 0);
 EXECUTE call_plan(2, 0);
 
 \c - - - :worker_1_port
+\set VERBOSITY terse
 SET search_path TO multi_mx_function_call_delegation, public;
 -- create_distributed_function is disallowed from worker nodes
 select create_distributed_function('mx_call_func(int,int)');
@@ -343,6 +346,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 \c - - - :master_port
+\set VERBOSITY terse
 SET search_path TO multi_mx_function_call_delegation, public;
 
 RESET client_min_messages;

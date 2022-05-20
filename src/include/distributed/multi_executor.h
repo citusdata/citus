@@ -61,6 +61,7 @@ typedef struct TransactionProperties
 } TransactionProperties;
 
 
+extern bool AllowNestedDistributedExecution;
 extern int MultiShardConnectionType;
 extern bool WritableStandbyCoordinator;
 extern bool AllowModificationsFromWorkersToReplicatedTables;
@@ -150,8 +151,7 @@ extern void ExtractParametersFromParamList(ParamListInfo paramListInfo,
 										   const char ***parameterValues, bool
 										   useOriginalCustomTypeOids);
 extern ParamListInfo ExecutorBoundParams(void);
-extern void EnsureRemoteTaskExecutionAllowed(void);
-extern bool InTaskExecution(void);
+extern void EnsureTaskExecutionAllowed(bool isRemote);
 
 
 #endif /* MULTI_EXECUTOR_H */
