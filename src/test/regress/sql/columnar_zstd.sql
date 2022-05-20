@@ -26,7 +26,7 @@ VACUUM FULL test_zstd;
 SELECT pg_relation_size('test_zstd') AS size_comp_level_default \gset
 
 -- change compression level
-SELECT alter_columnar_table_set('test_zstd', compression_level => 19);
+ALTER TABLE test_zstd SET (columnar.compression_level = 19);
 VACUUM FULL test_zstd;
 
 SELECT pg_relation_size('test_zstd') AS size_comp_level_19 \gset

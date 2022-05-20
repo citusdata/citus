@@ -25,6 +25,7 @@
 #include "columnar/columnar_compression.h"
 #include "columnar/columnar_metadata.h"
 
+#define COLUMNAR_AM_NAME "columnar"
 #define COLUMNAR_MODULE_NAME "citus_columnar"
 
 #define COLUMNAR_SETOPTIONS_HOOK_SYM "ColumnarTableSetOptions_hook"

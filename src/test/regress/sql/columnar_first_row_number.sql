@@ -12,7 +12,7 @@ ROLLBACK;
 
 INSERT INTO col_table_1 SELECT i FROM generate_series(1, 12) i;
 
-SELECT alter_columnar_table_set('col_table_1', stripe_row_limit => 1000);
+ALTER TABLE col_table_1 SET (columnar.stripe_row_limit = 1000);
 
 INSERT INTO col_table_1 SELECT i FROM generate_series(1, 2350) i;
 

@@ -22,7 +22,7 @@ SELECT * FROM columnar.options
 WHERE regclass = 't_view'::regclass;
 
 -- show we can set options on a materialized view
-SELECT alter_columnar_table_set('t_view', compression => 'pglz');
+ALTER TABLE t_view SET (columnar.compression = pglz);
 SELECT * FROM columnar.options
 WHERE regclass = 't_view'::regclass;
 

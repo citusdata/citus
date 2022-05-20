@@ -20,6 +20,7 @@
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/index.h"
+#include "catalog/namespace.h"
 #include "catalog/objectaccess.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_publication.h"
@@ -103,9 +104,6 @@ typedef struct IndexFetchColumnarData
 	MemoryContext scanContext;
 } IndexFetchColumnarData;
 
-/* available to other extensions using find_rendezvous_variable() */
-static ColumnarTableSetOptions_hook_type ColumnarTableSetOptions_hook = NULL;
-
 static object_access_hook_type PrevObjectAccessHook = NULL;
 static ProcessUtility_hook_type PrevProcessUtilityHook = NULL;
 
@@ -116,6 +114,8 @@ static void ColumnarTriggerCreateHook(Oid tgid);
 static void ColumnarTableAMObjectAccessHook(ObjectAccessType access, Oid classId,
 											Oid objectId, int subId,
 											void *arg);
+static RangeVar * ColumnarProcessAlterTable(AlterTableStmt *alterTableStmt,
+											List **columnarOptions);
 static void ColumnarProcessUtility(PlannedStmt *pstmt,
 								   const char *queryString,
 #if PG_VERSION_NUM >= PG_VERSION_14
@@ -1902,11 +1902,6 @@ ColumnarSubXactCallback(SubXactEvent event, SubTransactionId mySubid,
 void
 columnar_tableam_init()
 {
-	ColumnarTableSetOptions_hook_type **ColumnarTableSetOptions_hook_ptr =
-		(ColumnarTableSetOptions_hook_type **) find_rendezvous_variable(
-			COLUMNAR_SETOPTIONS_HOOK_SYM);
-	*ColumnarTableSetOptions_hook_ptr = &ColumnarTableSetOptions_hook;
-
 	RegisterXactCallback(ColumnarXactCallback, NULL);
 	RegisterSubXactCallback(ColumnarSubXactCallback, NULL);
 
@@ -2081,6 +2076,71 @@ ColumnarTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid object
 
 
 /*
+ * ColumnarProcessAlterTable - if modifying a columnar table, extract columnar
+ * options and return the table's RangeVar.
+ */
+static RangeVar *
+ColumnarProcessAlterTable(AlterTableStmt *alterTableStmt, List **columnarOptions)
+{
+	RangeVar *columnarRangeVar = NULL;
+	Relation rel = relation_openrv_extended(alterTableStmt->relation, AccessShareLock,
+											alterTableStmt->missing_ok);
+
+	if (rel == NULL)
+	{
+		return NULL;
+	}
+
+	/* track separately in case of ALTER TABLE ... SET ACCESS METHOD */
+	bool srcIsColumnar = rel->rd_tableam == GetColumnarTableAmRoutine();
+	bool destIsColumnar = srcIsColumnar;
+
+	ListCell *lc = NULL;
+	foreach(lc, alterTableStmt->cmds)
+	{
+		AlterTableCmd *alterTableCmd = castNode(AlterTableCmd, lfirst(lc));
+
+		if (alterTableCmd->subtype == AT_SetRelOptions ||
+			alterTableCmd->subtype == AT_ResetRelOptions)
+		{
+			List *options = castNode(List, alterTableCmd->def);
+
+			alterTableCmd->def = (Node *) ExtractColumnarRelOptions(
+				options, columnarOptions);
+
+			if (destIsColumnar)
+			{
+				columnarRangeVar = alterTableStmt->relation;
+			}
+		}
+#if PG_VERSION_NUM >= PG_VERSION_15
+		else if (alterTableCmd->subtype == AT_SetAccessMethod)
+		{
+			if (columnarRangeVar || *columnarOptions)
+			{
+				ereport(ERROR, (errmsg(
+									"ALTER TABLE cannot alter the access method after altering storage parameters"),
+								errhint(
+									"Specify SET ACCESS METHOD before storage parameters, or use separate ALTER TABLE commands.")));
+			}
+
+			destIsColumnar = (strcmp(alterTableCmd->name, COLUMNAR_AM_NAME) == 0);
+
+			if (srcIsColumnar && !destIsColumnar)
+			{
+				DeleteColumnarTableOptions(RelationGetRelid(rel), true);
+			}
+		}
+#endif /* PG_VERSION_15 */
+	}
+
+	relation_close(rel, NoLock);
+
+	return columnarRangeVar;
+}
+
+
+/*
  * Utility hook for columnar tables.
  */
 static void
@@ -2104,31 +2164,116 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 
 	Node *parsetree = pstmt->utilityStmt;
 
-	if (IsA(parsetree, IndexStmt))
+	RangeVar *columnarRangeVar = NULL;
+	List *columnarOptions = NIL;
+
+	switch (nodeTag(parsetree))
 	{
-		IndexStmt *indexStmt = (IndexStmt *) parsetree;
-
-		Relation rel = relation_openrv(indexStmt->relation,
-									   indexStmt->concurrent ? ShareUpdateExclusiveLock :
-									   ShareLock);
-
-		if (rel->rd_tableam == GetColumnarTableAmRoutine())
+		case T_IndexStmt:
 		{
-			CheckCitusColumnarVersion(ERROR);
-			if (!ColumnarSupportsIndexAM(indexStmt->accessMethod))
+			IndexStmt *indexStmt = (IndexStmt *) parsetree;
+
+			Relation rel = relation_openrv(indexStmt->relation,
+										   indexStmt->concurrent ?
+										   ShareUpdateExclusiveLock :
+										   ShareLock);
+
+			if (rel->rd_tableam == GetColumnarTableAmRoutine())
 			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("unsupported access method for the "
-									   "index on columnar table %s",
-									   RelationGetRelationName(rel))));
+				CheckCitusColumnarVersion(ERROR);
+				if (!ColumnarSupportsIndexAM(indexStmt->accessMethod))
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("unsupported access method for the "
+										   "index on columnar table %s",
+										   RelationGetRelationName(rel))));
+				}
 			}
+
+			RelationClose(rel);
+			break;
 		}
 
-		RelationClose(rel);
+		case T_CreateStmt:
+		{
+			CreateStmt *createStmt = castNode(CreateStmt, parsetree);
+			bool no_op = false;
+
+			if (createStmt->if_not_exists)
+			{
+				Oid existing_relid;
+
+				/* use same check as transformCreateStmt */
+				(void) RangeVarGetAndCheckCreationNamespace(
+					createStmt->relation, AccessShareLock, &existing_relid);
+
+				no_op = OidIsValid(existing_relid);
+			}
+
+			if (!no_op && createStmt->accessMethod != NULL &&
+				!strcmp(createStmt->accessMethod, COLUMNAR_AM_NAME))
+			{
+				columnarRangeVar = createStmt->relation;
+				createStmt->options = ExtractColumnarRelOptions(createStmt->options,
+																&columnarOptions);
+			}
+			break;
+		}
+
+		case T_CreateTableAsStmt:
+		{
+			CreateTableAsStmt *createTableAsStmt = castNode(CreateTableAsStmt, parsetree);
+			IntoClause *into = createTableAsStmt->into;
+			bool no_op = false;
+
+			if (createTableAsStmt->if_not_exists)
+			{
+				Oid existing_relid;
+
+				/* use same check as transformCreateStmt */
+				(void) RangeVarGetAndCheckCreationNamespace(
+					into->rel, AccessShareLock, &existing_relid);
+
+				no_op = OidIsValid(existing_relid);
+			}
+
+			if (!no_op && into->accessMethod != NULL &&
+				!strcmp(into->accessMethod, COLUMNAR_AM_NAME))
+			{
+				columnarRangeVar = into->rel;
+				into->options = ExtractColumnarRelOptions(into->options,
+														  &columnarOptions);
+			}
+			break;
+		}
+
+		case T_AlterTableStmt:
+		{
+			AlterTableStmt *alterTableStmt = castNode(AlterTableStmt, parsetree);
+			columnarRangeVar = ColumnarProcessAlterTable(alterTableStmt,
+														 &columnarOptions);
+			break;
+		}
+
+		default:
+
+			/* FALL THROUGH */
+			break;
+	}
+
+	if (columnarOptions != NIL && columnarRangeVar == NULL)
+	{
+		ereport(ERROR,
+				(errmsg("columnar storage parameters specified on non-columnar table")));
 	}
 
 	PrevProcessUtilityHook_compat(pstmt, queryString, false, context,
 								  params, queryEnv, dest, completionTag);
+
+	if (columnarOptions != NIL)
+	{
+		SetColumnarRelOptions(columnarRangeVar, columnarOptions);
+	}
 }
 
 
@@ -2325,219 +2470,36 @@ ColumnarCheckLogicalReplication(Relation rel)
 
 
 /*
- * alter_columnar_table_set is a UDF exposed in postgres to change settings on a columnar
- * table. Calling this function on a non-columnar table gives an error.
+ * alter_columnar_table_set()
  *
- * sql syntax:
- *   pg_catalog.alter_columnar_table_set(
- *        table_name regclass,
- *        chunk_group_row_limit int DEFAULT NULL,
- *        stripe_row_limit int DEFAULT NULL,
- *        compression name DEFAULT null)
+ * Deprecated in 11.1-1: should issue ALTER TABLE ... SET instead. Function
+ * still available, but implemented in PL/pgSQL instead of C.
  *
- * All arguments except the table name are optional. The UDF is supposed to be called
- * like:
- *   SELECT alter_columnar_table_set('table', compression => 'pglz');
- *
- * This will only update the compression of the table, keeping all other settings the
- * same. Multiple settings can be changed at the same time by providing multiple
- * arguments. Calling the argument with the NULL value will be interperted as not having
- * provided the argument.
+ * C code is removed -- the symbol may still be required in some
+ * upgrade/downgrade paths, but it should not be called.
  */
 PG_FUNCTION_INFO_V1(alter_columnar_table_set);
 Datum
 alter_columnar_table_set(PG_FUNCTION_ARGS)
 {
-	CheckCitusColumnarVersion(ERROR);
-
-	Oid relationId = PG_GETARG_OID(0);
-
-	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
-	if (!IsColumnarTableAmTable(relationId))
-	{
-		ereport(ERROR, (errmsg("table %s is not a columnar table",
-							   quote_identifier(RelationGetRelationName(rel)))));
-	}
-
-	if (!pg_class_ownercheck(relationId, GetUserId()))
-	{
-		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLE,
-					   get_rel_name(relationId));
-	}
-
-	ColumnarOptions options = { 0 };
-	if (!ReadColumnarOptions(relationId, &options))
-	{
-		ereport(ERROR, (errmsg("unable to read current options for table")));
-	}
-
-	/* chunk_group_row_limit => not null */
-	if (!PG_ARGISNULL(1))
-	{
-		options.chunkRowCount = PG_GETARG_INT32(1);
-		if (options.chunkRowCount < CHUNK_ROW_COUNT_MINIMUM ||
-			options.chunkRowCount > CHUNK_ROW_COUNT_MAXIMUM)
-		{
-			ereport(ERROR, (errmsg("chunk group row count limit out of range"),
-							errhint("chunk group row count limit must be between "
-									UINT64_FORMAT " and " UINT64_FORMAT,
-									(uint64) CHUNK_ROW_COUNT_MINIMUM,
-									(uint64) CHUNK_ROW_COUNT_MAXIMUM)));
-		}
-		ereport(DEBUG1,
-				(errmsg("updating chunk row count to %d", options.chunkRowCount)));
-	}
-
-	/* stripe_row_limit => not null */
-	if (!PG_ARGISNULL(2))
-	{
-		options.stripeRowCount = PG_GETARG_INT32(2);
-		if (options.stripeRowCount < STRIPE_ROW_COUNT_MINIMUM ||
-			options.stripeRowCount > STRIPE_ROW_COUNT_MAXIMUM)
-		{
-			ereport(ERROR, (errmsg("stripe row count limit out of range"),
-							errhint("stripe row count limit must be between "
-									UINT64_FORMAT " and " UINT64_FORMAT,
-									(uint64) STRIPE_ROW_COUNT_MINIMUM,
-									(uint64) STRIPE_ROW_COUNT_MAXIMUM)));
-		}
-		ereport(DEBUG1, (errmsg(
-							 "updating stripe row count to " UINT64_FORMAT,
-							 options.stripeRowCount)));
-	}
-
-	/* compression => not null */
-	if (!PG_ARGISNULL(3))
-	{
-		Name compressionName = PG_GETARG_NAME(3);
-		options.compressionType = ParseCompressionType(NameStr(*compressionName));
-		if (options.compressionType == COMPRESSION_TYPE_INVALID)
-		{
-			ereport(ERROR, (errmsg("unknown compression type for columnar table: %s",
-								   quote_identifier(NameStr(*compressionName)))));
-		}
-		ereport(DEBUG1, (errmsg("updating compression to %s",
-								CompressionTypeStr(options.compressionType))));
-	}
-
-	/* compression_level => not null */
-	if (!PG_ARGISNULL(4))
-	{
-		options.compressionLevel = PG_GETARG_INT32(4);
-		if (options.compressionLevel < COMPRESSION_LEVEL_MIN ||
-			options.compressionLevel > COMPRESSION_LEVEL_MAX)
-		{
-			ereport(ERROR, (errmsg("compression level out of range"),
-							errhint("compression level must be between %d and %d",
-									COMPRESSION_LEVEL_MIN,
-									COMPRESSION_LEVEL_MAX)));
-		}
-
-		ereport(DEBUG1, (errmsg("updating compression level to %d",
-								options.compressionLevel)));
-	}
-
-	if (ColumnarTableSetOptions_hook != NULL)
-	{
-		ColumnarTableSetOptions_hook(relationId, options);
-	}
-
-	SetColumnarOptions(relationId, &options);
-
-	table_close(rel, NoLock);
-
-	PG_RETURN_VOID();
+	elog(ERROR, "alter_columnar_table_set is deprecated");
 }
 
 
 /*
- * alter_columnar_table_reset is a UDF exposed in postgres to reset the settings on a
- * columnar table. Calling this function on a non-columnar table gives an error.
+ * alter_columnar_table_reset()
  *
- * sql syntax:
- *   pg_catalog.alter_columnar_table_re
- *   teset(
- *        table_name regclass,
- *        chunk_group_row_limit bool DEFAULT FALSE,
- *        stripe_row_limit bool DEFAULT FALSE,
- *        compression bool DEFAULT FALSE)
+ * Deprecated in 11.1-1: should issue ALTER TABLE ... RESET instead. Function
+ * still available, but implemented in PL/pgSQL instead of C.
  *
- * All arguments except the table name are optional. The UDF is supposed to be called
- * like:
- *   SELECT alter_columnar_table_set('table', compression => true);
- *
- * All options set to true will be reset to the default system value.
+ * C code is removed -- the symbol may still be required in some
+ * upgrade/downgrade paths, but it should not be called.
  */
 PG_FUNCTION_INFO_V1(alter_columnar_table_reset);
 Datum
 alter_columnar_table_reset(PG_FUNCTION_ARGS)
 {
-	CheckCitusColumnarVersion(ERROR);
-
-	Oid relationId = PG_GETARG_OID(0);
-
-	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
-	if (!IsColumnarTableAmTable(relationId))
-	{
-		ereport(ERROR, (errmsg("table %s is not a columnar table",
-							   quote_identifier(RelationGetRelationName(rel)))));
-	}
-
-	if (!pg_class_ownercheck(relationId, GetUserId()))
-	{
-		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLE,
-					   get_rel_name(relationId));
-	}
-
-	ColumnarOptions options = { 0 };
-	if (!ReadColumnarOptions(relationId, &options))
-	{
-		ereport(ERROR, (errmsg("unable to read current options for table")));
-	}
-
-	/* chunk_group_row_limit => true */
-	if (!PG_ARGISNULL(1) && PG_GETARG_BOOL(1))
-	{
-		options.chunkRowCount = columnar_chunk_group_row_limit;
-		ereport(DEBUG1,
-				(errmsg("resetting chunk row count to %d", options.chunkRowCount)));
-	}
-
-	/* stripe_row_limit => true */
-	if (!PG_ARGISNULL(2) && PG_GETARG_BOOL(2))
-	{
-		options.stripeRowCount = columnar_stripe_row_limit;
-		ereport(DEBUG1,
-				(errmsg("resetting stripe row count to " UINT64_FORMAT,
-						options.stripeRowCount)));
-	}
-
-	/* compression => true */
-	if (!PG_ARGISNULL(3) && PG_GETARG_BOOL(3))
-	{
-		options.compressionType = columnar_compression;
-		ereport(DEBUG1, (errmsg("resetting compression to %s",
-								CompressionTypeStr(options.compressionType))));
-	}
-
-	/* compression_level => true */
-	if (!PG_ARGISNULL(4) && PG_GETARG_BOOL(4))
-	{
-		options.compressionLevel = columnar_compression_level;
-		ereport(DEBUG1, (errmsg("reseting compression level to %d",
-								columnar_compression_level)));
-	}
-
-	if (ColumnarTableSetOptions_hook != NULL)
-	{
-		ColumnarTableSetOptions_hook(relationId, options);
-	}
-
-	SetColumnarOptions(relationId, &options);
-
-	table_close(rel, NoLock);
-
-	PG_RETURN_VOID();
+	elog(ERROR, "alter_columnar_table_reset is deprecated");
 }
 
 

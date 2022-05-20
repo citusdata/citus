@@ -711,7 +711,7 @@ ConvertTable(TableConversionState *con)
 		char *columnarOptionsSql = GetShardedTableDDLCommandColumnar(con->hashOfName,
 																	 context);
 
-		ExecuteQueryViaSPI(columnarOptionsSql, SPI_OK_SELECT);
+		ExecuteQueryViaSPI(columnarOptionsSql, SPI_OK_UTILITY);
 	}
 
 	con->newRelationId = get_relname_relid(con->tempName, con->schemaId);

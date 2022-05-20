@@ -77,6 +77,8 @@ RelationGetSmgr(Relation rel)
 	standard_ProcessUtility(a, b, c, d, e, f, g, h)
 #define ProcessUtility_compat(a, b, c, d, e, f, g, h) \
 	ProcessUtility(a, b, c, d, e, f, g, h)
+#define PrevProcessUtility_compat(a, b, c, d, e, f, g, h) \
+	PrevProcessUtility(a, b, c, d, e, f, g, h)
 #define SetTuplestoreDestReceiverParams_compat(a, b, c, d, e, f) \
 	SetTuplestoreDestReceiverParams(a, b, c, d, e, f)
 #define pgproc_statusflags_compat(pgproc) ((pgproc)->statusFlags)
@@ -106,6 +108,8 @@ RelationGetSmgr(Relation rel)
 #define standard_ProcessUtility_compat(a, b, c, d, e, f, g, h) \
 	standard_ProcessUtility(a, b, d, e, f, g, h)
 #define ProcessUtility_compat(a, b, c, d, e, f, g, h) ProcessUtility(a, b, d, e, f, g, h)
+#define PrevProcessUtility_compat(a, b, c, d, e, f, g, h) \
+	PrevProcessUtility(a, b, d, e, f, g, h)
 #define COPY_FRONTEND COPY_NEW_FE
 #define SetTuplestoreDestReceiverParams_compat(a, b, c, d, e, f) \
 	SetTuplestoreDestReceiverParams(a, b, c, d)

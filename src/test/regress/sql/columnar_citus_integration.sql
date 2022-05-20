@@ -1,4 +1,10 @@
-SET columnar.compression TO 'none';
+
+SELECT success, result FROM run_command_on_all_nodes($cmd$
+  ALTER SYSTEM SET columnar.compression TO 'none'
+$cmd$);
+SELECT success, result FROM run_command_on_all_nodes($cmd$
+  SELECT pg_reload_conf()
+$cmd$);
 
 CREATE SCHEMA columnar_citus_integration;
 SET search_path TO columnar_citus_integration;
@@ -18,13 +24,13 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', compression => 'pglz');
+ALTER TABLE table_option SET (columnar.compression = pglz);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', compression => true);
+ALTER TABLE table_option RESET (columnar.compression);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -36,13 +42,13 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', compression_level => 13);
+ALTER TABLE table_option SET (columnar.compression_level = 13);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', compression_level => true);
+ALTER TABLE table_option RESET (columnar.compression_level);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -54,13 +60,13 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', chunk_group_row_limit => 2000);
+ALTER TABLE table_option SET (columnar.chunk_group_row_limit = 2000);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', chunk_group_row_limit => true);
+ALTER TABLE table_option RESET (columnar.chunk_group_row_limit);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -72,13 +78,13 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', stripe_row_limit => 2000);
+ALTER TABLE table_option SET (columnar.stripe_row_limit = 2000);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', stripe_row_limit => true);
+ALTER TABLE table_option RESET (columnar.stripe_row_limit);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -86,11 +92,11 @@ $cmd$);
 
 -- verify settings are propagated when creating a table
 CREATE TABLE table_option_2 (a int, b text) USING columnar;
-SELECT alter_columnar_table_set('table_option_2',
-                                chunk_group_row_limit => 2000,
-                                stripe_row_limit => 20000,
-                                compression => 'pglz',
-                                compression_level => 15);
+ALTER TABLE table_option_2 SET
+  (columnar.chunk_group_row_limit = 2000,
+   columnar.stripe_row_limit = 20000,
+   columnar.compression = pglz,
+   columnar.compression_level = 15);
 SELECT create_distributed_table('table_option_2', 'a');
 
 -- verify settings on placements
@@ -118,13 +124,13 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', compression => 'pglz');
+ALTER TABLE table_option SET (columnar.compression = pglz);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', compression => true);
+ALTER TABLE table_option RESET (columnar.compression);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -136,13 +142,13 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', compression_level => 17);
+ALTER TABLE table_option SET (columnar.compression_level = 17);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', compression_level => true);
+ALTER TABLE table_option RESET (columnar.compression_level);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -154,13 +160,13 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', chunk_group_row_limit => 2000);
+ALTER TABLE table_option SET (columnar.chunk_group_row_limit = 2000);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', chunk_group_row_limit => true);
+ALTER TABLE table_option RESET (columnar.chunk_group_row_limit);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -172,13 +178,13 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', stripe_row_limit => 2000);
+ALTER TABLE table_option SET (columnar.stripe_row_limit = 2000);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', stripe_row_limit => true);
+ALTER TABLE table_option RESET (columnar.stripe_row_limit);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -186,11 +192,11 @@ $cmd$);
 
 -- verify settings are propagated when creating a table
 CREATE TABLE table_option_2 (a int, b text) USING columnar;
-SELECT alter_columnar_table_set('table_option_2',
-                                chunk_group_row_limit => 2000,
-                                stripe_row_limit => 20000,
-                                compression => 'pglz',
-                                compression_level => 19);
+ALTER TABLE table_option_2 SET
+  (columnar.chunk_group_row_limit = 2000,
+   columnar.stripe_row_limit = 20000,
+   columnar.compression = pglz,
+   columnar.compression_level = 19);
 SELECT create_distributed_table('table_option_2', 'a');
 
 -- verify settings on placements
@@ -215,13 +221,13 @@ SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_reference', compression => 'pglz');
+ALTER TABLE table_option_reference SET (columnar.compression = pglz);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option_reference', compression => true);
+ALTER TABLE table_option_reference RESET (columnar.compression);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -233,13 +239,13 @@ SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_reference', compression_level => 11);
+ALTER TABLE table_option_reference SET (columnar.compression_level = 11);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option_reference', compression_level => true);
+ALTER TABLE table_option_reference RESET (columnar.compression_level);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -251,13 +257,13 @@ SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_reference', chunk_group_row_limit => 2000);
+ALTER TABLE table_option_reference SET (columnar.chunk_group_row_limit = 2000);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option_reference', chunk_group_row_limit => true);
+ALTER TABLE table_option_reference RESET (columnar.chunk_group_row_limit);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -269,13 +275,13 @@ SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_reference', stripe_row_limit => 2000);
+ALTER TABLE table_option_reference SET (columnar.stripe_row_limit = 2000);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option_reference', stripe_row_limit => true);
+ALTER TABLE table_option_reference RESET (columnar.stripe_row_limit);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -283,11 +289,11 @@ $cmd$);
 
 -- verify settings are propagated when creating a table
 CREATE TABLE table_option_reference_2 (a int, b text) USING columnar;
-SELECT alter_columnar_table_set('table_option_reference_2',
-                                chunk_group_row_limit => 2000,
-                                stripe_row_limit => 20000,
-                                compression => 'pglz',
-                                compression_level => 9);
+ALTER TABLE table_option_reference_2 SET
+  (columnar.chunk_group_row_limit = 2000,
+   columnar.stripe_row_limit = 20000,
+   columnar.compression = pglz,
+   columnar.compression_level = 9);
 SELECT create_reference_table('table_option_reference_2');
 
 -- verify settings on placements
@@ -315,13 +321,13 @@ SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_citus_local', compression => 'pglz');
+ALTER TABLE table_option_citus_local SET (columnar.compression = pglz);
 -- verify setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option_citus_local', compression => true);
+ALTER TABLE table_option_citus_local RESET (columnar.compression);
 -- verify setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -333,13 +339,13 @@ SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_citus_local', compression_level => 11);
+ALTER TABLE table_option_citus_local SET (columnar.compression_level = 11);
 -- verify setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option_citus_local', compression_level => true);
+ALTER TABLE table_option_citus_local RESET (columnar.compression_level);
 -- verify setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -351,13 +357,13 @@ SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_citus_local', chunk_group_row_limit => 2000);
+ALTER TABLE table_option_citus_local SET (columnar.chunk_group_row_limit = 2000);
 -- verify setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option_citus_local', chunk_group_row_limit => true);
+ALTER TABLE table_option_citus_local RESET (columnar.chunk_group_row_limit);
 -- verify setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -369,13 +375,13 @@ SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_citus_local', stripe_row_limit => 2000);
+ALTER TABLE table_option_citus_local SET (columnar.stripe_row_limit = 2000);
 -- verify setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option_citus_local', stripe_row_limit => true);
+ALTER TABLE table_option_citus_local RESET (columnar.stripe_row_limit);
 -- verify setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
@@ -383,11 +389,11 @@ $cmd$);
 
 -- verify settings are propagated when creating a table
 CREATE TABLE table_option_citus_local_2 (a int, b text) USING columnar;
-SELECT alter_columnar_table_set('table_option_citus_local_2',
-                                chunk_group_row_limit => 2000,
-                                stripe_row_limit => 20000,
-                                compression => 'pglz',
-                                compression_level => 9);
+ALTER TABLE table_option_citus_local_2 SET
+  (columnar.chunk_group_row_limit = 2000,
+   columnar.stripe_row_limit = 20000,
+   columnar.compression = pglz,
+   columnar.compression_level = 9);
 SELECT citus_add_local_table_to_metadata('table_option_citus_local_2');
 
 -- verify settings on placements

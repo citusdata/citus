@@ -10,7 +10,7 @@ set columnar.enable_custom_scan = false;
 
 create table fallback_scan(i int) using columnar;
 -- large enough to test parallel_workers > 1
-select alter_columnar_table_set('fallback_scan', compression => 'none');
+ALTER TABLE fallback_scan SET (columnar.compression = none);
 insert into fallback_scan select generate_series(1,150000);
 vacuum analyze fallback_scan;
 
