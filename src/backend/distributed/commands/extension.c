@@ -39,7 +39,6 @@ static List * FilterDistributedExtensions(List *extensionObjectList);
 static List * ExtensionNameListToObjectAddressList(List *extensionObjectList);
 static void MarkExistingObjectDependenciesDistributedIfSupported(void);
 static List * GetAllViews(void);
-static bool ShouldMarkRelationDistributedOnUpgrade(Oid relationId);
 static bool ShouldPropagateExtensionCommand(Node *parseTree);
 static bool IsAlterExtensionSetSchemaCitus(Node *parseTree);
 static Node * RecreateExtensionStmt(Oid extensionOid);
@@ -659,7 +658,7 @@ GetAllViews(void)
  * decides whether the input relation should be marked as distributed
  * during the upgrade.
  */
-static bool
+bool
 ShouldMarkRelationDistributedOnUpgrade(Oid relationId)
 {
 	if (!EnableMetadataSync)

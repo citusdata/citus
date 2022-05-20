@@ -50,6 +50,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata_utility.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/multi_executor.h"
@@ -317,6 +318,38 @@ SyncCitusTableMetadata(Oid relationId)
 		ObjectAddressSet(relationAddress, RelationRelationId, relationId);
 		MarkObjectDistributed(&relationAddress);
 	}
+
+	CreateDependentViewsOnWorkers(relationId);
+}
+
+
+/*
+ * CreateDependentViewsOnWorkers takes a relationId and creates the views that depend on
+ * that relation on workers with metadata.
+ */
+void
+CreateDependentViewsOnWorkers(Oid relationId)
+{
+	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
+	List *views = GetDependingViews(relationId);
+
+	Oid viewOid = InvalidOid;
+	foreach_oid(viewOid, views)
+	{
+		if (!ShouldMarkRelationDistributedOnUpgrade(viewOid))
+		{
+			continue;
+		}
+
+		char *createViewCommand = CreateViewDDLCommand(viewOid);
+		char *alterViewOwnerCommand = AlterViewOwnerCommand(viewOid);
+
+		SendCommandToWorkersWithMetadata(createViewCommand);
+		SendCommandToWorkersWithMetadata(alterViewOwnerCommand);
+	}
+
+	SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
 }
 
 

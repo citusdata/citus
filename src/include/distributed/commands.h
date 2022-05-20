@@ -181,6 +181,7 @@ extern Oid get_constraint_typid(Oid conoid);
 /* extension.c - forward declarations */
 extern bool IsDropCitusExtensionStmt(Node *parsetree);
 extern bool IsCreateAlterExtensionUpdateCitusStmt(Node *parsetree);
+extern bool ShouldMarkRelationDistributedOnUpgrade(Oid relationId);
 extern void ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree);
 extern List * PostprocessCreateExtensionStmt(Node *stmt, const char *queryString);
 extern List * PreprocessDropExtensionStmt(Node *stmt, const char *queryString,
