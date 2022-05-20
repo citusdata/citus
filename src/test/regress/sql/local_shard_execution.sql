@@ -691,7 +691,16 @@ BEGIN;
 	EXECUTE local_multi_row_insert_prepare_params(5,11);
 ROLLBACK;
 
-
+-- make sure that we still get results if we switch off local execution
+PREPARE ref_count_prepare AS SELECT count(*) FROM reference_table;
+EXECUTE ref_count_prepare;
+EXECUTE ref_count_prepare;
+EXECUTE ref_count_prepare;
+EXECUTE ref_count_prepare;
+EXECUTE ref_count_prepare;
+SET citus.enable_local_execution TO off;
+EXECUTE ref_count_prepare;
+RESET citus.enable_local_execution;
 
 -- failures of local execution should rollback both the
 -- local execution and remote executions

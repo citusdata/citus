@@ -1522,6 +1522,51 @@ NOTICE:  executing the command locally: INSERT INTO local_shard_execution.distri
 	EXECUTE local_multi_row_insert_prepare_params(5,11);
 NOTICE:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) VALUES (5,'55'::text,'21'::bigint) ON CONFLICT(key) WHERE ((key OPERATOR(pg_catalog.>) 3) AND (key OPERATOR(pg_catalog.<) 4)) DO UPDATE SET value = ('88'::text OPERATOR(pg_catalog.||) excluded.value)
 ROLLBACK;
+-- make sure that we still get results if we switch off local execution
+PREPARE ref_count_prepare AS SELECT count(*) FROM reference_table;
+EXECUTE ref_count_prepare;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.reference_table_1470000 reference_table
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+EXECUTE ref_count_prepare;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.reference_table_1470000 reference_table
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+EXECUTE ref_count_prepare;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.reference_table_1470000 reference_table
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+EXECUTE ref_count_prepare;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.reference_table_1470000 reference_table
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+EXECUTE ref_count_prepare;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.reference_table_1470000 reference_table
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+SET citus.enable_local_execution TO off;
+EXECUTE ref_count_prepare;
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+RESET citus.enable_local_execution;
 -- failures of local execution should rollback both the
 -- local execution and remote executions
 -- fail on a local execution
