@@ -44,7 +44,6 @@
 static void ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement);
 static void ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command);
 static void EnsurePartitionTableNotReplicatedForTruncate(TruncateStmt *truncateStatement);
-static void LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement);
 static List * TruncateTaskList(Oid relationId);
 
 
@@ -244,7 +243,13 @@ PreprocessTruncateStatement(TruncateStmt *truncateStatement)
 	ErrorIfUnsupportedTruncateStmt(truncateStatement);
 	EnsurePartitionTableNotReplicatedForTruncate(truncateStatement);
 	ExecuteTruncateStmtSequentialIfNecessary(truncateStatement);
-	LockTruncatedRelationMetadataInWorkers(truncateStatement);
+
+	uint32 lockAcquiringMode = truncateStatement->behavior == DROP_CASCADE ?
+							   DIST_LOCK_REFERENCING_TABLES :
+							   DIST_LOCK_DEFAULT;
+
+	AcquireDistributedLockOnRelations(truncateStatement->relations, AccessExclusiveLock,
+									  lockAcquiringMode);
 }
 
 
@@ -339,71 +344,5 @@ ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command)
 			/* nothing to do more */
 			return;
 		}
-	}
-}
-
-
-/*
- * LockTruncatedRelationMetadataInWorkers determines if distributed
- * lock is necessary for truncated relations, and acquire locks.
- *
- * LockTruncatedRelationMetadataInWorkers handles distributed locking
- * of truncated tables before standard utility takes over.
- *
- * Actual distributed truncation occurs inside truncate trigger.
- *
- * This is only for distributed serialization of truncate commands.
- * The function assumes that there is no foreign key relation between
- * non-distributed and distributed relations.
- */
-static void
-LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
-{
-	/* nothing to do if there is no metadata at worker nodes */
-	if (!ClusterHasKnownMetadataWorkers() || !EnableMetadataSync)
-	{
-		return;
-	}
-
-	List *distributedRelationList = NIL;
-
-	/*
-	 * this is used to enforce the lock order:
-	 * [...TruncatedTables], [...TablesTruncatedFromCascadingOnTruncatedTables]
-	 */
-	List *referencingRelationIds = NIL;
-
-	RangeVar *rangeVar = NULL;
-	foreach_ptr(rangeVar, truncateStatement->relations)
-	{
-		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
-
-		if (!IsCitusTable(relationId))
-		{
-			continue;
-		}
-
-		distributedRelationList = list_append_unique_oid(distributedRelationList,
-														 relationId);
-
-		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		Assert(cacheEntry != NULL);
-
-		List *referencingTableList = cacheEntry->referencingRelationsViaForeignKey;
-
-		Oid referencingRelationId = InvalidOid;
-		foreach_oid(referencingRelationId, referencingTableList)
-		{
-			referencingRelationIds = lappend_oid(referencingRelationIds,
-												 referencingRelationId);
-		}
-	}
-
-	distributedRelationList = list_concat_unique_oid(distributedRelationList,
-													 referencingRelationIds);
-
-	if (distributedRelationList != NIL)
-	{
-		AcquireDistributedLockOnRelations(distributedRelationList, AccessExclusiveLock);
 	}
 }

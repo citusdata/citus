@@ -164,7 +164,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	parsetree = pstmt->utilityStmt;
 
 	if (IsA(parsetree, TransactionStmt) ||
-		IsA(parsetree, LockStmt) ||
 		IsA(parsetree, ListenStmt) ||
 		IsA(parsetree, NotifyStmt) ||
 		IsA(parsetree, ExecuteStmt) ||
@@ -503,6 +502,18 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	if (IsA(parsetree, TruncateStmt))
 	{
 		PreprocessTruncateStatement((TruncateStmt *) parsetree);
+	}
+
+	if (IsA(parsetree, LockStmt))
+	{
+		/*
+		 * PreprocessLockStatement might lock the relations locally if the
+		 * node executing the command is in pg_dist_node. Even though the process
+		 * utility will re-acquire the locks across the same relations if the node
+		 * is in the metadata (in the pg_dist_node table) that should not be a problem,
+		 * plus it ensures consistent locking order between the nodes.
+		 */
+		PreprocessLockStatement((LockStmt *) parsetree, context);
 	}
 
 	/*

@@ -2,17 +2,29 @@
 
 setup
 {
-	CREATE TABLE truncate_table(id integer, value integer);
+	CREATE TABLE truncate_table(id integer, value integer, PRIMARY KEY(id));
+	CREATE TABLE data_table(id integer, value integer);
+	CREATE TABLE referencing_table_1 (id integer, PRIMARY KEY(id), FOREIGN KEY (id) REFERENCES truncate_table(id));
+	CREATE TABLE referencing_table_2 (id integer, PRIMARY KEY(id), FOREIGN KEY (id) REFERENCES referencing_table_1(id));
+
 	SELECT create_distributed_table('truncate_table', 'id');
+	SELECT create_distributed_table('data_table', 'id');
+	SELECT create_distributed_table('referencing_table_1', 'id');
+	SELECT create_distributed_table('referencing_table_2', 'id');
+
 	COPY truncate_table FROM PROGRAM 'echo 1, 10 && echo 2, 20 && echo 3, 30 && echo 4, 40 && echo 5, 50' WITH CSV;
+	COPY data_table FROM PROGRAM 'echo 20, 20 && echo 30, 30 && echo 40, 40 && echo 50, 50' WITH CSV;
 }
 
 // Create and use UDF to close the connection opened in the setup step. Also return the cluster
 // back to the initial state.
 teardown
 {
-        DROP TABLE IF EXISTS truncate_table CASCADE;
-        SELECT citus_internal.restore_isolation_tester_func();
+	DROP TABLE IF EXISTS data_table;
+	DROP TABLE IF EXISTS referencing_table_2;
+	DROP TABLE IF EXISTS referencing_table_1;
+	DROP TABLE IF EXISTS truncate_table CASCADE;
+	SELECT citus_internal.restore_isolation_tester_func();
 }
 
 session "s1"
@@ -36,7 +48,7 @@ step "s1-begin-on-worker"
 
 step "s1-truncate"
 {
-	SELECT run_commands_on_session_level_connection_to_node('TRUNCATE truncate_table');
+	SELECT run_commands_on_session_level_connection_to_node('TRUNCATE truncate_table CASCADE');
 }
 
 step "s1-select"
@@ -46,7 +58,7 @@ step "s1-select"
 
 step "s1-insert-select"
 {
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO truncate_table SELECT * FROM truncate_table');
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO truncate_table SELECT * FROM data_table');
 }
 
 step "s1-delete"
@@ -56,7 +68,7 @@ step "s1-delete"
 
 step "s1-copy"
 {
-	SELECT run_commands_on_session_level_connection_to_node('COPY truncate_table FROM PROGRAM ''echo 5, 50 && echo 9, 90 && echo 10, 100''WITH CSV');
+	SELECT run_commands_on_session_level_connection_to_node('COPY truncate_table FROM PROGRAM ''echo 6, 60 && echo 9, 90 && echo 10, 100''WITH CSV');
 }
 
 step "s1-alter"
@@ -101,7 +113,7 @@ step "s2-begin-on-worker"
 
 step "s2-truncate"
 {
-	SELECT run_commands_on_session_level_connection_to_node('TRUNCATE truncate_table');
+	SELECT run_commands_on_session_level_connection_to_node('TRUNCATE truncate_table CASCADE');
 }
 
 step "s2-commit-worker"
@@ -122,6 +134,11 @@ step "s3-select-count"
 	SELECT COUNT(*) FROM truncate_table;
 }
 
+step "s3-select-count-from-ref-table"
+{
+	SELECT COUNT(*) FROM referencing_table_2;
+}
+
 
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-truncate" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-truncate" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-select-count"
 
@@ -131,3 +148,4 @@ permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-delete"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-copy" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-truncate" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-select-count"
 permutation "s1-begin" "s1-alter" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-truncate" "s1-commit" "s2-commit-worker" "s2-stop-connection" "s3-select-count"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-for-update" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-truncate" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-select-count"
+permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-truncate" "s3-select-count-from-ref-table" "s1-commit-worker" "s1-stop-connection"

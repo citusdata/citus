@@ -21,6 +21,7 @@
 #include "catalog/namespace.h"
 #include "commands/tablecmds.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
@@ -38,12 +39,14 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "distributed/local_executor.h"
+#include "distributed/worker_shard_visibility.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/varlena.h"
 
-#define LOCK_RELATION_IF_EXISTS "SELECT lock_relation_if_exists(%s, %s);"
+#define LOCK_RELATION_IF_EXISTS \
+	"SELECT pg_catalog.lock_relation_if_exists(%s, %s);"
 
 /* static definition and declarations */
 struct LockModeToStringType
@@ -70,6 +73,17 @@ static const struct LockModeToStringType lockmode_to_string_map[] = {
 static const int lock_mode_to_string_map_count = sizeof(lockmode_to_string_map) /
 												 sizeof(lockmode_to_string_map[0]);
 
+/*
+ * LockRelationRecord holds the oid of a relation to be locked
+ * and a boolean inh to determine whether its decendants
+ * should be locked as well
+ */
+typedef struct LockRelationRecord
+{
+	Oid relationId;
+	bool inh;
+} LockRelationRecord;
+
 
 /* local function forward declarations */
 static LOCKMODE IntToLockMode(int mode);
@@ -91,6 +105,8 @@ PG_FUNCTION_INFO_V1(lock_shard_metadata);
 PG_FUNCTION_INFO_V1(lock_shard_resources);
 PG_FUNCTION_INFO_V1(lock_relation_if_exists);
 
+/* Config variable managed via guc.c */
+bool EnableAcquiringUnsafeLockFromWorkers = false;
 
 /*
  * lock_shard_metadata allows the shard distribution metadata to be locked
@@ -1080,14 +1096,110 @@ EnsureCanAcquireLock(Oid relationId, LOCKMODE lockMode)
 
 
 /*
- * AcquireDistributedLockOnRelations acquire a distributed lock on worker nodes
- * for given list of relations ids. Worker node list is sorted so that the lock
- * is acquired in the same order regardless of which node it was run on. Notice
- * that no lock is acquired on coordinator node if the coordinator is not added
- * to the metadata.
+ * CreateLockTerminationString creates a string that can be appended to the
+ * end of a partial lock command to properly terminate the command
  */
-void
-AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
+static const char *
+CreateLockTerminationString(const char *lockModeText, bool nowait)
+{
+	StringInfo lockTerminationStringInfo = makeStringInfo();
+	appendStringInfo(lockTerminationStringInfo, nowait ? " IN %s MODE NOWAIT;\n" :
+					 " IN %s MODE;\n", lockModeText);
+	return lockTerminationStringInfo->data;
+}
+
+
+/*
+ * FinishLockCommandIfNecessary appends the lock termination string if the lock command is partial.
+ * Sets the partialLockCommand flag to false
+ */
+static void
+FinishLockCommandIfNecessary(StringInfo lockCommand, const char *lockTerminationString,
+							 bool *partialLockCommand)
+{
+	if (*partialLockCommand)
+	{
+		appendStringInfo(lockCommand, "%s", lockTerminationString);
+	}
+
+	*partialLockCommand = false;
+}
+
+
+/*
+ * LockRelationRecordListMember checks if a relation id is present in the
+ * LockRelationRecord list
+ */
+static bool
+LockRelationRecordListMember(List *lockRelationRecordList, Oid relationId)
+{
+	LockRelationRecord *record = NULL;
+	foreach_ptr(record, lockRelationRecordList)
+	{
+		if (record->relationId == relationId)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * MakeLockRelationRecord makes a LockRelationRecord using the relation oid
+ * and the inh boolean while properly allocating the structure
+ */
+static LockRelationRecord *
+MakeLockRelationRecord(Oid relationId, bool inh)
+{
+	LockRelationRecord *lockRelationRecord = palloc(sizeof(LockRelationRecord));
+	lockRelationRecord->relationId = relationId;
+	lockRelationRecord->inh = inh;
+	return lockRelationRecord;
+}
+
+
+/*
+ * ConcatLockRelationRecordList concats a list of LockRelationRecord with
+ * another list of LockRelationRecord created from a list of relation oid-s
+ * which are not present in the first list and an inh bool which will be
+ * applied across all LockRelationRecords
+ */
+static List *
+ConcatLockRelationRecordList(List *lockRelationRecordList, List *relationOidList, bool
+							 inh)
+{
+	List *constructedList = NIL;
+
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, relationOidList)
+	{
+		if (!LockRelationRecordListMember(lockRelationRecordList, relationId))
+		{
+			LockRelationRecord *record = MakeLockRelationRecord(relationId, inh);
+			constructedList = lappend(constructedList, (void *) record);
+		}
+	}
+
+	return list_concat(lockRelationRecordList, constructedList);
+}
+
+
+/*
+ * AcquireDistributedLockOnRelations_Internal acquire a distributed lock on worker nodes
+ * for given list of relations ids. Worker node list is sorted so that the lock
+ * is acquired in the same order regardless of which node it was run on.
+ *
+ * A nowait flag is used to require the locks to be available immediately
+ * and if that is not the case, an error will be thrown
+ *
+ * Notice that no validation or filtering is done on the relationIds, that is the responsibility
+ * of this function's caller.
+ */
+static void
+AcquireDistributedLockOnRelations_Internal(List *lockRelationRecordList,
+										   LOCKMODE lockMode, bool nowait)
 {
 	const char *lockModeText = LockModeToLockModeText(lockMode);
 
@@ -1103,22 +1215,15 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 	 */
 	bool startedLockCommand = false;
 
+	/* create a lock termination string used to terminate a partial lock command */
+	const char *lockTerminationString = CreateLockTerminationString(lockModeText, nowait);
+
 	int lockedRelations = 0;
-	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIdList)
+	LockRelationRecord *lockRelationRecord;
+	foreach_ptr(lockRelationRecord, lockRelationRecordList)
 	{
-		/*
-		 * we want to prevent under privileged users to trigger establishing connections,
-		 * that's why we have this additional check. Otherwise, we'd get the errors as
-		 * soon as we execute the command on any node
-		 */
-		EnsureCanAcquireLock(relationId, lockMode);
-
-		if (!ShouldSyncTableMetadata(relationId))
-		{
-			continue;
-		}
-
+		Oid relationId = lockRelationRecord->relationId;
+		bool lockDescendants = lockRelationRecord->inh;
 		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 
 		/*
@@ -1127,12 +1232,18 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 		 */
 		if (get_rel_relkind(relationId) == RELKIND_FOREIGN_TABLE)
 		{
-			/* finish the partial lock statement */
-			if (startedLockCommand)
-			{
-				appendStringInfo(lockRelationsCommand, " IN %s MODE;\n", lockModeText);
-				startedLockCommand = false;
-			}
+			FinishLockCommandIfNecessary(lockRelationsCommand, lockTerminationString,
+										 &startedLockCommand);
+
+			/*
+			 * The user should not be able to trigger this codepath
+			 * with nowait = true or lockDescendants = false since the
+			 * only way to do that is calling LOCK * IN * MODE NOWAIT;
+			 * and LOCK ONLY * IN * MODE; respectively but foreign tables
+			 * cannot be locked with LOCK command as of pg14
+			 */
+			Assert(nowait == false);
+			Assert(lockDescendants == true);
 
 			/* use lock_relation_if_exits to lock foreign table */
 			appendStringInfo(lockRelationsCommand, LOCK_RELATION_IF_EXISTS,
@@ -1143,12 +1254,16 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 		else if (startedLockCommand)
 		{
 			/* append relation to partial lock statement */
-			appendStringInfo(lockRelationsCommand, ", %s", qualifiedRelationName);
+			appendStringInfo(lockRelationsCommand, ",%s%s",
+							 lockDescendants ? " " : " ONLY ",
+							 qualifiedRelationName);
 		}
 		else
 		{
 			/* start a new partial lock statement */
-			appendStringInfo(lockRelationsCommand, "LOCK %s", qualifiedRelationName);
+			appendStringInfo(lockRelationsCommand, "LOCK%s%s",
+							 lockDescendants ? " " : " ONLY ",
+							 qualifiedRelationName);
 			startedLockCommand = true;
 		}
 
@@ -1160,14 +1275,11 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 		return;
 	}
 
-	if (startedLockCommand)
-	{
-		appendStringInfo(lockRelationsCommand, " IN %s MODE;\n", lockModeText);
-	}
+	FinishLockCommandIfNecessary(lockRelationsCommand, lockTerminationString,
+								 &startedLockCommand);
 
 	appendStringInfo(lockRelationsCommand, ENABLE_DDL_PROPAGATION);
-	const char *lockCommand = lockRelationsCommand->data;
-
+	char *lockCommand = lockRelationsCommand->data;
 
 	List *workerNodeList = TargetWorkerSetNodeList(METADATA_NODES, NoLock);
 
@@ -1180,6 +1292,7 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 	int32 localGroupId = GetLocalGroupId();
 
 	WorkerNode *workerNode = NULL;
+	const char *currentUser = CurrentUserName();
 	foreach_ptr(workerNode, workerNodeList)
 	{
 		const char *nodeName = workerNode->workerName;
@@ -1192,6 +1305,126 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 			continue;
 		}
 
-		SendCommandToWorker(nodeName, nodePort, lockCommand);
+		SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName, nodePort,
+																currentUser, list_make1(
+																	lockCommand));
 	}
+}
+
+
+/*
+ * AcquireDistributedLockOnRelations filters relations before passing them to
+ * AcquireDistributedLockOnRelations_Internal to acquire the locks.
+ *
+ * Only tables, views, and foreign tables can be locked with this function. Other relations
+ * will cause an error.
+ *
+ * Skips non distributed relations.
+ * configs parameter is used to configure what relation will be locked and if the lock
+ * should throw an error if it cannot be acquired immediately
+ */
+void
+AcquireDistributedLockOnRelations(List *relationList, LOCKMODE lockMode, uint32 configs)
+{
+	if (!ClusterHasKnownMetadataWorkers() || !EnableMetadataSync || !EnableDDLPropagation)
+	{
+		return;
+	}
+
+	/* used to store the relations that will be locked */
+	List *distributedRelationRecordsList = NIL;
+
+	bool nowait = (configs & DIST_LOCK_NOWAIT) > 0;
+
+	RangeVar *rangeVar = NULL;
+	foreach_ptr(rangeVar, relationList)
+	{
+		Oid relationId = RangeVarGetRelidExtended(rangeVar, AccessShareLock, nowait ?
+												  RVR_NOWAIT : 0, NULL, NULL);
+
+		LockRelationRecord *lockRelationRecord = MakeLockRelationRecord(relationId,
+																		rangeVar->inh);
+
+		/*
+		 * Note that allowing the user to lock shards could lead to
+		 * distributed deadlocks due to shards not being locked when
+		 * a distributed table is locked.
+		 * However, because citus.enable_manual_changes_to_shards
+		 * is a guc which is not visible by default, whoever is using this
+		 * guc will hopefully know what they're doing and avoid such scenarios.
+		 */
+		ErrorIfIllegallyChangingKnownShard(relationId);
+
+		/*
+		 * we want to prevent under privileged users to trigger establishing connections,
+		 * that's why we have this additional check. Otherwise, we'd get the errors as
+		 * soon as we execute the command on any node
+		 */
+		EnsureCanAcquireLock(relationId, lockMode);
+
+		bool isView = get_rel_relkind(relationId) == RELKIND_VIEW;
+		if ((isView && !IsViewDistributed(relationId)) ||
+			(!isView && !ShouldSyncTableMetadata(relationId)))
+		{
+			continue;
+		}
+
+		if (!LockRelationRecordListMember(distributedRelationRecordsList, relationId))
+		{
+			distributedRelationRecordsList = lappend(distributedRelationRecordsList,
+													 (void *) lockRelationRecord);
+		}
+
+		if ((configs & DIST_LOCK_REFERENCING_TABLES) > 0)
+		{
+			CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+			Assert(cacheEntry != NULL);
+
+			List *referencingTableList = cacheEntry->referencingRelationsViaForeignKey;
+
+			/* remove the relations which should not be synced */
+			referencingTableList = list_filter_oid(referencingTableList,
+												   &ShouldSyncTableMetadata);
+
+			distributedRelationRecordsList = ConcatLockRelationRecordList(
+				distributedRelationRecordsList, referencingTableList, true);
+		}
+	}
+
+	if (distributedRelationRecordsList != NIL)
+	{
+		if (!IsCoordinator() && !CoordinatorAddedAsWorkerNode() &&
+			!EnableAcquiringUnsafeLockFromWorkers)
+		{
+			ereport(ERROR,
+					(errmsg(
+						 "Cannot acquire a distributed lock from a worker node since the "
+						 "coordinator is not in the metadata."),
+					 errhint(
+						 "Either run this command on the coordinator or add the coordinator "
+						 "in the metadata by using: SELECT citus_set_coordinator_host('<hostname>', <port>);\n"
+						 "Alternatively, though it is not recommended, you can allow this command by running: "
+						 "SET citus.allow_unsafe_locks_from_workers TO 'on';")));
+		}
+
+		AcquireDistributedLockOnRelations_Internal(distributedRelationRecordsList,
+												   lockMode, nowait);
+	}
+}
+
+
+/**
+ * PreprocessLockStatement makes sure that the lock is allowed
+ * before calling AcquireDistributedLockOnRelations on the locked tables/views
+ * with flags DIST_LOCK_VIEWS_RECUR and DIST_LOCK_NOWAIT if nowait is true for
+ * the lock statement
+ */
+void
+PreprocessLockStatement(LockStmt *stmt, ProcessUtilityContext context)
+{
+	bool isTopLevel = context == PROCESS_UTILITY_TOPLEVEL;
+	RequireTransactionBlock(isTopLevel, "LOCK TABLE");
+
+	uint32 nowaitFlag = stmt->nowait ? DIST_LOCK_NOWAIT : 0;
+	AcquireDistributedLockOnRelations(stmt->relations, stmt->mode, nowaitFlag);
 }
