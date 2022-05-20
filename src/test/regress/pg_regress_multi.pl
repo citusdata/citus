@@ -464,6 +464,7 @@ push(@pgOptions, "citus.shard_replication_factor=2");
 push(@pgOptions, "citus.node_connection_timeout=${connectionTimeout}");
 push(@pgOptions, "citus.explain_analyze_sort_method='taskId'");
 push(@pgOptions, "citus.enable_manual_changes_to_shards=on");
+push(@pgOptions, "citus.allow_unsafe_locks_from_workers=on");
 
 # Some tests look at shards in pg_class, make sure we can usually see them:
 push(@pgOptions, "citus.show_shards_for_app_name_prefixes='pg_regress'");

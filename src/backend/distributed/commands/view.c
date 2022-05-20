@@ -251,10 +251,7 @@ FilterNameListForDistributedViews(List *viewNamesList, bool missing_ok)
 			continue;
 		}
 
-		ObjectAddress viewAddress = { 0 };
-		ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
-
-		if (IsObjectDistributed(&viewAddress))
+		if (IsViewDistributed(viewOid))
 		{
 			distributedViewNames = lappend(distributedViewNames,
 										   possiblyQualifiedViewName);
@@ -424,6 +421,21 @@ AlterViewOwnerCommand(Oid viewOid)
 					 quote_identifier(viewOwnerName));
 
 	return alterOwnerCommand->data;
+}
+
+
+/*
+ * IsViewDistributed checks if a view is distributed
+ */
+bool
+IsViewDistributed(Oid viewOid)
+{
+	Assert(get_rel_relkind(viewOid) == RELKIND_VIEW);
+
+	ObjectAddress viewAddress = { 0 };
+	ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
+
+	return IsObjectDistributed(&viewAddress);
 }
 
 

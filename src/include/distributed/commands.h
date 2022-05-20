@@ -536,6 +536,7 @@ extern char * CreateViewDDLCommand(Oid viewOid);
 extern char * AlterViewOwnerCommand(Oid viewOid);
 extern char * DeparseViewStmt(Node *node);
 extern char * DeparseDropViewStmt(Node *node);
+extern bool IsViewDistributed(Oid viewOid);
 extern List * CreateViewDDLCommandsIdempotent(Oid viewOid);
 extern List * PreprocessAlterViewStmt(Node *node, const char *queryString,
 									  ProcessUtilityContext processUtilityContext);

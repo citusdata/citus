@@ -74,7 +74,7 @@
 #include "distributed/shared_library_init.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/subplan_execution.h"
-
+#include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/utils/directory.h"
@@ -666,6 +666,26 @@ RegisterCitusConfigVariables(void)
 					 "worker nodes."),
 		&AllowModificationsFromWorkersToReplicatedTables,
 		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.allow_unsafe_locks_from_workers",
+		gettext_noop("Enables acquiring a distributed lock from a worker "
+					 "when the coordinator is not in the metadata"),
+		gettext_noop("Set to false by default. If set to true, enables "
+					 "acquiring a distributed lock from a worker "
+					 "when the coordinator is not in the metadata. "
+					 "This type of lock is unsafe because the worker will not be "
+					 "able to lock the coordinator; the coordinator will be able to "
+					 "intialize distributed operations on the resources locked "
+					 "by the worker. This can lead to concurrent operations from the "
+					 "coordinator and distributed deadlocks since the coordinator "
+					 "and the workers would not acquire locks across the same nodes "
+					 "in the same order."),
+		&EnableAcquiringUnsafeLockFromWorkers,
+		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);

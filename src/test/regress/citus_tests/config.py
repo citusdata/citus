@@ -176,7 +176,6 @@ class CitusUpgradeConfig(CitusBaseClusterConfig):
         self.user = SUPER_USER_NAME
         self.mixed_mode = arguments["--mixed"]
         self.fixed_port = 57635
-        self.is_mx = False
 
 
 class PostgresConfig(CitusDefaultClusterConfig):
@@ -341,6 +340,9 @@ class CitusNonMxClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.is_mx = False
+        # citus does not support distributed functions
+        # when metadata is not synced
+        self.skip_tests = ["function_create", "functions"]
 
 
 class PGUpgradeConfig(CitusBaseClusterConfig):

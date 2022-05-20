@@ -214,10 +214,10 @@ def save_regression_diff(name, output_dir):
     shutil.move(path, new_file_path)
 
 
-def sync_metadata_to_workers(pg_path, worker_ports, coordinator_port):
+def stop_metadata_to_workers(pg_path, worker_ports, coordinator_port):
     for port in worker_ports:
         command = (
-            "SELECT * from start_metadata_sync_to_node('localhost', {port});".format(
+            "SELECT * from stop_metadata_sync_to_node('localhost', {port});".format(
                 port=port
             )
         )
@@ -286,8 +286,8 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
     start_databases(bindir, datadir, config.node_name_to_ports, config.name, config.env_variables)
     create_citus_extension(bindir, config.node_name_to_ports.values())
     add_workers(bindir, config.worker_ports, config.coordinator_port())
-    if config.is_mx:
-        sync_metadata_to_workers(bindir, config.worker_ports, config.coordinator_port())
+    if not config.is_mx:
+        stop_metadata_to_workers(bindir, config.worker_ports, config.coordinator_port())
     if config.add_coordinator_to_metadata:
         add_coordinator_to_metadata(bindir, config.coordinator_port())
     config.setup_steps()
