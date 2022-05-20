@@ -25,28 +25,28 @@ SELECT * FROM t_view a ORDER BY a;
 
 -- show columnar options for materialized view
 SELECT * FROM columnar.options
-WHERE regclass = 't_view'::regclass;
- regclass | chunk_group_row_limit | stripe_row_limit | compression_level | compression
+WHERE relation = 't_view'::regclass;
+ relation | chunk_group_row_limit | stripe_row_limit | compression | compression_level
 ---------------------------------------------------------------------
- t_view   |           10000 |           150000 |                 3 | none
+ t_view   |                 10000 |           150000 | none        |                 3
 (1 row)
 
 -- show we can set options on a materialized view
 ALTER TABLE t_view SET (columnar.compression = pglz);
 SELECT * FROM columnar.options
-WHERE regclass = 't_view'::regclass;
- regclass | chunk_group_row_limit | stripe_row_limit | compression_level | compression
+WHERE relation = 't_view'::regclass;
+ relation | chunk_group_row_limit | stripe_row_limit | compression | compression_level
 ---------------------------------------------------------------------
- t_view   |           10000 |           150000 |                 3 | pglz
+ t_view   |                 10000 |           150000 | pglz        |                 3
 (1 row)
 
 REFRESH MATERIALIZED VIEW t_view;
 -- verify options have not been changed
 SELECT * FROM columnar.options
-WHERE regclass = 't_view'::regclass;
- regclass | chunk_group_row_limit | stripe_row_limit | compression_level | compression
+WHERE relation = 't_view'::regclass;
+ relation | chunk_group_row_limit | stripe_row_limit | compression | compression_level
 ---------------------------------------------------------------------
- t_view   |           10000 |           150000 |                 3 | pglz
+ t_view   |                 10000 |           150000 | pglz        |                 3
 (1 row)
 
 SELECT * FROM t_view a ORDER BY a;
@@ -61,7 +61,7 @@ SELECT * FROM t_view a ORDER BY a;
 (6 rows)
 
 -- verify that we have created metadata entries for the materialized view
-SELECT columnar_test_helpers.columnar_relation_storageid(oid) AS storageid
+SELECT columnar.get_storage_id(oid) AS storageid
 FROM pg_class WHERE relname='t_view' \gset
 SELECT count(*) FROM columnar.stripe WHERE storage_id=:storageid;
  count

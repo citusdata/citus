@@ -6,7 +6,7 @@ CREATE TABLE t(a int, b int) USING columnar;
 
 CREATE VIEW t_stripes AS
 SELECT * FROM columnar.stripe a, pg_class b
-WHERE a.storage_id = columnar_test_helpers.columnar_relation_storageid(b.oid) AND b.relname='t';
+WHERE a.storage_id = columnar.get_storage_id(b.oid) AND b.relname='t';
 
 SELECT count(*) FROM t_stripes;
 
@@ -56,13 +56,13 @@ ALTER TABLE t DROP COLUMN a;
 
 SELECT stripe_num, attr_num, chunk_group_num, minimum_value IS NULL, maximum_value IS NULL
 FROM columnar.chunk a, pg_class b
-WHERE a.storage_id = columnar_test_helpers.columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
+WHERE a.storage_id = columnar.get_storage_id(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
 
 VACUUM FULL t;
 
 SELECT stripe_num, attr_num, chunk_group_num, minimum_value IS NULL, maximum_value IS NULL
 FROM columnar.chunk a, pg_class b
-WHERE a.storage_id = columnar_test_helpers.columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
+WHERE a.storage_id = columnar.get_storage_id(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
 
 -- Make sure we cleaned-up the transient table metadata after VACUUM FULL commands
 SELECT count(distinct storage_id) - :columnar_table_count FROM columnar.stripe;

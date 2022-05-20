@@ -90,7 +90,7 @@ INSERT INTO columnar_same_transaction_truncate SELECT * FROM generate_series(20,
 COMMIT;
 
 -- should output "1" for the newly created relation
-SELECT count(distinct storage_id) - :columnar_data_files_before_truncate FROM columnar.stripe;
+SELECT count(distinct storage_id) - :columnar_data_files_before_truncate FROM columnar_internal.stripe;
 SELECT * FROM columnar_same_transaction_truncate;
 
 DROP TABLE columnar_same_transaction_truncate;

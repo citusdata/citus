@@ -8,10 +8,10 @@ create table t_compressed(a int) using columnar;
 ALTER TABLE t_compressed SET (columnar.compression = pglz);
 ALTER TABLE t_compressed SET (columnar.stripe_row_limit = 2000);
 ALTER TABLE t_compressed SET (columnar.chunk_group_row_limit = 1000);
-SELECT * FROM columnar.options WHERE regclass = 't_compressed'::regclass;
-   regclass   | chunk_group_row_limit | stripe_row_limit | compression_level | compression
+SELECT * FROM columnar.options WHERE relation = 't_compressed'::regclass;
+   relation   | chunk_group_row_limit | stripe_row_limit | compression | compression_level
 ---------------------------------------------------------------------
- t_compressed |                  1000 |             2000 |                 3 | pglz
+ t_compressed |                  1000 |             2000 | pglz        |                 3
 (1 row)
 
 -- select

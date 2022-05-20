@@ -231,7 +231,7 @@ ABORT;
 -- all below 5 commands should throw no permission errors
 -- read columnar metadata table
 SELECT * FROM columnar.stripe;
- storage_id | stripe_num | file_offset | data_length | column_count | chunk_row_count | row_count | chunk_group_count | first_row_number
+ relation | storage_id | stripe_num | file_offset | data_length | column_count | chunk_row_count | row_count | chunk_group_count | first_row_number
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -261,16 +261,18 @@ SET ROLE read_access;
 -- and drop it
 DROP TABLE columnar_table;
 -- cannot modify columnar metadata table as unprivileged user
-INSERT INTO columnar.stripe VALUES(99);
-ERROR:  permission denied for table stripe
+INSERT INTO columnar_internal.stripe VALUES(99);
+ERROR:  permission denied for schema columnar_internal
 -- Cannot drop columnar metadata table as unprivileged user.
 -- Privileged user also cannot drop but with a different error message.
 -- (since citus extension has a dependency to it)
-DROP TABLE columnar.chunk;
-ERROR:  must be owner of table chunk
--- cannot read columnar.chunk since it could expose chunk min/max values
+DROP TABLE columnar_internal.chunk;
+ERROR:  permission denied for schema columnar_internal
 SELECT * FROM columnar.chunk;
-ERROR:  permission denied for table chunk
+ relation | storage_id | stripe_num | attr_num | chunk_group_num | minimum_value | maximum_value | value_stream_offset | value_stream_length | exists_stream_offset | exists_stream_length | value_compression_type | value_compression_level | value_decompressed_length | value_count
+---------------------------------------------------------------------
+(0 rows)
+
 -- test whether a read-only user can read from citus_tables view
 SELECT distribution_column FROM citus_tables WHERE table_name = 'test'::regclass;
  distribution_column

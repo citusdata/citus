@@ -151,13 +151,12 @@ SET ROLE read_access;
 DROP TABLE columnar_table;
 
 -- cannot modify columnar metadata table as unprivileged user
-INSERT INTO columnar.stripe VALUES(99);
+INSERT INTO columnar_internal.stripe VALUES(99);
 -- Cannot drop columnar metadata table as unprivileged user.
 -- Privileged user also cannot drop but with a different error message.
 -- (since citus extension has a dependency to it)
-DROP TABLE columnar.chunk;
+DROP TABLE columnar_internal.chunk;
 
--- cannot read columnar.chunk since it could expose chunk min/max values
 SELECT * FROM columnar.chunk;
 
 -- test whether a read-only user can read from citus_tables view
