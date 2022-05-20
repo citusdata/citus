@@ -556,9 +556,8 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 			 * At this point, we're dealing with a task that has placements on both
 			 * local and remote nodes.
 			 */
-			task->partiallyLocalOrRemote = true;
-
 			Task *localTask = copyObject(task);
+			localTask->partiallyLocalOrRemote = true;
 
 			localTask->taskPlacementList = localTaskPlacementList;
 			*localTaskList = lappend(*localTaskList, localTask);
@@ -572,6 +571,7 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 				/* since shard replication factor > 1, we should have at least 1 remote task */
 				Assert(remoteTaskPlacementList != NIL);
 				Task *remoteTask = copyObject(task);
+				remoteTask->partiallyLocalOrRemote = true;
 				remoteTask->taskPlacementList = remoteTaskPlacementList;
 
 				*remoteTaskList = lappend(*remoteTaskList, remoteTask);
