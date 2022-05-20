@@ -18,6 +18,7 @@
 #include "catalog/dependency.h"
 #include "catalog/pg_class.h"
 #include "catalog/namespace.h"
+#include "distributed/backend_data.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h"

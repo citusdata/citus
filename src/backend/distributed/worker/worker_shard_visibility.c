@@ -14,6 +14,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_type.h"
+#include "distributed/backend_data.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/listutils.h"
