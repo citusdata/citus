@@ -186,6 +186,9 @@ bool EnableVersionChecks = true; /* version checks are enabled */
 
 static bool citusVersionKnownCompatible = false;
 
+/* Variable to determine if we are in the process of creating citus */
+static int CreateCitusTransactionLevel = 0;
+
 /* Hash table for informations about each partition */
 static HTAB *DistTableCacheHash = NULL;
 static List *DistTableCacheExpired = NIL;
@@ -1983,6 +1986,27 @@ CitusHasBeenLoadedInternal(void)
 
 	/* citus extension exists and has been created */
 	return true;
+}
+
+
+/*
+ * GetCitusCreationLevel returns the level of the transaction creating citus
+ */
+int
+GetCitusCreationLevel(void)
+{
+	return CreateCitusTransactionLevel;
+}
+
+
+/*
+ * Sets the value of CreateCitusTransactionLevel based on int received which represents the
+ * nesting level of the transaction that created the Citus extension
+ */
+void
+SetCreateCitusTransactionLevel(int val)
+{
+	CreateCitusTransactionLevel = val;
 }
 
 

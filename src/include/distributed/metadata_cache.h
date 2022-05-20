@@ -144,6 +144,8 @@ extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
 extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);
 
+extern void SetCreateCitusTransactionLevel(int val);
+extern int GetCitusCreationLevel(void);
 extern bool IsCitusTable(Oid relationId);
 extern bool IsCitusTableViaCatalog(Oid relationId);
 extern char PgDistPartitionViaCatalog(Oid relationId);

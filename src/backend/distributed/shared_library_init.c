@@ -24,8 +24,11 @@
 #include "safe_lib.h"
 
 #include "catalog/pg_authid.h"
+#include "catalog/objectaccess.h"
+#include "catalog/pg_extension.h"
 #include "citus_version.h"
 #include "commands/explain.h"
+#include "commands/extension.h"
 #include "common/string.h"
 #include "executor/executor.h"
 #include "distributed/backend_data.h"
@@ -141,9 +144,12 @@ static int ReplicationModel = REPLICATION_MODEL_STREAMING;
 /* we override the application_name assign_hook and keep a pointer to the old one */
 static GucStringAssignHook OldApplicationNameAssignHook = NULL;
 
+static object_access_hook_type PrevObjectAccessHook = NULL;
 
 void _PG_init(void);
 
+static void CitusObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int
+								  subId, void *arg);
 static void DoInitialCleanup(void);
 static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
@@ -380,6 +386,9 @@ _PG_init(void)
 	{
 		DoInitialCleanup();
 	}
+
+	PrevObjectAccessHook = object_access_hook;
+	object_access_hook = CitusObjectAccessHook;
 
 	/* ensure columnar module is loaded at the right time */
 	load_file(COLUMNAR_MODULE_NAME, false);
@@ -2326,4 +2335,30 @@ IsSuperuser(char *roleName)
 	ReleaseSysCache(roleTuple);
 
 	return isSuperuser;
+}
+
+
+/*
+ * CitusObjectAccessHook is called when an object is created.
+ *
+ * We currently use it to track CREATE EXTENSION citus; operations to make sure we
+ * clear the metadata if the transaction is rolled back.
+ */
+static void
+CitusObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int subId,
+					  void *arg)
+{
+	if (PrevObjectAccessHook)
+	{
+		PrevObjectAccessHook(access, classId, objectId, subId, arg);
+	}
+
+	/* Checks if the access is post_create and that it's an extension id */
+	if (access == OAT_POST_CREATE && classId == ExtensionRelationId)
+	{
+		/* There's currently an engine bug that makes it difficult to check
+		 * the provided objectId with extension oid so we will set the value
+		 * regardless if it's citus being created */
+		SetCreateCitusTransactionLevel(GetCurrentTransactionNestLevel());
+	}
 }
