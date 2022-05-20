@@ -2081,6 +2081,7 @@ static void
 ApplicationNameAssignHook(const char *newval, void *extra)
 {
 	ResetHideShardsDecision();
+	ResetCitusBackendType();
 	OldApplicationNameAssignHook(newval, extra);
 }
 

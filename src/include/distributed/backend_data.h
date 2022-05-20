@@ -69,6 +69,10 @@ extern LocalTransactionId GetMyProcLocalTransactionId(void);
 extern int GetExternalClientBackendCount(void);
 extern uint32 IncrementExternalClientBackendCounter(void);
 extern void DecrementExternalClientBackendCounter(void);
+extern bool IsCitusInternalBackend(void);
+extern bool IsRebalancerInternalBackend(void);
+extern bool IsCitusRunCommandBackend(void);
+extern void ResetCitusBackendType(void);
 
 #define INVALID_CITUS_INTERNAL_BACKEND_GPID 0
 #define GLOBAL_PID_NODE_ID_FOR_NODES_NOT_IN_METADATA 99999999

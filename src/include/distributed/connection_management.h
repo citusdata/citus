@@ -288,9 +288,6 @@ extern void FinishConnectionListEstablishment(List *multiConnectionList);
 extern void FinishConnectionEstablishment(MultiConnection *connection);
 extern void ClaimConnectionExclusively(MultiConnection *connection);
 extern void UnclaimConnection(MultiConnection *connection);
-extern bool IsCitusInternalBackend(void);
-extern bool IsRebalancerInternalBackend(void);
-extern bool IsCitusRunCommandBackend(void);
 extern void MarkConnectionConnected(MultiConnection *connection);
 
 /* waiteventset utilities */

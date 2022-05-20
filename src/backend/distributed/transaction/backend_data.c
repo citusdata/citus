@@ -78,6 +78,19 @@ typedef struct BackendManagementShmemData
 	BackendData backends[FLEXIBLE_ARRAY_MEMBER];
 } BackendManagementShmemData;
 
+/*
+ * CitusBackendType reflects what type of backend we are in. This
+ * can change depending on the application_name.
+ */
+typedef enum CitusBackendType
+{
+	CITUS_BACKEND_NOT_ASSIGNED,
+	CITUS_INTERNAL_BACKEND,
+	CITUS_REBALANCER_BACKEND,
+	CITUS_RUN_COMMAND_BACKEND,
+	EXTERNAL_CLIENT_BACKEND
+} CitusBackendType;
+
 
 static void StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc
 									   tupleDescriptor);
@@ -88,10 +101,12 @@ static uint64 GenerateGlobalPID(void);
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static BackendManagementShmemData *backendManagementShmemData = NULL;
 static BackendData *MyBackendData = NULL;
+static CitusBackendType CurrentBackendType = CITUS_BACKEND_NOT_ASSIGNED;
 
 
 static void BackendManagementShmemInit(void);
 static size_t BackendManagementShmemSize(void);
+static void DetermineCitusBackendType(void);
 
 
 PG_FUNCTION_INFO_V1(assign_distributed_transaction_id);
@@ -1277,4 +1292,88 @@ void
 DecrementExternalClientBackendCounter(void)
 {
 	pg_atomic_sub_fetch_u32(&backendManagementShmemData->externalClientBackendCounter, 1);
+}
+
+
+/*
+ * ResetCitusBackendType resets the backend type cache.
+ */
+void
+ResetCitusBackendType(void)
+{
+	CurrentBackendType = CITUS_BACKEND_NOT_ASSIGNED;
+}
+
+
+/*
+ * IsRebalancerInitiatedBackend returns true if we are in a backend that citus
+ * rebalancer initiated.
+ */
+bool
+IsRebalancerInternalBackend(void)
+{
+	if (CurrentBackendType == CITUS_BACKEND_NOT_ASSIGNED)
+	{
+		DetermineCitusBackendType();
+	}
+
+	return CurrentBackendType == CITUS_REBALANCER_BACKEND;
+}
+
+
+/*
+ * IsCitusInitiatedRemoteBackend returns true if we are in a backend that citus
+ * initiated via remote connection.
+ */
+bool
+IsCitusInternalBackend(void)
+{
+	if (CurrentBackendType == CITUS_BACKEND_NOT_ASSIGNED)
+	{
+		DetermineCitusBackendType();
+	}
+
+	return CurrentBackendType == CITUS_INTERNAL_BACKEND;
+}
+
+
+/*
+ * IsCitusRunCommandBackend returns true if we are in a backend that one of
+ * the run_command_on_* functions initiated.
+ */
+bool
+IsCitusRunCommandBackend(void)
+{
+	if (CurrentBackendType == CITUS_BACKEND_NOT_ASSIGNED)
+	{
+		DetermineCitusBackendType();
+	}
+
+	return CurrentBackendType == CITUS_RUN_COMMAND_BACKEND;
+}
+
+
+/*
+ * DetermineCitusBackendType determines the type of backend based on the application_name.
+ */
+static void
+DetermineCitusBackendType(void)
+{
+	if (ExtractGlobalPID(application_name) != INVALID_CITUS_INTERNAL_BACKEND_GPID)
+	{
+		CurrentBackendType = CITUS_INTERNAL_BACKEND;
+	}
+	else if (application_name && strcmp(application_name, CITUS_REBALANCER_NAME) == 0)
+	{
+		CurrentBackendType = CITUS_REBALANCER_BACKEND;
+	}
+	else if (application_name &&
+			 strcmp(application_name, CITUS_RUN_COMMAND_APPLICATION_NAME) == 0)
+	{
+		CurrentBackendType = CITUS_RUN_COMMAND_BACKEND;
+	}
+	else
+	{
+		CurrentBackendType = EXTERNAL_CLIENT_BACKEND;
+	}
 }
