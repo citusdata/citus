@@ -205,6 +205,12 @@ ALTER TABLE table_options SET (columnar.foobar = 123);
 ERROR:  unrecognized columnar storage parameter "foobar"
 ALTER TABLE table_options RESET (columnar.foobar);
 ERROR:  unrecognized columnar storage parameter "foobar"
+-- verify that invalid options are caught early, before query executes
+-- (error should be about invalid options, not division-by-zero)
+CREATE TABLE fail(i) USING columnar WITH (columnar.foobar = 123) AS SELECT 1/0;
+ERROR:  unrecognized columnar storage parameter "foobar"
+CREATE TABLE fail(i) USING columnar WITH (columnar.compression = foobar) AS SELECT 1/0;
+ERROR:  unknown compression type for columnar table: foobar
 -- verify cannot set out of range compression levels
 ALTER TABLE table_options SET (columnar.compression_level = 0);
 ERROR:  compression level out of range

@@ -145,6 +145,11 @@ ALTER TABLE table_options SET (columnar.compression = foobar);
 ALTER TABLE table_options SET (columnar.foobar = 123);
 ALTER TABLE table_options RESET (columnar.foobar);
 
+-- verify that invalid options are caught early, before query executes
+-- (error should be about invalid options, not division-by-zero)
+CREATE TABLE fail(i) USING columnar WITH (columnar.foobar = 123) AS SELECT 1/0;
+CREATE TABLE fail(i) USING columnar WITH (columnar.compression = foobar) AS SELECT 1/0;
+
 -- verify cannot set out of range compression levels
 ALTER TABLE table_options SET (columnar.compression_level = 0);
 ALTER TABLE table_options SET (columnar.compression_level = 20);

@@ -2482,8 +2482,7 @@ PG_FUNCTION_INFO_V1(alter_columnar_table_set);
 Datum
 alter_columnar_table_set(PG_FUNCTION_ARGS)
 {
-	ereport(ERROR, (errmsg("alter_columnar_table_set is deprecated"),
-					errhint("Use ALTER TABLE ... SET instead.")));
+	elog(ERROR, "alter_columnar_table_set is deprecated");
 }
 
 
@@ -2500,8 +2499,7 @@ PG_FUNCTION_INFO_V1(alter_columnar_table_reset);
 Datum
 alter_columnar_table_reset(PG_FUNCTION_ARGS)
 {
-	ereport(ERROR, (errmsg("alter_columnar_table_reset is deprecated"),
-					errhint("Use ALTER TABLE ... RESET instead.")));
+	elog(ERROR, "alter_columnar_table_reset is deprecated");
 }
 
 

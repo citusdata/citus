@@ -83,6 +83,7 @@ typedef enum RowNumberLookupMode
 	FIND_GREATER
 } RowNumberLookupMode;
 
+static void ParseColumnarRelOptions(List *reloptions, ColumnarOptions *options);
 static void InsertEmptyStripeMetadataRow(uint64 storageId, uint64 stripeId,
 										 uint32 columnCount, uint32 chunkGroupRowCount,
 										 uint64 firstRowNumber);
@@ -220,6 +221,90 @@ InitColumnarOptions(Oid regclass)
 
 
 /*
+ * ParseColumnarRelOptions - update the given 'options' using the given list
+ * of DefElem.
+ */
+static void
+ParseColumnarRelOptions(List *reloptions, ColumnarOptions *options)
+{
+	ListCell *lc = NULL;
+
+	foreach(lc, reloptions)
+	{
+		DefElem *elem = castNode(DefElem, lfirst(lc));
+
+		if (elem->defnamespace == NULL ||
+			strcmp(elem->defnamespace, COLUMNAR_RELOPTION_NAMESPACE) != 0)
+		{
+			ereport(ERROR, (errmsg("columnar options must have the prefix \"%s\"",
+								   COLUMNAR_RELOPTION_NAMESPACE)));
+		}
+
+		if (strcmp(elem->defname, "chunk_group_row_limit") == 0)
+		{
+			options->chunkRowCount = (elem->arg == NULL) ?
+									 columnar_chunk_group_row_limit : defGetInt64(elem);
+			if (options->chunkRowCount < CHUNK_ROW_COUNT_MINIMUM ||
+				options->chunkRowCount > CHUNK_ROW_COUNT_MAXIMUM)
+			{
+				ereport(ERROR, (errmsg("chunk group row count limit out of range"),
+								errhint("chunk group row count limit must be between "
+										UINT64_FORMAT " and " UINT64_FORMAT,
+										(uint64) CHUNK_ROW_COUNT_MINIMUM,
+										(uint64) CHUNK_ROW_COUNT_MAXIMUM)));
+			}
+		}
+		else if (strcmp(elem->defname, "stripe_row_limit") == 0)
+		{
+			options->stripeRowCount = (elem->arg == NULL) ?
+									  columnar_stripe_row_limit : defGetInt64(elem);
+
+			if (options->stripeRowCount < STRIPE_ROW_COUNT_MINIMUM ||
+				options->stripeRowCount > STRIPE_ROW_COUNT_MAXIMUM)
+			{
+				ereport(ERROR, (errmsg("stripe row count limit out of range"),
+								errhint("stripe row count limit must be between "
+										UINT64_FORMAT " and " UINT64_FORMAT,
+										(uint64) STRIPE_ROW_COUNT_MINIMUM,
+										(uint64) STRIPE_ROW_COUNT_MAXIMUM)));
+			}
+		}
+		else if (strcmp(elem->defname, "compression") == 0)
+		{
+			options->compressionType = (elem->arg == NULL) ?
+									   columnar_compression : ParseCompressionType(
+				defGetString(elem));
+
+			if (options->compressionType == COMPRESSION_TYPE_INVALID)
+			{
+				ereport(ERROR, (errmsg("unknown compression type for columnar table: %s",
+									   quote_identifier(defGetString(elem)))));
+			}
+		}
+		else if (strcmp(elem->defname, "compression_level") == 0)
+		{
+			options->compressionLevel = (elem->arg == NULL) ?
+										columnar_compression_level : defGetInt64(elem);
+
+			if (options->compressionLevel < COMPRESSION_LEVEL_MIN ||
+				options->compressionLevel > COMPRESSION_LEVEL_MAX)
+			{
+				ereport(ERROR, (errmsg("compression level out of range"),
+								errhint("compression level must be between %d and %d",
+										COMPRESSION_LEVEL_MIN,
+										COMPRESSION_LEVEL_MAX)));
+			}
+		}
+		else
+		{
+			ereport(ERROR, (errmsg("unrecognized columnar storage parameter \"%s\"",
+								   elem->defname)));
+		}
+	}
+}
+
+
+/*
  * ExtractColumnarOptions - extract columnar options from inOptions, appending
  * to inoutColumnarOptions. Return the remaining (non-columnar) options.
  */
@@ -243,6 +328,10 @@ ExtractColumnarRelOptions(List *inOptions, List **inoutColumnarOptions)
 			otherOptions = lappend(otherOptions, elem);
 		}
 	}
+
+	/* validate options */
+	ColumnarOptions dummy = { 0 };
+	ParseColumnarRelOptions(*inoutColumnarOptions, &dummy);
 
 	return otherOptions;
 }
@@ -273,79 +362,7 @@ SetColumnarRelOptions(RangeVar *rv, List *reloptions)
 		return;
 	}
 
-	ListCell *lc;
-	foreach(lc, reloptions)
-	{
-		DefElem *elem = castNode(DefElem, lfirst(lc));
-
-		if (elem->defnamespace == NULL ||
-			strcmp(elem->defnamespace, COLUMNAR_RELOPTION_NAMESPACE) != 0)
-		{
-			ereport(ERROR, (errmsg("columnar options must have the prefix \"%s\"",
-								   COLUMNAR_RELOPTION_NAMESPACE)));
-		}
-
-		if (strcmp(elem->defname, "chunk_group_row_limit") == 0)
-		{
-			options.chunkRowCount = (elem->arg == NULL) ?
-									columnar_chunk_group_row_limit : defGetInt64(elem);
-			if (options.chunkRowCount < CHUNK_ROW_COUNT_MINIMUM ||
-				options.chunkRowCount > CHUNK_ROW_COUNT_MAXIMUM)
-			{
-				ereport(ERROR, (errmsg("chunk group row count limit out of range"),
-								errhint("chunk group row count limit must be between "
-										UINT64_FORMAT " and " UINT64_FORMAT,
-										(uint64) CHUNK_ROW_COUNT_MINIMUM,
-										(uint64) CHUNK_ROW_COUNT_MAXIMUM)));
-			}
-		}
-		else if (strcmp(elem->defname, "stripe_row_limit") == 0)
-		{
-			options.stripeRowCount = (elem->arg == NULL) ?
-									 columnar_stripe_row_limit : defGetInt64(elem);
-
-			if (options.stripeRowCount < STRIPE_ROW_COUNT_MINIMUM ||
-				options.stripeRowCount > STRIPE_ROW_COUNT_MAXIMUM)
-			{
-				ereport(ERROR, (errmsg("stripe row count limit out of range"),
-								errhint("stripe row count limit must be between "
-										UINT64_FORMAT " and " UINT64_FORMAT,
-										(uint64) STRIPE_ROW_COUNT_MINIMUM,
-										(uint64) STRIPE_ROW_COUNT_MAXIMUM)));
-			}
-		}
-		else if (strcmp(elem->defname, "compression") == 0)
-		{
-			options.compressionType = (elem->arg == NULL) ?
-									  columnar_compression : ParseCompressionType(
-				defGetString(elem));
-
-			if (options.compressionType == COMPRESSION_TYPE_INVALID)
-			{
-				ereport(ERROR, (errmsg("unknown compression type for columnar table: %s",
-									   quote_identifier(defGetString(elem)))));
-			}
-		}
-		else if (strcmp(elem->defname, "compression_level") == 0)
-		{
-			options.compressionLevel = (elem->arg == NULL) ?
-									   columnar_compression_level : defGetInt64(elem);
-
-			if (options.compressionLevel < COMPRESSION_LEVEL_MIN ||
-				options.compressionLevel > COMPRESSION_LEVEL_MAX)
-			{
-				ereport(ERROR, (errmsg("compression level out of range"),
-								errhint("compression level must be between %d and %d",
-										COMPRESSION_LEVEL_MIN,
-										COMPRESSION_LEVEL_MAX)));
-			}
-		}
-		else
-		{
-			ereport(ERROR, (errmsg("unrecognized columnar storage parameter \"%s\"",
-								   elem->defname)));
-		}
-	}
+	ParseColumnarRelOptions(reloptions, &options);
 
 	SetColumnarOptions(relid, &options);
 }
