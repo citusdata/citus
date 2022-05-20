@@ -18,11 +18,6 @@ ERROR:  table "drop_hash" does not exist
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM drop_hash;
 ERROR:  relation "drop_hash" does not exist
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-drop-schema s2-drop-schema s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -42,11 +37,6 @@ ERROR:  schema "drop_tests" does not exist
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM drop_hash;
 ERROR:  relation "drop_hash" does not exist
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-drop-schema s2-drop-schema-2 s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -64,11 +54,6 @@ step s1-commit: COMMIT;
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM drop_hash;
 ERROR:  relation "drop_hash" does not exist
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-drop s2-ddl-create-index s1-commit s2-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -94,11 +79,6 @@ run_command_on_workers
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s2-initialize s1-ddl-create-index s1-begin s2-begin s1-drop s2-ddl-drop-index s1-commit s2-commit s1-select-count s1-show-indexes
@@ -127,11 +107,6 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s2-initialize s1-begin s1-drop s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -155,11 +130,6 @@ run_command_on_workers
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-drop s2-ddl-add-column s1-commit s2-commit s1-select-count s1-show-columns
@@ -186,11 +156,6 @@ run_command_on_workers
 (localhost,57637,t,"")
 (localhost,57638,t,"")
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s2-initialize s1-ddl-add-column s1-begin s2-begin s1-drop s2-ddl-drop-column s1-commit s2-commit s1-select-count s1-show-columns
@@ -219,11 +184,6 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-drop s2-ddl-rename-column s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -250,11 +210,6 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-drop s2-table-size s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -274,11 +229,6 @@ ERROR:  could not compute table size: relation does not exist
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM drop_hash;
 ERROR:  relation "drop_hash" does not exist
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s2-initialize s1-begin s2-begin s1-drop s2-distribute-table s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -300,11 +250,6 @@ ERROR:  could not create distributed table: relation does not exist
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM drop_hash;
 ERROR:  relation "drop_hash" does not exist
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-ddl-create-index s2-drop s1-commit s2-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -329,11 +274,6 @@ run_command_on_workers
 (localhost,57637,t,0)
 (localhost,57638,t,0)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s2-initialize s1-ddl-create-index s1-begin s2-begin s1-ddl-drop-index s2-drop s1-commit s2-commit s1-select-count s1-show-indexes
@@ -361,11 +301,6 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-ddl-add-column s2-drop s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -390,11 +325,6 @@ run_command_on_workers
 (localhost,57637,t,"")
 (localhost,57638,t,"")
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s2-initialize s1-ddl-add-column s1-begin s2-begin s1-ddl-drop-column s2-drop s1-commit s2-commit s1-select-count s1-show-columns
@@ -422,11 +352,6 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-ddl-rename-column s2-drop s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -452,11 +377,6 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-table-size s2-drop s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -479,11 +399,6 @@ step s1-commit: COMMIT;
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM drop_hash;
 ERROR:  relation "drop_hash" does not exist
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s2-initialize s1-begin s2-begin s1-distribute-table s2-drop s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -509,8 +424,3 @@ step s2-drop: <... completed>
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM drop_hash;
 ERROR:  relation "drop_hash" does not exist
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-

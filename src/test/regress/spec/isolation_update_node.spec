@@ -1,5 +1,8 @@
 setup
 {
+    -- revert back to pg_isolation_test_session_is_blocked until the tests are fixed
+    SELECT citus_internal.restore_isolation_tester_func();
+
     SELECT 1 FROM master_add_node('localhost', 57637);
     SELECT 1 FROM master_add_node('localhost', 57638);
 
@@ -8,6 +11,9 @@ setup
 
 teardown
 {
+    -- replace pg_isolation_test_session_is_blocked so that next tests are run with Citus implementation
+    SELECT citus_internal.replace_isolation_tester_func();
+
     DROP TABLE IF EXISTS test;
     SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
     SELECT nodeid, nodename, nodeport from pg_dist_node ORDER BY 1 DESC;

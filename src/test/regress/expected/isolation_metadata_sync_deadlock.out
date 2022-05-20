@@ -117,8 +117,3 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-

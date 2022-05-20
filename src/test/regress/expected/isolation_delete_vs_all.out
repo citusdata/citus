@@ -20,11 +20,6 @@ count
     4
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-delete s2-truncate s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -46,11 +41,6 @@ count
     0
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-delete s2-drop s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -68,11 +58,6 @@ step s2-drop: <... completed>
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 ERROR:  relation "delete_hash" does not exist
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-delete s2-ddl-create-index s1-commit s2-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -100,11 +85,6 @@ run_command_on_workers
 (localhost,57637,t,2)
 (localhost,57638,t,2)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-delete s2-ddl-drop-index s1-commit s2-commit s1-select-count s1-show-indexes
@@ -135,11 +115,6 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s1-delete s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -165,11 +140,6 @@ run_command_on_workers
 (localhost,57637,t,2)
 (localhost,57638,t,2)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-delete s2-ddl-add-column s1-commit s2-commit s1-select-count s1-show-columns
@@ -198,11 +168,6 @@ run_command_on_workers
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-delete s2-ddl-drop-column s1-commit s2-commit s1-select-count s1-show-columns
@@ -233,11 +198,6 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-delete s2-ddl-rename-column s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -266,11 +226,6 @@ run_command_on_workers
 (localhost,57638,t,new_column)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-delete s2-table-size s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -294,11 +249,6 @@ step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
 ---------------------------------------------------------------------
     4
-(1 row)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
 (1 row)
 
 
@@ -329,11 +279,6 @@ count
     8
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-truncate s2-delete s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -355,11 +300,6 @@ count
     0
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-delete s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -378,11 +318,6 @@ ERROR:  relation "delete_hash" does not exist
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 ERROR:  relation "delete_hash" does not exist
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-delete s1-commit s2-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -410,11 +345,6 @@ run_command_on_workers
 (localhost,57637,t,2)
 (localhost,57638,t,2)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-ddl-drop-index s2-delete s1-commit s2-commit s1-select-count s1-show-indexes
@@ -445,11 +375,6 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-delete s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -477,11 +402,6 @@ run_command_on_workers
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-ddl-drop-column s2-delete s1-commit s2-commit s1-select-count s1-show-columns
@@ -512,11 +432,6 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-delete s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -545,11 +460,6 @@ run_command_on_workers
 (localhost,57638,t,new_column)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-table-size s2-delete s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -573,11 +483,6 @@ step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
 ---------------------------------------------------------------------
     4
-(1 row)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
 (1 row)
 
 
@@ -606,10 +511,5 @@ step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
 ---------------------------------------------------------------------
     8
-(1 row)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
 (1 row)
 

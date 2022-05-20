@@ -26,7 +26,6 @@ teardown
   DROP TABLE deadlock_detection_test;
   DROP TABLE t2;
   SET citus.shard_replication_factor = 1;
-  SELECT citus_internal.restore_isolation_tester_func();
 }
 
 session "s1"

@@ -99,11 +99,6 @@ id|value
  2|    2
 (3 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-delete s2-start-session-level-connection s2-begin-on-worker s2-select s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-display
 step s1-start-session-level-connection:
@@ -198,11 +193,6 @@ id|value
 id|value
 ---------------------------------------------------------------------
  2|    2
-(1 row)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
 (1 row)
 
 
@@ -306,11 +296,6 @@ id|value
  2|    2
 (4 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-update s2-start-session-level-connection s2-begin-on-worker s2-update s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-display
 step s1-start-session-level-connection:
@@ -409,11 +394,6 @@ id|value
  1|    2
  2|    2
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-update s2-start-session-level-connection s2-begin-on-worker s2-copy s1-rollback-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-display
@@ -515,11 +495,6 @@ id|value
  2|    2
 (3 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-update s2-start-session-level-connection s2-begin-on-worker s2-truncate s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-display
 step s1-start-session-level-connection:
@@ -617,11 +592,6 @@ id|value
 ---------------------------------------------------------------------
 (0 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-delete s2-start-session-level-connection s2-begin-on-worker s2-select-for-udpate s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-display
 step s1-start-session-level-connection:
@@ -717,10 +687,5 @@ id|value
 id|value
 ---------------------------------------------------------------------
  2|    2
-(1 row)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
 (1 row)
 
