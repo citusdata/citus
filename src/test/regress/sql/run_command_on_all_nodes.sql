@@ -27,7 +27,12 @@ SELECT tablename FROM pg_tables WHERE schemaname = 'run_command_on_all_nodes';
 SELECT tablename FROM pg_tables WHERE schemaname = 'run_command_on_all_nodes';
 
 \c - - - :master_port
+SET search_path TO run_command_on_all_nodes;
+
 SELECT result FROM run_command_on_all_nodes('SELECT tablename FROM pg_tables WHERE schemaname = ''run_command_on_all_nodes'';');
+
+CREATE TABLE test (x int, y int);
+SELECT create_distributed_table('test','x');
 
 -- break a node and check messages
 BEGIN;
@@ -57,6 +62,12 @@ SELECT success, result FROM run_command_on_all_nodes($$select result from run_co
 -- we can use run_command_on_coordinator from any node if the coordinator is in the metadata
 SELECT citus_set_coordinator_host('localhost');
 SELECT success, result FROM run_command_on_all_nodes($$select result from run_command_on_coordinator('select inet_server_port()')$$);
+SELECT success, result FROM run_command_on_all_nodes($$select result from run_command_on_coordinator('select count(*) from run_command_on_all_nodes.test')$$);
+\c - - - :worker_1_port
+-- poor man's DDL from worker
+select result from run_command_on_coordinator($$create index on run_command_on_all_nodes.test (x)$$);
+\c - - - :master_port
+-- remove coordinator from metadata to restore pre-test situation
 SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
 
 -- check that we fail when pg_dist_node is empty
@@ -64,5 +75,13 @@ BEGIN;
 DELETE FROM pg_dist_node;
 SELECT success, result FROM run_command_on_coordinator('select inet_server_port()');
 ROLLBACK;
+
+-- check that we can do distributed queries from worker nodes
+SELECT success, result FROM run_command_on_all_nodes($$insert into run_command_on_all_nodes.test values (1,2)$$, true);
+SELECT success, result FROM run_command_on_all_nodes($$insert into run_command_on_all_nodes.test values (1,2)$$, false);
+SELECT success, result FROM run_command_on_all_nodes($$select count(*) from run_command_on_all_nodes.test$$);
+
+-- ddl commands are only allowed from the coordinator
+SELECT success, result FROM run_command_on_all_nodes($$create index on run_command_on_all_nodes.test (x)$$);
 
 DROP SCHEMA run_command_on_all_nodes CASCADE;

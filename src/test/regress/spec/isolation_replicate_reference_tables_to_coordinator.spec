@@ -89,6 +89,7 @@ step "s2-view-worker"
 	SELECT query, state, wait_event_type, wait_event, usename, datname
     FROM citus_stat_activity
     WHERE query NOT ILIKE ALL(VALUES
+      ('%application_name%'),
       ('%pg_prepared_xacts%'),
       ('%COMMIT%'),
       ('%dump_local_%'),
