@@ -330,9 +330,15 @@ SyncCitusTableMetadata(Oid relationId)
 void
 CreateDependentViewsOnWorkers(Oid relationId)
 {
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
-
 	List *views = GetDependingViews(relationId);
+
+	if (list_length(views) < 1)
+	{
+		/* no view to propagate */
+		return;
+	}
+
+	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	Oid viewOid = InvalidOid;
 	foreach_oid(viewOid, views)
