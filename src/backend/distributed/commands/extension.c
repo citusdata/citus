@@ -654,51 +654,6 @@ GetAllViews(void)
 
 
 /*
- * ShouldMarkRelationDistributed is a helper function that
- * decides whether the input relation should be marked as distributed
- * during the upgrade.
- */
-bool
-ShouldMarkRelationDistributed(Oid relationId)
-{
-	if (!EnableMetadataSync)
-	{
-		/*
-		 * Just in case anything goes wrong, we should still be able
-		 * to continue to the version upgrade.
-		 */
-		return false;
-	}
-
-	ObjectAddress relationAddress = { 0 };
-	ObjectAddressSet(relationAddress, RelationRelationId, relationId);
-
-	bool pgObject = (relationId < FirstNormalObjectId);
-	bool ownedByExtension = IsTableOwnedByExtension(relationId);
-	bool alreadyDistributed = IsObjectDistributed(&relationAddress);
-	bool hasUnsupportedDependency =
-		DeferErrorIfHasUnsupportedDependency(&relationAddress) != NULL;
-	bool hasCircularDependency =
-		DeferErrorIfCircularDependencyExists(&relationAddress) != NULL;
-
-	/*
-	 * pgObject: Citus never marks pg objects as distributed
-	 * ownedByExtension: let extensions manage its own objects
-	 * alreadyDistributed: most likely via earlier versions
-	 * hasUnsupportedDependency: Citus doesn't know how to distribute its dependencies
-	 * hasCircularDependency: Citus cannot handle circular dependencies
-	 */
-	if (pgObject || ownedByExtension || alreadyDistributed ||
-		hasUnsupportedDependency || hasCircularDependency)
-	{
-		return false;
-	}
-
-	return true;
-}
-
-
-/*
  * PreprocessAlterExtensionContentsStmt issues a notice. It does not propagate.
  */
 List *
