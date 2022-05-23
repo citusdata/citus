@@ -345,12 +345,6 @@ CreateDependentViewsOnWorkers(Oid relationId)
 	Oid viewOid = InvalidOid;
 	foreach_oid(viewOid, views)
 	{
-		if (get_rel_relkind(viewOid) == RELKIND_MATVIEW)
-		{
-			/* do not propagate materialized views */
-			continue;
-		}
-
 		if (!ShouldMarkRelationDistributed(viewOid))
 		{
 			continue;
