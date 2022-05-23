@@ -534,6 +534,7 @@ extern ObjectAddress AlterViewStmtObjectAddress(Node *node, bool missing_ok);
 extern List * PreprocessDropViewStmt(Node *node, const char *queryString,
 									 ProcessUtilityContext processUtilityContext);
 extern char * CreateViewDDLCommand(Oid viewOid);
+extern List * GetViewCreationCommandsOfTable(Oid relationId, bool asTableDDLCommand);
 extern char * AlterViewOwnerCommand(Oid viewOid);
 extern char * DeparseViewStmt(Node *node);
 extern char * DeparseDropViewStmt(Node *node);

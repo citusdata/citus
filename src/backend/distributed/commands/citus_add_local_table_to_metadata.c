@@ -81,6 +81,7 @@ static char * GetRenameShardTriggerCommand(Oid shardRelationId, char *triggerNam
 										   uint64 shardId);
 static void DropRelationTruncateTriggers(Oid relationId);
 static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
+static void DropViewsOnTable(Oid relationId);
 static List * GetRenameStatsCommandList(List *statsOidList, uint64 shardId);
 static void AppendExplicitIndexIdsToList(Form_pg_index indexForm,
 										 List **explicitIndexIdList,
@@ -328,6 +329,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	EnsureReferenceTablesExistOnAllNodes();
 
 	List *shellTableDDLEvents = GetShellTableDDLEventsForCitusLocalTable(relationId);
+	List *tableViewCreationCommands = GetViewCreationCommandsOfTable(relationId, false);
 
 	char *relationName = get_rel_name(relationId);
 	Oid relationSchemaId = get_rel_namespace(relationId);
@@ -341,6 +343,11 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 * via process utility.
 	 */
 	ExecuteAndLogUtilityCommandList(shellTableDDLEvents);
+
+	/*
+	 * Execute the view creation commands with the shell table.
+	 */
+	ExecuteAndLogUtilityCommandList(tableViewCreationCommands);
 
 	/*
 	 * Set shellRelationId as the relation with relationId now points
@@ -699,6 +706,9 @@ ConvertLocalTableToShard(Oid relationId)
 	 */
 	DropRelationTruncateTriggers(relationId);
 
+	/* drop views that depend on the shard table */
+	DropViewsOnTable(relationId);
+
 	/*
 	 * We create INSERT|DELETE|UPDATE triggers on shard relation too.
 	 * This is because citus prevents postgres executor to fire those
@@ -1016,6 +1026,30 @@ GetDropTriggerCommand(Oid relationId, char *triggerName)
 					 quotedTriggerName, qualifiedRelationName);
 
 	return dropCommand->data;
+}
+
+
+/*
+ * DropViewsOnTable drops the views that depend on the given relation.
+ */
+static void
+DropViewsOnTable(Oid relationId)
+{
+	List *views = GetDependingViews(relationId);
+
+	Oid viewId = InvalidOid;
+	foreach_oid(viewId, views)
+	{
+		char *viewName = get_rel_name(viewId);
+		char *schemaName = get_namespace_name(get_rel_namespace(viewId));
+		char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
+
+		StringInfo dropCommand = makeStringInfo();
+		appendStringInfo(dropCommand, "DROP VIEW IF EXISTS %s CASCADE",
+						 qualifiedViewName);
+
+		ExecuteAndLogUtilityCommand(dropCommand->data);
+	}
 }
 
 
