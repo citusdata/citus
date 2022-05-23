@@ -74,10 +74,11 @@ extern void SendCommandListToWorkerOutsideTransaction(const char *nodeName,
 													  int32 nodePort,
 													  const char *nodeUser,
 													  List *commandList);
-extern void SendMetadataCommandListToWorkerInCoordinatedTransaction(const char *nodeName,
-																	int32 nodePort,
-																	const char *nodeUser,
-																	List *commandList);
+extern void SendMetadataCommandListToWorkerListInCoordinatedTransaction(
+	List *workerNodeList,
+	const char *
+	nodeUser,
+	List *commandList);
 extern void SendCommandToWorkersOptionalInParallel(TargetWorkerSet targetWorkerSet,
 												   const char *command,
 												   const char *user);

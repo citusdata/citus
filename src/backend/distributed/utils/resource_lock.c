@@ -1296,9 +1296,6 @@ AcquireDistributedLockOnRelations_Internal(List *lockRelationRecordList,
 	const char *currentUser = CurrentUserName();
 	foreach_ptr(workerNode, workerNodeList)
 	{
-		const char *nodeName = workerNode->workerName;
-		int nodePort = workerNode->workerPort;
-
 		/* if local node is one of the targets, acquire the lock locally */
 		if (workerNode->groupId == localGroupId)
 		{
@@ -1306,9 +1303,11 @@ AcquireDistributedLockOnRelations_Internal(List *lockRelationRecordList,
 			continue;
 		}
 
-		SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName, nodePort,
-																currentUser, list_make1(
-																	lockCommand));
+		SendMetadataCommandListToWorkerListInCoordinatedTransaction(list_make1(
+																		workerNode),
+																	currentUser,
+																	list_make1(
+																		lockCommand));
 	}
 }
 

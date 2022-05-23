@@ -490,27 +490,70 @@ SendCommandListToWorkerOutsideTransaction(const char *nodeName, int32 nodePort,
  * coordinated transaction. Any failures aborts the coordinated transaction.
  */
 void
-SendMetadataCommandListToWorkerInCoordinatedTransaction(const char *nodeName,
-														int32 nodePort,
-														const char *nodeUser,
-														List *commandList)
+SendMetadataCommandListToWorkerListInCoordinatedTransaction(List *workerNodeList,
+															const char *nodeUser,
+															List *commandList)
 {
-	int connectionFlags = REQUIRE_METADATA_CONNECTION;
+	if (list_length(commandList) == 0 || list_length(workerNodeList) == 0)
+	{
+		/* nothing to do */
+		return;
+	}
 
 	UseCoordinatedTransaction();
 
-	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
-																	  nodeName, nodePort,
-																	  nodeUser, NULL);
+	List *connectionList = NIL;
 
-	MarkRemoteTransactionCritical(workerConnection);
-	RemoteTransactionBeginIfNecessary(workerConnection);
-
-	/* iterate over the commands and execute them in the same connection */
-	const char *commandString = NULL;
-	foreach_ptr(commandString, commandList)
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
 	{
-		ExecuteCriticalRemoteCommand(workerConnection, commandString);
+		const char *nodeName = workerNode->workerName;
+		int nodePort = workerNode->workerPort;
+		int connectionFlags = REQUIRE_METADATA_CONNECTION;
+
+		MultiConnection *connection =
+			StartNodeConnection(connectionFlags, nodeName, nodePort);
+
+		MarkRemoteTransactionCritical(connection);
+
+		/*
+		 * connection can only be NULL for optional connections, which we don't
+		 * support in this codepath.
+		 */
+		Assert((connectionFlags & OPTIONAL_CONNECTION) == 0);
+		Assert(connection != NULL);
+		connectionList = lappend(connectionList, connection);
+	}
+
+	FinishConnectionListEstablishment(connectionList);
+
+	/* must open transaction blocks to use intermediate results */
+	RemoteTransactionsBeginIfNecessary(connectionList);
+
+	/*
+	 * In order to avoid round-trips per query in queryStringList,
+	 * we join the string and send as a single command. Also,
+	 * if there is only a single command, avoid additional call to
+	 * StringJoin given that some strings can be quite large.
+	 */
+	char *stringToSend = (list_length(commandList) == 1) ?
+						 linitial(commandList) : StringJoin(commandList, ';');
+
+	/* send commands in parallel */
+	bool failOnError = true;
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, connectionList)
+	{
+		int querySent = SendRemoteCommand(connection, stringToSend);
+		if (querySent == 0)
+		{
+			ReportConnectionError(connection, ERROR);
+		}
+	}
+
+	foreach_ptr(connection, connectionList)
+	{
+		ClearResults(connection, failOnError);
 	}
 }
 

@@ -139,6 +139,7 @@ static char * RemoteTypeIdExpression(Oid typeId);
 static char * RemoteCollationIdExpression(Oid colocationId);
 
 
+PG_FUNCTION_INFO_V1(start_metadata_sync_to_all_nodes);
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_node);
 PG_FUNCTION_INFO_V1(stop_metadata_sync_to_node);
 PG_FUNCTION_INFO_V1(worker_record_sequence_dependency);
@@ -192,6 +193,33 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	SetLocalReplicateReferenceTablesOnActivate(prevReplicateRefTablesOnActivate);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * start_metadata_sync_to_all_nodes function sets hasmetadata column of
+ * all the primary worker nodes to true, and then activate nodes without
+ * replicating reference tables.
+ */
+Datum
+start_metadata_sync_to_all_nodes(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	EnsureSuperUser();
+	EnsureCoordinator();
+
+	List *workerNodes = ActivePrimaryNonCoordinatorNodeList(RowShareLock);
+
+	bool prevReplicateRefTablesOnActivate = ReplicateReferenceTablesOnActivate;
+	SetLocalReplicateReferenceTablesOnActivate(false);
+
+	ActivateNodeList(workerNodes);
+	TransactionModifiedNodeMetadata = true;
+
+	SetLocalReplicateReferenceTablesOnActivate(prevReplicateRefTablesOnActivate);
+
+	PG_RETURN_BOOL(true);
 }
 
 
@@ -543,10 +571,10 @@ SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 	 */
 	if (raiseOnError)
 	{
-		SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
-																workerNode->workerPort,
-																currentUser,
-																recreateMetadataSnapshotCommandList);
+		SendMetadataCommandListToWorkerListInCoordinatedTransaction(list_make1(
+																		workerNode),
+																	currentUser,
+																	recreateMetadataSnapshotCommandList);
 		return true;
 	}
 	else
