@@ -300,5 +300,41 @@ CREATE MATERIALIZED VIEW test_mat_view_am USING COLUMNAR AS SELECT count(*), a F
 SELECT alter_distributed_table('test_am_matview', shard_count:= 52);
 SELECT amname FROM pg_am WHERE oid IN (SELECT relam FROM pg_class WHERE relname ='test_mat_view_am');
 
+-- verify that alter_distributed_table works if it has dependent views and materialized views
+-- set colocate_with explicitly to not to affect other tables
+CREATE SCHEMA schema_to_test_alter_dist_table;
+SET search_path to schema_to_test_alter_dist_table;
+
+CREATE TABLE test_alt_dist_table_1(a int, b int);
+SELECT create_distributed_table('test_alt_dist_table_1', 'a', colocate_with => 'None');
+
+CREATE TABLE test_alt_dist_table_2(a int, b int);
+SELECT create_distributed_table('test_alt_dist_table_2', 'a', colocate_with => 'test_alt_dist_table_1');
+
+CREATE VIEW dependent_view_1 AS SELECT test_alt_dist_table_2.* FROM test_alt_dist_table_2;
+CREATE VIEW dependent_view_2 AS SELECT test_alt_dist_table_2.* FROM test_alt_dist_table_2 JOIN test_alt_dist_table_1 USING(a);
+
+CREATE MATERIALIZED VIEW dependent_mat_view_1 AS SELECT test_alt_dist_table_2.* FROM test_alt_dist_table_2;
+
+-- Alter owner to make sure that alter_distributed_table doesn't change view's owner
 SET client_min_messages TO WARNING;
+CREATE USER alter_dist_table_test_user;
+SELECT 1 FROM run_command_on_workers($$CREATE USER alter_dist_table_test_user$$);
+
+ALTER VIEW dependent_view_1 OWNER TO alter_dist_table_test_user;
+ALTER VIEW dependent_view_2 OWNER TO alter_dist_table_test_user;
+ALTER MATERIALIZED VIEW dependent_mat_view_1 OWNER TO alter_dist_table_test_user;
+
+SELECT alter_distributed_table('test_alt_dist_table_1', shard_count:=12, cascade_to_colocated:=true);
+SELECT viewowner FROM pg_views WHERE viewname IN ('dependent_view_1', 'dependent_view_2');
+SELECT matviewowner FROM pg_matviews WHERE matviewname = 'dependent_mat_view_1';
+
+-- Check the existence of the view on the worker node as well
+SELECT run_command_on_workers($$SELECT viewowner FROM pg_views WHERE viewname = 'dependent_view_1'$$);
+SELECT run_command_on_workers($$SELECT viewowner FROM pg_views WHERE viewname = 'dependent_view_2'$$);
+-- It is expected to not have mat view on worker node
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_matviews WHERE matviewname = 'dependent_mat_view_1';$$);
+RESET search_path;
+
 DROP SCHEMA alter_distributed_table CASCADE;
+DROP SCHEMA schema_to_test_alter_dist_table CASCADE;
