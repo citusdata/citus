@@ -1281,8 +1281,8 @@ ActivateNode(char *nodeName, int nodePort)
 {
 	bool isActive = true;
 
-	WorkerNode *workreNode = ModifiableWorkerNode(nodeName, nodePort);
-	ActivateNodeList(list_make1(workreNode));
+	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
+	ActivateNodeList(list_make1(workerNode));
 
 	/* finally, let all other active metadata nodes to learn about this change */
 	WorkerNode *newWorkerNode = SetNodeState(nodeName, nodePort, isActive);

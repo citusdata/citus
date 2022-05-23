@@ -154,7 +154,7 @@ step coor-begin:
 step coor-acquire-aggresive-lock-on-dist-table-nowait:
  LOCK dist_table IN ACCESS EXCLUSIVE MODE NOWAIT;
 
-ERROR:  could not obtain lock on relation "dist_table"
+ERROR:  could not obtain lock on relation "public.dist_table"
 step coor-rollback:
  ROLLBACK;
 
@@ -1074,6 +1074,109 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
+ SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: coor-begin coor-read-dist-table w2-start-session-level-connection w2-begin w1-start-session-level-connection w1-begin w2-acquire-aggressive-lock-dist-table w1-acquire-aggressive-lock-dist-table coor-rollback w2-rollback w1-rollback w1-stop-connection w2-stop-connection
+step coor-begin:
+ BEGIN;
+
+step coor-read-dist-table:
+ SELECT COUNT(*) FROM dist_table;
+
+count
+---------------------------------------------------------------------
+    5
+(1 row)
+
+step w2-start-session-level-connection:
+    SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w2-begin:
+ SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-start-session-level-connection:
+    SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-begin:
+ SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w2-acquire-aggressive-lock-dist-table:
+ SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
+ <waiting ...>
+step w1-acquire-aggressive-lock-dist-table: 
+ SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
+ <waiting ...>
+step coor-rollback: 
+ ROLLBACK;
+
+step w2-acquire-aggressive-lock-dist-table: <... completed>
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w2-rollback:
+ SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-acquire-aggressive-lock-dist-table: <... completed>
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-rollback:
+ SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w1-stop-connection:
+ SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step w2-stop-connection:
  SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
