@@ -401,7 +401,7 @@ AppendViewDefinitionToCreateViewCommand(StringInfo buf, Oid viewOid)
 
 /*
  * AlterViewOwnerCommand returns the command to alter view owner command for the
- * given view oid.
+ * given view or materialized view oid.
  */
 char *
 AlterViewOwnerCommand(Oid viewOid)
@@ -416,9 +416,18 @@ AlterViewOwnerCommand(Oid viewOid)
 	char *viewOwnerName = TableOwner(viewOid);
 	char *qualifiedViewName = NameListToQuotedString(list_make2(makeString(schemaName),
 																makeString(viewName)));
-	appendStringInfo(alterOwnerCommand,
-					 "ALTER VIEW %s OWNER TO %s", qualifiedViewName,
-					 quote_identifier(viewOwnerName));
+
+	if (get_rel_relkind(viewOid) == RELKIND_MATVIEW)
+	{
+		appendStringInfo(alterOwnerCommand, "ALTER MATERIALIZED VIEW %s ",
+						 qualifiedViewName);
+	}
+	else
+	{
+		appendStringInfo(alterOwnerCommand, "ALTER VIEW %s ", qualifiedViewName);
+	}
+
+	appendStringInfo(alterOwnerCommand, "OWNER TO %s", quote_identifier(viewOwnerName));
 
 	return alterOwnerCommand->data;
 }
@@ -457,16 +466,20 @@ PreprocessAlterViewStmt(Node *node, const char *queryString, ProcessUtilityConte
 	QualifyTreeNode((Node *) stmt);
 
 	EnsureCoordinator();
-	EnsureSequentialMode(OBJECT_VIEW);
 
 	/* reconstruct alter statement in a portable fashion */
 	const char *alterViewStmtSql = DeparseTreeNode((Node *) stmt);
 
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) alterViewStmtSql,
-								ENABLE_DDL_PROPAGATION);
+	/*
+	 * To avoid sequential mode, we are using metadata connection. For the
+	 * detailed explanation, please check the comment on PostprocessViewStmt.
+	 */
+	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
+	ddlJob->targetObjectAddress = viewAddress;
+	ddlJob->metadataSyncCommand = alterViewStmtSql;
+	ddlJob->taskList = NIL;
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return list_make1(ddlJob);
 }
 
 
@@ -527,8 +540,8 @@ List *
 PreprocessRenameViewStmt(Node *node, const char *queryString,
 						 ProcessUtilityContext processUtilityContext)
 {
-	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, true);
-	if (!ShouldPropagateObject(&typeAddress))
+	ObjectAddress viewAddress = GetObjectAddressFromParseTree(node, true);
+	if (!ShouldPropagateObject(&viewAddress))
 	{
 		return NIL;
 	}
@@ -541,14 +554,16 @@ PreprocessRenameViewStmt(Node *node, const char *queryString,
 	/* deparse sql*/
 	const char *renameStmtSql = DeparseTreeNode(node);
 
-	EnsureSequentialMode(OBJECT_VIEW);
+	/*
+	 * To avoid sequential mode, we are using metadata connection. For the
+	 * detailed explanation, please check the comment on PostprocessViewStmt.
+	 */
+	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
+	ddlJob->targetObjectAddress = viewAddress;
+	ddlJob->metadataSyncCommand = renameStmtSql;
+	ddlJob->taskList = NIL;
 
-	/* to prevent recursion with mx we disable ddl propagation */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) renameStmtSql,
-								ENABLE_DDL_PROPAGATION);
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return list_make1(ddlJob);
 }
 
 
@@ -580,24 +595,28 @@ PreprocessAlterViewSchemaStmt(Node *node, const char *queryString,
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 
-	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, true);
-	if (!ShouldPropagateObject(&typeAddress))
+	ObjectAddress viewAddress = GetObjectAddressFromParseTree((Node *) stmt, true);
+	if (!ShouldPropagateObject(&viewAddress))
 	{
 		return NIL;
 	}
 
 	EnsureCoordinator();
-	EnsureSequentialMode(OBJECT_VIEW);
 
 	QualifyTreeNode((Node *) stmt);
 
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
+	/*
+	 * To avoid sequential mode, we are using metadata connection. For the
+	 * detailed explanation, please check the comment on PostprocessViewStmt.
+	 */
+	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
+	ddlJob->targetObjectAddress = viewAddress;
+	ddlJob->metadataSyncCommand = sql;
+	ddlJob->taskList = NIL;
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return list_make1(ddlJob);
 }
 
 
