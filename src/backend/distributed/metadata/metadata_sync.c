@@ -98,6 +98,7 @@ static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 static void CreateShellTableOnWorkers(Oid relationId);
 static void CreateTableMetadataOnWorkers(Oid relationId);
+static void CreateDependentViewsOnWorkers(Oid relationId);
 static NodeMetadataSyncResult SyncNodeMetadataToNodesOptional(void);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 											bool citusTableWithNoDistKey);
@@ -303,7 +304,8 @@ SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort)
  * SyncCitusTableMetadata syncs citus table metadata to worker nodes with metadata.
  * Our definition of metadata includes the shell table and its inter relations with
  * other shell tables, corresponding pg_dist_object, pg_dist_partiton, pg_dist_shard
- * and pg_dist_shard placement entries.
+ * and pg_dist_shard placement entries. This function also propagates the views that
+ * depend on the given relation, to the metadata workers.
  */
 void
 SyncCitusTableMetadata(Oid relationId)
@@ -327,7 +329,7 @@ SyncCitusTableMetadata(Oid relationId)
  * CreateDependentViewsOnWorkers takes a relationId and creates the views that depend on
  * that relation on workers with metadata.
  */
-void
+static void
 CreateDependentViewsOnWorkers(Oid relationId)
 {
 	List *views = GetDependingViews(relationId);

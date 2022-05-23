@@ -32,7 +32,6 @@ typedef enum
 /* Functions declarations for metadata syncing */
 extern void SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort);
 extern void SyncCitusTableMetadata(Oid relationId);
-extern void CreateDependentViewsOnWorkers(Oid relationId);
 extern void EnsureSequentialModeMetadataOperations(void);
 extern bool ClusterHasKnownMetadataWorkers(void);
 extern char * LocalGroupIdUpdateCommand(int32 groupId);
