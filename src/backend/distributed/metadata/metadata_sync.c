@@ -337,7 +337,7 @@ CreateDependentViewsOnWorkers(Oid relationId)
 	Oid viewOid = InvalidOid;
 	foreach_oid(viewOid, views)
 	{
-		if (!ShouldMarkRelationDistributedOnUpgrade(viewOid))
+		if (!ShouldMarkRelationDistributed(viewOid))
 		{
 			continue;
 		}

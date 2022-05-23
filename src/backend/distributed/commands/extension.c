@@ -512,7 +512,7 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	Oid citusTableId = InvalidOid;
 	foreach_oid(citusTableId, citusTableIdList)
 	{
-		if (!ShouldMarkRelationDistributedOnUpgrade(citusTableId))
+		if (!ShouldMarkRelationDistributed(citusTableId))
 		{
 			continue;
 		}
@@ -556,7 +556,7 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	Oid viewOid = InvalidOid;
 	foreach_oid(viewOid, viewList)
 	{
-		if (!ShouldMarkRelationDistributedOnUpgrade(viewOid))
+		if (!ShouldMarkRelationDistributed(viewOid))
 		{
 			continue;
 		}
@@ -654,12 +654,12 @@ GetAllViews(void)
 
 
 /*
- * ShouldMarkRelationDistributedOnUpgrade is a helper function that
+ * ShouldMarkRelationDistributed is a helper function that
  * decides whether the input relation should be marked as distributed
  * during the upgrade.
  */
 bool
-ShouldMarkRelationDistributedOnUpgrade(Oid relationId)
+ShouldMarkRelationDistributed(Oid relationId)
 {
 	if (!EnableMetadataSync)
 	{
