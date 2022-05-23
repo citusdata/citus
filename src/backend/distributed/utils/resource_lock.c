@@ -1338,8 +1338,7 @@ AcquireDistributedLockOnRelations(List *relationList, LOCKMODE lockMode, uint32 
 	RangeVar *rangeVar = NULL;
 	foreach_ptr(rangeVar, relationList)
 	{
-		Oid relationId = RangeVarGetRelidExtended(rangeVar, AccessShareLock, nowait ?
-												  RVR_NOWAIT : 0, NULL, NULL);
+		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 
 		LockRelationRecord *lockRelationRecord = MakeLockRelationRecord(relationId,
 																		rangeVar->inh);
