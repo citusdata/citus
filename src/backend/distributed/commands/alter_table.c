@@ -194,7 +194,6 @@ static void EnsureTableNotPartition(Oid relationId);
 static TableConversionState * CreateTableConversion(TableConversionParameters *params);
 static void CreateDistributedTableLike(TableConversionState *con);
 static void CreateCitusTableLike(TableConversionState *con);
-static List * GetViewCreationCommandsOfTable(Oid relationId);
 static void ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 						 bool suppressNoticeMessages);
 static bool HasAnyGeneratedStoredColumns(Oid relationId);
@@ -575,7 +574,7 @@ ConvertTable(TableConversionState *con)
 	List *attachPartitionCommands = NIL;
 
 	postLoadCommands = list_concat(postLoadCommands,
-								   GetViewCreationCommandsOfTable(con->relationId));
+								   GetViewCreationCommandsOfTable(con->relationId, true));
 
 	List *foreignKeyCommands = NIL;
 	if (con->conversionType == ALTER_DISTRIBUTED_TABLE)
@@ -1256,7 +1255,7 @@ CreateCitusTableLike(TableConversionState *con)
  * that recursively depend on the table too.
  */
 List *
-GetViewCreationCommandsOfTable(Oid relationId)
+GetViewCreationCommandsOfTable(Oid relationId, bool asTableDDLCommand)
 {
 	List *views = GetDependingViews(relationId);
 	List *commands = NIL;
@@ -1281,7 +1280,14 @@ GetViewCreationCommandsOfTable(Oid relationId)
 		char *alterViewCommmand = AlterViewOwnerCommand(viewOid);
 		appendStringInfoString(query, alterViewCommmand);
 
-		commands = lappend(commands, makeTableDDLCommandString(query->data));
+		if (asTableDDLCommand)
+		{
+			commands = lappend(commands, makeTableDDLCommandString(query->data));
+		}
+		else
+		{
+			commands = lappend(commands, query->data);
+		}
 	}
 
 	return commands;
