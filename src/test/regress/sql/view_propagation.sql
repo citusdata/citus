@@ -356,6 +356,25 @@ ALTER VIEW IF EXISTS non_existing_view RENAME COLUMN val1 TO val2;
 ALTER VIEW IF EXISTS non_existing_view RENAME val2 TO val1;
 ALTER VIEW IF EXISTS non_existing_view SET SCHEMA view_prop_schema;
 
+-- Show that create view and alter view commands can be run from same transaction
+-- but not the drop view. Since we can not use metadata connection for drop view commands
+BEGIN;
+    SET LOCAL citus.force_max_query_parallelization TO ON;
+    CREATE TABLE table_1_to_view_in_transaction(a int);
+    SELECT create_distributed_table('table_1_to_view_in_transaction', 'a');
+
+    CREATE TABLE table_2_to_view_in_transaction(a int);
+    SELECT create_distributed_table('table_2_to_view_in_transaction', 'a');
+
+    -- we can create/alter/drop views even in parallel mode
+    CREATE VIEW view_in_transaction AS SELECT table_1_to_view_in_transaction.* FROM table_2_to_view_in_transaction JOIN table_1_to_view_in_transaction USING (a);
+    ALTER TABLE view_in_transaction SET (security_barrier);
+    ALTER VIEW view_in_transaction SET SCHEMA public;
+    ALTER VIEW public.view_in_transaction SET SCHEMA view_prop_schema_inner;
+    ALTER TABLE view_prop_schema_inner.view_in_transaction RENAME COLUMN a TO b;
+    DROP VIEW view_prop_schema_inner.view_in_transaction;
+ROLLBACK;
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA view_prop_schema_inner CASCADE;
 DROP SCHEMA view_prop_schema CASCADE;
