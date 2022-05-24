@@ -573,8 +573,9 @@ ConvertTable(TableConversionState *con)
 	List *justBeforeDropCommands = NIL;
 	List *attachPartitionCommands = NIL;
 
-	postLoadCommands = list_concat(postLoadCommands,
-								   GetViewCreationCommandsOfTable(con->relationId, true));
+	postLoadCommands =
+		list_concat(postLoadCommands,
+					GetViewCreationTableDDLCommandsOfTable(con->relationId));
 
 	List *foreignKeyCommands = NIL;
 	if (con->conversionType == ALTER_DISTRIBUTED_TABLE)
@@ -1255,7 +1256,7 @@ CreateCitusTableLike(TableConversionState *con)
  * that recursively depend on the table too.
  */
 List *
-GetViewCreationCommandsOfTable(Oid relationId, bool asTableDDLCommand)
+GetViewCreationCommandsOfTable(Oid relationId)
 {
 	List *views = GetDependingViews(relationId);
 	List *commands = NIL;
@@ -1280,17 +1281,30 @@ GetViewCreationCommandsOfTable(Oid relationId, bool asTableDDLCommand)
 		char *alterViewCommmand = AlterViewOwnerCommand(viewOid);
 		appendStringInfoString(query, alterViewCommmand);
 
-		if (asTableDDLCommand)
-		{
-			commands = lappend(commands, makeTableDDLCommandString(query->data));
-		}
-		else
-		{
-			commands = lappend(commands, query->data);
-		}
+		commands = lappend(commands, query->data);
 	}
 
 	return commands;
+}
+
+
+/*
+ * GetViewCreationTableDDLCommandsOfTable is the same as GetViewCreationCommandsOfTable,
+ * but the returned list includes objects of TableDDLCommand's, not strings.
+ */
+List *
+GetViewCreationTableDDLCommandsOfTable(Oid relationId)
+{
+	List *commands = GetViewCreationCommandsOfTable(relationId);
+	List *tableDDLCommands = NIL;
+
+	char *command = NULL;
+	foreach_ptr(command, commands)
+	{
+		tableDDLCommands = lappend(tableDDLCommands, makeTableDDLCommandString(command));
+	}
+
+	return tableDDLCommands;
 }
 
 

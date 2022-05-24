@@ -329,7 +329,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	EnsureReferenceTablesExistOnAllNodes();
 
 	List *shellTableDDLEvents = GetShellTableDDLEventsForCitusLocalTable(relationId);
-	List *tableViewCreationCommands = GetViewCreationCommandsOfTable(relationId, false);
+	List *tableViewCreationCommands = GetViewCreationCommandsOfTable(relationId);
 
 	char *relationName = get_rel_name(relationId);
 	Oid relationSchemaId = get_rel_namespace(relationId);
