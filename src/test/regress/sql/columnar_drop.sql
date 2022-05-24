@@ -37,15 +37,15 @@ SELECT current_database() datname \gset
 
 CREATE DATABASE db_to_drop;
 \c db_to_drop
-CREATE EXTENSION citus;
+CREATE EXTENSION citus_columnar;
 SELECT oid::text databaseoid FROM pg_database WHERE datname = current_database() \gset
 
 CREATE TABLE test_table(data int) USING columnar;
 
-DROP EXTENSION citus CASCADE;
+DROP EXTENSION citus_columnar CASCADE;
 
 -- test database drop
-CREATE EXTENSION citus;
+CREATE EXTENSION citus_columnar;
 SELECT oid::text databaseoid FROM pg_database WHERE datname = current_database() \gset
 
 CREATE TABLE test_table(data int) USING columnar;
