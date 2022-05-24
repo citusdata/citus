@@ -409,6 +409,38 @@ SELECT logicalrelid, partmethod, partkey FROM pg_dist_partition
     WHERE logicalrelid IN ('parent_dropped_col'::regclass, 'parent_dropped_col_2'::regclass)
         ORDER BY logicalrelid;
 
+-- some tests for view propagation on citus local tables
+CREATE TABLE view_tbl_1 (a int);
+CREATE TABLE view_tbl_2 (a int);
+CREATE SCHEMA viewsc;
+-- create dependent views, in a different schema
+-- the first one depends on a citus metadata table
+CREATE VIEW viewsc.prop_view AS SELECT COUNT (*) FROM view_tbl_1 JOIN pg_dist_node ON view_tbl_1.a=pg_dist_node.nodeid;
+CREATE VIEW viewsc.prop_view2 AS SELECT COUNT (*) FROM view_tbl_1;
+SELECT citus_add_local_table_to_metadata('view_tbl_1');
+-- verify the shard view is dropped, and created&propagated the correct view
+SELECT viewname, definition FROM pg_views WHERE viewname LIKE 'prop_view%' ORDER BY viewname;
+
+SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_views WHERE viewname LIKE 'prop_view%';$$);
+-- drop views
+DROP VIEW viewsc.prop_view;
+DROP VIEW viewsc.prop_view2;
+-- verify dropped on workers
+SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_views WHERE viewname LIKE 'prop_view%';$$);
+
+-- create a view that depends on a pg_ table
+CREATE VIEW viewsc.prop_view3 AS SELECT COUNT (*) FROM view_tbl_1 JOIN pg_namespace ON view_tbl_1.a=pg_namespace.nspowner;
+-- create a view that depends on two different tables, one of them is local for now
+CREATE VIEW viewsc.prop_view4 AS SELECT COUNT (*) FROM view_tbl_1 JOIN view_tbl_2 ON view_tbl_1.a=view_tbl_2.a;
+-- distribute the first table
+SELECT create_distributed_table('view_tbl_1','a');
+-- verify the last view is not distributed
+SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_views WHERE viewname LIKE 'prop_view%';$$);
+-- add the other table to metadata, so the local view gets distributed
+SELECT citus_add_local_table_to_metadata('view_tbl_2');
+-- verify both views are distributed
+SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_views WHERE viewname LIKE 'prop_view%';$$);
+
 -- cleanup at exit
 set client_min_messages to error;
 DROP SCHEMA citus_local_tables_mx CASCADE;

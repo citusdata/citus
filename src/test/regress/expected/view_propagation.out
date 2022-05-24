@@ -570,6 +570,10 @@ BEGIN;
     SET LOCAL citus.force_max_query_parallelization TO ON;
     CREATE TABLE table_1_to_view_in_transaction(a int);
     SELECT create_distributed_table('table_1_to_view_in_transaction', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
     CREATE TABLE table_2_to_view_in_transaction(a int);
     SELECT create_distributed_table('table_2_to_view_in_transaction', 'a');
  create_distributed_table
