@@ -2140,25 +2140,32 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 	{
 		CreateExtensionStmt *createExtensionStmt = castNode(CreateExtensionStmt,
 															parsetree);
-		if (strcmp(createExtensionStmt->extname, "citus_columnar") == 0)
+
+		if (get_extension_oid("citus_columnar", true) == InvalidOid)
 		{
-			DefElem *newVersionValue = GetExtensionOption(createExtensionStmt->options,
-														  "new_version");
-			if (newVersionValue)
+			if (strcmp(createExtensionStmt->extname, "citus_columnar") == 0)
 			{
-				const char *newVersion = defGetString(newVersionValue);
-				if (strcmp(newVersion, "11.1-0") == 0)
+				DefElem *newVersionValue = GetExtensionOption(
+					createExtensionStmt->options,
+					"new_version");
+				if (newVersionValue)
+				{
+					const char *newVersion = defGetString(newVersionValue);
+					if (strcmp(newVersion, "11.1-0") == 0)
+					{
+						ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+										errmsg(
+											"unsupported citus_columnar version 11.1-0")));
+					}
+				}
+
+				/*latest citus requires install columnar first, existing citus can only be an older version */
+				if (get_extension_oid("citus", true) != InvalidOid)
 				{
 					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("unsupported citus_columnar version 11.1-0")));
+									errmsg(
+										"must upgrade citus to version 11.1-1 first")));
 				}
-			}
-
-			/*latest citus requires install columnar first, existing citus can only be an older version */
-			if (get_extension_oid("citus", true) != InvalidOid)
-			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("must upgrade citus to version 11.1-1 first")));
 			}
 		}
 	}
