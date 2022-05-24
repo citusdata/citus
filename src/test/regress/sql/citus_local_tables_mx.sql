@@ -422,6 +422,7 @@ SELECT citus_add_local_table_to_metadata('view_tbl_1');
 SELECT viewname, definition FROM pg_views WHERE viewname LIKE 'prop_view%' ORDER BY viewname;
 
 SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_views WHERE viewname LIKE 'prop_view%';$$);
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid IN('viewsc.prop_view'::regclass::oid, 'viewsc.prop_view2'::regclass::oid);
 -- drop views
 DROP VIEW viewsc.prop_view;
 DROP VIEW viewsc.prop_view2;
@@ -440,6 +441,7 @@ SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_views WHERE viewname LIK
 SELECT citus_add_local_table_to_metadata('view_tbl_2');
 -- verify both views are distributed
 SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_views WHERE viewname LIKE 'prop_view%';$$);
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid IN('viewsc.prop_view3'::regclass::oid, 'viewsc.prop_view4'::regclass::oid);
 
 -- cleanup at exit
 set client_min_messages to error;
