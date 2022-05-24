@@ -52,33 +52,11 @@ extern ShardSplitInfoSMHeader * GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handl
 																	   dsm_segment **
 																	   attachedSegment);
 
-/*
- * An UPADATE request for a partition key, is realized as 'DELETE' on
- * old shard and 'INSERT' on new shard. So a commit of UPDATE has to be
- * seggrated in two replication messages. WAL sender belonging to a
- * replication slot can send only one message and hence to handle UPDATE we
- * have to create one extra replication slot per node that handles the deletion
- * part of an UPDATE.
- *
- * SLOT_HANDING_INSERT_AND_DELETE - Responsible for handling INSERT and DELETE
- *                                 operations.
- * SLOT_HANDLING_DELETE_OF_UPDATE - Responsible for only handling DELETE on old shard
- *                                 for an UPDATE. Its a no-op for INSERT and DELETE
- *                                 operations.
- */
-enum ReplicationSlotType
-{
-	SLOT_HANDLING_INSERT_AND_DELETE,
-	SLOT_HANDLING_DELETE_OF_UPDATE
-};
-
 /* Functions related to encoding-decoding for replication slot name */
 char * encode_replication_slot(uint64_t nodeId,
-							   uint32 slotType,
 							   dsm_handle dsmHandle);
 void decode_replication_slot(char *slotName,
 							 uint64_t *nodeId,
-							 uint32_t *slotType,
 							 dsm_handle *dsmHandle);
 
 #endif /* SHARDSPLIT_SHARED_MEMORY_H */

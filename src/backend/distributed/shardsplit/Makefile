@@ -7,7 +7,6 @@
 #    src/backend/replication/pgoutput
 #
 #-------------------------------------------------------------------------
-citus_subdir = src/backend/distributed/shardsplit
 citus_top_builddir = ../../../..
 safestringlib_srcdir = $(citus_abs_top_srcdir)/vendor/safestringlib
 SUBDIRS = . safeclib

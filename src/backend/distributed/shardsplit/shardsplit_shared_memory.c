@@ -97,9 +97,8 @@ GetSMHandleFromSlotName(char *slotName)
 	}
 
 	uint64_t nodeId = 0;
-	uint32_t type = 0;
 	dsm_handle handle = 0;
-	decode_replication_slot(slotName, &nodeId, &type, &handle);
+	decode_replication_slot(slotName, &nodeId, &handle);
 
 	return handle;
 }
@@ -192,27 +191,25 @@ ShardSplitInfoSMSteps(ShardSplitInfoSMHeader *shardSplitInfoSMHeader)
 /*
  * encode_replication_slot returns an encoded replication slot name
  * in the following format.
- * Slot Name = NodeId_ReplicationSlotType_SharedMemoryHandle
+ * Slot Name = NodeId_SharedMemoryHandle
  */
 char *
 encode_replication_slot(uint64_t nodeId,
-						uint32 slotType,
 						dsm_handle dsmHandle)
 {
 	StringInfo slotName = makeStringInfo();
-	appendStringInfo(slotName, "%ld_%u_%u", nodeId, slotType, dsmHandle);
+	appendStringInfo(slotName, "%ld_%u", nodeId, dsmHandle);
 	return slotName->data;
 }
 
 
 /*
  * decode_replication_slot decodes the replication slot name
- * into node id, slotType, shared memory handle.
+ * into node id, shared memory handle.
  */
 void
 decode_replication_slot(char *slotName,
 						uint64_t *nodeId,
-						uint32_t *slotType,
 						dsm_handle *dsmHandle)
 {
 	if (slotName == NULL)
@@ -233,10 +230,6 @@ decode_replication_slot(char *slotName,
 			*nodeId = SafeStringToUint64(slotNameString);
 		}
 		else if (index == 1)
-		{
-			*slotType = strtoul(slotNameString, NULL, 10);
-		}
-		else if (index == 2)
 		{
 			*dsmHandle = strtoul(slotNameString, NULL, 10);
 		}

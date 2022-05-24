@@ -43,13 +43,12 @@ int shardSplitInfoArraySize = 0;
 
 
 /* Plugin callback */
-static void split_change(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
+static void split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 						 Relation relation, ReorderBufferChange *change);
 
 /* Helper methods */
-static bool ShouldSlotHandleChange(char *slotName, ReorderBufferChange *change);
 static bool ShouldCommitBeApplied(Relation sourceShardRelation);
-static int GetHashValueForIncomingTuple(Relation sourceShardRelation,
+static int32_t GetHashValueForIncomingTuple(Relation sourceShardRelation,
 										HeapTuple tuple,
 										bool *shouldHandleUpdate);
 
@@ -73,7 +72,7 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
 
 	pgoutputChangeCB = cb->change_cb;
 
-	cb->change_cb = split_change;
+	cb->change_cb = split_change_cb;
 }
 
 
@@ -83,7 +82,7 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
  * handled as the incoming committed change would belong to a relation
  * that is not under going split.
  */
-static int
+static int32_t
 GetHashValueForIncomingTuple(Relation sourceShardRelation,
 							 HeapTuple tuple,
 							 bool *shouldHandleChange)
@@ -139,7 +138,7 @@ GetHashValueForIncomingTuple(Relation sourceShardRelation,
 
 	/* get hashed value of the distribution value */
 	Datum hashedValueDatum = FunctionCall1(hashFunction, partitionColumnValue);
-	int hashedValue = DatumGetInt32(hashedValueDatum);
+	int32_t hashedValue = DatumGetInt32(hashedValueDatum);
 
 	*shouldHandleChange = true;
 
@@ -226,42 +225,12 @@ ShouldCommitBeApplied(Relation sourceShardRelation)
 }
 
 
-bool
-ShouldSlotHandleChange(char *slotName, ReorderBufferChange *change)
-{
-	if (slotName == NULL)
-	{
-		ereport(ERROR, errmsg("Invalid null replication slot name."));
-	}
-
-	uint64_t nodeId = 0;
-	uint32_t slotType = 0;
-	dsm_handle dsmHandle;
-
-	/* change this to enum */
-	decode_replication_slot(slotName, &nodeId, &slotType, &dsmHandle);
-	if (slotType != SLOT_HANDLING_INSERT_AND_DELETE &&
-		slotType != SLOT_HANDLING_DELETE_OF_UPDATE)
-	{
-		ereport(ERROR, errmsg("Invalid replication slot type."));
-	}
-
-	if (slotType == SLOT_HANDLING_DELETE_OF_UPDATE &&
-		change->action != REORDER_BUFFER_CHANGE_UPDATE)
-	{
-		return false;
-	}
-
-	return true;
-}
-
-
 /*
  * split_change function emits the incoming tuple change
  * to the appropriate destination shard.
  */
 static void
-split_change(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
+split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 			 Relation relation, ReorderBufferChange *change)
 {
 	/*
@@ -279,21 +248,11 @@ split_change(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 	}
 
 	char *replicationSlotName = ctx->slot->data.name.data;
-	bool shouldHandleChanges = false;
-	if (!ShouldSlotHandleChange(replicationSlotName, change))
-	{
-		return;
-	}
-
 	if (!ShouldCommitBeApplied(relation))
 	{
 		return;
 	}
 
-	uint64_t nodeId = 0;
-	uint32 slotType = 0;
-	dsm_handle dsmHandle = 0;
-	decode_replication_slot(replicationSlotName, &nodeId, &slotType, &dsmHandle);
 	Oid targetRelationOid = InvalidOid;
 	switch (change->action)
 	{
@@ -305,36 +264,6 @@ split_change(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 			break;
 		}
 
-		case REORDER_BUFFER_CHANGE_UPDATE:
-		{
-			switch (slotType)
-			{
-				case SLOT_HANDLING_INSERT_AND_DELETE:
-				{
-					HeapTuple newTuple = &(change->data.tp.newtuple->tuple);
-					Oid destinationForInsert = FindTargetRelationOid(relation, newTuple,
-																	 replicationSlotName);
-					targetRelationOid = destinationForInsert;
-					change->action = REORDER_BUFFER_CHANGE_INSERT;
-					break;
-				}
-
-				case SLOT_HANDLING_DELETE_OF_UPDATE:
-				{
-					char *modifiedSlotName = encode_replication_slot(nodeId, 0,
-																	 dsmHandle);
-					HeapTuple oldTuple = &(change->data.tp.oldtuple->tuple);
-					Oid destinationForDelete = FindTargetRelationOid(relation, oldTuple,
-																	 modifiedSlotName);
-					targetRelationOid = destinationForDelete;
-					change->action = REORDER_BUFFER_CHANGE_DELETE;
-					break;
-				}
-			}
-
-			break;
-		}
-
 		case REORDER_BUFFER_CHANGE_DELETE:
 		{
 			HeapTuple oldTuple = &(change->data.tp.oldtuple->tuple);
@@ -343,8 +272,12 @@ split_change(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 
 			break;
 		}
-	}
 
+		/* Only INSERT/DELETE are visible in the replication path of split shard */
+		default:
+			Assert(false);
+	}
+	
 	if (targetRelationOid != InvalidOid)
 	{
 		Relation targetRelation = RelationIdGetRelation(targetRelationOid);

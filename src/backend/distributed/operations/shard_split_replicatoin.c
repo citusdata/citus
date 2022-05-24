@@ -48,27 +48,28 @@ static void ParseShardSplitInfo(ArrayType *shardInfoArrayObject,
 								int32 *minValue,
 								int32 *maxValue,
 								int32 *nodeId);
-static ShardSplitInfo * GetShardSplitInfo(uint64 sourceShardIdToSplit,
+static ShardSplitInfo * CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 										  uint64 desSplitChildShardId,
 										  int32 minValue,
 										  int32 maxValue,
 										  int32 nodeId);
-static void AddShardSplitInfoEntryForNode(ShardSplitInfo *shardSplitInfo);
-static void * CopyShardSplitInfoToSM(ShardSplitInfo *shardSplitInfoArray,
+static void AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo);
+static void * PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
 									 HTAB *shardInfoHashMap,
 									 dsm_handle dsmHandle,
 									 int shardSplitInfoCount);
-static HTAB * SetupHashMapForShardInfo();
+static void SetupHashMapForShardInfo();
 
 /*
  * split_shard_replication_setup UDF creates in-memory data structures
- * to store the meta information about the new shards and their placements
- * required during the catch up phase of logical replication.
+ * to store the meta information about the shard undergoing split and new split
+ * children along with their placements required during the catch up phase
+ * of logical replication.
  * This meta information is stored in a shared memory segment and accessed
  * by logical decoding plugin.
  *
  * Split information is given by user as an Array in the below format
- * [{sourceShardId, childShardID, minValue, maxValue, Destination NodeId}]
+ * [{sourceShardId, childShardId, minValue, maxValue, Destination NodeId}]
  *
  * sourceShardId - id of the shard that is undergoing a split
  * childShardId  - id of shard that stores a specific range of values
@@ -83,7 +84,7 @@ static HTAB * SetupHashMapForShardInfo();
  * Multiple shards can be placed on the same destiation node. Source and
  * destinations nodes can be same too.
  *
- * There is a 1-1 mapping between a node and a replication slot as one replication
+ * There is a 1-1 mapping between a target node and a replication slot as one replication
  * slot takes care of replicating changes for one node.
  * The 'logical_decoding_plugin' consumes this information and routes the tuple
  * from the source shard to the appropriate destination shard that falls in the
@@ -94,7 +95,6 @@ split_shard_replication_setup(PG_FUNCTION_ARGS)
 {
 	ArrayType *shardInfoArrayObject = PG_GETARG_ARRAYTYPE_P(0);
 	int shardInfoArrayLength = ARR_DIMS(shardInfoArrayObject)[0];
-	int insideCount = ARR_DIMS(shardInfoArrayObject)[1];
 
 	/* SetupMap */
 	SetupHashMapForShardInfo();
@@ -117,14 +117,14 @@ split_shard_replication_setup(PG_FUNCTION_ARGS)
 			&maxValue,
 			&nodeId);
 
-		ShardSplitInfo *shardSplitInfo = GetShardSplitInfo(
+		ShardSplitInfo *shardSplitInfo = CreateShardSplitInfo(
 			sourceShardId,
 			desShardId,
 			minValue,
 			maxValue,
 			nodeId);
 
-		AddShardSplitInfoEntryForNode(shardSplitInfo);
+		AddShardSplitInfoEntryForNodeInMap(shardSplitInfo);
 		shardSplitInfoCount++;
 	}
 
@@ -132,7 +132,7 @@ split_shard_replication_setup(PG_FUNCTION_ARGS)
 	ShardSplitInfo *splitShardInfoSMArray =
 		GetSharedMemoryForShardSplitInfo(shardSplitInfoCount, &dsmHandle);
 
-	CopyShardSplitInfoToSM(splitShardInfoSMArray,
+	PopulateShardSplitInfoInSM(splitShardInfoSMArray,
 						   ShardInfoHashMap,
 						   dsmHandle,
 						   shardSplitInfoCount);
@@ -147,7 +147,7 @@ split_shard_replication_setup(PG_FUNCTION_ARGS)
  * is 'nodeId' and value is a list of ShardSplitInfo that are placed on
  * this particular node.
  */
-static HTAB *
+static void
 SetupHashMapForShardInfo()
 {
 	HASHCTL info;
@@ -159,7 +159,6 @@ SetupHashMapForShardInfo()
 	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
 
 	ShardInfoHashMap = hash_create("ShardInfoMap", 128, &info, hashFlags);
-	return ShardInfoHashMap;
 }
 
 
@@ -173,7 +172,7 @@ ParseShardSplitInfo(ArrayType *shardInfoArrayObject,
 					int32 *nodeId)
 {
 	Oid elemtypeId = ARR_ELEMTYPE(shardInfoArrayObject);
-	int16 elemtypeLength = 0;
+	int elemtypeLength = 0;
 	bool elemtypeByValue = false;
 	char elemtypeAlignment = 0;
 	get_typlenbyvalalign(elemtypeId, &elemtypeLength, &elemtypeByValue,
@@ -304,7 +303,7 @@ ParseShardSplitInfo(ArrayType *shardInfoArrayObject,
 
 
 /*
- * GetShardSplitInfo function constructs ShardSplitInfo data structure
+ * CreateShardSplitInfo function constructs ShardSplitInfo data structure
  * with appropriate OIs' for source and destination relation.
  *
  * sourceShardIdToSplit - Existing shardId which has a valid entry in cache and catalogue
@@ -315,7 +314,7 @@ ParseShardSplitInfo(ArrayType *shardInfoArrayObject,
  * However we can use shard ID and construct qualified shardName.
  */
 ShardSplitInfo *
-GetShardSplitInfo(uint64 sourceShardIdToSplit,
+CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 				  uint64 desSplitChildShardId,
 				  int32 minValue,
 				  int32 maxValue,
@@ -386,11 +385,11 @@ GetShardSplitInfo(uint64 sourceShardIdToSplit,
 
 
 /*
- * AddShardSplitInfoEntryForNode function add's ShardSplitInfo entry
+ * AddShardSplitInfoEntryForNodeInMap function add's ShardSplitInfo entry
  * to the hash map. The key is nodeId on which the new shard is to be placed.
  */
 void
-AddShardSplitInfoEntryForNode(ShardSplitInfo *shardSplitInfo)
+AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo)
 {
 	uint64_t keyNodeId = shardSplitInfo->nodeId;
 	bool found = false;
@@ -412,7 +411,7 @@ AddShardSplitInfoEntryForNode(ShardSplitInfo *shardSplitInfo)
 
 
 /*
- * CopyShardSplitInfoToSM function copies information from the hash map
+ * PopulateShardSplitInfoInSM function copies information from the hash map
  * into shared memory segment. This information is consumed by the WAL sender
  * process during logical replication.
  *
@@ -425,7 +424,7 @@ AddShardSplitInfoEntryForNode(ShardSplitInfo *shardSplitInfo)
  * dsmHandle           - Shared memory segment handle
  */
 void *
-CopyShardSplitInfoToSM(ShardSplitInfo *shardSplitInfoArray,
+PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
 					   HTAB *shardInfoHashMap,
 					   dsm_handle dsmHandle,
 					   int shardSplitInfoCount)
@@ -439,9 +438,7 @@ CopyShardSplitInfoToSM(ShardSplitInfo *shardSplitInfoArray,
 	{
 		uint64_t nodeId = entry->key;
 		char *derivedSlotName =
-			encode_replication_slot(nodeId,
-									SLOT_HANDLING_INSERT_AND_DELETE,
-									dsmHandle);
+			encode_replication_slot(nodeId, dsmHandle);
 
 		List *shardSplitInfoList = entry->shardSplitInfoList;
 		ListCell *listCell = NULL;
