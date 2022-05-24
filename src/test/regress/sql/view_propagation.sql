@@ -379,7 +379,7 @@ create table table_to_depend_on_1 (a int);
 create table table_to_depend_on_2 (a int);
 -- the first view depends on a table
 create view dependent_view_1 as select count(*) from table_to_depend_on_1;
--- the seconds view depends on two tables
+-- the second view depends on two tables
 create view dependent_view_2 as select count(*) from table_to_depend_on_1 join table_to_depend_on_2 on table_to_depend_on_1.a=table_to_depend_on_2.a;
 -- distribute only one table
 select create_distributed_table('table_to_depend_on_1','a');
