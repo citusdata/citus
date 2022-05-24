@@ -241,13 +241,8 @@ ShouldMarkRelationDistributed(Oid relationId)
 	ObjectAddress relationAddress = { 0 };
 	ObjectAddressSet(relationAddress, RelationRelationId, relationId);
 
-	/* check if the relation itself is supported or not */
-	if (!SupportedDependencyByCitus(&relationAddress))
-	{
-		return false;
-	}
-
 	bool pgObject = (relationId < FirstNormalObjectId);
+	bool isObjectSupported = SupportedDependencyByCitus(&relationAddress);
 	bool ownedByExtension = IsTableOwnedByExtension(relationId);
 	bool alreadyDistributed = IsObjectDistributed(&relationAddress);
 	bool hasUnsupportedDependency =
@@ -262,7 +257,7 @@ ShouldMarkRelationDistributed(Oid relationId)
 	 * hasUnsupportedDependency: Citus doesn't know how to distribute its dependencies
 	 * hasCircularDependency: Citus cannot handle circular dependencies
 	 */
-	if (pgObject || ownedByExtension || alreadyDistributed ||
+	if (pgObject || !isObjectSupported || ownedByExtension || alreadyDistributed ||
 		hasUnsupportedDependency || hasCircularDependency)
 	{
 		return false;
