@@ -327,7 +327,7 @@ SyncCitusTableMetadata(Oid relationId)
 
 /*
  * CreateDependentViewsOnWorkers takes a relationId and creates the views that depend on
- * that relation on workers with metadata.
+ * that relation on workers with metadata. Propagated views are marked as distributed.
  */
 static void
 CreateDependentViewsOnWorkers(Oid relationId)
