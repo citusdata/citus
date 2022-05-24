@@ -355,6 +355,10 @@ CreateDependentViewsOnWorkers(Oid relationId)
 
 		SendCommandToWorkersWithMetadata(createViewCommand);
 		SendCommandToWorkersWithMetadata(alterViewOwnerCommand);
+
+		ObjectAddress viewAddress = { 0 };
+		ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
+		MarkObjectDistributed(&viewAddress);
 	}
 
 	SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
