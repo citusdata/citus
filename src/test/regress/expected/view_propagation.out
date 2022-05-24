@@ -596,7 +596,7 @@ create view dependent_view_1 as select count(*) from table_to_depend_on_1;
 WARNING:  "view dependent_view_1" has dependency to "table table_to_depend_on_1" that is not in Citus' metadata
 DETAIL:  "view dependent_view_1" will be created only locally
 HINT:  Distribute "table table_to_depend_on_1" first to distribute "view dependent_view_1"
--- the seconds view depends on two tables
+-- the second view depends on two tables
 create view dependent_view_2 as select count(*) from table_to_depend_on_1 join table_to_depend_on_2 on table_to_depend_on_1.a=table_to_depend_on_2.a;
 WARNING:  "view dependent_view_2" has dependency to "table table_to_depend_on_2" that is not in Citus' metadata
 DETAIL:  "view dependent_view_2" will be created only locally

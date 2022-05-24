@@ -768,10 +768,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		 * experience by asking to add coordinator to metadata.
 		 */
 
-		/* as we're having a table type conversion, dont need warning messages */
-		InTableTypeConversionFunctionCall = true;
 		ConvertPostgresLocalTablesToCitusLocalTables(alterTableStatement);
-		InTableTypeConversionFunctionCall = false;
 
 		/*
 		 * CreateCitusLocalTable converts relation to a shard relation and creates
@@ -1272,6 +1269,9 @@ RelationIdListContainsPostgresTable(List *relationIdList)
 static void
 ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement)
 {
+	/* as we're having a table type conversion, dont need warning messages */
+	InTableTypeConversionFunctionCall = true;
+
 	List *rightRelationRangeVarList =
 		GetAlterTableAddFKeyRightRelationRangeVarList(alterTableStatement);
 	RangeVar *leftRelationRangeVar = alterTableStatement->relation;
@@ -1387,6 +1387,7 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 		}
 		PG_CATCH();
 		{
+			InTableTypeConversionFunctionCall = false;
 			MemoryContextSwitchTo(savedMemoryContext);
 
 			ErrorData *errorData = CopyErrorData();
@@ -1405,6 +1406,8 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 		}
 		PG_END_TRY();
 	}
+
+	InTableTypeConversionFunctionCall = false;
 }
 
 
