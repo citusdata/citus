@@ -767,7 +767,11 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		 * distributed table from local table and we don't want to break user
 		 * experience by asking to add coordinator to metadata.
 		 */
+
+		/* as we're having a table type conversion, dont need warning messages */
+		InTableTypeConversionFunctionCall = true;
 		ConvertPostgresLocalTablesToCitusLocalTables(alterTableStatement);
+		InTableTypeConversionFunctionCall = false;
 
 		/*
 		 * CreateCitusLocalTable converts relation to a shard relation and creates
