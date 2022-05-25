@@ -1034,6 +1034,27 @@ NeededColumnsList(TupleDesc tupdesc, Bitmapset *attr_needed)
 
 
 /*
+ * ColumnarTableTupleCount returns the number of tuples that columnar
+ * table with relationId has by using stripe metadata.
+ */
+static uint64
+ColumnarTableTupleCount(Relation relation)
+{
+	List *stripeList = StripesForRelfilenode(relation->rd_node);
+	uint64 tupleCount = 0;
+
+	ListCell *lc = NULL;
+	foreach(lc, stripeList)
+	{
+		StripeMetadata *stripe = lfirst(lc);
+		tupleCount += stripe->rowCount;
+	}
+
+	return tupleCount;
+}
+
+
+/*
  * columnar_vacuum_rel implements VACUUM without FULL option.
  */
 static void
@@ -1048,6 +1069,9 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 		 */
 		return;
 	}
+
+	pgstat_progress_start_command(PROGRESS_COMMAND_VACUUM,
+								  RelationGetRelid(rel));
 
 	/*
 	 * If metapage version of relation is older, then we hint users to VACUUM
@@ -1072,6 +1096,79 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 	{
 		TruncateColumnar(rel, elevel);
 	}
+
+	RelationOpenSmgr(rel);
+	BlockNumber new_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+
+	/* get the number of indexes */
+	List *indexList = RelationGetIndexList(rel);
+	int nindexes = list_length(indexList);
+
+	TransactionId oldestXmin;
+	TransactionId freezeLimit;
+	MultiXactId multiXactCutoff;
+
+	/* initialize xids */
+#if PG_VERSION_NUM >= PG_VERSION_15
+	MultiXactId oldestMxact;
+	vacuum_set_xid_limits(rel,
+						  params->freeze_min_age,
+						  params->freeze_table_age,
+						  params->multixact_freeze_min_age,
+						  params->multixact_freeze_table_age,
+						  &oldestXmin, &oldestMxact,
+						  &freezeLimit, &multiXactCutoff);
+
+	Assert(MultiXactIdPrecedesOrEquals(multiXactCutoff, oldestMxact));
+#else
+	TransactionId xidFullScanLimit;
+	MultiXactId mxactFullScanLimit;
+	vacuum_set_xid_limits(rel,
+						  params->freeze_min_age,
+						  params->freeze_table_age,
+						  params->multixact_freeze_min_age,
+						  params->multixact_freeze_table_age,
+						  &oldestXmin, &freezeLimit, &xidFullScanLimit,
+						  &multiXactCutoff, &mxactFullScanLimit);
+#endif
+
+	Assert(TransactionIdPrecedesOrEquals(freezeLimit, oldestXmin));
+
+	/*
+	 * Columnar storage doesn't hold any transaction IDs, so we can always
+	 * just advance to the most aggressive value.
+	 */
+	TransactionId newRelFrozenXid = oldestXmin;
+#if PG_VERSION_NUM >= PG_VERSION_15
+	MultiXactId newRelminMxid = oldestMxact;
+#else
+	MultiXactId newRelminMxid = multiXactCutoff;
+#endif
+
+	double new_live_tuples = ColumnarTableTupleCount(rel);
+
+	/* all visible pages are always 0 */
+	BlockNumber new_rel_allvisible = 0;
+
+#if PG_VERSION_NUM >= PG_VERSION_15
+	bool frozenxid_updated;
+	bool minmulti_updated;
+
+	vac_update_relstats(rel, new_rel_pages, new_live_tuples,
+						new_rel_allvisible, nindexes > 0,
+						newRelFrozenXid, newRelminMxid,
+						&frozenxid_updated, &minmulti_updated, false);
+#else
+	vac_update_relstats(rel, new_rel_pages, new_live_tuples,
+						new_rel_allvisible, nindexes > 0,
+						newRelFrozenXid, newRelminMxid, false);
+#endif
+
+	pgstat_report_vacuum(RelationGetRelid(rel),
+						 rel->rd_rel->relisshared,
+						 Max(new_live_tuples, 0),
+						 0);
+	pgstat_progress_end_command();
 }
 
 
