@@ -345,13 +345,9 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	ExecuteAndLogUtilityCommandList(shellTableDDLEvents);
 
 	/*
-	 * Execute the view creation commands with the shell table. Since we want to create
-	 * views locally here, disable/enable ddl propagation. Views will be distributed via
-	 * FinalizeCitusLocalTableCreation below.
+	 * Execute the view creation commands with the shell table.
+	 * Views will be distributed via FinalizeCitusLocalTableCreation below.
 	 */
-	tableViewCreationCommands = lcons(DISABLE_DDL_PROPAGATION, tableViewCreationCommands);
-	tableViewCreationCommands = lappend(tableViewCreationCommands,
-										ENABLE_DDL_PROPAGATION);
 	ExecuteAndLogUtilityCommandList(tableViewCreationCommands);
 
 	/*
