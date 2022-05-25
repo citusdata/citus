@@ -38,5 +38,3 @@ BEGIN
 
   END IF;
 END $check_citus$;
-
-#include "../../columnar/sql/columnar--11.0-2--11.1-1.sql"
