@@ -28,10 +28,7 @@ static ShardSplitInfoSMHeader * AllocateSharedMemoryForShardSplitInfo(int
 
 static void * ShardSplitInfoSMSteps(ShardSplitInfoSMHeader *shardSplitInfoSMHeader);
 
-static ShardSplitInfoSMHeader * GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle
-																	   dsmHandle,
-																	   dsm_segment **
-																	   attachedSegment);
+static ShardSplitInfoSMHeader * GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle dsmHandle);
 static dsm_handle GetSMHandleFromSlotName(char *slotName);
 
 /*
@@ -40,8 +37,7 @@ static dsm_handle GetSMHandleFromSlotName(char *slotName);
  * lifetime of the backend process accessing it.
  */
 static ShardSplitInfoSMHeader *
-GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle dsmHandle,
-									   dsm_segment **attachedSegment)
+GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle dsmHandle)
 {
 	dsm_segment *dsmSegment = dsm_find_mapping(dsmHandle);
 
@@ -63,8 +59,6 @@ GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle dsmHandle,
 	ShardSplitInfoSMHeader *header = (ShardSplitInfoSMHeader *) dsm_segment_address(
 		dsmSegment);
 
-	*attachedSegment = dsmSegment;
-
 	return header;
 }
 
@@ -85,10 +79,8 @@ GetShardSplitInfoSMArrayForSlot(char *slotName, int *arraySize)
 	}
 
 	dsm_handle dsmHandle = GetSMHandleFromSlotName(slotName);
-	dsm_segment *dsmSegment = NULL;
 	ShardSplitInfoSMHeader *shardSplitInfoSMHeader =
-		GetShardSplitInfoSMHeaderFromDSMHandle(dsmHandle,
-											   &dsmSegment);
+		GetShardSplitInfoSMHeaderFromDSMHandle(dsmHandle);
 	*arraySize = shardSplitInfoSMHeader->stepCount;
 
 	ShardSplitInfo *shardSplitInfoArray =
@@ -162,7 +154,7 @@ AllocateSharedMemoryForShardSplitInfo(int shardSplitInfoCount, Size shardSplitIn
 	dsm_pin_segment(dsmSegment);
 
 	ShardSplitInfoSMHeader *shardSplitInfoSMHeader =
-		GetShardSplitInfoSMHeaderFromDSMHandle(*dsmHandle, &dsmSegment);
+		GetShardSplitInfoSMHeaderFromDSMHandle(*dsmHandle);
 
 	shardSplitInfoSMHeader->stepCount = shardSplitInfoCount;
 	shardSplitInfoSMHeader->processId = MyProcPid;
@@ -173,7 +165,7 @@ AllocateSharedMemoryForShardSplitInfo(int shardSplitInfoCount, Size shardSplitIn
 
 /*
  * CreateSharedMemoryForShardSplitInfo is a wrapper function which creates shared memory
- * for storing shard split infomation. The function returns pointer the first element
+ * for storing shard split infomation. The function returns pointer to the first element
  * within this array.
  *
  * shardSplitInfoCount - number of 'ShardSplitInfo ' elements to be allocated
