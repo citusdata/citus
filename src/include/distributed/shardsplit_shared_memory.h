@@ -30,27 +30,11 @@ typedef struct ShardSplitInfoSMHeader
 
 
 /* Functions for creating and accessing shared memory segments */
-extern ShardSplitInfoSMHeader * CreateShardSplitInfoSharedMemory(int stepCount,
-																 Size stepSize,
-																 dsm_handle *dsmHandle);
-
-extern ShardSplitInfo * GetSharedMemoryForShardSplitInfo(int shardSplitInfoCount,
-														 dsm_handle *dsmHandle);
+extern ShardSplitInfo * CreateSharedMemoryForShardSplitInfo(int shardSplitInfoCount,
+															dsm_handle *dsmHandle);
 
 extern ShardSplitInfo * GetShardSplitInfoSMArrayForSlot(char *slotName, int *arraySize);
 
-extern dsm_handle GetSMHandleFromSlotName(char *slotName);
-
-/*
- * ShardSplitInfoSMSteps returns a pointer to the array of shard split info
- * steps that are stored in shared memory.
- */
-extern void * ShardSplitInfoSMSteps(ShardSplitInfoSMHeader *shardSplitInfoSMHeader);
-
-extern ShardSplitInfoSMHeader * GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle
-																	   dsmHandle,
-																	   dsm_segment **
-																	   attachedSegment);
 
 /* Functions related to encoding-decoding for replication slot name */
 char * encode_replication_slot(uint64_t nodeId,

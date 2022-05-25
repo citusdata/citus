@@ -49,15 +49,15 @@ static void ParseShardSplitInfo(ArrayType *shardInfoArrayObject,
 								int32 *maxValue,
 								int32 *nodeId);
 static ShardSplitInfo * CreateShardSplitInfo(uint64 sourceShardIdToSplit,
-										  uint64 desSplitChildShardId,
-										  int32 minValue,
-										  int32 maxValue,
-										  int32 nodeId);
+											 uint64 desSplitChildShardId,
+											 int32 minValue,
+											 int32 maxValue,
+											 int32 nodeId);
 static void AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo);
 static void * PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
-									 HTAB *shardInfoHashMap,
-									 dsm_handle dsmHandle,
-									 int shardSplitInfoCount);
+										 HTAB *shardInfoHashMap,
+										 dsm_handle dsmHandle,
+										 int shardSplitInfoCount);
 static void SetupHashMapForShardInfo();
 
 /*
@@ -130,12 +130,12 @@ split_shard_replication_setup(PG_FUNCTION_ARGS)
 
 	dsm_handle dsmHandle;
 	ShardSplitInfo *splitShardInfoSMArray =
-		GetSharedMemoryForShardSplitInfo(shardSplitInfoCount, &dsmHandle);
+		CreateSharedMemoryForShardSplitInfo(shardSplitInfoCount, &dsmHandle);
 
 	PopulateShardSplitInfoInSM(splitShardInfoSMArray,
-						   ShardInfoHashMap,
-						   dsmHandle,
-						   shardSplitInfoCount);
+							   ShardInfoHashMap,
+							   dsmHandle,
+							   shardSplitInfoCount);
 
 	return dsmHandle;
 }
@@ -315,10 +315,10 @@ ParseShardSplitInfo(ArrayType *shardInfoArrayObject,
  */
 ShardSplitInfo *
 CreateShardSplitInfo(uint64 sourceShardIdToSplit,
-				  uint64 desSplitChildShardId,
-				  int32 minValue,
-				  int32 maxValue,
-				  int32 nodeId)
+					 uint64 desSplitChildShardId,
+					 int32 minValue,
+					 int32 maxValue,
+					 int32 nodeId)
 {
 	ShardInterval *shardIntervalToSplit = LoadShardInterval(sourceShardIdToSplit);
 	CitusTableCacheEntry *cachedTableEntry = GetCitusTableCacheEntry(
@@ -425,9 +425,9 @@ AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo)
  */
 void *
 PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
-					   HTAB *shardInfoHashMap,
-					   dsm_handle dsmHandle,
-					   int shardSplitInfoCount)
+						   HTAB *shardInfoHashMap,
+						   dsm_handle dsmHandle,
+						   int shardSplitInfoCount)
 {
 	HASH_SEQ_STATUS status;
 	hash_seq_init(&status, shardInfoHashMap);

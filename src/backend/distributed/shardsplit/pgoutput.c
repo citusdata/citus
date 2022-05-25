@@ -44,13 +44,13 @@ int shardSplitInfoArraySize = 0;
 
 /* Plugin callback */
 static void split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
-						 Relation relation, ReorderBufferChange *change);
+							Relation relation, ReorderBufferChange *change);
 
 /* Helper methods */
 static bool ShouldCommitBeApplied(Relation sourceShardRelation);
 static int32_t GetHashValueForIncomingTuple(Relation sourceShardRelation,
-										HeapTuple tuple,
-										bool *shouldHandleUpdate);
+											HeapTuple tuple,
+											bool *shouldHandleUpdate);
 
 void
 _PG_output_plugin_init(OutputPluginCallbacks *cb)
@@ -202,6 +202,8 @@ FindTargetRelationOid(Relation sourceShardRelation,
  * part of replication. This in turn creates one more commit(2).
  * Commit 2 should be skipped as the source shard and destination for commit 2
  * are same and the commit has already been applied.
+ *
+ * TODO(saawasek): Add the information in Hashmap for performance reasons.
  */
 bool
 ShouldCommitBeApplied(Relation sourceShardRelation)
@@ -231,7 +233,7 @@ ShouldCommitBeApplied(Relation sourceShardRelation)
  */
 static void
 split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
-			 Relation relation, ReorderBufferChange *change)
+				Relation relation, ReorderBufferChange *change)
 {
 	/*
 	 * Get ShardSplitInfo array from Shared Memory if not already
@@ -243,8 +245,7 @@ split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 	{
 		shardSplitInfoArray =
 			GetShardSplitInfoSMArrayForSlot(ctx->slot->data.name.data,
-											&arraySize);
-		shardSplitInfoArraySize = arraySize;
+											&shardSplitInfoArraySize);
 	}
 
 	char *replicationSlotName = ctx->slot->data.name.data;
@@ -277,11 +278,14 @@ split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 		default:
 			Assert(false);
 	}
-	
-	if (targetRelationOid != InvalidOid)
+
+	/* Current replication slot is not responsible for handling the change */
+	if (targetRelationOid == InvalidOid)
 	{
-		Relation targetRelation = RelationIdGetRelation(targetRelationOid);
-		pgoutputChangeCB(ctx, txn, targetRelation, change);
-		RelationClose(targetRelation);
+		return;
 	}
+
+	Relation targetRelation = RelationIdGetRelation(targetRelationOid);
+	pgoutputChangeCB(ctx, txn, targetRelation, change);
+	RelationClose(targetRelation);
 }

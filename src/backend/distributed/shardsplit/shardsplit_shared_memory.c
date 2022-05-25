@@ -18,12 +18,28 @@
 #include "distributed/shardsplit_shared_memory.h"
 #include "distributed/citus_safe_lib.h"
 
+/* Function declarations */
+static ShardSplitInfoSMHeader * AllocateSharedMemoryForShardSplitInfo(int
+																	  shardSplitInfoCount,
+																	  Size
+																	  shardSplitInfoSize,
+																	  dsm_handle *
+																	  dsmHandle);
+
+static void * ShardSplitInfoSMSteps(ShardSplitInfoSMHeader *shardSplitInfoSMHeader);
+
+static ShardSplitInfoSMHeader * GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle
+																	   dsmHandle,
+																	   dsm_segment **
+																	   attachedSegment);
+static dsm_handle GetSMHandleFromSlotName(char *slotName);
+
 /*
  * GetShardSplitInfoSMHeaderFromDSMHandle returns the header of the shared memory
  * segment beloing to 'dsmHandle'. It pins the shared memory segment mapping till
  * lifetime of the backend process accessing it.
  */
-ShardSplitInfoSMHeader *
+static ShardSplitInfoSMHeader *
 GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle dsmHandle,
 									   dsm_segment **attachedSegment)
 {
@@ -87,7 +103,7 @@ GetShardSplitInfoSMArrayForSlot(char *slotName, int *arraySize)
  * from the replication slot name. Replication slot name is encoded as
  * "NODEID_SlotType_SharedMemoryHANDLE".
  */
-dsm_handle
+static dsm_handle
 GetSMHandleFromSlotName(char *slotName)
 {
 	if (slotName == NULL)
@@ -105,27 +121,29 @@ GetSMHandleFromSlotName(char *slotName)
 
 
 /*
- * CreateShardSplitInfoSharedMemory is used to create a place to store
- * information about the shard undergoing a split. The function creates dynamic
- * shared memory segment consisting of a header regarding the processId and an
- * array of "steps" which store ShardSplitInfo. The contents of this shared
- * memory segment are consumed by WAL sender process during catch up phase of
+ * AllocateSharedMemoryForShardSplitInfo is used to create a place to store
+ * information about the shard undergoing a split. The function allocates dynamic
+ * shared memory segment consisting of a header which stores the id of process
+ * creating it and an array of "steps" which store ShardSplitInfo. The contents of
+ * this shared memory segment are consumed by WAL sender process during catch up phase of
  * replication through logical decoding plugin.
  *
  * The shared memory segment exists till the catch up phase completes or the
  * postmaster shutsdown.
  */
-ShardSplitInfoSMHeader *
-CreateShardSplitInfoSharedMemory(int stepCount, Size stepSize, dsm_handle *dsmHandle)
+static ShardSplitInfoSMHeader *
+AllocateSharedMemoryForShardSplitInfo(int shardSplitInfoCount, Size shardSplitInfoSize,
+									  dsm_handle *dsmHandle)
 {
-	if (stepSize <= 0 || stepCount <= 0)
+	if (shardSplitInfoCount <= 0 || shardSplitInfoSize <= 0)
 	{
 		ereport(ERROR,
-				(errmsg("number of steps and size of each step should be "
+				(errmsg("count and size of each step should be "
 						"positive values")));
 	}
 
-	Size totalSize = sizeof(ShardSplitInfoSMHeader) + stepSize * stepCount;
+	Size totalSize = sizeof(ShardSplitInfoSMHeader) + shardSplitInfoCount *
+					 shardSplitInfoSize;
 	dsm_segment *dsmSegment = dsm_create(totalSize, DSM_CREATE_NULL_IF_MAXSEGMENTS);
 
 	if (dsmSegment == NULL)
@@ -146,7 +164,7 @@ CreateShardSplitInfoSharedMemory(int stepCount, Size stepSize, dsm_handle *dsmHa
 	ShardSplitInfoSMHeader *shardSplitInfoSMHeader =
 		GetShardSplitInfoSMHeaderFromDSMHandle(*dsmHandle, &dsmSegment);
 
-	shardSplitInfoSMHeader->stepCount = stepCount;
+	shardSplitInfoSMHeader->stepCount = shardSplitInfoCount;
 	shardSplitInfoSMHeader->processId = MyProcPid;
 
 	return shardSplitInfoSMHeader;
@@ -154,7 +172,7 @@ CreateShardSplitInfoSharedMemory(int stepCount, Size stepSize, dsm_handle *dsmHa
 
 
 /*
- * GetSharedMemoryForShardSplitInfo is a wrapper function which creates shared memory
+ * CreateSharedMemoryForShardSplitInfo is a wrapper function which creates shared memory
  * for storing shard split infomation. The function returns pointer the first element
  * within this array.
  *
@@ -162,12 +180,12 @@ CreateShardSplitInfoSharedMemory(int stepCount, Size stepSize, dsm_handle *dsmHa
  * dsmHandle           - handle of the allocated shared memory segment
  */
 ShardSplitInfo *
-GetSharedMemoryForShardSplitInfo(int shardSplitInfoCount, dsm_handle *dsmHandle)
+CreateSharedMemoryForShardSplitInfo(int shardSplitInfoCount, dsm_handle *dsmHandle)
 {
 	ShardSplitInfoSMHeader *shardSplitInfoSMHeader =
-		CreateShardSplitInfoSharedMemory(shardSplitInfoCount,
-										 sizeof(ShardSplitInfo),
-										 dsmHandle);
+		AllocateSharedMemoryForShardSplitInfo(shardSplitInfoCount,
+											  sizeof(ShardSplitInfo),
+											  dsmHandle);
 	ShardSplitInfo *shardSplitInfoSMArray =
 		(ShardSplitInfo *) ShardSplitInfoSMSteps(shardSplitInfoSMHeader);
 
@@ -181,7 +199,7 @@ GetSharedMemoryForShardSplitInfo(int shardSplitInfoCount, dsm_handle *dsmHandle)
  * right after the header, so this function is trivial. The main purpose of
  * this function is to make the intent clear to readers of the code.
  */
-void *
+static void *
 ShardSplitInfoSMSteps(ShardSplitInfoSMHeader *shardSplitInfoSMHeader)
 {
 	return shardSplitInfoSMHeader + 1;
