@@ -345,8 +345,13 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	ExecuteAndLogUtilityCommandList(shellTableDDLEvents);
 
 	/*
-	 * Execute the view creation commands with the shell table.
+	 * Execute the view creation commands with the shell table. Since we want to create
+	 * views locally here, disable/enable ddl propagation. Views will be distributed via
+	 * FinalizeCitusLocalTableCreation below.
 	 */
+	tableViewCreationCommands = lcons(DISABLE_DDL_PROPAGATION, tableViewCreationCommands);
+	tableViewCreationCommands = lappend(tableViewCreationCommands,
+										ENABLE_DDL_PROPAGATION);
 	ExecuteAndLogUtilityCommandList(tableViewCreationCommands);
 
 	/*
@@ -1036,9 +1041,20 @@ static void
 DropViewsOnTable(Oid relationId)
 {
 	List *views = GetDependingViews(relationId);
+	List *reverseOrderedViews = NIL;
 
+	/*
+	 * GetDependingViews returns views in the dependency order. We should drop views
+	 * in the reversed order since dropping views can cascade to other views below.
+	 */
 	Oid viewId = InvalidOid;
 	foreach_oid(viewId, views)
+	{
+		reverseOrderedViews = list_insert_nth_oid(reverseOrderedViews, 0, viewId);
+	}
+
+	viewId = InvalidOid;
+	foreach_oid(viewId, reverseOrderedViews)
 	{
 		char *viewName = get_rel_name(viewId);
 		char *schemaName = get_namespace_name(get_rel_namespace(viewId));

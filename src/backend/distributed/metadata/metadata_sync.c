@@ -350,14 +350,17 @@ CreateDependentViewsOnWorkers(Oid relationId)
 			continue;
 		}
 
+		ObjectAddress viewAddress = { 0 };
+		ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
+
+		EnsureDependenciesExistOnAllNodes(&viewAddress);
+
 		char *createViewCommand = CreateViewDDLCommand(viewOid);
 		char *alterViewOwnerCommand = AlterViewOwnerCommand(viewOid);
 
 		SendCommandToWorkersWithMetadata(createViewCommand);
 		SendCommandToWorkersWithMetadata(alterViewOwnerCommand);
 
-		ObjectAddress viewAddress = { 0 };
-		ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
 		MarkObjectDistributed(&viewAddress);
 	}
 
