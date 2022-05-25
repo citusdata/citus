@@ -612,6 +612,8 @@ extern bool RelationIdListHasReferenceTable(List *relationIdList);
 extern List * GetFKeyCreationCommandsForRelationIdList(List *relationIdList);
 extern void DropRelationForeignKeys(Oid relationId, int flags);
 extern void SetLocalEnableLocalReferenceForeignKeys(bool state);
+extern void ExecuteAndLogUtilityCommandListInTableTypeConversion(
+	List *utilityCommandList);
 extern void ExecuteAndLogUtilityCommandList(List *ddlCommandList);
 extern void ExecuteAndLogUtilityCommand(const char *commandString);
 extern void ExecuteForeignKeyCreateCommandList(List *ddlCommandList,
