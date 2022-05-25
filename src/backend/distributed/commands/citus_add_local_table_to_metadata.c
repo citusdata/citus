@@ -83,6 +83,7 @@ static void DropRelationTruncateTriggers(Oid relationId);
 static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
 static void DropViewsOnTable(Oid relationId);
 static List * GetRenameStatsCommandList(List *statsOidList, uint64 shardId);
+static List * ReverseOidList(List *oidList);
 static void AppendExplicitIndexIdsToList(Form_pg_index indexForm,
 										 List **explicitIndexIdList,
 										 int flags);
@@ -1037,19 +1038,15 @@ static void
 DropViewsOnTable(Oid relationId)
 {
 	List *views = GetDependingViews(relationId);
-	List *reverseOrderedViews = NIL;
 
 	/*
 	 * GetDependingViews returns views in the dependency order. We should drop views
 	 * in the reversed order since dropping views can cascade to other views below.
 	 */
-	Oid viewId = InvalidOid;
-	foreach_oid(viewId, views)
-	{
-		reverseOrderedViews = list_insert_nth_oid(reverseOrderedViews, 0, viewId);
-	}
 
-	viewId = InvalidOid;
+	List *reverseOrderedViews = ReverseOidList(views);
+
+	Oid viewId = InvalidOid;
 	foreach_oid(viewId, reverseOrderedViews)
 	{
 		char *viewName = get_rel_name(viewId);
@@ -1062,6 +1059,23 @@ DropViewsOnTable(Oid relationId)
 
 		ExecuteAndLogUtilityCommand(dropCommand->data);
 	}
+}
+
+
+/*
+ * ReverseOidList takes a list of oids and returns the reverse ordered version of it.
+ */
+static List *
+ReverseOidList(List *oidList)
+{
+	List *reversed = NIL;
+	Oid oid = InvalidOid;
+	foreach_oid(oid, oidList)
+	{
+		reversed = lcons_oid(oid, reversed);
+	}
+
+	return reversed;
 }
 
 
