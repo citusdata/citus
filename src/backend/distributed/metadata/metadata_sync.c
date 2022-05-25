@@ -98,7 +98,7 @@ static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 static void CreateShellTableOnWorkers(Oid relationId);
 static void CreateTableMetadataOnWorkers(Oid relationId);
-static void CreateDependentViewsOnWorkers(Oid relationId);
+static void CreateDependingViewsOnWorkers(Oid relationId);
 static NodeMetadataSyncResult SyncNodeMetadataToNodesOptional(void);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 											bool citusTableWithNoDistKey);
@@ -321,16 +321,16 @@ SyncCitusTableMetadata(Oid relationId)
 		MarkObjectDistributed(&relationAddress);
 	}
 
-	CreateDependentViewsOnWorkers(relationId);
+	CreateDependingViewsOnWorkers(relationId);
 }
 
 
 /*
- * CreateDependentViewsOnWorkers takes a relationId and creates the views that depend on
+ * CreateDependingViewsOnWorkers takes a relationId and creates the views that depend on
  * that relation on workers with metadata. Propagated views are marked as distributed.
  */
 static void
-CreateDependentViewsOnWorkers(Oid relationId)
+CreateDependingViewsOnWorkers(Oid relationId)
 {
 	List *views = GetDependingViews(relationId);
 
