@@ -365,7 +365,7 @@ jobs:
           when: on_fail
       - store_artifacts:
           name: 'Save tap logs'
-          path: /home/circleci/project/src/test/recovery/tmp_check/log
+          path: /home/circleci/project/src/test/<< parameters.suite >>/tmp_check/log
           when: on_fail
       - store_artifacts:
           name: 'Save core dumps'
@@ -552,6 +552,12 @@ workflows:
           image_tag: '12.4'
           suite: recovery
           requires: [build-12]
+      - tap-test-citus:
+          name: 'test-12_tap-columnar-freezing'
+          pg_major: 12
+          image_tag: '12.4'
+          suite: columnar_freezing
+          requires: [build-12]
       - test-citus:
           name: 'test-12_check-failure'
           pg_major: 12
@@ -619,6 +625,12 @@ workflows:
           pg_major: 13
           image_tag: '13.0'
           suite: recovery
+          requires: [build-13]
+      - tap-test-citus:
+          name: 'test-13_tap-columnar-freezing'
+          pg_major: 13
+          image_tag: '13.0'
+          suite: columnar_freezing
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-failure'
