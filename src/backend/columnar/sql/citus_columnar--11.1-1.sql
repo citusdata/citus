@@ -134,9 +134,6 @@ IS 'reset on or more options on a columnar table to the system defaults';
 END IF;
 END$proc$;
 
--- add citus_internal schema
-CREATE SCHEMA IF NOT EXISTS citus_internal;
-
 -- (this function being dropped in 10.0.3)->#include "udfs/columnar_ensure_objects_exist/10.0-1.sql"
 
 RESET search_path;
@@ -175,30 +172,6 @@ BEGIN
 END;
 $$;
 
---#include "udfs/upgrade_columnar_storage/10.2-1.sql"
-CREATE OR REPLACE FUNCTION citus_internal.upgrade_columnar_storage(rel regclass)
-  RETURNS VOID
-  STRICT
-  LANGUAGE c AS 'MODULE_PATHNAME', $$upgrade_columnar_storage$$;
-
-COMMENT ON FUNCTION citus_internal.upgrade_columnar_storage(regclass)
-  IS 'function to upgrade the columnar storage, if necessary';
-
-
---#include "udfs/downgrade_columnar_storage/10.2-1.sql"
-
-CREATE OR REPLACE FUNCTION citus_internal.downgrade_columnar_storage(rel regclass)
-  RETURNS VOID
-  STRICT
-  LANGUAGE c AS 'MODULE_PATHNAME', $$downgrade_columnar_storage$$;
-
-COMMENT ON FUNCTION citus_internal.downgrade_columnar_storage(regclass)
-  IS 'function to downgrade the columnar storage, if necessary';
-
--- upgrade storage for all columnar relations
-SELECT citus_internal.upgrade_columnar_storage(c.oid) FROM pg_class c, pg_am a
-  WHERE c.relam = a.oid AND amname = 'columnar';
-
 -- columnar--10.2-1--10.2-2.sql
 
 -- revoke read access for columnar.chunk from unprivileged
@@ -221,49 +194,6 @@ REVOKE SELECT ON columnar.chunk FROM PUBLIC;
 
 -- columnar--10.2-3--10.2-4.sql
 
-CREATE OR REPLACE FUNCTION citus_internal.columnar_ensure_am_depends_catalog()
-  RETURNS void
-  LANGUAGE plpgsql
-  SET search_path = pg_catalog
-AS $func$
-BEGIN
-  INSERT INTO pg_depend
-  SELECT -- Define a dependency edge from "columnar table access method" ..
-         'pg_am'::regclass::oid as classid,
-         (select oid from pg_am where amname = 'columnar') as objid,
-         0 as objsubid,
-         -- ... to each object that is registered to pg_class and that lives
-         -- in "columnar" schema. That contains catalog tables, indexes
-         -- created on them and the sequences created in "columnar" schema.
-         --
-         -- Given the possibility of user might have created their own objects
-         -- in columnar schema, we explicitly specify list of objects that we
-         -- are interested in.
-         'pg_class'::regclass::oid as refclassid,
-         columnar_schema_members.relname::regclass::oid as refobjid,
-         0 as refobjsubid,
-         'n' as deptype
-  FROM (VALUES ('columnar.chunk'),
-               ('columnar.chunk_group'),
-               ('columnar.chunk_group_pkey'),
-               ('columnar.chunk_pkey'),
-               ('columnar.options'),
-               ('columnar.options_pkey'),
-               ('columnar.storageid_seq'),
-               ('columnar.stripe'),
-               ('columnar.stripe_first_row_number_idx'),
-               ('columnar.stripe_pkey')
-       ) columnar_schema_members(relname)
-  -- Avoid inserting duplicate entries into pg_depend.
-  EXCEPT TABLE pg_depend;
-END;
-$func$;
-COMMENT ON FUNCTION citus_internal.columnar_ensure_am_depends_catalog()
-  IS 'internal function responsible for creating dependencies from columnar '
-     'table access method to the rel objects in columnar schema';
-
-
-SELECT citus_internal.columnar_ensure_am_depends_catalog();
 
 -- columnar--11.0-2--11.1-1.sql
 
@@ -376,8 +306,28 @@ REVOKE ALL PRIVILEGES ON SCHEMA columnar_internal FROM PUBLIC;
 CREATE SCHEMA columnar;
 GRANT USAGE ON SCHEMA columnar TO PUBLIC;
 
+--#include "udfs/upgrade_columnar_storage/10.2-1.sql"
+CREATE OR REPLACE FUNCTION columnar_internal.upgrade_columnar_storage(rel regclass)
+  RETURNS VOID
+  STRICT
+  LANGUAGE c AS 'MODULE_PATHNAME', $$upgrade_columnar_storage$$;
+
+COMMENT ON FUNCTION columnar_internal.upgrade_columnar_storage(regclass)
+  IS 'function to upgrade the columnar storage, if necessary';
+
+
+--#include "udfs/downgrade_columnar_storage/10.2-1.sql"
+
+CREATE OR REPLACE FUNCTION columnar_internal.downgrade_columnar_storage(rel regclass)
+  RETURNS VOID
+  STRICT
+  LANGUAGE c AS 'MODULE_PATHNAME', $$downgrade_columnar_storage$$;
+
+COMMENT ON FUNCTION columnar_internal.downgrade_columnar_storage(regclass)
+  IS 'function to downgrade the columnar storage, if necessary';
+
 -- update UDF to account for columnar_internal schema
-CREATE OR REPLACE FUNCTION citus_internal.columnar_ensure_am_depends_catalog()
+CREATE OR REPLACE FUNCTION columnar_internal.columnar_ensure_am_depends_catalog()
   RETURNS void
   LANGUAGE plpgsql
   SET search_path = pg_catalog
@@ -422,9 +372,11 @@ BEGIN
   EXCEPT TABLE pg_depend;
 END;
 $func$;
-COMMENT ON FUNCTION citus_internal.columnar_ensure_am_depends_catalog()
+COMMENT ON FUNCTION columnar_internal.columnar_ensure_am_depends_catalog()
   IS 'internal function responsible for creating dependencies from columnar '
      'table access method to the rel objects in columnar schema';
+
+SELECT columnar_internal.columnar_ensure_am_depends_catalog();
 
 -- add utility function
 

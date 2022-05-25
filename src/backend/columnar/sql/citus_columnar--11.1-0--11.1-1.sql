@@ -120,6 +120,12 @@ REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA columnar FROM PUBLIC;
 ALTER SCHEMA columnar RENAME TO columnar_internal;
 REVOKE ALL PRIVILEGES ON SCHEMA columnar_internal FROM PUBLIC;
 
+-- move citus_internal functions to columnar_internal
+
+ALTER FUNCTION citus_internal.upgrade_columnar_storage(regclass) SET SCHEMA columnar_internal;
+ALTER FUNCTION citus_internal.downgrade_columnar_storage(regclass) SET SCHEMA columnar_internal;
+ALTER FUNCTION citus_internal.columnar_ensure_am_depends_catalog() SET SCHEMA columnar_internal;
+
 -- create columnar schema with public usage privileges
 
 CREATE SCHEMA columnar;

@@ -83,6 +83,12 @@ DROP FUNCTION columnar.get_storage_id(regclass);
 
 DROP SCHEMA columnar;
 
+-- move columnar_internal functions back to citus_internal
+
+ALTER FUNCTION columnar_internal.upgrade_columnar_storage(regclass) SET SCHEMA citus_internal;
+ALTER FUNCTION columnar_internal.downgrade_columnar_storage(regclass) SET SCHEMA citus_internal;
+ALTER FUNCTION columnar_internal.columnar_ensure_am_depends_catalog() SET SCHEMA citus_internal;
+
 ALTER SCHEMA columnar_internal RENAME TO columnar;
 GRANT USAGE ON SCHEMA columnar TO PUBLIC;
 GRANT SELECT ON columnar.options TO PUBLIC;
