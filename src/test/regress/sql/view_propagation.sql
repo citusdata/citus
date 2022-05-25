@@ -381,13 +381,17 @@ create table table_to_depend_on_2 (a int);
 create view dependent_view_1 as select count(*) from table_to_depend_on_1;
 -- the second view depends on two tables
 create view dependent_view_2 as select count(*) from table_to_depend_on_1 join table_to_depend_on_2 on table_to_depend_on_1.a=table_to_depend_on_2.a;
+-- the third view depends on the first view
+create view dependent_view_3 as select count(*) from table_to_depend_on_1;
+-- the fourth view depends on the second view
+create view dependent_view_4 as select count(*) from table_to_depend_on_2;
 -- distribute only one table
 select create_distributed_table('table_to_depend_on_1','a');
 
--- see two views on the coordinator
+-- see all four views on the coordinator
 select viewname from pg_views where viewname like 'dependent_view__';
 \c - - - :worker_1_port
--- see one view on the worker
+-- see 1st and 3rd view on the worker
 select viewname from pg_views where viewname like 'dependent_view__';
 
 \c - - - :master_port
