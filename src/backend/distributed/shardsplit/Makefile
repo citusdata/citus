@@ -16,7 +16,7 @@ ENSURE_SUBDIRS_EXIST := $(shell mkdir -p $(SUBDIRS))
         $(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(citus_abs_srcdir)/$(dir)/*.c))))
 OBJS += pgoutput.o
 
-MODULE_big = logical_decoding_plugin
+MODULE_big = decoding_plugin_for_shard_split
 
 PG_CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include
 

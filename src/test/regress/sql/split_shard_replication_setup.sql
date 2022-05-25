@@ -43,12 +43,12 @@ begin
 
     SELECT * into sharedMemoryId from SplitShardReplicationSetup(targetNode1, targetNode2);
     SELECT FORMAT('%s_%s', targetNode1, sharedMemoryId) into derivedSlotName;
-    SELECT slot_name into targetOneSlotName from pg_create_logical_replication_slot(derivedSlotName, 'logical_decoding_plugin');
+    SELECT slot_name into targetOneSlotName from pg_create_logical_replication_slot(derivedSlotName, 'decoding_plugin_for_shard_split');
 
     -- if new child shards are placed on different nodes, create one more replication slot
     if (targetNode1 != targetNode2) then
         SELECT FORMAT('%s_%s', targetNode2, sharedMemoryId) into derivedSlotName;
-        SELECT slot_name into targetTwoSlotName from pg_create_logical_replication_slot(derivedSlotName, 'logical_decoding_plugin');
+        SELECT slot_name into targetTwoSlotName from pg_create_logical_replication_slot(derivedSlotName, 'decoding_plugin_for_shard_split');
         INSERT INTO slotName_table values(targetTwoSlotName, targetNode2, 1);
     end if;
 
@@ -91,7 +91,7 @@ $$ LANGUAGE plpgsql;
 --                ARRAY[1, 3 , 0 , 2147483647, 18 ]
 --               ]
 --         );
--- 5. Create Replication slot with 'logical_decoding_plugin'
+-- 5. Create Replication slot with 'decoding_plugin_for_shard_split'
 -- 6. Setup Pub/Sub
 -- 7. Insert into table_to_split_1 at source worker1
 -- 8. Expect the results in either table_to_split_2 or table_to_split_2 at worker2

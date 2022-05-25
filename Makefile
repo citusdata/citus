@@ -17,16 +17,17 @@ all: extension pg_send_cancellation
 # build columnar only
 columnar:
 	$(MAKE) -C src/backend/columnar all
-logical_decoding_plugin:
+# build logical decoding plugin for shard split
+decoding_plugin_for_shard_split:
 	$(MAKE) -C src/backend/distributed/shardsplit all
 # build extension
 extension: $(citus_top_builddir)/src/include/citus_version.h columnar
 	$(MAKE) -C src/backend/distributed/ all
 install-columnar: columnar
 	$(MAKE) -C src/backend/columnar install
-install-logical_decoding_plugin: logical_decoding_plugin
+install-decoding_plugin_for_shard_split: decoding_plugin_for_shard_split
 	$(MAKE) -C src/backend/distributed/shardsplit install
-install-extension: extension install-columnar install-logical_decoding_plugin
+install-extension: extension install-columnar install-decoding_plugin_for_shard_split
 	$(MAKE) -C src/backend/distributed/ install
 install-headers: extension
 	$(MKDIR_P) '$(DESTDIR)$(includedir_server)/distributed/'

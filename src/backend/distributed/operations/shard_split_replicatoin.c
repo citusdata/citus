@@ -86,7 +86,7 @@ static void SetupHashMapForShardInfo();
  *
  * There is a 1-1 mapping between a target node and a replication slot as one replication
  * slot takes care of replicating changes for one node.
- * The 'logical_decoding_plugin' consumes this information and routes the tuple
+ * The 'decoding_plugin_for_shard_split' consumes this information and routes the tuple
  * from the source shard to the appropriate destination shard that falls in the
  * respective range.
  */
