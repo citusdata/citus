@@ -28,7 +28,8 @@ static ShardSplitInfoSMHeader * AllocateSharedMemoryForShardSplitInfo(int
 
 static void * ShardSplitInfoSMSteps(ShardSplitInfoSMHeader *shardSplitInfoSMHeader);
 
-static ShardSplitInfoSMHeader * GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle dsmHandle);
+static ShardSplitInfoSMHeader * GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle
+																	   dsmHandle);
 static dsm_handle GetSMHandleFromSlotName(char *slotName);
 
 /*
