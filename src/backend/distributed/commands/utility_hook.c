@@ -204,9 +204,25 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 															parsetree);
 		if (strcmp(createExtensionStmt->extname, "citus") == 0)
 		{
-			if (get_extension_oid("citus_columnar", true) == InvalidOid)
+			double versionNumber = strtod(CITUS_MAJORVERSION, NULL);
+			DefElem *newVersionValue = GetExtensionOption(createExtensionStmt->options,
+														  "new_version");
+
+			if (newVersionValue)
 			{
-				CreateExtensionWithVersion("citus_columnar", NULL);
+				const char *newVersion = defGetString(newVersionValue);
+				const char schemaVersionSeparator = '-';
+
+				char *leftSeperatorPosition = strchr(newVersion, schemaVersionSeparator);
+				versionNumber = strtod(leftSeperatorPosition, NULL);
+			}
+
+			if (versionNumber >= 11.1)
+			{
+				if (get_extension_oid("citus_columnar", true) == InvalidOid)
+				{
+					CreateExtensionWithVersion("citus_columnar", NULL);
+				}
 			}
 		}
 	}
