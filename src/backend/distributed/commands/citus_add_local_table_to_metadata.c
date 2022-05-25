@@ -1057,7 +1057,7 @@ DropViewsOnTable(Oid relationId)
 		char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
 
 		StringInfo dropCommand = makeStringInfo();
-		appendStringInfo(dropCommand, "DROP VIEW IF EXISTS %s CASCADE",
+		appendStringInfo(dropCommand, "DROP VIEW IF EXISTS %s",
 						 qualifiedViewName);
 
 		ExecuteAndLogUtilityCommand(dropCommand->data);
