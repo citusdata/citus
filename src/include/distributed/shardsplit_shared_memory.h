@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * shardsplit_sharedmemory.h
+ * shardsplit_shared_memory.h
  *    API's for creating and accessing shared memory segments to store
  *    shard split information. 'setup_shard_replication' UDF creates the
  *    shared memory, populates the contents and WAL sender processes are
@@ -14,7 +14,6 @@
 #ifndef SHARDSPLIT_SHARED_MEMORY_H
 #define SHARDSPLIT_SHARED_MEMORY_H
 
-#include "postgres.h"
 #include "c.h"
 #include "fmgr.h"
 #include "distributed/shard_split.h"
@@ -24,8 +23,7 @@
  */
 typedef struct ShardSplitInfoSMHeader
 {
-	uint64 processId;       /* process id creating the shared memory segment */
-	int stepCount;          /* number of elements in the shared memory */
+	int shardSplitInfoCount;          /* number of elements in the shared memory */
 } ShardSplitInfoSMHeader;
 
 
@@ -33,7 +31,8 @@ typedef struct ShardSplitInfoSMHeader
 extern ShardSplitInfo * CreateSharedMemoryForShardSplitInfo(int shardSplitInfoCount,
 															dsm_handle *dsmHandle);
 
-extern ShardSplitInfo * GetShardSplitInfoSMArrayForSlot(char *slotName, int *arraySize);
+extern ShardSplitInfo * GetShardSplitInfoSMArrayForSlot(char *slotName,
+														int *shardSplitInfoCount);
 
 
 /* Functions related to encoding-decoding for replication slot name */

@@ -12,8 +12,6 @@ safestringlib_srcdir = $(citus_abs_top_srcdir)/vendor/safestringlib
 SUBDIRS = . safeclib
 SUBDIRS +=
 ENSURE_SUBDIRS_EXIST := $(shell mkdir -p $(SUBDIRS))
-#OBJS += \
-        $(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(citus_abs_srcdir)/$(dir)/*.c))))
 OBJS += pgoutput.o
 
 MODULE_big = decoding_plugin_for_shard_split

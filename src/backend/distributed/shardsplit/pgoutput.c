@@ -55,10 +55,8 @@ static int32_t GetHashValueForIncomingTuple(Relation sourceShardRelation,
 void
 _PG_output_plugin_init(OutputPluginCallbacks *cb)
 {
-	char *plugin = "pgoutput";
-
 	LogicalOutputPluginInit plugin_init =
-		(LogicalOutputPluginInit) load_external_function(plugin,
+		(LogicalOutputPluginInit) load_external_function("pgoutput",
 														 "_PG_output_plugin_init",
 														 false, NULL);
 
@@ -70,8 +68,8 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
 	/* ask the output plugin to fill the callback struct */
 	plugin_init(cb);
 
+	/* actual pgoutput callback will be called with the appropriate destination shard */
 	pgoutputChangeCB = cb->change_cb;
-
 	cb->change_cb = split_change_cb;
 }
 
@@ -202,8 +200,6 @@ FindTargetRelationOid(Relation sourceShardRelation,
  * part of replication. This in turn creates one more commit(2).
  * Commit 2 should be skipped as the source shard and destination for commit 2
  * are same and the commit has already been applied.
- *
- * TODO(saawasek): Add the information in Hashmap for performance reasons.
  */
 bool
 ShouldCommitBeApplied(Relation sourceShardRelation)
@@ -240,7 +236,6 @@ split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 	 * initialized. This gets initialized during the replication of
 	 * first message.
 	 */
-	int arraySize = 0;
 	if (shardSplitInfoArray == NULL)
 	{
 		shardSplitInfoArray =
@@ -274,9 +269,11 @@ split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 			break;
 		}
 
-		/* Only INSERT/DELETE are visible in the replication path of split shard */
+		/* Only INSERT/DELETE actions are visible in the replication path of split shard */
 		default:
-			Assert(false);
+			ereport(ERROR, errmsg(
+						"Unexpected Action :%d. Expected action is INSERT or DELETE",
+						change->action));
 	}
 
 	/* Current replication slot is not responsible for handling the change */

@@ -26,11 +26,10 @@ static ShardSplitInfoSMHeader * AllocateSharedMemoryForShardSplitInfo(int
 																	  dsm_handle *
 																	  dsmHandle);
 
-static void * ShardSplitInfoSMSteps(ShardSplitInfoSMHeader *shardSplitInfoSMHeader);
+static void * ShardSplitInfoSMData(ShardSplitInfoSMHeader *shardSplitInfoSMHeader);
 
 static ShardSplitInfoSMHeader * GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle
 																	   dsmHandle);
-static dsm_handle GetSMHandleFromSlotName(char *slotName);
 
 /*
  * GetShardSplitInfoSMHeaderFromDSMHandle returns the header of the shared memory
@@ -69,47 +68,28 @@ GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle dsmHandle)
  * 'ShardSplitInfo' struct stored in the shared memory segment.
  */
 ShardSplitInfo *
-GetShardSplitInfoSMArrayForSlot(char *slotName, int *arraySize)
+GetShardSplitInfoSMArrayForSlot(char *slotName, int *shardSplitInfoCount)
 {
 	if (slotName == NULL ||
-		arraySize == NULL)
+		shardSplitInfoCount == NULL)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 				 errmsg("Expected slot name and array size arguments")));
 	}
 
-	dsm_handle dsmHandle = GetSMHandleFromSlotName(slotName);
+	dsm_handle dsmHandle;
+	uint64_t nodeId = 0;
+	decode_replication_slot(slotName, &nodeId, &dsmHandle);
+
 	ShardSplitInfoSMHeader *shardSplitInfoSMHeader =
 		GetShardSplitInfoSMHeaderFromDSMHandle(dsmHandle);
-	*arraySize = shardSplitInfoSMHeader->stepCount;
+	*shardSplitInfoCount = shardSplitInfoSMHeader->shardSplitInfoCount;
 
 	ShardSplitInfo *shardSplitInfoArray =
-		(ShardSplitInfo *) ShardSplitInfoSMSteps(shardSplitInfoSMHeader);
+		(ShardSplitInfo *) ShardSplitInfoSMData(shardSplitInfoSMHeader);
 
 	return shardSplitInfoArray;
-}
-
-
-/*
- * GetSMHandleFromSlotName function returns the shared memory handle
- * from the replication slot name. Replication slot name is encoded as
- * "NODEID_SlotType_SharedMemoryHANDLE".
- */
-static dsm_handle
-GetSMHandleFromSlotName(char *slotName)
-{
-	if (slotName == NULL)
-	{
-		ereport(ERROR,
-				errmsg("Invalid NULL replication slot name."));
-	}
-
-	uint64_t nodeId = 0;
-	dsm_handle handle = 0;
-	decode_replication_slot(slotName, &nodeId, &handle);
-
-	return handle;
 }
 
 
@@ -157,8 +137,7 @@ AllocateSharedMemoryForShardSplitInfo(int shardSplitInfoCount, Size shardSplitIn
 	ShardSplitInfoSMHeader *shardSplitInfoSMHeader =
 		GetShardSplitInfoSMHeaderFromDSMHandle(*dsmHandle);
 
-	shardSplitInfoSMHeader->stepCount = shardSplitInfoCount;
-	shardSplitInfoSMHeader->processId = MyProcPid;
+	shardSplitInfoSMHeader->shardSplitInfoCount = shardSplitInfoCount;
 
 	return shardSplitInfoSMHeader;
 }
@@ -180,20 +159,20 @@ CreateSharedMemoryForShardSplitInfo(int shardSplitInfoCount, dsm_handle *dsmHand
 											  sizeof(ShardSplitInfo),
 											  dsmHandle);
 	ShardSplitInfo *shardSplitInfoSMArray =
-		(ShardSplitInfo *) ShardSplitInfoSMSteps(shardSplitInfoSMHeader);
+		(ShardSplitInfo *) ShardSplitInfoSMData(shardSplitInfoSMHeader);
 
 	return shardSplitInfoSMArray;
 }
 
 
 /*
- * ShardSplitInfoSMSteps returns a pointer to the array of 'ShardSplitInfo'
- * steps that are stored in shared memory segment. This is simply the data
- * right after the header, so this function is trivial. The main purpose of
- * this function is to make the intent clear to readers of the code.
+ * ShardSplitInfoSMData returns a pointer to the array of 'ShardSplitInfo'.
+ * This is simply the data right after the header, so this function is trivial.
+ * The main purpose of this function is to make the intent clear to readers
+ * of the code.
  */
 static void *
-ShardSplitInfoSMSteps(ShardSplitInfoSMHeader *shardSplitInfoSMHeader)
+ShardSplitInfoSMData(ShardSplitInfoSMHeader *shardSplitInfoSMHeader)
 {
 	return shardSplitInfoSMHeader + 1;
 }
@@ -223,7 +202,9 @@ decode_replication_slot(char *slotName,
 						uint64_t *nodeId,
 						dsm_handle *dsmHandle)
 {
-	if (slotName == NULL)
+	if (slotName == NULL ||
+		nodeId == NULL ||
+		dsmHandle == NULL)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),

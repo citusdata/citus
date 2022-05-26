@@ -68,8 +68,9 @@ static void SetupHashMapForShardInfo();
  * This meta information is stored in a shared memory segment and accessed
  * by logical decoding plugin.
  *
- * Split information is given by user as an Array in the below format
- * [{sourceShardId, childShardId, minValue, maxValue, Destination NodeId}]
+ * Split information is given by user as an Array of source shards undergoing splits
+ * in the below format.
+ * Array[Array[sourceShardId, childShardId, minValue, maxValue, Destination NodeId]]
  *
  * sourceShardId - id of the shard that is undergoing a split
  * childShardId  - id of shard that stores a specific range of values
@@ -84,11 +85,20 @@ static void SetupHashMapForShardInfo();
  * Multiple shards can be placed on the same destiation node. Source and
  * destinations nodes can be same too.
  *
+ * Usage Semantics:
+ * This UDF returns a shared memory handle where the information is stored. This shared memory
+ * handle is used by caller to encode replication slot name as "NodeId_MemoryHandle" for every 
+ * distinct  target node. The same encoded slot name is stored in one of the fields of the 
+ * in-memory data structure(ShardSplitInfo).
+ *
  * There is a 1-1 mapping between a target node and a replication slot as one replication
  * slot takes care of replicating changes for one node.
- * The 'decoding_plugin_for_shard_split' consumes this information and routes the tuple
- * from the source shard to the appropriate destination shard that falls in the
- * respective range.
+ *
+ * During the replication phase, 'decoding_plugin_for_shard_split' called for a change on a particular
+ * replication slot, will decode the shared memory handle from its slot name and will attach to the
+ * shared memory. The plugin consumes the information from shared memory. It routes the tuple
+ * from the source shard to the appropriate destination shard for which the respective slot is
+ * responsible.
  */
 Datum
 split_shard_replication_setup(PG_FUNCTION_ARGS)
@@ -359,9 +369,6 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 							   desSplitChildShardOid)));
 	}
 
-	/* Get PartitionColumnIndex for citusTableOid */
-	int partitionColumnIndex = -1;
-
 	/* determine the partition column in the tuple descriptor */
 	Var *partitionColumn = cachedTableEntry->partitionColumn;
 	if (partitionColumn == NULL)
@@ -369,6 +376,7 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
 						errmsg("Invalid Partition Column")));
 	}
+	int partitionColumnIndex = -1;
 	partitionColumnIndex = partitionColumn->varattno - 1;
 
 	ShardSplitInfo *shardSplitInfo = palloc0(sizeof(ShardSplitInfo));

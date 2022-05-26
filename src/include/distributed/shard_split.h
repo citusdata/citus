@@ -29,16 +29,16 @@ typedef enum SplitOperation
 } SplitOperation;
 
 /*
- * In-memory representation of a split child shard.
+ * In-memory mapping of a split child shard.
  */
 typedef struct ShardSplitInfo
 {
 	Oid distributedTableOid;     /* citus distributed table Oid */
-	int partitionColumnIndex;
+	int partitionColumnIndex;    /* partition column index */
 	Oid sourceShardOid;          /* parent shard Oid */
 	Oid splitChildShardOid;      /* child shard Oid */
-	int32 shardMinValue;
-	int32 shardMaxValue;
+	int32 shardMinValue;         /* min hash value */
+	int32 shardMaxValue;         /* max hash value */
 	uint64 nodeId;               /* node where child shard is to be placed */
 	char slotName[NAMEDATALEN];  /* replication slot name belonging to this node */
 } ShardSplitInfo;
