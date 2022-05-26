@@ -181,6 +181,7 @@ extern Oid get_constraint_typid(Oid conoid);
 /* extension.c - forward declarations */
 extern bool IsDropCitusExtensionStmt(Node *parsetree);
 extern bool IsCreateAlterExtensionUpdateCitusStmt(Node *parsetree);
+extern bool ShouldMarkRelationDistributed(Oid relationId);
 extern void ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree);
 extern List * PostprocessCreateExtensionStmt(Node *stmt, const char *queryString);
 extern List * PreprocessDropExtensionStmt(Node *stmt, const char *queryString,
@@ -533,6 +534,8 @@ extern ObjectAddress AlterViewStmtObjectAddress(Node *node, bool missing_ok);
 extern List * PreprocessDropViewStmt(Node *node, const char *queryString,
 									 ProcessUtilityContext processUtilityContext);
 extern char * CreateViewDDLCommand(Oid viewOid);
+extern List * GetViewCreationCommandsOfTable(Oid relationId);
+extern List * GetViewCreationTableDDLCommandsOfTable(Oid relationId);
 extern char * AlterViewOwnerCommand(Oid viewOid);
 extern char * DeparseViewStmt(Node *node);
 extern char * DeparseDropViewStmt(Node *node);
@@ -609,6 +612,8 @@ extern bool RelationIdListHasReferenceTable(List *relationIdList);
 extern List * GetFKeyCreationCommandsForRelationIdList(List *relationIdList);
 extern void DropRelationForeignKeys(Oid relationId, int flags);
 extern void SetLocalEnableLocalReferenceForeignKeys(bool state);
+extern void ExecuteAndLogUtilityCommandListInTableTypeConversion(
+	List *utilityCommandList);
 extern void ExecuteAndLogUtilityCommandList(List *ddlCommandList);
 extern void ExecuteAndLogUtilityCommand(const char *commandString);
 extern void ExecuteForeignKeyCreateCommandList(List *ddlCommandList,
