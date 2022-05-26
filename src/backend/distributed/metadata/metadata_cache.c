@@ -2277,7 +2277,7 @@ InstalledExtensionVersion(void)
 		MemoryContext oldMemoryContext = MemoryContextSwitchTo(
 			MetadataCacheMemoryContext);
 
-		installedExtensionVersion = text_to_cstring(DatumGetTextPCopy(installedVersion));
+		installedExtensionVersion = text_to_cstring(DatumGetTextPP(installedVersion));
 
 		MemoryContextSwitchTo(oldMemoryContext);
 	}

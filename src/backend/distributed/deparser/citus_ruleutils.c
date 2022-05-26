@@ -152,7 +152,7 @@ get_extension_version(Oid extensionId)
 										  RelationGetDescr(relation), &isNull);
 		if (!isNull)
 		{
-			versionName = text_to_cstring(DatumGetTextPCopy(versionDatum));
+			versionName = text_to_cstring(DatumGetTextPP(versionDatum));
 		}
 	}
 
