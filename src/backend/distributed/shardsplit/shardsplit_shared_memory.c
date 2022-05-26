@@ -12,9 +12,7 @@
  */
 
 #include "postgres.h"
-#include "miscadmin.h"
-#include "lib/stringinfo.h"
-#include "distributed/colocation_utils.h"
+#include "distributed/shardinterval_utils.h"
 #include "distributed/shardsplit_shared_memory.h"
 #include "distributed/citus_safe_lib.h"
 

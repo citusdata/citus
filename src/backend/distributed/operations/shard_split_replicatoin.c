@@ -9,24 +9,13 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
-#include "nodes/pg_list.h"
-#include "utils/array.h"
-#include "distributed/utils/array_type.h"
-#include "lib/stringinfo.h"
-#include "utils/builtins.h"
-#include "utils/lsyscache.h"
-#include "distributed/colocation_utils.h"
-#include "distributed/metadata_cache.h"
+#include "common/hashfn.h"
 #include "distributed/shardinterval_utils.h"
-#include "distributed/coordinator_protocol.h"
-#include "distributed/connection_management.h"
-#include "distributed/remote_commands.h"
-#include "distributed/shard_split.h"
 #include "distributed/shard_utils.h"
 #include "distributed/shardsplit_shared_memory.h"
-#include "common/hashfn.h"
-#include "safe_str_lib.h"
 #include "distributed/citus_safe_lib.h"
+#include "utils/builtins.h"
+#include "utils/lsyscache.h"
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(split_shard_replication_setup);

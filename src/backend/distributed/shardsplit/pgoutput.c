@@ -11,28 +11,9 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
-#include "access/htup_details.h"
-#include "access/nbtree.h"
-#include "catalog/pg_am.h"
-#include "catalog/pg_collation.h"
-#include "catalog/pg_publication.h"
-#include "catalog/pg_type.h"
-#include "distributed/multi_progress.h"
-#include "distributed/worker_protocol.h"
-#include "replication/logical.h"
-#include "replication/logicalproto.h"
-#include "replication/origin.h"
-#include "replication/pgoutput.h"
-#include "utils/inval.h"
-#include "utils/int8.h"
-#include "utils/lsyscache.h"
-#include "utils/memutils.h"
-#include "utils/syscache.h"
-#include "utils/typcache.h"
-#include "utils/varlena.h"
-#include "distributed/shard_split.h"
+#include "distributed/shardinterval_utils.h"
 #include "distributed/shardsplit_shared_memory.h"
-#include "citus_version.h"
+#include "replication/logical.h"
 
 PG_MODULE_MAGIC;
 
