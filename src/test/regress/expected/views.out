@@ -1,0 +1,30 @@
+SET search_path TO views_create;
+SELECT * FROM "local regular view";
+ id | title
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT * FROM dist_regular_view;
+ id | name | created_at
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT * FROM local_regular_view2;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT * FROM local_regular_view3;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT * FROM "local regular view4";
+ my cny
+---------------------------------------------------------------------
+      0
+(1 row)
+
+RESET search_path;
