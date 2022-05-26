@@ -2874,7 +2874,7 @@ InstalledExtensionVersionColumnar(void)
 		}
 
 
-		installedExtensionVersion = text_to_cstring(DatumGetTextPP(installedVersion));
+		installedExtensionVersion = text_to_cstring(DatumGetTextPCopy(installedVersion));
 	}
 	else
 	{

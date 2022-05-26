@@ -1286,6 +1286,7 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 			return;
 		}
 
+		/* TODO: might need copying */
 		char *fetchedExplainAnalyzePlan = TextDatumGetCString(explainAnalyze);
 		double fetchedExplainAnalyzeExecutionDuration = DatumGetFloat8(executionDuration);
 

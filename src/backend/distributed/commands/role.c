@@ -337,6 +337,7 @@ ExtractEncryptedPassword(Oid roleOid)
 
 	Datum passwordDatum = heap_getattr(tuple, Anum_pg_authid_rolpassword,
 									   pgAuthIdDescription, &isNull);
+	char *passwordCstring = text_to_cstring(DatumGetTextPCopy(passwordDatum));
 
 	table_close(pgAuthId, AccessShareLock);
 	ReleaseSysCache(tuple);
@@ -346,7 +347,7 @@ ExtractEncryptedPassword(Oid roleOid)
 		return NULL;
 	}
 
-	return pstrdup(TextDatumGetCString(passwordDatum));
+	return pstrdup(passwordCstring);
 }
 
 
@@ -398,7 +399,7 @@ GenerateAlterRoleSetIfExistsCommandList(HeapTuple tuple,
 	 */
 	for (i = 0; i < nconfigs; i++)
 	{
-		char *config = TextDatumGetCString(configs[i]);
+		char *config = text_to_cstring(DatumGetTextPCopy(configs[i]));
 		stmt->setstmt = MakeVariableSetStmt(config);
 		commandList = lappend(commandList,
 							  (void *) CreateAlterRoleSetIfExistsCommand(stmt));

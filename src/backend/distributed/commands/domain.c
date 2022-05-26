@@ -175,7 +175,7 @@ RecreateDomainStmt(Oid domainOid)
 		 *
 		 * There is no supported way to go from a cooked expression to a raw expression.
 		 */
-		constraint->cooked_expr = TextDatumGetCString(conbin);
+		constraint->cooked_expr = text_to_cstring(DatumGetTextPCopy(conbin));
 
 		stmt->constraints = lappend(stmt->constraints, constraint);
 	}
