@@ -422,6 +422,11 @@ SELECT run_command_on_workers($$SELECT count(*) FROM v2$$);
 SELECT run_command_on_workers($$SELECT count(*) FROM v3$$);
 SELECT run_command_on_workers($$SELECT count(*) FROM v4$$);
 
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%v1%';
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%v2%';
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%v3%';
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%v4%';
+
 CREATE TABLE employees (employee_id int, manager_id int, full_name text);
 
 -- v_test_1 and v_test_2 becomes circularly dependend views

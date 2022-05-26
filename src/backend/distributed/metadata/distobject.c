@@ -252,6 +252,7 @@ ShouldMarkRelationDistributed(Oid relationId)
 
 	/*
 	 * pgObject: Citus never marks pg objects as distributed
+	 * isObjectSupported: Citus does not support propagation of some objects
 	 * ownedByExtension: let extensions manage its own objects
 	 * alreadyDistributed: most likely via earlier versions
 	 * hasUnsupportedDependency: Citus doesn't know how to distribute its dependencies

@@ -728,6 +728,30 @@ SELECT run_command_on_workers($$SELECT count(*) FROM v4$$);
  (localhost,57638,t,0)
 (2 rows)
 
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%v1%';
+     obj_identifier
+---------------------------------------------------------------------
+ (view,"{public,v1}",{})
+(1 row)
+
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%v2%';
+     obj_identifier
+---------------------------------------------------------------------
+ (view,"{public,v2}",{})
+(1 row)
+
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%v3%';
+     obj_identifier
+---------------------------------------------------------------------
+ (view,"{public,v3}",{})
+(1 row)
+
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%v4%';
+     obj_identifier
+---------------------------------------------------------------------
+ (view,"{public,v4}",{})
+(1 row)
+
 CREATE TABLE employees (employee_id int, manager_id int, full_name text);
 -- v_test_1 and v_test_2 becomes circularly dependend views
 -- so we should not try to distribute any of the views
