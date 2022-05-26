@@ -864,6 +864,50 @@ SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.p
  (view,"{viewsc,prop_view4}",{})
 (2 rows)
 
+-- test with fkey cascading
+create table ref_tb(a int primary key);
+SELECT create_reference_table('ref_tb');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE loc_tb (a int );
+CREATE VIEW v100 AS SELECT * FROM loc_tb;
+CREATE VIEW v101 AS SELECT * FROM loc_tb JOIN ref_tb USING (a);
+CREATE VIEW v102 AS SELECT * FROM v101;
+ALTER TABLE loc_tb ADD CONSTRAINT fkey FOREIGN KEY (a) references ref_tb(a);
+-- works fine
+select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100, citus_local_tables_mx.v101, citus_local_tables_mx.v102$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,0)
+ (localhost,57638,t,0)
+(2 rows)
+
+ALTER TABLE loc_tb DROP CONSTRAINT fkey;
+-- fails because fkey is dropped and table is converted to local table
+select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100$$);
+                                run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  relation ""citus_local_tables_mx.v100"" does not exist")
+ (localhost,57638,f,"ERROR:  relation ""citus_local_tables_mx.v100"" does not exist")
+(2 rows)
+
+	select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v101$$);
+                                run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  relation ""citus_local_tables_mx.v101"" does not exist")
+ (localhost,57638,f,"ERROR:  relation ""citus_local_tables_mx.v101"" does not exist")
+(2 rows)
+
+	select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v102$$);
+                                run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  relation ""citus_local_tables_mx.v102"" does not exist")
+ (localhost,57638,f,"ERROR:  relation ""citus_local_tables_mx.v102"" does not exist")
+(2 rows)
+
 -- cleanup at exit
 set client_min_messages to error;
 DROP SCHEMA citus_local_tables_mx CASCADE;
