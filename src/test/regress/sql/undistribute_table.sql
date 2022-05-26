@@ -128,6 +128,47 @@ SELECT undistribute_table('view_table');
 SELECT schemaname, viewname, viewowner, definition FROM pg_views WHERE viewname LIKE 'undis\_view%' ORDER BY viewname;
 SELECT * FROM another_schema.undis_view3 ORDER BY 1, 2;
 
+-- test the drop in undistribute_table cannot cascade to an extension
+CREATE TABLE extension_table (a INT);
+SELECT create_distributed_table('extension_table', 'a');
+CREATE VIEW extension_view AS SELECT * FROM extension_table;
+ALTER EXTENSION plpgsql ADD VIEW extension_view;
+
+SELECT undistribute_table ('extension_table');
+
+-- test the drop that doesn't cascade to an extension
+CREATE TABLE dist_type_table (a INT, b citus.distribution_type);
+SELECT create_distributed_table('dist_type_table', 'a');
+
+SELECT undistribute_table('dist_type_table');
+
+-- test CREATE RULE with ON SELECT
+CREATE TABLE rule_table_1 (a INT);
+CREATE TABLE rule_table_2 (a INT);
+SELECT create_distributed_table('rule_table_2', 'a');
+
+CREATE RULE "_RETURN" AS ON SELECT TO rule_table_1 DO INSTEAD SELECT * FROM rule_table_2;
+
+-- the CREATE RULE turns rule_table_1 into a view
+ALTER EXTENSION plpgsql ADD VIEW rule_table_1;
+
+SELECT undistribute_table('rule_table_2');
+
+-- test CREATE RULE without ON SELECT
+CREATE TABLE rule_table_3 (a INT);
+CREATE TABLE rule_table_4 (a INT);
+SELECT create_distributed_table('rule_table_4', 'a');
+
+CREATE RULE "rule_1" AS ON INSERT TO rule_table_3 DO INSTEAD SELECT * FROM rule_table_4;
+
+ALTER EXTENSION plpgsql ADD TABLE rule_table_3;
+
+SELECT undistribute_table('rule_table_4');
+
+ALTER EXTENSION plpgsql DROP VIEW extension_view;
+ALTER EXTENSION plpgsql DROP VIEW rule_table_1;
+ALTER EXTENSION plpgsql DROP TABLE rule_table_3;
+
 DROP TABLE view_table CASCADE;
 
 DROP SCHEMA undistribute_table, another_schema CASCADE;

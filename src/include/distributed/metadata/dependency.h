@@ -15,6 +15,8 @@
 #include "postgres.h"
 
 #include "catalog/objectaddress.h"
+#include "catalog/pg_depend.h"
+#include "distributed/errormessage.h"
 #include "nodes/pg_list.h"
 
 extern List * GetUniqueDependenciesList(List *objectAddressesList);
@@ -24,5 +26,6 @@ extern bool SupportedDependencyByCitus(const ObjectAddress *address);
 extern List * GetPgDependTuplesForDependingObjects(Oid targetObjectClassId,
 												   Oid targetObjectId);
 extern List * GetDependingViews(Oid relationId);
+extern Oid GetDependingView(Form_pg_depend pg_depend);
 
 #endif /* CITUS_DEPENDENCY_H */
