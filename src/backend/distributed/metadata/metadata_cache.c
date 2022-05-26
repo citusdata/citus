@@ -4911,8 +4911,10 @@ DistNodeMetadata(void)
 							"could not find any entries in pg_dist_metadata")));
 	}
 
-	/* copy the jsonb result before closing the table */
-	/* since that memory can be freed */
+	/*
+	 * Copy the jsonb result before closing the table
+	 * since that memory can be freed.
+	 */
 	metadata = JsonbPGetDatum(DatumGetJsonbPCopy(metadata));
 
 	systable_endscan(scanDescriptor);
