@@ -193,7 +193,6 @@ static void EnsureTableNotPartition(Oid relationId);
 static TableConversionState * CreateTableConversion(TableConversionParameters *params);
 static void CreateDistributedTableLike(TableConversionState *con);
 static void CreateCitusTableLike(TableConversionState *con);
-static List * GetViewCreationCommandsOfTable(Oid relationId);
 static void ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 						 bool suppressNoticeMessages);
 static bool HasAnyGeneratedStoredColumns(Oid relationId);
@@ -572,8 +571,9 @@ ConvertTable(TableConversionState *con)
 	List *justBeforeDropCommands = NIL;
 	List *attachPartitionCommands = NIL;
 
-	postLoadCommands = list_concat(postLoadCommands,
-								   GetViewCreationCommandsOfTable(con->relationId));
+	postLoadCommands =
+		list_concat(postLoadCommands,
+					GetViewCreationTableDDLCommandsOfTable(con->relationId));
 
 	List *foreignKeyCommands = NIL;
 	if (con->conversionType == ALTER_DISTRIBUTED_TABLE)
@@ -1290,10 +1290,30 @@ GetViewCreationCommandsOfTable(Oid relationId)
 
 		appendStringInfo(query, "AS %s", viewDefinition);
 
-		commands = lappend(commands, makeTableDDLCommandString(query->data));
+		commands = lappend(commands, query->data);
 	}
 
 	return commands;
+}
+
+
+/*
+ * GetViewCreationTableDDLCommandsOfTable is the same as GetViewCreationCommandsOfTable,
+ * but the returned list includes objects of TableDDLCommand's, not strings.
+ */
+List *
+GetViewCreationTableDDLCommandsOfTable(Oid relationId)
+{
+	List *commands = GetViewCreationCommandsOfTable(relationId);
+	List *tableDDLCommands = NIL;
+
+	char *command = NULL;
+	foreach_ptr(command, commands)
+	{
+		tableDDLCommands = lappend(tableDDLCommands, makeTableDDLCommandString(command));
+	}
+
+	return tableDDLCommands;
 }
 
 

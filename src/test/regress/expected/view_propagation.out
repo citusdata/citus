@@ -564,6 +564,234 @@ ALTER VIEW IF EXISTS non_existing_view RENAME val2 TO val1;
 NOTICE:  relation "non_existing_view" does not exist, skipping
 ALTER VIEW IF EXISTS non_existing_view SET SCHEMA view_prop_schema;
 NOTICE:  relation "non_existing_view" does not exist, skipping
+-- Show that create view and alter view commands can be run from same transaction
+-- but not the drop view. Since we can not use metadata connection for drop view commands
+BEGIN;
+    SET LOCAL citus.force_max_query_parallelization TO ON;
+    CREATE TABLE table_1_to_view_in_transaction(a int);
+    SELECT create_distributed_table('table_1_to_view_in_transaction', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    CREATE TABLE table_2_to_view_in_transaction(a int);
+    SELECT create_distributed_table('table_2_to_view_in_transaction', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    -- we can create/alter/drop views even in parallel mode
+    CREATE VIEW view_in_transaction AS SELECT table_1_to_view_in_transaction.* FROM table_2_to_view_in_transaction JOIN table_1_to_view_in_transaction USING (a);
+    ALTER TABLE view_in_transaction SET (security_barrier);
+    ALTER VIEW view_in_transaction SET SCHEMA public;
+    ALTER VIEW public.view_in_transaction SET SCHEMA view_prop_schema_inner;
+    ALTER TABLE view_prop_schema_inner.view_in_transaction RENAME COLUMN a TO b;
+    DROP VIEW view_prop_schema_inner.view_in_transaction;
+ERROR:  cannot run view command because there was a parallel operation on a distributed table in the transaction
+DETAIL:  When running command on/for a distributed view, Citus needs to perform all operations over a single connection per node to ensure consistency.
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
+-- verify that the views get distributed after the table is distributed
+create table table_to_depend_on_1 (a int);
+create table table_to_depend_on_2 (a int);
+-- the first view depends on a table
+create view dependent_view_1 as select count(*) from table_to_depend_on_1;
+WARNING:  "view dependent_view_1" has dependency to "table table_to_depend_on_1" that is not in Citus' metadata
+DETAIL:  "view dependent_view_1" will be created only locally
+HINT:  Distribute "table table_to_depend_on_1" first to distribute "view dependent_view_1"
+-- the second view depends on two tables
+create view dependent_view_2 as select count(*) from table_to_depend_on_1 join table_to_depend_on_2 on table_to_depend_on_1.a=table_to_depend_on_2.a;
+WARNING:  "view dependent_view_2" has dependency to "table table_to_depend_on_2" that is not in Citus' metadata
+DETAIL:  "view dependent_view_2" will be created only locally
+HINT:  Distribute "table table_to_depend_on_2" first to distribute "view dependent_view_2"
+-- the third view depends on the first view
+create view dependent_view_3 as select count(*) from table_to_depend_on_1;
+WARNING:  "view dependent_view_3" has dependency to "table table_to_depend_on_1" that is not in Citus' metadata
+DETAIL:  "view dependent_view_3" will be created only locally
+HINT:  Distribute "table table_to_depend_on_1" first to distribute "view dependent_view_3"
+-- the fourth view depends on the second view
+create view dependent_view_4 as select count(*) from table_to_depend_on_2;
+WARNING:  "view dependent_view_4" has dependency to "table table_to_depend_on_2" that is not in Citus' metadata
+DETAIL:  "view dependent_view_4" will be created only locally
+HINT:  Distribute "table table_to_depend_on_2" first to distribute "view dependent_view_4"
+-- distribute only one table
+select create_distributed_table('table_to_depend_on_1','a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- see all four views on the coordinator
+select viewname from pg_views where viewname like 'dependent_view__';
+     viewname
+---------------------------------------------------------------------
+ dependent_view_1
+ dependent_view_2
+ dependent_view_3
+ dependent_view_4
+(4 rows)
+
+\c - - - :worker_1_port
+-- see 1st and 3rd view on the worker
+select viewname from pg_views where viewname like 'dependent_view__';
+     viewname
+---------------------------------------------------------------------
+ dependent_view_1
+ dependent_view_3
+(2 rows)
+
+\c - - - :master_port
+CREATE TABLE parent_1 (a INT UNIQUE) PARTITION BY RANGE(a);
+SELECT create_distributed_table('parent_1','a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE parent_1_child_1 (a int);
+CREATE TABLE parent_1_child_2 (a int);
+CREATE VIEW v1 AS SELECT * FROM parent_1_child_1;
+WARNING:  "view v1" has dependency to "table parent_1_child_1" that is not in Citus' metadata
+DETAIL:  "view v1" will be created only locally
+HINT:  Distribute "table parent_1_child_1" first to distribute "view v1"
+CREATE VIEW v2 AS SELECT * FROM parent_1_child_2;
+WARNING:  "view v2" has dependency to "table parent_1_child_2" that is not in Citus' metadata
+DETAIL:  "view v2" will be created only locally
+HINT:  Distribute "table parent_1_child_2" first to distribute "view v2"
+CREATE VIEW v3 AS SELECT parent_1_child_2.* FROM parent_1_child_2 JOIN parent_1_child_1 USING(a);
+WARNING:  "view v3" has dependency to "table parent_1_child_2" that is not in Citus' metadata
+DETAIL:  "view v3" will be created only locally
+HINT:  Distribute "table parent_1_child_2" first to distribute "view v3"
+CREATE VIEW v4 AS SELECT * FROM v3;
+WARNING:  "view v4" has dependency to "table parent_1_child_2" that is not in Citus' metadata
+DETAIL:  "view v4" will be created only locally
+HINT:  Distribute "table parent_1_child_2" first to distribute "view v4"
+alter table parent_1 attach partition parent_1_child_1 FOR VALUES FROM (0) TO (10) ;
+-- only v1 distributed
+SELECT run_command_on_workers($$SELECT count(*) FROM v1$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,0)
+ (localhost,57638,t,0)
+(2 rows)
+
+SELECT run_command_on_workers($$SELECT count(*) FROM v2$$);
+                    run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  relation ""v2"" does not exist")
+ (localhost,57638,f,"ERROR:  relation ""v2"" does not exist")
+(2 rows)
+
+SELECT run_command_on_workers($$SELECT count(*) FROM v3$$);
+                    run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  relation ""v3"" does not exist")
+ (localhost,57638,f,"ERROR:  relation ""v3"" does not exist")
+(2 rows)
+
+SELECT run_command_on_workers($$SELECT count(*) FROM v4$$);
+                    run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  relation ""v4"" does not exist")
+ (localhost,57638,f,"ERROR:  relation ""v4"" does not exist")
+(2 rows)
+
+-- all views becomes distributed
+alter table parent_1 attach partition parent_1_child_2 FOR VALUES FROM (10) TO (20);
+SELECT run_command_on_workers($$SELECT count(*) FROM v1$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,0)
+ (localhost,57638,t,0)
+(2 rows)
+
+SELECT run_command_on_workers($$SELECT count(*) FROM v2$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,0)
+ (localhost,57638,t,0)
+(2 rows)
+
+SELECT run_command_on_workers($$SELECT count(*) FROM v3$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,0)
+ (localhost,57638,t,0)
+(2 rows)
+
+SELECT run_command_on_workers($$SELECT count(*) FROM v4$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,0)
+ (localhost,57638,t,0)
+(2 rows)
+
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%v1%';
+     obj_identifier
+---------------------------------------------------------------------
+ (view,"{public,v1}",{})
+(1 row)
+
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%v2%';
+     obj_identifier
+---------------------------------------------------------------------
+ (view,"{public,v2}",{})
+(1 row)
+
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%v3%';
+     obj_identifier
+---------------------------------------------------------------------
+ (view,"{public,v3}",{})
+(1 row)
+
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%v4%';
+     obj_identifier
+---------------------------------------------------------------------
+ (view,"{public,v4}",{})
+(1 row)
+
+CREATE TABLE employees (employee_id int, manager_id int, full_name text);
+-- v_test_1 and v_test_2 becomes circularly dependend views
+-- so we should not try to distribute any of the views
+CREATE VIEW v_test_1 AS SELECT * FROM employees;
+WARNING:  "view v_test_1" has dependency to "table employees" that is not in Citus' metadata
+DETAIL:  "view v_test_1" will be created only locally
+HINT:  Distribute "table employees" first to distribute "view v_test_1"
+CREATE VIEW v_test_2 AS SELECT * FROM employees;
+WARNING:  "view v_test_2" has dependency to "table employees" that is not in Citus' metadata
+DETAIL:  "view v_test_2" will be created only locally
+HINT:  Distribute "table employees" first to distribute "view v_test_2"
+CREATE OR REPLACE VIEW v_test_1 AS SELECT employees.* FROM employees JOIN v_test_2 USING (employee_id);
+WARNING:  "view v_test_1" has dependency to "table employees" that is not in Citus' metadata
+DETAIL:  "view v_test_1" will be created only locally
+HINT:  Distribute "table employees" first to distribute "view v_test_1"
+CREATE OR REPLACE VIEW v_test_2 AS SELECT employees.* FROM employees JOIN v_test_1 USING (employee_id);
+WARNING:  "view v_test_2" has dependency to "table employees" that is not in Citus' metadata
+DETAIL:  "view v_test_2" will be created only locally
+HINT:  Distribute "table employees" first to distribute "view v_test_2"
+SELECT create_distributed_table('employees','employee_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify not distributed
+SELECT run_command_on_workers($$SELECT count(*) FROM v_test_1$$);
+                       run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  relation ""v_test_1"" does not exist")
+ (localhost,57638,f,"ERROR:  relation ""v_test_1"" does not exist")
+(2 rows)
+
+SELECT run_command_on_workers($$SELECT count(*) FROM v_test_2$$);
+                       run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  relation ""v_test_2"" does not exist")
+ (localhost,57638,f,"ERROR:  relation ""v_test_2"" does not exist")
+(2 rows)
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA view_prop_schema_inner CASCADE;
 DROP SCHEMA view_prop_schema CASCADE;

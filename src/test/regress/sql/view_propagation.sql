@@ -356,6 +356,92 @@ ALTER VIEW IF EXISTS non_existing_view RENAME COLUMN val1 TO val2;
 ALTER VIEW IF EXISTS non_existing_view RENAME val2 TO val1;
 ALTER VIEW IF EXISTS non_existing_view SET SCHEMA view_prop_schema;
 
+-- Show that create view and alter view commands can be run from same transaction
+-- but not the drop view. Since we can not use metadata connection for drop view commands
+BEGIN;
+    SET LOCAL citus.force_max_query_parallelization TO ON;
+    CREATE TABLE table_1_to_view_in_transaction(a int);
+    SELECT create_distributed_table('table_1_to_view_in_transaction', 'a');
+
+    CREATE TABLE table_2_to_view_in_transaction(a int);
+    SELECT create_distributed_table('table_2_to_view_in_transaction', 'a');
+
+    -- we can create/alter/drop views even in parallel mode
+    CREATE VIEW view_in_transaction AS SELECT table_1_to_view_in_transaction.* FROM table_2_to_view_in_transaction JOIN table_1_to_view_in_transaction USING (a);
+    ALTER TABLE view_in_transaction SET (security_barrier);
+    ALTER VIEW view_in_transaction SET SCHEMA public;
+    ALTER VIEW public.view_in_transaction SET SCHEMA view_prop_schema_inner;
+    ALTER TABLE view_prop_schema_inner.view_in_transaction RENAME COLUMN a TO b;
+    DROP VIEW view_prop_schema_inner.view_in_transaction;
+ROLLBACK;
+-- verify that the views get distributed after the table is distributed
+create table table_to_depend_on_1 (a int);
+create table table_to_depend_on_2 (a int);
+-- the first view depends on a table
+create view dependent_view_1 as select count(*) from table_to_depend_on_1;
+-- the second view depends on two tables
+create view dependent_view_2 as select count(*) from table_to_depend_on_1 join table_to_depend_on_2 on table_to_depend_on_1.a=table_to_depend_on_2.a;
+-- the third view depends on the first view
+create view dependent_view_3 as select count(*) from table_to_depend_on_1;
+-- the fourth view depends on the second view
+create view dependent_view_4 as select count(*) from table_to_depend_on_2;
+-- distribute only one table
+select create_distributed_table('table_to_depend_on_1','a');
+
+-- see all four views on the coordinator
+select viewname from pg_views where viewname like 'dependent_view__';
+\c - - - :worker_1_port
+-- see 1st and 3rd view on the worker
+select viewname from pg_views where viewname like 'dependent_view__';
+
+\c - - - :master_port
+
+CREATE TABLE parent_1 (a INT UNIQUE) PARTITION BY RANGE(a);
+SELECT create_distributed_table('parent_1','a');
+CREATE TABLE parent_1_child_1 (a int);
+CREATE TABLE parent_1_child_2 (a int);
+CREATE VIEW v1 AS SELECT * FROM parent_1_child_1;
+CREATE VIEW v2 AS SELECT * FROM parent_1_child_2;
+CREATE VIEW v3 AS SELECT parent_1_child_2.* FROM parent_1_child_2 JOIN parent_1_child_1 USING(a);
+CREATE VIEW v4 AS SELECT * FROM v3;
+
+
+alter table parent_1 attach partition parent_1_child_1 FOR VALUES FROM (0) TO (10) ;
+
+-- only v1 distributed
+SELECT run_command_on_workers($$SELECT count(*) FROM v1$$);
+SELECT run_command_on_workers($$SELECT count(*) FROM v2$$);
+SELECT run_command_on_workers($$SELECT count(*) FROM v3$$);
+SELECT run_command_on_workers($$SELECT count(*) FROM v4$$);
+
+-- all views becomes distributed
+alter table parent_1 attach partition parent_1_child_2 FOR VALUES FROM (10) TO (20);
+
+SELECT run_command_on_workers($$SELECT count(*) FROM v1$$);
+SELECT run_command_on_workers($$SELECT count(*) FROM v2$$);
+SELECT run_command_on_workers($$SELECT count(*) FROM v3$$);
+SELECT run_command_on_workers($$SELECT count(*) FROM v4$$);
+
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%v1%';
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%v2%';
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%v3%';
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%v4%';
+
+CREATE TABLE employees (employee_id int, manager_id int, full_name text);
+
+-- v_test_1 and v_test_2 becomes circularly dependend views
+-- so we should not try to distribute any of the views
+CREATE VIEW v_test_1 AS SELECT * FROM employees;
+CREATE VIEW v_test_2 AS SELECT * FROM employees;
+CREATE OR REPLACE VIEW v_test_1 AS SELECT employees.* FROM employees JOIN v_test_2 USING (employee_id);
+CREATE OR REPLACE VIEW v_test_2 AS SELECT employees.* FROM employees JOIN v_test_1 USING (employee_id);
+
+SELECT create_distributed_table('employees','employee_id');
+
+-- verify not distributed
+SELECT run_command_on_workers($$SELECT count(*) FROM v_test_1$$);
+SELECT run_command_on_workers($$SELECT count(*) FROM v_test_2$$);
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA view_prop_schema_inner CASCADE;
 DROP SCHEMA view_prop_schema CASCADE;
