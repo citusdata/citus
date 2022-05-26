@@ -156,7 +156,6 @@ static void ApplyAddToDependencyList(ObjectAddressCollector *collector,
 static List * ExpandCitusSupportedTypes(ObjectAddressCollector *collector,
 										ObjectAddress target);
 static ViewDependencyNode * BuildViewDependencyGraph(Oid relationId, HTAB *nodeMap);
-static Oid GetDependingView(Form_pg_depend pg_depend);
 
 
 /*
