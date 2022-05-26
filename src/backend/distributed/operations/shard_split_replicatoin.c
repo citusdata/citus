@@ -25,7 +25,7 @@ static HTAB *ShardInfoHashMap = NULL;
 /* Entry for hash map */
 typedef struct NodeShardMappingEntry
 {
-	uint64_t key;
+	uint64_t keyNodeId;
 	List *shardSplitInfoList;
 } NodeShardMappingEntry;
 
@@ -397,7 +397,7 @@ AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo)
 	if (!found)
 	{
 		nodeMappingEntry->shardSplitInfoList = NULL;
-		nodeMappingEntry->key = keyNodeId;
+		nodeMappingEntry->keyNodeId = keyNodeId;
 	}
 
 	nodeMappingEntry->shardSplitInfoList =
@@ -433,7 +433,7 @@ PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
 	int index = 0;
 	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
 	{
-		uint64_t nodeId = entry->key;
+		uint64_t nodeId = entry->keyNodeId;
 		char *derivedSlotName =
 			encode_replication_slot(nodeId, dsmHandle);
 

@@ -185,20 +185,25 @@ DROP SUBSCRIPTION SUB1;
 DELETE FROM slotName_table;
 
 \c - - - :worker_2_port
+
 SET client_min_messages TO WARNING;
 DROP SUBSCRIPTION SUB2;
 DELETE FROM slotName_table;
 
--- Test Scenario 3
+-- Test scenario three starts from here (parent shard and child shards are located on same machine)
+-- 1. table_to_split_1 is split into table_to_split_2 and table_to_split_3.
+-- 2. table_to_split_1 is located on worker1.
+-- 3. table_to_split_2 and table_to_split_3 are located on worker1
+
 \c - - - :worker_1_port
+SET client_min_messages TO WARNING;
 
 -- Create publication at worker1
 BEGIN;
     CREATE PUBLICATION PUB1 for table table_to_split_1, table_to_split_2, table_to_split_3;
 COMMIT;
 
--- Create replication slots for two target nodes worker1 and worker2.
--- Worker1 is target for table_to_split_2 and Worker2 is target for table_to_split_3
+-- Worker1 is target for table_to_split_2 and table_to_split_3
 BEGIN;
 select 1 from public.CreateReplicationSlot(:worker_1_node, :worker_1_node);
 COMMIT;
@@ -210,12 +215,12 @@ SELECT 1 from public.CreateSubscription(:worker_1_node, 'SUB1');
 COMMIT;
 SELECT pg_sleep(10);
 
- INSERT into table_to_split_1 values(100, 'a');
+INSERT into table_to_split_1 values(100, 'a');
 INSERT into table_to_split_1 values(400, 'a');
 INSERT into table_to_split_1 values(500, 'a');
 select pg_sleep(10);
 
--- expect data to present in table_to_split_2 on worker1
+-- expect data to present in  table_to_split_2/3 on worker1
 SELECT * from table_to_split_1;
 SELECT * from table_to_split_2; 
 SELECT * from table_to_split_3;
@@ -226,3 +231,8 @@ SELECT pg_sleep(10);
 SELECT * from table_to_split_1;
 SELECT * from table_to_split_2; 
 SELECT * from table_to_split_3;
+
+-- clean up
+DROP PUBLICATION PUB1;
+DELETE FROM slotName_table;
+DROP SUBSCRIPTION SUB1;
