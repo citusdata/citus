@@ -33,7 +33,7 @@ COMMENT ON FUNCTION pg_catalog.alter_columnar_table_reset(
     compression_level bool)
 IS 'reset on or more options on a columnar table to the system defaults';
 
-CREATE OR REPLACE FUNCTION citus_internal.columnar_ensure_am_depends_catalog()
+CREATE OR REPLACE FUNCTION columnar_internal.columnar_ensure_am_depends_catalog()
   RETURNS void
   LANGUAGE plpgsql
   SET search_path = pg_catalog
@@ -70,7 +70,7 @@ BEGIN
   EXCEPT TABLE pg_depend;
 END;
 $func$;
-COMMENT ON FUNCTION citus_internal.columnar_ensure_am_depends_catalog()
+COMMENT ON FUNCTION columnar_internal.columnar_ensure_am_depends_catalog()
   IS 'internal function responsible for creating dependencies from columnar '
      'table access method to the rel objects in columnar schema';
 

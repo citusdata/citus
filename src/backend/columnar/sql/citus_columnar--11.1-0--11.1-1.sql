@@ -132,7 +132,7 @@ CREATE SCHEMA columnar;
 GRANT USAGE ON SCHEMA columnar TO PUBLIC;
 
 -- update UDF to account for columnar_internal schema
-CREATE OR REPLACE FUNCTION citus_internal.columnar_ensure_am_depends_catalog()
+CREATE OR REPLACE FUNCTION columnar_internal.columnar_ensure_am_depends_catalog()
   RETURNS void
   LANGUAGE plpgsql
   SET search_path = pg_catalog
@@ -177,7 +177,7 @@ BEGIN
   EXCEPT TABLE pg_depend;
 END;
 $func$;
-COMMENT ON FUNCTION citus_internal.columnar_ensure_am_depends_catalog()
+COMMENT ON FUNCTION columnar_internal.columnar_ensure_am_depends_catalog()
   IS 'internal function responsible for creating dependencies from columnar '
      'table access method to the rel objects in columnar schema';
 
