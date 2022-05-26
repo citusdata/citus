@@ -32,6 +32,7 @@
 #if PG_VERSION_NUM >= 12000
 #include "catalog/pg_proc.h"
 #endif
+#include "catalog/pg_rewrite_d.h"
 #include "catalog/pg_trigger.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
@@ -127,6 +128,8 @@ static void DoCopyFromLocalTableIntoShards(Relation distributedRelation,
 static void UndistributeTable(Oid relationId);
 static List * GetViewCreationCommandsOfTable(Oid relationId);
 static void ReplaceTable(Oid sourceId, Oid targetId);
+static void ErrorIfUnsupportedCascadeObjects(Oid relationId);
+static bool DoesCascadeDropUnsupportedObject(Oid classId, Oid id, HTAB *nodeMap);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
@@ -1619,6 +1622,8 @@ UndistributeTable(Oid relationId)
 								parentRelationName)));
 	}
 
+	ErrorIfUnsupportedCascadeObjects(relationId);
+
 	List *preLoadCommands = GetPreLoadTableCreationCommands(relationId, true);
 	List *postLoadCommands = GetPostLoadTableCreationCommands(relationId);
 
@@ -1798,4 +1803,92 @@ ReplaceTable(Oid sourceId, Oid targetId)
 	RenameRelationInternal(targetId,
 						   sourceName, false);
 #endif
+}
+
+
+/*
+ * ErrorIfUnsupportedCascadeObjects gets oid of a relation, finds the objects
+ * that dropping this relation cascades into and errors if there are any extensions
+ * that would be dropped.
+ */
+static void
+ErrorIfUnsupportedCascadeObjects(Oid relationId)
+{
+	HASHCTL info;
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(Oid);
+	info.entrysize = sizeof(Oid);
+	info.hash = oid_hash;
+	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION);
+	HTAB *nodeMap = hash_create("object dependency map (oid)", 64, &info, hashFlags);
+
+	bool unsupportedObjectInDepGraph =
+		DoesCascadeDropUnsupportedObject(RelationRelationId, relationId, nodeMap);
+
+	if (unsupportedObjectInDepGraph)
+	{
+		ereport(ERROR, (errmsg("cannot alter table because an extension depends on it")));
+	}
+}
+
+
+/*
+ * DoesCascadeDropUnsupportedObject walks through the objects that depend on the
+ * object with object id and returns true if it finds any unsupported objects.
+ *
+ * This function only checks extensions as unsupported objects.
+ *
+ * Extension dependency is different than the rest. If an object depends on an extension
+ * dropping the object would drop the extension too.
+ * So we check with IsObjectAddressOwnedByExtension function.
+ */
+static bool
+DoesCascadeDropUnsupportedObject(Oid classId, Oid objectId, HTAB *nodeMap)
+{
+	bool found = false;
+	hash_search(nodeMap, &objectId, HASH_ENTER, &found);
+
+	if (found)
+	{
+		return false;
+	}
+
+	ObjectAddress objectAddress = { 0 };
+	ObjectAddressSet(objectAddress, classId, objectId);
+
+	if (IsObjectAddressOwnedByExtension(&objectAddress, NULL))
+	{
+		return true;
+	}
+
+	Oid targetObjectClassId = classId;
+	Oid targetObjectId = objectId;
+	List *dependencyTupleList = GetPgDependTuplesForDependingObjects(targetObjectClassId,
+																	 targetObjectId);
+
+	HeapTuple depTup = NULL;
+	foreach_ptr(depTup, dependencyTupleList)
+	{
+		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
+
+		Oid dependingOid = InvalidOid;
+		Oid dependingClassId = InvalidOid;
+
+		if (pg_depend->classid == RewriteRelationId)
+		{
+			dependingOid = GetDependingView(pg_depend);
+			dependingClassId = RelationRelationId;
+		}
+		else
+		{
+			dependingOid = pg_depend->objid;
+			dependingClassId = pg_depend->classid;
+		}
+
+		if (DoesCascadeDropUnsupportedObject(dependingClassId, dependingOid, nodeMap))
+		{
+			return true;
+		}
+	}
+	return false;
 }
