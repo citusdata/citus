@@ -70,6 +70,7 @@
 #include "utils/datum.h"
 #include "utils/elog.h"
 #include "utils/hsearch.h"
+#include "utils/jsonb.h"
 #if PG_VERSION_NUM >= PG_VERSION_13
 #include "common/hashfn.h"
 #endif
@@ -4909,6 +4910,12 @@ DistNodeMetadata(void)
 		ereport(ERROR, (errmsg(
 							"could not find any entries in pg_dist_metadata")));
 	}
+
+	/*
+	 * Copy the jsonb result before closing the table
+	 * since that memory can be freed.
+	 */
+	metadata = JsonbPGetDatum(DatumGetJsonbPCopy(metadata));
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistNodeMetadata, AccessShareLock);

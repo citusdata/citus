@@ -386,7 +386,7 @@ static void
 ExplainPropertyBytes(const char *qlabel, int64 bytes, ExplainState *es)
 {
 	Datum textDatum = DirectFunctionCall1(pg_size_pretty, Int64GetDatum(bytes));
-	ExplainPropertyText(qlabel, text_to_cstring(DatumGetTextP(textDatum)), es);
+	ExplainPropertyText(qlabel, TextDatumGetCString(textDatum), es);
 }
 
 
