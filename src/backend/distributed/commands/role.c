@@ -337,6 +337,7 @@ ExtractEncryptedPassword(Oid roleOid)
 
 	Datum passwordDatum = heap_getattr(tuple, Anum_pg_authid_rolpassword,
 									   pgAuthIdDescription, &isNull);
+	char *passwordCstring = TextDatumGetCString(passwordDatum);
 
 	table_close(pgAuthId, AccessShareLock);
 	ReleaseSysCache(tuple);
@@ -346,7 +347,7 @@ ExtractEncryptedPassword(Oid roleOid)
 		return NULL;
 	}
 
-	return pstrdup(TextDatumGetCString(passwordDatum));
+	return pstrdup(passwordCstring);
 }
 
 

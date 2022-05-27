@@ -578,7 +578,7 @@ JsonFieldValueString(Datum jsonDocument, const char *key)
 		return NULL;
 	}
 
-	char *valueString = text_to_cstring(DatumGetTextP(valueTextDatum));
+	char *valueString = TextDatumGetCString(valueTextDatum);
 	return valueString;
 }
 
