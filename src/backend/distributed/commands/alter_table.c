@@ -194,7 +194,6 @@ static void EnsureTableNotPartition(Oid relationId);
 static TableConversionState * CreateTableConversion(TableConversionParameters *params);
 static void CreateDistributedTableLike(TableConversionState *con);
 static void CreateCitusTableLike(TableConversionState *con);
-static List * GetViewCreationCommandsOfTable(Oid relationId);
 static void ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 						 bool suppressNoticeMessages);
 static bool HasAnyGeneratedStoredColumns(Oid relationId);
@@ -206,6 +205,7 @@ static char * CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaNa
 														  char *sourceName,
 														  char *targetSchemaName,
 														  char *targetName);
+static char * CreateMaterializedViewDDLCommand(Oid matViewOid);
 static char * GetAccessMethodForMatViewIfExists(Oid viewOid);
 static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
 												   CascadeToColocatedOption cascadeOption);
@@ -573,8 +573,9 @@ ConvertTable(TableConversionState *con)
 	List *justBeforeDropCommands = NIL;
 	List *attachPartitionCommands = NIL;
 
-	postLoadCommands = list_concat(postLoadCommands,
-								   GetViewCreationCommandsOfTable(con->relationId));
+	postLoadCommands =
+		list_concat(postLoadCommands,
+					GetViewCreationTableDDLCommandsOfTable(con->relationId));
 
 	List *foreignKeyCommands = NIL;
 	if (con->conversionType == ALTER_DISTRIBUTED_TABLE)
@@ -1263,38 +1264,105 @@ GetViewCreationCommandsOfTable(Oid relationId)
 	Oid viewOid = InvalidOid;
 	foreach_oid(viewOid, views)
 	{
-		Datum viewDefinitionDatum = DirectFunctionCall1(pg_get_viewdef,
-														ObjectIdGetDatum(viewOid));
-		char *viewDefinition = TextDatumGetCString(viewDefinitionDatum);
 		StringInfo query = makeStringInfo();
-		char *viewName = get_rel_name(viewOid);
-		char *schemaName = get_namespace_name(get_rel_namespace(viewOid));
-		char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
-		bool isMatView = get_rel_relkind(viewOid) == RELKIND_MATVIEW;
 
-		/* here we need to get the access method of the view to recreate it */
-		char *accessMethodName = GetAccessMethodForMatViewIfExists(viewOid);
-
-		appendStringInfoString(query, "CREATE ");
-
-		if (isMatView)
+		/* See comments on CreateMaterializedViewDDLCommand for its limitations */
+		if (get_rel_relkind(viewOid) == RELKIND_MATVIEW)
 		{
-			appendStringInfoString(query, "MATERIALIZED ");
+			char *matViewCreateCommands = CreateMaterializedViewDDLCommand(viewOid);
+			appendStringInfoString(query, matViewCreateCommands);
+		}
+		else
+		{
+			char *viewCreateCommand = CreateViewDDLCommand(viewOid);
+			appendStringInfoString(query, viewCreateCommand);
 		}
 
-		appendStringInfo(query, "VIEW %s ", qualifiedViewName);
+		char *alterViewCommmand = AlterViewOwnerCommand(viewOid);
+		appendStringInfoString(query, alterViewCommmand);
 
-		if (accessMethodName)
-		{
-			appendStringInfo(query, "USING %s ", accessMethodName);
-		}
-
-		appendStringInfo(query, "AS %s", viewDefinition);
-
-		commands = lappend(commands, makeTableDDLCommandString(query->data));
+		commands = lappend(commands, query->data);
 	}
 
 	return commands;
+}
+
+
+/*
+ * GetViewCreationTableDDLCommandsOfTable is the same as GetViewCreationCommandsOfTable,
+ * but the returned list includes objects of TableDDLCommand's, not strings.
+ */
+List *
+GetViewCreationTableDDLCommandsOfTable(Oid relationId)
+{
+	List *commands = GetViewCreationCommandsOfTable(relationId);
+	List *tableDDLCommands = NIL;
+
+	char *command = NULL;
+	foreach_ptr(command, commands)
+	{
+		tableDDLCommands = lappend(tableDDLCommands, makeTableDDLCommandString(command));
+	}
+
+	return tableDDLCommands;
+}
+
+
+/*
+ * CreateMaterializedViewDDLCommand creates the command to create materialized view.
+ * Note that this function doesn't support
+ * - Aliases
+ * - Storage parameters
+ * - Tablespace
+ * - WITH [NO] DATA
+ * options for the given materialized view. Parser functions for materialized views
+ * should be added to handle them.
+ *
+ * Related issue: https://github.com/citusdata/citus/issues/5968
+ */
+static char *
+CreateMaterializedViewDDLCommand(Oid matViewOid)
+{
+	StringInfo query = makeStringInfo();
+
+	char *viewName = get_rel_name(matViewOid);
+	char *schemaName = get_namespace_name(get_rel_namespace(matViewOid));
+	char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
+
+	/* here we need to get the access method of the view to recreate it */
+	char *accessMethodName = GetAccessMethodForMatViewIfExists(matViewOid);
+
+	appendStringInfo(query, "CREATE MATERIALIZED VIEW %s ", qualifiedViewName);
+
+	if (accessMethodName)
+	{
+		appendStringInfo(query, "USING %s ", accessMethodName);
+	}
+
+	/*
+	 * Set search_path to NIL so that all objects outside of pg_catalog will be
+	 * schema-prefixed.
+	 */
+	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+	overridePath->schemas = NIL;
+	overridePath->addCatalog = true;
+	PushOverrideSearchPath(overridePath);
+
+	/*
+	 * Push the transaction snapshot to be able to get vief definition with pg_get_viewdef
+	 */
+	PushActiveSnapshot(GetTransactionSnapshot());
+
+	Datum viewDefinitionDatum = DirectFunctionCall1(pg_get_viewdef,
+													ObjectIdGetDatum(matViewOid));
+	char *viewDefinition = TextDatumGetCString(viewDefinitionDatum);
+
+	PopActiveSnapshot();
+	PopOverrideSearchPath();
+
+	appendStringInfo(query, "AS %s", viewDefinition);
+
+	return query->data;
 }
 
 

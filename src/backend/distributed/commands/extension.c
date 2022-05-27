@@ -39,7 +39,6 @@ static List * FilterDistributedExtensions(List *extensionObjectList);
 static List * ExtensionNameListToObjectAddressList(List *extensionObjectList);
 static void MarkExistingObjectDependenciesDistributedIfSupported(void);
 static List * GetAllViews(void);
-static bool ShouldMarkRelationDistributedOnUpgrade(Oid relationId);
 static bool ShouldPropagateExtensionCommand(Node *parseTree);
 static bool IsAlterExtensionSetSchemaCitus(Node *parseTree);
 static Node * RecreateExtensionStmt(Oid extensionOid);
@@ -513,7 +512,7 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	Oid citusTableId = InvalidOid;
 	foreach_oid(citusTableId, citusTableIdList)
 	{
-		if (!ShouldMarkRelationDistributedOnUpgrade(citusTableId))
+		if (!ShouldMarkRelationDistributed(citusTableId))
 		{
 			continue;
 		}
@@ -557,7 +556,7 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	Oid viewOid = InvalidOid;
 	foreach_oid(viewOid, viewList)
 	{
-		if (!ShouldMarkRelationDistributedOnUpgrade(viewOid))
+		if (!ShouldMarkRelationDistributed(viewOid))
 		{
 			continue;
 		}
@@ -651,51 +650,6 @@ GetAllViews(void)
 	table_close(pgClass, NoLock);
 
 	return viewOidList;
-}
-
-
-/*
- * ShouldMarkRelationDistributedOnUpgrade is a helper function that
- * decides whether the input relation should be marked as distributed
- * during the upgrade.
- */
-static bool
-ShouldMarkRelationDistributedOnUpgrade(Oid relationId)
-{
-	if (!EnableMetadataSync)
-	{
-		/*
-		 * Just in case anything goes wrong, we should still be able
-		 * to continue to the version upgrade.
-		 */
-		return false;
-	}
-
-	ObjectAddress relationAddress = { 0 };
-	ObjectAddressSet(relationAddress, RelationRelationId, relationId);
-
-	bool pgObject = (relationId < FirstNormalObjectId);
-	bool ownedByExtension = IsTableOwnedByExtension(relationId);
-	bool alreadyDistributed = IsObjectDistributed(&relationAddress);
-	bool hasUnsupportedDependency =
-		DeferErrorIfHasUnsupportedDependency(&relationAddress) != NULL;
-	bool hasCircularDependency =
-		DeferErrorIfCircularDependencyExists(&relationAddress) != NULL;
-
-	/*
-	 * pgObject: Citus never marks pg objects as distributed
-	 * ownedByExtension: let extensions manage its own objects
-	 * alreadyDistributed: most likely via earlier versions
-	 * hasUnsupportedDependency: Citus doesn't know how to distribute its dependencies
-	 * hasCircularDependency: Citus cannot handle circular dependencies
-	 */
-	if (pgObject || ownedByExtension || alreadyDistributed ||
-		hasUnsupportedDependency || hasCircularDependency)
-	{
-		return false;
-	}
-
-	return true;
 }
 
 
