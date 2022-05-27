@@ -2,9 +2,9 @@
  *
  * shardsplit_shared_memory.h
  *    API's for creating and accessing shared memory segments to store
- *    shard split information. 'setup_shard_replication' UDF creates the
- *    shared memory, populates the contents and WAL sender processes are
- *    the consumers.
+ *    shard split information. 'split_shard_replication_setup' UDF creates the
+ *    shared memory and populates the contents. WAL sender processes are consumer
+ *    of split information for appropriate tuple routing.
  *
  * Copyright (c) Citus Data, Inc.
  *
@@ -36,10 +36,10 @@ extern ShardSplitInfo * GetShardSplitInfoSMArrayForSlot(char *slotName,
 
 
 /* Functions related to encoding-decoding for replication slot name */
-char * encode_replication_slot(uint64_t nodeId,
+char * encode_replication_slot(uint32_t nodeId,
 							   dsm_handle dsmHandle);
 void decode_replication_slot(char *slotName,
-							 uint64_t *nodeId,
+							 uint32_t *nodeId,
 							 dsm_handle *dsmHandle);
 
 #endif /* SHARDSPLIT_SHARED_MEMORY_H */

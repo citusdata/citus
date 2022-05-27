@@ -51,7 +51,11 @@ GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle dsmHandle)
 						"corresponding to handle:%u", dsmHandle)));
 	}
 
-	/* Remain attached until end of backend or DetachSession(). */
+	/*
+	 * By default, mappings are owned by current resource owner, which typically
+	 * means they stick around for the duration of current query.
+	 * Keep a dynamic shared memory mapping until end of session to avoid warnings and leak.
+	 */
 	dsm_pin_mapping(dsmSegment);
 
 	ShardSplitInfoSMHeader *header = (ShardSplitInfoSMHeader *) dsm_segment_address(
@@ -77,7 +81,7 @@ GetShardSplitInfoSMArrayForSlot(char *slotName, int *shardSplitInfoCount)
 	}
 
 	dsm_handle dsmHandle;
-	uint64_t nodeId = 0;
+	uint32_t nodeId = 0;
 	decode_replication_slot(slotName, &nodeId, &dsmHandle);
 
 	ShardSplitInfoSMHeader *shardSplitInfoSMHeader =
@@ -182,11 +186,11 @@ ShardSplitInfoSMData(ShardSplitInfoSMHeader *shardSplitInfoSMHeader)
  * Slot Name = NodeId_SharedMemoryHandle
  */
 char *
-encode_replication_slot(uint64_t nodeId,
+encode_replication_slot(uint32_t nodeId,
 						dsm_handle dsmHandle)
 {
 	StringInfo slotName = makeStringInfo();
-	appendStringInfo(slotName, "%ld_%u", nodeId, dsmHandle);
+	appendStringInfo(slotName, "%u_%u", nodeId, dsmHandle);
 	return slotName->data;
 }
 
@@ -197,7 +201,7 @@ encode_replication_slot(uint64_t nodeId,
  */
 void
 decode_replication_slot(char *slotName,
-						uint64_t *nodeId,
+						uint32_t *nodeId,
 						dsm_handle *dsmHandle)
 {
 	if (slotName == NULL ||
@@ -206,7 +210,7 @@ decode_replication_slot(char *slotName,
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
-				 errmsg("Invalid null replication slot name.")));
+				 errmsg("Invalid Out parameters")));
 	}
 
 	int index = 0;
@@ -215,15 +219,28 @@ decode_replication_slot(char *slotName,
 	char *slotNameString = strtok_r(dupSlotName, "_", &strtokPosition);
 	while (slotNameString != NULL)
 	{
+		/* first part of the slot name is NodeId */
 		if (index == 0)
 		{
-			*nodeId = SafeStringToUint64(slotNameString);
+			*nodeId = strtoul(slotNameString, NULL, 10);
 		}
+
+		/* second part of the name is memory handle */
 		else if (index == 1)
 		{
 			*dsmHandle = strtoul(slotNameString, NULL, 10);
 		}
 		slotNameString = strtok_r(NULL, "_", &strtokPosition);
 		index++;
+	}
+
+	/*
+	 * Replication slot name is encoded as NodeId_SharedMemoryHandle. Hence the number of tokens
+	 * would be strictly two considering "_" as delimiter.
+	 */
+	if (index != 2)
+	{
+		ereport(ERROR,
+				(errmsg("Invalid Replication Slot name encoding: %s", slotName)));
 	}
 }

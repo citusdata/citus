@@ -2,10 +2,6 @@ SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 1;
 SET citus.next_shard_id TO 1;
 
--- Add two additional nodes to cluster.
-SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
-SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
-
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
 SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 
@@ -89,7 +85,19 @@ SELECT * from table_to_split_1; -- should alwasy have zero rows
 SELECT * from table_to_split_2;
 SELECT * from table_to_split_3;
 
--- Delete data from table_to_split_1 from worker1
+-- UPDATE data of table_to_split_1 from worker1
+\c - - - :worker_1_port
+UPDATE table_to_split_1 SET value='b' where id = 100;
+UPDATE table_to_split_1 SET value='b' where id = 400;
+UPDATE table_to_split_1 SET value='b' where id = 500;
+SELECT pg_sleep(10);
+
+-- Value should be updated in table_to_split_2;
+\c - - - :worker_2_port
+SELECT * FROM table_to_split_1;
+SELECT * FROM table_to_split_2;
+SELECT * FROM table_to_split_3;
+
 \c - - - :worker_1_port
 DELETE FROM table_to_split_1;
 SELECT pg_sleep(10);
@@ -150,6 +158,7 @@ select pg_sleep(10);
 INSERT into table_to_split_1 values(100, 'a');
 INSERT into table_to_split_1 values(400, 'a');
 INSERT into table_to_split_1 values(500, 'a');
+UPDATE table_to_split_1 SET value='b' where id = 400;
 select pg_sleep(10);
 
 -- expect data to present in table_to_split_2 on worker1 as its destination for value '400'

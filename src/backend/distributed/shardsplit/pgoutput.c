@@ -241,6 +241,15 @@ split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 			break;
 		}
 
+		/* updating non-partition column value */
+		case REORDER_BUFFER_CHANGE_UPDATE:
+		{
+			HeapTuple newTuple = &(change->data.tp.newtuple->tuple);
+			targetRelationOid = FindTargetRelationOid(relation, newTuple,
+													  replicationSlotName);
+			break;
+		}
+
 		case REORDER_BUFFER_CHANGE_DELETE:
 		{
 			HeapTuple oldTuple = &(change->data.tp.oldtuple->tuple);
@@ -250,10 +259,10 @@ split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 			break;
 		}
 
-		/* Only INSERT/DELETE actions are visible in the replication path of split shard */
+		/* Only INSERT/DELETE/UPDATE actions are visible in the replication path of split shard */
 		default:
 			ereport(ERROR, errmsg(
-						"Unexpected Action :%d. Expected action is INSERT or DELETE",
+						"Unexpected Action :%d. Expected action is INSERT/DELETE/UPDATE",
 						change->action));
 	}
 

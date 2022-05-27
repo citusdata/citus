@@ -25,7 +25,7 @@ static HTAB *ShardInfoHashMap = NULL;
 /* Entry for hash map */
 typedef struct NodeShardMappingEntry
 {
-	uint64_t keyNodeId;
+	uint32_t keyNodeId;
 	List *shardSplitInfoList;
 } NodeShardMappingEntry;
 
@@ -76,8 +76,8 @@ static void SetupHashMapForShardInfo();
  *
  * Usage Semantics:
  * This UDF returns a shared memory handle where the information is stored. This shared memory
- * handle is used by caller to encode replication slot name as "NodeId_MemoryHandle" for every 
- * distinct  target node. The same encoded slot name is stored in one of the fields of the 
+ * handle is used by caller to encode replication slot name as "NodeId_SharedMemoryHandle" for every
+ * distinct  target node. The same encoded slot name is stored in one of the fields of the
  * in-memory data structure(ShardSplitInfo).
  *
  * There is a 1-1 mapping between a target node and a replication slot as one replication
@@ -151,7 +151,7 @@ SetupHashMapForShardInfo()
 {
 	HASHCTL info;
 	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(uint64_t);
+	info.keysize = sizeof(uint32_t);
 	info.entrysize = sizeof(NodeShardMappingEntry);
 	info.hash = uint32_hash;
 	info.hcxt = CurrentMemoryContext;
@@ -388,7 +388,7 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 void
 AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo)
 {
-	uint64_t keyNodeId = shardSplitInfo->nodeId;
+	uint32_t keyNodeId = shardSplitInfo->nodeId;
 	bool found = false;
 	NodeShardMappingEntry *nodeMappingEntry =
 		(NodeShardMappingEntry *) hash_search(ShardInfoHashMap, &keyNodeId, HASH_ENTER,
@@ -433,7 +433,7 @@ PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
 	int index = 0;
 	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
 	{
-		uint64_t nodeId = entry->keyNodeId;
+		uint32_t nodeId = entry->keyNodeId;
 		char *derivedSlotName =
 			encode_replication_slot(nodeId, dsmHandle);
 

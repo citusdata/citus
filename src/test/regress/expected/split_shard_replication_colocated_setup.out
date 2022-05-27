@@ -2,19 +2,6 @@
 SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 1;
 SET citus.next_shard_id TO 4;
--- Add two additional nodes to cluster.
-SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
 SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 -- Create distributed table (co-located)
