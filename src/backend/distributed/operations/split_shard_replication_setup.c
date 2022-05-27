@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * shard_split_replication.c
+ * split_shard_replication_setup.c
  *    This file contains functions to setup information about list of shards
  *    that are being split.
  *
