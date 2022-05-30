@@ -25,7 +25,7 @@ insert_final_newline = unset
 trim_trailing_whitespace = unset
 indent_style = unset
 
-[*.{sql,sh,py}]
+[*.{sql,sh,py,spec}]
 indent_style = space
 indent_size = 4
 tab_width = 4
