@@ -49,6 +49,11 @@ step "s1-stop-connection"
 	SELECT stop_session_level_connection_to_node();
 }
 
+step "s1-sleep"
+{
+	SELECT pg_sleep(.1);
+}
+
 
 session "s2"
 
@@ -135,4 +140,5 @@ permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-copy" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-select-count"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select" "s2-begin" "s2-index" "s1-commit-worker" "s2-commit" "s1-stop-connection"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-select-for-update" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection"
-permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-disable-binary-protocol-on-worker" "s1-select" "s2-coordinator-create-index-concurrently" "s1-commit-worker" "s1-stop-connection"
+// the next permutation is flaky. To have a deterministic order of outputs, we sleep in s1, and we delay completion messages of s2 until the sleep is over.
+permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-disable-binary-protocol-on-worker" "s1-select" "s2-coordinator-create-index-concurrently"("s1-sleep") "s1-commit-worker" "s1-sleep" "s1-stop-connection"

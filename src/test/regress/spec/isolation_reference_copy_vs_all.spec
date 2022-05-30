@@ -49,6 +49,7 @@ step "s1-distribute-table" { SELECT create_reference_table('reference_copy'); }
 step "s1-select-count" { SELECT COUNT(*) FROM reference_copy; }
 step "s1-show-indexes" { SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''reference_copy%'''); }
 step "s1-show-columns" { SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''reference_copy%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1'); }
+step "s1-sleep" { SELECT pg_sleep(.1); }
 step "s1-commit" { COMMIT; }
 
 // session 2
@@ -91,7 +92,8 @@ permutation "s1-initialize" "s1-begin" "s1-copy" "s2-truncate" "s1-commit" "s1-s
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-drop" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-create-index" "s1-commit" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s1-copy" "s2-ddl-drop-index" "s1-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-create-index-concurrently" "s1-commit" "s1-select-count" "s1-show-indexes"
+// the next permutation is flaky. To have a deterministic order of outputs, we sleep in s1, and we delay completion messages of s2 until the sleep is over.
+permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-create-index-concurrently"("s1-sleep") "s1-commit" "s1-sleep" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-add-column" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-copy-additional-column" "s2-ddl-drop-column" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-rename-column" "s1-commit" "s1-select-count" "s1-show-columns"
