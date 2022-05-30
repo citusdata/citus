@@ -746,8 +746,6 @@ PgDistTableMetadataSyncCommandList(void)
 	metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 											  colocationGroupSyncCommandList);
 
-	/* As the last step, propagate the pg_dist_object entities */
-	Assert(ShouldPropagate());
 	List *distributedObjectSyncCommandList = DistributedObjectMetadataSyncCommandList();
 	metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 											  distributedObjectSyncCommandList);
@@ -924,8 +922,6 @@ SyncPgDistTableMetadataToNodeList(List *nodeList)
 	/* send commands to new workers, the current user should be a superuser */
 	Assert(superuser());
 
-	List *syncPgDistMetadataCommandList = PgDistTableMetadataSyncCommandList();
-
 	List *nodesWithMetadata = NIL;
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, nodeList)
@@ -936,7 +932,12 @@ SyncPgDistTableMetadataToNodeList(List *nodeList)
 		}
 	}
 
+	if (nodesWithMetadata == NIL)
+	{
+		return;
+	}
 
+	List *syncPgDistMetadataCommandList = PgDistTableMetadataSyncCommandList();
 	SendMetadataCommandListToWorkerListInCoordinatedTransaction(
 		nodesWithMetadata,
 		CurrentUserName(),
@@ -1898,12 +1899,15 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 
 	RemoveOldShardPlacementForNodeGroup(workerNode->groupId);
 
-	char *nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
-
 	/* make sure we don't have any lingering session lifespan connections */
 	CloseNodeConnectionsAfterTransaction(workerNode->workerName, nodePort);
 
-	SendCommandToWorkersWithMetadata(nodeDeleteCommand);
+	if (EnableMetadataSync)
+	{
+		char *nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
+
+		SendCommandToWorkersWithMetadata(nodeDeleteCommand);
+	}
 }
 
 
@@ -2154,18 +2158,21 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 
 	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 
-	/* send the delete command to all primary nodes with metadata */
-	char *nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
-	SendCommandToWorkersWithMetadata(nodeDeleteCommand);
-
-	/* finally prepare the insert command and send it to all primary nodes */
-	uint32 primariesWithMetadata = CountPrimariesWithMetadata();
-	if (primariesWithMetadata != 0)
+	if (EnableMetadataSync)
 	{
-		List *workerNodeList = list_make1(workerNode);
-		char *nodeInsertCommand = NodeListInsertCommand(workerNodeList);
+		/* send the delete command to all primary nodes with metadata */
+		char *nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
+		SendCommandToWorkersWithMetadata(nodeDeleteCommand);
 
-		SendCommandToWorkersWithMetadata(nodeInsertCommand);
+		/* finally prepare the insert command and send it to all primary nodes */
+		uint32 primariesWithMetadata = CountPrimariesWithMetadata();
+		if (primariesWithMetadata != 0)
+		{
+			List *workerNodeList = list_make1(workerNode);
+			char *nodeInsertCommand = NodeListInsertCommand(workerNodeList);
+
+			SendCommandToWorkersWithMetadata(nodeInsertCommand);
+		}
 	}
 
 	return workerNode->nodeId;
@@ -2184,11 +2191,13 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 {
 	workerNode = SetWorkerColumnLocalOnly(workerNode, columnIndex, value);
 
-	char *metadataSyncCommand = GetMetadataSyncCommandToSetNodeColumn(workerNode,
-																	  columnIndex,
-																	  value);
+	if (EnableMetadataSync)
+	{
+		char *metadataSyncCommand =
+			GetMetadataSyncCommandToSetNodeColumn(workerNode, columnIndex, value);
 
-	SendCommandToWorkersWithMetadata(metadataSyncCommand);
+		SendCommandToWorkersWithMetadata(metadataSyncCommand);
+	}
 
 	return workerNode;
 }
