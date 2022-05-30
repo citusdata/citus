@@ -746,8 +746,6 @@ PgDistTableMetadataSyncCommandList(void)
 	metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 											  colocationGroupSyncCommandList);
 
-	/* As the last step, propagate the pg_dist_object entities */
-	Assert(ShouldPropagate());
 	List *distributedObjectSyncCommandList = DistributedObjectMetadataSyncCommandList();
 	metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 											  distributedObjectSyncCommandList);
@@ -924,8 +922,6 @@ SyncPgDistTableMetadataToNodeList(List *nodeList)
 	/* send commands to new workers, the current user should be a superuser */
 	Assert(superuser());
 
-	List *syncPgDistMetadataCommandList = PgDistTableMetadataSyncCommandList();
-
 	List *nodesWithMetadata = NIL;
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, nodeList)
@@ -936,7 +932,12 @@ SyncPgDistTableMetadataToNodeList(List *nodeList)
 		}
 	}
 
+	if (nodesWithMetadata == NIL)
+	{
+		return;
+	}
 
+	List *syncPgDistMetadataCommandList = PgDistTableMetadataSyncCommandList();
 	SendMetadataCommandListToWorkerListInCoordinatedTransaction(
 		nodesWithMetadata,
 		CurrentUserName(),
