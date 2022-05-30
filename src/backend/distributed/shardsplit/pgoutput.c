@@ -33,6 +33,10 @@ static int32_t GetHashValueForIncomingTuple(Relation sourceShardRelation,
 											HeapTuple tuple,
 											bool *shouldHandleUpdate);
 
+static Oid FindTargetRelationOid(Relation sourceShardRelation,
+								 HeapTuple tuple,
+								 char *currentSlotName);
+
 void
 _PG_output_plugin_init(OutputPluginCallbacks *cb)
 {
@@ -132,7 +136,7 @@ GetHashValueForIncomingTuple(Relation sourceShardRelation,
  * tuple               - changed tuple.
  * currentSlotName     - Name of replication slot that is processing this update.
  */
-Oid
+static Oid
 FindTargetRelationOid(Relation sourceShardRelation,
 					  HeapTuple tuple,
 					  char *currentSlotName)
@@ -185,21 +189,17 @@ FindTargetRelationOid(Relation sourceShardRelation,
 bool
 ShouldCommitBeApplied(Relation sourceShardRelation)
 {
-	ShardSplitInfo *shardSplitInfo = NULL;
-	int partitionColumnIndex = -1;
-	Oid distributedTableOid = InvalidOid;
-
 	Oid sourceShardOid = sourceShardRelation->rd_id;
 	for (int i = 0; i < shardSplitInfoArraySize; i++)
 	{
 		/* skip the commit when destination is equal to the source */
-		shardSplitInfo = &shardSplitInfoArray[i];
+		ShardSplitInfo *shardSplitInfo = &shardSplitInfoArray[i];
 		if (shardSplitInfo->splitChildShardOid == sourceShardOid)
 		{
 			return false;
 		}
 	}
-
+	
 	return true;
 }
 

@@ -37,7 +37,7 @@ SELECT create_distributed_table('slotName_table','id');
 -- 5. Create Replication slot with 'decoding_plugin_for_shard_split'
 -- 6. Setup Pub/Sub
 -- 7. Insert into table_to_split_1 at source worker1
--- 8. Expect the results in either table_to_split_2 or table_to_split_2 at worker2
+-- 8. Expect the results in either table_to_split_2 or table_to_split_3 at worker2
 \c - - - :worker_2_port
 CREATE TABLE table_to_split_1(id bigserial PRIMARY KEY, value char);
 CREATE TABLE table_to_split_2(id bigserial PRIMARY KEY, value char);

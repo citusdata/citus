@@ -43,11 +43,11 @@ static ShardSplitInfo * CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 											 int32 maxValue,
 											 int32 nodeId);
 static void AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo);
-static void * PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
-										 HTAB *shardInfoHashMap,
-										 dsm_handle dsmHandle,
-										 int shardSplitInfoCount);
-static void SetupHashMapForShardInfo();
+static void PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
+									   HTAB *shardInfoHashMap,
+									   dsm_handle dsmHandle,
+									   int shardSplitInfoCount);
+static void SetupHashMapForShardInfo(void);
 
 /*
  * split_shard_replication_setup UDF creates in-memory data structures
@@ -171,7 +171,7 @@ ParseShardSplitInfo(ArrayType *shardInfoArrayObject,
 					int32 *nodeId)
 {
 	Oid elemtypeId = ARR_ELEMTYPE(shardInfoArrayObject);
-	int elemtypeLength = 0;
+	int16 elemtypeLength = 0;
 	bool elemtypeByValue = false;
 	char elemtypeAlignment = 0;
 	get_typlenbyvalalign(elemtypeId, &elemtypeLength, &elemtypeByValue,
@@ -296,8 +296,6 @@ ParseShardSplitInfo(ArrayType *shardInfoArrayObject,
 	}
 
 	*nodeId = DatumGetInt32(nodeIdDat);
-
-	PG_RETURN_VOID();
 }
 
 
@@ -385,7 +383,7 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
  * AddShardSplitInfoEntryForNodeInMap function add's ShardSplitInfo entry
  * to the hash map. The key is nodeId on which the new shard is to be placed.
  */
-void
+static void
 AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo)
 {
 	uint32_t keyNodeId = shardSplitInfo->nodeId;
@@ -402,8 +400,6 @@ AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo)
 
 	nodeMappingEntry->shardSplitInfoList =
 		lappend(nodeMappingEntry->shardSplitInfoList, (ShardSplitInfo *) shardSplitInfo);
-
-	PG_RETURN_VOID();
 }
 
 
@@ -420,7 +416,7 @@ AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo)
  *
  * dsmHandle           - Shared memory segment handle
  */
-void *
+static void
 PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
 						   HTAB *shardInfoHashMap,
 						   dsm_handle dsmHandle,
@@ -455,6 +451,4 @@ PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
 			index++;
 		}
 	}
-
-	PG_RETURN_VOID();
 }
