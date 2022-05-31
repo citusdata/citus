@@ -51,7 +51,7 @@ COMMIT;
 BEGIN;
 select 1 from public.CreateReplicationSlotForColocatedShards(:worker_2_node, :worker_2_node);
 COMMIT;
-SELECT pg_sleep(10);
+SELECT pg_sleep(5);
 
 \c - - - :worker_2_port
 -- Create subscription at worker2 with copy_data to 'false' and derived replication slot name
@@ -63,7 +63,7 @@ COMMIT;
 SELECT * from table_first_4;
 SELECT * from table_first_5;
 SELECT * from table_first_6;
-select pg_sleep(10);
+
 
 -- Insert data in table_to_split_1 at worker1 
 \c - - - :worker_1_port
@@ -82,11 +82,10 @@ INSERT into table_second_7 values(500, 'a');
 SELECT * FROM table_second_7;
 SELECT * FROM table_second_8;
 SELECT * FROM table_second_9;
-select pg_sleep(10);
+select pg_sleep(5);
 
 -- Expect data to be present in shard 5,6 and 8,9 based on the hash value.
 \c - - - :worker_2_port
-select pg_sleep(10);
 SELECT * from table_first_4; -- should alwasy have zero rows
 SELECT * from table_first_5;
 SELECT * from table_first_6;

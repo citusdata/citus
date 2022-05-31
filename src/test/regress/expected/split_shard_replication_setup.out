@@ -72,6 +72,12 @@ SELECT 1 from public.CreateSubscription(:worker_2_node, 'SUB1');
 (1 row)
 
 COMMIT;
+select pg_sleep(5);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
 -- No data is present at this moment in all the below tables at worker2
 SELECT * from table_to_split_1;
  id | value
@@ -87,12 +93,6 @@ SELECT * from table_to_split_3;
  id | value
 ---------------------------------------------------------------------
 (0 rows)
-
-select pg_sleep(10);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
 
 -- Insert data in table_to_split_1 at worker1
 \c - - - :worker_1_port
@@ -117,7 +117,7 @@ SELECT * from table_to_split_3;
 ---------------------------------------------------------------------
 (0 rows)
 
-select pg_sleep(10);
+select pg_sleep(2);
  pg_sleep
 ---------------------------------------------------------------------
 
@@ -125,12 +125,6 @@ select pg_sleep(10);
 
 -- Expect data to be present in shard xxxxx and shard xxxxx based on the hash value.
 \c - - - :worker_2_port
-select pg_sleep(10);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
 SELECT * from table_to_split_1; -- should alwasy have zero rows
  id | value
 ---------------------------------------------------------------------
@@ -154,7 +148,7 @@ SELECT * from table_to_split_3;
 UPDATE table_to_split_1 SET value='b' where id = 100;
 UPDATE table_to_split_1 SET value='b' where id = 400;
 UPDATE table_to_split_1 SET value='b' where id = 500;
-SELECT pg_sleep(10);
+SELECT pg_sleep(2);
  pg_sleep
 ---------------------------------------------------------------------
 
@@ -182,7 +176,7 @@ SELECT * FROM table_to_split_3;
 
 \c - - - :worker_1_port
 DELETE FROM table_to_split_1;
-SELECT pg_sleep(10);
+SELECT pg_sleep(5);
  pg_sleep
 ---------------------------------------------------------------------
 
@@ -232,12 +226,6 @@ select 1 from public.CreateReplicationSlot(:worker_1_node, :worker_2_node);
 (1 row)
 
 COMMIT;
-SELECT pg_sleep(10);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
 -- Create subscription at worker1 with copy_data to 'false' and derived replication slot name
 BEGIN;
 SELECT 1 from public.CreateSubscription(:worker_1_node, 'SUB1');
@@ -247,6 +235,12 @@ SELECT 1 from public.CreateSubscription(:worker_1_node, 'SUB1');
 (1 row)
 
 COMMIT;
+select pg_sleep(5);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
 \c - - - :worker_2_port
 -- Create subscription at worker2 with copy_data to 'false' and derived replication slot name
 BEGIN;
@@ -257,6 +251,12 @@ SELECT 1 from public.CreateSubscription(:worker_2_node, 'SUB2');
 (1 row)
 
 COMMIT;
+select pg_sleep(5);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
 -- No data is present at this moment in all the below tables at worker2
 SELECT * from table_to_split_1;
  id | value
@@ -273,19 +273,13 @@ SELECT * from table_to_split_3;
 ---------------------------------------------------------------------
 (0 rows)
 
-select pg_sleep(10);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
 -- Insert data in table_to_split_1 at worker1
 \c - - - :worker_1_port
 INSERT into table_to_split_1 values(100, 'a');
 INSERT into table_to_split_1 values(400, 'a');
 INSERT into table_to_split_1 values(500, 'a');
 UPDATE table_to_split_1 SET value='b' where id = 400;
-select pg_sleep(10);
+select pg_sleep(5);
  pg_sleep
 ---------------------------------------------------------------------
 
@@ -311,20 +305,8 @@ SELECT * from table_to_split_3;
 ---------------------------------------------------------------------
 (0 rows)
 
-select pg_sleep(10);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
 -- Expect data to be present only in table_to_split3 on worker2
 \c - - - :worker_2_port
-select pg_sleep(10);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
 SELECT * from table_to_split_1;
  id | value
 ---------------------------------------------------------------------
@@ -393,12 +375,6 @@ select 1 from public.CreateReplicationSlot(:worker_1_node, :worker_1_node);
 (1 row)
 
 COMMIT;
-SELECT pg_sleep(10);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
 -- Create subscription at worker1 with copy_data to 'false' and derived replication slot name
 BEGIN;
 SELECT 1 from public.CreateSubscription(:worker_1_node, 'SUB1');
@@ -408,7 +384,7 @@ SELECT 1 from public.CreateSubscription(:worker_1_node, 'SUB1');
 (1 row)
 
 COMMIT;
-SELECT pg_sleep(10);
+SELECT pg_sleep(5);
  pg_sleep
 ---------------------------------------------------------------------
 
@@ -417,7 +393,7 @@ SELECT pg_sleep(10);
 INSERT into table_to_split_1 values(100, 'a');
 INSERT into table_to_split_1 values(400, 'a');
 INSERT into table_to_split_1 values(500, 'a');
-select pg_sleep(10);
+select pg_sleep(5);
  pg_sleep
 ---------------------------------------------------------------------
 
@@ -445,14 +421,8 @@ SELECT * from table_to_split_3;
  500 | a
 (2 rows)
 
-select pg_sleep(10);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
 DELETE FROM table_to_split_1;
-SELECT pg_sleep(10);
+SELECT pg_sleep(5);
  pg_sleep
 ---------------------------------------------------------------------
 

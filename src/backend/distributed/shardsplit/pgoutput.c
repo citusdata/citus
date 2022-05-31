@@ -41,9 +41,9 @@ void
 _PG_output_plugin_init(OutputPluginCallbacks *cb)
 {
 	LogicalOutputPluginInit plugin_init =
-		(LogicalOutputPluginInit) load_external_function("pgoutput",
-														 "_PG_output_plugin_init",
-														 false, NULL);
+		(LogicalOutputPluginInit) (void *) load_external_function("pgoutput",
+																  "_PG_output_plugin_init",
+																  false, NULL);
 
 	if (plugin_init == NULL)
 	{
@@ -199,7 +199,7 @@ ShouldCommitBeApplied(Relation sourceShardRelation)
 			return false;
 		}
 	}
-	
+
 	return true;
 }
 

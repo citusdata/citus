@@ -55,7 +55,7 @@ select 1 from public.CreateReplicationSlotForColocatedShards(:worker_2_node, :wo
 (1 row)
 
 COMMIT;
-SELECT pg_sleep(10);
+SELECT pg_sleep(5);
  pg_sleep
 ---------------------------------------------------------------------
 
@@ -86,12 +86,6 @@ SELECT * from table_first_6;
  id | value
 ---------------------------------------------------------------------
 (0 rows)
-
-select pg_sleep(10);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
 
 -- Insert data in table_to_split_1 at worker1
 \c - - - :worker_1_port
@@ -137,7 +131,7 @@ SELECT * FROM table_second_9;
 ---------------------------------------------------------------------
 (0 rows)
 
-select pg_sleep(10);
+select pg_sleep(5);
  pg_sleep
 ---------------------------------------------------------------------
 
@@ -145,12 +139,6 @@ select pg_sleep(10);
 
 -- Expect data to be present in shard xxxxx,6 and 8,9 based on the hash value.
 \c - - - :worker_2_port
-select pg_sleep(10);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
 SELECT * from table_first_4; -- should alwasy have zero rows
  id | value
 ---------------------------------------------------------------------
