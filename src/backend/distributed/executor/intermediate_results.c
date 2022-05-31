@@ -674,7 +674,7 @@ static char *
 IntermediateResultsDirectory(void)
 {
 	StringInfo resultFileName = makeStringInfo();
-	Oid userId = GetUserId();
+	Oid userId = GetSessionUserId();
 	DistributedTransactionId *transactionId = GetCurrentDistributedTransactionId();
 	int initiatorNodeIdentifier = transactionId->initiatorNodeIdentifier;
 	uint64 transactionNumber = transactionId->transactionNumber;
