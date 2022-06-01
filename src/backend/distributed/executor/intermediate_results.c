@@ -47,7 +47,7 @@
 #include "utils/syscache.h"
 
 
-static bool CreatedResultsDirectory = false;
+static char *CreatedResultsDirectory = NULL;
 
 
 /* CopyDestReceiver can be used to stream results into a distributed table */
@@ -596,7 +596,16 @@ CreateIntermediateResultsDirectory(void)
 {
 	char *resultDirectory = IntermediateResultsDirectory();
 
-	if (!CreatedResultsDirectory)
+	MemoryContext intermediateResultsContext = AllocSetContextCreateExtended(
+		CacheMemoryContext,
+		"Intermediate Result Files Context",
+		ALLOCSET_DEFAULT_MINSIZE,
+		ALLOCSET_DEFAULT_INITSIZE,
+		ALLOCSET_DEFAULT_MAXSIZE);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(intermediateResultsContext);
+
+	if (CreatedResultsDirectory == NULL)
 	{
 		int makeOK = mkdir(resultDirectory, S_IRWXU);
 		if (makeOK != 0)
@@ -613,8 +622,10 @@ CreateIntermediateResultsDirectory(void)
 								   resultDirectory)));
 		}
 
-		CreatedResultsDirectory = true;
+		CreatedResultsDirectory = pstrdup(resultDirectory);
 	}
+
+	MemoryContextSwitchTo(oldContext);
 
 	return resultDirectory;
 }
@@ -674,7 +685,7 @@ static char *
 IntermediateResultsDirectory(void)
 {
 	StringInfo resultFileName = makeStringInfo();
-	Oid userId = GetSessionUserId();
+	Oid userId = GetUserId();
 	DistributedTransactionId *transactionId = GetCurrentDistributedTransactionId();
 	int initiatorNodeIdentifier = transactionId->initiatorNodeIdentifier;
 	uint64 transactionNumber = transactionId->transactionNumber;
@@ -701,7 +712,7 @@ IntermediateResultsDirectory(void)
 void
 RemoveIntermediateResultsDirectory(void)
 {
-	if (CreatedResultsDirectory)
+	if (CreatedResultsDirectory != NULL)
 	{
 		/*
 		 * The shared directory is renamed before deleting it. Otherwise it
@@ -710,7 +721,7 @@ RemoveIntermediateResultsDirectory(void)
 		 * that's not possible. The current PID is included in the new
 		 * filename, so there can be no collisions with other backends.
 		 */
-		char *sharedName = IntermediateResultsDirectory();
+		char *sharedName = CreatedResultsDirectory;
 		StringInfo privateName = makeStringInfo();
 		appendStringInfo(privateName, "%s.removed-by-%d", sharedName, MyProcPid);
 		if (rename(sharedName, privateName->data))
@@ -731,7 +742,11 @@ RemoveIntermediateResultsDirectory(void)
 			PathNameDeleteTemporaryDir(privateName->data);
 		}
 
-		CreatedResultsDirectory = false;
+		if(CreatedResultsDirectory)
+		{
+			pfree(CreatedResultsDirectory);
+		}
+		CreatedResultsDirectory = NULL;
 	}
 }
 
