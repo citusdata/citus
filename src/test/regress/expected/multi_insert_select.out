@@ -1005,15 +1005,17 @@ $Q$);
  GROUP BY
    outer_most.id;
 $Q$);
-                coordinator_plan
+                   coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
-   ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan XXX_1
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-(6 rows)
+   ->  HashAggregate
+         Group Key: remote_scan.user_id
+         ->  Custom Scan (Citus Adaptive)
+               ->  Distributed Subplan XXX_1
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+(8 rows)
 
  -- if the given filter was on value_1 as shown in the above, Citus could
  -- push it down. But here the query falls back to route via coordinator.
@@ -1068,15 +1070,17 @@ EXPLAIN (costs off)
  GROUP BY
    outer_most.id;
 $Q$);
-                coordinator_plan
+                   coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
-   ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan XXX_1
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-(6 rows)
+   ->  HashAggregate
+         Group Key: remote_scan.user_id
+         ->  Custom Scan (Citus Adaptive)
+               ->  Distributed Subplan XXX_1
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+(8 rows)
 
 INSERT INTO agg_events
             (value_4_agg,
@@ -1363,15 +1367,17 @@ outer_most.id, max(outer_most.value)
 ON (f.id != f2.id)) as outer_most
 GROUP BY outer_most.id;
 $Q$);
-                coordinator_plan
+                   coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
-   ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan XXX_1
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-(6 rows)
+   ->  HashAggregate
+         Group Key: remote_scan.user_id
+         ->  Custom Scan (Citus Adaptive)
+               ->  Distributed Subplan XXX_1
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+(8 rows)
 
 -- cannot pushdown since foo2 is not join on partition key
 -- falls back to route via coordinator
@@ -1406,18 +1412,20 @@ ON (f.id = f2.id)) as outer_most
 GROUP BY
   outer_most.id;
 $Q$);
-                                     coordinator_plan
+                                        coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
-   ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan XXX_1
-               ->  HashAggregate
-                     Group Key: remote_scan.id
-                     Filter: (pg_catalog.sum(remote_scan.worker_column_4) > '10'::numeric)
-                     ->  Custom Scan (Citus Adaptive)
-                           Task Count: 4
-(9 rows)
+   ->  HashAggregate
+         Group Key: remote_scan.user_id
+         ->  Custom Scan (Citus Adaptive)
+               ->  Distributed Subplan XXX_1
+                     ->  HashAggregate
+                           Group Key: remote_scan.id
+                           Filter: (pg_catalog.sum(remote_scan.worker_column_4) > '10'::numeric)
+                           ->  Custom Scan (Citus Adaptive)
+                                 Task Count: 4
+(11 rows)
 
 -- cannot push down since foo doesn't have en equi join
 -- falls back to route via coordinator
@@ -1452,15 +1460,17 @@ ON (f.id = f2.id)) as outer_most
 GROUP BY
   outer_most.id;
 $Q$);
-                coordinator_plan
+                   coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
-   ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan XXX_1
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-(6 rows)
+   ->  HashAggregate
+         Group Key: remote_scan.user_id
+         ->  Custom Scan (Citus Adaptive)
+               ->  Distributed Subplan XXX_1
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+(8 rows)
 
 -- some unsupported LATERAL JOINs
 -- join on averages is not on the partition key
@@ -1484,17 +1494,15 @@ FROM
       value_4 = reference_ids.user_id) as averages ON true
     GROUP BY averages.user_id;
 $Q$);
-                   coordinator_plan
+              coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
-   ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan XXX_1
-               ->  HashAggregate
-                     Group Key: remote_scan.user_id
-                     ->  Custom Scan (Citus Adaptive)
-                           Task Count: 4
-(8 rows)
+   ->  HashAggregate
+         Group Key: remote_scan.user_id
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+(6 rows)
 
 -- join among reference_ids and averages is not on the partition key
 -- should fall back to route via coordinator
@@ -1516,15 +1524,17 @@ FROM
       raw_events_first) as averages ON averages.value_4 = reference_ids.user_id
     GROUP BY averages.user_id;
 $Q$);
-                coordinator_plan
+                   coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
-   ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan XXX_1
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-(6 rows)
+   ->  HashAggregate
+         Group Key: remote_scan.user_id
+         ->  Custom Scan (Citus Adaptive)
+               ->  Distributed Subplan XXX_1
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+(8 rows)
 
 -- join among the agg_ids and averages is not on the partition key
 -- should fall back to route via coordinator
@@ -1548,15 +1558,13 @@ JOIN LATERAL
     (SELECT user_id, value_4 FROM agg_events) as agg_ids ON (agg_ids.value_4 = averages.user_id)
     GROUP BY averages.user_id;
 $Q$);
-                coordinator_plan
+              coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan XXX_1
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-(6 rows)
+         Task Count: 4
+(4 rows)
 
 -- Selected value in the WHERE is not partition key, so we cannot use distributed
 -- INSERT/SELECT and falls back route via coordinator
