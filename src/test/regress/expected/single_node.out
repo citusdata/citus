@@ -2554,6 +2554,78 @@ RETURNING *;
     10 |     9 | string_9 |       |    10 | string_10 |       | string_11
 (1 row)
 
+-- test with top-level set operations
+INSERT INTO local_table_5 (col_5, col_3)
+SELECT 11, t1.text_col_1
+FROM dist_table_1 t1
+JOIN dist_table_1 t2
+ON (t1.dist_col = t2.dist_col)
+GROUP BY t1.text_col_1;
+NOTICE:  executing the command locally: SELECT t1.text_col_1, 'deftext'::text AS col_4, 11 FROM (single_node.dist_table_1_102048 t1 JOIN single_node.dist_table_1_102048 t2 ON ((t1.dist_col OPERATOR(pg_catalog.=) t2.dist_col))) WHERE true GROUP BY t1.text_col_1
+NOTICE:  executing the command locally: SELECT t1.text_col_1, 'deftext'::text AS col_4, 11 FROM (single_node.dist_table_1_102049 t1 JOIN single_node.dist_table_1_102049 t2 ON ((t1.dist_col OPERATOR(pg_catalog.=) t2.dist_col))) WHERE true GROUP BY t1.text_col_1
+NOTICE:  executing the command locally: SELECT t1.text_col_1, 'deftext'::text AS col_4, 11 FROM (single_node.dist_table_1_102050 t1 JOIN single_node.dist_table_1_102050 t2 ON ((t1.dist_col OPERATOR(pg_catalog.=) t2.dist_col))) WHERE true GROUP BY t1.text_col_1
+NOTICE:  executing the command locally: SELECT t1.text_col_1, 'deftext'::text AS col_4, 11 FROM (single_node.dist_table_1_102051 t1 JOIN single_node.dist_table_1_102051 t2 ON ((t1.dist_col OPERATOR(pg_catalog.=) t2.dist_col))) WHERE true GROUP BY t1.text_col_1
+NOTICE:  executing the command locally: SELECT text_col_1, col_4, "?column?" FROM (SELECT intermediate_result.text_col_1, intermediate_result.col_4, intermediate_result."?column?" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(text_col_1 text, col_4 text, "?column?" integer)) citus_insert_select_subquery(text_col_1, col_4, "?column?")
+INSERT INTO local_table_5 (col_5, col_3)
+SELECT 12, 'string_11'
+FROM dist_table_1 t1
+JOIN dist_table_1 t2
+ON (t1.dist_col = t2.dist_col)
+GROUP BY t1.text_col_1;
+NOTICE:  executing the command locally: SELECT 'string_11'::text AS col_3, 'deftext'::text AS col_4, 12, t1.text_col_1 AS worker_column_4 FROM (single_node.dist_table_1_102048 t1 JOIN single_node.dist_table_1_102048 t2 ON ((t1.dist_col OPERATOR(pg_catalog.=) t2.dist_col))) WHERE true GROUP BY t1.text_col_1
+NOTICE:  executing the command locally: SELECT 'string_11'::text AS col_3, 'deftext'::text AS col_4, 12, t1.text_col_1 AS worker_column_4 FROM (single_node.dist_table_1_102049 t1 JOIN single_node.dist_table_1_102049 t2 ON ((t1.dist_col OPERATOR(pg_catalog.=) t2.dist_col))) WHERE true GROUP BY t1.text_col_1
+NOTICE:  executing the command locally: SELECT 'string_11'::text AS col_3, 'deftext'::text AS col_4, 12, t1.text_col_1 AS worker_column_4 FROM (single_node.dist_table_1_102050 t1 JOIN single_node.dist_table_1_102050 t2 ON ((t1.dist_col OPERATOR(pg_catalog.=) t2.dist_col))) WHERE true GROUP BY t1.text_col_1
+NOTICE:  executing the command locally: SELECT 'string_11'::text AS col_3, 'deftext'::text AS col_4, 12, t1.text_col_1 AS worker_column_4 FROM (single_node.dist_table_1_102051 t1 JOIN single_node.dist_table_1_102051 t2 ON ((t1.dist_col OPERATOR(pg_catalog.=) t2.dist_col))) WHERE true GROUP BY t1.text_col_1
+NOTICE:  executing the command locally: SELECT col_3, col_4, "?column?" FROM (SELECT intermediate_result.col_3, intermediate_result.col_4, intermediate_result."?column?" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(col_3 text, col_4 text, "?column?" integer)) citus_insert_select_subquery(col_3, col_4, "?column?")
+PREPARE prep_insert_remote_exec(text, int, text, int) AS
+INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+SELECT
+    $1,
+    $4,
+    t1.dist_col,
+    t1.text_col_2,
+    $3,
+    null,
+    $2
+FROM dist_table_1 t1
+RETURNING *;
+-- execute 6 times with different params
+EXECUTE prep_insert_remote_exec('string_12', 13, 'string_13', 14);
+ col_1 | col_2 |   col_3   | col_4 | col_5 |   col_6   | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |    14 | string_12 |       |    13 | string_13 |       | string_11
+(1 row)
+
+EXECUTE prep_insert_remote_exec('string_14', 15, 'string_15', 16);
+ col_1 | col_2 |   col_3   | col_4 | col_5 |   col_6   | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |    16 | string_14 |       |    15 | string_15 |       | string_11
+(1 row)
+
+EXECUTE prep_insert_remote_exec('string_16', 17, 'string_17', 18);
+ col_1 | col_2 |   col_3   | col_4 | col_5 |   col_6   | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |    18 | string_16 |       |    17 | string_17 |       | string_11
+(1 row)
+
+EXECUTE prep_insert_remote_exec('string_18', 19, 'string_19', 20);
+ col_1 | col_2 |   col_3   | col_4 | col_5 |   col_6   | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |    20 | string_18 |       |    19 | string_19 |       | string_11
+(1 row)
+
+EXECUTE prep_insert_remote_exec('string_20', 21, 'string_21', 22);
+ col_1 | col_2 |   col_3   | col_4 | col_5 |   col_6   | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |    22 | string_20 |       |    21 | string_21 |       | string_11
+(1 row)
+
+EXECUTE prep_insert_remote_exec('string_22', 23, 'string_23', 24);
+ col_1 | col_2 |   col_3   | col_4 | col_5 |   col_6   | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |    24 | string_22 |       |    23 | string_23 |       | string_11
+(1 row)
+
 --
 -- test local execution
 --
@@ -2661,6 +2733,102 @@ NOTICE:  executing the command locally: SELECT dist_col, 90, 'string_90'::text A
     10 |    90 | string_90 |       |   100 | string_100 |       | string_11
 (1 row)
 
+    -- test with top-level set operations
+    INSERT INTO local_table_5 (col_5, col_3)
+    SELECT 110, t1.text_col_1
+    FROM dist_table_1 t1
+    JOIN dist_table_1 t2
+    ON (t1.dist_col = t2.dist_col)
+    GROUP BY t1.text_col_1;
+NOTICE:  executing the command locally: SELECT t1.text_col_1, 'deftext'::text AS col_4, 110 FROM (single_node.dist_table_1_102048 t1 JOIN single_node.dist_table_1_102048 t2 ON ((t1.dist_col OPERATOR(pg_catalog.=) t2.dist_col))) WHERE true GROUP BY t1.text_col_1
+NOTICE:  executing the command locally: SELECT t1.text_col_1, 'deftext'::text AS col_4, 110 FROM (single_node.dist_table_1_102049 t1 JOIN single_node.dist_table_1_102049 t2 ON ((t1.dist_col OPERATOR(pg_catalog.=) t2.dist_col))) WHERE true GROUP BY t1.text_col_1
+NOTICE:  executing the command locally: SELECT t1.text_col_1, 'deftext'::text AS col_4, 110 FROM (single_node.dist_table_1_102050 t1 JOIN single_node.dist_table_1_102050 t2 ON ((t1.dist_col OPERATOR(pg_catalog.=) t2.dist_col))) WHERE true GROUP BY t1.text_col_1
+NOTICE:  executing the command locally: SELECT t1.text_col_1, 'deftext'::text AS col_4, 110 FROM (single_node.dist_table_1_102051 t1 JOIN single_node.dist_table_1_102051 t2 ON ((t1.dist_col OPERATOR(pg_catalog.=) t2.dist_col))) WHERE true GROUP BY t1.text_col_1
+NOTICE:  executing the command locally: SELECT text_col_1, col_4, "?column?" FROM (SELECT intermediate_result.text_col_1, intermediate_result.col_4, intermediate_result."?column?" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(text_col_1 text, col_4 text, "?column?" integer)) citus_insert_select_subquery(text_col_1, col_4, "?column?")
+    INSERT INTO local_table_5 (col_5, col_3)
+    SELECT 120, 'string_110'
+    FROM dist_table_1 t1
+    JOIN dist_table_1 t2
+    ON (t1.dist_col = t2.dist_col)
+    GROUP BY t1.text_col_1;
+NOTICE:  executing the command locally: SELECT 'string_110'::text AS col_3, 'deftext'::text AS col_4, 120, t1.text_col_1 AS worker_column_4 FROM (single_node.dist_table_1_102048 t1 JOIN single_node.dist_table_1_102048 t2 ON ((t1.dist_col OPERATOR(pg_catalog.=) t2.dist_col))) WHERE true GROUP BY t1.text_col_1
+NOTICE:  executing the command locally: SELECT 'string_110'::text AS col_3, 'deftext'::text AS col_4, 120, t1.text_col_1 AS worker_column_4 FROM (single_node.dist_table_1_102049 t1 JOIN single_node.dist_table_1_102049 t2 ON ((t1.dist_col OPERATOR(pg_catalog.=) t2.dist_col))) WHERE true GROUP BY t1.text_col_1
+NOTICE:  executing the command locally: SELECT 'string_110'::text AS col_3, 'deftext'::text AS col_4, 120, t1.text_col_1 AS worker_column_4 FROM (single_node.dist_table_1_102050 t1 JOIN single_node.dist_table_1_102050 t2 ON ((t1.dist_col OPERATOR(pg_catalog.=) t2.dist_col))) WHERE true GROUP BY t1.text_col_1
+NOTICE:  executing the command locally: SELECT 'string_110'::text AS col_3, 'deftext'::text AS col_4, 120, t1.text_col_1 AS worker_column_4 FROM (single_node.dist_table_1_102051 t1 JOIN single_node.dist_table_1_102051 t2 ON ((t1.dist_col OPERATOR(pg_catalog.=) t2.dist_col))) WHERE true GROUP BY t1.text_col_1
+NOTICE:  executing the command locally: SELECT col_3, col_4, "?column?" FROM (SELECT intermediate_result.col_3, intermediate_result.col_4, intermediate_result."?column?" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(col_3 text, col_4 text, "?column?" integer)) citus_insert_select_subquery(col_3, col_4, "?column?")
+    PREPARE prep_insert_local_exec(text, int, text, int) AS
+    INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+    SELECT
+        $1,
+        $4,
+        t1.dist_col,
+        t1.text_col_2,
+        $3,
+        null,
+        $2
+    FROM dist_table_1 t1
+    RETURNING *;
+    -- execute 6 times with different params
+    EXECUTE prep_insert_local_exec('string_120', 130, 'string_130', 140);
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
+ col_1 | col_2 |   col_3    | col_4 | col_5 |   col_6    | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |   140 | string_120 |       |   130 | string_130 |       | string_11
+(1 row)
+
+    EXECUTE prep_insert_local_exec('string_140', 150, 'string_150', 160);
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
+ col_1 | col_2 |   col_3    | col_4 | col_5 |   col_6    | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |   160 | string_140 |       |   150 | string_150 |       | string_11
+(1 row)
+
+    EXECUTE prep_insert_local_exec('string_160', 170, 'string_170', 180);
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
+ col_1 | col_2 |   col_3    | col_4 | col_5 |   col_6    | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |   180 | string_160 |       |   170 | string_170 |       | string_11
+(1 row)
+
+    EXECUTE prep_insert_local_exec('string_180', 190, 'string_190', 200);
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
+ col_1 | col_2 |   col_3    | col_4 | col_5 |   col_6    | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |   200 | string_180 |       |   190 | string_190 |       | string_11
+(1 row)
+
+    EXECUTE prep_insert_local_exec('string_200', 210, 'string_210', 220);
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
+ col_1 | col_2 |   col_3    | col_4 | col_5 |   col_6    | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |   220 | string_200 |       |   210 | string_210 |       | string_11
+(1 row)
+
+    EXECUTE prep_insert_local_exec('string_220', 230, 'string_230', 240);
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, $4, $1, NULL::text AS col_4, $2, $3, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
+ col_1 | col_2 |   col_3    | col_4 | col_5 |   col_6    | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |   240 | string_220 |       |   230 | string_230 |       | string_11
+(1 row)
+
 COMMIT;
 -- test EXPLAIN (ANALYZE)
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
@@ -2763,22 +2931,38 @@ NOTICE:  executing the command locally: SELECT 'deftext'::text AS col_4, 'string
 NOTICE:  executing the command locally: SELECT 'deftext'::text AS col_4, 'string_4'::text AS col_6, text_col_1, 'string_1000'::text AS col_8 FROM single_node.dist_table_1_102051 t1 WHERE true GROUP BY text_col_1
 NOTICE:  executing the command locally: SELECT col_4, col_6, text_col_1, col_8 FROM (SELECT intermediate_result.col_4, intermediate_result.col_6, intermediate_result.text_col_1, intermediate_result.col_8 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(col_4 text, col_6 text, text_col_1 text, col_8 text)) citus_insert_select_subquery
 SELECT * FROM local_table_5 ORDER BY 1,2,3,4,5,6,7,8;
- col_1 | col_2 |   col_3   |   col_4   | col_5 |   col_6    |   col_7   |    col_8
+ col_1 | col_2 |   col_3    |   col_4   | col_5 |   col_6    |   col_7   |    col_8
 ---------------------------------------------------------------------
-    10 |     1 | string_1  | deftext   |     2 | string_2   | string_10 | string_11
-    10 |     3 | string_3  | deftext   |     4 | string_4   | string_10 | string_1000
-    10 |     3 | string_3  | string_10 |     4 | string_4   |           | string_11
-    10 |     5 | string_5  | deftext   |     6 | string_6   | string_10 | string_11
-    10 |     5 | string_5  | string_7  |     6 | string_6   |           | string_11
-    10 |     9 | string_9  |           |    10 | string_10  |           | string_11
-    10 |    10 | string_10 | deftext   |    20 | string_20  | string_10 | string_11
-    10 |    30 | string_30 | string_10 |    40 | string_40  |           | string_11
-    10 |    50 | string_50 | string_70 |    60 | string_60  |           | string_11
-    10 |    90 | string_90 |           |   100 | string_100 |           | string_11
-       |       | string_10 | deftext   |       |            |           |
-       |       |           | deftext   |       | string_4   | string_10 | string_1000
-       |       |           | deftext   |       |            | string_10 | string_1000
-(13 rows)
+    10 |     1 | string_1   | deftext   |     2 | string_2   | string_10 | string_11
+    10 |     3 | string_3   | deftext   |     4 | string_4   | string_10 | string_1000
+    10 |     3 | string_3   | string_10 |     4 | string_4   |           | string_11
+    10 |     5 | string_5   | deftext   |     6 | string_6   | string_10 | string_11
+    10 |     5 | string_5   | string_7  |     6 | string_6   |           | string_11
+    10 |     9 | string_9   |           |    10 | string_10  |           | string_11
+    10 |    10 | string_10  | deftext   |    20 | string_20  | string_10 | string_11
+    10 |    14 | string_12  |           |    13 | string_13  |           | string_11
+    10 |    16 | string_14  |           |    15 | string_15  |           | string_11
+    10 |    18 | string_16  |           |    17 | string_17  |           | string_11
+    10 |    20 | string_18  |           |    19 | string_19  |           | string_11
+    10 |    22 | string_20  |           |    21 | string_21  |           | string_11
+    10 |    24 | string_22  |           |    23 | string_23  |           | string_11
+    10 |    30 | string_30  | string_10 |    40 | string_40  |           | string_11
+    10 |    50 | string_50  | string_70 |    60 | string_60  |           | string_11
+    10 |    90 | string_90  |           |   100 | string_100 |           | string_11
+    10 |   140 | string_120 |           |   130 | string_130 |           | string_11
+    10 |   160 | string_140 |           |   150 | string_150 |           | string_11
+    10 |   180 | string_160 |           |   170 | string_170 |           | string_11
+    10 |   200 | string_180 |           |   190 | string_190 |           | string_11
+    10 |   220 | string_200 |           |   210 | string_210 |           | string_11
+    10 |   240 | string_220 |           |   230 | string_230 |           | string_11
+       |       | string_10  | deftext   |    11 |            |           |
+       |       | string_10  | deftext   |   110 |            |           |
+       |       | string_10  | deftext   |       |            |           |
+       |       | string_11  | deftext   |    12 |            |           |
+       |       | string_110 | deftext   |   120 |            |           |
+       |       |            | deftext   |       | string_4   | string_10 | string_1000
+       |       |            | deftext   |       |            | string_10 | string_1000
+(29 rows)
 
 -- suppress notices
 SET client_min_messages TO error;

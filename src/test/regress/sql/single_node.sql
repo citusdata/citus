@@ -1342,6 +1342,42 @@ SELECT
 FROM dist_table_1 t1
 RETURNING *;
 
+-- test with top-level set operations
+INSERT INTO local_table_5 (col_5, col_3)
+SELECT 11, t1.text_col_1
+FROM dist_table_1 t1
+JOIN dist_table_1 t2
+ON (t1.dist_col = t2.dist_col)
+GROUP BY t1.text_col_1;
+
+INSERT INTO local_table_5 (col_5, col_3)
+SELECT 12, 'string_11'
+FROM dist_table_1 t1
+JOIN dist_table_1 t2
+ON (t1.dist_col = t2.dist_col)
+GROUP BY t1.text_col_1;
+
+PREPARE prep_insert_remote_exec(text, int, text, int) AS
+INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+SELECT
+    $1,
+    $4,
+    t1.dist_col,
+    t1.text_col_2,
+    $3,
+    null,
+    $2
+FROM dist_table_1 t1
+RETURNING *;
+
+-- execute 6 times with different params
+EXECUTE prep_insert_remote_exec('string_12', 13, 'string_13', 14);
+EXECUTE prep_insert_remote_exec('string_14', 15, 'string_15', 16);
+EXECUTE prep_insert_remote_exec('string_16', 17, 'string_17', 18);
+EXECUTE prep_insert_remote_exec('string_18', 19, 'string_19', 20);
+EXECUTE prep_insert_remote_exec('string_20', 21, 'string_21', 22);
+EXECUTE prep_insert_remote_exec('string_22', 23, 'string_23', 24);
+
 --
 -- test local execution
 --
@@ -1413,6 +1449,42 @@ BEGIN;
         100
     FROM dist_table_1 t1
     RETURNING *;
+
+    -- test with top-level set operations
+    INSERT INTO local_table_5 (col_5, col_3)
+    SELECT 110, t1.text_col_1
+    FROM dist_table_1 t1
+    JOIN dist_table_1 t2
+    ON (t1.dist_col = t2.dist_col)
+    GROUP BY t1.text_col_1;
+
+    INSERT INTO local_table_5 (col_5, col_3)
+    SELECT 120, 'string_110'
+    FROM dist_table_1 t1
+    JOIN dist_table_1 t2
+    ON (t1.dist_col = t2.dist_col)
+    GROUP BY t1.text_col_1;
+
+    PREPARE prep_insert_local_exec(text, int, text, int) AS
+    INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+    SELECT
+        $1,
+        $4,
+        t1.dist_col,
+        t1.text_col_2,
+        $3,
+        null,
+        $2
+    FROM dist_table_1 t1
+    RETURNING *;
+
+    -- execute 6 times with different params
+    EXECUTE prep_insert_local_exec('string_120', 130, 'string_130', 140);
+    EXECUTE prep_insert_local_exec('string_140', 150, 'string_150', 160);
+    EXECUTE prep_insert_local_exec('string_160', 170, 'string_170', 180);
+    EXECUTE prep_insert_local_exec('string_180', 190, 'string_190', 200);
+    EXECUTE prep_insert_local_exec('string_200', 210, 'string_210', 220);
+    EXECUTE prep_insert_local_exec('string_220', 230, 'string_230', 240);
 COMMIT;
 
 -- test EXPLAIN (ANALYZE)
