@@ -33,7 +33,7 @@ static void split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 							Relation relation, ReorderBufferChange *change);
 
 /* Helper methods */
-static bool ShouldCommitBeApplied(Relation sourceShardRelation);
+static bool IsCommitRecursive(Relation sourceShardRelation);
 static int32_t GetHashValueForIncomingTuple(Relation sourceShardRelation,
 											HeapTuple tuple,
 											bool *shouldHandleUpdate);
@@ -183,29 +183,28 @@ FindTargetRelationOid(Relation sourceShardRelation,
 
 
 /*
- * ShouldCommitBeApplied avoids recursive commit case when source shard and
- * new split child shards are placed on the same node. When the source shard
+ * IsCommitRecursive returns true when commit is recursive. When the source shard
  * recives a commit(1), the WAL sender processes this commit message. This
  * commit is applied to a child shard which is placed on the same node as a
- * part of replication. This in turn creates one more commit(2).
+ * part of replication. This in turn creates one more commit(2) which is recursive in nature.
  * Commit 2 should be skipped as the source shard and destination for commit 2
  * are same and the commit has already been applied.
  */
 bool
-ShouldCommitBeApplied(Relation sourceShardRelation)
+IsCommitRecursive(Relation sourceShardRelation)
 {
 	Oid sourceShardOid = sourceShardRelation->rd_id;
 	for (int i = 0; i < shardSplitInfoArraySize; i++)
 	{
 		/* skip the commit when destination is equal to the source */
 		ShardSplitInfo *shardSplitInfo = &shardSplitInfoArray[i];
-		if (shardSplitInfo->splitChildShardOid == sourceShardOid)
+		if (sourceShardOid == shardSplitInfo->splitChildShardOid)
 		{
-			return false;
+			return true;
 		}
 	}
 
-	return true;
+	return false;
 }
 
 
@@ -229,13 +228,14 @@ split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 											&shardSplitInfoArraySize);
 	}
 
-	char *replicationSlotName = ctx->slot->data.name.data;
-	if (!ShouldCommitBeApplied(relation))
+	/* avoid applying recursive commit */
+	if (IsCommitRecursive(relation))
 	{
 		return;
 	}
 
 	Oid targetRelationOid = InvalidOid;
+	char *replicationSlotName = ctx->slot->data.name.data;
 	switch (change->action)
 	{
 		case REORDER_BUFFER_CHANGE_INSERT:

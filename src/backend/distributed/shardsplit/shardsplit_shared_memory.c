@@ -202,15 +202,6 @@ decode_replication_slot(char *slotName,
 						uint32_t *nodeId,
 						dsm_handle *dsmHandle)
 {
-	if (slotName == NULL ||
-		nodeId == NULL ||
-		dsmHandle == NULL)
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_SYNTAX_ERROR),
-				 errmsg("Invalid Out parameters")));
-	}
-
 	int index = 0;
 	char *strtokPosition = NULL;
 	char *dupSlotName = pstrdup(slotName);
