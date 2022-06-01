@@ -22,10 +22,17 @@ PG_FUNCTION_INFO_V1(split_shard_replication_setup);
 
 static HTAB *ShardInfoHashMap = NULL;
 
+/* key for NodeShardMappingEntry */
+typedef struct NodeShardMappingKey
+{
+	uint32_t nodeId;
+	Oid tableOwnerId;
+} NodeShardMappingKey;
+
 /* Entry for hash map */
 typedef struct NodeShardMappingEntry
 {
-	uint32_t keyNodeId;
+	NodeShardMappingKey key;
 	List *shardSplitInfoList;
 } NodeShardMappingEntry;
 
@@ -47,7 +54,11 @@ static void PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
 									   HTAB *shardInfoHashMap,
 									   dsm_handle dsmHandle,
 									   int shardSplitInfoCount);
+
 static void SetupHashMapForShardInfo(void);
+static uint32 NodeShardMappingHash(const void *key, Size keysize);
+static int NodeShardMappingHashCompare(const void *left, const void *right, Size keysize);
+
 
 /*
  * split_shard_replication_setup UDF creates in-memory data structures
@@ -80,8 +91,8 @@ static void SetupHashMapForShardInfo(void);
  * distinct  target node. The same encoded slot name is stored in one of the fields of the
  * in-memory data structure(ShardSplitInfo).
  *
- * There is a 1-1 mapping between a target node and a replication slot as one replication
- * slot takes care of replicating changes for one node.
+ * There is a 1-1 mapping between a target node and a replication slot. One replication
+ * slot takes care of replicating changes for all shards belonging to the same owner on that node.
  *
  * During the replication phase, 'decoding_plugin_for_shard_split' called for a change on a particular
  * replication slot, will decode the shared memory handle from its slot name and will attach to the
@@ -151,11 +162,13 @@ SetupHashMapForShardInfo()
 {
 	HASHCTL info;
 	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(uint32_t);
+	info.keysize = sizeof(NodeShardMappingKey);
 	info.entrysize = sizeof(NodeShardMappingEntry);
-	info.hash = uint32_hash;
+	info.hash = NodeShardMappingHash;
+	info.match = NodeShardMappingHashCompare;
 	info.hcxt = CurrentMemoryContext;
-	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
+
+	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION | HASH_COMPARE);
 
 	ShardInfoHashMap = hash_create("ShardInfoMap", 128, &info, hashFlags);
 }
@@ -386,16 +399,17 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 static void
 AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo)
 {
-	uint32_t keyNodeId = shardSplitInfo->nodeId;
+	NodeShardMappingKey key;
+	key.nodeId = shardSplitInfo->nodeId;
+	key.tableOwnerId = TableOwnerOid(shardSplitInfo->distributedTableOid);
+
 	bool found = false;
 	NodeShardMappingEntry *nodeMappingEntry =
-		(NodeShardMappingEntry *) hash_search(ShardInfoHashMap, &keyNodeId, HASH_ENTER,
+		(NodeShardMappingEntry *) hash_search(ShardInfoHashMap, &key, HASH_ENTER,
 											  &found);
-
 	if (!found)
 	{
 		nodeMappingEntry->shardSplitInfoList = NULL;
-		nodeMappingEntry->keyNodeId = keyNodeId;
 	}
 
 	nodeMappingEntry->shardSplitInfoList =
@@ -429,9 +443,10 @@ PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
 	int index = 0;
 	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
 	{
-		uint32_t nodeId = entry->keyNodeId;
+		uint32_t nodeId = entry->key.nodeId;
+		uint32_t tableOwnerId = entry->key.tableOwnerId;
 		char *derivedSlotName =
-			encode_replication_slot(nodeId, dsmHandle);
+			encode_replication_slot(nodeId, dsmHandle, tableOwnerId);
 
 		List *shardSplitInfoList = entry->shardSplitInfoList;
 		ListCell *listCell = NULL;
@@ -450,5 +465,40 @@ PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
 			strcpy_s(shardInfoInSM->slotName, NAMEDATALEN, derivedSlotName);
 			index++;
 		}
+	}
+}
+
+
+/*
+ * NodeShardMappingHash returns hash value by combining hash of node id
+ * and tableowner Id.
+ */
+static uint32
+NodeShardMappingHash(const void *key, Size keysize)
+{
+	NodeShardMappingKey *entry = (NodeShardMappingKey *) key;
+	uint32 hash = hash_uint32(entry->nodeId);
+	hash = hash_combine(hash, hash_uint32(entry->tableOwnerId));
+	return hash;
+}
+
+
+/*
+ * Comparator function for hash keys
+ */
+static int
+NodeShardMappingHashCompare(const void *left, const void *right, Size keysize)
+{
+	NodeShardMappingKey *leftKey = (NodeShardMappingKey *) left;
+	NodeShardMappingKey *rightKey = (NodeShardMappingKey *) right;
+
+	if (leftKey->nodeId != rightKey->nodeId ||
+		leftKey->tableOwnerId != rightKey->tableOwnerId)
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
 	}
 }

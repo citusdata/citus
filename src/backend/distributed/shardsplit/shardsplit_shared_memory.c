@@ -183,14 +183,15 @@ ShardSplitInfoSMData(ShardSplitInfoSMHeader *shardSplitInfoSMHeader)
 /*
  * encode_replication_slot returns an encoded replication slot name
  * in the following format.
- * Slot Name = NodeId_SharedMemoryHandle
+ * Slot Name = NodeId_SharedMemoryHandle_TableOwnerOid
  */
 char *
 encode_replication_slot(uint32_t nodeId,
-						dsm_handle dsmHandle)
+						dsm_handle dsmHandle,
+						uint32_t tableOwnerId)
 {
 	StringInfo slotName = makeStringInfo();
-	appendStringInfo(slotName, "%u_%u", nodeId, dsmHandle);
+	appendStringInfo(slotName, "%u_%u_%u", nodeId, dsmHandle, tableOwnerId);
 	return slotName->data;
 }
 
@@ -230,15 +231,18 @@ decode_replication_slot(char *slotName,
 		{
 			*dsmHandle = strtoul(slotNameString, NULL, 10);
 		}
+
 		slotNameString = strtok_r(NULL, "_", &strtokPosition);
 		index++;
+
+		/*Ignoring TableOwnerOid*/
 	}
 
 	/*
-	 * Replication slot name is encoded as NodeId_SharedMemoryHandle. Hence the number of tokens
-	 * would be strictly two considering "_" as delimiter.
+	 * Replication slot name is encoded as NodeId_SharedMemoryHandle_TableOwnerOid.
+	 * Hence the number of tokens would be strictly three considering "_" as delimiter.
 	 */
-	if (index != 2)
+	if (index != 3)
 	{
 		ereport(ERROR,
 				(errmsg("Invalid Replication Slot name encoding: %s", slotName)));

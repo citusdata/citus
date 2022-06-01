@@ -37,7 +37,8 @@ extern ShardSplitInfo * GetShardSplitInfoSMArrayForSlot(char *slotName,
 
 /* Functions related to encoding-decoding for replication slot name */
 char * encode_replication_slot(uint32_t nodeId,
-							   dsm_handle dsmHandle);
+							   dsm_handle dsmHandle,
+							   uint32_t tableOwnerId);
 void decode_replication_slot(char *slotName,
 							 uint32_t *nodeId,
 							 dsm_handle *dsmHandle);

@@ -53,13 +53,13 @@ COMMIT;
 
 -- Create replication slot for target node worker2
 BEGIN;
-select 1 from public.CreateReplicationSlot(:worker_2_node, :worker_2_node);
+select 1 from public.create_replication_slot(:worker_2_node, :worker_2_node);
 COMMIT;
 
 \c - - - :worker_2_port
 -- Create subscription at worker2 with copy_data to 'false' and derived replication slot name
 BEGIN;
-SELECT 1 from public.CreateSubscription(:worker_2_node, 'SUB1');
+SELECT 1 from public.create_subscription(:worker_2_node, 'SUB1');
 COMMIT;
 select pg_sleep(5);
 
@@ -132,19 +132,19 @@ COMMIT;
 -- Create replication slots for two target nodes worker1 and worker2.
 -- Worker1 is target for table_to_split_2 and Worker2 is target for table_to_split_3
 BEGIN;
-select 1 from public.CreateReplicationSlot(:worker_1_node, :worker_2_node);
+select 1 from public.create_replication_slot(:worker_1_node, :worker_2_node);
 COMMIT;
 
 -- Create subscription at worker1 with copy_data to 'false' and derived replication slot name
 BEGIN;
-SELECT 1 from public.CreateSubscription(:worker_1_node, 'SUB1');
+SELECT 1 from public.create_subscription(:worker_1_node, 'SUB1');
 COMMIT;
 select pg_sleep(5);
 
 \c - - - :worker_2_port
 -- Create subscription at worker2 with copy_data to 'false' and derived replication slot name
 BEGIN;
-SELECT 1 from public.CreateSubscription(:worker_2_node, 'SUB2');
+SELECT 1 from public.create_subscription(:worker_2_node, 'SUB2');
 COMMIT;
 select pg_sleep(5);
 
@@ -212,12 +212,12 @@ COMMIT;
 
 -- Worker1 is target for table_to_split_2 and table_to_split_3
 BEGIN;
-select 1 from public.CreateReplicationSlot(:worker_1_node, :worker_1_node);
+select 1 from public.create_replication_slot(:worker_1_node, :worker_1_node);
 COMMIT;
 
 -- Create subscription at worker1 with copy_data to 'false' and derived replication slot name
 BEGIN;
-SELECT 1 from public.CreateSubscription(:worker_1_node, 'SUB1');
+SELECT 1 from public.create_subscription(:worker_1_node, 'SUB1');
 COMMIT;
 SELECT pg_sleep(5);
 
