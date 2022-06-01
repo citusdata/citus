@@ -1145,11 +1145,19 @@ CREATE TABLE local_table_4(
 
 CREATE TABLE dist_table_1(
     dist_col integer,
+    drop_me_1 text,
     int_col integer,
+    drop_me_2 text,
     text_col_1 text,
+    drop_me_3 int,
     text_col_2 text
 );
 SELECT create_distributed_table('dist_table_1', 'dist_col');
+
+-- drop "drop_me_*" columns to test together with dropped columns in relevant tests
+ALTER TABLE dist_table_1 DROP COLUMN drop_me_1;
+ALTER TABLE dist_table_1 DROP COLUMN drop_me_2;
+ALTER TABLE dist_table_1 DROP COLUMN drop_me_3;
 
 INSERT INTO dist_table_1 VALUES (10, 11, 'string_10', 'string_11');
 
@@ -1242,16 +1250,30 @@ SELECT * FROM local_table_4 ORDER BY 1,2,3,4,5,6,7,8;
 -- test using a column that has a default value
 CREATE TABLE local_table_5(
     col_1 integer,
+    drop_me_1 text,
     col_2 integer,
     col_3 text,
+    drop_me_2 int,
     col_4 text default 'deftext',
+    drop_me_3 text,
     col_5 int,
     col_6 text,
+    drop_me_4 text,
     col_7 text,
+    drop_me_5 int,
     col_8 text
 );
 
+-- drop "drop_me_*" columns to test together with dropped columns in relevant tests
+ALTER TABLE local_table_5 DROP COLUMN drop_me_1;
+ALTER TABLE local_table_5 DROP COLUMN drop_me_2;
+ALTER TABLE local_table_5 DROP COLUMN drop_me_3;
+ALTER TABLE local_table_5 DROP COLUMN drop_me_4;
+ALTER TABLE local_table_5 DROP COLUMN drop_me_5;
+
+--
 -- test remote execution
+--
 INSERT INTO local_table_5 (col_1, col_2, col_3, col_5, col_6, col_7, col_8)
 SELECT
     t1.dist_col,
@@ -1264,15 +1286,73 @@ SELECT
 FROM dist_table_1 t1
 RETURNING *;
 
+-- Specify the value for the column that has a default value
+-- and use a weird order for the columns.
+INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+SELECT
+    'string_3',
+    3,
+    t1.dist_col,
+    t1.text_col_2,
+    'string_4',
+    t1.text_col_1,
+    4
+FROM dist_table_1 t1
+RETURNING *;
+
+-- Pass a string literal for the column that has a default value
+-- and use a weird order for the columns.
+INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+SELECT
+    'string_5',
+    5,
+    t1.dist_col,
+    t1.text_col_2,
+    'string_6',
+    'string_7',
+    6
+FROM dist_table_1 t1
+RETURNING *;
+
+-- using limit 0
+INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+SELECT
+    'string_8',
+    7,
+    t1.dist_col,
+    t1.text_col_2,
+    null,
+    t1.text_col_1,
+    8
+FROM dist_table_1 t1
+LIMIT 0
+RETURNING *;
+
+-- Pass null for the column that has a default value
+-- and use a weird order for the columns.
+INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+SELECT
+    'string_9',
+    9,
+    t1.dist_col,
+    t1.text_col_2,
+    'string_10',
+    null,
+    10
+FROM dist_table_1 t1
+RETURNING *;
+
+--
 -- test local execution
+--
 BEGIN;
     INSERT INTO local_table_5 (col_1, col_2, col_3, col_5, col_6, col_7, col_8)
     SELECT
         t1.dist_col,
-        3,
-        'string_3',
-        4,
-        'string_4',
+        10,
+        'string_10',
+        20,
+        'string_20',
         t1.text_col_1,
         t1.text_col_2
     FROM dist_table_1 t1
@@ -1283,12 +1363,12 @@ BEGIN;
     INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
     SELECT
         'string_30',
-        3,
+        30,
         t1.dist_col,
         t1.text_col_2,
         'string_40',
         t1.text_col_1,
-        4
+        40
     FROM dist_table_1 t1
     RETURNING *;
 
@@ -1296,13 +1376,41 @@ BEGIN;
     -- and use a weird order for the columns.
     INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
     SELECT
-        'string_300',
-        3,
+        'string_50',
+        50,
         t1.dist_col,
         t1.text_col_2,
-        'string_400',
-        'string_500',
-        4
+        'string_60',
+        'string_70',
+        60
+    FROM dist_table_1 t1
+    RETURNING *;
+
+    -- using limit 0
+    INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+    SELECT
+        'string_80',
+        70,
+        t1.dist_col,
+        t1.text_col_2,
+        null,
+        t1.text_col_1,
+        80
+    FROM dist_table_1 t1
+    LIMIT 0
+    RETURNING *;
+
+    -- Pass null for the column that has a default value
+    -- and use a weird order for the columns.
+    INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+    SELECT
+        'string_90',
+        90,
+        t1.dist_col,
+        t1.text_col_2,
+        'string_100',
+        null,
+        100
     FROM dist_table_1 t1
     RETURNING *;
 COMMIT;
@@ -1320,8 +1428,6 @@ SELECT
     t1.text_col_2
 FROM dist_table_1 t1
 RETURNING *;
-
-SELECT * FROM local_table_5 ORDER BY 1,2,3,4,5,6,7,8;
 
 CREATE TABLE local_table_6 (
     col_1 int,

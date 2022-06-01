@@ -2296,8 +2296,11 @@ CREATE TABLE local_table_4(
 );
 CREATE TABLE dist_table_1(
     dist_col integer,
+    drop_me_1 text,
     int_col integer,
+    drop_me_2 text,
     text_col_1 text,
+    drop_me_3 int,
     text_col_2 text
 );
 SELECT create_distributed_table('dist_table_1', 'dist_col');
@@ -2306,6 +2309,10 @@ SELECT create_distributed_table('dist_table_1', 'dist_col');
 
 (1 row)
 
+-- drop "drop_me_*" columns to test together with dropped columns in relevant tests
+ALTER TABLE dist_table_1 DROP COLUMN drop_me_1;
+ALTER TABLE dist_table_1 DROP COLUMN drop_me_2;
+ALTER TABLE dist_table_1 DROP COLUMN drop_me_3;
 INSERT INTO dist_table_1 VALUES (10, 11, 'string_10', 'string_11');
 NOTICE:  executing the command locally: INSERT INTO single_node.dist_table_1_102048 (dist_col, int_col, text_col_1, text_col_2) VALUES (10, 11, 'string_10'::text, 'string_11'::text)
 -- test remote execution
@@ -2438,15 +2445,28 @@ SELECT * FROM local_table_4 ORDER BY 1,2,3,4,5,6,7,8;
 -- test using a column that has a default value
 CREATE TABLE local_table_5(
     col_1 integer,
+    drop_me_1 text,
     col_2 integer,
     col_3 text,
+    drop_me_2 int,
     col_4 text default 'deftext',
+    drop_me_3 text,
     col_5 int,
     col_6 text,
+    drop_me_4 text,
     col_7 text,
+    drop_me_5 int,
     col_8 text
 );
+-- drop "drop_me_*" columns to test together with dropped columns in relevant tests
+ALTER TABLE local_table_5 DROP COLUMN drop_me_1;
+ALTER TABLE local_table_5 DROP COLUMN drop_me_2;
+ALTER TABLE local_table_5 DROP COLUMN drop_me_3;
+ALTER TABLE local_table_5 DROP COLUMN drop_me_4;
+ALTER TABLE local_table_5 DROP COLUMN drop_me_5;
+--
 -- test remote execution
+--
 INSERT INTO local_table_5 (col_1, col_2, col_3, col_5, col_6, col_7, col_8)
 SELECT
     t1.dist_col,
@@ -2463,26 +2483,99 @@ RETURNING *;
     10 |     1 | string_1 | deftext |     2 | string_2 | string_10 | string_11
 (1 row)
 
+-- Specify the value for the column that has a default value
+-- and use a weird order for the columns.
+INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+SELECT
+    'string_3',
+    3,
+    t1.dist_col,
+    t1.text_col_2,
+    'string_4',
+    t1.text_col_1,
+    4
+FROM dist_table_1 t1
+RETURNING *;
+ col_1 | col_2 |  col_3   |   col_4   | col_5 |  col_6   | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |     3 | string_3 | string_10 |     4 | string_4 |       | string_11
+(1 row)
+
+-- Pass a string literal for the column that has a default value
+-- and use a weird order for the columns.
+INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+SELECT
+    'string_5',
+    5,
+    t1.dist_col,
+    t1.text_col_2,
+    'string_6',
+    'string_7',
+    6
+FROM dist_table_1 t1
+RETURNING *;
+ col_1 | col_2 |  col_3   |  col_4   | col_5 |  col_6   | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |     5 | string_5 | string_7 |     6 | string_6 |       | string_11
+(1 row)
+
+-- using limit 0
+INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+SELECT
+    'string_8',
+    7,
+    t1.dist_col,
+    t1.text_col_2,
+    null,
+    t1.text_col_1,
+    8
+FROM dist_table_1 t1
+LIMIT 0
+RETURNING *;
+ col_1 | col_2 | col_3 | col_4 | col_5 | col_6 | col_7 | col_8
+---------------------------------------------------------------------
+(0 rows)
+
+-- Pass null for the column that has a default value
+-- and use a weird order for the columns.
+INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+SELECT
+    'string_9',
+    9,
+    t1.dist_col,
+    t1.text_col_2,
+    'string_10',
+    null,
+    10
+FROM dist_table_1 t1
+RETURNING *;
+ col_1 | col_2 |  col_3   | col_4 | col_5 |   col_6   | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |     9 | string_9 |       |    10 | string_10 |       | string_11
+(1 row)
+
+--
 -- test local execution
+--
 BEGIN;
     INSERT INTO local_table_5 (col_1, col_2, col_3, col_5, col_6, col_7, col_8)
     SELECT
         t1.dist_col,
-        3,
-        'string_3',
-        4,
-        'string_4',
+        10,
+        'string_10',
+        20,
+        'string_20',
         t1.text_col_1,
         t1.text_col_2
     FROM dist_table_1 t1
     RETURNING *;
-NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_3'::text AS col_3, 'deftext'::text AS col_4, 4, 'string_4'::text AS col_6, text_col_1, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
-NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_3'::text AS col_3, 'deftext'::text AS col_4, 4, 'string_4'::text AS col_6, text_col_1, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
-NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_3'::text AS col_3, 'deftext'::text AS col_4, 4, 'string_4'::text AS col_6, text_col_1, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
-NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_3'::text AS col_3, 'deftext'::text AS col_4, 4, 'string_4'::text AS col_6, text_col_1, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
- col_1 | col_2 |  col_3   |  col_4  | col_5 |  col_6   |   col_7   |   col_8
+NOTICE:  executing the command locally: SELECT dist_col, 10, 'string_10'::text AS col_3, 'deftext'::text AS col_4, 20, 'string_20'::text AS col_6, text_col_1, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 10, 'string_10'::text AS col_3, 'deftext'::text AS col_4, 20, 'string_20'::text AS col_6, text_col_1, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 10, 'string_10'::text AS col_3, 'deftext'::text AS col_4, 20, 'string_20'::text AS col_6, text_col_1, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 10, 'string_10'::text AS col_3, 'deftext'::text AS col_4, 20, 'string_20'::text AS col_6, text_col_1, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
+ col_1 | col_2 |   col_3   |  col_4  | col_5 |   col_6   |   col_7   |   col_8
 ---------------------------------------------------------------------
-    10 |     3 | string_3 | deftext |     4 | string_4 | string_10 | string_11
+    10 |    10 | string_10 | deftext |    20 | string_20 | string_10 | string_11
 (1 row)
 
     -- Specify the value for the column that has a default value
@@ -2490,43 +2583,82 @@ NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_3'::text AS 
     INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
     SELECT
         'string_30',
-        3,
+        30,
         t1.dist_col,
         t1.text_col_2,
         'string_40',
         t1.text_col_1,
-        4
+        40
     FROM dist_table_1 t1
     RETURNING *;
-NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_30'::text AS col_3, text_col_1, 4, 'string_40'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
-NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_30'::text AS col_3, text_col_1, 4, 'string_40'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
-NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_30'::text AS col_3, text_col_1, 4, 'string_40'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
-NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_30'::text AS col_3, text_col_1, 4, 'string_40'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 30, 'string_30'::text AS col_3, text_col_1, 40, 'string_40'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 30, 'string_30'::text AS col_3, text_col_1, 40, 'string_40'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 30, 'string_30'::text AS col_3, text_col_1, 40, 'string_40'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 30, 'string_30'::text AS col_3, text_col_1, 40, 'string_40'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
  col_1 | col_2 |   col_3   |   col_4   | col_5 |   col_6   | col_7 |   col_8
 ---------------------------------------------------------------------
-    10 |     3 | string_30 | string_10 |     4 | string_40 |       | string_11
+    10 |    30 | string_30 | string_10 |    40 | string_40 |       | string_11
 (1 row)
 
     -- Pass a string literal for the column that has a default value
     -- and use a weird order for the columns.
     INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
     SELECT
-        'string_300',
-        3,
+        'string_50',
+        50,
         t1.dist_col,
         t1.text_col_2,
-        'string_400',
-        'string_500',
-        4
+        'string_60',
+        'string_70',
+        60
     FROM dist_table_1 t1
     RETURNING *;
-NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_300'::text AS col_3, 'string_500'::text AS col_4, 4, 'string_400'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
-NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_300'::text AS col_3, 'string_500'::text AS col_4, 4, 'string_400'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
-NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_300'::text AS col_3, 'string_500'::text AS col_4, 4, 'string_400'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
-NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_300'::text AS col_3, 'string_500'::text AS col_4, 4, 'string_400'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
- col_1 | col_2 |   col_3    |   col_4    | col_5 |   col_6    | col_7 |   col_8
+NOTICE:  executing the command locally: SELECT dist_col, 50, 'string_50'::text AS col_3, 'string_70'::text AS col_4, 60, 'string_60'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 50, 'string_50'::text AS col_3, 'string_70'::text AS col_4, 60, 'string_60'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 50, 'string_50'::text AS col_3, 'string_70'::text AS col_4, 60, 'string_60'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 50, 'string_50'::text AS col_3, 'string_70'::text AS col_4, 60, 'string_60'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
+ col_1 | col_2 |   col_3   |   col_4   | col_5 |   col_6   | col_7 |   col_8
 ---------------------------------------------------------------------
-    10 |     3 | string_300 | string_500 |     4 | string_400 |       | string_11
+    10 |    50 | string_50 | string_70 |    60 | string_60 |       | string_11
+(1 row)
+
+    -- using limit 0
+    INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+    SELECT
+        'string_80',
+        70,
+        t1.dist_col,
+        t1.text_col_2,
+        null,
+        t1.text_col_1,
+        80
+    FROM dist_table_1 t1
+    LIMIT 0
+    RETURNING *;
+ col_1 | col_2 | col_3 | col_4 | col_5 | col_6 | col_7 | col_8
+---------------------------------------------------------------------
+(0 rows)
+
+    -- Pass null for the column that has a default value
+    -- and use a weird order for the columns.
+    INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+    SELECT
+        'string_90',
+        90,
+        t1.dist_col,
+        t1.text_col_2,
+        'string_100',
+        null,
+        100
+    FROM dist_table_1 t1
+    RETURNING *;
+NOTICE:  executing the command locally: SELECT dist_col, 90, 'string_90'::text AS col_3, NULL::text AS col_4, 100, 'string_100'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 90, 'string_90'::text AS col_3, NULL::text AS col_4, 100, 'string_100'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 90, 'string_90'::text AS col_3, NULL::text AS col_4, 100, 'string_100'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 90, 'string_90'::text AS col_3, NULL::text AS col_4, 100, 'string_100'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
+ col_1 | col_2 |   col_3   | col_4 | col_5 |   col_6    | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |    90 | string_90 |       |   100 | string_100 |       | string_11
 (1 row)
 
 COMMIT;
@@ -2555,16 +2687,6 @@ RETURNING *;
                Node: host=localhost port=xxxxx dbname=regression
                ->  Seq Scan on dist_table_1_102048 t1 (actual rows=1 loops=1)
 (9 rows)
-
-SELECT * FROM local_table_5 ORDER BY 1,2,3,4,5,6,7,8;
- col_1 | col_2 |   col_3    |   col_4    | col_5 |   col_6    |   col_7   |   col_8
----------------------------------------------------------------------
-    10 |     1 | string_1   | deftext    |     2 | string_2   | string_10 | string_11
-    10 |     3 | string_3   | deftext    |     4 | string_4   | string_10 | string_11
-    10 |     3 | string_30  | string_10  |     4 | string_40  |           | string_11
-    10 |     3 | string_300 | string_500 |     4 | string_400 |           | string_11
-    10 |     5 | string_5   | deftext    |     6 | string_6   | string_10 | string_11
-(5 rows)
 
 CREATE TABLE local_table_6 (
     col_1 int,
@@ -2641,18 +2763,22 @@ NOTICE:  executing the command locally: SELECT 'deftext'::text AS col_4, 'string
 NOTICE:  executing the command locally: SELECT 'deftext'::text AS col_4, 'string_4'::text AS col_6, text_col_1, 'string_1000'::text AS col_8 FROM single_node.dist_table_1_102051 t1 WHERE true GROUP BY text_col_1
 NOTICE:  executing the command locally: SELECT col_4, col_6, text_col_1, col_8 FROM (SELECT intermediate_result.col_4, intermediate_result.col_6, intermediate_result.text_col_1, intermediate_result.col_8 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(col_4 text, col_6 text, text_col_1 text, col_8 text)) citus_insert_select_subquery
 SELECT * FROM local_table_5 ORDER BY 1,2,3,4,5,6,7,8;
- col_1 | col_2 |   col_3    |   col_4    | col_5 |   col_6    |   col_7   |    col_8
+ col_1 | col_2 |   col_3   |   col_4   | col_5 |   col_6    |   col_7   |    col_8
 ---------------------------------------------------------------------
-    10 |     1 | string_1   | deftext    |     2 | string_2   | string_10 | string_11
-    10 |     3 | string_3   | deftext    |     4 | string_4   | string_10 | string_1000
-    10 |     3 | string_3   | deftext    |     4 | string_4   | string_10 | string_11
-    10 |     3 | string_30  | string_10  |     4 | string_40  |           | string_11
-    10 |     3 | string_300 | string_500 |     4 | string_400 |           | string_11
-    10 |     5 | string_5   | deftext    |     6 | string_6   | string_10 | string_11
-       |       | string_10  | deftext    |       |            |           |
-       |       |            | deftext    |       | string_4   | string_10 | string_1000
-       |       |            | deftext    |       |            | string_10 | string_1000
-(9 rows)
+    10 |     1 | string_1  | deftext   |     2 | string_2   | string_10 | string_11
+    10 |     3 | string_3  | deftext   |     4 | string_4   | string_10 | string_1000
+    10 |     3 | string_3  | string_10 |     4 | string_4   |           | string_11
+    10 |     5 | string_5  | deftext   |     6 | string_6   | string_10 | string_11
+    10 |     5 | string_5  | string_7  |     6 | string_6   |           | string_11
+    10 |     9 | string_9  |           |    10 | string_10  |           | string_11
+    10 |    10 | string_10 | deftext   |    20 | string_20  | string_10 | string_11
+    10 |    30 | string_30 | string_10 |    40 | string_40  |           | string_11
+    10 |    50 | string_50 | string_70 |    60 | string_60  |           | string_11
+    10 |    90 | string_90 |           |   100 | string_100 |           | string_11
+       |       | string_10 | deftext   |       |            |           |
+       |       |           | deftext   |       | string_4   | string_10 | string_1000
+       |       |           | deftext   |       |            | string_10 | string_1000
+(13 rows)
 
 -- suppress notices
 SET client_min_messages TO error;
