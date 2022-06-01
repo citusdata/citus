@@ -207,7 +207,6 @@ GetTextSearchDictionaryInitOptions(HeapTuple tup, Form_pg_ts_dict dict)
 	List *initOptionDefElemList = NIL;
 	if (!isnull)
 	{
-		/* TODO: might need copying */
 		initOptionDefElemList = deserialize_deflist(dictinitoption);
 	}
 

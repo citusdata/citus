@@ -67,7 +67,6 @@
 #include "utils/datum.h"
 #include "utils/elog.h"
 #include "utils/hsearch.h"
-#include "utils/jsonb.h"
 #if PG_VERSION_NUM >= PG_VERSION_13
 #include "common/hashfn.h"
 #endif
@@ -2250,7 +2249,7 @@ InstalledExtensionVersion(void)
 		MemoryContext oldMemoryContext = MemoryContextSwitchTo(
 			MetadataCacheMemoryContext);
 
-		installedExtensionVersion = text_to_cstring(DatumGetTextPCopy(installedVersion));
+		installedExtensionVersion = text_to_cstring(DatumGetTextPP(installedVersion));
 
 		MemoryContextSwitchTo(oldMemoryContext);
 	}
@@ -4883,10 +4882,6 @@ DistNodeMetadata(void)
 		ereport(ERROR, (errmsg(
 							"could not find any entries in pg_dist_metadata")));
 	}
-
-	/* copy the jsonb result before closing the table */
-	/* since that memory can be freed */
-	metadata = JsonbPGetDatum(DatumGetJsonbPCopy(metadata));
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistNodeMetadata, AccessShareLock);
