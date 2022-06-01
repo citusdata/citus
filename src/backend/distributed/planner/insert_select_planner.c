@@ -380,23 +380,30 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *originalQuery, ParamL
 	RangeTblEntry *insertRte = ExtractResultRelationRTEOrError(insertSelectQuery);
 	Oid targetRelationId = insertRte->relid;
 
-	Query *selectQuery = BuildSelectForInsertSelect(insertSelectQuery);
-
-	selectRte->subquery = selectQuery;
 	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
 
 	/*
 	 * Cast types of insert target list and select projection list to
 	 * match the column types of the target relation.
 	 */
-	selectQuery->targetList =
+	selectRte->subquery->targetList =
 		AddInsertSelectCasts(insertSelectQuery->targetList,
-							 selectQuery->targetList,
+							 selectRte->subquery->targetList,
 							 targetRelationId);
 
+	/*
+	 * Due to ReorderInsertSelectTargetLists(), now the Vars in GROUP BY
+	 * clause might be pointing to an incorrect range table entry. For this
+	 * reason, need to wrap SELECT query in a subquery in that case, in
+	 * addition to the cases where BuildSelectForInsertSelect() does so by
+	 * default.
+	 */
+	bool wrapIfContainsGroupBy = true;
+	selectRte->subquery = BuildSelectForInsertSelect(insertSelectQuery,
+													 wrapIfContainsGroupBy);
 	insertSelectQuery->cteList = NIL;
-	DistributedPlan *distPlan = CreateDistributedPlan(planId, selectQuery,
-													  copyObject(selectQuery),
+	DistributedPlan *distPlan = CreateDistributedPlan(planId, selectRte->subquery,
+													  copyObject(selectRte->subquery),
 													  boundParams, hasUnresolvedParams,
 													  plannerRestrictionContext);
 
@@ -902,15 +909,8 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 	int targetEntryIndex = 0;
 
 	/*
-	 * Callers of this function are already sure about the fact that whole
-	 * SELECT query is wrapped in a subquery and hence represented by a single
-	 * RTE in the top-level.
-	 *
-	 * This is either done by postgres or by us by calling
-	 * BuildSelectForInsertSelect function for the query tree.
-	 *
-	 * And hence, while the first RTE always belongs to the table that we're
-	 * inserting into, the second one belongs to the subquery mentioned above.
+	 * While the first RTE always belongs to the table that we're inserting
+	 * into, the second one belongs to the subquery.
 	 */
 	Index subqueryVarNo = 2;
 
@@ -1439,7 +1439,14 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 		return distributedPlan;
 	}
 
-	Query *selectQuery = BuildSelectForInsertSelect(insertSelectQuery);
+	/*
+	 * We don't see a reason for wrapping SELECT query in a subquery for this
+	 * type of query, so avoid doing that to not introduce any unnecessary
+	 * overhead.
+	 */
+	bool wrapIfContainsGroupBy = false;
+	Query *selectQuery = BuildSelectForInsertSelect(insertSelectQuery,
+													wrapIfContainsGroupBy);
 
 	selectRte->subquery = selectQuery;
 	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);

@@ -2485,6 +2485,50 @@ NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_3'::text AS 
     10 |     3 | string_3 | deftext |     4 | string_4 | string_10 | string_11
 (1 row)
 
+    -- Specify the value for the column that has a default value
+    -- and use a weird order for the columns.
+    INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+    SELECT
+        'string_30',
+        3,
+        t1.dist_col,
+        t1.text_col_2,
+        'string_40',
+        t1.text_col_1,
+        4
+    FROM dist_table_1 t1
+    RETURNING *;
+NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_30'::text AS col_3, text_col_1, 4, 'string_40'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_30'::text AS col_3, text_col_1, 4, 'string_40'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_30'::text AS col_3, text_col_1, 4, 'string_40'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_30'::text AS col_3, text_col_1, 4, 'string_40'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
+ col_1 | col_2 |   col_3   |   col_4   | col_5 |   col_6   | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |     3 | string_30 | string_10 |     4 | string_40 |       | string_11
+(1 row)
+
+    -- Pass a string literal for the column that has a default value
+    -- and use a weird order for the columns.
+    INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+    SELECT
+        'string_300',
+        3,
+        t1.dist_col,
+        t1.text_col_2,
+        'string_400',
+        'string_500',
+        4
+    FROM dist_table_1 t1
+    RETURNING *;
+NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_300'::text AS col_3, 'string_500'::text AS col_4, 4, 'string_400'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102048 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_300'::text AS col_3, 'string_500'::text AS col_4, 4, 'string_400'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102049 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_300'::text AS col_3, 'string_500'::text AS col_4, 4, 'string_400'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102050 t1 WHERE true
+NOTICE:  executing the command locally: SELECT dist_col, 3, 'string_300'::text AS col_3, 'string_500'::text AS col_4, 4, 'string_400'::text AS col_6, text_col_2 FROM single_node.dist_table_1_102051 t1 WHERE true
+ col_1 | col_2 |   col_3    |   col_4    | col_5 |   col_6    | col_7 |   col_8
+---------------------------------------------------------------------
+    10 |     3 | string_300 | string_500 |     4 | string_400 |       | string_11
+(1 row)
+
 COMMIT;
 -- test EXPLAIN (ANALYZE)
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
@@ -2513,12 +2557,14 @@ RETURNING *;
 (9 rows)
 
 SELECT * FROM local_table_5 ORDER BY 1,2,3,4,5,6,7,8;
- col_1 | col_2 |  col_3   |  col_4  | col_5 |  col_6   |   col_7   |   col_8
+ col_1 | col_2 |   col_3    |   col_4    | col_5 |   col_6    |   col_7   |   col_8
 ---------------------------------------------------------------------
-    10 |     1 | string_1 | deftext |     2 | string_2 | string_10 | string_11
-    10 |     3 | string_3 | deftext |     4 | string_4 | string_10 | string_11
-    10 |     5 | string_5 | deftext |     6 | string_6 | string_10 | string_11
-(3 rows)
+    10 |     1 | string_1   | deftext    |     2 | string_2   | string_10 | string_11
+    10 |     3 | string_3   | deftext    |     4 | string_4   | string_10 | string_11
+    10 |     3 | string_30  | string_10  |     4 | string_40  |           | string_11
+    10 |     3 | string_300 | string_500 |     4 | string_400 |           | string_11
+    10 |     5 | string_5   | deftext    |     6 | string_6   | string_10 | string_11
+(5 rows)
 
 CREATE TABLE local_table_6 (
     col_1 int,
@@ -2545,6 +2591,68 @@ SELECT * FROM local_table_6 ORDER BY 1,2;
 ---------------------------------------------------------------------
      1 |           |     2
 (1 row)
+
+INSERT INTO local_table_5 (col_3)
+SELECT t1.text_col_1
+FROM dist_table_1 t1
+GROUP BY t1.text_col_1;
+NOTICE:  executing the command locally: SELECT text_col_1, 'deftext'::text AS col_4 FROM single_node.dist_table_1_102048 t1 WHERE true GROUP BY text_col_1
+NOTICE:  executing the command locally: SELECT text_col_1, 'deftext'::text AS col_4 FROM single_node.dist_table_1_102049 t1 WHERE true GROUP BY text_col_1
+NOTICE:  executing the command locally: SELECT text_col_1, 'deftext'::text AS col_4 FROM single_node.dist_table_1_102050 t1 WHERE true GROUP BY text_col_1
+NOTICE:  executing the command locally: SELECT text_col_1, 'deftext'::text AS col_4 FROM single_node.dist_table_1_102051 t1 WHERE true GROUP BY text_col_1
+NOTICE:  executing the command locally: SELECT text_col_1, col_4 FROM (SELECT intermediate_result.text_col_1, intermediate_result.col_4 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(text_col_1 text, col_4 text)) citus_insert_select_subquery
+INSERT INTO local_table_5 (col_1, col_2, col_3, col_5, col_6, col_7, col_8)
+SELECT
+    max(t1.dist_col),
+    3,
+    'string_3',
+    4,
+    'string_4',
+    t1.text_col_1,
+    'string_1000'
+FROM dist_table_1 t1
+GROUP BY t1.text_col_2, t1.text_col_1;
+NOTICE:  executing the command locally: SELECT max(dist_col) AS max, 3, 'string_3'::text AS col_3, 'deftext'::text AS col_4, 4, 'string_4'::text AS col_6, text_col_1, 'string_1000'::text AS col_8, text_col_2 AS worker_column_9 FROM single_node.dist_table_1_102048 t1 WHERE true GROUP BY text_col_2, text_col_1
+NOTICE:  executing the command locally: SELECT max(dist_col) AS max, 3, 'string_3'::text AS col_3, 'deftext'::text AS col_4, 4, 'string_4'::text AS col_6, text_col_1, 'string_1000'::text AS col_8, text_col_2 AS worker_column_9 FROM single_node.dist_table_1_102049 t1 WHERE true GROUP BY text_col_2, text_col_1
+NOTICE:  executing the command locally: SELECT max(dist_col) AS max, 3, 'string_3'::text AS col_3, 'deftext'::text AS col_4, 4, 'string_4'::text AS col_6, text_col_1, 'string_1000'::text AS col_8, text_col_2 AS worker_column_9 FROM single_node.dist_table_1_102050 t1 WHERE true GROUP BY text_col_2, text_col_1
+NOTICE:  executing the command locally: SELECT max(dist_col) AS max, 3, 'string_3'::text AS col_3, 'deftext'::text AS col_4, 4, 'string_4'::text AS col_6, text_col_1, 'string_1000'::text AS col_8, text_col_2 AS worker_column_9 FROM single_node.dist_table_1_102051 t1 WHERE true GROUP BY text_col_2, text_col_1
+NOTICE:  executing the command locally: SELECT max, "?column?", col_3, col_4, "?column?_1" AS "?column?", col_6, text_col_1, col_8 FROM (SELECT intermediate_result.max, intermediate_result."?column?", intermediate_result.col_3, intermediate_result.col_4, intermediate_result."?column?_1" AS "?column?", intermediate_result.col_6, intermediate_result.text_col_1, intermediate_result.col_8 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max integer, "?column?" integer, col_3 text, col_4 text, "?column?_1" integer, col_6 text, text_col_1 text, col_8 text)) citus_insert_select_subquery(max, "?column?", col_3, col_4, "?column?_1", col_6, text_col_1, col_8)
+INSERT INTO local_table_5 (col_7, col_8)
+SELECT
+t1.text_col_1,
+'string_1000'
+FROM dist_table_1 t1
+GROUP BY t1.text_col_1;
+NOTICE:  executing the command locally: SELECT 'deftext'::text AS col_4, text_col_1, 'string_1000'::text AS col_8 FROM single_node.dist_table_1_102048 t1 WHERE true GROUP BY text_col_1
+NOTICE:  executing the command locally: SELECT 'deftext'::text AS col_4, text_col_1, 'string_1000'::text AS col_8 FROM single_node.dist_table_1_102049 t1 WHERE true GROUP BY text_col_1
+NOTICE:  executing the command locally: SELECT 'deftext'::text AS col_4, text_col_1, 'string_1000'::text AS col_8 FROM single_node.dist_table_1_102050 t1 WHERE true GROUP BY text_col_1
+NOTICE:  executing the command locally: SELECT 'deftext'::text AS col_4, text_col_1, 'string_1000'::text AS col_8 FROM single_node.dist_table_1_102051 t1 WHERE true GROUP BY text_col_1
+NOTICE:  executing the command locally: SELECT col_4, text_col_1, col_8 FROM (SELECT intermediate_result.col_4, intermediate_result.text_col_1, intermediate_result.col_8 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(col_4 text, text_col_1 text, col_8 text)) citus_insert_select_subquery
+INSERT INTO local_table_5 (col_6, col_7, col_8)
+SELECT
+  'string_4',
+  t1.text_col_1,
+  'string_1000'
+FROM dist_table_1 t1
+GROUP BY t1.text_col_1;
+NOTICE:  executing the command locally: SELECT 'deftext'::text AS col_4, 'string_4'::text AS col_6, text_col_1, 'string_1000'::text AS col_8 FROM single_node.dist_table_1_102048 t1 WHERE true GROUP BY text_col_1
+NOTICE:  executing the command locally: SELECT 'deftext'::text AS col_4, 'string_4'::text AS col_6, text_col_1, 'string_1000'::text AS col_8 FROM single_node.dist_table_1_102049 t1 WHERE true GROUP BY text_col_1
+NOTICE:  executing the command locally: SELECT 'deftext'::text AS col_4, 'string_4'::text AS col_6, text_col_1, 'string_1000'::text AS col_8 FROM single_node.dist_table_1_102050 t1 WHERE true GROUP BY text_col_1
+NOTICE:  executing the command locally: SELECT 'deftext'::text AS col_4, 'string_4'::text AS col_6, text_col_1, 'string_1000'::text AS col_8 FROM single_node.dist_table_1_102051 t1 WHERE true GROUP BY text_col_1
+NOTICE:  executing the command locally: SELECT col_4, col_6, text_col_1, col_8 FROM (SELECT intermediate_result.col_4, intermediate_result.col_6, intermediate_result.text_col_1, intermediate_result.col_8 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(col_4 text, col_6 text, text_col_1 text, col_8 text)) citus_insert_select_subquery
+SELECT * FROM local_table_5 ORDER BY 1,2,3,4,5,6,7,8;
+ col_1 | col_2 |   col_3    |   col_4    | col_5 |   col_6    |   col_7   |    col_8
+---------------------------------------------------------------------
+    10 |     1 | string_1   | deftext    |     2 | string_2   | string_10 | string_11
+    10 |     3 | string_3   | deftext    |     4 | string_4   | string_10 | string_1000
+    10 |     3 | string_3   | deftext    |     4 | string_4   | string_10 | string_11
+    10 |     3 | string_30  | string_10  |     4 | string_40  |           | string_11
+    10 |     3 | string_300 | string_500 |     4 | string_400 |           | string_11
+    10 |     5 | string_5   | deftext    |     6 | string_6   | string_10 | string_11
+       |       | string_10  | deftext    |       |            |           |
+       |       |            | deftext    |       | string_4   | string_10 | string_1000
+       |       |            | deftext    |       |            | string_10 | string_1000
+(9 rows)
 
 -- suppress notices
 SET client_min_messages TO error;

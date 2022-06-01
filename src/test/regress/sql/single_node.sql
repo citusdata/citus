@@ -1277,6 +1277,34 @@ BEGIN;
         t1.text_col_2
     FROM dist_table_1 t1
     RETURNING *;
+
+    -- Specify the value for the column that has a default value
+    -- and use a weird order for the columns.
+    INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+    SELECT
+        'string_30',
+        3,
+        t1.dist_col,
+        t1.text_col_2,
+        'string_40',
+        t1.text_col_1,
+        4
+    FROM dist_table_1 t1
+    RETURNING *;
+
+    -- Pass a string literal for the column that has a default value
+    -- and use a weird order for the columns.
+    INSERT INTO local_table_5 (col_3, col_2, col_1, col_8, col_6, col_4, col_5)
+    SELECT
+        'string_300',
+        3,
+        t1.dist_col,
+        t1.text_col_2,
+        'string_400',
+        'string_500',
+        4
+    FROM dist_table_1 t1
+    RETURNING *;
 COMMIT;
 
 -- test EXPLAIN (ANALYZE)
@@ -1314,6 +1342,40 @@ INSERT INTO local_table_6 (col_1, col_2)
 SELECT col_1, col_2 FROM dist_table_2;
 
 SELECT * FROM local_table_6 ORDER BY 1,2;
+
+INSERT INTO local_table_5 (col_3)
+SELECT t1.text_col_1
+FROM dist_table_1 t1
+GROUP BY t1.text_col_1;
+
+INSERT INTO local_table_5 (col_1, col_2, col_3, col_5, col_6, col_7, col_8)
+SELECT
+    max(t1.dist_col),
+    3,
+    'string_3',
+    4,
+    'string_4',
+    t1.text_col_1,
+    'string_1000'
+FROM dist_table_1 t1
+GROUP BY t1.text_col_2, t1.text_col_1;
+
+INSERT INTO local_table_5 (col_7, col_8)
+SELECT
+t1.text_col_1,
+'string_1000'
+FROM dist_table_1 t1
+GROUP BY t1.text_col_1;
+
+INSERT INTO local_table_5 (col_6, col_7, col_8)
+SELECT
+  'string_4',
+  t1.text_col_1,
+  'string_1000'
+FROM dist_table_1 t1
+GROUP BY t1.text_col_1;
+
+SELECT * FROM local_table_5 ORDER BY 1,2,3,4,5,6,7,8;
 
 -- suppress notices
 SET client_min_messages TO error;
