@@ -656,12 +656,12 @@ CREATE USER read_access;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 SET ROLE read_access;
--- user shouldn't be able to execute alter_columnar_table_set
--- or alter_columnar_table_reset for a columnar table that it
+-- user shouldn't be able to execute ALTER TABLE ... SET
+-- or ALTER TABLE ... RESET for a columnar table that it
 -- doesn't own
-SELECT alter_columnar_table_set('test_pg12.superuser_columnar_table', chunk_group_row_limit => 100);
+ALTER TABLE test_pg12.superuser_columnar_table SET(columnar.chunk_group_row_limit = 100);
 ERROR:  permission denied for schema test_pg12
-SELECT alter_columnar_table_reset('test_pg12.superuser_columnar_table');
+ALTER TABLE test_pg12.superuser_columnar_table RESET (columnar.chunk_group_row_limit);
 ERROR:  permission denied for schema test_pg12
 RESET ROLE;
 DROP USER read_access;

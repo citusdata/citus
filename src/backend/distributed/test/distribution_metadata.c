@@ -259,9 +259,9 @@ relation_count_in_query(PG_FUNCTION_ARGS)
 	Node *parsetree = NULL;
 	foreach_ptr(parsetree, parseTreeList)
 	{
-		List *queryTreeList = pg_analyze_and_rewrite((RawStmt *) parsetree,
-													 queryStringChar,
-													 NULL, 0, NULL);
+		List *queryTreeList = pg_analyze_and_rewrite_fixedparams((RawStmt *) parsetree,
+																 queryStringChar,
+																 NULL, 0, NULL);
 
 		Query *query = NULL;
 		foreach_ptr(query, queryTreeList)

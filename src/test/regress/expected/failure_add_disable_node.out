@@ -54,7 +54,6 @@ ORDER BY placementid;
 (2 rows)
 
 SELECT citus_disable_node('localhost', :worker_2_proxy_port, true);
-NOTICE:  Node localhost:xxxxx has active shard placements. Some queries may fail after this operation. Use SELECT citus_activate_node('localhost', 9060) to activate this node back.
  citus_disable_node
 ---------------------------------------------------------------------
 
@@ -107,10 +106,11 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE SCHEMA").kill()');
 (1 row)
 
 SELECT master_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  server closed the connection unexpectedly
+WARNING:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 -- verify node is not activated
 SELECT * FROM master_get_active_worker_nodes()
 ORDER BY 1, 2;

@@ -16,6 +16,7 @@
 #include "distributed/worker_transaction.h"
 #include "nodes/pg_list.h"
 #include "storage/lock.h"
+#include "tcop/utility.h"
 
 
 /*
@@ -109,6 +110,26 @@ typedef enum CitusOperations
 						 (uint32) 0, \
 						 ADV_LOCKTAG_CLASS_CITUS_PLACEMENT_CLEANUP)
 
+/*
+ * DistLockConfigs are used to configure the locking behaviour of AcquireDistributedLockOnRelations
+ */
+enum DistLockConfigs
+{
+	/*
+	 * lock citus tables
+	 */
+	DIST_LOCK_DEFAULT = 0,
+
+	/*
+	 * lock tables that refer to locked citus tables with a foreign key
+	 */
+	DIST_LOCK_REFERENCING_TABLES = 1,
+
+	/*
+	 * throw an error if the lock is not immediately available
+	 */
+	DIST_LOCK_NOWAIT = 2
+};
 
 /* Lock shard/relation metadata for safe modifications */
 extern void LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
@@ -151,5 +172,10 @@ extern void LockParentShardResourceIfPartition(List *shardIntervalList,
 /* Lock mode translation between text and enum */
 extern LOCKMODE LockModeTextToLockMode(const char *lockModeName);
 extern const char * LockModeToLockModeText(LOCKMODE lockMode);
+extern void AcquireDistributedLockOnRelations(List *relationList, LOCKMODE lockMode,
+											  uint32 configs);
+extern void PreprocessLockStatement(LockStmt *stmt, ProcessUtilityContext context);
+
+extern bool EnableAcquiringUnsafeLockFromWorkers;
 
 #endif /* RESOURCE_LOCK_H */

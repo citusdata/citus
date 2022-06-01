@@ -176,7 +176,6 @@ class CitusUpgradeConfig(CitusBaseClusterConfig):
         self.user = SUPER_USER_NAME
         self.mixed_mode = arguments["--mixed"]
         self.fixed_port = 57635
-        self.is_mx = False
 
 
 class PostgresConfig(CitusDefaultClusterConfig):
@@ -187,6 +186,7 @@ class PostgresConfig(CitusDefaultClusterConfig):
         self.new_settings = {
             "citus.use_citus_managed_tables": False,
         }
+        self.skip_tests = ["nested_execution"]
 
 
 class CitusSingleNodeClusterConfig(CitusDefaultClusterConfig):
@@ -321,11 +321,14 @@ class CitusShardReplicationFactorClusterConfig(CitusDefaultClusterConfig):
         self.new_settings = {"citus.shard_replication_factor": 2}
         self.skip_tests = [
             # citus does not support foreign keys in distributed tables
-            # when citus.shard_replication_factor > 2
+            # when citus.shard_replication_factor >= 2
             "arbitrary_configs_truncate_partition_create", "arbitrary_configs_truncate_partition",
             # citus does not support modifying a partition when
-            # citus.shard_replication_factor > 2
-            "arbitrary_configs_truncate_cascade_create", "arbitrary_configs_truncate_cascade"]
+            # citus.shard_replication_factor >= 2
+            "arbitrary_configs_truncate_cascade_create", "arbitrary_configs_truncate_cascade",
+            # citus does not support colocating functions with distributed tables when
+            # citus.shard_replication_factor >= 2
+            "function_create", "functions"]
 
 
 class CitusSingleShardClusterConfig(CitusDefaultClusterConfig):
@@ -338,6 +341,9 @@ class CitusNonMxClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.is_mx = False
+        # citus does not support distributed functions
+        # when metadata is not synced
+        self.skip_tests = ["function_create", "functions", "nested_execution"]
 
 
 class PGUpgradeConfig(CitusBaseClusterConfig):

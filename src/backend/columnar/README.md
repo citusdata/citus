@@ -90,38 +90,25 @@ data.
 Set options using:
 
 ```sql
-alter_columnar_table_set(
-    relid REGCLASS,
-    chunk_group_row_limit INT4 DEFAULT NULL,
-    stripe_row_limit INT4 DEFAULT NULL,
-    compression NAME DEFAULT NULL,
-    compression_level INT4)
-```
-
-For example:
-
-```sql
-SELECT alter_columnar_table_set(
-    'my_columnar_table',
-    compression => 'none',
-    stripe_row_limit => 10000);
+ALTER TABLE my_columnar_table SET
+  (columnar.compression = none, columnar.stripe_row_limit = 10000);
 ```
 
 The following options are available:
 
-* **compression**: `[none|pglz|zstd|lz4|lz4hc]` - set the compression type
+* **columnar.compression**: `[none|pglz|zstd|lz4|lz4hc]` - set the compression type
   for _newly-inserted_ data. Existing data will not be
   recompressed/decompressed. The default value is `zstd` (if support
   has been compiled in).
-* **compression_level**: ``<integer>`` - Sets compression level. Valid
+* **columnar.compression_level**: ``<integer>`` - Sets compression level. Valid
   settings are from 1 through 19. If the compression method does not
   support the level chosen, the closest level will be selected
   instead.
-* **stripe_row_limit**: ``<integer>`` - the maximum number of rows per
+* **columnar.stripe_row_limit**: ``<integer>`` - the maximum number of rows per
   stripe for _newly-inserted_ data. Existing stripes of data will not
   be changed and may have more rows than this maximum value. The
   default value is `150000`.
-* **chunk_group_row_limit**: ``<integer>`` - the maximum number of rows per
+* **columnar.chunk_group_row_limit**: ``<integer>`` - the maximum number of rows per
   chunk for _newly-inserted_ data. Existing chunks of data will not be
   changed and may have more rows than this maximum value. The default
   value is `10000`.

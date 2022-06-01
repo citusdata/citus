@@ -22,9 +22,27 @@
  */
 typedef enum TargetWorkerSet
 {
+	/*
+	 * All the active primary nodes in the metadata which have metadata
+	 * except the coordinator
+	 */
 	NON_COORDINATOR_METADATA_NODES,
+
+	/*
+	 * All the active primary nodes in the metadata except the coordinator
+	 */
 	NON_COORDINATOR_NODES,
-	ALL_SHARD_NODES
+
+	/*
+	 * All active primary nodes in the metadata
+	 */
+	ALL_SHARD_NODES,
+
+	/*
+	 * All the active primary nodes in the metadata which have metadata
+	 * (includes the coodinator if it is added)
+	 */
+	METADATA_NODES
 } TargetWorkerSet;
 
 
@@ -56,10 +74,11 @@ extern void SendCommandListToWorkerOutsideTransaction(const char *nodeName,
 													  int32 nodePort,
 													  const char *nodeUser,
 													  List *commandList);
-extern void SendMetadataCommandListToWorkerInCoordinatedTransaction(const char *nodeName,
-																	int32 nodePort,
-																	const char *nodeUser,
-																	List *commandList);
+extern void SendMetadataCommandListToWorkerListInCoordinatedTransaction(
+	List *workerNodeList,
+	const char *
+	nodeUser,
+	List *commandList);
 extern void SendCommandToWorkersOptionalInParallel(TargetWorkerSet targetWorkerSet,
 												   const char *command,
 												   const char *user);

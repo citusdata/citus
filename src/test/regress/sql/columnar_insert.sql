@@ -119,7 +119,7 @@ DROP TABLE test_toast_columnar;
 -- We support writing into zero column tables, but not reading from them.
 -- We test that metadata makes sense so we can fix the read path in future.
 CREATE TABLE zero_col() USING columnar;
-SELECT alter_columnar_table_set('zero_col', chunk_group_row_limit => 1000);
+ALTER TABLE zero_col SET (columnar.chunk_group_row_limit = 1000);
 
 INSERT INTO zero_col DEFAULT VALUES;
 INSERT INTO zero_col DEFAULT VALUES;
@@ -144,20 +144,20 @@ select
   from columnar_test_helpers.columnar_storage_info('zero_col');
 
 SELECT relname, stripe_num, chunk_group_count, row_count FROM columnar.stripe a, pg_class b
-WHERE columnar_test_helpers.columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
+WHERE columnar.get_storage_id(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3,4;
 
 SELECT relname, stripe_num, value_count FROM columnar.chunk a, pg_class b
-WHERE columnar_test_helpers.columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
+WHERE columnar.get_storage_id(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3;
 
 SELECT relname, stripe_num, chunk_group_num, row_count FROM columnar.chunk_group a, pg_class b
-WHERE columnar_test_helpers.columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
+WHERE columnar.get_storage_id(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3,4;
 
 CREATE TABLE selfinsert(x int) USING columnar;
 
-SELECT alter_columnar_table_set('selfinsert', stripe_row_limit => 1000);
+ALTER TABLE selfinsert SET (columnar.stripe_row_limit = 1000);
 
 BEGIN;
   INSERT INTO selfinsert SELECT generate_series(1,1010);

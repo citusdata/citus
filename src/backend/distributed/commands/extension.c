@@ -10,6 +10,7 @@
 
 #include "postgres.h"
 
+#include "access/genam.h"
 #include "citus_version.h"
 #include "catalog/pg_extension_d.h"
 #include "commands/defrem.h"
@@ -37,6 +38,7 @@ static void AddSchemaFieldIfMissing(CreateExtensionStmt *stmt);
 static List * FilterDistributedExtensions(List *extensionObjectList);
 static List * ExtensionNameListToObjectAddressList(List *extensionObjectList);
 static void MarkExistingObjectDependenciesDistributedIfSupported(void);
+static List * GetAllViews(void);
 static bool ShouldPropagateExtensionCommand(Node *parseTree);
 static bool IsAlterExtensionSetSchemaCitus(Node *parseTree);
 static Node * RecreateExtensionStmt(Oid extensionOid);
@@ -295,7 +297,7 @@ FilterDistributedExtensions(List *extensionObjectList)
 {
 	List *extensionNameList = NIL;
 
-	Value *objectName = NULL;
+	String *objectName = NULL;
 	foreach_ptr(objectName, extensionObjectList)
 	{
 		const char *extensionName = strVal(objectName);
@@ -334,7 +336,7 @@ ExtensionNameListToObjectAddressList(List *extensionObjectList)
 {
 	List *extensionObjectAddressList = NIL;
 
-	Value *objectName;
+	String *objectName;
 	foreach_ptr(objectName, extensionObjectList)
 	{
 		/*
@@ -510,25 +512,77 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	Oid citusTableId = InvalidOid;
 	foreach_oid(citusTableId, citusTableIdList)
 	{
-		ObjectAddress tableAddress = { 0 };
-		ObjectAddressSet(tableAddress, RelationRelationId, citusTableId);
-
-		if (ShouldSyncTableMetadata(citusTableId))
+		if (!ShouldMarkRelationDistributed(citusTableId))
 		{
-			/* we need to pass pointer allocated in the heap */
-			ObjectAddress *addressPointer = palloc0(sizeof(ObjectAddress));
-			*addressPointer = tableAddress;
-
-			/* as of Citus 11, tables that should be synced are also considered object */
-			resultingObjectAddresses = lappend(resultingObjectAddresses, addressPointer);
+			continue;
 		}
 
-		List *distributableDependencyObjectAddresses =
-			GetDistributableDependenciesForObject(&tableAddress);
+		/* refrain reading the metadata cache for all tables */
+		if (ShouldSyncTableMetadataViaCatalog(citusTableId))
+		{
+			ObjectAddress tableAddress = { 0 };
+			ObjectAddressSet(tableAddress, RelationRelationId, citusTableId);
 
-		resultingObjectAddresses = list_concat(resultingObjectAddresses,
-											   distributableDependencyObjectAddresses);
+			/*
+			 * We mark tables distributed immediately because we also need to mark
+			 * views as distributed. We check whether the views that depend on
+			 * the table has any auto-distirbutable dependencies below. Citus
+			 * currently cannot "auto" distribute tables as dependencies, so we
+			 * mark them distributed immediately.
+			 */
+			MarkObjectDistributedLocally(&tableAddress);
+
+			/*
+			 * All the distributable dependencies of a table should be marked as
+			 * distributed.
+			 */
+			List *distributableDependencyObjectAddresses =
+				GetDistributableDependenciesForObject(&tableAddress);
+
+			resultingObjectAddresses =
+				list_concat(resultingObjectAddresses,
+							distributableDependencyObjectAddresses);
+		}
 	}
+
+	/*
+	 * As of Citus 11, views on Citus tables that do not have any unsupported
+	 * dependency should also be distributed.
+	 *
+	 * In general, we mark views distributed as long as it does not have
+	 * any unsupported dependencies.
+	 */
+	List *viewList = GetAllViews();
+	Oid viewOid = InvalidOid;
+	foreach_oid(viewOid, viewList)
+	{
+		if (!ShouldMarkRelationDistributed(viewOid))
+		{
+			continue;
+		}
+
+		ObjectAddress viewAddress = { 0 };
+		ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
+
+		/*
+		 * If a view depends on multiple views, that view will be marked
+		 * as distributed while it is processed for the last view
+		 * table.
+		 */
+		MarkObjectDistributedLocally(&viewAddress);
+
+		/* we need to pass pointer allocated in the heap */
+		ObjectAddress *addressPointer = palloc0(sizeof(ObjectAddress));
+		*addressPointer = viewAddress;
+
+		List *distributableDependencyObjectAddresses =
+			GetDistributableDependenciesForObject(&viewAddress);
+
+		resultingObjectAddresses =
+			list_concat(resultingObjectAddresses,
+						distributableDependencyObjectAddresses);
+	}
+
 
 	/* resolve dependencies of the objects in pg_dist_object*/
 	List *distributedObjectAddressList = GetDistributedObjectAddressList();
@@ -562,6 +616,40 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	}
 
 	SetLocalEnableMetadataSync(prevMetadataSyncValue);
+}
+
+
+/*
+ * GetAllViews returns list of view oids that exists on this server.
+ */
+static List *
+GetAllViews(void)
+{
+	List *viewOidList = NIL;
+
+	Relation pgClass = table_open(RelationRelationId, AccessShareLock);
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgClass, InvalidOid, false, NULL,
+													0, NULL);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_class relationForm = (Form_pg_class) GETSTRUCT(heapTuple);
+
+		/* we're only interested in views */
+		if (relationForm->relkind == RELKIND_VIEW)
+		{
+			viewOidList = lappend_oid(viewOidList, relationForm->oid);
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgClass, NoLock);
+
+	return viewOidList;
 }
 
 
@@ -671,7 +759,7 @@ IsDropCitusExtensionStmt(Node *parseTree)
 	}
 
 	/* now that we have a DropStmt, check if citus extension is among the objects to dropped */
-	Value *objectName;
+	String *objectName;
 	foreach_ptr(objectName, dropStmt->objects)
 	{
 		const char *extensionName = strVal(objectName);

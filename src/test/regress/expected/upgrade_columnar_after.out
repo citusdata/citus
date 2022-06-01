@@ -101,10 +101,10 @@ SELECT * FROM matview ORDER BY a;
 (2 rows)
 
 -- test we retained options
-SELECT * FROM columnar.options WHERE regclass = 'test_options_1'::regclass;
-    regclass    | chunk_group_row_limit | stripe_row_limit | compression_level | compression
+SELECT * FROM columnar.options WHERE relation = 'test_options_1'::regclass;
+    relation    | chunk_group_row_limit | stripe_row_limit | compression | compression_level
 ---------------------------------------------------------------------
- test_options_1 |                  1000 |             5000 |                 3 | pglz
+ test_options_1 |                  1000 |             5000 | pglz        |                 3
 (1 row)
 
 VACUUM VERBOSE test_options_1;
@@ -121,10 +121,10 @@ SELECT count(*), sum(a), sum(b) FROM test_options_1;
  10000 | 50005000 | 45010
 (1 row)
 
-SELECT * FROM columnar.options WHERE regclass = 'test_options_2'::regclass;
-    regclass    | chunk_group_row_limit | stripe_row_limit | compression_level | compression
+SELECT * FROM columnar.options WHERE relation = 'test_options_2'::regclass;
+    relation    | chunk_group_row_limit | stripe_row_limit | compression | compression_level
 ---------------------------------------------------------------------
- test_options_2 |                  2000 |             6000 |                13 | none
+ test_options_2 |                  2000 |             6000 | none        |                13
 (1 row)
 
 VACUUM VERBOSE test_options_2;
@@ -272,7 +272,7 @@ ROLLBACK;
 SELECT pg_class.oid INTO columnar_schema_members
 FROM pg_class, pg_namespace
 WHERE pg_namespace.oid=pg_class.relnamespace AND
-      pg_namespace.nspname='columnar';
+      pg_namespace.nspname='columnar_internal';
 SELECT refobjid INTO columnar_schema_members_pg_depend
 FROM pg_depend
 WHERE classid = 'pg_am'::regclass::oid AND
@@ -304,7 +304,7 @@ $$
 SELECT pg_class.oid INTO columnar_schema_members
 FROM pg_class, pg_namespace
 WHERE pg_namespace.oid=pg_class.relnamespace AND
-	  pg_namespace.nspname='columnar';
+	  pg_namespace.nspname='columnar_internal';
 SELECT refobjid INTO columnar_schema_members_pg_depend
 FROM pg_depend
 WHERE classid = 'pg_am'::regclass::oid AND

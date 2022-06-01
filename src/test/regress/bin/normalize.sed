@@ -219,6 +219,20 @@ s/^(ERROR:  child table is missing constraint "\w+)_([0-9])+"/\1_xxxxxx"/g
     }
 }
 
+# normalize for random waits for CREATE INDEX CONCURRENTLY isolation tests.
+# <waiting ...> outputs can be in separate lines, or on the same line, and hence
+# we have a slightly more complex pattern.
+# All the flaky tests use a index name that starts with `flaky` so we limit the
+# normalization using that pattern.
+/CREATE INDEX CONCURRENTLY flaky/ {
+	N; s/ <waiting ...>//
+}
+
+# Remove completion lines in isolation tests for CREATE INDEX CONCURRENTLY commands.
+# This is needed because the commands that are executed on the shards can block each other
+# for a small window of time and we may see the completion output in different lines.
+/step s2-flaky.* <... completed>/d
+
 # normalize long table shard name errors for alter_table_set_access_method and alter_distributed_table
 s/^(ERROR:  child table is missing constraint "\w+)_([0-9])+"/\1_xxxxxx"/g
 s/^(DEBUG:  the name of the shard \(abcde_01234567890123456789012345678901234567890_f7ff6612)_([0-9])+/\1_xxxxxx/g

@@ -137,27 +137,26 @@ SET columnar.chunk_group_row_limit = 1050;
 -- create columnar table
 CREATE TABLE columnar_table (a int) USING columnar;
 -- alter a columnar table that is created by that unprivileged user
-SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 2000);
+ALTER TABLE columnar_table SET (columnar.chunk_group_row_limit = 2000);
 -- insert some data and read
 INSERT INTO columnar_table VALUES (1), (1);
 SELECT * FROM columnar_table;
 -- Fail to alter a columnar table that is created by a different user
 SET ROLE full_access;
-SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 2000);
+ALTER TABLE columnar_table SET (columnar.chunk_group_row_limit = 2000);
 -- Fail to reset a columnar table value created by a different user
-SELECT alter_columnar_table_reset('columnar_table', chunk_group_row_limit => true);
+ALTER TABLE columnar_table RESET (columnar.chunk_group_row_limit);
 SET ROLE read_access;
 -- and drop it
 DROP TABLE columnar_table;
 
 -- cannot modify columnar metadata table as unprivileged user
-INSERT INTO columnar.stripe VALUES(99);
+INSERT INTO columnar_internal.stripe VALUES(99);
 -- Cannot drop columnar metadata table as unprivileged user.
 -- Privileged user also cannot drop but with a different error message.
 -- (since citus extension has a dependency to it)
-DROP TABLE columnar.chunk;
+DROP TABLE columnar_internal.chunk;
 
--- cannot read columnar.chunk since it could expose chunk min/max values
 SELECT * FROM columnar.chunk;
 
 -- test whether a read-only user can read from citus_tables view

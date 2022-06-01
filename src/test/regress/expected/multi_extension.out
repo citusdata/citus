@@ -94,7 +94,7 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar')
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal')
 ORDER BY 1, 2;
  type |      identity
 ---------------------------------------------------------------------
@@ -759,9 +759,9 @@ DROP TABLE columnar_table;
 ERROR:  loaded Citus library version differs from installed extension version
 CREATE INDEX ON columnar_table (a);
 ERROR:  loaded Citus library version differs from installed extension version
-SELECT alter_columnar_table_set('columnar_table', compression => 'pglz');
+ALTER TABLE columnar_table SET (columnar.compression = pglz);
 ERROR:  loaded Citus library version differs from installed extension version
-SELECT alter_columnar_table_reset('columnar_table');
+ALTER TABLE columnar_table RESET (columnar.compression);
 ERROR:  loaded Citus library version differs from installed extension version
 INSERT INTO columnar_table SELECT * FROM columnar_table;
 ERROR:  loaded Citus library version differs from installed extension version
@@ -1031,11 +1031,30 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                       | view citus_stat_activity
 (41 rows)
 
+-- Snapshot of state at 11.0-2
+ALTER EXTENSION citus UPDATE TO '11.0-2';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object |                         current_object
+---------------------------------------------------------------------
+                 | function citus_is_coordinator() boolean
+                 | function run_command_on_coordinator(text,boolean) SETOF record
+                 | function start_metadata_sync_to_all_nodes() boolean
+(3 rows)
+
+-- Test downgrade script (result should be empty)
+ALTER EXTENSION citus UPDATE TO '11.0-1';
+ALTER EXTENSION citus UPDATE TO '11.0-2';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
 -- Snapshot of state at 11.1-1
 ALTER EXTENSION citus UPDATE TO '11.1-1';
 SELECT * FROM multi_extension.print_extension_changes();
-                                    previous_object                                     | current_object
+                                    previous_object                                     |                             current_object
 ---------------------------------------------------------------------
+ function columnar.columnar_handler(internal) table_am_handler                          |
  function worker_cleanup_job_schema_cache() void                                        |
  function worker_create_schema(bigint,text) void                                        |
  function worker_fetch_foreign_file(text,text,bigint,text[],integer[]) void             |
@@ -1044,7 +1063,33 @@ SELECT * FROM multi_extension.print_extension_changes();
  function worker_merge_files_into_table(bigint,integer,text[],text[]) void              |
  function worker_range_partition_table(bigint,integer,text,text,oid,anyarray) void      |
  function worker_repartition_cleanup(bigint) void                                       |
-(8 rows)
+ sequence columnar.storageid_seq                                                        |
+ table columnar.chunk                                                                   |
+ table columnar.chunk_group                                                             |
+ table columnar.options                                                                 |
+ table columnar.stripe                                                                  |
+                                                                                        | function columnar.get_storage_id(regclass) bigint
+                                                                                        | function columnar_internal.columnar_handler(internal) table_am_handler
+                                                                                        | schema columnar_internal
+                                                                                        | sequence columnar_internal.storageid_seq
+                                                                                        | table columnar_internal.chunk
+                                                                                        | table columnar_internal.chunk_group
+                                                                                        | table columnar_internal.options
+                                                                                        | table columnar_internal.stripe
+                                                                                        | view columnar.chunk
+                                                                                        | view columnar.chunk_group
+                                                                                        | view columnar.options
+                                                                                        | view columnar.storage
+                                                                                        | view columnar.stripe
+(27 rows)
+
+-- Test downgrade script (result should be empty)
+ALTER EXTENSION citus UPDATE TO '11.0-2';
+ALTER EXTENSION citus UPDATE TO '11.1-1';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
@@ -1062,7 +1107,7 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar')
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal')
 ORDER BY 1, 2;
  type |      identity
 ---------------------------------------------------------------------

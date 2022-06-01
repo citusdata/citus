@@ -1,6 +1,7 @@
 CREATE SCHEMA global_cancel;
 SET search_path TO global_cancel;
 SET citus.next_shard_id TO 56789000;
+SET citus.grep_remote_commands TO '%pg_cancel_backend%';
 
 CREATE TABLE dist_table (a INT, b INT);
 SELECT create_distributed_table ('dist_table', 'a', shard_count:=4);

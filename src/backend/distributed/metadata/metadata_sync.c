@@ -50,6 +50,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata_utility.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/multi_executor.h"
@@ -97,6 +98,8 @@ static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 static void CreateShellTableOnWorkers(Oid relationId);
 static void CreateTableMetadataOnWorkers(Oid relationId);
+static void CreateDependingViewsOnWorkers(Oid relationId);
+static NodeMetadataSyncResult SyncNodeMetadataToNodesOptional(void);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 											bool citusTableWithNoDistKey);
 static bool SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
@@ -138,6 +141,7 @@ static char * RemoteTypeIdExpression(Oid typeId);
 static char * RemoteCollationIdExpression(Oid colocationId);
 
 
+PG_FUNCTION_INFO_V1(start_metadata_sync_to_all_nodes);
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_node);
 PG_FUNCTION_INFO_V1(stop_metadata_sync_to_node);
 PG_FUNCTION_INFO_V1(worker_record_sequence_dependency);
@@ -191,6 +195,33 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	SetLocalReplicateReferenceTablesOnActivate(prevReplicateRefTablesOnActivate);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * start_metadata_sync_to_all_nodes function sets hasmetadata column of
+ * all the primary worker nodes to true, and then activate nodes without
+ * replicating reference tables.
+ */
+Datum
+start_metadata_sync_to_all_nodes(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	EnsureSuperUser();
+	EnsureCoordinator();
+
+	List *workerNodes = ActivePrimaryNonCoordinatorNodeList(RowShareLock);
+
+	bool prevReplicateRefTablesOnActivate = ReplicateReferenceTablesOnActivate;
+	SetLocalReplicateReferenceTablesOnActivate(false);
+
+	ActivateNodeList(workerNodes);
+	TransactionModifiedNodeMetadata = true;
+
+	SetLocalReplicateReferenceTablesOnActivate(prevReplicateRefTablesOnActivate);
+
+	PG_RETURN_BOOL(true);
 }
 
 
@@ -273,7 +304,8 @@ SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort)
  * SyncCitusTableMetadata syncs citus table metadata to worker nodes with metadata.
  * Our definition of metadata includes the shell table and its inter relations with
  * other shell tables, corresponding pg_dist_object, pg_dist_partiton, pg_dist_shard
- * and pg_dist_shard placement entries.
+ * and pg_dist_shard placement entries. This function also propagates the views that
+ * depend on the given relation, to the metadata workers.
  */
 void
 SyncCitusTableMetadata(Oid relationId)
@@ -288,6 +320,51 @@ SyncCitusTableMetadata(Oid relationId)
 		ObjectAddressSet(relationAddress, RelationRelationId, relationId);
 		MarkObjectDistributed(&relationAddress);
 	}
+
+	CreateDependingViewsOnWorkers(relationId);
+}
+
+
+/*
+ * CreateDependingViewsOnWorkers takes a relationId and creates the views that depend on
+ * that relation on workers with metadata. Propagated views are marked as distributed.
+ */
+static void
+CreateDependingViewsOnWorkers(Oid relationId)
+{
+	List *views = GetDependingViews(relationId);
+
+	if (list_length(views) < 1)
+	{
+		/* no view to propagate */
+		return;
+	}
+
+	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
+	Oid viewOid = InvalidOid;
+	foreach_oid(viewOid, views)
+	{
+		if (!ShouldMarkRelationDistributed(viewOid))
+		{
+			continue;
+		}
+
+		ObjectAddress viewAddress = { 0 };
+		ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
+
+		EnsureDependenciesExistOnAllNodes(&viewAddress);
+
+		char *createViewCommand = CreateViewDDLCommand(viewOid);
+		char *alterViewOwnerCommand = AlterViewOwnerCommand(viewOid);
+
+		SendCommandToWorkersWithMetadata(createViewCommand);
+		SendCommandToWorkersWithMetadata(alterViewOwnerCommand);
+
+		MarkObjectDistributed(&viewAddress);
+	}
+
+	SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
 }
 
 
@@ -426,6 +503,24 @@ ClusterHasKnownMetadataWorkers()
 
 
 /*
+ * ShouldSyncUserCommandForObject checks if the user command should be synced to the
+ * worker nodes for the given object.
+ */
+bool
+ShouldSyncUserCommandForObject(ObjectAddress objectAddress)
+{
+	if (objectAddress.classId == RelationRelationId)
+	{
+		Oid relOid = objectAddress.objectId;
+		return ShouldSyncTableMetadata(relOid) ||
+			   get_rel_relkind(relOid) == RELKIND_VIEW;
+	}
+
+	return false;
+}
+
+
+/*
  * ShouldSyncTableMetadata checks if the metadata of a distributed table should be
  * propagated to metadata workers, i.e. the table is a hash distributed table or
  * reference/citus local table.
@@ -524,10 +619,10 @@ SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 	 */
 	if (raiseOnError)
 	{
-		SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
-																workerNode->workerPort,
-																currentUser,
-																recreateMetadataSnapshotCommandList);
+		SendMetadataCommandListToWorkerListInCoordinatedTransaction(list_make1(
+																		workerNode),
+																	currentUser,
+																	recreateMetadataSnapshotCommandList);
 		return true;
 	}
 	else
@@ -2219,16 +2314,16 @@ DetachPartitionCommandList(void)
 
 
 /*
- * SyncNodeMetadataToNodes tries recreating the metadata snapshot in the
- * metadata workers that are out of sync. Returns the result of
- * synchronization.
+ * SyncNodeMetadataToNodesOptional tries recreating the metadata
+ * snapshot in the metadata workers that are out of sync.
+ * Returns the result of synchronization.
  *
  * This function must be called within coordinated transaction
  * since updates on the pg_dist_node metadata must be rollbacked if anything
  * goes wrong.
  */
 static NodeMetadataSyncResult
-SyncNodeMetadataToNodes(void)
+SyncNodeMetadataToNodesOptional(void)
 {
 	NodeMetadataSyncResult result = NODE_METADATA_SYNC_SUCCESS;
 	if (!IsCoordinator())
@@ -2289,6 +2384,46 @@ SyncNodeMetadataToNodes(void)
 
 
 /*
+ * SyncNodeMetadataToNodes recreates the node metadata snapshot in all the
+ * metadata workers.
+ *
+ * This function runs within a coordinated transaction since updates on
+ * the pg_dist_node metadata must be rollbacked if anything
+ * goes wrong.
+ */
+void
+SyncNodeMetadataToNodes(void)
+{
+	EnsureCoordinator();
+
+	/*
+	 * Request a RowExclusiveLock so we don't run concurrently with other
+	 * functions updating pg_dist_node, but allow concurrency with functions
+	 * which are just reading from pg_dist_node.
+	 */
+	if (!ConditionalLockRelationOid(DistNodeRelationId(), RowExclusiveLock))
+	{
+		ereport(ERROR, (errmsg("cannot sync metadata because a concurrent "
+							   "metadata syncing operation is in progress")));
+	}
+
+	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerList)
+	{
+		if (workerNode->hasMetadata)
+		{
+			SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_metadatasynced,
+									 BoolGetDatum(true));
+
+			bool raiseOnError = true;
+			SyncNodeMetadataSnapshotToNode(workerNode, raiseOnError);
+		}
+	}
+}
+
+
+/*
  * SyncNodeMetadataToNodesMain is the main function for syncing node metadata to
  * MX nodes. It retries until success and then exits.
  */
@@ -2334,7 +2469,7 @@ SyncNodeMetadataToNodesMain(Datum main_arg)
 		{
 			UseCoordinatedTransaction();
 
-			NodeMetadataSyncResult result = SyncNodeMetadataToNodes();
+			NodeMetadataSyncResult result = SyncNodeMetadataToNodesOptional();
 			syncedAllNodes = (result == NODE_METADATA_SYNC_SUCCESS);
 
 			/* we use LISTEN/NOTIFY to wait for metadata syncing in tests */
@@ -3393,12 +3528,19 @@ ColocationGroupCreateCommandList(void)
 					 "distributioncolumncollationschema)  AS (VALUES ");
 
 	Relation pgDistColocation = table_open(DistColocationRelationId(), AccessShareLock);
+	Relation colocationIdIndexRel = index_open(DistColocationIndexId(), AccessShareLock);
 
-	bool indexOK = false;
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistColocation, InvalidOid, indexOK,
-													NULL, 0, NULL);
+	/*
+	 * It is not strictly necessary to read the tuples in order.
+	 * However, it is useful to get consistent behavior, both for regression
+	 * tests and also in production systems.
+	 */
+	SysScanDesc scanDescriptor =
+		systable_beginscan_ordered(pgDistColocation, colocationIdIndexRel,
+								   NULL, 0, NULL);
 
-	HeapTuple colocationTuple = systable_getnext(scanDescriptor);
+	HeapTuple colocationTuple = systable_getnext_ordered(scanDescriptor,
+														 ForwardScanDirection);
 
 	while (HeapTupleIsValid(colocationTuple))
 	{
@@ -3456,10 +3598,11 @@ ColocationGroupCreateCommandList(void)
 							 "NULL, NULL)");
 		}
 
-		colocationTuple = systable_getnext(scanDescriptor);
+		colocationTuple = systable_getnext_ordered(scanDescriptor, ForwardScanDirection);
 	}
 
-	systable_endscan(scanDescriptor);
+	systable_endscan_ordered(scanDescriptor);
+	index_close(colocationIdIndexRel, AccessShareLock);
 	table_close(pgDistColocation, AccessShareLock);
 
 	if (!hasColocations)

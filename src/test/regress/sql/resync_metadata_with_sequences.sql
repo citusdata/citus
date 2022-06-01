@@ -55,6 +55,7 @@ INSERT INTO sensors VALUES (DEFAULT, DEFAULT, '2010-01-01') RETURNING *;
 INSERT INTO sensors_news VALUES (DEFAULT, DEFAULT, '2021-01-01') RETURNING *;
 
 \c - - - :master_port
+SET client_min_messages TO ERROR;
 SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 
 

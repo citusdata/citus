@@ -1,24 +1,8 @@
 setup
 {
-    CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
-                                                                      distribution_column text,
-                                                                      distribution_method citus.distribution_type)
-        RETURNS void
-        LANGUAGE C STRICT
-        AS 'citus', $$master_create_distributed_table$$;
-    COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
-                                                                distribution_column text,
-                                                                distribution_method citus.distribution_type)
-        IS 'define the table distribution functions';
-    -- this function is dropped in Citus10, added here for tests
-    CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name text, shard_count integer,
-                                                                    replication_factor integer DEFAULT 2)
-        RETURNS void
-        AS 'citus', $$master_create_worker_shards$$
-        LANGUAGE C STRICT;
     CREATE TABLE test_dml_vs_repair (test_id integer NOT NULL, data int);
-    SELECT master_create_distributed_table('test_dml_vs_repair', 'test_id', 'hash');
-    SELECT master_create_worker_shards('test_dml_vs_repair', 1, 2);
+	SET citus.shard_replication_factor TO 2;
+    SELECT create_distributed_table('test_dml_vs_repair', 'test_id', 'hash', shard_count:=1);
 }
 
 teardown

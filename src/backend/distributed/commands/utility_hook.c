@@ -42,6 +42,7 @@
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
 #include "distributed/adaptive_executor.h"
+#include "distributed/backend_data.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
@@ -85,6 +86,7 @@ static int activeDropSchemaOrDBs = 0;
 static bool ConstraintDropped = false;
 
 
+ProcessUtility_hook_type PrevProcessUtility = NULL;
 int UtilityHookLevel = 0;
 
 
@@ -163,7 +165,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	parsetree = pstmt->utilityStmt;
 
 	if (IsA(parsetree, TransactionStmt) ||
-		IsA(parsetree, LockStmt) ||
 		IsA(parsetree, ListenStmt) ||
 		IsA(parsetree, NotifyStmt) ||
 		IsA(parsetree, ExecuteStmt) ||
@@ -180,8 +181,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * that state. Since we never need to intercept transaction statements,
 		 * skip our checks and immediately fall into standard_ProcessUtility.
 		 */
-		standard_ProcessUtility_compat(pstmt, queryString, false, context,
-									   params, queryEnv, dest, completionTag);
+		PrevProcessUtility_compat(pstmt, queryString, false, context,
+								  params, queryEnv, dest, completionTag);
 
 		return;
 	}
@@ -199,8 +200,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * Ensure that utility commands do not behave any differently until CREATE
 		 * EXTENSION is invoked.
 		 */
-		standard_ProcessUtility_compat(pstmt, queryString, false, context,
-									   params, queryEnv, dest, completionTag);
+		PrevProcessUtility_compat(pstmt, queryString, false, context,
+								  params, queryEnv, dest, completionTag);
 
 		return;
 	}
@@ -231,8 +232,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		PG_TRY();
 		{
-			standard_ProcessUtility_compat(pstmt, queryString, false, context,
-										   params, queryEnv, dest, completionTag);
+			PrevProcessUtility_compat(pstmt, queryString, false, context,
+									  params, queryEnv, dest, completionTag);
 
 			StoredProcedureLevel -= 1;
 
@@ -265,8 +266,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		PG_TRY();
 		{
-			standard_ProcessUtility_compat(pstmt, queryString, false, context,
-										   params, queryEnv, dest, completionTag);
+			PrevProcessUtility_compat(pstmt, queryString, false, context,
+									  params, queryEnv, dest, completionTag);
 
 			DoBlockLevel -= 1;
 		}
@@ -468,6 +469,18 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		PreprocessTruncateStatement((TruncateStmt *) parsetree);
 	}
 
+	if (IsA(parsetree, LockStmt))
+	{
+		/*
+		 * PreprocessLockStatement might lock the relations locally if the
+		 * node executing the command is in pg_dist_node. Even though the process
+		 * utility will re-acquire the locks across the same relations if the node
+		 * is in the metadata (in the pg_dist_node table) that should not be a problem,
+		 * plus it ensures consistent locking order between the nodes.
+		 */
+		PreprocessLockStatement((LockStmt *) parsetree, context);
+	}
+
 	/*
 	 * We only process ALTER TABLE ... ATTACH PARTITION commands in the function below
 	 * and distribute the partition if necessary.
@@ -487,6 +500,20 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		pstmt = copyObject(pstmt);
 		parsetree = pstmt->utilityStmt;
 		ops = GetDistributeObjectOps(parsetree);
+
+		/*
+		 * For some statements Citus defines a Qualify function. The goal of this function
+		 * is to take any ambiguity from the statement that is contextual on either the
+		 * search_path or current settings.
+		 * Instead of relying on the search_path and settings we replace any deduced bits
+		 * and fill them out how postgres would resolve them. This makes subsequent
+		 * deserialize calls for the statement portable to other postgres servers, the
+		 * workers in our case.
+		 */
+		if (ops && ops->qualify)
+		{
+			ops->qualify(parsetree);
+		}
 
 		if (ops && ops->preprocess)
 		{
@@ -591,8 +618,8 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			citusCanBeUpdatedToAvailableVersion = !InstalledAndAvailableVersionsSame();
 		}
 
-		standard_ProcessUtility_compat(pstmt, queryString, false, context,
-									   params, queryEnv, dest, completionTag);
+		PrevProcessUtility_compat(pstmt, queryString, false, context,
+								  params, queryEnv, dest, completionTag);
 
 		/*
 		 * if we are running ALTER EXTENSION citus UPDATE (to "<version>") command, we may need
@@ -1044,16 +1071,20 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 	EnsureCoordinator();
 
-	Oid targetRelationId = ddlJob->targetRelationId;
+	ObjectAddress targetObjectAddress = ddlJob->targetObjectAddress;
 
-	if (OidIsValid(targetRelationId))
+	if (OidIsValid(targetObjectAddress.classId))
 	{
 		/*
-		 * Only for ddlJobs that are targetting a relation (table) we want to sync
-		 * its metadata and verify some properties around the table.
+		 * Only for ddlJobs that are targetting an object we want to sync
+		 * its metadata.
 		 */
-		shouldSyncMetadata = ShouldSyncTableMetadata(targetRelationId);
-		EnsurePartitionTableNotReplicated(targetRelationId);
+		shouldSyncMetadata = ShouldSyncUserCommandForObject(targetObjectAddress);
+
+		if (targetObjectAddress.classId == RelationRelationId)
+		{
+			EnsurePartitionTableNotReplicated(targetObjectAddress.objectId);
+		}
 	}
 
 	bool localExecutionSupported = true;
@@ -1304,7 +1335,7 @@ CreateCustomDDLTaskList(Oid relationId, TableDDLCommand *command)
 	}
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
-	ddlJob->targetRelationId = relationId;
+	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->metadataSyncCommand = GetTableDDLCommand(command);
 	ddlJob->taskList = taskList;
 
@@ -1555,7 +1586,7 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 	}
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
-	ddlJob->targetRelationId = InvalidOid;
+	ddlJob->targetObjectAddress = InvalidObjectAddress;
 	ddlJob->metadataSyncCommand = NULL;
 	ddlJob->taskList = list_make1(task);
 
@@ -1582,27 +1613,4 @@ bool
 DropSchemaOrDBInProgress(void)
 {
 	return activeDropSchemaOrDBs > 0;
-}
-
-
-/*
- * ColumnarTableSetOptionsHook propagates columnar table options to shards, if
- * necessary.
- */
-void
-ColumnarTableSetOptionsHook(Oid relationId, ColumnarOptions options)
-{
-	if (EnableDDLPropagation && IsCitusTable(relationId))
-	{
-		/* when a columnar table is distributed update all settings on the shards */
-		Oid namespaceId = get_rel_namespace(relationId);
-		char *schemaName = get_namespace_name(namespaceId);
-		char *relationName = get_rel_name(relationId);
-		TableDDLCommand *command = ColumnarGetCustomTableOptionsDDL(schemaName,
-																	relationName,
-																	options);
-		DDLJob *ddljob = CreateCustomDDLTaskList(relationId, command);
-
-		ExecuteDistributedDDLJob(ddljob);
-	}
 }

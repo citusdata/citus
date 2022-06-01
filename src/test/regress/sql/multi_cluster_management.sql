@@ -8,6 +8,11 @@ ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1;
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
+-- I am coordinator
+SELECT citus_is_coordinator();
+-- workers are not coordinator
+SELECT result FROM run_command_on_workers('SELECT citus_is_coordinator()');
+
 -- get the active nodes
 SELECT master_get_active_worker_nodes();
 
@@ -50,6 +55,19 @@ SELECT run_command_on_workers('TRUNCATE pg_dist_colocation');
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
 
 SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+
+-- disable node with sync/force options
+SELECT citus_disable_node('localhost', :worker_1_port);
+SELECT citus_disable_node('localhost', :worker_1_port, synchronous:=true);
+SELECT run_command_on_workers($$SELECT array_agg(isactive ORDER BY nodeport) FROM pg_dist_node WHERE hasmetadata and noderole='primary'::noderole AND nodecluster='default'$$);
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+
+-- disable node with sync/force options
+SELECT citus_disable_node('localhost', :worker_2_port, synchronous:=true);
+SELECT run_command_on_workers($$SELECT array_agg(isactive ORDER BY nodeport) FROM pg_dist_node WHERE hasmetadata and noderole='primary'::noderole AND nodecluster='default'$$);
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
 SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
@@ -464,7 +482,32 @@ WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport ORDER
 
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'bogusproperty', false);
 
+SELECT nextval('pg_catalog.pg_dist_groupid_seq') AS last_group_id_cls \gset
+SELECT nextval('pg_catalog.pg_dist_node_nodeid_seq') AS last_node_id_cls \gset
+
+BEGIN;
+	-- show that we do not send any metadata to any nodes if not enabled
+	SET LOCAL citus.log_remote_commands TO ON;
+	SET LOCAL citus.grep_remote_commands TO '%pg_dist%';
+	SET citus.enable_metadata_sync TO OFF;
+	SELECT start_metadata_sync_to_all_nodes();
+	DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated;
+	SELECT 1 FROM citus_remove_node('localhost', :worker_1_port);
+	SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
+	SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
+	SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+ROLLBACK;
+
+-- keep the rest of the tests inact that depends node/group ids
+ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id_cls;
+ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id_cls;
+
 DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated;
+
+BEGIN;
+	SELECT start_metadata_sync_to_all_nodes();
+COMMIT;
+SELECT start_metadata_sync_to_all_nodes();
 
 -- verify that at the end of this file, all primary nodes have metadata synced
 SELECT bool_and(hasmetadata) AND bool_and(metadatasynced) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';

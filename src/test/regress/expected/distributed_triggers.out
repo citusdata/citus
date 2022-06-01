@@ -272,6 +272,8 @@ FOR EACH ROW EXECUTE FUNCTION distributed_triggers.bad_shardkey_record_change();
 -- Query-on-distributed table exception should catch this
 INSERT INTO data VALUES ('hello6','world6','{"hello6":"world6"}');
 ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "INSERT INTO distributed_triggers.data_changes (shard_key_value, object_id, change_id, operation_type, new_value)
     VALUES ('BAD', NEW.object_id, COALESCE(last_change_id + 1, 1), TG_OP, NEW.value)"
 PL/pgSQL function bad_shardkey_record_change() line XX at SQL statement
@@ -314,6 +316,8 @@ ORDER BY shard_key_value, object_id, change_id;
 DROP TRIGGER bad_shardkey_record_change_trigger ON data;
 CREATE OR REPLACE FUNCTION remote_shardkey_record_change()
 RETURNS trigger
+SET search_path = 'distributed_triggers'
+LANGUAGE plpgsql
 AS $$
 DECLARE
     last_change_id bigint;
@@ -321,12 +325,15 @@ BEGIN
     UPDATE distributed_triggers.data_changes SET operation_type = TG_OP;
     RETURN NULL;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 CREATE TRIGGER remote_shardkey_record_change_trigger
 AFTER INSERT OR UPDATE OR DELETE ON data
 FOR EACH ROW EXECUTE FUNCTION distributed_triggers.remote_shardkey_record_change();
 CREATE FUNCTION insert_document(key text, id text)
-RETURNS void LANGUAGE plpgsql AS $fn$
+RETURNS void
+LANGUAGE plpgsql
+SET search_path = 'distributed_triggers'
+AS $fn$
 BEGIN
 	INSERT INTO distributed_triggers.data VALUES (key, id, '{"id1":"id2"}');
 	DELETE FROM distributed_triggers.data where shard_key_value = key;
@@ -345,6 +352,8 @@ SELECT create_distributed_function(
 BEGIN;
 SELECT insert_document('hello7', 'world7');
 ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "UPDATE distributed_triggers.data_changes SET operation_type = TG_OP"
 PL/pgSQL function remote_shardkey_record_change() line XX at SQL statement
 while executing command on localhost:xxxxx
@@ -353,6 +362,8 @@ PL/pgSQL function insert_document(text,text) line XX at SQL statement
 END;
 SELECT insert_document('hello7', 'world7');
 ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "UPDATE distributed_triggers.data_changes SET operation_type = TG_OP"
 PL/pgSQL function remote_shardkey_record_change() line XX at SQL statement
 SQL statement "INSERT INTO distributed_triggers.data VALUES (key, id, '{"id1":"id2"}')"
@@ -496,11 +507,15 @@ AFTER INSERT OR UPDATE OR DELETE ON emptest
     FOR EACH STATEMENT EXECUTE FUNCTION distributed_triggers.record_emp();
 INSERT INTO emptest VALUES ('test5', 1);
 ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "INSERT INTO distributed_triggers.record_op SELECT 'dummy', TG_OP, now()"
 PL/pgSQL function record_emp() line XX at SQL statement
 while executing command on localhost:xxxxx
 DELETE FROM emptest;
 ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "INSERT INTO distributed_triggers.record_op SELECT 'dummy', TG_OP, now()"
 PL/pgSQL function distributed_triggers.record_emp() line XX at SQL statement
 while executing command on localhost:xxxxx
@@ -538,6 +553,8 @@ FOR EACH ROW EXECUTE FUNCTION distributed_triggers.record_change();
 TRUNCATE TABLE data_changes;
 INSERT INTO data_ref_table VALUES ('hello','world','{"ref":"table"}');
 ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "SELECT change_id                           FROM distributed_triggers.data_changes
       WHERE shard_key_value = NEW.shard_key_value AND object_id = NEW.object_id
       ORDER BY change_id DESC LIMIT 1"
@@ -545,6 +562,8 @@ PL/pgSQL function record_change() line XX at SQL statement
 while executing command on localhost:xxxxx
 INSERT INTO data_ref_table VALUES ('hello2','world2','{"ref":"table"}');
 ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "SELECT change_id                           FROM distributed_triggers.data_changes
       WHERE shard_key_value = NEW.shard_key_value AND object_id = NEW.object_id
       ORDER BY change_id DESC LIMIT 1"
@@ -583,6 +602,8 @@ SELECT create_reference_table('data_changes');
 
 INSERT INTO data_ref_table VALUES ('hello','world','{"ref":"table"}');
 ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "INSERT INTO distributed_triggers.data_changes (shard_key_value, object_id, change_id, operation_type, new_value)
       VALUES (NEW.shard_key_value, NEW.object_id, COALESCE(last_change_id + 1, 1), TG_OP, NEW.value)"
 PL/pgSQL function record_change() line XX at SQL statement
@@ -882,8 +903,8 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_trigger WHERE tgname lik
 (2 rows)
 
 RESET client_min_messages;
-SET citus.enable_unsafe_triggers TO false;
-SELECT run_command_on_workers('ALTER SYSTEM SET citus.enable_unsafe_triggers TO false;');
+RESET citus.enable_unsafe_triggers;
+SELECT run_command_on_workers('ALTER SYSTEM RESET citus.enable_unsafe_triggers;');
        run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,"ALTER SYSTEM")

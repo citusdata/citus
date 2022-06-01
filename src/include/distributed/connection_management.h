@@ -35,6 +35,9 @@
 /* application name used for internal connections in rebalancer */
 #define CITUS_REBALANCER_NAME "citus_rebalancer"
 
+/* application name used for connections made by run_command_on_* */
+#define CITUS_RUN_COMMAND_APPLICATION_NAME "citus_run_command"
+
 /* deal with waiteventset errors */
 #define WAIT_EVENT_SET_INDEX_NOT_INITIALIZED -1
 #define WAIT_EVENT_SET_INDEX_FAILED -2
@@ -285,8 +288,6 @@ extern void FinishConnectionListEstablishment(List *multiConnectionList);
 extern void FinishConnectionEstablishment(MultiConnection *connection);
 extern void ClaimConnectionExclusively(MultiConnection *connection);
 extern void UnclaimConnection(MultiConnection *connection);
-extern bool IsCitusInternalBackend(void);
-extern bool IsRebalancerInternalBackend(void);
 extern void MarkConnectionConnected(MultiConnection *connection);
 
 /* waiteventset utilities */

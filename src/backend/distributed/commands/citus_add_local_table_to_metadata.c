@@ -81,7 +81,9 @@ static char * GetRenameShardTriggerCommand(Oid shardRelationId, char *triggerNam
 										   uint64 shardId);
 static void DropRelationTruncateTriggers(Oid relationId);
 static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
+static void DropViewsOnTable(Oid relationId);
 static List * GetRenameStatsCommandList(List *statsOidList, uint64 shardId);
+static List * ReversedOidList(List *oidList);
 static void AppendExplicitIndexIdsToList(Form_pg_index indexForm,
 										 List **explicitIndexIdList,
 										 int flags);
@@ -328,6 +330,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	EnsureReferenceTablesExistOnAllNodes();
 
 	List *shellTableDDLEvents = GetShellTableDDLEventsForCitusLocalTable(relationId);
+	List *tableViewCreationCommands = GetViewCreationCommandsOfTable(relationId);
 
 	char *relationName = get_rel_name(relationId);
 	Oid relationSchemaId = get_rel_namespace(relationId);
@@ -341,6 +344,12 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 * via process utility.
 	 */
 	ExecuteAndLogUtilityCommandList(shellTableDDLEvents);
+
+	/*
+	 * Execute the view creation commands with the shell table.
+	 * Views will be distributed via FinalizeCitusLocalTableCreation below.
+	 */
+	ExecuteAndLogUtilityCommandListInTableTypeConversion(tableViewCreationCommands);
 
 	/*
 	 * Set shellRelationId as the relation with relationId now points
@@ -699,6 +708,9 @@ ConvertLocalTableToShard(Oid relationId)
 	 */
 	DropRelationTruncateTriggers(relationId);
 
+	/* drop views that depend on the shard table */
+	DropViewsOnTable(relationId);
+
 	/*
 	 * We create INSERT|DELETE|UPDATE triggers on shard relation too.
 	 * This is because citus prevents postgres executor to fire those
@@ -1016,6 +1028,53 @@ GetDropTriggerCommand(Oid relationId, char *triggerName)
 					 quotedTriggerName, qualifiedRelationName);
 
 	return dropCommand->data;
+}
+
+
+/*
+ * DropViewsOnTable drops the views that depend on the given relation.
+ */
+static void
+DropViewsOnTable(Oid relationId)
+{
+	List *views = GetDependingViews(relationId);
+
+	/*
+	 * GetDependingViews returns views in the dependency order. We should drop views
+	 * in the reversed order since dropping views can cascade to other views below.
+	 */
+	List *reverseOrderedViews = ReversedOidList(views);
+
+	Oid viewId = InvalidOid;
+	foreach_oid(viewId, reverseOrderedViews)
+	{
+		char *viewName = get_rel_name(viewId);
+		char *schemaName = get_namespace_name(get_rel_namespace(viewId));
+		char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
+
+		StringInfo dropCommand = makeStringInfo();
+		appendStringInfo(dropCommand, "DROP VIEW IF EXISTS %s",
+						 qualifiedViewName);
+
+		ExecuteAndLogUtilityCommand(dropCommand->data);
+	}
+}
+
+
+/*
+ * ReversedOidList takes a list of oids and returns the reverse ordered version of it.
+ */
+static List *
+ReversedOidList(List *oidList)
+{
+	List *reversed = NIL;
+	Oid oid = InvalidOid;
+	foreach_oid(oid, oidList)
+	{
+		reversed = lcons_oid(oid, reversed);
+	}
+
+	return reversed;
 }
 
 

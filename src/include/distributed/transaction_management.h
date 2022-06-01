@@ -76,6 +76,12 @@ typedef struct AllowedDistributionColumn
 } AllowedDistributionColumn;
 
 /*
+ * The current distribution column value passed as an argument to a forced
+ * function call delegation.
+ */
+extern AllowedDistributionColumn AllowedDistributionColumnValue;
+
+/*
  * GUC that determines whether a SELECT in a transaction block should also run in
  * a transaction block on the worker.
  */
@@ -131,7 +137,7 @@ extern void InitializeTransactionManagement(void);
 /* other functions */
 extern List * ActiveSubXactContexts(void);
 extern StringInfo BeginAndSetDistributedTransactionIdCommand(void);
-extern void TriggerMetadataSyncOnCommit(void);
+extern void TriggerNodeMetadataSyncOnCommit(void);
 
 
 #endif /*  TRANSACTION_MANAGMENT_H */

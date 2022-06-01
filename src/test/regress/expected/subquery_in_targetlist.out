@@ -278,6 +278,8 @@ ORDER BY 1 LIMIT 3;
 ERROR:  correlated subqueries are not supported when the FROM clause contains a subquery without FROM
 -- sublink on view
 CREATE TEMP VIEW view_1 AS (SELECT user_id, value_2 FROM users_table WHERE user_id = 1 AND value_1 = 1 ORDER BY 1,2);
+WARNING:  "view view_1" has dependency on unsupported object "schema pg_temp_xxx"
+DETAIL:  "view view_1" will be created only locally
 -- with distribution column group by
 SELECT (SELECT value_2 FROM view_1 WHERE user_id = e.user_id GROUP BY user_id, value_2)
 FROM events_table e
@@ -323,6 +325,8 @@ ORDER BY 1 LIMIT 3;
 
 -- sublink on reference table view
 CREATE TEMP VIEW view_2 AS (SELECT user_id, value_2 FROM users_reference_table WHERE user_id = 1 AND value_1 = 1);
+WARNING:  "view view_2" has dependency on unsupported object "schema pg_temp_xxx"
+DETAIL:  "view view_2" will be created only locally
 SELECT (SELECT value_2 FROM view_2 WHERE user_id = e.user_id GROUP BY user_id, value_2)
 FROM events_table e
 GROUP BY 1

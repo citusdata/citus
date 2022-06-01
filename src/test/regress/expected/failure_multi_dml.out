@@ -218,6 +218,12 @@ COMMIT;
     '],
     false
 );
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+while executing command on localhost:xxxxx
    master_run_on_worker
 ---------------------------------------------------------------------
  (localhost,57636,t,BEGIN)

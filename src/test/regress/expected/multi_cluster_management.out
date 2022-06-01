@@ -15,6 +15,21 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
         1
 (1 row)
 
+-- I am coordinator
+SELECT citus_is_coordinator();
+ citus_is_coordinator
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- workers are not coordinator
+SELECT result FROM run_command_on_workers('SELECT citus_is_coordinator()');
+ result
+---------------------------------------------------------------------
+ f
+ f
+(2 rows)
+
 -- get the active nodes
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes
@@ -109,6 +124,54 @@ SELECT run_command_on_workers('TRUNCATE pg_dist_colocation');
 
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
 SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- disable node with sync/force options
+SELECT citus_disable_node('localhost', :worker_1_port);
+ERROR:  disabling the first worker node in the metadata is not allowed
+DETAIL:  Citus uses the first worker node in the metadata for certain internal operations when replicated tables are modified. Synchronous mode ensures that all nodes have the same view of the first worker node, which is used for certain locking operations.
+HINT:  You can force disabling node, SELECT citus_disable_node('localhost', 57637, synchronous:=true);
+SELECT citus_disable_node('localhost', :worker_1_port, synchronous:=true);
+ citus_disable_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT run_command_on_workers($$SELECT array_agg(isactive ORDER BY nodeport) FROM pg_dist_node WHERE hasmetadata and noderole='primary'::noderole AND nodecluster='default'$$);
+   run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57638,t,"{f,t}")
+(1 row)
+
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- disable node with sync/force options
+SELECT citus_disable_node('localhost', :worker_2_port, synchronous:=true);
+ citus_disable_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT run_command_on_workers($$SELECT array_agg(isactive ORDER BY nodeport) FROM pg_dist_node WHERE hasmetadata and noderole='primary'::noderole AND nodecluster='default'$$);
+   run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"{t,f}")
+(1 row)
+
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -1127,7 +1190,67 @@ WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport ORDER
 
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'bogusproperty', false);
 ERROR:  only the 'shouldhaveshards' property can be set using this function
+SELECT nextval('pg_catalog.pg_dist_groupid_seq') AS last_group_id_cls \gset
+SELECT nextval('pg_catalog.pg_dist_node_nodeid_seq') AS last_node_id_cls \gset
+BEGIN;
+	-- show that we do not send any metadata to any nodes if not enabled
+	SET LOCAL citus.log_remote_commands TO ON;
+	SET LOCAL citus.grep_remote_commands TO '%pg_dist%';
+	SET citus.enable_metadata_sync TO OFF;
+	SELECT start_metadata_sync_to_all_nodes();
+ start_metadata_sync_to_all_nodes
+---------------------------------------------------------------------
+ t
+(1 row)
+
+	DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated;
+	SELECT 1 FROM citus_remove_node('localhost', :worker_1_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+	SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+	SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
+NOTICE:  issuing SELECT metadata ->> 'server_id' AS server_id FROM pg_dist_node_metadata
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+	SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+NOTICE:  issuing SELECT metadata ->> 'server_id' AS server_id FROM pg_dist_node_metadata
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+ROLLBACK;
+-- keep the rest of the tests inact that depends node/group ids
+ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id_cls;
+ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id_cls;
 DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated;
+BEGIN;
+	SELECT start_metadata_sync_to_all_nodes();
+ start_metadata_sync_to_all_nodes
+---------------------------------------------------------------------
+ t
+(1 row)
+
+COMMIT;
+SELECT start_metadata_sync_to_all_nodes();
+ start_metadata_sync_to_all_nodes
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- verify that at the end of this file, all primary nodes have metadata synced
 SELECT bool_and(hasmetadata) AND bool_and(metadatasynced) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';
  ?column?

@@ -43,7 +43,9 @@ SELECT * FROM citus_shard_indexes_on_worker WHERE "Schema" = 'mx_hide_shard_name
 
 -- make sure that pg_class queries do not get blocked on table locks
 begin;
+SET LOCAL citus.enable_ddl_propagation TO OFF;
 lock table test_table in access exclusive mode;
+
 prepare transaction 'take-aggressive-lock';
 
 -- shards are hidden when using psql as application_name
@@ -67,7 +69,7 @@ SELECT * FROM citus_shard_indexes_on_worker WHERE "Schema" = 'mx_hide_shard_name
 SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
 
 -- changing application_name reveals the shards
-SET application_name TO '';
+SET application_name TO 'pg_regress';
 SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
 RESET application_name;
 
@@ -76,7 +78,7 @@ SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_name
 
 -- changing application_name in transaction reveals the shards
 BEGIN;
-SET LOCAL application_name TO '';
+SET LOCAL application_name TO 'pg_regress';
 SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
 ROLLBACK;
 
@@ -85,7 +87,7 @@ SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_name
 
 -- now with session-level GUC, but ROLLBACK;
 BEGIN;
-SET application_name TO '';
+SET application_name TO 'pg_regress';
 ROLLBACK;
 
 -- shards are hidden again after GUCs are reset
@@ -94,7 +96,7 @@ SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_name
 -- we should hide correctly based on application_name with savepoints
 BEGIN;
 SAVEPOINT s1;
-SET application_name TO '';
+SET application_name TO 'pg_regress';
 -- changing application_name reveals the shards
 SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
 ROLLBACK TO SAVEPOINT s1;
@@ -102,9 +104,9 @@ ROLLBACK TO SAVEPOINT s1;
 SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
 ROLLBACK;
 
--- changing citus.hide_shards_from_app_name_prefixes reveals the shards
+-- changing citus.show_shards_for_app_name_prefix reveals the shards
 BEGIN;
-SET LOCAL citus.hide_shards_from_app_name_prefixes TO 'notpsql';
+SET LOCAL citus.show_shards_for_app_name_prefixes TO 'psql';
 SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
 ROLLBACK;
 

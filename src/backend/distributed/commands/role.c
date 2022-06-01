@@ -150,7 +150,7 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 
 			if (encryptedPassword != NULL)
 			{
-				Value *encryptedPasswordValue = makeString((char *) encryptedPassword);
+				String *encryptedPasswordValue = makeString((char *) encryptedPassword);
 				option->arg = (Node *) encryptedPasswordValue;
 			}
 			else
@@ -337,6 +337,7 @@ ExtractEncryptedPassword(Oid roleOid)
 
 	Datum passwordDatum = heap_getattr(tuple, Anum_pg_authid_rolpassword,
 									   pgAuthIdDescription, &isNull);
+	char *passwordCstring = TextDatumGetCString(passwordDatum);
 
 	table_close(pgAuthId, AccessShareLock);
 	ReleaseSysCache(tuple);
@@ -346,7 +347,7 @@ ExtractEncryptedPassword(Oid roleOid)
 		return NULL;
 	}
 
-	return pstrdup(TextDatumGetCString(passwordDatum));
+	return pstrdup(passwordCstring);
 }
 
 
@@ -741,8 +742,13 @@ makeStringConst(char *str, int location)
 {
 	A_Const *n = makeNode(A_Const);
 
+#if PG_VERSION_NUM >= PG_VERSION_15
+	n->val.sval.type = T_String;
+	n->val.sval.sval = str;
+#else
 	n->val.type = T_String;
 	n->val.val.str = str;
+#endif
 	n->location = location;
 
 	return (Node *) n;
@@ -759,8 +765,13 @@ makeIntConst(int val, int location)
 {
 	A_Const *n = makeNode(A_Const);
 
+#if PG_VERSION_NUM >= PG_VERSION_15
+	n->val.ival.type = T_Integer;
+	n->val.ival.ival = val;
+#else
 	n->val.type = T_Integer;
 	n->val.val.ival = val;
+#endif
 	n->location = location;
 
 	return (Node *) n;
@@ -777,8 +788,13 @@ makeFloatConst(char *str, int location)
 {
 	A_Const *n = makeNode(A_Const);
 
+#if PG_VERSION_NUM >= PG_VERSION_15
+	n->val.fval.type = T_Float;
+	n->val.fval.fval = str;
+#else
 	n->val.type = T_Float;
 	n->val.val.str = str;
+#endif
 	n->location = location;
 
 	return (Node *) n;

@@ -144,6 +144,8 @@ extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
 extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);
 
+extern void SetCreateCitusTransactionLevel(int val);
+extern int GetCitusCreationLevel(void);
 extern bool IsCitusTable(Oid relationId);
 extern bool IsCitusTableViaCatalog(Oid relationId);
 extern char PgDistPartitionViaCatalog(Oid relationId);
@@ -155,6 +157,7 @@ extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern Oid RelationIdForShard(uint64 shardId);
 extern bool ReferenceTableShardId(uint64 shardId);
+extern bool DistributedTableShardId(uint64 shardId);
 extern ShardPlacement * ShardPlacementOnGroupIncludingOrphanedPlacements(int32 groupId,
 																		 uint64 shardId);
 extern ShardPlacement * ActiveShardPlacementOnGroup(int32 groupId, uint64 shardId);
@@ -238,6 +241,7 @@ extern Oid DistShardLogicalRelidIndexId(void);
 extern Oid DistShardShardidIndexId(void);
 extern Oid DistPlacementShardidIndexId(void);
 extern Oid DistPlacementPlacementidIndexId(void);
+extern Oid DistColocationIndexId(void);
 extern Oid DistTransactionRelationId(void);
 extern Oid DistTransactionGroupIndexId(void);
 extern Oid DistPlacementGroupidIndexId(void);

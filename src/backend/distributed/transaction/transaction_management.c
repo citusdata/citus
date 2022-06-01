@@ -40,6 +40,7 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_log_messages.h"
 #include "distributed/commands.h"
+#include "distributed/metadata_cache.h"
 #include "utils/hsearch.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
@@ -115,8 +116,8 @@ AllowedDistributionColumn AllowedDistributionColumnValue;
 /* if disabled, distributed statements in a function may run as separate transactions */
 bool FunctionOpensTransactionBlock = true;
 
-/* if true, we should trigger metadata sync on commit */
-bool MetadataSyncOnCommit = false;
+/* if true, we should trigger node metadata sync on commit */
+bool NodeMetadataSyncOnCommit = false;
 
 
 /* transaction management functions */
@@ -205,8 +206,17 @@ InCoordinatedTransaction(void)
 void
 Use2PCForCoordinatedTransaction(void)
 {
-	Assert(InCoordinatedTransaction());
-
+	/*
+	 * If this transaction is also a coordinated
+	 * transaction, use 2PC. Otherwise, this
+	 * state change does nothing.
+	 *
+	 * In other words, when this flag is set,
+	 * we "should" use 2PC when needed (e.g.,
+	 * we are in a coordinated transaction and
+	 * the coordinated transaction does a remote
+	 * modification).
+	 */
 	ShouldCoordinatedTransactionUse2PC = true;
 }
 
@@ -288,11 +298,11 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			/*
 			 * Changes to catalog tables are now visible to the metadata sync
-			 * daemon, so we can trigger metadata sync if necessary.
+			 * daemon, so we can trigger node metadata sync if necessary.
 			 */
-			if (MetadataSyncOnCommit)
+			if (NodeMetadataSyncOnCommit)
 			{
-				TriggerMetadataSync(MyDatabaseId);
+				TriggerNodeMetadataSync(MyDatabaseId);
 			}
 
 			ResetGlobalVariables();
@@ -309,6 +319,17 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			/* empty the CommitContext to ensure we're not leaking memory */
 			MemoryContextSwitchTo(previousContext);
 			MemoryContextReset(CommitContext);
+
+			/* Set CreateCitusTransactionLevel to 0 since original transaction is about to be
+			 * committed.
+			 */
+
+			if (GetCitusCreationLevel() > 0)
+			{
+				/* Check CitusCreationLevel was correctly decremented to 1 */
+				Assert(GetCitusCreationLevel() == 1);
+				SetCreateCitusTransactionLevel(0);
+			}
 			break;
 		}
 
@@ -352,6 +373,20 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			AfterXactConnectionHandling(false);
 
 			ResetGlobalVariables();
+
+			/*
+			 * Clear MetadataCache table if we're aborting from a CREATE EXTENSION Citus
+			 * so that any created OIDs from the table are cleared and invalidated. We
+			 * also set CreateCitusTransactionLevel to 0 since that process has been aborted
+			 */
+			if (GetCitusCreationLevel() > 0)
+			{
+				/* Checks CitusCreationLevel correctly decremented to 1 */
+				Assert(GetCitusCreationLevel() == 1);
+
+				InvalidateMetadataSystemCache();
+				SetCreateCitusTransactionLevel(0);
+			}
 
 			/*
 			 * Make sure that we give the shared connections back to the shared
@@ -554,8 +589,9 @@ ResetGlobalVariables()
 	activeSetStmts = NULL;
 	ShouldCoordinatedTransactionUse2PC = false;
 	TransactionModifiedNodeMetadata = false;
-	MetadataSyncOnCommit = false;
+	NodeMetadataSyncOnCommit = false;
 	InTopLevelDelegatedFunctionCall = false;
+	InTableTypeConversionFunctionCall = false;
 	ResetWorkerErrorIndication();
 	memset(&AllowedDistributionColumnValue, 0,
 		   sizeof(AllowedDistributionColumn));
@@ -599,6 +635,13 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 				CoordinatedRemoteTransactionsSavepointRelease(subId);
 			}
 			PopSubXact(subId);
+
+			/* Set CachedDuringCitusCreation to one level lower to represent citus creation is done */
+
+			if (GetCitusCreationLevel() == GetCurrentTransactionNestLevel())
+			{
+				SetCreateCitusTransactionLevel(GetCitusCreationLevel() - 1);
+			}
 			break;
 		}
 
@@ -621,6 +664,16 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			}
 			PopSubXact(subId);
 
+			/*
+			 * Clear MetadataCache table if we're aborting from a CREATE EXTENSION Citus
+			 * so that any created OIDs from the table are cleared and invalidated. We
+			 * also set CreateCitusTransactionLevel to 0 since subtransaction has been aborted
+			 */
+			if (GetCitusCreationLevel() == GetCurrentTransactionNestLevel())
+			{
+				InvalidateMetadataSystemCache();
+				SetCreateCitusTransactionLevel(0);
+			}
 			break;
 		}
 
@@ -800,14 +853,14 @@ MaybeExecutingUDF(void)
 
 
 /*
- * TriggerMetadataSyncOnCommit sets a flag to do metadata sync on commit.
- * This is because new metadata only becomes visible to the metadata sync
- * daemon after commit happens.
+ * TriggerNodeMetadataSyncOnCommit sets a flag to do node metadata sync
+ * on commit. This is because new metadata only becomes visible to the
+ * metadata sync daemon after commit happens.
  */
 void
-TriggerMetadataSyncOnCommit(void)
+TriggerNodeMetadataSyncOnCommit(void)
 {
-	MetadataSyncOnCommit = true;
+	NodeMetadataSyncOnCommit = true;
 }
 
 

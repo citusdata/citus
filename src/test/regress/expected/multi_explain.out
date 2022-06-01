@@ -18,6 +18,16 @@ BEGIN
   RETURN result;
 END;
 $BODY$ LANGUAGE plpgsql;
+CREATE FUNCTION explain_analyze_json(query text)
+RETURNS jsonb
+AS $BODY$
+DECLARE
+  result jsonb;
+BEGIN
+  EXECUTE format('EXPLAIN (ANALYZE TRUE, FORMAT JSON) %s', query) INTO result;
+  RETURN result;
+END;
+$BODY$ LANGUAGE plpgsql;
 -- Function that parses explain output as XML
 CREATE FUNCTION explain_xml(query text)
 RETURNS xml
@@ -26,6 +36,17 @@ DECLARE
   result xml;
 BEGIN
   EXECUTE format('EXPLAIN (FORMAT XML) %s', query) INTO result;
+  RETURN result;
+END;
+$BODY$ LANGUAGE plpgsql;
+-- Function that parses explain output as XML
+CREATE FUNCTION explain_analyze_xml(query text)
+RETURNS xml
+AS $BODY$
+DECLARE
+  result xml;
+BEGIN
+  EXECUTE format('EXPLAIN (ANALYZE true, FORMAT XML) %s', query) INTO result;
   RETURN result;
 END;
 $BODY$ LANGUAGE plpgsql;
@@ -135,6 +156,13 @@ SELECT true AS valid FROM explain_json($$
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity$$);
 t
+SELECT true AS valid FROM explain_analyze_json($$
+	WITH a AS (
+		SELECT l_quantity, count(*) count_quantity FROM lineitem
+		GROUP BY l_quantity ORDER BY count_quantity, l_quantity LIMIT 10)
+	SELECT count(*) FROM a
+$$);
+t
 -- Test XML format
 EXPLAIN (COSTS FALSE, FORMAT XML)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
@@ -207,6 +235,13 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
 SELECT true AS valid FROM explain_xml($$
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity$$);
+t
+SELECT true AS valid FROM explain_analyze_xml($$
+	WITH a AS (
+		SELECT l_quantity, count(*) count_quantity FROM lineitem
+		GROUP BY l_quantity ORDER BY count_quantity, l_quantity LIMIT 10)
+	SELECT count(*) FROM a
+$$);
 t
 -- Test YAML format
 EXPLAIN (COSTS FALSE, FORMAT YAML)
@@ -3056,5 +3091,49 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
         Tuple data received from node: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on tbl_570036 tbl (actual rows=0 loops=1)
+PREPARE q1(int_wrapper_type) AS WITH a AS (SELECT * FROM tbl WHERE b = $1 AND a = 1 OFFSET 0) SELECT * FROM a;
+EXPLAIN (COSTS false) EXECUTE q1('(1)');
+Custom Scan (Citus Adaptive)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on tbl_570036 tbl
+              Filter: ((b = '(1)'::multi_explain.int_wrapper_type) AND (a = 1))
+EXPLAIN :default_analyze_flags EXECUTE q1('(1)');
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on tbl_570036 tbl (actual rows=0 loops=1)
+              Filter: ((b = $1) AND (a = 1))
+PREPARE q2(int_wrapper_type) AS WITH a AS (UPDATE tbl SET b = $1 WHERE a = 1 RETURNING *) SELECT * FROM a;
+EXPLAIN (COSTS false) EXECUTE q2('(1)');
+Custom Scan (Citus Adaptive)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  CTE Scan on a
+              CTE a
+                ->  Update on tbl_570036 tbl
+                      ->  Seq Scan on tbl_570036 tbl
+                            Filter: (a = 1)
+EXPLAIN :default_analyze_flags EXECUTE q2('(1)');
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  CTE Scan on a (actual rows=0 loops=1)
+              CTE a
+                ->  Update on tbl_570036 tbl (actual rows=0 loops=1)
+                      ->  Seq Scan on tbl_570036 tbl (actual rows=0 loops=1)
+                            Filter: (a = 1)
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_explain CASCADE;

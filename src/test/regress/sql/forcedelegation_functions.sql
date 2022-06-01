@@ -128,11 +128,8 @@ ROLLBACK;
 BEGIN;
 -- Query gets delegated to the node of the shard xx_900001 for the key=1,
 -- and the function inserts value (1+17) locally on the shard xx_900031
+-- which is not allowed because this is not a regular pushdown
 SELECT insert_data(intcol+17) from test_forcepushdown where intcol = 1;
-
--- This will fail with duplicate error as the function already inserted
--- the value(1+17)
-SELECT insert_data(18);
 COMMIT;
 
 --
@@ -278,10 +275,8 @@ END;
 BEGIN;
 
 -- Query lands on the shard with key = 300(shard __900089) and the function inserts locally
+-- which is not allowed because this is not a regular pushdown
 SELECT inner_force_delegation_function(id) FROM test_nested WHERE id = 300;
-
--- Query lands on the shard with key = 300(shard __900089) and the function inserts remotely
-SELECT insert_data_non_distarg(id) FROM test_nested WHERE id = 300;
 
 END;
 
@@ -291,6 +286,12 @@ END;
 
 -- Param(PARAM_EXEC) node e.g. SELECT fn((SELECT col from test_nested where col=val))
 BEGIN;
+SELECT inner_force_delegation_function((SELECT id+112 FROM test_nested WHERE id=400));
+END;
+
+BEGIN;
+SET LOCAL citus.propagate_set_commands TO 'local';
+SET LOCAL citus.allow_nested_distributed_execution TO on;
 SELECT inner_force_delegation_function((SELECT id+112 FROM test_nested WHERE id=400));
 END;
 

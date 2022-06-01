@@ -2,7 +2,7 @@
 // so setting the corresponding shard here is useful
 setup
 {
-
+    SET citus.enable_metadata_sync TO off;
     CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
     RETURNS VOID
     AS 'citus'
@@ -31,6 +31,7 @@ CREATE OR REPLACE PROCEDURE isolation_cleanup_orphaned_shards()
     AS 'citus', $$isolation_cleanup_orphaned_shards$$;
 COMMENT ON PROCEDURE isolation_cleanup_orphaned_shards()
     IS 'cleanup orphaned shards';
+    RESET citus.enable_metadata_sync;
 
     SET citus.next_shard_id to 120000;
 	SET citus.shard_count TO 8;

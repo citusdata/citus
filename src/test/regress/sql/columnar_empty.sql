@@ -7,11 +7,11 @@ create table t_uncompressed(a int) using columnar;
 create table t_compressed(a int) using columnar;
 
 -- set options
-SELECT alter_columnar_table_set('t_compressed', compression => 'pglz');
-SELECT alter_columnar_table_set('t_compressed', stripe_row_limit => 2000);
-SELECT alter_columnar_table_set('t_compressed', chunk_group_row_limit => 1000);
+ALTER TABLE t_compressed SET (columnar.compression = pglz);
+ALTER TABLE t_compressed SET (columnar.stripe_row_limit = 2000);
+ALTER TABLE t_compressed SET (columnar.chunk_group_row_limit = 1000);
 
-SELECT * FROM columnar.options WHERE regclass = 't_compressed'::regclass;
+SELECT * FROM columnar.options WHERE relation = 't_compressed'::regclass;
 
 -- select
 select * from t_uncompressed;

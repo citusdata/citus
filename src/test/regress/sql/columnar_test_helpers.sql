@@ -1,10 +1,6 @@
 CREATE SCHEMA columnar_test_helpers;
 SET search_path TO columnar_test_helpers;
 
-CREATE FUNCTION columnar_relation_storageid(relid oid) RETURNS bigint
-    LANGUAGE C STABLE STRICT
-    AS 'citus', $$columnar_relation_storageid$$;
-
 CREATE OR REPLACE FUNCTION columnar_storage_info(
     rel regclass,
     version_major OUT int4,
@@ -30,22 +26,22 @@ $$ LANGUAGE plpgsql;
 CREATE view chunk_group_consistency AS
 WITH a as (
    SELECT storage_id, stripe_num, chunk_group_num, min(value_count) as row_count
-   FROM columnar.chunk
+   FROM columnar_internal.chunk
    GROUP BY 1,2,3
 ), b as (
    SELECT storage_id, stripe_num, chunk_group_num, max(value_count) as row_count
-   FROM columnar.chunk
+   FROM columnar_internal.chunk
    GROUP BY 1,2,3
 ), c as (
    (TABLE a EXCEPT TABLE b) UNION (TABLE b EXCEPT TABLE a) UNION
-   (TABLE a EXCEPT TABLE columnar.chunk_group) UNION (TABLE columnar.chunk_group EXCEPT TABLE a)
+   (TABLE a EXCEPT TABLE columnar_internal.chunk_group) UNION (TABLE columnar_internal.chunk_group EXCEPT TABLE a)
 ), d as (
    SELECT storage_id, stripe_num, count(*) as chunk_group_count
-   FROM columnar.chunk_group
+   FROM columnar_internal.chunk_group
    GROUP BY 1,2
 ), e as (
    SELECT storage_id, stripe_num, chunk_group_count
-   FROM columnar.stripe
+   FROM columnar_internal.stripe
 ), f as (
    (TABLE d EXCEPT TABLE e) UNION (TABLE e EXCEPT TABLE d)
 )
@@ -59,9 +55,9 @@ DECLARE
 BEGIN
    SELECT count(*) INTO union_storage_id_count FROM
    (
-   SELECT storage_id FROM columnar.stripe UNION ALL
-   SELECT storage_id FROM columnar.chunk UNION ALL
-   SELECT storage_id FROM columnar.chunk_group
+   SELECT storage_id FROM columnar_internal.stripe UNION ALL
+   SELECT storage_id FROM columnar_internal.chunk UNION ALL
+   SELECT storage_id FROM columnar_internal.chunk_group
    ) AS union_storage_id
    WHERE storage_id=input_storage_id;
 

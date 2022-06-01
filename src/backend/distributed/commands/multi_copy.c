@@ -2009,7 +2009,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	foreach(columnNameCell, columnNameList)
 	{
 		char *columnName = (char *) lfirst(columnNameCell);
-		Value *columnNameValue = makeString(columnName);
+		String *columnNameValue = makeString(columnName);
 
 		attributeList = lappend(attributeList, columnNameValue);
 	}
@@ -3430,10 +3430,7 @@ InitializeCopyShardState(CopyShardState *shardState,
 		ereport(ERROR, (errmsg("could not connect to any active placements")));
 	}
 
-	if (hasRemoteCopy)
-	{
-		EnsureRemoteTaskExecutionAllowed();
-	}
+	EnsureTaskExecutionAllowed(hasRemoteCopy);
 
 	/*
 	 * We just error out and code execution should never reach to this

@@ -108,26 +108,26 @@
 bool EnableLocalExecution = true;
 bool LogLocalCommands = false;
 
-int LocalExecutorLevel = 0;
+/* global variable that tracks whether the local execution is on a shard */
+uint64 LocalExecutorShardId = INVALID_SHARD_ID;
 
 static LocalExecutionStatus CurrentLocalExecutionStatus = LOCAL_EXECUTION_OPTIONAL;
 
-static uint64 ExecuteLocalTaskListInternal(List *taskList,
-										   ParamListInfo paramListInfo,
-										   DistributedPlan *distributedPlan,
-										   TupleDestination *defaultTupleDest,
-										   bool isUtilityCommand);
 static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 										  List **localTaskPlacementList,
 										  List **remoteTaskPlacementList);
-static uint64 ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
-								   TupleDestination *tupleDest, Task *task,
-								   ParamListInfo paramListInfo);
+static uint64 LocallyExecuteTaskPlan(PlannedStmt *taskPlan, char *queryString,
+									 TupleDestination *tupleDest, Task *task,
+									 ParamListInfo paramListInfo);
+static uint64 ExecuteTaskPlan(PlannedStmt *taskPlan, char *queryString,
+							  TupleDestination *tupleDest, Task *task,
+							  ParamListInfo paramListInfo);
 static void RecordNonDistTableAccessesForTask(Task *task);
 static void LogLocalCommand(Task *task);
 static uint64 LocallyPlanAndExecuteMultipleQueries(List *queryStrings,
 												   TupleDestination *tupleDest,
 												   Task *task);
+static void LocallyExecuteUtilityTask(Task *task);
 static void ExecuteUdfTaskQuery(Query *localUdfCommandQuery);
 static void EnsureTransitionPossible(LocalExecutionStatus from,
 									 LocalExecutionStatus to);
@@ -204,50 +204,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 							 TupleDestination *defaultTupleDest,
 							 bool isUtilityCommand)
 {
-	uint64 totalRowsProcessed = 0;
 	ParamListInfo paramListInfo = copyParamList(orig_paramListInfo);
-
-	/*
-	 * Even if we are executing local tasks, we still enable
-	 * coordinated transaction. This is because
-	 *  (a) we might be in a transaction, and the next commands may
-	 *      require coordinated transaction
-	 *  (b) we might be executing some tasks locally and the others
-	 *      via remote execution
-	 *
-	 * Also, there is no harm enabling coordinated transaction even if
-	 * we only deal with local tasks in the transaction.
-	 */
-	UseCoordinatedTransaction();
-
-	LocalExecutorLevel++;
-	PG_TRY();
-	{
-		totalRowsProcessed = ExecuteLocalTaskListInternal(taskList, paramListInfo,
-														  distributedPlan,
-														  defaultTupleDest,
-														  isUtilityCommand);
-	}
-	PG_CATCH();
-	{
-		LocalExecutorLevel--;
-
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
-	LocalExecutorLevel--;
-
-	return totalRowsProcessed;
-}
-
-
-static uint64
-ExecuteLocalTaskListInternal(List *taskList,
-							 ParamListInfo paramListInfo,
-							 DistributedPlan *distributedPlan,
-							 TupleDestination *defaultTupleDest,
-							 bool isUtilityCommand)
-{
 	uint64 totalRowsProcessed = 0;
 	int numParams = 0;
 	Oid *parameterTypes = NULL;
@@ -261,6 +218,12 @@ ExecuteLocalTaskListInternal(List *taskList,
 										   &parameterValues);
 
 		numParams = paramListInfo->numParams;
+	}
+
+	if (taskList != NIL)
+	{
+		bool isRemote = false;
+		EnsureTaskExecutionAllowed(isRemote);
 	}
 
 	/*
@@ -304,7 +267,7 @@ ExecuteLocalTaskListInternal(List *taskList,
 
 		if (isUtilityCommand)
 		{
-			ExecuteUtilityCommand(TaskQueryString(task));
+			LocallyExecuteUtilityTask(task);
 
 			MemoryContextSwitchTo(oldContext);
 			MemoryContextReset(loopContext);
@@ -391,8 +354,8 @@ ExecuteLocalTaskListInternal(List *taskList,
 		}
 
 		totalRowsProcessed +=
-			ExecuteLocalTaskPlan(localPlan, shardQueryString,
-								 tupleDest, task, paramListInfo);
+			LocallyExecuteTaskPlan(localPlan, shardQueryString,
+								   tupleDest, task, paramListInfo);
 
 		MemoryContextSwitchTo(oldContext);
 		MemoryContextReset(loopContext);
@@ -421,9 +384,9 @@ LocallyPlanAndExecuteMultipleQueries(List *queryStrings, TupleDestination *tuple
 		ParamListInfo paramListInfo = NULL;
 		PlannedStmt *localPlan = planner_compat(shardQuery, cursorOptions,
 												paramListInfo);
-		totalProcessedRows += ExecuteLocalTaskPlan(localPlan, queryString,
-												   tupleDest, task,
-												   paramListInfo);
+		totalProcessedRows += LocallyExecuteTaskPlan(localPlan, queryString,
+													 tupleDest, task,
+													 paramListInfo);
 	}
 	return totalProcessedRows;
 }
@@ -441,6 +404,39 @@ ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterT
 {
 	ExtractParametersFromParamList(paramListInfo, parameterTypes,
 								   parameterValues, true);
+}
+
+
+/*
+ * LocallyExecuteUtilityTask runs a utility command via local execution.
+ */
+static void
+LocallyExecuteUtilityTask(Task *task)
+{
+	/*
+	 * If we roll back to a savepoint, we may no longer be in a query on
+	 * a shard. Reset the value as we go back up the stack.
+	 */
+	uint64 prevLocalExecutorShardId = LocalExecutorShardId;
+
+	if (task->anchorShardId != INVALID_SHARD_ID)
+	{
+		LocalExecutorShardId = task->anchorShardId;
+	}
+
+	PG_TRY();
+	{
+		ExecuteUtilityCommand(TaskQueryString(task));
+	}
+	PG_CATCH();
+	{
+		LocalExecutorShardId = prevLocalExecutorShardId;
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	LocalExecutorShardId = prevLocalExecutorShardId;
 }
 
 
@@ -569,9 +565,8 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 			 * At this point, we're dealing with a task that has placements on both
 			 * local and remote nodes.
 			 */
-			task->partiallyLocalOrRemote = true;
-
 			Task *localTask = copyObject(task);
+			localTask->partiallyLocalOrRemote = true;
 
 			localTask->taskPlacementList = localTaskPlacementList;
 			*localTaskList = lappend(*localTaskList, localTask);
@@ -585,6 +580,7 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 				/* since shard replication factor > 1, we should have at least 1 remote task */
 				Assert(remoteTaskPlacementList != NIL);
 				Task *remoteTask = copyObject(task);
+				remoteTask->partiallyLocalOrRemote = true;
 				remoteTask->taskPlacementList = remoteTaskPlacementList;
 
 				*remoteTaskList = lappend(*remoteTaskList, remoteTask);
@@ -630,9 +626,50 @@ SplitLocalAndRemotePlacements(List *taskPlacementList, List **localTaskPlacement
  * case of DML.
  */
 static uint64
-ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
-					 TupleDestination *tupleDest, Task *task,
-					 ParamListInfo paramListInfo)
+LocallyExecuteTaskPlan(PlannedStmt *taskPlan, char *queryString,
+					   TupleDestination *tupleDest, Task *task,
+					   ParamListInfo paramListInfo)
+{
+	volatile uint64 processedRows = 0;
+
+	/*
+	 * If we roll back to a savepoint, we may no longer be in a query on
+	 * a shard. Reset the value as we go back up the stack.
+	 */
+	uint64 prevLocalExecutorShardId = LocalExecutorShardId;
+
+	if (task->anchorShardId != INVALID_SHARD_ID)
+	{
+		LocalExecutorShardId = task->anchorShardId;
+	}
+
+	PG_TRY();
+	{
+		processedRows = ExecuteTaskPlan(taskPlan, queryString, tupleDest, task,
+										paramListInfo);
+	}
+	PG_CATCH();
+	{
+		LocalExecutorShardId = prevLocalExecutorShardId;
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	LocalExecutorShardId = prevLocalExecutorShardId;
+
+	return processedRows;
+}
+
+
+/*
+ * ExecuteTaskPlan executes the given planned statement and writes the results
+ * to tupleDest.
+ */
+static uint64
+ExecuteTaskPlan(PlannedStmt *taskPlan, char *queryString,
+				TupleDestination *tupleDest, Task *task,
+				ParamListInfo paramListInfo)
 {
 	ScanDirection scanDirection = ForwardScanDirection;
 	QueryEnvironment *queryEnv = create_queryEnv();
@@ -642,7 +679,7 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	RecordNonDistTableAccessesForTask(task);
 
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
-													   "ExecuteLocalTaskPlan",
+													   "ExecuteTaskPlan",
 													   ALLOCSET_DEFAULT_SIZES);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);

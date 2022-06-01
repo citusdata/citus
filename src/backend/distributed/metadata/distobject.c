@@ -29,7 +29,9 @@
 #include "citus_version.h"
 #include "commands/extension.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
@@ -46,7 +48,6 @@
 #include "utils/rel.h"
 
 
-static void MarkObjectDistributedLocally(const ObjectAddress *distAddress);
 static char * CreatePgDistObjectEntryCommand(const ObjectAddress *objectAddress);
 static int ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 									 Datum *paramValues);
@@ -195,7 +196,7 @@ MarkObjectDistributedViaSuperUser(const ObjectAddress *distAddress)
  * This function should never be called alone, MarkObjectDistributed() or
  * MarkObjectDistributedViaSuperUser() should be called.
  */
-static void
+void
 MarkObjectDistributedLocally(const ObjectAddress *distAddress)
 {
 	int paramCount = 3;
@@ -218,6 +219,52 @@ MarkObjectDistributedLocally(const ObjectAddress *distAddress)
 	{
 		ereport(ERROR, (errmsg("failed to insert object into citus.pg_dist_object")));
 	}
+}
+
+
+/*
+ * ShouldMarkRelationDistributed is a helper function that
+ * decides whether the input relation should be marked as distributed.
+ */
+bool
+ShouldMarkRelationDistributed(Oid relationId)
+{
+	if (!EnableMetadataSync)
+	{
+		/*
+		 * Just in case anything goes wrong, we should still be able
+		 * to continue to the version upgrade.
+		 */
+		return false;
+	}
+
+	ObjectAddress relationAddress = { 0 };
+	ObjectAddressSet(relationAddress, RelationRelationId, relationId);
+
+	bool pgObject = (relationId < FirstNormalObjectId);
+	bool isObjectSupported = SupportedDependencyByCitus(&relationAddress);
+	bool ownedByExtension = IsTableOwnedByExtension(relationId);
+	bool alreadyDistributed = IsObjectDistributed(&relationAddress);
+	bool hasUnsupportedDependency =
+		DeferErrorIfHasUnsupportedDependency(&relationAddress) != NULL;
+	bool hasCircularDependency =
+		DeferErrorIfCircularDependencyExists(&relationAddress) != NULL;
+
+	/*
+	 * pgObject: Citus never marks pg objects as distributed
+	 * isObjectSupported: Citus does not support propagation of some objects
+	 * ownedByExtension: let extensions manage its own objects
+	 * alreadyDistributed: most likely via earlier versions
+	 * hasUnsupportedDependency: Citus doesn't know how to distribute its dependencies
+	 * hasCircularDependency: Citus cannot handle circular dependencies
+	 */
+	if (pgObject || !isObjectSupported || ownedByExtension || alreadyDistributed ||
+		hasUnsupportedDependency || hasCircularDependency)
+	{
+		return false;
+	}
+
+	return true;
 }
 
 

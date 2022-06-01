@@ -317,13 +317,14 @@ test: ssl_by_default
 # TODO: After deprecating parameterless create_distributed_function combine
 # distributed_functions and function_propagation tests
 # ---------
-test: distributed_types distributed_types_conflict disable_object_propagation distributed_types_xact_add_enum_value text_search
+test: distributed_types distributed_types_conflict disable_object_propagation distributed_types_xact_add_enum_value text_search distributed_domain
 test: check_mx
 test: distributed_functions distributed_functions_conflict
 test: distributed_collations
 test: distributed_procedure
 test: distributed_collations_conflict
 test: function_propagation
+test: view_propagation
 test: check_mx
 
 # ---------

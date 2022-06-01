@@ -387,7 +387,7 @@ ExtractShardIdFromTableName(const char *tableName, bool missingOk)
 	shardIdString++;
 
 	errno = 0;
-	uint64 shardId = pg_strtouint64(shardIdString, &shardIdStringEnd, 0);
+	uint64 shardId = strtou64(shardIdString, &shardIdStringEnd, 0);
 
 	if (errno != 0 || (*shardIdStringEnd != '\0'))
 	{

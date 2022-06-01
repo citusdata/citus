@@ -10,6 +10,9 @@ SET citus.shard_replication_factor TO 1;
 SELECT pg_backend_pid() as pid \gset
 SELECT citus.mitmproxy('conn.allow()');
 
+\set VERBOSITY terse
+SET client_min_messages TO ERROR;
+
 CREATE TABLE t1 (id int PRIMARY KEY);
 SELECT create_distributed_table('t1', 'id');
 INSERT INTO t1 SELECT x FROM generate_series(1,100) AS f(x);
@@ -25,21 +28,21 @@ SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE pg_dist_local_group SET grou
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
 -- Failure to drop all tables in pg_dist_partition
-SELECT citus.mitmproxy('conn.onQuery(query="^DELETE FROM pg_dist_partition").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_dist_partition").cancel(' || :pid || ')');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-SELECT citus.mitmproxy('conn.onQuery(query="^DELETE FROM pg_dist_partition").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_dist_partition").kill()');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
 -- Failure to delete pg_dist_node entries from the worker
-SELECT citus.mitmproxy('conn.onQuery(query="^DELETE FROM pg_dist_node").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_dist_node").cancel(' || :pid || ')');
 SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
-SELECT citus.mitmproxy('conn.onQuery(query="^DELETE FROM pg_dist_node").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_dist_node").kill()');
 SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 
 -- Failure to populate pg_dist_node in the worker
-SELECT citus.mitmproxy('conn.onQuery(query="^INSERT INTO pg_dist_node").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="INSERT INTO pg_dist_node").cancel(' || :pid || ')');
 SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
-SELECT citus.mitmproxy('conn.onQuery(query="^INSERT INTO pg_dist_node").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="INSERT INTO pg_dist_node").kill()');
 SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 
 -- Verify that coordinator knows worker does not have valid metadata
@@ -71,9 +74,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE pg_dist_local_group SET grou
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 
 -- Failure to delete pg_dist_node entries from the worker
-SELECT citus.mitmproxy('conn.onQuery(query="^DELETE FROM pg_dist_node").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_dist_node").cancel(' || :pid || ')');
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
-SELECT citus.mitmproxy('conn.onQuery(query="^DELETE FROM pg_dist_node").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_dist_node").kill()');
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 
 \c - - - :worker_2_port

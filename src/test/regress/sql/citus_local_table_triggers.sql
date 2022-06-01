@@ -27,13 +27,14 @@ ALTER TABLE citus_local_table ADD CONSTRAINT fkey_to_dummy_1 FOREIGN KEY (value)
 
 BEGIN;
     CREATE TABLE distributed_table(value int);
-    SELECT create_distributed_table('distributed_table', 'value');
     CREATE FUNCTION insert_42() RETURNS trigger AS $insert_42$
     BEGIN
         INSERT INTO distributed_table VALUES (42);
         RETURN NEW;
     END;
     $insert_42$ LANGUAGE plpgsql;
+
+    SELECT create_distributed_table('distributed_table', 'value');
 
     CREATE TRIGGER insert_42_trigger
     AFTER DELETE ON citus_local_table
@@ -291,7 +292,7 @@ BEGIN;
     SELECT * FROM reference_table;
 ROLLBACK;
 
--- cannot perform remote execution from a trigger on a Citus local table
+-- can perform remote execution from a trigger on a Citus local table
 BEGIN;
     -- update should actually update something to test ON UPDATE CASCADE logic
     INSERT INTO another_citus_local_table VALUES (600);

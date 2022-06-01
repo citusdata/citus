@@ -7,7 +7,9 @@
  *-------------------------------------------------------------------------
  */
 
+#include "postgres.h"
 #include "distributed/pg_version_constants.h"
+#include "pg_version_compat.h"
 
 #include "stdint.h"
 #include "postgres.h"
@@ -68,6 +70,7 @@
 #include "utils/datum.h"
 #include "utils/elog.h"
 #include "utils/hsearch.h"
+#include "utils/jsonb.h"
 #if PG_VERSION_NUM >= PG_VERSION_13
 #include "common/hashfn.h"
 #endif
@@ -150,6 +153,7 @@ typedef struct MetadataCacheData
 	Oid distShardShardidIndexId;
 	Oid distPlacementShardidIndexId;
 	Oid distPlacementPlacementidIndexId;
+	Oid distColocationidIndexId;
 	Oid distPlacementGroupidIndexId;
 	Oid distTransactionRelationId;
 	Oid distTransactionGroupIndexId;
@@ -182,6 +186,9 @@ static MetadataCacheData MetadataCache;
 bool EnableVersionChecks = true; /* version checks are enabled */
 
 static bool citusVersionKnownCompatible = false;
+
+/* Variable to determine if we are in the process of creating citus */
+static int CreateCitusTransactionLevel = 0;
 
 /* Hash table for informations about each partition */
 static HTAB *DistTableCacheHash = NULL;
@@ -717,6 +724,24 @@ ReferenceTableShardId(uint64 shardId)
 	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
 	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
 	return IsCitusTableTypeCacheEntry(tableEntry, REFERENCE_TABLE);
+}
+
+
+/*
+ * DistributedTableShardId returns true if the given shardId belongs to
+ * a distributed table.
+ */
+bool
+DistributedTableShardId(uint64 shardId)
+{
+	if (shardId == INVALID_SHARD_ID)
+	{
+		return false;
+	}
+
+	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
+	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
+	return IsCitusTableTypeCacheEntry(tableEntry, DISTRIBUTED_TABLE);
 }
 
 
@@ -1966,6 +1991,27 @@ CitusHasBeenLoadedInternal(void)
 
 
 /*
+ * GetCitusCreationLevel returns the level of the transaction creating citus
+ */
+int
+GetCitusCreationLevel(void)
+{
+	return CreateCitusTransactionLevel;
+}
+
+
+/*
+ * Sets the value of CreateCitusTransactionLevel based on int received which represents the
+ * nesting level of the transaction that created the Citus extension
+ */
+void
+SetCreateCitusTransactionLevel(int val)
+{
+	CreateCitusTransactionLevel = val;
+}
+
+
+/*
  * CheckCitusVersion checks whether there is a version mismatch between the
  * available version and the loaded version or between the installed version
  * and the loaded version. Returns true if compatible, false otherwise.
@@ -2504,6 +2550,17 @@ DistPlacementPlacementidIndexId(void)
 }
 
 
+/* return oid of pg_dist_colocation_pkey */
+Oid
+DistColocationIndexId(void)
+{
+	CachedRelationLookup("pg_dist_colocation_pkey",
+						 &MetadataCache.distColocationidIndexId);
+
+	return MetadataCache.distColocationidIndexId;
+}
+
+
 /* return oid of pg_dist_transaction relation */
 Oid
 DistTransactionRelationId(void)
@@ -2864,8 +2921,8 @@ CurrentUserName(void)
 Oid
 LookupTypeOid(char *schemaNameSting, char *typeNameString)
 {
-	Value *schemaName = makeString(schemaNameSting);
-	Value *typeName = makeString(typeNameString);
+	String *schemaName = makeString(schemaNameSting);
+	String *typeName = makeString(typeNameString);
 	List *qualifiedName = list_make2(schemaName, typeName);
 	TypeName *enumTypeName = makeTypeNameFromNameList(qualifiedName);
 
@@ -4853,6 +4910,12 @@ DistNodeMetadata(void)
 		ereport(ERROR, (errmsg(
 							"could not find any entries in pg_dist_metadata")));
 	}
+
+	/*
+	 * Copy the jsonb result before closing the table
+	 * since that memory can be freed.
+	 */
+	metadata = JsonbPGetDatum(DatumGetJsonbPCopy(metadata));
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistNodeMetadata, AccessShareLock);

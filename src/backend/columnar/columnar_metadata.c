@@ -59,6 +59,7 @@
 #include "utils/rel.h"
 #include "utils/relfilenodemap.h"
 
+#define COLUMNAR_RELOPTION_NAMESPACE "columnar"
 
 typedef struct
 {
@@ -82,6 +83,7 @@ typedef enum RowNumberLookupMode
 	FIND_GREATER
 } RowNumberLookupMode;
 
+static void ParseColumnarRelOptions(List *reloptions, ColumnarOptions *options);
 static void InsertEmptyStripeMetadataRow(uint64 storageId, uint64 stripeId,
 										 uint32 columnCount, uint32 chunkGroupRowCount,
 										 uint64 firstRowNumber);
@@ -215,6 +217,154 @@ InitColumnarOptions(Oid regclass)
 	};
 
 	WriteColumnarOptions(regclass, &defaultOptions, false);
+}
+
+
+/*
+ * ParseColumnarRelOptions - update the given 'options' using the given list
+ * of DefElem.
+ */
+static void
+ParseColumnarRelOptions(List *reloptions, ColumnarOptions *options)
+{
+	ListCell *lc = NULL;
+
+	foreach(lc, reloptions)
+	{
+		DefElem *elem = castNode(DefElem, lfirst(lc));
+
+		if (elem->defnamespace == NULL ||
+			strcmp(elem->defnamespace, COLUMNAR_RELOPTION_NAMESPACE) != 0)
+		{
+			ereport(ERROR, (errmsg("columnar options must have the prefix \"%s\"",
+								   COLUMNAR_RELOPTION_NAMESPACE)));
+		}
+
+		if (strcmp(elem->defname, "chunk_group_row_limit") == 0)
+		{
+			options->chunkRowCount = (elem->arg == NULL) ?
+									 columnar_chunk_group_row_limit : defGetInt64(elem);
+			if (options->chunkRowCount < CHUNK_ROW_COUNT_MINIMUM ||
+				options->chunkRowCount > CHUNK_ROW_COUNT_MAXIMUM)
+			{
+				ereport(ERROR, (errmsg("chunk group row count limit out of range"),
+								errhint("chunk group row count limit must be between "
+										UINT64_FORMAT " and " UINT64_FORMAT,
+										(uint64) CHUNK_ROW_COUNT_MINIMUM,
+										(uint64) CHUNK_ROW_COUNT_MAXIMUM)));
+			}
+		}
+		else if (strcmp(elem->defname, "stripe_row_limit") == 0)
+		{
+			options->stripeRowCount = (elem->arg == NULL) ?
+									  columnar_stripe_row_limit : defGetInt64(elem);
+
+			if (options->stripeRowCount < STRIPE_ROW_COUNT_MINIMUM ||
+				options->stripeRowCount > STRIPE_ROW_COUNT_MAXIMUM)
+			{
+				ereport(ERROR, (errmsg("stripe row count limit out of range"),
+								errhint("stripe row count limit must be between "
+										UINT64_FORMAT " and " UINT64_FORMAT,
+										(uint64) STRIPE_ROW_COUNT_MINIMUM,
+										(uint64) STRIPE_ROW_COUNT_MAXIMUM)));
+			}
+		}
+		else if (strcmp(elem->defname, "compression") == 0)
+		{
+			options->compressionType = (elem->arg == NULL) ?
+									   columnar_compression : ParseCompressionType(
+				defGetString(elem));
+
+			if (options->compressionType == COMPRESSION_TYPE_INVALID)
+			{
+				ereport(ERROR, (errmsg("unknown compression type for columnar table: %s",
+									   quote_identifier(defGetString(elem)))));
+			}
+		}
+		else if (strcmp(elem->defname, "compression_level") == 0)
+		{
+			options->compressionLevel = (elem->arg == NULL) ?
+										columnar_compression_level : defGetInt64(elem);
+
+			if (options->compressionLevel < COMPRESSION_LEVEL_MIN ||
+				options->compressionLevel > COMPRESSION_LEVEL_MAX)
+			{
+				ereport(ERROR, (errmsg("compression level out of range"),
+								errhint("compression level must be between %d and %d",
+										COMPRESSION_LEVEL_MIN,
+										COMPRESSION_LEVEL_MAX)));
+			}
+		}
+		else
+		{
+			ereport(ERROR, (errmsg("unrecognized columnar storage parameter \"%s\"",
+								   elem->defname)));
+		}
+	}
+}
+
+
+/*
+ * ExtractColumnarOptions - extract columnar options from inOptions, appending
+ * to inoutColumnarOptions. Return the remaining (non-columnar) options.
+ */
+List *
+ExtractColumnarRelOptions(List *inOptions, List **inoutColumnarOptions)
+{
+	List *otherOptions = NIL;
+
+	ListCell *lc = NULL;
+	foreach(lc, inOptions)
+	{
+		DefElem *elem = castNode(DefElem, lfirst(lc));
+
+		if (elem->defnamespace != NULL &&
+			strcmp(elem->defnamespace, COLUMNAR_RELOPTION_NAMESPACE) == 0)
+		{
+			*inoutColumnarOptions = lappend(*inoutColumnarOptions, elem);
+		}
+		else
+		{
+			otherOptions = lappend(otherOptions, elem);
+		}
+	}
+
+	/* validate options */
+	ColumnarOptions dummy = { 0 };
+	ParseColumnarRelOptions(*inoutColumnarOptions, &dummy);
+
+	return otherOptions;
+}
+
+
+/*
+ * SetColumnarRelOptions - apply the list of DefElem options to the
+ * relation. If there are duplicates, the last one in the list takes effect.
+ */
+void
+SetColumnarRelOptions(RangeVar *rv, List *reloptions)
+{
+	ColumnarOptions options = { 0 };
+
+	if (reloptions == NIL)
+	{
+		return;
+	}
+
+	Relation rel = relation_openrv(rv, AccessShareLock);
+	Oid relid = RelationGetRelid(rel);
+	relation_close(rel, NoLock);
+
+	/* get existing or default options */
+	if (!ReadColumnarOptions(relid, &options))
+	{
+		/* if extension doesn't exist, just return */
+		return;
+	}
+
+	ParseColumnarRelOptions(reloptions, &options);
+
+	SetColumnarOptions(relid, &options);
 }
 
 
@@ -1433,7 +1583,7 @@ DeleteTupleAndEnforceConstraints(ModifyState *state, HeapTuple heapTuple)
 	simple_heap_delete(state->rel, tid);
 
 	/* execute AFTER ROW DELETE Triggers to enforce constraints */
-	ExecARDeleteTriggers(estate, resultRelInfo, tid, NULL, NULL);
+	ExecARDeleteTriggers_compat(estate, resultRelInfo, tid, NULL, NULL, false);
 }
 
 
@@ -1670,7 +1820,15 @@ ColumnarChunkGroupIndexRelationId(void)
 static Oid
 ColumnarNamespaceId(void)
 {
-	return get_namespace_oid("columnar", false);
+	Oid namespace = get_namespace_oid("columnar_internal", true);
+
+	/* if schema is earlier than 11.1-1 */
+	if (!OidIsValid(namespace))
+	{
+		namespace = get_namespace_oid("columnar", false);
+	}
+
+	return namespace;
 }
 
 
@@ -1712,6 +1870,13 @@ columnar_relation_storageid(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 	Relation relation = relation_open(relationId, AccessShareLock);
+
+	if (!pg_class_ownercheck(relationId, GetUserId()))
+	{
+		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLE,
+					   get_rel_name(relationId));
+	}
+
 	if (!IsColumnarTableAmTable(relationId))
 	{
 		elog(ERROR, "relation \"%s\" is not a columnar table",
@@ -1738,11 +1903,10 @@ ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade)
 		return;
 	}
 
-	RelationOpenSmgr(rel);
-	BlockNumber nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+	BlockNumber nblocks = smgrnblocks(RelationGetSmgr(rel), MAIN_FORKNUM);
 	if (nblocks < 2)
 	{
-		ColumnarStorageInit(rel->rd_smgr, ColumnarMetadataNewStorageId());
+		ColumnarStorageInit(RelationGetSmgr(rel), ColumnarMetadataNewStorageId());
 		return;
 	}
 

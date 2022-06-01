@@ -11,6 +11,8 @@
 
 #include "postgres.h"
 
+#include "pg_version_compat.h"
+
 #include "catalog/namespace.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
@@ -44,6 +46,6 @@ AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 
 	appendStringInfo(buf,
 					 "ALTER DATABASE %s OWNER TO %s;",
-					 quote_identifier(strVal((Value *) stmt->object)),
+					 quote_identifier(strVal((String *) stmt->object)),
 					 RoleSpecString(stmt->newowner, true));
 }

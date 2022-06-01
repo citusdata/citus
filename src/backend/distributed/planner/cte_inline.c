@@ -12,6 +12,7 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+#include "pg_version_compat.h"
 #include "distributed/pg_version_constants.h"
 
 #include "distributed/cte_inline.h"
@@ -309,7 +310,7 @@ inline_cte_walker(Node *node, inline_cte_walker_context *context)
 				 */
 				if (columnAliasCount >= columnIndex)
 				{
-					Value *columnAlias = (Value *) list_nth(columnAliasList, columnIndex - 1);
+					String *columnAlias = (String *) list_nth(columnAliasList, columnIndex - 1);
 					Assert(IsA(columnAlias, String));
 					TargetEntry *targetEntry =
 						list_nth(rte->subquery->targetList, columnIndex - 1);

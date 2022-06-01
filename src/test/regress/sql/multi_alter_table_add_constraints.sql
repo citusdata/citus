@@ -518,6 +518,13 @@ SELECT (run_command_on_workers($$
 ORDER BY
     1,2,3,4;
 
+CREATE TABLE alter_add_unique(x int, y int);
+CREATE UNIQUE INDEX CONCURRENTLY alter_unique_idx ON alter_add_unique(x);
+SELECT create_distributed_table('alter_add_unique', 'x');
+
+ALTER TABLE alter_add_unique ADD CONSTRAINT unique_constraint_test UNIQUE USING INDEX alter_unique_idx;
+ALTER TABLE alter_add_unique DROP CONSTRAINT unique_constraint_test;
+
 SET search_path TO 'public';
 
 DROP SCHEMA sc1 CASCADE;

@@ -651,11 +651,20 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 	 */
 	ObjectAddress tableAddress = GetObjectAddressFromParseTree((Node *) stmt, true);
 
-	/* check whether we are dealing with a sequence here */
-	if (get_rel_relkind(tableAddress.objectId) == RELKIND_SEQUENCE)
+	/*
+	 * Check whether we are dealing with a sequence or view here and route queries
+	 * accordingly to the right processor function.
+	 */
+	char relKind = get_rel_relkind(tableAddress.objectId);
+	if (relKind == RELKIND_SEQUENCE)
 	{
 		stmt->objectType = OBJECT_SEQUENCE;
 		return PostprocessAlterSequenceSchemaStmt((Node *) stmt, queryString);
+	}
+	else if (relKind == RELKIND_VIEW)
+	{
+		stmt->objectType = OBJECT_VIEW;
+		return PostprocessAlterViewSchemaStmt((Node *) stmt, queryString);
 	}
 
 	if (!ShouldPropagate() || !IsCitusTable(tableAddress.objectId))
@@ -699,17 +708,25 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	}
 
 	/*
-	 * check whether we are dealing with a sequence here
+	 * check whether we are dealing with a sequence or view here
 	 * if yes, it must be ALTER TABLE .. OWNER TO .. command
-	 * since this is the only ALTER command of a sequence that
+	 * since this is the only ALTER command of a sequence or view that
 	 * passes through an AlterTableStmt
 	 */
-	if (get_rel_relkind(leftRelationId) == RELKIND_SEQUENCE)
+	char relKind = get_rel_relkind(leftRelationId);
+	if (relKind == RELKIND_SEQUENCE)
 	{
 		AlterTableStmt *stmtCopy = copyObject(alterTableStatement);
 		AlterTableStmtObjType_compat(stmtCopy) = OBJECT_SEQUENCE;
 		return PreprocessAlterSequenceOwnerStmt((Node *) stmtCopy, alterTableCommand,
 												processUtilityContext);
+	}
+	else if (relKind == RELKIND_VIEW)
+	{
+		AlterTableStmt *stmtCopy = copyObject(alterTableStatement);
+		AlterTableStmtObjType_compat(stmtCopy) = OBJECT_VIEW;
+		return PreprocessAlterViewStmt((Node *) stmtCopy, alterTableCommand,
+									   processUtilityContext);
 	}
 
 	/*
@@ -1102,7 +1119,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 
 	/* fill them here as it is possible to use them in some conditional blocks below */
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
-	ddlJob->targetRelationId = leftRelationId;
+	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, leftRelationId);
 
 	const char *sqlForTaskList = alterTableCommand;
 	if (deparseAT)
@@ -1758,17 +1775,30 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 	{
 		return NIL;
 	}
+
 	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
 														  stmt->missing_ok);
 	Oid relationId = address.objectId;
 
-	/* check whether we are dealing with a sequence here */
-	if (get_rel_relkind(relationId) == RELKIND_SEQUENCE)
+	/*
+	 * Check whether we are dealing with a sequence or view here and route queries
+	 * accordingly to the right processor function. We need to check both objects here
+	 * since PG supports targeting sequences and views with ALTER TABLE commands.
+	 */
+	char relKind = get_rel_relkind(relationId);
+	if (relKind == RELKIND_SEQUENCE)
 	{
 		AlterObjectSchemaStmt *stmtCopy = copyObject(stmt);
 		stmtCopy->objectType = OBJECT_SEQUENCE;
 		return PreprocessAlterSequenceSchemaStmt((Node *) stmtCopy, queryString,
 												 processUtilityContext);
+	}
+	else if (relKind == RELKIND_VIEW)
+	{
+		AlterObjectSchemaStmt *stmtCopy = copyObject(stmt);
+		stmtCopy->objectType = OBJECT_VIEW;
+		return PreprocessAlterViewSchemaStmt((Node *) stmtCopy, queryString,
+											 processUtilityContext);
 	}
 
 	/* first check whether a distributed relation is affected */
@@ -1779,7 +1809,7 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	QualifyTreeNode((Node *) stmt);
-	ddlJob->targetRelationId = relationId;
+	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->metadataSyncCommand = DeparseTreeNode((Node *) stmt);
 	ddlJob->taskList = DDLTaskList(relationId, ddlJob->metadataSyncCommand);
 	return list_make1(ddlJob);
@@ -1939,10 +1969,17 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		 * since this is the only ALTER command of a sequence that
 		 * passes through an AlterTableStmt
 		 */
-		if (get_rel_relkind(relationId) == RELKIND_SEQUENCE)
+		char relKind = get_rel_relkind(relationId);
+		if (relKind == RELKIND_SEQUENCE)
 		{
 			AlterTableStmtObjType_compat(alterTableStatement) = OBJECT_SEQUENCE;
 			PostprocessAlterSequenceOwnerStmt((Node *) alterTableStatement, NULL);
+			return;
+		}
+		else if (relKind == RELKIND_VIEW)
+		{
+			AlterTableStmtObjType_compat(alterTableStatement) = OBJECT_VIEW;
+			PostprocessAlterViewStmt((Node *) alterTableStatement, NULL);
 			return;
 		}
 
