@@ -351,7 +351,7 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 
 	/* Oid of dummy table at the source */
 	Oid destSplitChildShardOid = GetTableLocalShardOid(citusTableOid,
-													  desSplitChildShardId);
+													   desSplitChildShardId);
 
 	if (citusTableOid == InvalidOid ||
 		sourceShardToSplitOid == InvalidOid ||

@@ -51,7 +51,7 @@ GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle dsmHandle)
 	}
 
 	/*
-	 * Detatching segment associated with resource owner with 'dsm_pin_mapping' call before the 
+	 * Detatching segment associated with resource owner with 'dsm_pin_mapping' call before the
 	 * resource owner releases, to avoid warning being logged and potential leaks.
 	 */
 	dsm_pin_mapping(dsmSegment);
@@ -61,6 +61,7 @@ GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle dsmHandle)
 
 	return header;
 }
+
 
 /*
  * GetShardSplitInfoSMArrayForSlot returns pointer to the array of
@@ -95,7 +96,7 @@ GetShardSplitInfoSMArrayForSlot(char *slotName, int *shardSplitInfoCount)
 /*
  * AllocateSharedMemoryForShardSplitInfo is used to allocate and store
  * information about the shard undergoing a split. The function allocates dynamic
- * shared memory segment consisting of a header and an array of ShardSplitInfo structure. 
+ * shared memory segment consisting of a header and an array of ShardSplitInfo structure.
  * The contents of this shared memory segment are consumed by WAL sender process
  * during catch up phase of replication through logical decoding plugin.
  *
