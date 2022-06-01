@@ -69,7 +69,7 @@ DECLARE
     tableOwnerOne bigint;
     tableOwnerTwo bigint;
 begin
-    -- setup shared memory information    
+    -- setup shared memory information
     SELECT * into sharedMemoryId from public.split_shard_replication_setup_for_colocated_shards(targetNode1, targetNode2);
 
     SELECT relowner into tableOwnerOne from pg_class where relname='table_first';
@@ -83,7 +83,7 @@ begin
 
     INSERT INTO slotName_table values(targetOneSlotName, targetNode1, 1);
     INSERT INTO slotName_table values(targetTwoSlotName, targetNode2, 2);
-    
+
     return targetOneSlotName;
 end
 $$ LANGUAGE plpgsql;
@@ -106,7 +106,7 @@ CREATE OR REPLACE FUNCTION create_subscription_for_owner_one(targetNodeId intege
 DECLARE
     replicationSlotName text;
     nodeportLocal int;
-    subname text;    
+    subname text;
 begin
     SELECT name into replicationSlotName from slotName_table where id = 1;
     EXECUTE FORMAT($sub$create subscription %s connection 'host=localhost port=57637 user=postgres dbname=regression' publication PUB1 with(create_slot=false, enabled=true, slot_name='%s', copy_data=false)$sub$, subscriptionName, replicationSlotName);
@@ -120,7 +120,7 @@ CREATE OR REPLACE FUNCTION create_subscription_for_owner_two(targetNodeId intege
 DECLARE
     replicationSlotName text;
     nodeportLocal int;
-    subname text;    
+    subname text;
 begin
     SELECT name into replicationSlotName from slotName_table where id = 2;
     EXECUTE FORMAT($sub$create subscription %s connection 'host=localhost port=57637 user=postgres dbname=regression' publication PUB2 with(create_slot=false, enabled=true, slot_name='%s', copy_data=false)$sub$, subscriptionName, replicationSlotName);

@@ -14,6 +14,7 @@
 #include "distributed/shard_utils.h"
 #include "distributed/shardsplit_shared_memory.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/listutils.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 
@@ -75,9 +76,9 @@ static int NodeShardMappingHashCompare(const void *left, const void *right, Size
  * sourceShardId - id of the shard that is undergoing a split
  * childShardId  - id of shard that stores a specific range of values
  *                 belonging to sourceShardId(parent)
- * minValue      - lower bound of hash value which childShard stores
+ * minValue      - lower bound(inclusive) of hash value which childShard stores
  *
- * maxValue      - upper bound of hash value which childShard stores
+ * maxValue      - upper bound(inclusive) of hash value which childShard stores
  *
  * NodeId        - Node where the childShardId is located
  *
@@ -87,12 +88,12 @@ static int NodeShardMappingHashCompare(const void *left, const void *right, Size
  *
  * Usage Semantics:
  * This UDF returns a shared memory handle where the information is stored. This shared memory
- * handle is used by caller to encode replication slot name as "NodeId_SharedMemoryHandle" for every
+ * handle is used by caller to encode replication slot name as "NodeId_SharedMemoryHandle_TableOnwerId" for every
  * distinct  target node. The same encoded slot name is stored in one of the fields of the
  * in-memory data structure(ShardSplitInfo).
  *
- * There is a 1-1 mapping between a target node and a replication slot. One replication
- * slot takes care of replicating changes for all shards belonging to the same owner on that node.
+ * There is a 1-1 mapping between a table owner id and a replication slot. One replication
+ * slot takes care of replicating changes for all shards belonging to the same owner on a particular node.
  *
  * During the replication phase, 'decoding_plugin_for_shard_split' called for a change on a particular
  * replication slot, will decode the shared memory handle from its slot name and will attach to the
@@ -334,7 +335,6 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 	CitusTableCacheEntry *cachedTableEntry = GetCitusTableCacheEntry(
 		shardIntervalToSplit->relationId);
 
-	/*Todo(sameer): Also check if non-distributed table */
 	if (!IsCitusTableTypeCacheEntry(cachedTableEntry, HASH_DISTRIBUTED))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -345,28 +345,25 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 	Assert(shardIntervalToSplit->maxValueExists);
 
 	/* Oid of distributed table */
-	Oid citusTableOid = InvalidOid;
-	citusTableOid = shardIntervalToSplit->relationId;
-	Oid sourceShardToSplitOid = InvalidOid;
-	sourceShardToSplitOid = GetTableLocalShardOid(citusTableOid,
-												  sourceShardIdToSplit);
+	Oid citusTableOid = shardIntervalToSplit->relationId;
+	Oid sourceShardToSplitOid = GetTableLocalShardOid(citusTableOid,
+													  sourceShardIdToSplit);
 
 	/* Oid of dummy table at the source */
-	Oid desSplitChildShardOid = InvalidOid;
-	desSplitChildShardOid = GetTableLocalShardOid(citusTableOid,
-												  desSplitChildShardId);
+	Oid destSplitChildShardOid = GetTableLocalShardOid(citusTableOid,
+													  desSplitChildShardId);
 
 	if (citusTableOid == InvalidOid ||
 		sourceShardToSplitOid == InvalidOid ||
-		desSplitChildShardOid == InvalidOid)
+		destSplitChildShardOid == InvalidOid)
 	{
 		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
 						errmsg("Invalid citusTableOid:%u "
 							   "sourceShardToSplitOid: %u,"
-							   "desSplitChildShardOid :%u ",
+							   "destSplitChildShardOid :%u ",
 							   citusTableOid,
 							   sourceShardToSplitOid,
-							   desSplitChildShardOid)));
+							   destSplitChildShardOid)));
 	}
 
 	/* determine the partition column in the tuple descriptor */
@@ -376,14 +373,13 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
 						errmsg("Invalid Partition Column")));
 	}
-	int partitionColumnIndex = -1;
-	partitionColumnIndex = partitionColumn->varattno - 1;
+	int partitionColumnIndex = partitionColumn->varattno - 1;
 
 	ShardSplitInfo *shardSplitInfo = palloc0(sizeof(ShardSplitInfo));
 	shardSplitInfo->distributedTableOid = citusTableOid;
 	shardSplitInfo->partitionColumnIndex = partitionColumnIndex;
 	shardSplitInfo->sourceShardOid = sourceShardToSplitOid;
-	shardSplitInfo->splitChildShardOid = desSplitChildShardOid;
+	shardSplitInfo->splitChildShardOid = destSplitChildShardOid;
 	shardSplitInfo->shardMinValue = minValue;
 	shardSplitInfo->shardMaxValue = maxValue;
 	shardSplitInfo->nodeId = nodeId;
@@ -449,10 +445,9 @@ PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
 			encode_replication_slot(nodeId, dsmHandle, tableOwnerId);
 
 		List *shardSplitInfoList = entry->shardSplitInfoList;
-		ListCell *listCell = NULL;
-		foreach(listCell, shardSplitInfoList)
+		ShardSplitInfo *splitShardInfo = NULL;
+		foreach_ptr(splitShardInfo, shardSplitInfoList)
 		{
-			ShardSplitInfo *splitShardInfo = (ShardSplitInfo *) lfirst(listCell);
 			ShardSplitInfo *shardInfoInSM = &shardSplitInfoArray[index];
 
 			shardInfoInSM->distributedTableOid = splitShardInfo->distributedTableOid;

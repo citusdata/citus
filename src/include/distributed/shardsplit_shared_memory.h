@@ -14,8 +14,6 @@
 #ifndef SHARDSPLIT_SHARED_MEMORY_H
 #define SHARDSPLIT_SHARED_MEMORY_H
 
-#include "c.h"
-#include "fmgr.h"
 #include "distributed/shard_split.h"
 
 /*

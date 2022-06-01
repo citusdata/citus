@@ -1,12 +1,16 @@
 \c - - - :master_port
+CREATE USER myuser;
+CREATE USER admin_user;
+GRANT USAGE, CREATE ON SCHEMA split_shard_replication_setup_schema, public to myuser;
+GRANT USAGE, CREATE ON SCHEMA split_shard_replication_setup_schema, public to admin_user;
+SET search_path TO split_shard_replication_setup_schema;
 SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 1;
 SET citus.next_shard_id TO 4;
-CREATE USER myuser;
-CREATE USER admin_user;
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
 SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 \c - myuser - -
+SET search_path TO split_shard_replication_setup_schema;
 SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 1;
 SET citus.next_shard_id TO 4;
@@ -18,6 +22,7 @@ SELECT create_distributed_table('table_first','id');
 (1 row)
 
 \c - admin_user - -
+SET search_path TO split_shard_replication_setup_schema;
 SET citus.next_shard_id TO 7;
 SET citus.shard_count TO 1;
 CREATE TABLE table_second (id bigserial PRIMARY KEY, value char);
@@ -28,16 +33,20 @@ SELECT create_distributed_table('table_second', 'id', colocate_with => 'table_fi
 (1 row)
 
 \c - myuser - :worker_1_port
+SET search_path TO split_shard_replication_setup_schema;
 CREATE TABLE table_first_5(id bigserial PRIMARY KEY, value char);
 CREATE TABLE table_first_6(id bigserial PRIMARY KEY, value char);
 \c - myuser - :worker_2_port
+SET search_path TO split_shard_replication_setup_schema;
 CREATE TABLE table_first_4(id bigserial PRIMARY KEY, value char);
 CREATE TABLE table_first_5(id bigserial PRIMARY KEY, value char);
 CREATE TABLE table_first_6(id bigserial PRIMARY KEY, value char);
 \c - admin_user - :worker_1_port
+SET search_path TO split_shard_replication_setup_schema;
 CREATE TABLE table_second_8(id bigserial PRIMARY KEY, value char);
 CREATE TABLE table_second_9(id bigserial PRIMARY KEY, value char);
 \c - admin_user - :worker_2_port
+SET search_path TO split_shard_replication_setup_schema;
 CREATE TABLE table_second_7(id bigserial PRIMARY KEY, value char);
 CREATE TABLE table_second_8(id bigserial PRIMARY KEY, value char);
 CREATE TABLE table_second_9(id bigserial PRIMARY KEY, value char);
@@ -50,8 +59,9 @@ CREATE TABLE table_second_9(id bigserial PRIMARY KEY, value char);
 --- 6. Create two publishers and two subscribers for respective table owners.
 --- 7. Insert into table_first_4 and table_second_7 at source worker1
 --- 8. Expect the results in child shards on worker2
-\c - postgres - :worker_1_port
 -- Create publication at worker1
+\c - postgres - :worker_1_port
+SET search_path TO split_shard_replication_setup_schema;
 BEGIN;
     CREATE PUBLICATION PUB1 for table table_first_4, table_first_5, table_first_6;
 COMMIT;
@@ -74,6 +84,7 @@ SELECT pg_sleep(5);
 
 -- Create subscription at worker2 with copy_data to 'false' and derived replication slot name
 \c - postgres - :worker_2_port
+SET search_path TO split_shard_replication_setup_schema;
 SET client_min_messages TO WARNING;
 BEGIN;
 SELECT 1 from public.create_subscription_for_owner_one(:worker_2_node, 'SUB1');
@@ -84,6 +95,7 @@ SELECT 1 from public.create_subscription_for_owner_one(:worker_2_node, 'SUB1');
 
 COMMIT;
 \c - myuser - :worker_1_port
+SET search_path TO split_shard_replication_setup_schema;
 INSERT into table_first_4 values(100, 'a');
 INSERT into table_first_4 values(400, 'a');
 INSERT into table_first_4 values(500, 'a');
@@ -94,6 +106,7 @@ select pg_sleep(2);
 (1 row)
 
 \c - admin_user - :worker_1_port
+SET search_path TO split_shard_replication_setup_schema;
 INSERT INTO table_second_7 values(100, 'a');
 INSERT INTO table_second_7 values(400, 'a');
 SELECT * from table_second_7;
@@ -110,7 +123,8 @@ select pg_sleep(2);
 (1 row)
 
 \c - myuser - :worker_2_port
-SELECT * from table_first_4; -- should alwasy have zero rows
+SET search_path TO split_shard_replication_setup_schema;
+SELECT * from table_first_4;
  id | value
 ---------------------------------------------------------------------
 (0 rows)
@@ -128,7 +142,9 @@ SELECT * from table_first_6;
  500 | a
 (2 rows)
 
+-- should have zero rows in all the below tables as the subscription is not yet created for admin_user
 \c - admin_user - :worker_2_port
+SET search_path TO split_shard_replication_setup_schema;
 SELECT * from table_second_7;
  id | value
 ---------------------------------------------------------------------
@@ -145,6 +161,7 @@ SELECT * from table_second_9;
 (0 rows)
 
 \c - postgres - :worker_2_port
+SET search_path TO split_shard_replication_setup_schema;
 SET client_min_messages TO WARNING;
 BEGIN;
 SELECT 1 from public.create_subscription_for_owner_two(:worker_2_node, 'SUB2');
@@ -160,7 +177,9 @@ select pg_sleep(5);
 
 (1 row)
 
+-- expect data
 \c - admin_user - :worker_2_port
+SET search_path TO split_shard_replication_setup_schema;
 SELECT * from table_second_7;
  id | value
 ---------------------------------------------------------------------

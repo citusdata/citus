@@ -31,8 +31,7 @@ static ShardSplitInfoSMHeader * GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handl
 
 /*
  * GetShardSplitInfoSMHeaderFromDSMHandle returns the header of the shared memory
- * segment beloing to 'dsmHandle'. It pins the shared memory segment mapping till
- * lifetime of the backend process accessing it.
+ * segment. It pins the mapping till lifetime of the backend process accessing it.
  */
 static ShardSplitInfoSMHeader *
 GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle dsmHandle)
@@ -52,9 +51,8 @@ GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle dsmHandle)
 	}
 
 	/*
-	 * By default, mappings are owned by current resource owner, which typically
-	 * means they stick around for the duration of current query.
-	 * Keep a dynamic shared memory mapping until end of session to avoid warnings and leak.
+	 * Detatching segment associated with resource owner with 'dsm_pin_mapping' call before the 
+	 * resource owner releases, to avoid warning being logged and potential leaks.
 	 */
 	dsm_pin_mapping(dsmSegment);
 
@@ -63,7 +61,6 @@ GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle dsmHandle)
 
 	return header;
 }
-
 
 /*
  * GetShardSplitInfoSMArrayForSlot returns pointer to the array of
@@ -96,12 +93,11 @@ GetShardSplitInfoSMArrayForSlot(char *slotName, int *shardSplitInfoCount)
 
 
 /*
- * AllocateSharedMemoryForShardSplitInfo is used to create a place to store
+ * AllocateSharedMemoryForShardSplitInfo is used to allocate and store
  * information about the shard undergoing a split. The function allocates dynamic
- * shared memory segment consisting of a header which stores the id of process
- * creating it and an array of "steps" which store ShardSplitInfo. The contents of
- * this shared memory segment are consumed by WAL sender process during catch up phase of
- * replication through logical decoding plugin.
+ * shared memory segment consisting of a header and an array of ShardSplitInfo structure. 
+ * The contents of this shared memory segment are consumed by WAL sender process
+ * during catch up phase of replication through logical decoding plugin.
  *
  * The shared memory segment exists till the catch up phase completes or the
  * postmaster shutsdown.

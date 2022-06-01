@@ -15,6 +15,11 @@
 #include "distributed/shardsplit_shared_memory.h"
 #include "replication/logical.h"
 
+/*
+ * Dynamically-loaded modules are required to include this macro call to check for
+ * incompatibility (such as being compiled for a different major PostgreSQL version etc).
+ * In a multiple source-file module, the macro call should only appear once.
+ */
 PG_MODULE_MAGIC;
 
 extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
@@ -62,7 +67,7 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
 /*
  * GetHashValueForIncomingTuple returns the hash value of the partition
  * column for the incoming tuple. It also checks if the change should be
- * handled as the incoming committed change would belong to a relation
+ * handled as the incoming committed change can belong to a relation
  * that is not under going split.
  */
 static int32_t

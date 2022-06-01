@@ -5,5 +5,6 @@ test: multi_cluster_management
 test: multi_test_catalog_views
 test: tablespace
 # Split tests go here.
+test: split_shard_test_helpers
 test: citus_split_shard_by_split_points_negative
 test: citus_split_shard_by_split_points
