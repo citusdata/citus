@@ -329,7 +329,6 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Test downgrade to 9.2-2 from 9.2-4
 ALTER EXTENSION citus UPDATE TO '9.2-4';
 ALTER EXTENSION citus UPDATE TO '9.2-2';
-ERROR:  extension "citus" has no update path from version "9.2-4" to version "9.2-2"
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
@@ -343,9 +342,8 @@ SELECT * FROM multi_extension.print_extension_changes();
  * Hence the query below should fail.
  */
 ALTER EXTENSION citus UPDATE TO '9.3-1';
-ERROR:  extension "citus" has no update path from version "9.2-4" to version "9.3-1"
+ERROR:  extension "citus" has no update path from version "9.2-2" to version "9.3-1"
 ALTER EXTENSION citus UPDATE TO '9.2-4';
-NOTICE:  version "9.2-4" of extension "citus" is already installed
 -- Snapshot of state at 9.2-4
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
@@ -355,8 +353,14 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Test downgrade to 9.2-4 from 9.3-2
 ALTER EXTENSION citus UPDATE TO '9.3-2';
 ALTER EXTENSION citus UPDATE TO '9.2-4';
-ERROR:  extension "citus" has no update path from version "9.3-2" to version "9.2-4"
 -- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 9.3-2
+ALTER EXTENSION citus UPDATE TO '9.3-2';
 SELECT * FROM multi_extension.print_extension_changes();
                   previous_object                  |                            current_object
 ---------------------------------------------------------------------
@@ -369,33 +373,23 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                    | function worker_create_or_alter_role(text,text,text) boolean
 (7 rows)
 
--- Snapshot of state at 9.3-2
+-- Test downgrade to 9.3-2 from 9.4-1
+ALTER EXTENSION citus UPDATE TO '9.4-1';
 ALTER EXTENSION citus UPDATE TO '9.3-2';
-NOTICE:  version "9.3-2" of extension "citus" is already installed
+-- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
 (0 rows)
 
--- Test downgrade to 9.3-2 from 9.4-1
+-- Snapshot of state at 9.4-1
 ALTER EXTENSION citus UPDATE TO '9.4-1';
-ALTER EXTENSION citus UPDATE TO '9.3-2';
-ERROR:  extension "citus" has no update path from version "9.4-1" to version "9.3-2"
--- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object |                                                    current_object
 ---------------------------------------------------------------------
                  | function worker_last_saved_explain_analyze() TABLE(explain_analyze_output text, execution_duration double precision)
                  | function worker_save_query_explain_analyze(text,jsonb) SETOF record
 (2 rows)
-
--- Snapshot of state at 9.4-1
-ALTER EXTENSION citus UPDATE TO '9.4-1';
-NOTICE:  version "9.4-1" of extension "citus" is already installed
-SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
----------------------------------------------------------------------
-(0 rows)
 
 -- Test upgrade paths for backported citus_pg_upgrade functions
 ALTER EXTENSION citus UPDATE TO '9.4-2';
@@ -511,8 +505,14 @@ ALTER EXTENSION citus UPDATE TO '9.5-1';
 -- ROLLBACK;
 -- now we can downgrade as there is no citus local table
 ALTER EXTENSION citus UPDATE TO '9.4-1';
-ERROR:  extension "citus" has no update path from version "9.5-1" to version "9.4-1"
 -- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 9.5-1
+ALTER EXTENSION citus UPDATE TO '9.5-1';
 SELECT * FROM multi_extension.print_extension_changes();
                              previous_object                              |                             current_object
 ---------------------------------------------------------------------
@@ -527,14 +527,6 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                           | function undistribute_table(regclass) void
                                                                           | function worker_record_sequence_dependency(regclass,regclass,name) void
 (10 rows)
-
--- Snapshot of state at 9.5-1
-ALTER EXTENSION citus UPDATE TO '9.5-1';
-NOTICE:  version "9.5-1" of extension "citus" is already installed
-SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
----------------------------------------------------------------------
-(0 rows)
 
 -- Test upgrade paths for backported citus_pg_upgrade functions
 ALTER EXTENSION citus UPDATE TO '9.5-2';
@@ -640,8 +632,14 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Test downgrade to 9.5-1 from 10.0-4
 ALTER EXTENSION citus UPDATE TO '10.0-4';
 ALTER EXTENSION citus UPDATE TO '9.5-1';
-ERROR:  extension "citus" has no update path from version "10.0-4" to version "9.5-1"
 -- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 10.0-4
+ALTER EXTENSION citus UPDATE TO '10.0-4';
 SELECT * FROM multi_extension.print_extension_changes();
                                    previous_object                                    |                                                current_object
 ---------------------------------------------------------------------
@@ -715,14 +713,6 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                       | view time_partitions
 (68 rows)
 
--- Snapshot of state at 10.0-4
-ALTER EXTENSION citus UPDATE TO '10.0-4';
-NOTICE:  version "10.0-4" of extension "citus" is already installed
-SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
----------------------------------------------------------------------
-(0 rows)
-
 -- check that we depend on the existence of public schema, and we can not drop it now
 DROP SCHEMA public;
 ERROR:  cannot drop schema public because other objects depend on it
@@ -730,30 +720,26 @@ DETAIL:  extension citus depends on schema public
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 -- verify that citus_tables view is on pg_catalog if public schema is absent.
 ALTER EXTENSION citus UPDATE TO '9.5-1';
-ERROR:  extension "citus" has no update path from version "10.0-4" to version "9.5-1"
 DROP SCHEMA public;
-ERROR:  cannot drop schema public because other objects depend on it
-DETAIL:  extension citus depends on schema public
-HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 ALTER EXTENSION citus UPDATE TO '10.0-4';
-NOTICE:  version "10.0-4" of extension "citus" is already installed
 SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
+      previous_object      |   current_object
 ---------------------------------------------------------------------
-(0 rows)
+ view public.citus_tables  |
+                           | view citus_tables
+(2 rows)
 
 -- recreate public schema, and recreate citus_tables in the public schema by default
 CREATE SCHEMA public;
-ERROR:  schema "public" already exists
 GRANT ALL ON SCHEMA public TO public;
 ALTER EXTENSION citus UPDATE TO '9.5-1';
-ERROR:  extension "citus" has no update path from version "10.0-4" to version "9.5-1"
 ALTER EXTENSION citus UPDATE TO '10.0-4';
-NOTICE:  version "10.0-4" of extension "citus" is already installed
 SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
+  previous_object   |      current_object
 ---------------------------------------------------------------------
-(0 rows)
+ view citus_tables  |
+                    | view public.citus_tables
+(2 rows)
 
 -- not print "HINT: " to hide current lib version
 \set VERBOSITY terse
@@ -795,8 +781,14 @@ RESET columnar.enable_custom_scan;
 -- Test downgrade to 10.0-4 from 10.1-1
 ALTER EXTENSION citus UPDATE TO '10.1-1';
 ALTER EXTENSION citus UPDATE TO '10.0-4';
-ERROR:  extension "citus" has no update path from version "10.1-1" to version "10.0-4"
 -- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 10.1-1
+ALTER EXTENSION citus UPDATE TO '10.1-1';
 SELECT * FROM multi_extension.print_extension_changes();
                                                                                                         previous_object                                                                                                        |                                                                                                                          current_object
 ---------------------------------------------------------------------
@@ -817,19 +809,17 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                                                                                                                                | function worker_partitioned_table_size(regclass) bigint
 (15 rows)
 
--- Snapshot of state at 10.1-1
+-- Test downgrade to 10.1-1 from 10.2-1
+ALTER EXTENSION citus UPDATE TO '10.2-1';
 ALTER EXTENSION citus UPDATE TO '10.1-1';
-NOTICE:  version "10.1-1" of extension "citus" is already installed
+-- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
 (0 rows)
 
--- Test downgrade to 10.1-1 from 10.2-1
+-- Snapshot of state at 10.2-1
 ALTER EXTENSION citus UPDATE TO '10.2-1';
-ALTER EXTENSION citus UPDATE TO '10.1-1';
-ERROR:  extension "citus" has no update path from version "10.2-1" to version "10.1-1"
--- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
                       previous_object                       |                                                                                     current_object
 ---------------------------------------------------------------------
@@ -851,18 +841,9 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                             | function worker_nextval(regclass) integer
 (16 rows)
 
--- Snapshot of state at 10.2-1
-ALTER EXTENSION citus UPDATE TO '10.2-1';
-NOTICE:  version "10.2-1" of extension "citus" is already installed
-SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
----------------------------------------------------------------------
-(0 rows)
-
 -- Test downgrade to 10.2-1 from 10.2-2
 ALTER EXTENSION citus UPDATE TO '10.2-2';
 ALTER EXTENSION citus UPDATE TO '10.2-1';
-ERROR:  extension "citus" has no update path from version "10.2-2" to version "10.2-1"
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
@@ -871,7 +852,6 @@ SELECT * FROM multi_extension.print_extension_changes();
 
 -- Snapshot of state at 10.2-2
 ALTER EXTENSION citus UPDATE TO '10.2-2';
-NOTICE:  version "10.2-2" of extension "citus" is already installed
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
@@ -880,7 +860,6 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Test downgrade to 10.2-2 from 10.2-3
 ALTER EXTENSION citus UPDATE TO '10.2-3';
 ALTER EXTENSION citus UPDATE TO '10.2-2';
-ERROR:  extension "citus" has no update path from version "10.2-3" to version "10.2-2"
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
@@ -889,7 +868,6 @@ SELECT * FROM multi_extension.print_extension_changes();
 
 -- Snapshot of state at 10.2-3
 ALTER EXTENSION citus UPDATE TO '10.2-3';
-NOTICE:  version "10.2-3" of extension "citus" is already installed
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
@@ -898,7 +876,6 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Test downgrade to 10.2-3 from 10.2-4
 ALTER EXTENSION citus UPDATE TO '10.2-4';
 ALTER EXTENSION citus UPDATE TO '10.2-3';
-ERROR:  extension "citus" has no update path from version "10.2-4" to version "10.2-3"
 -- Make sure that we don't delete pg_depend entries added in
 -- columnar--10.2-3--10.2-4.sql when downgrading to 10.2-3.
 SELECT COUNT(*)=10
@@ -916,6 +893,13 @@ WHERE classid = 'pg_am'::regclass::oid AND
 
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 10.2-4
+ALTER EXTENSION citus UPDATE TO '10.2-4';
+SELECT * FROM multi_extension.print_extension_changes();
  previous_object |                              current_object
 ---------------------------------------------------------------------
                  | function citus_internal.columnar_ensure_am_depends_catalog() void
@@ -923,14 +907,6 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function fix_partition_shard_index_names(regclass) void
                  | function worker_fix_partition_shard_index_names(regclass,text,text) void
 (4 rows)
-
--- Snapshot of state at 10.2-4
-ALTER EXTENSION citus UPDATE TO '10.2-4';
-NOTICE:  version "10.2-4" of extension "citus" is already installed
-SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
----------------------------------------------------------------------
-(0 rows)
 
 -- Make sure that we defined dependencies from all rel objects (tables,
 -- indexes, sequences ..) to columnar table access method ...
@@ -1001,8 +977,14 @@ FROM
 DELETE FROM pg_dist_partition WHERE logicalrelid = 'e_transactions'::regclass;
 DROP TABLE e_transactions;
 ALTER EXTENSION citus UPDATE TO '10.2-4';
-ERROR:  extension "citus" has no update path from version "11.0-1" to version "10.2-4"
 -- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 11.0-1
+ALTER EXTENSION citus UPDATE TO '11.0-1';
 SELECT * FROM multi_extension.print_extension_changes();
                                                    previous_object                                                    |                                                            current_object
 ---------------------------------------------------------------------
