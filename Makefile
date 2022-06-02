@@ -48,6 +48,7 @@ install-downgrades:
 install-all: install-headers install-pg_send_cancellation
 	$(MAKE) -C src/backend/columnar/ install-all
 	$(MAKE) -C src/backend/distributed/ install-all
+	$(MAKE) -C src/backend/distributed/shardsplit install-all
 
 # build citus_send_cancellation binary
 pg_send_cancellation:
