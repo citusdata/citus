@@ -77,6 +77,8 @@ step "s1-commit"
     COMMIT;
 }
 
+step "s1-empty" { }
+
 session "s2"
 
 step "s2-begin"
@@ -144,7 +146,8 @@ permutation "s1-begin" "s1-update_value_1_of_1_or_3_to_5" "s2-begin" "s2-update_
 permutation "s1-begin" "s1-update_value_1_of_1_or_3_to_5" "s2-begin" "s2-update_value_1_of_1_or_3_to_8" "s1-commit" "s2-commit" "s2-select"
 
 // test with inserts
-permutation "s1-begin" "s1-update_all_value_1" "s2-begin" "s2-insert-to-table" "s1-commit" "s2-commit" "s2-select"
+// the next test is flaky. there is an empty step that will postpone the s2-select step output for a miniscule time
+permutation "s1-begin" "s1-update_all_value_1" "s2-begin" "s2-insert-to-table" "s1-commit" "s2-commit" "s2-select"(*) "s1-empty"
 permutation "s1-begin" "s1-update_all_value_1" "s2-begin" "s2-insert-into-select" "s1-commit" "s2-commit" "s2-select"
 
 // multi-shard update affecting the same rows

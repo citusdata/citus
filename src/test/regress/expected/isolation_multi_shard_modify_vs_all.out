@@ -182,7 +182,7 @@ user_id|value_1|value_2|value_3
 (7 rows)
 
 
-starting permutation: s1-begin s1-update_all_value_1 s2-begin s2-insert-to-table s1-commit s2-commit s2-select
+starting permutation: s1-begin s1-update_all_value_1 s2-begin s2-insert-to-table s1-commit s2-commit s2-select s1-empty
 step s1-begin:
     BEGIN;
 
@@ -203,7 +203,9 @@ step s2-commit:
 
 step s2-select:
  SELECT * FROM users_test_table ORDER BY value_2, value_3;
-
+ <waiting ...>
+step s1-empty: 
+step s2-select: <... completed>
 user_id|value_1|value_2|value_3
 ---------------------------------------------------------------------
       1|      2|      3|      4
