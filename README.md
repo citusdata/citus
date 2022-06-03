@@ -2,7 +2,7 @@
 
 [![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.citusdata.com/)
 [![Stack Overflow](https://img.shields.io/badge/Stack%20Overflow-%20-545353?logo=Stack%20Overflow)](https://stackoverflow.com/questions/tagged/citus)
-[![Slack Status](http://slack.citusdata.com/badge.svg)](https://citus-public.slack.com/)
+[![Slack Status](https://citus-slack.herokuapp.com/badge.svg)](https://citus-public.slack.com/)
 [![Code Coverage](https://codecov.io/gh/citusdata/citus/branch/master/graph/badge.svg)](https://app.codecov.io/gh/citusdata/citus)
 [![Twitter](https://img.shields.io/twitter/follow/citusdata.svg?label=Follow%20@citusdata)](https://twitter.com/intent/follow?screen_name=citusdata)
 
