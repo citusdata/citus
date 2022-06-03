@@ -87,8 +87,8 @@ static int NodeShardMappingHashCompare(const void *left, const void *right, Size
  *
  * Usage Semantics:
  * This UDF returns a shared memory handle where the information is stored. This shared memory
- * handle is used by caller to encode replication slot name as "NodeId_SharedMemoryHandle_TableOnwerId" for every
- * distinct  target node. The same encoded slot name is stored in one of the fields of the
+ * handle is used by caller to encode replication slot name as "citus_split_nodeId_sharedMemoryHandle_tableOnwerId"
+ * for every distinct  table owner. The same encoded slot name is stored in one of the fields of the
  * in-memory data structure(ShardSplitInfo).
  *
  * There is a 1-1 mapping between a table owner id and a replication slot. One replication

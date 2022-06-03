@@ -21,12 +21,12 @@ DECLARE
 begin
 
     SELECT * into sharedMemoryId from public.split_shard_replication_setup_helper(targetNode1, targetNode2);
-    SELECT FORMAT('%s_%s_10', targetNode1, sharedMemoryId) into derivedSlotName;
+    SELECT FORMAT('citus_split_%s_%s_10', targetNode1, sharedMemoryId) into derivedSlotName;
     SELECT slot_name into targetOneSlotName from pg_create_logical_replication_slot(derivedSlotName, 'decoding_plugin_for_shard_split');
 
     -- if new child shards are placed on different nodes, create one more replication slot
     if (targetNode1 != targetNode2) then
-        SELECT FORMAT('%s_%s_10', targetNode2, sharedMemoryId) into derivedSlotName;
+        SELECT FORMAT('citus_split_%s_%s_10', targetNode2, sharedMemoryId) into derivedSlotName;
         SELECT slot_name into targetTwoSlotName from pg_create_logical_replication_slot(derivedSlotName, 'decoding_plugin_for_shard_split');
         INSERT INTO slotName_table values(targetTwoSlotName, targetNode2, 1);
     end if;
@@ -69,11 +69,11 @@ begin
     SELECT * into sharedMemoryId from public.split_shard_replication_setup_for_colocated_shards(targetNode1, targetNode2);
 
     SELECT relowner into tableOwnerOne from pg_class where relname='table_first';
-    SELECT FORMAT('%s_%s_%s', targetNode1, sharedMemoryId, tableOwnerOne) into derivedSlotNameOne;
+    SELECT FORMAT('citus_split_%s_%s_%s', targetNode1, sharedMemoryId, tableOwnerOne) into derivedSlotNameOne;
     SELECT slot_name into targetOneSlotName from pg_create_logical_replication_slot(derivedSlotNameOne, 'decoding_plugin_for_shard_split');
 
     SELECT relowner into tableOwnerTwo from pg_class where relname='table_second';
-    SELECT FORMAT('%s_%s_%s', targetNode2, sharedMemoryId, tableOwnerTwo) into derivedSlotNameTwo;
+    SELECT FORMAT('citus_split_%s_%s_%s', targetNode2, sharedMemoryId, tableOwnerTwo) into derivedSlotNameTwo;
     SELECT slot_name into targetTwoSlotName from pg_create_logical_replication_slot(derivedSlotNameTwo, 'decoding_plugin_for_shard_split');
 
 
@@ -104,7 +104,6 @@ DECLARE
 begin
     SELECT name into replicationSlotName from slotName_table where id = 1;
     EXECUTE FORMAT($sub$create subscription %s connection 'host=localhost port=xxxxx user=postgres dbname=regression' publication PUB1 with(create_slot=false, enabled=true, slot_name='%s', copy_data=false)$sub$, subscriptionName, replicationSlotName);
-    RAISE NOTICE 'sameer %', replicationSlotName;
     return replicationSlotName;
 end
 $$ LANGUAGE plpgsql;
@@ -117,7 +116,6 @@ DECLARE
 begin
     SELECT name into replicationSlotName from slotName_table where id = 2;
     EXECUTE FORMAT($sub$create subscription %s connection 'host=localhost port=xxxxx user=postgres dbname=regression' publication PUB2 with(create_slot=false, enabled=true, slot_name='%s', copy_data=false)$sub$, subscriptionName, replicationSlotName);
-    RAISE NOTICE 'sameer %', replicationSlotName;
     return replicationSlotName;
 end
 $$ LANGUAGE plpgsql;

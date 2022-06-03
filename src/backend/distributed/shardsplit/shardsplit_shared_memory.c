@@ -180,7 +180,8 @@ ShardSplitInfoSMData(ShardSplitInfoSMHeader *shardSplitInfoSMHeader)
 /*
  * encode_replication_slot returns an encoded replication slot name
  * in the following format.
- * Slot Name = NodeId_SharedMemoryHandle_TableOwnerOid
+ * Slot Name = citus_split_nodeId_sharedMemoryHandle_tableOwnerOid
+ * Max supported length of replication slot name is 64 bytes.
  */
 char *
 encode_replication_slot(uint32_t nodeId,
@@ -188,7 +189,7 @@ encode_replication_slot(uint32_t nodeId,
 						uint32_t tableOwnerId)
 {
 	StringInfo slotName = makeStringInfo();
-	appendStringInfo(slotName, "%u_%u_%u", nodeId, dsmHandle, tableOwnerId);
+	appendStringInfo(slotName, "citus_split_%u_%u_%u", nodeId, dsmHandle, tableOwnerId);
 	return slotName->data;
 }
 
@@ -208,14 +209,14 @@ decode_replication_slot(char *slotName,
 	char *slotNameString = strtok_r(dupSlotName, "_", &strtokPosition);
 	while (slotNameString != NULL)
 	{
-		/* first part of the slot name is NodeId */
-		if (index == 0)
+		/* third part of the slot name is NodeId */
+		if (index == 2)
 		{
 			*nodeId = strtoul(slotNameString, NULL, 10);
 		}
 
-		/* second part of the name is memory handle */
-		else if (index == 1)
+		/* fourth part of the name is memory handle */
+		else if (index == 3)
 		{
 			*dsmHandle = strtoul(slotNameString, NULL, 10);
 		}
@@ -227,10 +228,10 @@ decode_replication_slot(char *slotName,
 	}
 
 	/*
-	 * Replication slot name is encoded as NodeId_SharedMemoryHandle_TableOwnerOid.
-	 * Hence the number of tokens would be strictly three considering "_" as delimiter.
+	 * Replication slot name is encoded as citus_split_nodeId_sharedMemoryHandle_tableOwnerOid.
+	 * Hence the number of tokens would be strictly five considering "_" as delimiter.
 	 */
-	if (index != 3)
+	if (index != 5)
 	{
 		ereport(ERROR,
 				(errmsg("Invalid Replication Slot name encoding: %s", slotName)));
