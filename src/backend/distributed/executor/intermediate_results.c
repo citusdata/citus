@@ -742,7 +742,7 @@ RemoveIntermediateResultsDirectory(void)
 			PathNameDeleteTemporaryDir(privateName->data);
 		}
 
-		if(CreatedResultsDirectory)
+		if (CreatedResultsDirectory)
 		{
 			pfree(CreatedResultsDirectory);
 		}
