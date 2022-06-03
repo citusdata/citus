@@ -1461,8 +1461,17 @@ CREATE FUNCTION pg_catalog.citus_server_id()
 COMMENT ON FUNCTION citus_server_id()
     IS 'generates a random UUID to be used as server identifier';
 
+-- Insert the latest extension version into pg_dist_node_metadata
+-- for new installations.
+--
+-- While users could technically upgrade to an intermediate version
+-- everything in Citus fails until it is upgraded to the latest version,
+-- so it seems safe to use the latest.
 INSERT INTO pg_dist_node_metadata
-    VALUES (jsonb_build_object('server_id', citus_server_id()::text));
+SELECT jsonb_build_object('server_id', citus_server_id()::text,
+                          'last_upgrade_version', default_version)
+FROM pg_available_extensions
+WHERE name = 'citus';
 
 -- rebalancer functions
 CREATE TYPE citus.shard_transfer_mode AS ENUM (
