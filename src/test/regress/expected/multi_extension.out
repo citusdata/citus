@@ -1036,10 +1036,11 @@ ALTER EXTENSION citus UPDATE TO '11.0-2';
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object |                         current_object
 ---------------------------------------------------------------------
+                 | function citus_finish_citus_upgrade()
                  | function citus_is_coordinator() boolean
                  | function run_command_on_coordinator(text,boolean) SETOF record
                  | function start_metadata_sync_to_all_nodes() boolean
-(3 rows)
+(4 rows)
 
 -- Test downgrade script (result should be empty)
 ALTER EXTENSION citus UPDATE TO '11.0-1';
