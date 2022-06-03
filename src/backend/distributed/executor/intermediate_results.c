@@ -47,7 +47,7 @@
 #include "utils/syscache.h"
 
 
-static char *CreatedResultsDirectory = NULL;
+static List *CreatedResultsDirectories = NIL;
 
 
 /* CopyDestReceiver can be used to stream results into a distributed table */
@@ -605,25 +605,21 @@ CreateIntermediateResultsDirectory(void)
 
 	MemoryContext oldContext = MemoryContextSwitchTo(intermediateResultsContext);
 
-	if (CreatedResultsDirectory == NULL)
+	int makeOK = mkdir(resultDirectory, S_IRWXU);
+	if (makeOK != 0)
 	{
-		int makeOK = mkdir(resultDirectory, S_IRWXU);
-		if (makeOK != 0)
+		/* if it already exists, someone else beat us to it, that's ok */
+		if (errno != EEXIST)
 		{
-			if (errno == EEXIST)
-			{
-				/* someone else beat us to it, that's ok */
-				return resultDirectory;
-			}
-
 			ereport(ERROR, (errcode_for_file_access(),
 							errmsg("could not create intermediate results directory "
 								   "\"%s\": %m",
 								   resultDirectory)));
 		}
-
-		CreatedResultsDirectory = pstrdup(resultDirectory);
 	}
+
+	CreatedResultsDirectories = list_append_unique(CreatedResultsDirectories, pstrdup(
+													   resultDirectory));
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -712,7 +708,8 @@ IntermediateResultsDirectory(void)
 void
 RemoveIntermediateResultsDirectory(void)
 {
-	if (CreatedResultsDirectory != NULL)
+	char *directoryElement = NULL;
+	foreach_ptr(directoryElement, CreatedResultsDirectories)
 	{
 		/*
 		 * The shared directory is renamed before deleting it. Otherwise it
@@ -721,7 +718,7 @@ RemoveIntermediateResultsDirectory(void)
 		 * that's not possible. The current PID is included in the new
 		 * filename, so there can be no collisions with other backends.
 		 */
-		char *sharedName = CreatedResultsDirectory;
+		char *sharedName = directoryElement;
 		StringInfo privateName = makeStringInfo();
 		appendStringInfo(privateName, "%s.removed-by-%d", sharedName, MyProcPid);
 		if (rename(sharedName, privateName->data))
@@ -741,13 +738,14 @@ RemoveIntermediateResultsDirectory(void)
 		{
 			PathNameDeleteTemporaryDir(privateName->data);
 		}
-
-		if (CreatedResultsDirectory)
-		{
-			pfree(CreatedResultsDirectory);
-		}
-		CreatedResultsDirectory = NULL;
 	}
+
+	if (CreatedResultsDirectories != NIL)
+	{
+		pfree(CreatedResultsDirectories);
+	}
+
+	CreatedResultsDirectories = NIL;
 }
 
 
