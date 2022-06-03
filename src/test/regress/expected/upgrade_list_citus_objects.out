@@ -242,6 +242,7 @@ ORDER BY 1;
  function worker_partitioned_table_size(regclass)
  function worker_record_sequence_dependency(regclass,regclass,name)
  function worker_save_query_explain_analyze(text,jsonb)
+ function worker_split_shard_replication_setup(bigint[])
  schema citus
  schema citus_internal
  schema columnar

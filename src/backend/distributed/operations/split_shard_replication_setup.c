@@ -19,7 +19,7 @@
 #include "utils/lsyscache.h"
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(split_shard_replication_setup);
+PG_FUNCTION_INFO_V1(worker_split_shard_replication_setup);
 
 static HTAB *ShardInfoHashMap = NULL;
 
@@ -53,8 +53,7 @@ static ShardSplitInfo * CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 static void AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo);
 static void PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
 									   HTAB *shardInfoHashMap,
-									   dsm_handle dsmHandle,
-									   int shardSplitInfoCount);
+									   dsm_handle dsmHandle);
 
 static void SetupHashMapForShardInfo(void);
 static uint32 NodeShardMappingHash(const void *key, Size keysize);
@@ -62,7 +61,7 @@ static int NodeShardMappingHashCompare(const void *left, const void *right, Size
 
 
 /*
- * split_shard_replication_setup UDF creates in-memory data structures
+ * worker_split_shard_replication_setup UDF creates in-memory data structures
  * to store the meta information about the shard undergoing split and new split
  * children along with their placements required during the catch up phase
  * of logical replication.
@@ -102,7 +101,7 @@ static int NodeShardMappingHashCompare(const void *left, const void *right, Size
  * responsible.
  */
 Datum
-split_shard_replication_setup(PG_FUNCTION_ARGS)
+worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
 {
 	ArrayType *shardInfoArrayObject = PG_GETARG_ARRAYTYPE_P(0);
 	int shardInfoArrayLength = ARR_DIMS(shardInfoArrayObject)[0];
@@ -145,8 +144,7 @@ split_shard_replication_setup(PG_FUNCTION_ARGS)
 
 	PopulateShardSplitInfoInSM(splitShardInfoSMArray,
 							   ShardInfoHashMap,
-							   dsmHandle,
-							   shardSplitInfoCount);
+							   dsmHandle);
 
 	return dsmHandle;
 }
@@ -429,8 +427,7 @@ AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo)
 static void
 PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
 						   HTAB *shardInfoHashMap,
-						   dsm_handle dsmHandle,
-						   int shardSplitInfoCount)
+						   dsm_handle dsmHandle)
 {
 	HASH_SEQ_STATUS status;
 	hash_seq_init(&status, shardInfoHashMap);

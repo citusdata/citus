@@ -2,7 +2,7 @@
  *
  * shardsplit_shared_memory.h
  *    API's for creating and accessing shared memory segments to store
- *    shard split information. 'split_shard_replication_setup' UDF creates the
+ *    shard split information. 'worker_split_shard_replication_setup' UDF creates the
  *    shared memory and populates the contents. WAL sender processes are consumer
  *    of split information for appropriate tuple routing.
  *
