@@ -551,8 +551,8 @@ run_commands_on_session_level_connection_to_node
 
 step s2-coordinator-create-index-concurrently:
  CREATE INDEX CONCURRENTLY select_table_index ON select_table(id);
-
-step s1-commit-worker:
+ <waiting ...>
+step s1-commit-worker: 
  SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
@@ -560,6 +560,7 @@ run_commands_on_session_level_connection_to_node
 
 (1 row)
 
+step s2-coordinator-create-index-concurrently: <... completed>
 step s1-sleep:
  SELECT pg_sleep(.1);
 

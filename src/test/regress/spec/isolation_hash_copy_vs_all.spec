@@ -104,7 +104,7 @@ permutation "s1-initialize" "s1-begin" "s1-copy" "s2-drop" "s1-commit" "s1-selec
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-create-index" "s1-commit" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s1-copy" "s2-ddl-drop-index" "s1-commit" "s1-select-count" "s1-show-indexes"
 // the next permutation is flaky. To have a deterministic order of outputs, we sleep in s1, and we delay completion messages of s2 until the sleep is over.
-permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-create-index-concurrently"("s1-sleep") "s1-commit" "s1-sleep" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-create-index-concurrently"(*, "s1-sleep") "s1-commit" "s1-sleep" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-add-column" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-copy-additional-column" "s2-ddl-drop-column" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-rename-column" "s1-commit" "s1-select-count" "s1-show-columns"

@@ -85,7 +85,7 @@ permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begi
 permutation "s1-initialize" "s1-begin" "s1-table-size" "s2-ddl-create-index-concurrently" "s1-commit" "s1-show-indexes"
 permutation "s1-initialize" "s1-begin" "s1-master-modify-multiple-shards" "s2-ddl-create-index-concurrently" "s1-commit" "s1-show-indexes"
 // the next permutation is flaky. To have a deterministic order of outputs, we sleep in s1, and we delay completion messages of s2 until the sleep is over.
-permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s1-distribute-table" "s2-ddl-create-index-concurrently"("s1-sleep") "s1-sleep" "s1-commit" "s1-show-indexes"
+permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s1-distribute-table" "s2-ddl-create-index-concurrently"(*, "s1-sleep") "s1-sleep" "s1-commit" "s1-show-indexes"
 
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-table-size" "s2-ddl-add-column" "s1-commit" "s2-commit" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-master-modify-multiple-shards" "s2-ddl-add-column" "s1-commit" "s2-commit" "s1-show-columns"
