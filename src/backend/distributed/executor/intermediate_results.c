@@ -597,7 +597,7 @@ CreateIntermediateResultsDirectory(void)
 	char *resultDirectory = IntermediateResultsDirectory();
 
 	MemoryContext intermediateResultsContext = AllocSetContextCreateExtended(
-		CacheMemoryContext,
+		TopTransactionContext,
 		"Intermediate Result Files Context",
 		ALLOCSET_DEFAULT_MINSIZE,
 		ALLOCSET_DEFAULT_INITSIZE,
