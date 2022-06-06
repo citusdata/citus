@@ -596,27 +596,22 @@ CreateIntermediateResultsDirectory(void)
 {
 	char *resultDirectory = IntermediateResultsDirectory();
 
-	MemoryContext intermediateResultsContext = AllocSetContextCreateExtended(
-		TopTransactionContext,
-		"Intermediate Result Files Context",
-		ALLOCSET_DEFAULT_MINSIZE,
-		ALLOCSET_DEFAULT_INITSIZE,
-		ALLOCSET_DEFAULT_MAXSIZE);
-
-	MemoryContext oldContext = MemoryContextSwitchTo(intermediateResultsContext);
-
 	int makeOK = mkdir(resultDirectory, S_IRWXU);
 	if (makeOK != 0)
 	{
-		/* if it already exists, someone else beat us to it, that's ok */
-		if (errno != EEXIST)
+		if (errno == EEXIST)
 		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not create intermediate results directory "
-								   "\"%s\": %m",
-								   resultDirectory)));
+			/* someone else beat us to it, that's ok */
+			return resultDirectory;
 		}
+
+		ereport(ERROR, (errcode_for_file_access(),
+						errmsg("could not create intermediate results directory "
+							   "\"%s\": %m",
+							   resultDirectory)));
 	}
+
+	MemoryContext oldContext = MemoryContextSwitchTo(TopTransactionContext);
 
 	CreatedResultsDirectories = list_append_unique(CreatedResultsDirectories, pstrdup(
 													   resultDirectory));
