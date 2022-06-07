@@ -173,9 +173,6 @@ typedef enum ConversionChoice
 
 static bool HasConstantFilterOnUniqueColumn(RangeTblEntry *rangeTableEntry,
 											RelationRestriction *relationRestriction);
-static List * RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
-											 PlannerRestrictionContext *
-											 plannerRestrictionContext);
 static ConversionCandidates * CreateConversionCandidates(PlannerRestrictionContext *
 														 plannerRestrictionContext,
 														 List *rangeTableList,
@@ -474,7 +471,7 @@ AppendUniqueIndexColumnsToList(Form_pg_index indexForm, List **uniqueIndexGroups
  * The function could be optimized by not adding the columns that only appear
  * WHERE clause as a filter (e.g., not a join clause).
  */
-static List *
+List *
 RequiredAttrNumbersForRelation(RangeTblEntry *rangeTableEntry,
 							   PlannerRestrictionContext *plannerRestrictionContext)
 {
