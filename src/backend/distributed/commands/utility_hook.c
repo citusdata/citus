@@ -675,7 +675,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			}
 			else
 			{
-				Oid citusColumnarOid = get_extension_oid("citus_columnar", true);
 				double versionNumber = strtod(CITUS_MAJORVERSION, NULL);
 				if (versionNumber >= 11.1)
 				{
@@ -720,14 +719,11 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			}
 			else
 			{
-				Oid citusColumnarOid = get_extension_oid("citus_columnar", true);
-				Oid citusOid = get_extension_oid("citus", true);
 				double versionNumber = strtod(CITUS_MAJORVERSION, NULL);
 				if (versionNumber >= 11.1)
 				{
 					char *curColumnarVersion = get_extension_version(citusColumnarOid);
-					char *citusversion = get_extension_version(citusOid);
-					if (strcmp(citusversion, "11.1-1") == 0)
+					if (strcmp(curColumnarVersion, "11.1-0") == 0)
 					{
 						AlterExtensionUpdateStmt("citus_columnar", "11.1-1");
 					}
