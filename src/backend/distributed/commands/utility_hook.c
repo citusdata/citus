@@ -77,6 +77,7 @@
 #include "nodes/makefuncs.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
@@ -212,7 +213,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			{
 				const char *newVersion = defGetString(newVersionValue);
 				const char schemaVersionSeparator = '-';
-
 				char *leftSeperatorPosition = strchr(newVersion, schemaVersionSeparator);
 				versionNumber = strtod(leftSeperatorPosition, NULL);
 			}
@@ -673,6 +673,18 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 					AlterExtensionUpdateStmt("citus_columnar", "11.1-0");
 				}
 			}
+			else
+			{
+				Oid citusColumnarOid = get_extension_oid("citus_columnar", true);
+				double versionNumber = strtod(CITUS_MAJORVERSION, NULL);
+				if (versionNumber >= 11.1)
+				{
+					if (citusColumnarOid == InvalidOid)
+					{
+						CreateExtensionWithVersion("citus_columnar", "11.1-0");
+					}
+				}
+			}
 		}
 
 		PrevProcessUtility_compat(pstmt, queryString, false, context,
@@ -703,6 +715,21 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 					if (strcmp(curColumnarVersion, "11.1-0") == 0)
 					{
 						RemoveExtensionById(citusColumnarOid);
+					}
+				}
+			}
+			else
+			{
+				Oid citusColumnarOid = get_extension_oid("citus_columnar", true);
+				Oid citusOid = get_extension_oid("citus", true);
+				double versionNumber = strtod(CITUS_MAJORVERSION, NULL);
+				if (versionNumber >= 11.1)
+				{
+					char *curColumnarVersion = get_extension_version(citusColumnarOid);
+					char *citusversion = get_extension_version(citusOid);
+					if (strcmp(citusversion, "11.1-1") == 0)
+					{
+						AlterExtensionUpdateStmt("citus_columnar", "11.1-1");
 					}
 				}
 			}
