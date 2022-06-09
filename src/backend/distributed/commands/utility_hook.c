@@ -651,7 +651,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			/*upgrade citus */
 			DefElem *newVersionValue = GetExtensionOption(
 				((AlterExtensionStmt *) parsetree)->options, "new_version");
-			Oid citusExtensionOid = get_extension_oid("citus", true);
 			Oid citusColumnarOid = get_extension_oid("citus_columnar", true);
 			if (newVersionValue)
 			{
