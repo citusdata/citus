@@ -211,10 +211,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 			if (newVersionValue)
 			{
-				const char *newVersion = strdup(defGetString(newVersionValue));
-				char *strtokPosition = NULL;
-				char *versionVal = strtok_r(newVersion, "-", &strtokPosition);
-				versionNumber = strtod(versionVal, NULL);
+				char *newVersion = strdup(defGetString(newVersionValue));
+				versionNumber = GetExtensionVersionNumber(newVersion);
 			}
 
 			if (versionNumber * 100 >= 1110.0)
@@ -655,8 +653,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 				((AlterExtensionStmt *) parsetree)->options, "new_version");
 			Oid citusExtensionOid = get_extension_oid("citus", true);
 			char *curExtensionVersion = get_extension_version(citusExtensionOid);
-			double curExtensionNumber = GetExtensionVersionNumber(strdup(
-																	  curExtensionVersion));
 			Oid citusColumnarOid = get_extension_oid("citus_columnar", true);
 			if (newVersionValue)
 			{
