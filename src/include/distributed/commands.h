@@ -207,6 +207,7 @@ extern ObjectAddress AlterExtensionUpdateStmtObjectAddress(Node *stmt,
 														   bool missing_ok);
 extern void CreateExtensionWithVersion(char *extname, char *extVersion);
 extern void AlterExtensionUpdateStmt(char *extname, char *extVersion);
+extern double GetExtensionVersionNumber(char *extVersion);
 
 /* foreign_constraint.c - forward declarations */
 extern bool ConstraintIsAForeignKeyToReferenceTable(char *constraintName,

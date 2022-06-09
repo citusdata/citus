@@ -98,6 +98,7 @@ ORDER BY 1, 2;
 
 -- DROP EXTENSION pre-created by the regression suite
 DROP EXTENSION citus;
+DROP EXTENSION citus_columnar;
 \c
 
 -- these tests switch between citus versions and call ddl's that require pg_dist_object to be created
@@ -497,6 +498,7 @@ ORDER BY 1, 2;
 RESET citus.enable_version_checks;
 RESET columnar.enable_version_checks;
 DROP EXTENSION citus;
+DROP EXTENSION citus_columnar;
 CREATE EXTENSION citus VERSION '8.0-1';
 
 -- Test non-distributed queries work even in version mismatch
@@ -561,6 +563,7 @@ ALTER EXTENSION citus UPDATE;
 
 -- re-create in newest version
 DROP EXTENSION citus;
+DROP EXTENSION citus_columnar;
 \c
 CREATE EXTENSION citus;
 
@@ -568,6 +571,7 @@ CREATE EXTENSION citus;
 \c - - - :worker_1_port
 
 DROP EXTENSION citus;
+DROP EXTENSION citus_columnar;
 SET citus.enable_version_checks TO 'false';
 SET columnar.enable_version_checks TO 'false';
 CREATE EXTENSION citus VERSION '8.0-1';

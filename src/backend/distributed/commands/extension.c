@@ -1014,6 +1014,19 @@ CreateExtensionWithVersion(char *extname, char *extVersion)
 
 
 /*
+ * GetExtensionVersionNumber convert extension version to real value
+ */
+double
+GetExtensionVersionNumber(char *extVersion)
+{
+	char *strtokPosition = NULL;
+	char *versionVal = strtok_r(extVersion, "-", &strtokPosition);
+	double versionNumber = strtod(versionVal, NULL);
+	return versionNumber;
+}
+
+
+/*
  * AlterExtensionUpdateStmt builds and execute Alter extension statements
  * per given extension name and updates extension verision
  */

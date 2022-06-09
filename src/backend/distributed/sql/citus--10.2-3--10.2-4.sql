@@ -3,11 +3,16 @@
 -- bump version to 10.2-4
 
 --#include "../../columnar/sql/columnar--10.2-3--10.2-4.sql"
+DO $$ begin raise log '%', 'begin 10.2-3--10.2-4'; end; $$;
 DO $check_columnar$
 BEGIN
-  IF NOT EXISTS (select 1 from pg_extension where extname='citus_columnar') THEN
-      #include "../../columnar/sql/columnar--10.2-3--10.2-4.sql"
-  END IF;
+IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_extension AS e
+             INNER JOIN pg_catalog.pg_depend AS d ON (d.refobjid = e.oid)
+             INNER JOIN pg_catalog.pg_proc AS p ON (p.oid = d.objid)
+             WHERE e.extname='citus_columnar' and p.proname = 'columnar_handler'
+  ) THEN
+    #include "../../columnar/sql/columnar--10.2-3--10.2-4.sql"
+END IF;
 END;
 $check_columnar$;
 
@@ -15,3 +20,4 @@ $check_columnar$;
 #include "udfs/fix_all_partition_shard_index_names/10.2-4.sql"
 #include "udfs/worker_fix_partition_shard_index_names/10.2-4.sql"
 #include "udfs/citus_finish_pg_upgrade/10.2-4.sql"
+DO $$ begin raise log '%', '10.2-3--10.2-4'; end; $$;
