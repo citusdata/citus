@@ -127,8 +127,8 @@ BEGIN
         'n' as deptype
     FROM pg_catalog.pg_dist_partition p;
 
-    -- disable set dependencies for columnar table access method
-    -- PERFORM citus_internal.columnar_ensure_am_depends_catalog();
+    -- set dependencies for columnar table access method
+    PERFORM columnar_internal.columnar_ensure_am_depends_catalog();
 
     -- restore pg_dist_object from the stable identifiers
     TRUNCATE pg_catalog.pg_dist_object;
