@@ -1,3 +1,4 @@
+DO $$ begin raise log '%', 'begin 11.0-2--11.1-1'; end; $$;
 DROP FUNCTION pg_catalog.worker_create_schema(bigint,text);
 DROP FUNCTION pg_catalog.worker_cleanup_job_schema_cache();
 DROP FUNCTION pg_catalog.worker_fetch_foreign_file(text, text, bigint, text[], integer[]);
@@ -7,7 +8,7 @@ DROP FUNCTION pg_catalog.worker_merge_files_into_table(bigint, integer, text[], 
 DROP FUNCTION pg_catalog.worker_range_partition_table(bigint, integer, text, text, oid, anyarray);
 DROP FUNCTION pg_catalog.worker_repartition_cleanup(bigint);
 
--- If upgrading citus, the columnar objects will be a part of the
+-- If upgrading citus, the columnar objects are already being a part of the
 -- citus extension, and must be detached so that they can be attached
 -- to the citus_columnar extension.
 DO $check_citus$
@@ -38,3 +39,5 @@ BEGIN
 
   END IF;
 END $check_citus$;
+#include "udfs/citus_finish_pg_upgrade/11.1-1.sql"
+DO $$ begin raise log '%', ' 11.0-2--11.1-1'; end; $$;
