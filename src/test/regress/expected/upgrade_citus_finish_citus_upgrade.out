@@ -1,0 +1,23 @@
+-- Citus upgrades are finished by calling a procedure
+-- this is a transactional procedure, so rollback should be fine
+BEGIN;
+	CALL citus_finish_citus_upgrade();
+NOTICE:  Preparing all the existing partitioned table indexes
+NOTICE:  Preparing to sync the metadata to all nodes
+ROLLBACK;
+-- do the actual job
+CALL citus_finish_citus_upgrade();
+NOTICE:  Preparing all the existing partitioned table indexes
+NOTICE:  Preparing to sync the metadata to all nodes
+-- show that the upgrade is successfull
+SELECT metadata->>'last_upgrade_version' = extversion
+FROM pg_dist_node_metadata, pg_extension WHERE extname = 'citus';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- idempotent, should be called multiple times
+-- still, do not NOTICE the version as it changes per release
+SET client_min_messages TO WARNING;
+CALL citus_finish_citus_upgrade();
