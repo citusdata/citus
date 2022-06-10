@@ -1,5 +1,6 @@
 # this schedule is to be run only on coordinators
 
+test: upgrade_citus_finish_citus_upgrade
 test: upgrade_basic_after
 test: upgrade_partition_constraints_after
 test: upgrade_pg_dist_object_test_after
