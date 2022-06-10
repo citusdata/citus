@@ -180,7 +180,7 @@ jobs:
 
   test-arbitrary-configs:
     description: Runs tests on arbitrary configs
-    parallelism: 6
+    parallelism: 1
     parameters:
       pg_major:
         description: 'postgres major version to use'
@@ -224,7 +224,7 @@ jobs:
             # to run the test suite
             gosu circleci \
               make -C src/test/regress \
-                check-arbitrary-configs parallel=4 CONFIGS=$TESTS
+                check-arbitrary-configs parallel=1 CONFIGS=$TESTS
           no_output_timeout: 2m
       - run:
           name: 'Show regressions'
