@@ -246,6 +246,10 @@ SELECT create_reference_table('reference_analyze_table');
 CREATE TABLE distributed_analyze_table(id int);
 SELECT create_distributed_table('distributed_analyze_table', 'id');
 
+CREATE TABLE loc (a INT, b INT);
+CREATE TABLE dist (a INT);
+SELECT create_distributed_table ('dist', 'a');
+
 SET citus.log_remote_commands TO ON;
 
 -- should propagate to all workers because no table is specified
@@ -270,3 +274,6 @@ ANALYZE local_analyze_table, reference_analyze_table;
 SET citus.enable_ddl_propagation TO OFF;
 ANALYZE distributed_analyze_table;
 SET citus.enable_ddl_propagation TO ON;
+
+-- analyze only specified columns for corresponding tables
+ANALYZE loc(b), dist(a);

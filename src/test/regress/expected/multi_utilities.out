@@ -387,6 +387,14 @@ SELECT create_distributed_table('distributed_analyze_table', 'id');
 
 (1 row)
 
+CREATE TABLE loc (a INT, b INT);
+CREATE TABLE dist (a INT);
+SELECT create_distributed_table ('dist', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SET citus.log_remote_commands TO ON;
 -- should propagate to all workers because no table is specified
 ANALYZE;
@@ -480,3 +488,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 SET citus.enable_ddl_propagation TO OFF;
 ANALYZE distributed_analyze_table;
 SET citus.enable_ddl_propagation TO ON;
+-- analyze only specified columns for corresponding tables
+ANALYZE loc(b), dist(a);
+NOTICE:  issuing ANALYZE public.dist_970004 (a)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx

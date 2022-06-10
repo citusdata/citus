@@ -48,6 +48,7 @@ typedef struct CitusVacuumParams
 } CitusVacuumParams;
 
 /* Local functions forward declarations for processing distributed table commands */
+static bool IsDistributedVacuumStmt(List *vacuumRelationIdList);
 static List * VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams,
 							 List *vacuumColumnList);
 static char * DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams);
@@ -59,8 +60,8 @@ static void ExecuteVacuumOnDistributedTables(VacuumStmt *vacuumStmt, List *relat
 static void ExecuteUnqualifiedVacuumTasks(VacuumStmt *vacuumStmt,
 										  CitusVacuumParams vacuumParams);
 static CitusVacuumParams VacuumStmtParams(VacuumStmt *vacstmt);
-static List * VacuumCitusRelationIdList(VacuumStmt *vacuumStmt, CitusVacuumParams
-										vacuumParams);
+static List * VacuumRelationIdList(VacuumStmt *vacuumStmt, CitusVacuumParams
+								   vacuumParams);
 
 /*
  * PostprocessVacuumStmt processes vacuum statements that may need propagation to
@@ -95,7 +96,7 @@ PostprocessVacuumStmt(Node *node, const char *vacuumCommand)
 	 * when no table is specified propagate the command as it is;
 	 * otherwise, only propagate when there is at least 1 citus table
 	 */
-	List *citusRelationIdList = VacuumCitusRelationIdList(vacuumStmt, vacuumParams);
+	List *relationIdList = VacuumRelationIdList(vacuumStmt, vacuumParams);
 
 	if (list_length(vacuumStmt->rels) == 0)
 	{
@@ -103,11 +104,11 @@ PostprocessVacuumStmt(Node *node, const char *vacuumCommand)
 
 		ExecuteUnqualifiedVacuumTasks(vacuumStmt, vacuumParams);
 	}
-	else if (list_length(citusRelationIdList) > 0)
+	else if (IsDistributedVacuumStmt(relationIdList))
 	{
 		/* there is at least 1 citus table specified */
 
-		ExecuteVacuumOnDistributedTables(vacuumStmt, citusRelationIdList,
+		ExecuteVacuumOnDistributedTables(vacuumStmt, relationIdList,
 										 vacuumParams);
 	}
 
@@ -118,10 +119,10 @@ PostprocessVacuumStmt(Node *node, const char *vacuumCommand)
 
 
 /*
- * VacuumCitusRelationIdList returns the oid of the citus relations in the given vacuum statement.
+ * VacuumRelationIdList returns the oid of the relations in the given vacuum statement.
  */
 static List *
-VacuumCitusRelationIdList(VacuumStmt *vacuumStmt, CitusVacuumParams vacuumParams)
+VacuumRelationIdList(VacuumStmt *vacuumStmt, CitusVacuumParams vacuumParams)
 {
 	LOCKMODE lockMode = (vacuumParams.options & VACOPT_FULL) ? AccessExclusiveLock :
 						ShareUpdateExclusiveLock;
@@ -134,14 +135,30 @@ VacuumCitusRelationIdList(VacuumStmt *vacuumStmt, CitusVacuumParams vacuumParams
 	foreach_ptr(vacuumRelation, vacuumRelationList)
 	{
 		Oid relationId = RangeVarGetRelid(vacuumRelation, lockMode, false);
-		if (!IsCitusTable(relationId))
-		{
-			continue;
-		}
 		relationIdList = lappend_oid(relationIdList, relationId);
 	}
 
 	return relationIdList;
+}
+
+
+/*
+ * IsDistributedVacuumStmt returns true if there is any citus table in the relation id list;
+ * otherwise, it returns false.
+ */
+static bool
+IsDistributedVacuumStmt(List *vacuumRelationIdList)
+{
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, vacuumRelationIdList)
+	{
+		if (OidIsValid(relationId) && IsCitusTable(relationId))
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 
