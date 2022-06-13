@@ -12,6 +12,7 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
+#include "nodes/pg_list.h"
 #include "distributed/utils/array_type.h"
 #include "utils/array.h"
 #include "utils/lsyscache.h"
@@ -95,4 +96,22 @@ DatumArrayToArrayType(Datum *datumArray, int datumCount, Oid datumTypeId)
 											 typeLength, typeByValue, typeAlignment);
 
 	return arrayObject;
+}
+
+/*
+ * Converts ArrayType to List.
+ */
+List *
+IntegerArrayTypeToList(ArrayType *arrayObject)
+{
+	List *list = NULL;
+	Datum *datumObjectArray = DeconstructArrayObject(arrayObject);
+	int arrayObjectCount = ArrayObjectCount(arrayObject);
+
+	for (int index = 0; index < arrayObjectCount; index++)
+	{
+		list = lappend_int(list, datumObjectArray[index]);
+	}
+
+	return list;
 }
