@@ -613,8 +613,8 @@ CreateIntermediateResultsDirectory(void)
 
 	MemoryContext oldContext = MemoryContextSwitchTo(TopTransactionContext);
 
-	CreatedResultsDirectories = list_append_unique(CreatedResultsDirectories, pstrdup(
-													   resultDirectory));
+	CreatedResultsDirectories =
+		lappend(CreatedResultsDirectories, pstrdup(resultDirectory));
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -697,11 +697,11 @@ IntermediateResultsDirectory(void)
 
 
 /*
- * RemoveIntermediateResultsDirectory removes the intermediate result directory
+ * RemoveIntermediateResultsDirectories removes the intermediate result directory
  * for the current distributed transaction, if any was created.
  */
 void
-RemoveIntermediateResultsDirectory(void)
+RemoveIntermediateResultsDirectories(void)
 {
 	char *directoryElement = NULL;
 	foreach_ptr(directoryElement, CreatedResultsDirectories)
