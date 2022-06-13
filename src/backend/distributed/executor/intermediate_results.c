@@ -735,10 +735,8 @@ RemoveIntermediateResultsDirectories(void)
 		}
 	}
 
-	if (CreatedResultsDirectories != NIL)
-	{
-		pfree(CreatedResultsDirectories);
-	}
+	/* cleanup */
+	list_free_deep(CreatedResultsDirectories);
 
 	CreatedResultsDirectories = NIL;
 }
