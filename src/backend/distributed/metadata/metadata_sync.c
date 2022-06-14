@@ -1347,6 +1347,23 @@ ShardListInsertCommand(List *shardIntervalList)
 
 
 /*
+ * ShardListDeleteCommand generates a command list that can be executed to delete
+ * shard and shard placement metadata for the given shard.
+ */
+List *
+ShardDeleteCommandList(ShardInterval *shardInterval)
+{
+	uint64 shardId = shardInterval->shardId;
+
+	StringInfo deleteShardCommand = makeStringInfo();
+	appendStringInfo(deleteShardCommand,
+					 "SELECT citus_internal_delete_shard_metadata(%ld);", shardId);
+
+	return list_make1(deleteShardCommand->data);
+}
+
+
+/*
  * NodeDeleteCommand generate a command that can be
  * executed to delete the metadata for a worker node.
  */

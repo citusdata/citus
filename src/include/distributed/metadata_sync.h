@@ -53,6 +53,7 @@ extern char * DistributionDeleteCommand(const char *schemaName,
 extern char * TableOwnerResetCommand(Oid distributedRelationId);
 extern char * NodeListInsertCommand(List *workerNodeList);
 extern List * ShardListInsertCommand(List *shardIntervalList);
+extern List * ShardDeleteCommandList(ShardInterval *shardInterval);
 extern char * NodeDeleteCommand(uint32 nodeId);
 extern char * NodeStateUpdateCommand(uint32 nodeId, bool isActive);
 extern char * ShouldHaveShardsUpdateCommand(uint32 nodeId, bool shouldHaveShards);
