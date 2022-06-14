@@ -2020,7 +2020,7 @@ columnar_tableam_init()
 		NULL,
 		&EnableVersionChecksColumnar,
 		true,
-		PGC_SUSET,
+		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 }
@@ -2362,59 +2362,6 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 	{
 		ereport(ERROR,
 				(errmsg("columnar storage parameters specified on non-columnar table")));
-	}
-
-	if (IsA(parsetree, CreateExtensionStmt))
-	{
-		CreateExtensionStmt *createExtensionStmt = castNode(CreateExtensionStmt,
-															parsetree);
-
-		if (get_extension_oid("citus_columnar", true) == InvalidOid)
-		{
-			if (strcmp(createExtensionStmt->extname, "citus_columnar") == 0)
-			{
-				DefElem *newVersionValue = GetExtensionOption(
-					createExtensionStmt->options,
-					"new_version");
-				if (newVersionValue)
-				{
-					const char *newVersion = defGetString(newVersionValue);
-					if (strcmp(newVersion, "11.1-0") == 0)
-					{
-						ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-										errmsg(
-											"unsupported citus_columnar version 11.1-0")));
-					}
-				}
-
-				/*latest citus requires install columnar first, existing citus can only be an older version */
-				if (get_extension_oid("citus", true) != InvalidOid)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg(
-										"must upgrade citus to version 11.1-1 first")));
-				}
-			}
-		}
-	}
-
-	if (IsA(parsetree, AlterExtensionStmt))
-	{
-		AlterExtensionStmt *alterExtensionStmt = castNode(AlterExtensionStmt, parsetree);
-		if (strcmp(alterExtensionStmt->extname, "citus_columnar") == 0)
-		{
-			DefElem *newVersionValue = GetExtensionOption(alterExtensionStmt->options,
-														  "new_version");
-			if (newVersionValue)
-			{
-				const char *newVersion = defGetString(newVersionValue);
-				if (strcmp(newVersion, "11.1-0") == 0)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("unsupported citus_columnar version 11.1-0")));
-				}
-			}
-		}
 	}
 
 	if (IsA(parsetree, CreateExtensionStmt))

@@ -16,3 +16,4 @@ DROP FUNCTION pg_catalog.run_command_on_coordinator(text,boolean);
 
 DROP FUNCTION pg_catalog.start_metadata_sync_to_all_nodes();
 DROP FUNCTION pg_catalog.citus_finalize_upgrade_to_citus11(boolean);
+#include "../udfs/citus_finalize_upgrade_to_citus11/11.0-1.sql"
