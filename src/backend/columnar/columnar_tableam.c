@@ -2020,7 +2020,7 @@ columnar_tableam_init()
 		NULL,
 		&EnableVersionChecksColumnar,
 		true,
-		PGC_SUSET,
+		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 }
@@ -2446,25 +2446,6 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 									errmsg(
 										"must upgrade citus to version 11.1-1 first")));
-				}
-			}
-		}
-	}
-
-	if (IsA(parsetree, AlterExtensionStmt))
-	{
-		AlterExtensionStmt *alterExtensionStmt = castNode(AlterExtensionStmt, parsetree);
-		if (strcmp(alterExtensionStmt->extname, "citus_columnar") == 0)
-		{
-			DefElem *newVersionValue = GetExtensionOption(alterExtensionStmt->options,
-														  "new_version");
-			if (newVersionValue)
-			{
-				const char *newVersion = defGetString(newVersionValue);
-				if (strcmp(newVersion, "11.1-0") == 0)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("unsupported citus_columnar version 11.1-0")));
 				}
 			}
 		}
