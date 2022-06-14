@@ -646,6 +646,33 @@ SELECT security_definer_in_files();
  f
 (1 row)
 
+CREATE FUNCTION security_definer_in_files_2()
+RETURNS BOOLEAN AS $$
+DECLARE passed BOOLEAN;
+BEGIN
+        SELECT  count(*) > 0 INTO passed
+        FROM   	(SELECT * FROM other_schema.dist_table ORDER BY a LIMIT 1) as foo,
+        		(SELECT * FROM other_schema.dist_table ORDER BY a LIMIT 1) as bar
+        		WHERE foo.a > bar.a;
+
+        RETURN passed;
+END;
+$$  LANGUAGE plpgsql
+    SECURITY DEFINER;
+BEGIN;
+  SELECT * FROM security_definer_in_files_2(), security_definer_in_files();
+ security_definer_in_files_2 | security_definer_in_files
+---------------------------------------------------------------------
+ f                           | f
+(1 row)
+
+  SELECT * FROM security_definer_in_files_2(), security_definer_in_files();
+ security_definer_in_files_2 | security_definer_in_files
+---------------------------------------------------------------------
+ f                           | f
+(1 row)
+
+COMMIT;
 -- cleanup
 SET client_min_messages TO ERROR;
 DROP SCHEMA other_schema CASCADE;
