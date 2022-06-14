@@ -255,4 +255,85 @@ END;
 -- results should have been deleted after transaction commit
 SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'binary') AS res (x int, x2 int);
 
+-- test refreshing mat views
+SET client_min_messages TO ERROR;
+SELECT run_command_on_workers($$CREATE USER some_other_user;$$);
+CREATE USER some_other_user;
+SELECT run_command_on_workers($$GRANT ALL ON DATABASE regression TO some_other_user;$$);
+GRANT ALL ON DATABASE regression TO some_other_user;
+RESET client_min_messages;
+
+\c - some_other_user
+
+CREATE SCHEMA other_schema;
+SET search_path TO other_schema;
+
+CREATE TABLE dist_table (a int, b int);
+INSERT INTO dist_table(a, b) SELECT n, n+1 FROM generate_series(1, 10) n;
+SELECT create_distributed_table('dist_table', 'a');
+
+CREATE MATERIALIZED VIEW mat_view AS
+SELECT *
+FROM (
+  SELECT * FROM dist_table
+  LIMIT 50000
+) q;
+
+CREATE MATERIALIZED VIEW mat_view_2 AS
+  SELECT count(*) FROM (SELECT * FROM dist_table LIMIT 50000) q, (SELECT * FROM dist_table LIMIT 100) r WHERE q.a > r.a;
+
+REFRESH MATERIALIZED VIEW other_schema.mat_view;
+REFRESH MATERIALIZED VIEW other_schema.mat_view_2;
+
+-- Now connect back as a different user and run REFRESH MATERIALIZED VIEW command,
+-- which in turn executes a repartition join query.
+\c - postgres
+REFRESH MATERIALIZED VIEW other_schema.mat_view;
+REFRESH MATERIALIZED VIEW other_schema.mat_view_2;
+
+\c - some_other_user
+
+-- test security definer funcs
+CREATE FUNCTION security_definer_in_files()
+RETURNS BOOLEAN AS $$
+DECLARE passed BOOLEAN;
+BEGIN
+        SELECT  count(*) > 0 INTO passed
+        FROM   	(SELECT * FROM other_schema.dist_table ORDER BY a LIMIT 1) as foo,
+        		(SELECT * FROM other_schema.dist_table ORDER BY a LIMIT 1) as bar
+        		WHERE foo.a > bar.a;
+
+        RETURN passed;
+END;
+$$  LANGUAGE plpgsql
+    SECURITY DEFINER;
+
+SELECT security_definer_in_files();
+
+\c - postgres
+
+SELECT security_definer_in_files();
+
+CREATE FUNCTION security_definer_in_files_2()
+RETURNS BOOLEAN AS $$
+DECLARE passed BOOLEAN;
+BEGIN
+        SELECT  count(*) > 0 INTO passed
+        FROM   	(SELECT * FROM other_schema.dist_table ORDER BY a LIMIT 1) as foo,
+        		(SELECT * FROM other_schema.dist_table ORDER BY a LIMIT 1) as bar
+        		WHERE foo.a > bar.a;
+
+        RETURN passed;
+END;
+$$  LANGUAGE plpgsql
+    SECURITY DEFINER;
+
+BEGIN;
+  SELECT * FROM security_definer_in_files_2(), security_definer_in_files();
+  SELECT * FROM security_definer_in_files_2(), security_definer_in_files();
+COMMIT;
+
+-- cleanup
+SET client_min_messages TO ERROR;
+DROP SCHEMA other_schema CASCADE;
 DROP SCHEMA intermediate_results CASCADE;

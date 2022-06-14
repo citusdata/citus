@@ -320,7 +320,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			/* stop propagating notices from workers, we know the query is failed */
 			DisableWorkerMessagePropagation();
 
-			RemoveIntermediateResultsDirectory();
+			RemoveIntermediateResultsDirectories();
 
 			ResetShardPlacementTransactionState();
 
@@ -408,7 +408,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * existing folders that are associated with distributed transaction
 			 * ids on the worker nodes.
 			 */
-			RemoveIntermediateResultsDirectory();
+			RemoveIntermediateResultsDirectories();
 
 			UnSetDistributedTransactionId();
 			break;
@@ -420,10 +420,10 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * If the distributed query involves 2PC, we already removed
 			 * the intermediate result directory on XACT_EVENT_PREPARE. However,
 			 * if not, we should remove it here on the COMMIT. Since
-			 * RemoveIntermediateResultsDirectory() is idempotent, we're safe
+			 * RemoveIntermediateResultsDirectories() is idempotent, we're safe
 			 * to call it here again even if the transaction involves 2PC.
 			 */
-			RemoveIntermediateResultsDirectory();
+			RemoveIntermediateResultsDirectories();
 
 			/* nothing further to do if there's no managed remote xacts */
 			if (CurrentCoordinatedTransactionState == COORD_TRANS_NONE)
