@@ -1,3 +1,9 @@
+-- Three modes to be implemented: blocking, non_blocking and auto.
+-- Currently, the default / only supported mode is blocking.
+CREATE TYPE citus.split_mode AS ENUM (
+    'blocking'
+);
+
 CREATE OR REPLACE FUNCTION pg_catalog.citus_split_shard_by_split_points(
     shard_id bigint,
     split_points integer[],
