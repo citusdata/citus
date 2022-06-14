@@ -127,6 +127,8 @@ VacuumRelationIdList(VacuumStmt *vacuumStmt, CitusVacuumParams vacuumParams)
 	LOCKMODE lockMode = (vacuumParams.options & VACOPT_FULL) ? AccessExclusiveLock :
 						ShareUpdateExclusiveLock;
 
+	bool skipLocked = (vacuumParams.options & VACOPT_SKIP_LOCKED);
+
 	List *vacuumRelationList = ExtractVacuumTargetRels(vacuumStmt);
 
 	List *relationIdList = NIL;
@@ -134,8 +136,19 @@ VacuumRelationIdList(VacuumStmt *vacuumStmt, CitusVacuumParams vacuumParams)
 	RangeVar *vacuumRelation = NULL;
 	foreach_ptr(vacuumRelation, vacuumRelationList)
 	{
-		Oid relationId = RangeVarGetRelid(vacuumRelation, lockMode, false);
-		relationIdList = lappend_oid(relationIdList, relationId);
+		/*
+		 * If skip_locked option is enabled, we are skipping that relation
+		 * if the lock for it is currently not available; else, we get the lock.
+		 */
+		Oid relationId = RangeVarGetRelidExtended(vacuumRelation,
+												  lockMode,
+												  skipLocked ? RVR_SKIP_LOCKED : 0, NULL,
+												  NULL);
+
+		if (OidIsValid(relationId))
+		{
+			relationIdList = lappend_oid(relationIdList, relationId);
+		}
 	}
 
 	return relationIdList;
@@ -198,6 +211,9 @@ ExecuteVacuumOnDistributedTables(VacuumStmt *vacuumStmt, List *relationIdList,
 static List *
 VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColumnList)
 {
+	LOCKMODE lockMode = (vacuumParams.options & VACOPT_FULL) ? AccessExclusiveLock :
+						ShareUpdateExclusiveLock;
+
 	/* resulting task list */
 	List *taskList = NIL;
 
@@ -216,8 +232,20 @@ VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColum
 	 * RowExclusiveLock. However if VACUUM FULL is used, we already obtain
 	 * AccessExclusiveLock before reaching to that point and INSERT's will be
 	 * blocked anyway. This is inline with PostgreSQL's own behaviour.
+	 * Also note that if skip locked option is enabled, we try to acquire the lock
+	 * in nonblocking way. If lock is not available, vacuum just skip that relation.
 	 */
-	LockRelationOid(relationId, ShareUpdateExclusiveLock);
+	if (!(vacuumParams.options & VACOPT_SKIP_LOCKED))
+	{
+		LockRelationOid(relationId, lockMode);
+	}
+	else
+	{
+		if (!ConditionalLockRelationOid(relationId, lockMode))
+		{
+			return NIL;
+		}
+	}
 
 	List *shardIntervalList = LoadShardIntervalList(relationId);
 
@@ -601,6 +629,7 @@ ExecuteUnqualifiedVacuumTasks(VacuumStmt *vacuumStmt, CitusVacuumParams vacuumPa
 	task->cannotBeExecutedInTransction = ((vacuumParams.options) & VACOPT_VACUUM);
 
 
+	bool hasPeerWorker = false;
 	int32 localNodeGroupId = GetLocalGroupId();
 
 	WorkerNode *workerNode = NULL;
@@ -615,9 +644,13 @@ ExecuteUnqualifiedVacuumTasks(VacuumStmt *vacuumStmt, CitusVacuumParams vacuumPa
 
 			task->taskPlacementList = lappend(task->taskPlacementList,
 											  targetPlacement);
+			hasPeerWorker = true;
 		}
 	}
 
-	bool localExecution = false;
-	ExecuteUtilityTaskList(list_make1(task), localExecution);
+	if (hasPeerWorker)
+	{
+		bool localExecution = false;
+		ExecuteUtilityTaskList(list_make1(task), localExecution);
+	}
 }

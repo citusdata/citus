@@ -202,7 +202,7 @@ SET citus.next_shard_id TO 970000;
 
 SET citus.log_remote_commands TO OFF;
 
-CREATE TABLE local_vacuum_table(id int);
+CREATE TABLE local_vacuum_table(id int primary key, b text);
 
 CREATE TABLE reference_vacuum_table(id int);
 SELECT create_reference_table('reference_vacuum_table');
@@ -216,7 +216,14 @@ SET citus.log_remote_commands TO ON;
 VACUUM;
 
 -- should not propagate because no distributed table is specified
+insert into local_vacuum_table select i from generate_series(1,1000000) i;
+delete from local_vacuum_table;
 VACUUM local_vacuum_table;
+SELECT pg_size_pretty( pg_total_relation_size('local_vacuum_table') );
+
+-- vacuum full deallocates pages of dead tuples whereas normal vacuum only marks dead tuples on visibility map
+VACUUM FULL local_vacuum_table;
+SELECT pg_size_pretty( pg_total_relation_size('local_vacuum_table') );
 
 -- should propagate to all workers because table is reference table
 VACUUM reference_vacuum_table;
@@ -229,6 +236,61 @@ VACUUM distributed_vacuum_table, local_vacuum_table, reference_vacuum_table;
 
 -- only reference_vacuum_table should propagate
 VACUUM local_vacuum_table, reference_vacuum_table;
+
+-- vacuum (disable_page_skipping) aggressively process pages of the relation, it does not respect visibility map
+VACUUM (DISABLE_PAGE_SKIPPING true) local_vacuum_table;
+VACUUM (DISABLE_PAGE_SKIPPING false) local_vacuum_table;
+
+-- vacuum (index_cleanup on, parallel 1) should execute index vacuuming and index cleanup phases in parallel
+insert into local_vacuum_table select i from generate_series(1,1000000) i;
+delete from local_vacuum_table;
+VACUUM (INDEX_CLEANUP OFF, PARALLEL 1) local_vacuum_table;
+SELECT pg_size_pretty( pg_total_relation_size('local_vacuum_table') );
+
+insert into local_vacuum_table select i from generate_series(1,1000000) i;
+delete from local_vacuum_table;
+VACUUM (INDEX_CLEANUP ON, PARALLEL 1) local_vacuum_table;
+SELECT pg_size_pretty( pg_total_relation_size('local_vacuum_table') );
+
+----------------- PROCESS_TOAST is only available for pg14
+-- vacuum (process_toast false) should not be vacuuming toast tables (default is true)
+--select reltoastrelid from pg_class where relname='local_vacuum_table'
+--\gset
+
+--SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass
+--\gset
+--VACUUM (FREEZE, PROCESS_TOAST true) local_vacuum_table;
+--SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
+--WHERE oid=:reltoastrelid::regclass;
+
+--SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass
+--\gset
+--VACUUM (FREEZE, PROCESS_TOAST false) local_vacuum_table;
+--SELECT relfrozenxid::text::integer = :frozenxid AS frozen_not_performed FROM pg_class
+--WHERE oid=:reltoastrelid::regclass;
+---------------
+
+-- vacuum (truncate false) should not attempt to truncate off any empty pages at the end of the table (default is true)
+insert into local_vacuum_table select i from generate_series(1,1000000) i;
+delete from local_vacuum_table;
+vacuum (TRUNCATE false) local_vacuum_table;
+SELECT pg_total_relation_size('local_vacuum_table') as size1 \gset
+
+insert into local_vacuum_table select i from generate_series(1,1000000) i;
+delete from local_vacuum_table;
+vacuum (TRUNCATE true) local_vacuum_table;
+SELECT pg_total_relation_size('local_vacuum_table') as size2 \gset
+
+SELECT :size1 > :size2 as truncate_less_size;
+
+-- vacuum (analyze) should be analyzing the table to generate statistics after vacuuming
+select analyze_count from pg_stat_all_tables where relname = 'local_vacuum_table' or relname = 'reference_vacuum_table';
+vacuum (analyze) local_vacuum_table, reference_vacuum_table;
+
+-- give enough time for stats to be updated.(updated per 500ms by default)
+select pg_sleep(1);
+
+select analyze_count from pg_stat_all_tables where relname = 'local_vacuum_table' or relname = 'reference_vacuum_table';
 
 -- should not propagate because ddl propagation is disabled
 SET citus.enable_ddl_propagation TO OFF;
