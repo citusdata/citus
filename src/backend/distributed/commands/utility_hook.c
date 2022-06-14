@@ -727,36 +727,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			}
 		}
 
-		if (isAlterExtensionUpdateCitusStmt)
-		{
-			DefElem *newVersionValue = GetExtensionOption(
-				((AlterExtensionStmt *) parsetree)->options, "new_version");
-			Oid citusColumnarOid = get_extension_oid("citus_columnar", true);
-			if (newVersionValue)
-			{
-				const char *newVersion = defGetString(newVersionValue);
-				if (strcmp(newVersion, "11.1-1") == 0 && citusColumnarOid != InvalidOid)
-				{
-					/*after "ALTER EXTENSION citus" updates citus_columnar Y to version Z. */
-					char *curColumnarVersion = get_extension_version(citusColumnarOid);
-					if (strcmp(curColumnarVersion, "11.1-0") == 0)
-					{
-						AlterExtensionUpdateStmt("citus_columnar", "11.1-1");
-					}
-				}
-				else if (strcmp(newVersion, "11.0-2") == 0 && citusColumnarOid !=
-						 InvalidOid)
-				{
-					/*after "ALTER EXTENSION citus" drops citus_columnar extension */
-					char *curColumnarVersion = get_extension_version(citusColumnarOid);
-					if (strcmp(curColumnarVersion, "11.1-0") == 0)
-					{
-						RemoveExtensionById(citusColumnarOid);
-					}
-				}
-			}
-		}
-
 		/*
 		 * if we are running ALTER EXTENSION citus UPDATE (to "<version>") command, we may need
 		 * to mark existing objects as distributed depending on the "version" parameter if
