@@ -17,7 +17,9 @@
 
 #include "postgres.h"
 
+#include "distributed/commands.h"
 #include "distributed/deparser.h"
+#include "distributed/listutils.h"
 #include "distributed/version_compat.h"
 #include "parser/parse_func.h"
 #include "utils/lsyscache.h"
@@ -38,8 +40,13 @@ QualifyAlterSequenceOwnerStmt(Node *node)
 
 	if (seq->schemaname == NULL)
 	{
-		Oid schemaOid = RangeVarGetCreationNamespace(seq);
-		seq->schemaname = get_namespace_name(schemaOid);
+		Oid seqOid = RangeVarGetRelid(seq, NoLock, stmt->missing_ok);
+
+		if (OidIsValid(seqOid))
+		{
+			Oid schemaOid = get_rel_namespace(seqOid);
+			seq->schemaname = get_namespace_name(schemaOid);
+		}
 	}
 }
 
@@ -59,8 +66,13 @@ QualifyAlterSequenceSchemaStmt(Node *node)
 
 	if (seq->schemaname == NULL)
 	{
-		Oid schemaOid = RangeVarGetCreationNamespace(seq);
-		seq->schemaname = get_namespace_name(schemaOid);
+		Oid seqOid = RangeVarGetRelid(seq, NoLock, stmt->missing_ok);
+
+		if (OidIsValid(seqOid))
+		{
+			Oid schemaOid = get_rel_namespace(seqOid);
+			seq->schemaname = get_namespace_name(schemaOid);
+		}
 	}
 }
 
@@ -80,7 +92,48 @@ QualifyRenameSequenceStmt(Node *node)
 
 	if (seq->schemaname == NULL)
 	{
-		Oid schemaOid = RangeVarGetCreationNamespace(seq);
-		seq->schemaname = get_namespace_name(schemaOid);
+		Oid seqOid = RangeVarGetRelid(seq, NoLock, stmt->missing_ok);
+
+		if (OidIsValid(seqOid))
+		{
+			Oid schemaOid = get_rel_namespace(seqOid);
+			seq->schemaname = get_namespace_name(schemaOid);
+		}
 	}
+}
+
+
+/*
+ * QualifyDropSequenceStmt transforms a DROP SEQUENCE
+ * statement in place and makes the sequence name fully qualified.
+ */
+void
+QualifyDropSequenceStmt(Node *node)
+{
+	DropStmt *stmt = castNode(DropStmt, node);
+
+	Assert(stmt->removeType == OBJECT_SEQUENCE);
+
+	List *objectNameListWithSchema = NIL;
+	List *objectNameList = NULL;
+	foreach_ptr(objectNameList, stmt->objects)
+	{
+		RangeVar *seq = makeRangeVarFromNameList(objectNameList);
+
+		if (seq->schemaname == NULL)
+		{
+			Oid seqOid = RangeVarGetRelid(seq, NoLock, stmt->missing_ok);
+
+			if (OidIsValid(seqOid))
+			{
+				Oid schemaOid = get_rel_namespace(seqOid);
+				seq->schemaname = get_namespace_name(schemaOid);
+			}
+		}
+
+		objectNameListWithSchema = lappend(objectNameListWithSchema,
+										   MakeNameListFromRangeVar(seq));
+	}
+
+	stmt->objects = objectNameListWithSchema;
 }

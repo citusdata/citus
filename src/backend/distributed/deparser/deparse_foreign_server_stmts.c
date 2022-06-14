@@ -223,7 +223,7 @@ AppendDropForeignServerStmt(StringInfo buf, DropStmt *stmt)
 static void
 AppendServerNames(StringInfo buf, DropStmt *stmt)
 {
-	Value *serverValue = NULL;
+	String *serverValue = NULL;
 	foreach_ptr(serverValue, stmt->objects)
 	{
 		const char *serverString = quote_identifier(strVal(serverValue));

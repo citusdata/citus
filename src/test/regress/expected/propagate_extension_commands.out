@@ -218,8 +218,9 @@ SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extnam
 
 -- adding the second node will fail as the text search template needs to be created manually
 SELECT 1 from master_add_node('localhost', :worker_2_port);
-ERROR:  text search template "public.intdict_template" does not exist
+WARNING:  text search template "public.intdict_template" does not exist
 CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 -- create the text search template manually on the worker
 \c - - - :worker_2_port
 SET citus.enable_metadata_sync TO false;
@@ -305,6 +306,9 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname 
 -- propagated to the workers. the user should run it manually on the workers
 CREATE TABLE t1 (A int);
 CREATE VIEW v1 AS select * from t1;
+WARNING:  "view v1" has dependency to "table t1" that is not in Citus' metadata
+DETAIL:  "view v1" will be created only locally
+HINT:  Distribute "table t1" first to distribute "view v1"
 ALTER EXTENSION seg ADD VIEW v1;
 ALTER EXTENSION seg DROP VIEW v1;
 DROP VIEW v1;

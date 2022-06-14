@@ -1467,28 +1467,6 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 
 
 /*
- * IsRebalancerInitiatedBackend returns true if we are in a backend that citus
- * rebalancer initiated.
- */
-bool
-IsRebalancerInternalBackend(void)
-{
-	return application_name && strcmp(application_name, CITUS_REBALANCER_NAME) == 0;
-}
-
-
-/*
- * IsCitusInitiatedRemoteBackend returns true if we are in a backend that citus
- * initiated via remote connection.
- */
-bool
-IsCitusInternalBackend(void)
-{
-	return ExtractGlobalPID(application_name) != INVALID_CITUS_INTERNAL_BACKEND_GPID;
-}
-
-
-/*
  * ResetConnection preserves the given connection for later usage by
  * resetting its states.
  */

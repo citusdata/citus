@@ -144,6 +144,17 @@ extern Oid TypeOidGetNamespaceOid(Oid typeOid);
 extern ObjectAddress GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok);
 extern ObjectAddress RenameAttributeStmtObjectAddress(Node *stmt, bool missing_ok);
 
+/* forward declarations for deparse_view_stmts.c */
+extern void QualifyDropViewStmt(Node *node);
+extern void QualifyAlterViewStmt(Node *node);
+extern void QualifyRenameViewStmt(Node *node);
+extern void QualifyAlterViewSchemaStmt(Node *node);
+extern char * DeparseRenameViewStmt(Node *stmt);
+extern char * DeparseAlterViewStmt(Node *node);
+extern char * DeparseDropViewStmt(Node *node);
+extern char * DeparseAlterViewSchemaStmt(Node *node);
+
+
 /* forward declarations for deparse_function_stmts.c */
 extern char * DeparseDropFunctionStmt(Node *stmt);
 extern char * DeparseAlterFunctionStmt(Node *stmt);
@@ -202,6 +213,7 @@ extern char * DeparseAlterSequenceOwnerStmt(Node *node);
 
 /* forward declarations for qualify_sequence_stmt.c */
 extern void QualifyRenameSequenceStmt(Node *node);
+extern void QualifyDropSequenceStmt(Node *node);
 extern void QualifyAlterSequenceSchemaStmt(Node *node);
 extern void QualifyAlterSequenceOwnerStmt(Node *node);
 

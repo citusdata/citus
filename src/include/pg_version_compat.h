@@ -13,6 +13,55 @@
 
 #include "distributed/pg_version_constants.h"
 
+#if PG_VERSION_NUM >= PG_VERSION_15
+#define ProcessCompletedNotifies()
+#define RelationCreateStorage_compat(a, b, c) RelationCreateStorage(a, b, c)
+#define parse_analyze_varparams_compat(a, b, c, d, e) parse_analyze_varparams(a, b, c, d, \
+																			  e)
+#else
+
+#include "nodes/value.h"
+#include "storage/smgr.h"
+#include "utils/int8.h"
+#include "utils/rel.h"
+
+typedef Value String;
+
+#ifdef HAVE_LONG_INT_64
+#define strtoi64(str, endptr, base) ((int64) strtol(str, endptr, base))
+#define strtou64(str, endptr, base) ((uint64) strtoul(str, endptr, base))
+#else
+#define strtoi64(str, endptr, base) ((int64) strtoll(str, endptr, base))
+#define strtou64(str, endptr, base) ((uint64) strtoull(str, endptr, base))
+#endif
+#define RelationCreateStorage_compat(a, b, c) RelationCreateStorage(a, b)
+#define parse_analyze_varparams_compat(a, b, c, d, e) parse_analyze_varparams(a, b, c, d)
+#define pgstat_init_relation(r) pgstat_initstats(r)
+#define pg_analyze_and_rewrite_fixedparams(a, b, c, d, e) pg_analyze_and_rewrite(a, b, c, \
+																				 d, e)
+
+static inline int64
+pg_strtoint64(char *s)
+{
+	int64 result;
+	(void) scanint8(s, false, &result);
+	return result;
+}
+
+
+static inline SMgrRelation
+RelationGetSmgr(Relation rel)
+{
+	if (unlikely(rel->rd_smgr == NULL))
+	{
+		smgrsetowner(&(rel->rd_smgr), smgropen(rel->rd_node, rel->rd_backend));
+	}
+	return rel->rd_smgr;
+}
+
+
+#endif
+
 #if PG_VERSION_NUM >= PG_VERSION_14
 #define AlterTableStmtObjType_compat(a) ((a)->objtype)
 #define getObjectTypeDescription_compat(a, b) getObjectTypeDescription(a, b)
@@ -28,6 +77,8 @@
 	standard_ProcessUtility(a, b, c, d, e, f, g, h)
 #define ProcessUtility_compat(a, b, c, d, e, f, g, h) \
 	ProcessUtility(a, b, c, d, e, f, g, h)
+#define PrevProcessUtility_compat(a, b, c, d, e, f, g, h) \
+	PrevProcessUtility(a, b, c, d, e, f, g, h)
 #define SetTuplestoreDestReceiverParams_compat(a, b, c, d, e, f) \
 	SetTuplestoreDestReceiverParams(a, b, c, d, e, f)
 #define pgproc_statusflags_compat(pgproc) ((pgproc)->statusFlags)
@@ -57,6 +108,8 @@
 #define standard_ProcessUtility_compat(a, b, c, d, e, f, g, h) \
 	standard_ProcessUtility(a, b, d, e, f, g, h)
 #define ProcessUtility_compat(a, b, c, d, e, f, g, h) ProcessUtility(a, b, d, e, f, g, h)
+#define PrevProcessUtility_compat(a, b, c, d, e, f, g, h) \
+	PrevProcessUtility(a, b, d, e, f, g, h)
 #define COPY_FRONTEND COPY_NEW_FE
 #define SetTuplestoreDestReceiverParams_compat(a, b, c, d, e, f) \
 	SetTuplestoreDestReceiverParams(a, b, c, d)

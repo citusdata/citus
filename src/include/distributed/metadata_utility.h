@@ -23,6 +23,7 @@
 #include "catalog/objectaddress.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/connection_management.h"
+#include "distributed/errormessage.h"
 #include "distributed/relay_utility.h"
 #include "utils/acl.h"
 #include "utils/relcache.h"
@@ -40,6 +41,15 @@
 	"worker_partitioned_relation_total_size(%s)"
 
 #define SHARD_SIZES_COLUMN_COUNT (3)
+
+/*
+ * Flag to keep track of whether the process is currently in a function converting the
+ * type of the table. Since it only affects the level of the log shown while dropping/
+ * recreating table within the table type conversion, rollbacking to the savepoint hasn't
+ * been implemented for the sake of simplicity. If you are planning to use that flag for
+ * any other purpose, please consider implementing that.
+ */
+extern bool InTableTypeConversionFunctionCall;
 
 /* In-memory representation of a typed tuple in pg_dist_shard. */
 typedef struct ShardInterval
@@ -249,7 +259,11 @@ extern void CreateTruncateTrigger(Oid relationId);
 extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
 
 extern void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
+extern DeferredErrorMessage * DeferErrorIfCircularDependencyExists(const
+																   ObjectAddress *
+																   objectAddress);
 extern List * GetDistributableDependenciesForObject(const ObjectAddress *target);
+extern List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 extern bool ShouldPropagate(void);
 extern bool ShouldPropagateCreateInCoordinatedTransction(void);
 extern bool ShouldPropagateObject(const ObjectAddress *address);

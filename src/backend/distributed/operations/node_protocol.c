@@ -1039,12 +1039,12 @@ CitusCreateAlterColumnarTableSet(char *qualifiedRelationName,
 	initStringInfo(&buf);
 
 	appendStringInfo(&buf,
-					 "SELECT alter_columnar_table_set(%s, "
-					 "chunk_group_row_limit => %d, "
-					 "stripe_row_limit => %lu, "
-					 "compression_level => %d, "
-					 "compression => %s);",
-					 quote_literal_cstr(qualifiedRelationName),
+					 "ALTER TABLE %s SET ("
+					 "columnar.chunk_group_row_limit = %d, "
+					 "columnar.stripe_row_limit = %lu, "
+					 "columnar.compression_level = %d, "
+					 "columnar.compression = %s);",
+					 qualifiedRelationName,
 					 options->chunkRowCount,
 					 options->stripeRowCount,
 					 options->compressionLevel,

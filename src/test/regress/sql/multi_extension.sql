@@ -92,12 +92,13 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar')
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal')
 ORDER BY 1, 2;
 
 
 -- DROP EXTENSION pre-created by the regression suite
 DROP EXTENSION citus;
+DROP EXTENSION citus_columnar;
 \c
 
 -- these tests switch between citus versions and call ddl's that require pg_dist_object to be created
@@ -315,8 +316,8 @@ VACUUM columnar_table;
 TRUNCATE columnar_table;
 DROP TABLE columnar_table;
 CREATE INDEX ON columnar_table (a);
-SELECT alter_columnar_table_set('columnar_table', compression => 'pglz');
-SELECT alter_columnar_table_reset('columnar_table');
+ALTER TABLE columnar_table SET(columnar.compression = pglz);
+ALTER TABLE columnar_table RESET (columnar.compression);
 INSERT INTO columnar_table SELECT * FROM columnar_table;
 
 SELECT 1 FROM columnar_table; -- columnar custom scan
@@ -459,7 +460,21 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '11.0-1';
 SELECT * FROM multi_extension.print_extension_changes();
 
+-- Snapshot of state at 11.0-2
+ALTER EXTENSION citus UPDATE TO '11.0-2';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test downgrade script (result should be empty)
+ALTER EXTENSION citus UPDATE TO '11.0-1';
+ALTER EXTENSION citus UPDATE TO '11.0-2';
+SELECT * FROM multi_extension.print_extension_changes();
+
 -- Snapshot of state at 11.1-1
+ALTER EXTENSION citus UPDATE TO '11.1-1';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test downgrade script (result should be empty)
+ALTER EXTENSION citus UPDATE TO '11.0-2';
 ALTER EXTENSION citus UPDATE TO '11.1-1';
 SELECT * FROM multi_extension.print_extension_changes();
 
@@ -476,13 +491,14 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar')
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar', 'columnar_internal')
 ORDER BY 1, 2;
 
 -- see incompatible version errors out
 RESET citus.enable_version_checks;
 RESET columnar.enable_version_checks;
 DROP EXTENSION citus;
+DROP EXTENSION citus_columnar;
 CREATE EXTENSION citus VERSION '8.0-1';
 
 -- Test non-distributed queries work even in version mismatch
@@ -547,6 +563,7 @@ ALTER EXTENSION citus UPDATE;
 
 -- re-create in newest version
 DROP EXTENSION citus;
+DROP EXTENSION citus_columnar;
 \c
 CREATE EXTENSION citus;
 
@@ -554,6 +571,7 @@ CREATE EXTENSION citus;
 \c - - - :worker_1_port
 
 DROP EXTENSION citus;
+DROP EXTENSION citus_columnar;
 SET citus.enable_version_checks TO 'false';
 SET columnar.enable_version_checks TO 'false';
 CREATE EXTENSION citus VERSION '8.0-1';

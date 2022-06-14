@@ -51,5 +51,7 @@ typedef struct EmptyStripeReservation
 
 extern List * StripesForRelfilenode(RelFileNode relfilenode);
 extern void ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade);
+extern List * ExtractColumnarRelOptions(List *inOptions, List **outColumnarOptions);
+extern void SetColumnarRelOptions(RangeVar *rv, List *reloptions);
 
 #endif /* COLUMNAR_METADATA_H */

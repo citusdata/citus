@@ -17,6 +17,7 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
+#include "distributed/backend_data.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"

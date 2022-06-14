@@ -1,0 +1,139 @@
+\set VERBOSITY terse
+SET search_path TO function_create;
+-- test user defined function with a distribution column argument
+SELECT
+    warning (id, message)
+FROM
+    warnings
+WHERE
+    id = 1;
+WARNING:  hello arbitrary config tests
+ warning
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT warning (1, 'Push down to worker that holds the partition value of 1');
+WARNING:  Push down to worker that holds the partition value of 1
+ warning
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT warning (2, 'Push down to worker that holds the partition value of 2');
+WARNING:  Push down to worker that holds the partition value of 2
+ warning
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT warning (3, 'Push down to worker that holds the partition value of 3');
+WARNING:  Push down to worker that holds the partition value of 3
+ warning
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT warning (4, 'Push down to worker that holds the partition value of 4');
+WARNING:  Push down to worker that holds the partition value of 4
+ warning
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT warning (5, 'Push down to worker that holds the partition value of 5');
+WARNING:  Push down to worker that holds the partition value of 5
+ warning
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT warning (6, 'Push down to worker that holds the partition value of 6');
+WARNING:  Push down to worker that holds the partition value of 6
+ warning
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT warning (7, 'Push down to worker that holds the partition value of 7');
+WARNING:  Push down to worker that holds the partition value of 7
+ warning
+---------------------------------------------------------------------
+
+(1 row)
+
+-- insert some data to test user defined aggregates
+INSERT INTO aggdata (id, key, val, valf)
+    VALUES (1, 1, 2, 11.2),
+           (2, 1, NULL, 2.1),
+           (3, 2, 2, 3.22),
+           (4, 2, 3, 4.23),
+           (5, 2, 5, 5.25),
+           (6, 3, 4, 63.4),
+           (7, 5, NULL, 75),
+           (8, 6, NULL, NULL),
+           (9, 6, NULL, 96),
+           (10, 7, 8, 1078),
+           (11, 9, 0, 1.19);
+-- test user defined aggregates
+SELECT
+    key,
+    sum2 (val),
+    sum2_strict (val),
+    stddev(valf)::numeric(10, 5),
+    psum (val, valf::int),
+    psum_strict (val, valf::int)
+FROM
+    aggdata
+GROUP BY
+    key
+ORDER BY
+    key;
+ key | sum2 | sum2_strict | stddev  | psum  | psum_strict
+---------------------------------------------------------------------
+   1 |      |           4 | 6.43467 |    52 |          50
+   2 |   20 |          20 | 1.01500 |   104 |         104
+   3 |    8 |           8 |         |   510 |         510
+   5 |      |             |         |     2 |           0
+   6 |      |             |         |     4 |           0
+   7 |   16 |          16 |         | 17254 |       17254
+   9 |    0 |           0 |         |     6 |           6
+(7 rows)
+
+-- test function that writes to a reference table
+SELECT add_new_item_to_series();
+ add_new_item_to_series
+---------------------------------------------------------------------
+                      6
+(1 row)
+
+SELECT add_new_item_to_series();
+ add_new_item_to_series
+---------------------------------------------------------------------
+                      7
+(1 row)
+
+SELECT add_new_item_to_series();
+ add_new_item_to_series
+---------------------------------------------------------------------
+                      8
+(1 row)
+
+SELECT add_new_item_to_series();
+ add_new_item_to_series
+---------------------------------------------------------------------
+                      9
+(1 row)
+
+SELECT add_new_item_to_series();
+ add_new_item_to_series
+---------------------------------------------------------------------
+                     10
+(1 row)
+
+SELECT add_new_item_to_series();
+ add_new_item_to_series
+---------------------------------------------------------------------
+                     11
+(1 row)
+

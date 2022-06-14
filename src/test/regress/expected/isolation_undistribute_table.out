@@ -251,13 +251,18 @@ step s2-truncate:
 step s1-commit: 
     COMMIT;
 
+s2: WARNING:  relation "public.dist_table" does not exist
 step s2-truncate: <... completed>
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 step s2-select:
     SELECT * FROM dist_table ORDER BY 1, 2;
 
 a|b
 ---------------------------------------------------------------------
-(0 rows)
+1|2
+3|4
+5|6
+(3 rows)
 
 restore_isolation_tester_func
 ---------------------------------------------------------------------

@@ -211,6 +211,24 @@ ORDER BY
 	user_id,
 	time
 LIMIT 10;
+--
+-- Test a prepared statement with unused argument
+--
+CREATE TYPE foo as (x int, y int);
+CREATE TABLE footest (x int, y int, z foo);
+SELECT create_distributed_table('footest','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO footest VALUES(1, 2, (3,4));
+-- Add a redundant parameter
+PREPARE prepared_test_9(foo,foo) AS
+WITH a AS (
+	SELECT * FROM footest WHERE z = $1 AND x = 1 OFFSET 0
+)
+SELECT * FROM a;
 EXECUTE prepared_test_1;
  user_id |              time               | value_1 | value_2 | value_3 | value_4
 ---------------------------------------------------------------------
@@ -883,6 +901,42 @@ EXECUTE prepared_test_8;
 (10 rows)
 
 ROLLBACK;
+EXECUTE prepared_test_9('(3,4)','(2,3)');
+ x | y |   z
+---------------------------------------------------------------------
+ 1 | 2 | (3,4)
+(1 row)
+
+EXECUTE prepared_test_9('(3,4)','(2,3)');
+ x | y |   z
+---------------------------------------------------------------------
+ 1 | 2 | (3,4)
+(1 row)
+
+EXECUTE prepared_test_9('(3,4)','(2,3)');
+ x | y |   z
+---------------------------------------------------------------------
+ 1 | 2 | (3,4)
+(1 row)
+
+EXECUTE prepared_test_9('(3,4)','(2,3)');
+ x | y |   z
+---------------------------------------------------------------------
+ 1 | 2 | (3,4)
+(1 row)
+
+EXECUTE prepared_test_9('(3,4)','(2,3)');
+ x | y |   z
+---------------------------------------------------------------------
+ 1 | 2 | (3,4)
+(1 row)
+
+EXECUTE prepared_test_9('(3,4)','(2,3)');
+ x | y |   z
+---------------------------------------------------------------------
+ 1 | 2 | (3,4)
+(1 row)
+
 EXECUTE prepared_partition_column_insert(1);
  user_id | time | value_1 | value_2 | value_3 | value_4
 ---------------------------------------------------------------------

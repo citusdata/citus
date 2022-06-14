@@ -281,6 +281,9 @@ FROM
 							) as baz
 									WHERE baz.user_id = users_table.user_id
 	) as sub1;
+WARNING:  "view subquery_from_from_where_local_table" has dependency to "table events_table_local" that is not in Citus' metadata
+DETAIL:  "view subquery_from_from_where_local_table" will be created only locally
+HINT:  Distribute "table events_table_local" first to distribute "view subquery_from_from_where_local_table"
 SELECT
 	*
 FROM
@@ -337,6 +340,9 @@ FROM
 	SELECT user_id FROM users_table_local WHERE user_id = 2
 ) baw
 WHERE foo.value_2 = bar.user_id AND baz.value_2 = bar.user_id AND bar.user_id = baw.user_id;
+WARNING:  "view all_executors_view" has dependency to "table users_table_local" that is not in Citus' metadata
+DETAIL:  "view all_executors_view" will be created only locally
+HINT:  Distribute "table users_table_local" first to distribute "view all_executors_view"
 SELECT
 	*
 FROM
@@ -390,6 +396,9 @@ FROM
      ) as foo
 	  WHERE foo.user_id = cte.user_id
 ) as foo, users_table WHERE foo.cnt > users_table.value_2;
+WARNING:  "view subquery_and_ctes" has dependency to "table users_table_local" that is not in Citus' metadata
+DETAIL:  "view subquery_and_ctes" will be created only locally
+HINT:  Distribute "table users_table_local" first to distribute "view subquery_and_ctes"
 SELECT * FROM subquery_and_ctes
 ORDER BY 3 DESC, 1 DESC, 2 DESC, 4 DESC
 LIMIT 5;
@@ -437,6 +446,9 @@ SELECT time, event_type, value_2, value_3 FROM
 			events_table
 		WHERE
 			foo.user_id = events_table.value_2;
+WARNING:  "view subquery_and_ctes_second" has dependency to "table users_table_local" that is not in Citus' metadata
+DETAIL:  "view subquery_and_ctes_second" will be created only locally
+HINT:  Distribute "table users_table_local" first to distribute "view subquery_and_ctes_second"
 SELECT * FROM subquery_and_ctes_second
 ORDER BY 3 DESC, 2 DESC, 1 DESC
 LIMIT 5;

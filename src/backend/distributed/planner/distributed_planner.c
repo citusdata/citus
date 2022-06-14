@@ -1065,7 +1065,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 
 
 /*
- * EnsurePartitionTableNotReplicated errors out if the infput relation is
+ * EnsurePartitionTableNotReplicated errors out if the input relation is
  * a partition table and the table has a replication factor greater than
  * one.
  *
@@ -1353,7 +1353,7 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 	TargetEntry *targetEntry = NULL;
 	foreach_ptr(targetEntry, customScan->scan.plan.targetlist)
 	{
-		Value *columnName = makeString(targetEntry->resname);
+		String *columnName = makeString(targetEntry->resname);
 		columnNameList = lappend(columnNameList, columnName);
 	}
 

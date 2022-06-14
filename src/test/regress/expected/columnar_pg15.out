@@ -1,0 +1,60 @@
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
+\gset
+\if :server_version_ge_15
+\else
+\q
+\endif
+CREATE TABLE alter_am(i int);
+CREATE TABLE
+INSERT INTO alter_am SELECT generate_series(1,1000000);
+INSERT 0 1000000
+SELECT * FROM columnar.options WHERE regclass = 'alter_am'::regclass;
+ regclass | chunk_group_row_limit | stripe_row_limit | compression_level | compression
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT SUM(i) FROM alter_am;
+     sum
+---------------------------------------------------------------------
+ 500000500000
+(1 row)
+
+ALTER TABLE alter_am
+  SET ACCESS METHOD columnar,
+  SET (columnar.compression = pglz, fillfactor = 20);
+ALTER TABLE
+SELECT * FROM columnar.options WHERE regclass = 'alter_am'::regclass;
+ regclass | chunk_group_row_limit | stripe_row_limit | compression_level | compression
+---------------------------------------------------------------------
+ alter_am |                 10000 |           150000 |                 3 | pglz
+(1 row)
+
+SELECT SUM(i) FROM alter_am;
+     sum
+---------------------------------------------------------------------
+ 500000500000
+(1 row)
+
+ALTER TABLE alter_am SET ACCESS METHOD heap;
+ALTER TABLE
+-- columnar options should be gone
+SELECT * FROM columnar.options WHERE regclass = 'alter_am'::regclass;
+ regclass | chunk_group_row_limit | stripe_row_limit | compression_level | compression
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT SUM(i) FROM alter_am;
+     sum
+---------------------------------------------------------------------
+ 500000500000
+(1 row)
+
+-- error: setting columnar options must happen after converting to columnar
+ALTER TABLE alter_am
+  SET (columnar.stripe_row_limit = 1111),
+  SET ACCESS METHOD columnar;
+ERROR:  ALTER TABLE cannot alter the access method after altering storage parameters
+HINT:  Specify SET ACCESS METHOD before storage parameters, or use separate ALTER TABLE commands.
+DROP TABLE alter_am;
+DROP TABLE

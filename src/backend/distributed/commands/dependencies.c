@@ -34,7 +34,6 @@ typedef bool (*AddressPredicate)(const ObjectAddress *);
 static void EnsureDependenciesCanBeDistributed(const ObjectAddress *relationAddress);
 static void ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress);
 static int ObjectAddressComparator(const void *a, const void *b);
-static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static List * FilterObjectAddressListByPredicate(List *objectAddressList,
 												 AddressPredicate predicate);
 
@@ -166,11 +165,28 @@ EnsureDependenciesCanBeDistributed(const ObjectAddress *objectAddress)
 
 
 /*
- * ErrorIfCircularDependencyExists checks whether given object has circular dependency
- * with itself via existing objects of pg_dist_object.
+ * ErrorIfCircularDependencyExists is a wrapper around
+ * DeferErrorIfCircularDependencyExists(), and throws error
+ * if circular dependency exists.
  */
 static void
 ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
+{
+	DeferredErrorMessage *depError =
+		DeferErrorIfCircularDependencyExists(objectAddress);
+	if (depError != NULL)
+	{
+		RaiseDeferredError(depError, ERROR);
+	}
+}
+
+
+/*
+ * DeferErrorIfCircularDependencyExists checks whether given object has
+ * circular dependency with itself via existing objects of pg_dist_object.
+ */
+DeferredErrorMessage *
+DeferErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
 {
 	List *dependencies = GetAllSupportedDependenciesForObject(objectAddress);
 
@@ -189,13 +205,18 @@ ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
 			objectDescription = getObjectDescription(objectAddress);
 			#endif
 
-			ereport(ERROR, (errmsg("Citus can not handle circular dependencies "
-								   "between distributed objects"),
-							errdetail("\"%s\" circularly depends itself, resolve "
-									  "circular dependency first",
-									  objectDescription)));
+			StringInfo detailInfo = makeStringInfo();
+			appendStringInfo(detailInfo, "\"%s\" circularly depends itself, resolve "
+										 "circular dependency first", objectDescription);
+
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "Citus can not handle circular dependencies "
+								 "between distributed objects", detailInfo->data,
+								 NULL);
 		}
 	}
+
+	return NULL;
 }
 
 
@@ -289,7 +310,7 @@ GetDistributableDependenciesForObject(const ObjectAddress *target)
  * GetDependencyCreateDDLCommands returns a list (potentially empty or NIL) of ddl
  * commands to execute on a worker to create the object.
  */
-static List *
+List *
 GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 {
 	switch (getObjectClass(dependency))
@@ -347,6 +368,14 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 			{
 				char *sequenceOwnerName = TableOwner(dependency->objectId);
 				return DDLCommandsForSequence(dependency->objectId, sequenceOwnerName);
+			}
+
+			if (relKind == RELKIND_VIEW)
+			{
+				char *createViewCommand = CreateViewDDLCommand(dependency->objectId);
+				char *alterViewOwnerCommand = AlterViewOwnerCommand(dependency->objectId);
+
+				return list_make2(createViewCommand, alterViewOwnerCommand);
 			}
 
 			/* if this relation is not supported, break to the error at the end */

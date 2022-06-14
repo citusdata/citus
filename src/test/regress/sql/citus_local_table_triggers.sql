@@ -292,7 +292,7 @@ BEGIN;
     SELECT * FROM reference_table;
 ROLLBACK;
 
--- cannot perform remote execution from a trigger on a Citus local table
+-- can perform remote execution from a trigger on a Citus local table
 BEGIN;
     -- update should actually update something to test ON UPDATE CASCADE logic
     INSERT INTO another_citus_local_table VALUES (600);

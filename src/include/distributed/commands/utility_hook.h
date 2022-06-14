@@ -50,13 +50,13 @@ extern bool InDelegatedProcedureCall;
 
 /*
  * A DDLJob encapsulates the remote tasks and commands needed to process all or
- * part of a distributed DDL command. It hold the distributed relation's oid,
+ * part of a distributed DDL command. It hold the target object's address,
  * the original DDL command string (for MX DDL propagation), and a task list of
  * DDL_TASK-type Tasks to be executed.
  */
 typedef struct DDLJob
 {
-	Oid targetRelationId;      /* oid of the target distributed relation */
+	ObjectAddress targetObjectAddress;      /* target distributed object address */
 
 	/*
 	 * Whether to commit and start a new transaction before sending commands
@@ -75,6 +75,7 @@ typedef struct DDLJob
 	List *taskList;            /* worker DDL tasks to execute */
 } DDLJob;
 
+extern ProcessUtility_hook_type PrevProcessUtility;
 
 extern void multi_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 #if PG_VERSION_NUM >= PG_VERSION_14

@@ -407,12 +407,12 @@ INSERT INTO aborted_write_test VALUES (16999);
 REINDEX TABLE aborted_write_test;
 
 BEGIN;
-  ALTER TABLE columnar.stripe SET (autovacuum_enabled = false);
-  ALTER TABLE columnar.chunk SET (autovacuum_enabled = false);
-  ALTER TABLE columnar.chunk_group SET (autovacuum_enabled = false);
+  ALTER TABLE columnar_internal.stripe SET (autovacuum_enabled = false);
+  ALTER TABLE columnar_internal.chunk SET (autovacuum_enabled = false);
+  ALTER TABLE columnar_internal.chunk_group SET (autovacuum_enabled = false);
 
   DROP TABLE aborted_write_test;
-  TRUNCATE columnar.stripe, columnar.chunk, columnar.chunk_group;
+  TRUNCATE columnar_internal.stripe, columnar_internal.chunk, columnar_internal.chunk_group;
 
   CREATE TABLE aborted_write_test (a INT) USING columnar;
 
@@ -422,12 +422,13 @@ BEGIN;
     SELECT FROM aborted_write_test;
   ROLLBACK TO SAVEPOINT svpt;
 
-  -- Already disabled autovacuum for all three metadata tables.
-  -- Here we truncate columnar.chunk and columnar.chunk_group but not
-  -- columnar.stripe to make sure that we properly handle dead tuples
-  -- in columnar.stripe, i.e. stripe metadata entries for aborted
-  -- transactions.
-  TRUNCATE columnar.chunk, columnar.chunk_group;
+  -- Already disabled autovacuum for all three metadata tables.  Here
+  -- we truncate columnar_internal.chunk and
+  -- columnar.chunk_group but not columnar.stripe to
+  -- make sure that we properly handle dead tuples in
+  -- columnar.stripe, i.e. stripe metadata entries for
+  -- aborted transactions.
+  TRUNCATE columnar_internal.chunk, columnar_internal.chunk_group;
 
   CREATE INDEX ON aborted_write_test (a);
 ROLLBACK;
@@ -477,7 +478,7 @@ rollback;
 insert into uniq select generate_series(1,100);
 
 SELECT COUNT(*)=1 FROM columnar.stripe cs
-WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+WHERE cs.storage_id = columnar.get_storage_id('columnar_indexes.uniq'::regclass);
 
 TRUNCATE uniq;
 
@@ -489,7 +490,7 @@ rollback;
 insert into uniq select generate_series(1,100);
 
 SELECT COUNT(*)=1 FROM columnar.stripe cs
-WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+WHERE cs.storage_id = columnar.get_storage_id('columnar_indexes.uniq'::regclass);
 
 TRUNCATE uniq;
 
@@ -501,7 +502,7 @@ rollback;
 insert into uniq select generate_series(1,100);
 
 SELECT COUNT(*)=1 FROM columnar.stripe cs
-WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+WHERE cs.storage_id = columnar.get_storage_id('columnar_indexes.uniq'::regclass);
 
 TRUNCATE uniq;
 
@@ -513,7 +514,7 @@ rollback;
 insert into uniq select generate_series(1,100);
 
 SELECT COUNT(*)=1 FROM columnar.stripe cs
-WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+WHERE cs.storage_id = columnar.get_storage_id('columnar_indexes.uniq'::regclass);
 
 TRUNCATE uniq;
 
@@ -529,12 +530,12 @@ begin;
 
   -- didn't flush anything yet, but should see the in progress stripe-write
   SELECT stripe_num, first_row_number, row_count FROM columnar.stripe cs
-  WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+  WHERE cs.storage_id = columnar.get_storage_id('columnar_indexes.uniq'::regclass);
 commit;
 
 -- should have completed the stripe reservation
 SELECT stripe_num, first_row_number, row_count FROM columnar.stripe cs
-WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+WHERE cs.storage_id = columnar.get_storage_id('columnar_indexes.uniq'::regclass);
 
 TRUNCATE uniq;
 

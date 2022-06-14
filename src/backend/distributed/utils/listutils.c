@@ -245,3 +245,24 @@ GenerateListFromElement(void *listElement, int listLength)
 
 	return list;
 }
+
+
+/*
+ * list_filter_oid filters a list of oid-s based on a keepElement
+ * function
+ */
+List *
+list_filter_oid(List *list, bool (*keepElement)(Oid element))
+{
+	List *result = NIL;
+	Oid element = InvalidOid;
+	foreach_oid(element, list)
+	{
+		if (keepElement(element))
+		{
+			result = lappend_oid(result, element);
+		}
+	}
+
+	return result;
+}

@@ -6,7 +6,7 @@ CREATE TABLE t(a int, b int) USING columnar;
 
 CREATE VIEW t_stripes AS
 SELECT * FROM columnar.stripe a, pg_class b
-WHERE a.storage_id = columnar_test_helpers.columnar_relation_storageid(b.oid) AND b.relname='t';
+WHERE a.storage_id = columnar.get_storage_id(b.oid) AND b.relname='t';
 
 SELECT count(*) FROM t_stripes;
 
@@ -34,7 +34,7 @@ select
   from columnar_test_helpers.columnar_storage_info('t');
 
 -- test the case when all data cannot fit into a single stripe
-SELECT alter_columnar_table_set('t', stripe_row_limit => 1000);
+ALTER TABLE t SET (columnar.stripe_row_limit = 1000);
 INSERT INTO t SELECT i, 2 * i FROM generate_series(1,2500) i;
 
 SELECT sum(a), sum(b) FROM t;
@@ -56,13 +56,13 @@ ALTER TABLE t DROP COLUMN a;
 
 SELECT stripe_num, attr_num, chunk_group_num, minimum_value IS NULL, maximum_value IS NULL
 FROM columnar.chunk a, pg_class b
-WHERE a.storage_id = columnar_test_helpers.columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
+WHERE a.storage_id = columnar.get_storage_id(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
 
 VACUUM FULL t;
 
 SELECT stripe_num, attr_num, chunk_group_num, minimum_value IS NULL, maximum_value IS NULL
 FROM columnar.chunk a, pg_class b
-WHERE a.storage_id = columnar_test_helpers.columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
+WHERE a.storage_id = columnar.get_storage_id(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
 
 -- Make sure we cleaned-up the transient table metadata after VACUUM FULL commands
 SELECT count(distinct storage_id) - :columnar_table_count FROM columnar.stripe;
@@ -91,15 +91,15 @@ SELECT count(*) FROM t;
 -- then vacuum to print stats
 
 BEGIN;
-SELECT alter_columnar_table_set('t',
-    chunk_group_row_limit => 1000,
-    stripe_row_limit => 2000,
-    compression => 'pglz');
+ALTER TABLE t SET
+  (columnar.chunk_group_row_limit = 1000,
+   columnar.stripe_row_limit = 2000,
+   columnar.compression = pglz);
 SAVEPOINT s1;
 INSERT INTO t SELECT i FROM generate_series(1, 1500) i;
 ROLLBACK TO SAVEPOINT s1;
 INSERT INTO t SELECT i / 5 FROM generate_series(1, 1500) i;
-SELECT alter_columnar_table_set('t', compression => 'none');
+ALTER TABLE t SET (columnar.compression = none);
 SAVEPOINT s2;
 INSERT INTO t SELECT i FROM generate_series(1, 1500) i;
 ROLLBACK TO SAVEPOINT s2;
@@ -125,7 +125,7 @@ VACUUM VERBOSE t;
 -- vacuum full should remove chunks for dropped columns
 -- note that, a chunk will be stored in non-compressed for if compression
 -- doesn't reduce its size.
-SELECT alter_columnar_table_set('t', compression => 'pglz');
+ALTER TABLE t SET (columnar.compression = pglz);
 VACUUM FULL t;
 VACUUM VERBOSE t;
 

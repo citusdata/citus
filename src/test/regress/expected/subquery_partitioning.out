@@ -209,6 +209,9 @@ FROM
      ) as foo
 	  WHERE foo.user_id = cte.user_id
 ) as foo, users_table WHERE foo.cnt > users_table.value_2;
+WARNING:  "view subquery_and_ctes" has dependency to "table users_table_local" that is not in Citus' metadata
+DETAIL:  "view subquery_and_ctes" will be created only locally
+HINT:  Distribute "table users_table_local" first to distribute "view subquery_and_ctes"
 SELECT * FROM subquery_and_ctes
 ORDER BY 3 DESC, 1 DESC, 2 DESC, 4 DESC
 LIMIT 5;

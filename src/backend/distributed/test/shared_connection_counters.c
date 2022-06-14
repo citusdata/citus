@@ -38,6 +38,29 @@ wake_up_connection_pool_waiters(PG_FUNCTION_ARGS)
 
 
 /*
+ * makeIntConst creates a Const Node that stores a given integer
+ *
+ * copied from backend/parser/gram.c
+ */
+static Node *
+makeIntConst(int val, int location)
+{
+	A_Const *n = makeNode(A_Const);
+
+#if PG_VERSION_NUM >= PG_VERSION_15
+	n->val.ival.type = T_Integer;
+	n->val.ival.ival = val;
+#else
+	n->val.type = T_Integer;
+	n->val.val.ival = val;
+#endif
+	n->location = location;
+
+	return (Node *) n;
+}
+
+
+/*
  * set_max_shared_pool_size is a SQL
  * interface for setting MaxSharedPoolSize. We use this function in isolation
  * tester where ALTER SYSTEM is not allowed.
@@ -49,9 +72,8 @@ set_max_shared_pool_size(PG_FUNCTION_ARGS)
 
 	AlterSystemStmt *alterSystemStmt = palloc0(sizeof(AlterSystemStmt));
 
-	A_Const *aConstValue = makeNode(A_Const);
+	A_Const *aConstValue = castNode(A_Const, makeIntConst(value, 0));
 
-	aConstValue->val = *makeInteger(value);
 	alterSystemStmt->setstmt = makeNode(VariableSetStmt);
 	alterSystemStmt->setstmt->name = "citus.max_shared_pool_size";
 	alterSystemStmt->setstmt->is_local = false;

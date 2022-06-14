@@ -224,7 +224,7 @@ ERROR:  operation is not allowed on this node
 CREATE STATISTICS stx9 ON a, b FROM citus_local_table_stats2;
 DROP STATISTICS stx8;
 DROP STATISTICS stx4;
-ERROR:  statistics object "citus_local_tables_mx.stx4" does not exist
+ERROR:  statistics object "stx4" does not exist
 SELECT stxname FROM pg_statistic_ext ORDER BY stxname;
  stxname
 ---------------------------------------------------------------------

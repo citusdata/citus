@@ -24,8 +24,11 @@
 #include "safe_lib.h"
 
 #include "catalog/pg_authid.h"
+#include "catalog/objectaccess.h"
+#include "catalog/pg_extension.h"
 #include "citus_version.h"
 #include "commands/explain.h"
+#include "commands/extension.h"
 #include "common/string.h"
 #include "executor/executor.h"
 #include "distributed/backend_data.h"
@@ -74,7 +77,7 @@
 #include "distributed/shared_library_init.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/subplan_execution.h"
-
+#include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/utils/directory.h"
@@ -141,9 +144,12 @@ static int ReplicationModel = REPLICATION_MODEL_STREAMING;
 /* we override the application_name assign_hook and keep a pointer to the old one */
 static GucStringAssignHook OldApplicationNameAssignHook = NULL;
 
+static object_access_hook_type PrevObjectAccessHook = NULL;
 
 void _PG_init(void);
 
+static void CitusObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int
+								  subId, void *arg);
 static void DoInitialCleanup(void);
 static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
@@ -159,9 +165,9 @@ static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
 static bool WarnIfReplicationModelIsSet(int *newval, void **extra, GucSource source);
 static bool NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source);
-static bool HideShardsFromAppNamePrefixesCheckHook(char **newval, void **extra,
-												   GucSource source);
-static void HideShardsFromAppNamePrefixesAssignHook(const char *newval, void *extra);
+static bool ShowShardsForAppNamePrefixesCheckHook(char **newval, void **extra,
+												  GucSource source);
+static void ShowShardsForAppNamePrefixesAssignHook(const char *newval, void *extra);
 static void ApplicationNameAssignHook(const char *newval, void *extra);
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
@@ -334,9 +340,6 @@ _PG_init(void)
 	/* intercept planner */
 	planner_hook = distributed_planner;
 
-	/* register utility hook */
-	ProcessUtility_hook = multi_ProcessUtility;
-
 	/* register for planner hook */
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
 	set_join_pathlist_hook = multi_join_restriction_hook;
@@ -384,23 +387,22 @@ _PG_init(void)
 		DoInitialCleanup();
 	}
 
+	PrevObjectAccessHook = object_access_hook;
+	object_access_hook = CitusObjectAccessHook;
+
 	/* ensure columnar module is loaded at the right time */
 	load_file(COLUMNAR_MODULE_NAME, false);
 
 	/*
-	 * Now, acquire symbols from columnar module. First, acquire
-	 * the address of the set options hook, and set it so that we
-	 * can propagate options changes.
+	 * Register utility hook. This must be done after loading columnar, so
+	 * that the citus hook is called first, followed by the columnar hook,
+	 * followed by standard_ProcessUtility. That allows citus to distribute
+	 * ALTER TABLE commands before columnar strips out the columnar-specific
+	 * options.
 	 */
-	ColumnarTableSetOptions_hook_type **ColumnarTableSetOptions_hook_ptr =
-		(ColumnarTableSetOptions_hook_type **) find_rendezvous_variable(
-			COLUMNAR_SETOPTIONS_HOOK_SYM);
-
-	/* rendezvous variable registered during columnar initialization */
-	Assert(ColumnarTableSetOptions_hook_ptr != NULL);
-	Assert(*ColumnarTableSetOptions_hook_ptr != NULL);
-
-	**ColumnarTableSetOptions_hook_ptr = ColumnarTableSetOptionsHook;
+	PrevProcessUtility = (ProcessUtility_hook != NULL) ?
+						 ProcessUtility_hook : standard_ProcessUtility;
+	ProcessUtility_hook = multi_ProcessUtility;
 
 	/*
 	 * Acquire symbols for columnar functions that citus calls.
@@ -666,6 +668,43 @@ RegisterCitusConfigVariables(void)
 					 "worker nodes."),
 		&AllowModificationsFromWorkersToReplicatedTables,
 		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.allow_nested_distributed_execution",
+		gettext_noop("Enables distributed execution within a task "
+					 "of another distributed execution."),
+		gettext_noop("Nested distributed execution can happen when Citus "
+					 "pushes down a call to a user-defined function within "
+					 "a distributed query, and the function contains another "
+					 "distributed query. In this scenario, Citus makes no "
+					 "guarantess with regards to correctness and it is therefore "
+					 "disallowed by default. This setting can be used to allow "
+					 "nested distributed execution."),
+		&AllowNestedDistributedExecution,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.allow_unsafe_locks_from_workers",
+		gettext_noop("Enables acquiring a distributed lock from a worker "
+					 "when the coordinator is not in the metadata"),
+		gettext_noop("Set to false by default. If set to true, enables "
+					 "acquiring a distributed lock from a worker "
+					 "when the coordinator is not in the metadata. "
+					 "This type of lock is unsafe because the worker will not be "
+					 "able to lock the coordinator; the coordinator will be able to "
+					 "intialize distributed operations on the resources locked "
+					 "by the worker. This can lead to concurrent operations from the "
+					 "coordinator and distributed deadlocks since the coordinator "
+					 "and the workers would not acquire locks across the same nodes "
+					 "in the same order."),
+		&EnableAcquiringUnsafeLockFromWorkers,
+		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
@@ -1173,24 +1212,6 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
-
-	DefineCustomStringVariable(
-		"citus.hide_shards_from_app_name_prefixes",
-		gettext_noop("If application_name starts with one of these values, hide shards"),
-		gettext_noop("Citus places distributed tables and shards in the same schema. "
-					 "That can cause confusion when inspecting the list of tables on "
-					 "a node with shards. This GUC can be used to hide the shards from "
-					 "pg_class for certain applications based on the application_name "
-					 "of the connection. The default is *, which hides shards from all "
-					 "applications. This behaviour can be overridden using the "
-					 "citus.override_table_visibility setting"),
-		&HideShardsFromAppNamePrefixes,
-		"*",
-		PGC_USERSET,
-		GUC_STANDARD,
-		HideShardsFromAppNamePrefixesCheckHook,
-		HideShardsFromAppNamePrefixesAssignHook,
-		NULL);
 
 	DefineCustomIntVariable(
 		"citus.isolation_test_session_process_id",
@@ -1716,6 +1737,25 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomStringVariable(
+		"citus.show_shards_for_app_name_prefixes",
+		gettext_noop("If application_name starts with one of these values, show shards"),
+		gettext_noop("Citus places distributed tables and shards in the same schema. "
+					 "That can cause confusion when inspecting the list of tables on "
+					 "a node with shards. By default the shards are hidden from "
+					 "pg_class. This GUC can be used to show the shards to certain "
+					 "applications based on the application_name of the connection. "
+					 "The default is empty string, which hides shards from all "
+					 "applications. This behaviour can be overridden using the "
+					 "citus.override_table_visibility setting"),
+		&ShowShardsForAppNamePrefixes,
+		"",
+		PGC_USERSET,
+		GUC_STANDARD,
+		ShowShardsForAppNamePrefixesCheckHook,
+		ShowShardsForAppNamePrefixesAssignHook,
+		NULL);
+
 	DefineCustomBoolVariable(
 		"citus.sort_returning",
 		gettext_noop("Sorts the RETURNING clause to get consistent test output"),
@@ -1985,12 +2025,12 @@ WarnIfReplicationModelIsSet(int *newval, void **extra, GucSource source)
 
 
 /*
- * HideShardsFromAppNamePrefixesCheckHook ensures that the
- * citus.hide_shards_from_app_name_prefixes holds a valid list of application_name
+ * ShowShardsForAppNamePrefixesCheckHook ensures that the
+ * citus.show_shards_for_app_name_prefixes holds a valid list of application_name
  * values.
  */
 static bool
-HideShardsFromAppNamePrefixesCheckHook(char **newval, void **extra, GucSource source)
+ShowShardsForAppNamePrefixesCheckHook(char **newval, void **extra, GucSource source)
 {
 	List *prefixList = NIL;
 
@@ -2020,7 +2060,7 @@ HideShardsFromAppNamePrefixesCheckHook(char **newval, void **extra, GucSource so
 
 		if (strcmp(prefixAscii, appNamePrefix) != 0)
 		{
-			GUC_check_errdetail("prefix %s in citus.hide_shards_from_app_name_prefixes "
+			GUC_check_errdetail("prefix %s in citus.show_shards_for_app_name_prefixes "
 								"contains non-ascii characters", appNamePrefix);
 			return false;
 		}
@@ -2031,12 +2071,12 @@ HideShardsFromAppNamePrefixesCheckHook(char **newval, void **extra, GucSource so
 
 
 /*
- * HideShardsFromAppNamePrefixesAssignHook ensures changes to
- * citus.hide_shards_from_app_name_prefixes are reflected in the decision
+ * ShowShardsForAppNamePrefixesAssignHook ensures changes to
+ * citus.show_shards_for_app_name_prefixes are reflected in the decision
  * whether or not to show shards.
  */
 static void
-HideShardsFromAppNamePrefixesAssignHook(const char *newval, void *extra)
+ShowShardsForAppNamePrefixesAssignHook(const char *newval, void *extra)
 {
 	ResetHideShardsDecision();
 }
@@ -2050,6 +2090,7 @@ static void
 ApplicationNameAssignHook(const char *newval, void *extra)
 {
 	ResetHideShardsDecision();
+	ResetCitusBackendType();
 	OldApplicationNameAssignHook(newval, extra);
 }
 
@@ -2294,4 +2335,30 @@ IsSuperuser(char *roleName)
 	ReleaseSysCache(roleTuple);
 
 	return isSuperuser;
+}
+
+
+/*
+ * CitusObjectAccessHook is called when an object is created.
+ *
+ * We currently use it to track CREATE EXTENSION citus; operations to make sure we
+ * clear the metadata if the transaction is rolled back.
+ */
+static void
+CitusObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int subId,
+					  void *arg)
+{
+	if (PrevObjectAccessHook)
+	{
+		PrevObjectAccessHook(access, classId, objectId, subId, arg);
+	}
+
+	/* Checks if the access is post_create and that it's an extension id */
+	if (access == OAT_POST_CREATE && classId == ExtensionRelationId)
+	{
+		/* There's currently an engine bug that makes it difficult to check
+		 * the provided objectId with extension oid so we will set the value
+		 * regardless if it's citus being created */
+		SetCreateCitusTransactionLevel(GetCurrentTransactionNestLevel());
+	}
 }

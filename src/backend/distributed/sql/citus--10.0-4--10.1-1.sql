@@ -3,6 +3,7 @@
 -- add the current database to the distributed objects if not already in there.
 -- this is to reliably propagate some of the alter database commands that might be
 -- supported.
+
 INSERT INTO citus.pg_dist_object SELECT
   'pg_catalog.pg_database'::regclass::oid AS oid,
   (SELECT oid FROM pg_database WHERE datname = current_database()) as objid,
@@ -12,7 +13,11 @@ ON CONFLICT DO NOTHING;
 --#include "../../columnar/sql/columnar--10.0-3--10.1-1.sql"
 DO $check_columnar$
 BEGIN
-  IF NOT EXISTS (select 1 from pg_extension where extname='citus_columnar') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_extension AS e
+             INNER JOIN pg_catalog.pg_depend AS d ON (d.refobjid = e.oid)
+             INNER JOIN pg_catalog.pg_proc AS p ON (p.oid = d.objid)
+             WHERE e.extname='citus_columnar' and p.proname = 'columnar_handler'
+  ) THEN
       #include "../../columnar/sql/columnar--10.0-3--10.1-1.sql"
   END IF;
 END;
@@ -55,4 +60,5 @@ WHERE repmodel = 'c'
 DROP TRIGGER pg_dist_rebalance_strategy_enterprise_check_trigger ON pg_catalog.pg_dist_rebalance_strategy;
 DROP FUNCTION citus_internal.pg_dist_rebalance_strategy_enterprise_check();
 
+DO $$ begin raise log '%', '10.0-4--10.1-1'; end; $$;
 #include "udfs/citus_cleanup_orphaned_shards/10.1-1.sql"

@@ -92,7 +92,7 @@ PreprocessCreateStatisticsStmt(Node *node, const char *queryString,
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
-	ddlJob->targetRelationId = relationId;
+	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->startNewTransaction = false;
 	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
@@ -197,7 +197,7 @@ PreprocessDropStatisticsStmt(Node *node, const char *queryString,
 
 		DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
-		ddlJob->targetRelationId = relationId;
+		ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 		ddlJob->startNewTransaction = false;
 		ddlJob->metadataSyncCommand = ddlCommand;
 		ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
@@ -236,7 +236,7 @@ PreprocessAlterStatisticsRenameStmt(Node *node, const char *queryString,
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
-	ddlJob->targetRelationId = relationId;
+	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->startNewTransaction = false;
 	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
@@ -274,7 +274,7 @@ PreprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString,
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
-	ddlJob->targetRelationId = relationId;
+	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->startNewTransaction = false;
 	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
@@ -295,7 +295,7 @@ PostprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString)
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_STATISTIC_EXT);
 
-	Value *statName = llast((List *) stmt->object);
+	String *statName = llast((List *) stmt->object);
 	Oid statsOid = get_statistics_object_oid(list_make2(makeString(stmt->newschema),
 														statName), false);
 	Oid relationId = GetRelIdByStatsOid(statsOid);
@@ -328,7 +328,7 @@ AlterStatisticsSchemaStmtObjectAddress(Node *node, bool missingOk)
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 
 	ObjectAddress address = { 0 };
-	Value *statName = llast((List *) stmt->object);
+	String *statName = llast((List *) stmt->object);
 	Oid statsOid = get_statistics_object_oid(list_make2(makeString(stmt->newschema),
 														statName), missingOk);
 	ObjectAddressSet(address, StatisticExtRelationId, statsOid);
@@ -376,7 +376,7 @@ PreprocessAlterStatisticsStmt(Node *node, const char *queryString,
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
-	ddlJob->targetRelationId = relationId;
+	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->startNewTransaction = false;
 	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
@@ -416,7 +416,7 @@ PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString,
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
-	ddlJob->targetRelationId = relationId;
+	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->startNewTransaction = false;
 	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);

@@ -28,7 +28,6 @@
 #include "funcapi.h"
 #include "miscadmin.h"
 #include "utils/builtins.h"
-#include "utils/int8.h"
 #include "utils/json.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"

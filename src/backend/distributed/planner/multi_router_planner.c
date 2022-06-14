@@ -151,7 +151,7 @@ static Job * RouterJob(Query *originalQuery,
 static bool RelationPrunesToMultipleShards(List *relationShardList);
 static void NormalizeMultiRowInsertTargetList(Query *query);
 static void AppendNextDummyColReference(Alias *expendedReferenceNames);
-static Value * MakeDummyColumnString(int dummyColumnId);
+static String * MakeDummyColumnString(int dummyColumnId);
 static List * BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError);
 static List * GroupInsertValuesByShardId(List *insertValuesList);
 static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
@@ -3249,7 +3249,7 @@ AppendNextDummyColReference(Alias *expendedReferenceNames)
 {
 	int existingColReferences = list_length(expendedReferenceNames->colnames);
 	int nextColReferenceId = existingColReferences + 1;
-	Value *missingColumnString = MakeDummyColumnString(nextColReferenceId);
+	String *missingColumnString = MakeDummyColumnString(nextColReferenceId);
 	expendedReferenceNames->colnames = lappend(expendedReferenceNames->colnames,
 											   missingColumnString);
 }
@@ -3259,12 +3259,12 @@ AppendNextDummyColReference(Alias *expendedReferenceNames)
  * MakeDummyColumnString returns a String (Value) object by appending given
  * integer to end of the "column" string.
  */
-static Value *
+static String *
 MakeDummyColumnString(int dummyColumnId)
 {
 	StringInfo dummyColumnStringInfo = makeStringInfo();
 	appendStringInfo(dummyColumnStringInfo, "column%d", dummyColumnId);
-	Value *dummyColumnString = makeString(dummyColumnStringInfo->data);
+	String *dummyColumnString = makeString(dummyColumnStringInfo->data);
 
 	return dummyColumnString;
 }

@@ -31,11 +31,11 @@ SELECT * FROM test_alter_type ORDER BY a;
 SELECT * FROM matview ORDER BY a;
 
 -- test we retained options
-SELECT * FROM columnar.options WHERE regclass = 'test_options_1'::regclass;
+SELECT * FROM columnar.options WHERE relation = 'test_options_1'::regclass;
 VACUUM VERBOSE test_options_1;
 SELECT count(*), sum(a), sum(b) FROM test_options_1;
 
-SELECT * FROM columnar.options WHERE regclass = 'test_options_2'::regclass;
+SELECT * FROM columnar.options WHERE relation = 'test_options_2'::regclass;
 VACUUM VERBOSE test_options_2;
 SELECT count(*), sum(a), sum(b) FROM test_options_2;
 
@@ -145,7 +145,7 @@ ROLLBACK;
 SELECT pg_class.oid INTO columnar_schema_members
 FROM pg_class, pg_namespace
 WHERE pg_namespace.oid=pg_class.relnamespace AND
-      pg_namespace.nspname='columnar';
+      pg_namespace.nspname='columnar_internal';
 SELECT refobjid INTO columnar_schema_members_pg_depend
 FROM pg_depend
 WHERE classid = 'pg_am'::regclass::oid AND
@@ -173,7 +173,7 @@ $$
 SELECT pg_class.oid INTO columnar_schema_members
 FROM pg_class, pg_namespace
 WHERE pg_namespace.oid=pg_class.relnamespace AND
-	  pg_namespace.nspname='columnar';
+	  pg_namespace.nspname='columnar_internal';
 SELECT refobjid INTO columnar_schema_members_pg_depend
 FROM pg_depend
 WHERE classid = 'pg_am'::regclass::oid AND

@@ -73,8 +73,10 @@ COMMIT;
 
 
 -- basic view queries
+SET citus.enable_ddl_propagation TO OFF;
 CREATE VIEW simple_view AS
 	SELECT count(*) as cnt FROM test t1 JOIN test t2 USING (x);
+RESET citus.enable_ddl_propagation;
 SELECT * FROM simple_view;
 SELECT * FROM simple_view, test WHERE test.x = simple_view.cnt;
 

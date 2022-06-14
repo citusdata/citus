@@ -76,6 +76,12 @@ typedef struct AllowedDistributionColumn
 } AllowedDistributionColumn;
 
 /*
+ * The current distribution column value passed as an argument to a forced
+ * function call delegation.
+ */
+extern AllowedDistributionColumn AllowedDistributionColumnValue;
+
+/*
  * GUC that determines whether a SELECT in a transaction block should also run in
  * a transaction block on the worker.
  */

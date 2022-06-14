@@ -16,10 +16,7 @@ WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
 ORDER BY 1;
                                                        description
 ---------------------------------------------------------------------
- access method columnar
  event trigger citus_cascade_to_partition
- function alter_columnar_table_reset(regclass,boolean,boolean,boolean,boolean)
- function alter_columnar_table_set(regclass,integer,integer,name,integer)
  function alter_distributed_table(regclass,text,integer,text,boolean)
  function alter_old_partitions_set_access_method(regclass,timestamp with time zone,name)
  function alter_role_if_exists(text,text)
@@ -62,8 +59,6 @@ ORDER BY 1;
  function citus_finalize_upgrade_to_citus11(boolean)
  function citus_finish_pg_upgrade()
  function citus_get_active_worker_nodes()
- function citus_internal.columnar_ensure_am_depends_catalog()
- function citus_internal.downgrade_columnar_storage(regclass)
  function citus_internal.find_groupid_for_node(text,integer)
  function citus_internal.pg_dist_node_trigger_func()
  function citus_internal.pg_dist_rebalance_strategy_trigger_func()
@@ -71,7 +66,6 @@ ORDER BY 1;
  function citus_internal.refresh_isolation_tester_prepared_statement()
  function citus_internal.replace_isolation_tester_func()
  function citus_internal.restore_isolation_tester_func()
- function citus_internal.upgrade_columnar_storage(regclass)
  function citus_internal_add_colocation_metadata(integer,integer,integer,regtype,oid)
  function citus_internal_add_object_metadata(text,text[],text[],integer,integer,boolean)
  function citus_internal_add_partition_metadata(regclass,"char",text,integer,"char")
@@ -83,6 +77,7 @@ ORDER BY 1;
  function citus_internal_local_blocked_processes()
  function citus_internal_update_placement_metadata(bigint,integer,integer)
  function citus_internal_update_relation_colocation(oid,integer)
+ function citus_is_coordinator()
  function citus_isolation_test_session_is_blocked(integer,integer[])
  function citus_json_concatenate(json,json)
  function citus_json_concatenate_final(json)
@@ -127,7 +122,6 @@ ORDER BY 1;
  function citus_version()
  function column_name_to_column(regclass,text)
  function column_to_column_name(regclass,text)
- function columnar.columnar_handler(internal)
  function coord_combine_agg(oid,cstring,anyelement)
  function coord_combine_agg_ffunc(internal,oid,cstring,anyelement)
  function coord_combine_agg_sfunc(internal,oid,cstring,anyelement)
@@ -198,10 +192,12 @@ ORDER BY 1;
  function role_exists(name)
  function run_command_on_all_nodes(text,boolean,boolean)
  function run_command_on_colocated_placements(regclass,regclass,text,boolean)
+ function run_command_on_coordinator(text,boolean)
  function run_command_on_placements(regclass,text,boolean)
  function run_command_on_shards(regclass,text,boolean)
  function run_command_on_workers(text,boolean)
  function shard_name(regclass,bigint)
+ function start_metadata_sync_to_all_nodes()
  function start_metadata_sync_to_node(text,integer)
  function stop_metadata_sync_to_node(text,integer,boolean)
  function time_partition_range(regclass)
@@ -238,17 +234,11 @@ ORDER BY 1;
  function worker_save_query_explain_analyze(text,jsonb)
  schema citus
  schema citus_internal
- schema columnar
- sequence columnar.storageid_seq
  sequence pg_dist_colocationid_seq
  sequence pg_dist_groupid_seq
  sequence pg_dist_node_nodeid_seq
  sequence pg_dist_placement_placementid_seq
  sequence pg_dist_shardid_seq
- table columnar.chunk
- table columnar.chunk_group
- table columnar.options
- table columnar.stripe
  table pg_dist_authinfo
  table pg_dist_colocation
  table pg_dist_local_group
@@ -275,5 +265,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(259 rows)
+(249 rows)
 

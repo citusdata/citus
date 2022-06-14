@@ -319,7 +319,7 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-initialize s1-begin s1-copy s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
+starting permutation: s1-initialize s1-begin s1-copy s2-flaky-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_reference_table
 ---------------------------------------------------------------------
 
@@ -328,9 +328,8 @@ create_reference_table
 step s1-initialize: COPY reference_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-copy: COPY reference_copy FROM PROGRAM 'echo 5, f, 5  && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV;
-step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY reference_copy_index ON reference_copy(id); <waiting ...>
+step s2-flaky-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY flaky_reference_copy_index ON reference_copy(id);
 step s1-commit: COMMIT;
-step s2-ddl-create-index-concurrently: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM reference_copy;
 count
 ---------------------------------------------------------------------

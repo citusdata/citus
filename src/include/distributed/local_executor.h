@@ -19,7 +19,8 @@
 extern bool EnableLocalExecution;
 extern bool LogLocalCommands;
 
-extern int LocalExecutorLevel;
+/* global variable that tracks whether the local execution is on a shard */
+extern uint64 LocalExecutorShardId;
 
 typedef enum LocalExecutionStatus
 {

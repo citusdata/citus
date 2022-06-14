@@ -12,7 +12,11 @@ ALTER TABLE pg_catalog.pg_dist_placement ADD CONSTRAINT placement_shardid_groupi
 --#include "../../columnar/sql/columnar--10.1-1--10.2-1.sql"
 DO $check_columnar$
 BEGIN
-  IF NOT EXISTS (select 1 from pg_extension where extname='citus_columnar') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_extension AS e
+             INNER JOIN pg_catalog.pg_depend AS d ON (d.refobjid = e.oid)
+             INNER JOIN pg_catalog.pg_proc AS p ON (p.oid = d.objid)
+             WHERE e.extname='citus_columnar' and p.proname = 'columnar_handler'
+  ) THEN
       #include "../../columnar/sql/columnar--10.1-1--10.2-1.sql"
   END IF;
 END;
@@ -29,6 +33,8 @@ $check_columnar$;
 #include "udfs/get_missing_time_partition_ranges/10.2-1.sql"
 #include "udfs/worker_nextval/10.2-1.sql"
 
+DO $$ begin raise log '%', 'begin 10.1-1--10.2-1'; end; $$;
+
 DROP FUNCTION pg_catalog.citus_drop_all_shards(regclass, text, text);
 CREATE FUNCTION pg_catalog.citus_drop_all_shards(logicalrelid regclass,
                                                  schema_name text,
@@ -42,3 +48,4 @@ COMMENT ON FUNCTION pg_catalog.citus_drop_all_shards(regclass, text, text, boole
 #include "udfs/citus_drop_trigger/10.2-1.sql";
 #include "udfs/citus_prepare_pg_upgrade/10.2-1.sql"
 #include "udfs/citus_finish_pg_upgrade/10.2-1.sql"
+DO $$ begin raise log '%', '10.1-1--10.2-1'; end; $$;

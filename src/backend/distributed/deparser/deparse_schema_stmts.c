@@ -126,7 +126,7 @@ AppendDropSchemaStmt(StringInfo buf, DropStmt *stmt)
 		appendStringInfoString(buf, "IF EXISTS ");
 	}
 
-	Value *schemaValue = NULL;
+	String *schemaValue = NULL;
 	foreach_ptr(schemaValue, stmt->objects)
 	{
 		const char *schemaString = quote_identifier(strVal(schemaValue));
