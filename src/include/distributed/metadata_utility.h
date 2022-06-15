@@ -270,6 +270,7 @@ extern bool ShouldPropagateObject(const ObjectAddress *address);
 extern List * ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort);
 
 /* Remaining metadata utility functions  */
+extern Oid TableOwnerOid(Oid relationId);
 extern char * TableOwner(Oid relationId);
 extern void EnsureTablePermissions(Oid relationId, AclMode mode);
 extern void EnsureTableOwner(Oid relationId);

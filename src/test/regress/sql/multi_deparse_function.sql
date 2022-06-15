@@ -196,8 +196,9 @@ $cmd$);
 -- Rename the function back to the original name in the coordinator
 ALTER FUNCTION summation RENAME TO add;
 
+SET citus.enable_ddl_propagation TO on;
 CREATE ROLE function_role;
-SELECT run_command_on_workers('CREATE ROLE function_role');
+SET citus.enable_ddl_propagation TO off;
 
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION add OWNER TO function_role

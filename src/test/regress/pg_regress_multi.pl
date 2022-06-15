@@ -285,6 +285,19 @@ sub revert_replace_postgres
     }
 }
 
+sub generate_hba
+{
+    my $nodename = shift;
+
+    open(my $fh, ">", catfile($TMP_CHECKDIR, $nodename, "data", "pg_hba.conf"))
+        or die "could not open pg_hba.conf";
+    print $fh "host all         alice,bob localhost      md5\n";
+    print $fh "host all         all       127.0.0.1/32 trust\n";
+    print $fh "host all         all       ::1/128      trust\n";
+    print $fh "host replication postgres  localhost    trust\n";
+    close $fh;
+}
+
 # always want to call initdb under normal postgres, so revert from a
 # partial run, even if we're now not using valgrind.
 revert_replace_postgres();
@@ -465,6 +478,7 @@ push(@pgOptions, "citus.node_connection_timeout=${connectionTimeout}");
 push(@pgOptions, "citus.explain_analyze_sort_method='taskId'");
 push(@pgOptions, "citus.enable_manual_changes_to_shards=on");
 push(@pgOptions, "citus.allow_unsafe_locks_from_workers=on");
+push(@pgOptions, "citus.stat_statements_track = 'all'");
 
 # Some tests look at shards in pg_class, make sure we can usually see them:
 push(@pgOptions, "citus.show_shards_for_app_name_prefixes='pg_regress'");
@@ -673,12 +687,15 @@ if (!$conninfo)
     system(catfile("$bindir", "initdb"), ("--no-sync", "--allow-group-access", "-U", $user, "--encoding", "UTF8", catfile($TMP_CHECKDIR, $MASTERDIR, "data"))) == 0
         or die "Could not create $MASTERDIR data directory";
 
+	generate_hba("master");
+
     if ($usingWindows)
     {
         for my $port (@workerPorts)
         {
             system(catfile("$bindir", "initdb"), ("--no-sync", "--allow-group-access", "-U", $user, "--encoding", "UTF8", catfile($TMP_CHECKDIR, "worker.$port", "data"))) == 0
                 or die "Could not create worker data directory";
+			generate_hba("worker.$port");
         }
     }
     else

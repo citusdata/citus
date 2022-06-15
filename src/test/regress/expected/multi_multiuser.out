@@ -28,24 +28,14 @@ SELECT create_distributed_table('singleshard', 'id');
 (1 row)
 
 -- turn off propagation to avoid Enterprise processing the following section
-SET citus.enable_ddl_propagation TO off;
 CREATE USER full_access;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 CREATE USER usage_access;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 CREATE USER read_access;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 CREATE USER no_access;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 CREATE ROLE some_role;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 GRANT some_role TO full_access;
 GRANT some_role TO read_access;
+SET citus.enable_ddl_propagation TO off;
 GRANT ALL ON TABLE test TO full_access;
 GRANT SELECT ON TABLE test TO read_access;
 CREATE SCHEMA full_access_user_schema;
@@ -54,45 +44,11 @@ GRANT ALL ON SCHEMA full_access_user_schema TO full_access;
 GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 SET citus.enable_ddl_propagation TO DEFAULT;
 \c - - - :worker_1_port
-CREATE USER full_access;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-CREATE USER usage_access;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-CREATE USER read_access;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-CREATE USER no_access;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-CREATE ROLE some_role;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-GRANT some_role TO full_access;
-GRANT some_role TO read_access;
 GRANT ALL ON TABLE test_1420000 TO full_access;
 GRANT SELECT ON TABLE test_1420000 TO read_access;
 GRANT ALL ON TABLE test_1420002 TO full_access;
 GRANT SELECT ON TABLE test_1420002 TO read_access;
 \c - - - :worker_2_port
-CREATE USER full_access;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-CREATE USER usage_access;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-CREATE USER read_access;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-CREATE USER no_access;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-CREATE ROLE some_role;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-GRANT some_role TO full_access;
-GRANT some_role TO read_access;
 GRANT ALL ON TABLE test_1420001 TO full_access;
 GRANT SELECT ON TABLE test_1420001 TO read_access;
 GRANT ALL ON TABLE test_1420003 TO full_access;
@@ -774,6 +730,27 @@ DROP TABLE
     test,
     test_coloc,
     colocation_table;
+SELECT run_command_on_workers($$DROP OWNED BY full_access$$);
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"DROP OWNED")
+ (localhost,57638,t,"DROP OWNED")
+(2 rows)
+
+SELECT run_command_on_workers($$DROP OWNED BY some_role$$);
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"DROP OWNED")
+ (localhost,57638,t,"DROP OWNED")
+(2 rows)
+
+SELECT run_command_on_workers($$DROP OWNED BY read_access$$);
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"DROP OWNED")
+ (localhost,57638,t,"DROP OWNED")
+(2 rows)
+
 DROP USER full_access;
 DROP USER read_access;
 DROP USER no_access;

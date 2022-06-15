@@ -1,0 +1,37 @@
+# should come before multi_cluster_management
+# as it touches node metadata
+test: single_node_enterprise
+
+test: multi_test_helpers multi_test_helpers_superuser
+test: multi_cluster_management
+test: multi_test_catalog_views
+test: multi_data_types
+test: multi_tenant_isolation
+
+# --------
+# Tests that require adding coordinator to pg_dist_node
+# --------
+test: add_coordinator
+
+test: citus_local_tables_ent
+
+test: remove_coordinator
+# --------
+
+test: logical_replication
+test: multi_create_table
+test: multi_create_table_superuser
+test: multi_create_role_dependency
+test: multi_create_users
+test: multi_multiuser_master_protocol
+test: multi_multiuser_load_data
+test: multi_multiuser_basic_queries
+test: multi_multiuser_grant
+test: multi_multiuser_copy
+test: multi_multiuser_auth
+test: multi_poolinfo_usage
+test: multi_alter_table_row_level_security
+test: multi_alter_table_row_level_security_escape
+test: stat_statements
+test: shard_move_constraints
+test: check_mx

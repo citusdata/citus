@@ -49,7 +49,7 @@ SELECT create_distributed_table('referencing_table2', 'id');
 INSERT INTO referenced_table SELECT i,i FROM generate_series (0, 100) i;
 INSERT INTO referencing_table SELECT i,i FROM generate_series (0, 100) i;
 INSERT INTO referencing_table2 SELECT i,i FROM generate_series (0, 100) i;
-SELECT master_move_shard_placement(15000009, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_move_shard_placement(15000009, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
  master_move_shard_placement
 ---------------------------------------------------------------------
 
@@ -181,7 +181,7 @@ SELECT * FROM get_foreign_key_to_reference_table_commands('referenceing_dist_tab
 (5 rows)
 
 -- and show that rebalancer works fine
-SELECT master_move_shard_placement(15000018, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_move_shard_placement(15000018, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
  master_move_shard_placement
 ---------------------------------------------------------------------
 

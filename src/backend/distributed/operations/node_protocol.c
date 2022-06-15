@@ -622,12 +622,26 @@ GetPreLoadTableCreationCommands(Oid relationId,
 		}
 	}
 
+	List *tableACLList = pg_get_table_grants(relationId);
+	if (tableACLList != NIL)
+	{
+		char *tableACLCommand = NULL;
+		foreach_ptr(tableACLCommand, tableACLList)
+		{
+			tableDDLEventList = lappend(tableDDLEventList,
+										makeTableDDLCommandString(tableACLCommand));
+		}
+	}
+
 	char *tableOwnerDef = TableOwnerResetCommand(relationId);
 	if (tableOwnerDef != NULL)
 	{
 		tableDDLEventList = lappend(tableDDLEventList, makeTableDDLCommandString(
 										tableOwnerDef));
 	}
+
+	List *tableRowLevelSecurityCommands = GetTableRowLevelSecurityCommands(relationId);
+	tableDDLEventList = list_concat(tableDDLEventList, tableRowLevelSecurityCommands);
 
 	List *policyCommands = CreatePolicyCommands(relationId);
 	tableDDLEventList = list_concat(tableDDLEventList, policyCommands);
@@ -774,6 +788,29 @@ GatherIndexAndConstraintDefinitionList(Form_pg_index indexForm, List **indexDDLE
 
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
+}
+
+
+/*
+ * GetTableRowLevelSecurityCommands takes in a relationId, and returns the list of
+ * commands needed to reconstruct the row level security policy.
+ */
+List *
+GetTableRowLevelSecurityCommands(Oid relationId)
+{
+	List *rowLevelSecurityCommandList = NIL;
+
+	List *rowLevelSecurityEnableCommands = pg_get_row_level_security_commands(relationId);
+
+	char *rowLevelSecurityCommand = NULL;
+	foreach_ptr(rowLevelSecurityCommand, rowLevelSecurityEnableCommands)
+	{
+		rowLevelSecurityCommandList = lappend(
+			rowLevelSecurityCommandList,
+			makeTableDDLCommandString(rowLevelSecurityCommand));
+	}
+
+	return rowLevelSecurityCommandList;
 }
 
 

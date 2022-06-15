@@ -254,6 +254,8 @@ extern Oid CitusReadIntermediateResultFuncId(void);
 Oid CitusReadIntermediateResultArrayFuncId(void);
 extern Oid CitusExtraDataContainerFuncId(void);
 extern Oid CitusAnyValueFunctionId(void);
+extern Oid CitusTextSendAsJsonbFunctionId(void);
+extern Oid TextOutFunctionId(void);
 extern Oid PgTableVisibleFuncId(void);
 extern Oid CitusTableVisibleFuncId(void);
 extern Oid RelationIsAKnownShardFuncId(void);
@@ -272,5 +274,9 @@ extern Oid CitusExtensionOwner(void);
 extern char * CitusExtensionOwnerName(void);
 extern char * CurrentUserName(void);
 extern const char * CurrentDatabaseName(void);
+
+/* connection-related functions */
+extern char * GetAuthinfoViaCatalog(const char *roleName, int64 nodeId);
+extern char * GetPoolinfoViaCatalog(int64 nodeId);
 
 #endif /* METADATA_CACHE_H */

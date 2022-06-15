@@ -22,9 +22,7 @@
 static void AppendCreateSchemaStmt(StringInfo buf, CreateSchemaStmt *stmt);
 static void AppendDropSchemaStmt(StringInfo buf, DropStmt *stmt);
 static void AppendGrantOnSchemaStmt(StringInfo buf, GrantStmt *stmt);
-static void AppendGrantOnSchemaPrivileges(StringInfo buf, GrantStmt *stmt);
 static void AppendGrantOnSchemaSchemas(StringInfo buf, GrantStmt *stmt);
-static void AppendGrantOnSchemaGrantees(StringInfo buf, GrantStmt *stmt);
 static void AppendAlterSchemaRenameStmt(StringInfo buf, RenameStmt *stmt);
 
 char *
@@ -161,11 +159,11 @@ AppendGrantOnSchemaStmt(StringInfo buf, GrantStmt *stmt)
 		appendStringInfo(buf, "GRANT OPTION FOR ");
 	}
 
-	AppendGrantOnSchemaPrivileges(buf, stmt);
+	AppendGrantPrivileges(buf, stmt);
 
 	AppendGrantOnSchemaSchemas(buf, stmt);
 
-	AppendGrantOnSchemaGrantees(buf, stmt);
+	AppendGrantGrantees(buf, stmt);
 
 	if (stmt->is_grant && stmt->grant_option)
 	{
@@ -186,8 +184,8 @@ AppendGrantOnSchemaStmt(StringInfo buf, GrantStmt *stmt)
 }
 
 
-static void
-AppendGrantOnSchemaPrivileges(StringInfo buf, GrantStmt *stmt)
+void
+AppendGrantPrivileges(StringInfo buf, GrantStmt *stmt)
 {
 	if (list_length(stmt->privileges) == 0)
 	{
@@ -227,8 +225,8 @@ AppendGrantOnSchemaSchemas(StringInfo buf, GrantStmt *stmt)
 }
 
 
-static void
-AppendGrantOnSchemaGrantees(StringInfo buf, GrantStmt *stmt)
+void
+AppendGrantGrantees(StringInfo buf, GrantStmt *stmt)
 {
 	ListCell *cell = NULL;
 	appendStringInfo(buf, " %s ", stmt->is_grant ? "TO" : "FROM");

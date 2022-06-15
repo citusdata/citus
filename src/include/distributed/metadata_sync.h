@@ -38,6 +38,7 @@ extern char * LocalGroupIdUpdateCommand(int32 groupId);
 extern bool ShouldSyncUserCommandForObject(ObjectAddress objectAddress);
 extern bool ShouldSyncTableMetadata(Oid relationId);
 extern bool ShouldSyncTableMetadataViaCatalog(Oid relationId);
+extern bool ShouldSyncSequenceMetadata(Oid relationId);
 extern List * NodeMetadataCreateCommands(void);
 extern List * DistributedObjectMetadataSyncCommandList(void);
 extern List * ColocationGroupCreateCommandList(void);
@@ -53,12 +54,18 @@ extern char * DistributionDeleteCommand(const char *schemaName,
 extern char * TableOwnerResetCommand(Oid distributedRelationId);
 extern char * NodeListInsertCommand(List *workerNodeList);
 extern List * ShardListInsertCommand(List *shardIntervalList);
+extern List * ShardDeleteCommandList(ShardInterval *shardInterval);
 extern char * NodeDeleteCommand(uint32 nodeId);
 extern char * NodeStateUpdateCommand(uint32 nodeId, bool isActive);
 extern char * ShouldHaveShardsUpdateCommand(uint32 nodeId, bool shouldHaveShards);
 extern char * ColocationIdUpdateCommand(Oid relationId, uint32 colocationId);
 extern char * CreateSchemaDDLCommand(Oid schemaId);
 extern List * GrantOnSchemaDDLCommands(Oid schemaId);
+extern List * GrantOnFunctionDDLCommands(Oid functionOid);
+extern List * GrantOnForeignServerDDLCommands(Oid serverId);
+extern List * GenerateGrantOnForeignServerQueriesFromAclItem(Oid serverId,
+															 AclItem *aclItem);
+extern List * GenerateGrantOnFDWQueriesFromAclItem(Oid serverId, AclItem *aclItem);
 extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
 									 uint64 shardLength, int32 groupId);
 extern TableDDLCommand * TruncateTriggerCreateCommand(Oid relationId);

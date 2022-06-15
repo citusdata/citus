@@ -906,10 +906,6 @@ SELECT count(*) FROM pg_dist_transaction;
 
 -- first create the new user on all nodes
 CREATE USER test_user;
-\c - - - :worker_1_port
-CREATE USER test_user;
-\c - - - :worker_2_port
-CREATE USER test_user;
 
 -- now connect back to the master with the new user
 \c - test_user - :master_port
@@ -1014,7 +1010,6 @@ SELECT * FROM run_command_on_workers('ALTER USER test_user_new RENAME TO test_us
 DROP TABLE reference_modifying_xacts, hash_modifying_xacts, hash_modifying_xacts_second,
 	reference_failure_test, numbers_hash_failure_test;
 
-SELECT * FROM run_command_on_workers('DROP USER test_user');
 DROP USER test_user;
 
 -- set up foreign keys to test transactions with co-located and reference tables

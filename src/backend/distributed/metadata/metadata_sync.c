@@ -71,6 +71,7 @@
 #include "executor/spi.h"
 #include "foreign/foreign.h"
 #include "miscadmin.h"
+#include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
 #include "pgstat.h"
 #include "postmaster/bgworker.h"
@@ -113,6 +114,11 @@ static List * GetObjectsForGrantStmt(ObjectType objectType, Oid objectId);
 static AccessPriv * GetAccessPrivObjectForGrantStmt(char *permission);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
 													  AclItem *aclItem);
+static List * GenerateGrantOnFunctionQueriesFromAclItem(Oid schemaOid,
+														AclItem *aclItem);
+static List * GrantOnSequenceDDLCommands(Oid sequenceOid);
+static List * GenerateGrantOnSequenceQueriesFromAclItem(Oid sequenceOid,
+														AclItem *aclItem);
 static void SetLocalReplicateReferenceTablesOnActivate(bool state);
 static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
@@ -511,6 +517,7 @@ ShouldSyncUserCommandForObject(ObjectAddress objectAddress)
 	{
 		Oid relOid = objectAddress.objectId;
 		return ShouldSyncTableMetadata(relOid) ||
+			   ShouldSyncSequenceMetadata(relOid) ||
 			   get_rel_relkind(relOid) == RELKIND_VIEW;
 	}
 
@@ -583,6 +590,26 @@ ShouldSyncTableMetadataInternal(bool hashDistributed, bool citusTableWithNoDistK
 
 
 /*
+ * ShouldSyncSequenceMetadata checks if the metadata of a sequence should be
+ * propagated to metadata workers, i.e. the sequence is marked as distributed
+ */
+bool
+ShouldSyncSequenceMetadata(Oid relationId)
+{
+	if (!OidIsValid(relationId) || !(get_rel_relkind(relationId) == RELKIND_SEQUENCE))
+	{
+		return false;
+	}
+
+	ObjectAddress sequenceAddress = { 0 };
+	ObjectAddressSet(sequenceAddress, RelationRelationId, relationId);
+
+	return IsObjectDistributed(&sequenceAddress);
+}
+
+
+/*
+ * SyncMetadataSnapshotToNode does the following:
  * SyncNodeMetadataSnapshotToNode does the following:
  *  1. Sets the localGroupId on the worker so the worker knows which tuple in
  *     pg_dist_node represents itself.
@@ -1345,6 +1372,23 @@ ShardListInsertCommand(List *shardIntervalList)
 
 
 /*
+ * ShardListDeleteCommand generates a command list that can be executed to delete
+ * shard and shard placement metadata for the given shard.
+ */
+List *
+ShardDeleteCommandList(ShardInterval *shardInterval)
+{
+	uint64 shardId = shardInterval->shardId;
+
+	StringInfo deleteShardCommand = makeStringInfo();
+	appendStringInfo(deleteShardCommand,
+					 "SELECT citus_internal_delete_shard_metadata(%ld);", shardId);
+
+	return list_make1(deleteShardCommand->data);
+}
+
+
+/*
  * NodeDeleteCommand generate a command that can be
  * executed to delete the metadata for a worker node.
  */
@@ -1478,6 +1522,8 @@ DDLCommandsForSequence(Oid sequenceOid, char *ownerName)
 
 	sequenceDDLList = lappend(sequenceDDLList, wrappedSequenceDef->data);
 	sequenceDDLList = lappend(sequenceDDLList, sequenceGrantStmt->data);
+	sequenceDDLList = list_concat(sequenceDDLList, GrantOnSequenceDDLCommands(
+									  sequenceOid));
 
 	return sequenceDDLList;
 }
@@ -1937,7 +1983,7 @@ GrantOnSchemaDDLCommands(Oid schemaOid)
 
 
 /*
- * GenerateGrantOnSchemaQueryFromACL generates a query string for replicating a users permissions
+ * GenerateGrantOnSchemaQueryFromACLItem generates a query string for replicating a users permissions
  * on a schema.
  */
 List *
@@ -2021,6 +2067,34 @@ GetObjectsForGrantStmt(ObjectType objectType, Oid objectId)
 			return list_make1(makeString(get_namespace_name(objectId)));
 		}
 
+		/* enterprise supported object types */
+		case OBJECT_FUNCTION:
+		case OBJECT_PROCEDURE:
+		{
+			ObjectWithArgs *owa = ObjectWithArgsFromOid(objectId);
+			return list_make1(owa);
+		}
+
+		case OBJECT_FDW:
+		{
+			ForeignDataWrapper *fdw = GetForeignDataWrapper(objectId);
+			return list_make1(makeString(fdw->fdwname));
+		}
+
+		case OBJECT_FOREIGN_SERVER:
+		{
+			ForeignServer *server = GetForeignServer(objectId);
+			return list_make1(makeString(server->servername));
+		}
+
+		case OBJECT_SEQUENCE:
+		{
+			Oid namespaceOid = get_rel_namespace(objectId);
+			RangeVar *sequence = makeRangeVar(get_namespace_name(namespaceOid),
+											  get_rel_name(objectId), -1);
+			return list_make1(sequence);
+		}
+
 		default:
 		{
 			elog(ERROR, "unsupported object type for GRANT");
@@ -2028,6 +2102,211 @@ GetObjectsForGrantStmt(ObjectType objectType, Oid objectId)
 	}
 
 	return NIL;
+}
+
+
+/*
+ * GrantOnFunctionDDLCommands creates a list of ddl command for replicating the permissions
+ * of roles on distributed functions.
+ */
+List *
+GrantOnFunctionDDLCommands(Oid functionOid)
+{
+	HeapTuple proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(functionOid));
+
+	bool isNull = true;
+	Datum aclDatum = SysCacheGetAttr(PROCOID, proctup, Anum_pg_proc_proacl,
+									 &isNull);
+	if (isNull)
+	{
+		ReleaseSysCache(proctup);
+		return NIL;
+	}
+
+	Acl *acl = DatumGetAclPCopy(aclDatum);
+	AclItem *aclDat = ACL_DAT(acl);
+	int aclNum = ACL_NUM(acl);
+	List *commands = NIL;
+
+	ReleaseSysCache(proctup);
+
+	for (int i = 0; i < aclNum; i++)
+	{
+		commands = list_concat(commands,
+							   GenerateGrantOnFunctionQueriesFromAclItem(
+								   functionOid,
+								   &aclDat[i]));
+	}
+
+	return commands;
+}
+
+
+/*
+ * GrantOnForeignServerDDLCommands creates a list of ddl command for replicating the
+ * permissions of roles on distributed foreign servers.
+ */
+List *
+GrantOnForeignServerDDLCommands(Oid serverId)
+{
+	HeapTuple servertup = SearchSysCache1(FOREIGNSERVEROID, ObjectIdGetDatum(serverId));
+
+	bool isNull = true;
+	Datum aclDatum = SysCacheGetAttr(FOREIGNSERVEROID, servertup,
+									 Anum_pg_foreign_server_srvacl, &isNull);
+	if (isNull)
+	{
+		ReleaseSysCache(servertup);
+		return NIL;
+	}
+
+	Acl *aclEntry = DatumGetAclPCopy(aclDatum);
+	AclItem *privileges = ACL_DAT(aclEntry);
+	int numberOfPrivsGranted = ACL_NUM(aclEntry);
+	List *commands = NIL;
+
+	ReleaseSysCache(servertup);
+
+	for (int i = 0; i < numberOfPrivsGranted; i++)
+	{
+		commands = list_concat(commands,
+							   GenerateGrantOnForeignServerQueriesFromAclItem(
+								   serverId,
+								   &privileges[i]));
+	}
+
+	return commands;
+}
+
+
+/*
+ * GenerateGrantOnForeignServerQueriesFromAclItem generates a query string for
+ * replicating a users permissions on a foreign server.
+ */
+List *
+GenerateGrantOnForeignServerQueriesFromAclItem(Oid serverId, AclItem *aclItem)
+{
+	/* privileges to be granted */
+	AclMode permissions = ACLITEM_GET_PRIVS(*aclItem) & ACL_ALL_RIGHTS_FOREIGN_SERVER;
+
+	/* WITH GRANT OPTION clause */
+	AclMode grants = ACLITEM_GET_GOPTIONS(*aclItem) & ACL_ALL_RIGHTS_FOREIGN_SERVER;
+
+	/*
+	 * seems unlikely but we check if there is a grant option in the list without the actual permission
+	 */
+	Assert(!(grants & ACL_USAGE) || (permissions & ACL_USAGE));
+
+	Oid granteeOid = aclItem->ai_grantee;
+	List *queries = NIL;
+
+	/* switch to the role which had granted acl */
+	queries = lappend(queries, GenerateSetRoleQuery(aclItem->ai_grantor));
+
+	/* generate the GRANT stmt that will be executed by the grantor role */
+	if (permissions & ACL_USAGE)
+	{
+		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
+										  OBJECT_FOREIGN_SERVER, granteeOid, serverId,
+										  "USAGE", grants & ACL_USAGE));
+		queries = lappend(queries, query);
+	}
+
+	/* reset the role back */
+	queries = lappend(queries, "RESET ROLE");
+
+	return queries;
+}
+
+
+/*
+ * GenerateGrantOnFunctionQueryFromACLItem generates a query string for replicating a users permissions
+ * on a distributed function.
+ */
+List *
+GenerateGrantOnFunctionQueriesFromAclItem(Oid functionOid, AclItem *aclItem)
+{
+	AclMode permissions = ACLITEM_GET_PRIVS(*aclItem) & ACL_ALL_RIGHTS_FUNCTION;
+	AclMode grants = ACLITEM_GET_GOPTIONS(*aclItem) & ACL_ALL_RIGHTS_FUNCTION;
+
+	/*
+	 * seems unlikely but we check if there is a grant option in the list without the actual permission
+	 */
+	Assert(!(grants & ACL_EXECUTE) || (permissions & ACL_EXECUTE));
+	Oid granteeOid = aclItem->ai_grantee;
+	List *queries = NIL;
+
+	queries = lappend(queries, GenerateSetRoleQuery(aclItem->ai_grantor));
+
+	if (permissions & ACL_EXECUTE)
+	{
+		char prokind = get_func_prokind(functionOid);
+		ObjectType objectType;
+
+		if (prokind == PROKIND_FUNCTION)
+		{
+			objectType = OBJECT_FUNCTION;
+		}
+		else if (prokind == PROKIND_PROCEDURE)
+		{
+			objectType = OBJECT_PROCEDURE;
+		}
+		else
+		{
+			ereport(ERROR, (errmsg("unsupported prokind"),
+							errdetail("GRANT commands on procedures are propagated only "
+									  "for procedures and functions.")));
+		}
+
+		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
+										  objectType, granteeOid, functionOid, "EXECUTE",
+										  grants & ACL_EXECUTE));
+		queries = lappend(queries, query);
+	}
+
+	queries = lappend(queries, "RESET ROLE");
+
+	return queries;
+}
+
+
+/*
+ * GenerateGrantOnFDWQueriesFromAclItem generates a query string for
+ * replicating a users permissions on a foreign data wrapper.
+ */
+List *
+GenerateGrantOnFDWQueriesFromAclItem(Oid FDWId, AclItem *aclItem)
+{
+	/* privileges to be granted */
+	AclMode permissions = ACLITEM_GET_PRIVS(*aclItem) & ACL_ALL_RIGHTS_FDW;
+
+	/* WITH GRANT OPTION clause */
+	AclMode grants = ACLITEM_GET_GOPTIONS(*aclItem) & ACL_ALL_RIGHTS_FDW;
+
+	/*
+	 * seems unlikely but we check if there is a grant option in the list without the actual permission
+	 */
+	Assert(!(grants & ACL_USAGE) || (permissions & ACL_USAGE));
+
+	Oid granteeOid = aclItem->ai_grantee;
+	List *queries = NIL;
+
+	/* switch to the role which had granted acl */
+	queries = lappend(queries, GenerateSetRoleQuery(aclItem->ai_grantor));
+
+	/* generate the GRANT stmt that will be executed by the grantor role */
+	if (permissions & ACL_USAGE)
+	{
+		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
+										  OBJECT_FDW, granteeOid, FDWId, "USAGE",
+										  grants & ACL_USAGE));
+		queries = lappend(queries, query);
+	}
+
+	/* reset the role back */
+	queries = lappend(queries, "RESET ROLE");
+
+	return queries;
 }
 
 
@@ -2043,6 +2322,93 @@ GetAccessPrivObjectForGrantStmt(char *permission)
 	accessPriv->cols = NULL;
 
 	return accessPriv;
+}
+
+
+/*
+ * GrantOnSequenceDDLCommands creates a list of ddl command for replicating the permissions
+ * of roles on distributed sequences.
+ */
+static List *
+GrantOnSequenceDDLCommands(Oid sequenceOid)
+{
+	HeapTuple seqtup = SearchSysCache1(RELOID, ObjectIdGetDatum(sequenceOid));
+	bool isNull = false;
+	Datum aclDatum = SysCacheGetAttr(RELOID, seqtup, Anum_pg_class_relacl,
+									 &isNull);
+	if (isNull)
+	{
+		ReleaseSysCache(seqtup);
+		return NIL;
+	}
+
+	Acl *acl = DatumGetAclPCopy(aclDatum);
+	AclItem *aclDat = ACL_DAT(acl);
+	int aclNum = ACL_NUM(acl);
+	List *commands = NIL;
+
+	ReleaseSysCache(seqtup);
+
+	for (int i = 0; i < aclNum; i++)
+	{
+		commands = list_concat(commands,
+							   GenerateGrantOnSequenceQueriesFromAclItem(
+								   sequenceOid,
+								   &aclDat[i]));
+	}
+
+	return commands;
+}
+
+
+/*
+ * GenerateGrantOnSequenceQueriesFromAclItem generates a query string for replicating a users permissions
+ * on a distributed sequence.
+ */
+static List *
+GenerateGrantOnSequenceQueriesFromAclItem(Oid sequenceOid, AclItem *aclItem)
+{
+	AclMode permissions = ACLITEM_GET_PRIVS(*aclItem) & ACL_ALL_RIGHTS_SEQUENCE;
+	AclMode grants = ACLITEM_GET_GOPTIONS(*aclItem) & ACL_ALL_RIGHTS_SEQUENCE;
+
+	/*
+	 * seems unlikely but we check if there is a grant option in the list without the actual permission
+	 */
+	Assert(!(grants & ACL_USAGE) || (permissions & ACL_USAGE));
+	Assert(!(grants & ACL_SELECT) || (permissions & ACL_SELECT));
+	Assert(!(grants & ACL_UPDATE) || (permissions & ACL_UPDATE));
+
+	Oid granteeOid = aclItem->ai_grantee;
+	List *queries = NIL;
+	queries = lappend(queries, GenerateSetRoleQuery(aclItem->ai_grantor));
+
+	if (permissions & ACL_USAGE)
+	{
+		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
+										  OBJECT_SEQUENCE, granteeOid, sequenceOid,
+										  "USAGE", grants & ACL_USAGE));
+		queries = lappend(queries, query);
+	}
+
+	if (permissions & ACL_SELECT)
+	{
+		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
+										  OBJECT_SEQUENCE, granteeOid, sequenceOid,
+										  "SELECT", grants & ACL_SELECT));
+		queries = lappend(queries, query);
+	}
+
+	if (permissions & ACL_UPDATE)
+	{
+		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
+										  OBJECT_SEQUENCE, granteeOid, sequenceOid,
+										  "UPDATE", grants & ACL_UPDATE));
+		queries = lappend(queries, query);
+	}
+
+	queries = lappend(queries, "RESET ROLE");
+
+	return queries;
 }
 
 

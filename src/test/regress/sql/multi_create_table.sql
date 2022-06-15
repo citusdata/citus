@@ -252,6 +252,49 @@ SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=12, col
 
 DROP TABLE shard_count_table, shard_count_table_2;
 
+
+-- test shard splitting doesn't break shard_count parameter
+-- when shard count is given table needs to have exactly that
+-- many shards, regardless of shard splitting on other tables
+
+-- ensure there is no colocation group with 9 shards
+SELECT count(*) FROM pg_dist_colocation WHERE shardcount = 9;
+SET citus.shard_count TO 9;
+
+CREATE TABLE shard_split_table (a int, b int);
+SELECT create_distributed_table ('shard_split_table', 'a');
+SELECT 1 FROM isolate_tenant_to_new_shard('shard_split_table', 5);
+
+-- show the difference in pg_dist_colocation and citus_tables shard counts
+SELECT
+	(
+		SELECT shardcount FROM pg_dist_colocation WHERE colocationid IN
+		(
+			SELECT colocation_id FROM citus_tables WHERE table_name = 'shard_split_table'::regclass
+		)
+	) AS "pg_dist_colocation",
+	(SELECT shard_count FROM citus_tables WHERE table_name = 'shard_split_table'::regclass) AS "citus_tables";
+
+CREATE TABLE shard_split_table_2 (a int, b int);
+SELECT create_distributed_table ('shard_split_table_2', 'a', shard_count:=9);
+
+SELECT a.colocation_id = b.colocation_id FROM citus_tables a, citus_tables b
+	WHERE a.table_name = 'shard_split_table'::regclass AND b.table_name = 'shard_split_table_2'::regclass;
+
+SELECT shard_count FROM citus_tables WHERE table_name = 'shard_split_table_2'::regclass;
+
+-- also check we don't break regular behaviour
+CREATE TABLE shard_split_table_3 (a int, b int);
+SELECT create_distributed_table ('shard_split_table_3', 'a');
+
+SELECT a.colocation_id = b.colocation_id FROM citus_tables a, citus_tables b
+	WHERE a.table_name = 'shard_split_table'::regclass AND b.table_name = 'shard_split_table_3'::regclass;
+
+SELECT shard_count FROM citus_tables WHERE table_name = 'shard_split_table_3'::regclass;
+
+DROP TABLE shard_split_table, shard_split_table_2, shard_split_table_3;
+
+
 -- test a shard count with an empty default colocation group
 -- ensure there is no colocation group with 13 shards
 SELECT count(*) FROM pg_dist_colocation WHERE shardcount = 13;

@@ -1,6 +1,14 @@
 --
 -- MULTI_ALTER_TABLE_STATEMENTS
 --
+-- this test has different output per version
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
+ version_above_ten 
+-------------------
+ t
+(1 row)
+
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 220000;
 -- Check that we can run ALTER TABLE statements on distributed tables.
 -- We set the shardid sequence here so that the shardids in this test
@@ -350,7 +358,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineite
 ALTER TABLE lineitem_alter ADD COLUMN int_column3 INTEGER,
 	ALTER COLUMN int_column1 SET STATISTICS 10;
 ERROR:  alter table command is currently unsupported
-DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
 ALTER TABLE lineitem_alter DROP COLUMN int_column1, DROP COLUMN int_column2;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
      Column      |         Type          | Modifiers 
@@ -382,12 +390,12 @@ ERROR:  cannot execute ALTER TABLE command involving partition column
 -- Verify that we error out on unsupported statement types
 ALTER TABLE lineitem_alter ALTER COLUMN l_orderkey SET STATISTICS 100;
 ERROR:  alter table command is currently unsupported
-DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
 ALTER TABLE lineitem_alter DROP CONSTRAINT IF EXISTS non_existent_contraint;
 NOTICE:  constraint "non_existent_contraint" of relation "lineitem_alter" does not exist, skipping
 ALTER TABLE lineitem_alter SET WITHOUT OIDS;
 ERROR:  alter table command is currently unsupported
-DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
 -- Verify that we error out in case of postgres errors on supported statement
 -- types
 ALTER TABLE lineitem_alter ADD COLUMN new_column non_existent_type;
@@ -1037,10 +1045,30 @@ HINT:  Connect to worker nodes directly to manually move all tables.
 DROP TABLESPACE super_fast_ssd;
 -- Cleanup the table and its shards
 SET citus.enable_ddl_propagation to true;
+CREATE USER alter_table_owner WITH LOGIN;
+GRANT USAGE ON SCHEMA public TO alter_table_owner;
+\c - alter_table_owner - :master_port
+-- should not be able to access table without permission
+SELECT count(*) FROM lineitem_alter;
+ERROR:  permission denied for table lineitem_alter
+-- should not be able to drop the table as non table owner
+DROP TABLE lineitem_alter;
+ERROR:  must be owner of table lineitem_alter
+\c - postgres - :master_port
+ALTER TABLE lineitem_alter OWNER TO alter_table_owner;
+\c - alter_table_owner - :master_port
+-- should be able to query the table as table owner
+SELECT count(*) FROM lineitem_alter;
+ count 
+-------
+ 18000
+(1 row)
+
+-- should be able to drop the table as table owner
 DROP TABLE lineitem_alter;
 -- check that nothing's left over on workers, other than the leftover shard created
 -- during the unsuccessful COPY
-\c - - - :worker_1_port
+\c - postgres - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%';
         relname        
 -----------------------
@@ -1048,6 +1076,9 @@ SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%';
 (1 row)
 
 \c - - - :master_port
+-- drop the roles created
+REVOKE ALL ON SCHEMA PUBLIC FROM alter_table_owner;
+DROP ROLE alter_table_owner;
 -- Test alter table with drop table in the same transaction
 BEGIN;
 CREATE TABLE test_table_1(id int);

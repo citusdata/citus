@@ -22,7 +22,7 @@ SUBDIRS = . commands connection ddl deparser executor metadata operations planne
 # columnar modules
 SUBDIRS += ../columnar
 # enterprise modules
-SUBDIRS +=
+SUBDIRS += replication
 
 # Symlinks are not copied over to the build directory if a separete build
 # directory is used during configure (such as on CI)

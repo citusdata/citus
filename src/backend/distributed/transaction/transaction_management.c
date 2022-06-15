@@ -31,6 +31,7 @@
 #include "distributed/locally_reserved_shared_connections.h"
 #include "distributed/maintenanced.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_logical_replication.h"
 #include "distributed/multi_explain.h"
 #include "distributed/repartition_join_execution.h"
 #include "distributed/transaction_management.h"
@@ -315,6 +316,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			UnSetDistributedTransactionId();
 
+			PlacementMovedUsingLogicalReplicationInTX = false;
+
 			/* empty the CommitContext to ensure we're not leaking memory */
 			MemoryContextSwitchTo(previousContext);
 			MemoryContextReset(CommitContext);
@@ -387,6 +390,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 */
 			SubPlanLevel = 0;
 			UnSetDistributedTransactionId();
+
+			PlacementMovedUsingLogicalReplicationInTX = false;
 			break;
 		}
 

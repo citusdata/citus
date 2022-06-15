@@ -21,9 +21,13 @@
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
+#include "catalog/pg_auth_members.h"
+#include "catalog/pg_authid_d.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_depend.h"
+#include "catalog/pg_extension_d.h"
+#include "catalog/pg_foreign_data_wrapper_d.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_proc_d.h"
 #include "catalog/pg_rewrite.h"
@@ -45,6 +49,7 @@
 #include "utils/fmgroids.h"
 #include "utils/hsearch.h"
 #include "utils/lsyscache.h"
+#include "utils/syscache.h"
 
 /*
  * ObjectAddressCollector keeps track of collected ObjectAddresses. This can be used
@@ -168,6 +173,8 @@ static void ApplyAddToDependencyList(ObjectAddressCollector *collector,
 static List * GetViewRuleReferenceDependencyList(Oid relationId);
 static List * ExpandCitusSupportedTypes(ObjectAddressCollector *collector,
 										ObjectAddress target);
+static List * GetDependentRoleIdsFDW(Oid FDWOid);
+static List * ExpandRolesToGroups(Oid roleid);
 static ViewDependencyNode * BuildViewDependencyGraph(Oid relationId, HTAB *nodeMap);
 
 
@@ -670,16 +677,13 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 
 		case OCLASS_ROLE:
 		{
-			/*
-			 * Community only supports the extension owner as a distributed object to
-			 * propagate alter statements for this user
-			 */
-			if (address->objectId == CitusExtensionOwner())
+			/* if it is a reserved role do not propagate */
+			if (IsReservedName(GetUserNameFromId(address->objectId, false)))
 			{
-				return true;
+				return false;
 			}
 
-			return false;
+			return true;
 		}
 
 		case OCLASS_EXTENSION:
@@ -1275,6 +1279,42 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 
 	switch (target.classId)
 	{
+		case AuthIdRelationId:
+		{
+			/*
+			 * Roles are members of other roles. These relations are not recorded directly
+			 * but can be deduced from pg_auth_members
+			 */
+			return ExpandRolesToGroups(target.objectId);
+		}
+
+		case ExtensionRelationId:
+		{
+			/*
+			 * FDWs get propagated along with the extensions they belong to.
+			 * In case there are GRANTed privileges on FDWs to roles, those
+			 * GRANT statements will be propagated to. In order to make sure
+			 * that those GRANT statements work, the privileged roles should
+			 * exist on the worker nodes. Hence, here we find these dependent
+			 * roles and add them as dependencies.
+			 */
+
+			Oid extensionId = target.objectId;
+			List *FDWOids = GetDependentFDWsToExtension(extensionId);
+
+			Oid FDWOid = InvalidOid;
+			foreach_oid(FDWOid, FDWOids)
+			{
+				List *dependentRoleIds = GetDependentRoleIdsFDW(FDWOid);
+				List *dependencies =
+					CreateObjectAddressDependencyDefList(AuthIdRelationId,
+														 dependentRoleIds);
+				result = list_concat(result, dependencies);
+			}
+
+			break;
+		}
+
 		case TypeRelationId:
 		{
 			switch (get_typtype(target.objectId))
@@ -1404,6 +1444,73 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 		}
 	}
 	return result;
+}
+
+
+/*
+ * GetDependentRoleIdsFDW returns a list of role oids that has privileges on the
+ * FDW with the given object id.
+ */
+static List *
+GetDependentRoleIdsFDW(Oid FDWOid)
+{
+	List *roleIds = NIL;
+
+	Acl *aclEntry = GetPrivilegesForFDW(FDWOid);
+
+	if (aclEntry == NULL)
+	{
+		return NIL;
+	}
+
+	AclItem *privileges = ACL_DAT(aclEntry);
+	int numberOfPrivsGranted = ACL_NUM(aclEntry);
+
+	for (int i = 0; i < numberOfPrivsGranted; i++)
+	{
+		roleIds = lappend_oid(roleIds, privileges[i].ai_grantee);
+	}
+
+	return roleIds;
+}
+
+
+/*
+ * ExpandRolesToGroups returns a list of object addresses pointing to roles that roleid
+ * depends on.
+ */
+static List *
+ExpandRolesToGroups(Oid roleid)
+{
+	Relation pgAuthMembers = table_open(AuthMemRelationId, AccessShareLock);
+	HeapTuple tuple = NULL;
+
+	ScanKeyData scanKey[1];
+	const int scanKeyCount = 1;
+
+	/* scan pg_auth_members for member = $1 via index pg_auth_members_member_role_index */
+	ScanKeyInit(&scanKey[0], Anum_pg_auth_members_member, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(roleid));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgAuthMembers, AuthMemMemRoleIndexId,
+													true, NULL, scanKeyCount, scanKey);
+
+	List *roles = NIL;
+	while ((tuple = systable_getnext(scanDescriptor)) != NULL)
+	{
+		Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
+
+		DependencyDefinition *definition = palloc0(sizeof(DependencyDefinition));
+		definition->mode = DependencyObjectAddress;
+		ObjectAddressSet(definition->data.address, AuthIdRelationId, membership->roleid);
+
+		roles = lappend(roles, definition);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgAuthMembers, AccessShareLock);
+
+	return roles;
 }
 
 

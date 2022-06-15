@@ -161,14 +161,7 @@ PreprocessGrantOnSchemaStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	/*
-	 * Since access control needs to be handled manually on community, we need to support
-	 * such queries by handling them locally on worker nodes.
-	 */
-	if (!IsCoordinator())
-	{
-		return NIL;
-	}
+	EnsureCoordinator();
 
 	List *originalObjects = stmt->objects;
 
@@ -178,7 +171,11 @@ PreprocessGrantOnSchemaStmt(Node *node, const char *queryString,
 
 	stmt->objects = originalObjects;
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, list_make1(sql));
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 

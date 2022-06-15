@@ -199,6 +199,39 @@ ALTER TABLE par_table ATTACH PARTITION par_table_1 FOR VALUES FROM (1) TO (5);
 
 SELECT alter_distributed_table('par_table', distribution_column:='b', colocate_with:='col_table');
 
+
+-- test changing shard count into a default colocation group with shard split
+-- ensure there is no colocation group with 23 shards
+SELECT count(*) FROM pg_dist_colocation WHERE shardcount = 23;
+SET citus.shard_count TO 23;
+
+CREATE TABLE shard_split_table (a int, b int);
+SELECT create_distributed_table ('shard_split_table', 'a');
+SELECT 1 FROM isolate_tenant_to_new_shard('shard_split_table', 5);
+
+-- show the difference in pg_dist_colocation and citus_tables shard counts
+SELECT
+	(
+		SELECT shardcount FROM pg_dist_colocation WHERE colocationid IN
+		(
+			SELECT colocation_id FROM public.citus_tables WHERE table_name = 'shard_split_table'::regclass
+		)
+	) AS "pg_dist_colocation",
+	(SELECT shard_count FROM public.citus_tables WHERE table_name = 'shard_split_table'::regclass) AS "citus_tables";
+
+SET citus.shard_count TO 4;
+
+-- distribute another table and then change shard count to 23
+CREATE TABLE shard_split_table_2 (a int, b int);
+SELECT create_distributed_table ('shard_split_table_2', 'a');
+SELECT alter_distributed_table ('shard_split_table_2', shard_count:=23, cascade_to_colocated:=false);
+
+SELECT a.colocation_id = b.colocation_id FROM public.citus_tables a, public.citus_tables b
+	WHERE a.table_name = 'shard_split_table'::regclass AND b.table_name = 'shard_split_table_2'::regclass;
+
+SELECT shard_count FROM public.citus_tables WHERE table_name = 'shard_split_table_2'::regclass;
+
+
 -- test messages
 -- test nothing to change
 SELECT alter_distributed_table('dist_table');

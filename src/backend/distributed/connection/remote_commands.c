@@ -18,6 +18,7 @@
 #include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/remote_commands.h"
+#include "distributed/errormessage.h"
 #include "distributed/cancel_utils.h"
 #include "lib/stringinfo.h"
 #include "miscadmin.h"

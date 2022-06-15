@@ -653,8 +653,6 @@ SELECT citus_remove_node('localhost', :master_port);
 
 CREATE TABLE superuser_columnar_table (a int) USING columnar;
 CREATE USER read_access;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 SET ROLE read_access;
 -- user shouldn't be able to execute alter_columnar_table_set
 -- or alter_columnar_table_reset for a columnar table that it

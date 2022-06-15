@@ -1,8 +1,6 @@
 SET citus.next_shard_id TO 20030000;
 SET citus.enable_metadata_sync TO false; -- all tests here verify old behaviour without distributing types,functions,etc automatically
 CREATE USER typeowner_for_disabled_object_propagation_guc;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 CREATE SCHEMA disabled_object_propagation;
 CREATE SCHEMA disabled_object_propagation2;
 SET search_path TO disabled_object_propagation;

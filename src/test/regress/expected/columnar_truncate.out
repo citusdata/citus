@@ -265,16 +265,7 @@ set columnar.compression = 'pglz';
 INSERT INTO truncate_schema.truncate_tbl SELECT generate_series(1, 100);
 set columnar.compression to default;
 -- create a user that can not truncate
-SELECT run_command_on_workers($$CREATE USER truncate_user;$$);
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
-(2 rows)
-
 CREATE USER truncate_user;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 GRANT USAGE ON SCHEMA truncate_schema TO truncate_user;
 GRANT SELECT ON TABLE truncate_schema.truncate_tbl TO truncate_user;
 REVOKE TRUNCATE ON TABLE truncate_schema.truncate_tbl FROM truncate_user;

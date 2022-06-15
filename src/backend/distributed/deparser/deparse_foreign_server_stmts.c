@@ -27,6 +27,8 @@ static void AppendDropForeignServerStmt(StringInfo buf, DropStmt *stmt);
 static void AppendServerNames(StringInfo buf, DropStmt *stmt);
 static void AppendBehavior(StringInfo buf, DropStmt *stmt);
 static char * GetDefElemActionString(DefElemAction action);
+static void AppendGrantOnForeignServerStmt(StringInfo buf, GrantStmt *stmt);
+static void AppendGrantOnForeignServerServers(StringInfo buf, GrantStmt *stmt);
 
 char *
 DeparseCreateForeignServerStmt(Node *node)
@@ -99,6 +101,21 @@ DeparseDropForeignServerStmt(Node *node)
 	initStringInfo(&str);
 
 	AppendDropForeignServerStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+char *
+DeparseGrantOnForeignServerStmt(Node *node)
+{
+	GrantStmt *stmt = castNode(GrantStmt, node);
+	Assert(stmt->objtype == OBJECT_FOREIGN_SERVER);
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendGrantOnForeignServerStmt(&str, stmt);
 
 	return str.data;
 }
@@ -273,5 +290,60 @@ GetDefElemActionString(DefElemAction action)
 
 		default:
 			return "";
+	}
+}
+
+
+static void
+AppendGrantOnForeignServerStmt(StringInfo buf, GrantStmt *stmt)
+{
+	Assert(stmt->objtype == OBJECT_FOREIGN_SERVER);
+
+	appendStringInfo(buf, "%s ", stmt->is_grant ? "GRANT" : "REVOKE");
+
+	if (!stmt->is_grant && stmt->grant_option)
+	{
+		appendStringInfo(buf, "GRANT OPTION FOR ");
+	}
+
+	AppendGrantPrivileges(buf, stmt);
+
+	AppendGrantOnForeignServerServers(buf, stmt);
+
+	AppendGrantGrantees(buf, stmt);
+
+	if (stmt->is_grant && stmt->grant_option)
+	{
+		appendStringInfo(buf, " WITH GRANT OPTION");
+	}
+	if (!stmt->is_grant)
+	{
+		if (stmt->behavior == DROP_RESTRICT)
+		{
+			appendStringInfo(buf, " RESTRICT");
+		}
+		else if (stmt->behavior == DROP_CASCADE)
+		{
+			appendStringInfo(buf, " CASCADE");
+		}
+	}
+	appendStringInfo(buf, ";");
+}
+
+
+static void
+AppendGrantOnForeignServerServers(StringInfo buf, GrantStmt *stmt)
+{
+	ListCell *cell = NULL;
+	appendStringInfo(buf, " ON FOREIGN SERVER ");
+
+	foreach(cell, stmt->objects)
+	{
+		char *servername = strVal(lfirst(cell));
+		appendStringInfoString(buf, quote_identifier(servername));
+		if (cell != list_tail(stmt->objects))
+		{
+			appendStringInfo(buf, ", ");
+		}
 	}
 }

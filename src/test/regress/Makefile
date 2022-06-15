@@ -16,9 +16,9 @@ MAKEFILE_DIR := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
 export PATH := $(MAKEFILE_DIR)/bin:$(PATH)
 export PG_REGRESS_DIFF_OPTS = -dU10 -w
 # Use lower isolation test timeout, the 5 minute default is waaay too long for
-# us so we use 5 seconds instead. We should detect blockages very quickly and
+# us so we use 20 seconds instead. We should detect blockages very quickly and
 # the queries we run are also very fast.
-export PGISOLATIONTIMEOUT = 5
+export PGISOLATIONTIMEOUT = 20
 
 ##
 ## Citus regression support
@@ -41,9 +41,11 @@ output_files := $(patsubst $(citus_abs_srcdir)/output/%.source,expected/%.out, $
 
 # have make check actually run all tests, but keep check-full as an
 # intermediate, for muscle memory backward compatibility.
-check: check-full
+check: check-full check-enterprise-full
 # check-full triggers all tests that ought to be run routinely
 check-full: check-multi check-multi-mx check-multi-1 check-worker check-operations check-follower-cluster check-isolation check-failure
+# check-enterprise-full triggers all enterprise specific tests
+check-enterprise-full: check-enterprise check-enterprise-isolation check-enterprise-failure
 
 
 ISOLATION_DEPDIR=.deps/isolation
@@ -136,6 +138,9 @@ check-multi: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
+check-enterprise: all
+	$(pg_regress_multi_check) --load-extension=citus \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/enterprise_schedule $(EXTRA_TESTS)
 check-multi-1: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_1_schedule $(EXTRA_TESTS)
@@ -166,6 +171,24 @@ check-columnar-vg: all
 check-isolation: all  $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/isolation_schedule $(EXTRA_TESTS)
+
+check-enterprise-isolation: all $(isolation_test_files)
+	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
+	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/enterprise_isolation_schedule $(EXTRA_TESTS)
+
+# we have separate targets for logical replication tests because they take very long to complete
+# hence this increases parallelism a lot without sacrifing any coverage.
+check-enterprise-isolation-logicalrep-1: all $(isolation_test_files)
+	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
+	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/enterprise_isolation_logicalrep_1_schedule $(EXTRA_TESTS)
+
+check-enterprise-isolation-logicalrep-2: all $(isolation_test_files)
+	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
+	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/enterprise_isolation_logicalrep_2_schedule $(EXTRA_TESTS)
+
+check-enterprise-isolation-logicalrep-3: all $(isolation_test_files)
+	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
+	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/enterprise_isolation_logicalrep_3_schedule $(EXTRA_TESTS)
 
 check-isolation-base: all  $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
@@ -206,6 +229,10 @@ check-failure: all
 check-failure-base: all
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_base_schedule $(EXTRA_TESTS)
+
+check-enterprise-failure: all
+	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/enterprise_failure_schedule $(EXTRA_TESTS)
 
 check-pg-upgrade:
 	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir)

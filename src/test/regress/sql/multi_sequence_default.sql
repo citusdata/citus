@@ -277,8 +277,6 @@ CREATE ROLE seq_role_0;
 CREATE ROLE seq_role_1;
 ALTER SEQUENCE seq_10 OWNER TO seq_role_0;
 SELECT sequencename, sequenceowner FROM pg_sequences WHERE sequencename = 'seq_10' ORDER BY 1, 2;
-SELECT run_command_on_workers('CREATE ROLE seq_role_0');
-SELECT run_command_on_workers('CREATE ROLE seq_role_1');
 ALTER TABLE seq_test_9 ALTER COLUMN y SET DEFAULT nextval('seq_10');
 ALTER SEQUENCE seq_10 OWNER TO seq_role_1;
 SELECT sequencename, sequenceowner FROM pg_sequences WHERE sequencename = 'seq_10' ORDER BY 1, 2;
@@ -299,7 +297,6 @@ SET search_path = sequence_default, public;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 DROP SEQUENCE seq_10 CASCADE;
 DROP ROLE seq_role_0, seq_role_1;
-SELECT run_command_on_workers('DROP ROLE IF EXISTS seq_role_0, seq_role_1');
 
 
 -- Check some cases when default is defined by

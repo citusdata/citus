@@ -24,6 +24,7 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "nodes/makefuncs.h"
 #include "distributed/worker_create_or_replace.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
@@ -32,6 +33,7 @@
 /* Local functions forward declarations for helper functions */
 static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
 static Oid SequenceUsedInDistributedTable(const ObjectAddress *sequenceAddress);
+static List * FilterDistributedSequences(GrantStmt *stmt);
 
 
 /*
@@ -661,6 +663,97 @@ PostprocessAlterSequenceOwnerStmt(Node *node, const char *queryString)
 
 
 /*
+ * PreprocessGrantOnSequenceStmt is executed before the statement is applied to the local
+ * postgres instance.
+ *
+ * In this stage we can prepare the commands that need to be run on all workers to grant
+ * on distributed sequences.
+ */
+List *
+PreprocessGrantOnSequenceStmt(Node *node, const char *queryString,
+							  ProcessUtilityContext processUtilityContext)
+{
+	GrantStmt *stmt = castNode(GrantStmt, node);
+	Assert(stmt->objtype == OBJECT_SEQUENCE);
+
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, sequences cascading
+		 * from an extension should therefore not be propagated here.
+		 */
+		return NIL;
+	}
+
+	if (!EnableMetadataSync)
+	{
+		/*
+		 * we are configured to disable object propagation, should not propagate anything
+		 */
+		return NIL;
+	}
+
+	List *distributedSequences = FilterDistributedSequences(stmt);
+
+	if (list_length(distributedSequences) == 0)
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	GrantStmt *stmtCopy = copyObject(stmt);
+	stmtCopy->objects = distributedSequences;
+
+	/*
+	 * if the original command was targeting schemas, we have expanded to the distributed
+	 * sequences in these schemas through FilterDistributedSequences.
+	 */
+	stmtCopy->targtype = ACL_TARGET_OBJECT;
+
+	QualifyTreeNode((Node *) stmtCopy);
+
+	char *sql = DeparseTreeNode((Node *) stmtCopy);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION, (void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
+}
+
+
+/*
+ * PostprocessGrantOnSequenceStmt makes sure dependencies of each
+ * distributed sequence in the statement exist on all nodes
+ */
+List *
+PostprocessGrantOnSequenceStmt(Node *node, const char *queryString)
+{
+	GrantStmt *stmt = castNode(GrantStmt, node);
+	Assert(stmt->objtype == OBJECT_SEQUENCE);
+
+	List *distributedSequences = FilterDistributedSequences(stmt);
+
+	if (list_length(distributedSequences) == 0)
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	RangeVar *sequence = NULL;
+	foreach_ptr(sequence, distributedSequences)
+	{
+		ObjectAddress sequenceAddress = { 0 };
+		Oid sequenceOid = RangeVarGetRelid(sequence, NoLock, false);
+		ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+		EnsureDependenciesExistOnAllNodes(&sequenceAddress);
+	}
+	return NIL;
+}
+
+
+/*
  * GenerateBackupNameForSequenceCollision generates a new sequence name for an existing
  * sequence. The name is generated in such a way that the new name doesn't overlap with
  * an existing relation by adding a suffix with incrementing number after the new name.
@@ -699,6 +792,96 @@ GenerateBackupNameForSequenceCollision(const ObjectAddress *address)
 
 		count++;
 	}
+}
+
+
+/*
+ * FilterDistributedSequences determines and returns a list of distributed sequences
+ * RangeVar-s from given grant statement.
+ * - If the stmt's targtype is ACL_TARGET_OBJECT, i.e. of the form GRANT ON SEQUENCE ...
+ *   it returns the distributed sequences in the list of sequences in the statement
+ * - If targtype is ACL_TARGET_ALL_IN_SCHEMA, i.e. GRANT ON ALL SEQUENCES IN SCHEMA ...
+ *   it expands the ALL IN SCHEMA to the actual sequences, and returns the distributed
+ *   sequences from those.
+ */
+static List *
+FilterDistributedSequences(GrantStmt *stmt)
+{
+	bool grantOnSequenceCommand = (stmt->targtype == ACL_TARGET_OBJECT &&
+								   stmt->objtype == OBJECT_SEQUENCE);
+	bool grantOnAllSequencesInSchemaCommand = (stmt->targtype ==
+											   ACL_TARGET_ALL_IN_SCHEMA &&
+											   stmt->objtype == OBJECT_SEQUENCE);
+
+	/* we are only interested in sequence level grants */
+	if (!grantOnSequenceCommand && !grantOnAllSequencesInSchemaCommand)
+	{
+		return NIL;
+	}
+
+	List *grantSequenceList = NIL;
+
+	if (grantOnAllSequencesInSchemaCommand)
+	{
+		/* iterate over all namespace names provided to get their oid's */
+		List *namespaceOidList = NIL;
+		Value *namespaceValue = NULL;
+		foreach_ptr(namespaceValue, stmt->objects)
+		{
+			char *nspname = strVal(namespaceValue);
+			bool missing_ok = false;
+			Oid namespaceOid = get_namespace_oid(nspname, missing_ok);
+			namespaceOidList = list_append_unique_oid(namespaceOidList, namespaceOid);
+		}
+
+		/*
+		 * iterate over all distributed sequences to filter the ones
+		 * that belong to one of the namespaces from above
+		 */
+		List *distributedSequenceList = DistributedSequenceList();
+		ObjectAddress *sequenceAddress = NULL;
+		foreach_ptr(sequenceAddress, distributedSequenceList)
+		{
+			Oid namespaceOid = get_rel_namespace(sequenceAddress->objectId);
+
+			/*
+			 * if this distributed sequence's schema is one of the schemas
+			 * specified in the GRANT .. ALL SEQUENCES IN SCHEMA ..
+			 * add it to the list
+			 */
+			if (list_member_oid(namespaceOidList, namespaceOid))
+			{
+				RangeVar *distributedSequence = makeRangeVar(get_namespace_name(
+																 namespaceOid),
+															 get_rel_name(
+																 sequenceAddress->objectId),
+															 -1);
+				grantSequenceList = lappend(grantSequenceList, distributedSequence);
+			}
+		}
+	}
+	else
+	{
+		bool missing_ok = false;
+		RangeVar *sequenceRangeVar = NULL;
+		foreach_ptr(sequenceRangeVar, stmt->objects)
+		{
+			ObjectAddress sequenceAddress = { 0 };
+			Oid sequenceOid = RangeVarGetRelid(sequenceRangeVar, NoLock, missing_ok);
+			ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+
+			/*
+			 * if this sequence from GRANT .. ON SEQUENCE .. is a distributed
+			 * sequence, add it to the list
+			 */
+			if (IsObjectDistributed(&sequenceAddress))
+			{
+				grantSequenceList = lappend(grantSequenceList, sequenceRangeVar);
+			}
+		}
+	}
+
+	return grantSequenceList;
 }
 
 

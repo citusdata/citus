@@ -1190,6 +1190,7 @@ SET citus.enable_ddl_propagation TO off;
 CREATE USER router_user;
 GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
 \c - - - :worker_1_port
+SET citus.enable_ddl_propagation TO off;
 CREATE USER router_user;
 GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
 \c - router_user - :master_port

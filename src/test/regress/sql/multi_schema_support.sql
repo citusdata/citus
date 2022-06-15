@@ -827,7 +827,7 @@ DROP SCHEMA "cItuS.T E E N'sSchema", "citus-teen's scnd schm." CASCADE;
 
 
 -- test schema propagation with user other than current user
-SELECT run_command_on_coordinator_and_workers('CREATE USER "test-user"');
+CREATE USER "test-user";
 SELECT run_command_on_coordinator_and_workers('GRANT ALL ON DATABASE postgres to "test-user"');
 
 CREATE SCHEMA schema_with_user AUTHORIZATION "test-user";
@@ -845,7 +845,7 @@ SET citus.next_shard_id TO 1197000;
 -- we do not use run_command_on_coordinator_and_workers here because when there is CASCADE, it causes deadlock
 DROP OWNED BY "test-user" CASCADE;
 SELECT run_command_on_workers('DROP OWNED BY "test-user" CASCADE');
-SELECT run_command_on_coordinator_and_workers('DROP USER "test-user"');
+DROP USER "test-user";
 
 DROP FUNCTION run_command_on_coordinator_and_workers(p_sql text);
 

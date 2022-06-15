@@ -1,7 +1,6 @@
 SET citus.next_shard_id TO 20010000;
 
 CREATE USER typeuser;
-SELECT run_command_on_workers($$CREATE USER typeuser;$$);
 
 CREATE SCHEMA type_tests AUTHORIZATION typeuser;
 CREATE SCHEMA type_tests2 AUTHORIZATION typeuser; -- to test creation in a specific schema and moving to schema
@@ -356,4 +355,3 @@ SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
 DROP SCHEMA type_tests2 CASCADE;
 DROP USER typeuser;
-SELECT run_command_on_workers($$DROP USER typeuser;$$);
