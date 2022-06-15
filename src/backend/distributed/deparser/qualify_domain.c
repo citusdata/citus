@@ -205,10 +205,13 @@ QualifyTypeName(TypeName *typeName, bool missing_ok)
 		if (!schemaName)
 		{
 			Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-			Oid namespaceOid = TypeOidGetNamespaceOid(typeOid);
-			schemaName = get_namespace_name(namespaceOid);
+			if (OidIsValid(typeOid))
+			{
+				Oid namespaceOid = TypeOidGetNamespaceOid(typeOid);
+				schemaName = get_namespace_name(namespaceOid);
 
-			typeName->names = list_make2(makeString(schemaName), makeString(name));
+				typeName->names = list_make2(makeString(schemaName), makeString(name));
+			}
 		}
 	}
 }
