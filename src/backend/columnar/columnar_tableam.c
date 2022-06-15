@@ -2376,6 +2376,8 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 				DefElem *newVersionValue = GetExtensionOption(
 					createExtensionStmt->options,
 					"new_version");
+
+				/*we are not allowed to install citus_columnar as version 11.1-0 by cx*/
 				if (newVersionValue)
 				{
 					const char *newVersion = defGetString(newVersionValue);
@@ -2405,6 +2407,8 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 		{
 			DefElem *newVersionValue = GetExtensionOption(alterExtensionStmt->options,
 														  "new_version");
+
+			/*we are not allowed cx to downgrade citus_columnar to 11.1-0*/
 			if (newVersionValue)
 			{
 				const char *newVersion = defGetString(newVersionValue);
