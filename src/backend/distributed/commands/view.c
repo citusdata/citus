@@ -439,7 +439,8 @@ AlterViewOwnerCommand(Oid viewOid)
 bool
 IsViewDistributed(Oid viewOid)
 {
-	Assert(get_rel_relkind(viewOid) == RELKIND_VIEW);
+	Assert(get_rel_relkind(viewOid) == RELKIND_VIEW ||
+		   get_rel_relkind(viewOid) == RELKIND_MATVIEW);
 
 	ObjectAddress viewAddress = { 0 };
 	ObjectAddressSet(viewAddress, RelationRelationId, viewOid);

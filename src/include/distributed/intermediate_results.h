@@ -79,7 +79,7 @@ extern void WriteToLocalFile(StringInfo copyData, FileCompat *fileCompat);
 extern uint64 RemoteFileDestReceiverBytesSent(DestReceiver *destReceiver);
 extern void SendQueryResultViaCopy(const char *resultId);
 extern void ReceiveQueryResultViaCopy(const char *resultId);
-extern void RemoveIntermediateResultsDirectory(void);
+extern void RemoveIntermediateResultsDirectories(void);
 extern int64 IntermediateResultSize(const char *resultId);
 extern char * QueryResultFileName(const char *resultId);
 extern char * CreateIntermediateResultsDirectory(void);

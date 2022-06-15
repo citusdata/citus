@@ -50,6 +50,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata_utility.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/multi_executor.h"
@@ -97,6 +98,7 @@ static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 static void CreateShellTableOnWorkers(Oid relationId);
 static void CreateTableMetadataOnWorkers(Oid relationId);
+static void CreateDependingViewsOnWorkers(Oid relationId);
 static NodeMetadataSyncResult SyncNodeMetadataToNodesOptional(void);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 											bool citusTableWithNoDistKey);
@@ -302,7 +304,8 @@ SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort)
  * SyncCitusTableMetadata syncs citus table metadata to worker nodes with metadata.
  * Our definition of metadata includes the shell table and its inter relations with
  * other shell tables, corresponding pg_dist_object, pg_dist_partiton, pg_dist_shard
- * and pg_dist_shard placement entries.
+ * and pg_dist_shard placement entries. This function also propagates the views that
+ * depend on the given relation, to the metadata workers.
  */
 void
 SyncCitusTableMetadata(Oid relationId)
@@ -317,6 +320,51 @@ SyncCitusTableMetadata(Oid relationId)
 		ObjectAddressSet(relationAddress, RelationRelationId, relationId);
 		MarkObjectDistributed(&relationAddress);
 	}
+
+	CreateDependingViewsOnWorkers(relationId);
+}
+
+
+/*
+ * CreateDependingViewsOnWorkers takes a relationId and creates the views that depend on
+ * that relation on workers with metadata. Propagated views are marked as distributed.
+ */
+static void
+CreateDependingViewsOnWorkers(Oid relationId)
+{
+	List *views = GetDependingViews(relationId);
+
+	if (list_length(views) < 1)
+	{
+		/* no view to propagate */
+		return;
+	}
+
+	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
+	Oid viewOid = InvalidOid;
+	foreach_oid(viewOid, views)
+	{
+		if (!ShouldMarkRelationDistributed(viewOid))
+		{
+			continue;
+		}
+
+		ObjectAddress viewAddress = { 0 };
+		ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
+
+		EnsureDependenciesExistOnAllNodes(&viewAddress);
+
+		char *createViewCommand = CreateViewDDLCommand(viewOid);
+		char *alterViewOwnerCommand = AlterViewOwnerCommand(viewOid);
+
+		SendCommandToWorkersWithMetadata(createViewCommand);
+		SendCommandToWorkersWithMetadata(alterViewOwnerCommand);
+
+		MarkObjectDistributed(&viewAddress);
+	}
+
+	SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
 }
 
 

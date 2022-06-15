@@ -569,9 +569,111 @@ WARNING:  Query could not find the intermediate result file "squares_2", it was 
 ---------------------------------------------------------------------
 (0 rows)
 
+-- test refreshing mat views
+SET client_min_messages TO ERROR;
+SELECT run_command_on_workers($$CREATE USER some_other_user;$$);
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
+CREATE USER some_other_user;
+SELECT run_command_on_workers($$GRANT ALL ON DATABASE regression TO some_other_user;$$);
+  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,GRANT)
+ (localhost,57638,t,GRANT)
+(2 rows)
+
+GRANT ALL ON DATABASE regression TO some_other_user;
+RESET client_min_messages;
+\c - some_other_user
+CREATE SCHEMA other_schema;
+SET search_path TO other_schema;
+CREATE TABLE dist_table (a int, b int);
+INSERT INTO dist_table(a, b) SELECT n, n+1 FROM generate_series(1, 10) n;
+SELECT create_distributed_table('dist_table', 'a');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$other_schema.dist_table$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE MATERIALIZED VIEW mat_view AS
+SELECT *
+FROM (
+  SELECT * FROM dist_table
+  LIMIT 50000
+) q;
+CREATE MATERIALIZED VIEW mat_view_2 AS
+  SELECT count(*) FROM (SELECT * FROM dist_table LIMIT 50000) q, (SELECT * FROM dist_table LIMIT 100) r WHERE q.a > r.a;
+REFRESH MATERIALIZED VIEW other_schema.mat_view;
+REFRESH MATERIALIZED VIEW other_schema.mat_view_2;
+-- Now connect back as a different user and run REFRESH MATERIALIZED VIEW command,
+-- which in turn executes a repartition join query.
+\c - postgres
+REFRESH MATERIALIZED VIEW other_schema.mat_view;
+REFRESH MATERIALIZED VIEW other_schema.mat_view_2;
+\c - some_other_user
+-- test security definer funcs
+CREATE FUNCTION security_definer_in_files()
+RETURNS BOOLEAN AS $$
+DECLARE passed BOOLEAN;
+BEGIN
+        SELECT  count(*) > 0 INTO passed
+        FROM   	(SELECT * FROM other_schema.dist_table ORDER BY a LIMIT 1) as foo,
+        		(SELECT * FROM other_schema.dist_table ORDER BY a LIMIT 1) as bar
+        		WHERE foo.a > bar.a;
+
+        RETURN passed;
+END;
+$$  LANGUAGE plpgsql
+    SECURITY DEFINER;
+SELECT security_definer_in_files();
+ security_definer_in_files
+---------------------------------------------------------------------
+ f
+(1 row)
+
+\c - postgres
+SELECT security_definer_in_files();
+ security_definer_in_files
+---------------------------------------------------------------------
+ f
+(1 row)
+
+CREATE FUNCTION security_definer_in_files_2()
+RETURNS BOOLEAN AS $$
+DECLARE passed BOOLEAN;
+BEGIN
+        SELECT  count(*) > 0 INTO passed
+        FROM   	(SELECT * FROM other_schema.dist_table ORDER BY a LIMIT 1) as foo,
+        		(SELECT * FROM other_schema.dist_table ORDER BY a LIMIT 1) as bar
+        		WHERE foo.a > bar.a;
+
+        RETURN passed;
+END;
+$$  LANGUAGE plpgsql
+    SECURITY DEFINER;
+BEGIN;
+  SELECT * FROM security_definer_in_files_2(), security_definer_in_files();
+ security_definer_in_files_2 | security_definer_in_files
+---------------------------------------------------------------------
+ f                           | f
+(1 row)
+
+  SELECT * FROM security_definer_in_files_2(), security_definer_in_files();
+ security_definer_in_files_2 | security_definer_in_files
+---------------------------------------------------------------------
+ f                           | f
+(1 row)
+
+COMMIT;
+-- cleanup
+SET client_min_messages TO ERROR;
+DROP SCHEMA other_schema CASCADE;
 DROP SCHEMA intermediate_results CASCADE;
-NOTICE:  drop cascades to 4 other objects
-DETAIL:  drop cascades to table interesting_squares
-drop cascades to type square_type
-drop cascades to table stored_squares
-drop cascades to table squares

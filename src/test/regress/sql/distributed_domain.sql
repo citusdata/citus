@@ -483,5 +483,7 @@ SELECT * FROM run_command_on_workers($$ SELECT 1::distributed_domain.domain1; $$
 SELECT * FROM run_command_on_workers($$ SELECT '1'::distributed_domain.domain2; $$) ORDER BY 1,2;
 SELECT * FROM run_command_on_workers($$ SELECT '1'::distributed_domain.domain3; $$) ORDER BY 1,2;
 
+DROP DOMAIN IF EXISTS domain_does_not_exist;
+
 SET client_min_messages TO warning;
 DROP SCHEMA distributed_domain, distributed_domain_moved CASCADE;

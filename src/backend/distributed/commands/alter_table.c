@@ -32,6 +32,8 @@
 #include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/pg_am.h"
+#include "catalog/pg_depend.h"
+#include "catalog/pg_rewrite_d.h"
 #include "columnar/columnar.h"
 #include "columnar/columnar_tableam.h"
 #include "commands/defrem.h"
@@ -194,7 +196,6 @@ static void EnsureTableNotPartition(Oid relationId);
 static TableConversionState * CreateTableConversion(TableConversionParameters *params);
 static void CreateDistributedTableLike(TableConversionState *con);
 static void CreateCitusTableLike(TableConversionState *con);
-static List * GetViewCreationCommandsOfTable(Oid relationId);
 static void ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 						 bool suppressNoticeMessages);
 static bool HasAnyGeneratedStoredColumns(Oid relationId);
@@ -211,6 +212,8 @@ static char * GetAccessMethodForMatViewIfExists(Oid viewOid);
 static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
 												   CascadeToColocatedOption cascadeOption);
 static void WarningsForDroppingForeignKeysWithDistributedTables(Oid relationId);
+static void ErrorIfUnsupportedCascadeObjects(Oid relationId);
+static bool DoesCascadeDropUnsupportedObject(Oid classId, Oid id, HTAB *nodeMap);
 
 PG_FUNCTION_INFO_V1(undistribute_table);
 PG_FUNCTION_INFO_V1(alter_distributed_table);
@@ -390,6 +393,8 @@ UndistributeTable(TableConversionParameters *params)
 		ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(partitionList);
 	}
 
+	ErrorIfUnsupportedCascadeObjects(params->relationId);
+
 	params->conversionType = UNDISTRIBUTE_TABLE;
 	params->shardCountIsNull = true;
 	TableConversionState *con = CreateTableConversion(params);
@@ -420,6 +425,8 @@ AlterDistributedTable(TableConversionParameters *params)
 	EnsureTableNotForeign(params->relationId);
 	EnsureTableNotPartition(params->relationId);
 	EnsureHashDistributedTable(params->relationId);
+
+	ErrorIfUnsupportedCascadeObjects(params->relationId);
 
 	params->conversionType = ALTER_DISTRIBUTED_TABLE;
 	TableConversionState *con = CreateTableConversion(params);
@@ -476,6 +483,8 @@ AlterTableSetAccessMethod(TableConversionParameters *params)
 			SetLocalMultiShardModifyModeToSequential();
 		}
 	}
+
+	ErrorIfUnsupportedCascadeObjects(params->relationId);
 
 	params->conversionType = ALTER_TABLE_SET_ACCESS_METHOD;
 	params->shardCountIsNull = true;
@@ -574,8 +583,9 @@ ConvertTable(TableConversionState *con)
 	List *justBeforeDropCommands = NIL;
 	List *attachPartitionCommands = NIL;
 
-	postLoadCommands = list_concat(postLoadCommands,
-								   GetViewCreationCommandsOfTable(con->relationId));
+	postLoadCommands =
+		list_concat(postLoadCommands,
+					GetViewCreationTableDDLCommandsOfTable(con->relationId));
 
 	List *foreignKeyCommands = NIL;
 	if (con->conversionType == ALTER_DISTRIBUTED_TABLE)
@@ -1251,6 +1261,94 @@ CreateCitusTableLike(TableConversionState *con)
 
 
 /*
+ * ErrorIfUnsupportedCascadeObjects gets oid of a relation, finds the objects
+ * that dropping this relation cascades into and errors if there are any extensions
+ * that would be dropped.
+ */
+static void
+ErrorIfUnsupportedCascadeObjects(Oid relationId)
+{
+	HASHCTL info;
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(Oid);
+	info.entrysize = sizeof(Oid);
+	info.hash = oid_hash;
+	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION);
+	HTAB *nodeMap = hash_create("object dependency map (oid)", 64, &info, hashFlags);
+
+	bool unsupportedObjectInDepGraph =
+		DoesCascadeDropUnsupportedObject(RelationRelationId, relationId, nodeMap);
+
+	if (unsupportedObjectInDepGraph)
+	{
+		ereport(ERROR, (errmsg("cannot alter table because an extension depends on it")));
+	}
+}
+
+
+/*
+ * DoesCascadeDropUnsupportedObject walks through the objects that depend on the
+ * object with object id and returns true if it finds any unsupported objects.
+ *
+ * This function only checks extensions as unsupported objects.
+ *
+ * Extension dependency is different than the rest. If an object depends on an extension
+ * dropping the object would drop the extension too.
+ * So we check with IsObjectAddressOwnedByExtension function.
+ */
+static bool
+DoesCascadeDropUnsupportedObject(Oid classId, Oid objectId, HTAB *nodeMap)
+{
+	bool found = false;
+	hash_search(nodeMap, &objectId, HASH_ENTER, &found);
+
+	if (found)
+	{
+		return false;
+	}
+
+	ObjectAddress objectAddress = { 0 };
+	ObjectAddressSet(objectAddress, classId, objectId);
+
+	if (IsObjectAddressOwnedByExtension(&objectAddress, NULL))
+	{
+		return true;
+	}
+
+	Oid targetObjectClassId = classId;
+	Oid targetObjectId = objectId;
+	List *dependencyTupleList = GetPgDependTuplesForDependingObjects(targetObjectClassId,
+																	 targetObjectId);
+
+	HeapTuple depTup = NULL;
+	foreach_ptr(depTup, dependencyTupleList)
+	{
+		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
+
+		Oid dependingOid = InvalidOid;
+		Oid dependingClassId = InvalidOid;
+
+		if (pg_depend->classid == RewriteRelationId)
+		{
+			dependingOid = GetDependingView(pg_depend);
+			dependingClassId = RelationRelationId;
+		}
+		else
+		{
+			dependingOid = pg_depend->objid;
+			dependingClassId = pg_depend->classid;
+		}
+
+		if (DoesCascadeDropUnsupportedObject(dependingClassId, dependingOid, nodeMap))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+
+/*
  * GetViewCreationCommandsOfTable takes a table oid generates the CREATE VIEW
  * commands for views that depend to the given table. This includes the views
  * that recursively depend on the table too.
@@ -1281,10 +1379,30 @@ GetViewCreationCommandsOfTable(Oid relationId)
 		char *alterViewCommmand = AlterViewOwnerCommand(viewOid);
 		appendStringInfoString(query, alterViewCommmand);
 
-		commands = lappend(commands, makeTableDDLCommandString(query->data));
+		commands = lappend(commands, query->data);
 	}
 
 	return commands;
+}
+
+
+/*
+ * GetViewCreationTableDDLCommandsOfTable is the same as GetViewCreationCommandsOfTable,
+ * but the returned list includes objects of TableDDLCommand's, not strings.
+ */
+List *
+GetViewCreationTableDDLCommandsOfTable(Oid relationId)
+{
+	List *commands = GetViewCreationCommandsOfTable(relationId);
+	List *tableDDLCommands = NIL;
+
+	char *command = NULL;
+	foreach_ptr(command, commands)
+	{
+		tableDDLCommands = lappend(tableDDLCommands, makeTableDDLCommandString(command));
+	}
+
+	return tableDDLCommands;
 }
 
 

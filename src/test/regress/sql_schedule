@@ -7,6 +7,7 @@ test: dropped_columns_1 distributed_planning
 test: local_dist_join nested_execution
 test: connectivity_checks citus_run_command
 test: schemas
+test: views
 test: sequences
 test: functions
 test: arbitrary_configs_truncate

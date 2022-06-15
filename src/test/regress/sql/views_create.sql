@@ -41,3 +41,24 @@ SELECT * FROM select_filtered_matview;
 
 SELECT COUNT(*) FROM select_all_view a JOIN select_filtered_matview b ON a.c=b.c;
 SELECT COUNT(*) FROM select_all_view a JOIN view_test_table b ON a.c=b.c;
+
+CREATE TABLE distributed (id bigserial PRIMARY KEY,
+                    	  name text,
+                    	  created_at timestamptz DEFAULT now());
+CREATE TABLE reference (id bigserial PRIMARY KEY,
+                    	title text);
+CREATE TABLE local (id bigserial PRIMARY KEY,
+                    title text);
+SET client_min_messages TO ERROR;
+CREATE VIEW "local regular view" AS SELECT * FROM local;
+CREATE VIEW dist_regular_view AS SELECT * FROM distributed;
+
+CREATE VIEW local_regular_view2 as SELECT count(*) FROM distributed JOIN "local regular view" USING (id);
+CREATE VIEW local_regular_view3 as SELECT count(*) FROM local JOIN dist_regular_view USING (id);
+CREATE VIEW "local regular view4" as SELECT count(*) as "my cny" FROM dist_regular_view JOIN "local regular view" USING (id);
+RESET client_min_messages;
+
+-- these above restrictions brought us to the following schema
+SELECT create_reference_table('reference');
+SELECT create_distributed_table('distributed', 'id');
+SELECT create_reference_table('local');
