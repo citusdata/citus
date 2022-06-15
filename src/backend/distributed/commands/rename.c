@@ -99,6 +99,18 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 		case OBJECT_TABCONSTRAINT:
 		case OBJECT_POLICY:
 		{
+			if (relKind == RELKIND_INDEX ||
+				relKind == RELKIND_PARTITIONED_INDEX)
+			{
+				/*
+				 * Although weird, postgres allows ALTER TABLE .. RENAME command
+				 * on indexes. We don't want to break non-distributed tables,
+				 * so allow.
+				 */
+				tableRelationId = IndexGetRelation(objectRelationId, false);
+				break;
+			}
+
 			/* the target object is our tableRelationId. */
 			tableRelationId = objectRelationId;
 			break;
@@ -106,6 +118,18 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 
 		case OBJECT_INDEX:
 		{
+			if (relKind == RELKIND_RELATION ||
+				relKind == RELKIND_PARTITIONED_TABLE)
+			{
+				/*
+				 * Although weird, postgres allows ALTER INDEX .. RENAME command
+				 * on tables. We don't want to break non-distributed tables,
+				 * so allow.
+				 */
+				tableRelationId = objectRelationId;
+				break;
+			}
+
 			/*
 			 * here, objRelationId points to the index relation entry, and we
 			 * are interested into the entry of the table on which the index is
