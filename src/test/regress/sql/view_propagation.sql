@@ -442,6 +442,26 @@ SELECT create_distributed_table('employees','employee_id');
 SELECT run_command_on_workers($$SELECT count(*) FROM v_test_1$$);
 SELECT run_command_on_workers($$SELECT count(*) FROM v_test_2$$);
 
+-- create and drop temporary view
+CREATE TEMPORARY VIEW temp_view_to_drop AS SELECT 1;
+DROP VIEW temp_view_to_drop;
+
+-- drop non-existent view
+DROP VIEW IF EXISTS drop_the_nonexistent_view;
+DROP VIEW IF EXISTS non_exist_view_schema.view_to_drop;
+
+-- Check materialized view just for sanity
+CREATE MATERIALIZED VIEW materialized_view_to_test AS SELECT 1;
+DROP VIEW materialized_view_to_test;
+DROP MATERIALIZED VIEW materialized_view_to_test;
+
+CREATE SCHEMA axx;
+create materialized view axx.temp_view_to_drop AS SELECT 1;
+DROP VIEW axx.temp_view_to_drop;
+DROP VIEW IF EXISTS axx.temp_view_to_drop;
+DROP MATERIALIZED VIEW IF EXISTS axx.temp_view_to_drop;
+DROP MATERIALIZED VIEW IF EXISTS axx.temp_view_to_drop;
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA view_prop_schema_inner CASCADE;
-DROP SCHEMA view_prop_schema CASCADE;
+DROP SCHEMA view_prop_schema, axx CASCADE;
