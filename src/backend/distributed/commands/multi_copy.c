@@ -253,7 +253,6 @@ static StringInfo ConstructCopyStatement(CopyStmt *copyStatement, int64 shardId)
 static void SendCopyDataToAll(StringInfo dataBuffer, int64 shardId, List *connectionList);
 static void SendCopyDataToPlacement(StringInfo dataBuffer, int64 shardId,
 									MultiConnection *connection);
-static void ReportCopyError(MultiConnection *connection, PGresult *result);
 static uint32 AvailableColumnCount(TupleDesc tupleDescriptor);
 
 static Oid TypeForColumnName(Oid relationId, TupleDesc tupleDescriptor, char *columnName);
@@ -1049,7 +1048,7 @@ EndRemoteCopy(int64 shardId, List *connectionList)
  * ReportCopyError tries to report a useful error message for the user from
  * the remote COPY error messages.
  */
-static void
+void
 ReportCopyError(MultiConnection *connection, PGresult *result)
 {
 	char *remoteMessage = PQresultErrorField(result, PG_DIAG_MESSAGE_PRIMARY);

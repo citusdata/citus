@@ -179,6 +179,7 @@ extern void CheckCopyPermissions(CopyStmt *copyStatement);
 extern bool IsCopyResultStmt(CopyStmt *copyStatement);
 extern void ConversionPathForTypes(Oid inputType, Oid destType, CopyCoercionData *result);
 extern Datum CoerceColumnValue(Datum inputValue, CopyCoercionData *coercionPath);
+extern void ReportCopyError(MultiConnection *connection, PGresult *result);
 
 
 #endif /* MULTI_COPY_H */

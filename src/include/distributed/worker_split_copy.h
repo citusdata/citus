@@ -12,12 +12,6 @@
 #ifndef WORKER_SPLIT_COPY_H_
 #define WORKER_SPLIT_COPY_H_
 
-typedef struct FullRelationName
-{
-	char *schemaName;
-	char *relationName;
-} FullRelationName;
-
 typedef struct SplitCopyInfo
 {
 	FullRelationName *destinationShard;		/* destination shard name */

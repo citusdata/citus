@@ -14,8 +14,11 @@
 #include "postgres.h"
 #include "catalog/namespace.h"
 #include "utils/lsyscache.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/relation_utils.h"
 #include "distributed/worker_split_copy.h"
+#include "distributed/worker_shard_copy.h"
 
 typedef struct SplitCopyDestReceiver
 {
@@ -48,28 +51,41 @@ static void SplitCopyDestReceiverDestroy(DestReceiver *copyDest);
 
 DestReceiver * CreateSplitCopyDestReceiver(FullRelationName *sourceShard, List* splitCopyInfoList)
 {
-	SplitCopyDestReceiver *resultDest =
+	SplitCopyDestReceiver *splitCopyDest =
 		palloc0(sizeof(SplitCopyDestReceiver));
 
 	/* set up the DestReceiver function pointers */
-	resultDest->pub.receiveSlot = SplitCopyDestReceiverReceive;
-	resultDest->pub.rStartup = SplitCopyDestReceiverStartup;
-	resultDest->pub.rShutdown = SplitCopyDestReceiverShutdown;
-	resultDest->pub.rDestroy = SplitCopyDestReceiverDestroy;
+	splitCopyDest->pub.receiveSlot = SplitCopyDestReceiverReceive;
+	splitCopyDest->pub.rStartup = SplitCopyDestReceiverStartup;
+	splitCopyDest->pub.rShutdown = SplitCopyDestReceiverShutdown;
+	splitCopyDest->pub.rDestroy = SplitCopyDestReceiverDestroy;
 
 	Oid sourceSchemaOid = get_namespace_oid(sourceShard->schemaName, false /* missing_ok */);
 	Oid sourceShardOid = get_relname_relid(sourceShard->relationName, sourceSchemaOid);
-	resultDest->sourceShardOid = sourceShardOid;
+	splitCopyDest->sourceShardOid = sourceShardOid;
 
-	// TODO(niupre): Create internal destination receivers for each shard.
-	for (int index = 0; index < splitCopyInfoList->length; index++)
+	splitCopyDest->splitFactor = splitCopyInfoList->length;
+
+	DestReceiver **shardCopyDests = palloc0(splitCopyDest->splitFactor * sizeof(DestReceiver *));
+	SplitCopyInfo **splitCopyInfos = palloc0(splitCopyDest->splitFactor * sizeof(SplitCopyInfo *));
+
+	SplitCopyInfo *splitCopyInfo = NULL;
+	int index = 0;
+	foreach_ptr(splitCopyInfo, splitCopyInfoList)
 	{
+		DestReceiver *shardCopyDest = CreateShardCopyDestReceiver(
+			splitCopyInfo->destinationShard,
+			splitCopyInfo->nodeId);
 
+		shardCopyDests[index] = shardCopyDest;
+		splitCopyInfos[index] = splitCopyInfo;
+		index++;
 	}
 
-	resultDest->splitFactor = splitCopyInfoList->length;
+	splitCopyDest->shardCopyDestReceiverArray = shardCopyDests;
+	splitCopyDest->splitCopyInfoArray = splitCopyInfos;
 
-	return (DestReceiver *) resultDest;
+	return (DestReceiver *) splitCopyDest;
 }
 
 static void SplitCopyDestReceiverStartup(DestReceiver *dest, int operation, TupleDesc inputTupleDescriptor)
@@ -146,5 +162,8 @@ static void SplitCopyDestReceiverDestroy(DestReceiver *dest)
 	{
 		DestReceiver *shardCopyDest = self->shardCopyDestReceiverArray[index];
 		shardCopyDest->rDestroy(shardCopyDest);
+
+		pfree(shardCopyDest);
+		pfree(self->splitCopyInfoArray[index]);
 	}
 }
