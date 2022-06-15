@@ -42,6 +42,12 @@ QualifyCreateStatisticsStmt(Node *node)
 		relation->schemaname = get_namespace_name(schemaOid);
 	}
 
+	if (list_length(stmt->defnames) < 1)
+	{
+		/* no name to qualify */
+		return;
+	}
+
 	RangeVar *stat = makeRangeVarFromNameList(stmt->defnames);
 
 	if (stat->schemaname == NULL)
