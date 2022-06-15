@@ -28,6 +28,7 @@
 #include "catalog/pg_extension.h"
 #include "catalog/storage.h"
 #include "catalog/storage_xlog.h"
+#include "commands/defrem.h"
 #include "commands/progress.h"
 #include "commands/vacuum.h"
 #include "commands/extension.h"
@@ -2363,6 +2364,63 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 				(errmsg("columnar storage parameters specified on non-columnar table")));
 	}
 
+	if (IsA(parsetree, CreateExtensionStmt))
+	{
+		CreateExtensionStmt *createExtensionStmt = castNode(CreateExtensionStmt,
+															parsetree);
+
+		if (get_extension_oid("citus_columnar", true) == InvalidOid)
+		{
+			if (strcmp(createExtensionStmt->extname, "citus_columnar") == 0)
+			{
+				DefElem *newVersionValue = GetExtensionOption(
+					createExtensionStmt->options,
+					"new_version");
+
+				/*we are not allowed to install citus_columnar as version 11.1-0 by cx*/
+				if (newVersionValue)
+				{
+					const char *newVersion = defGetString(newVersionValue);
+					if (strcmp(newVersion, "11.1-0") == 0)
+					{
+						ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+										errmsg(
+											"unsupported citus_columnar version 11.1-0")));
+					}
+				}
+
+				/*latest citus requires install columnar first, existing citus can only be an older version */
+				if (get_extension_oid("citus", true) != InvalidOid)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg(
+										"must upgrade citus to version 11.1-1 first")));
+				}
+			}
+		}
+	}
+
+	if (IsA(parsetree, AlterExtensionStmt))
+	{
+		AlterExtensionStmt *alterExtensionStmt = castNode(AlterExtensionStmt, parsetree);
+		if (strcmp(alterExtensionStmt->extname, "citus_columnar") == 0)
+		{
+			DefElem *newVersionValue = GetExtensionOption(alterExtensionStmt->options,
+														  "new_version");
+
+			/*we are not allowed cx to downgrade citus_columnar to 11.1-0*/
+			if (newVersionValue)
+			{
+				const char *newVersion = defGetString(newVersionValue);
+				if (strcmp(newVersion, "11.1-0") == 0)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("unsupported citus_columnar version 11.1-0")));
+				}
+			}
+		}
+	}
+
 	PrevProcessUtilityHook_compat(pstmt, queryString, false, context,
 								  params, queryEnv, dest, completionTag);
 
@@ -2983,4 +3041,24 @@ InstalledExtensionVersionColumnar(void)
 	table_close(relation, AccessShareLock);
 
 	return installedExtensionVersion;
+}
+
+
+/*
+ * GetExtensionOption returns DefElem * node with "defname" from "options" list
+ */
+DefElem *
+GetExtensionOption(List *extensionOptions, const char *defname)
+{
+	DefElem *defElement = NULL;
+	foreach_ptr(defElement, extensionOptions)
+	{
+		if (IsA(defElement, DefElem) &&
+			strncmp(defElement->defname, defname, NAMEDATALEN) == 0)
+		{
+			return defElement;
+		}
+	}
+
+	return NULL;
 }

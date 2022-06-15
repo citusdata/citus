@@ -46,4 +46,19 @@ CREATE FUNCTION pg_catalog.worker_repartition_cleanup(bigint)
  STRICT
 AS 'MODULE_PATHNAME', $function$worker_repartition_cleanup$function$;
 
-#include "../../../columnar/sql/downgrades/columnar--11.1-1--11.0-2.sql"
+-- add relations to citus
+ALTER EXTENSION citus ADD SCHEMA columnar;
+ALTER EXTENSION citus ADD SEQUENCE columnar.storageid_seq;
+ALTER EXTENSION citus ADD TABLE columnar.options;
+ALTER EXTENSION citus ADD TABLE columnar.stripe;
+ALTER EXTENSION citus ADD TABLE columnar.chunk_group;
+ALTER EXTENSION citus ADD TABLE columnar.chunk;
+
+ALTER EXTENSION citus ADD FUNCTION columnar.columnar_handler;
+ALTER EXTENSION citus ADD ACCESS METHOD columnar;
+ALTER EXTENSION citus ADD FUNCTION pg_catalog.alter_columnar_table_set;
+ALTER EXTENSION citus ADD FUNCTION pg_catalog.alter_columnar_table_reset;
+
+ALTER EXTENSION citus ADD FUNCTION citus_internal.upgrade_columnar_storage;
+ALTER EXTENSION citus ADD FUNCTION citus_internal.downgrade_columnar_storage;
+ALTER EXTENSION citus ADD FUNCTION citus_internal.columnar_ensure_am_depends_catalog;

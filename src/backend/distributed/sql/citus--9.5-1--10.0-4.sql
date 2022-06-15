@@ -6,7 +6,7 @@
 -- cat citus--9.5-1--10.0-1.sql citus--10.0-1--10.0-2.sql citus--10.0-2--10.0-3.sql > citus--9.5-1--10.0-4.sql
 
 -- copy of citus--9.5-1--10.0-1
-
+DO $$ begin raise log '%', 'begin 9.5-1--10.0-4'; end; $$;
 DROP FUNCTION pg_catalog.upgrade_to_reference_table(regclass);
 DROP FUNCTION IF EXISTS pg_catalog.citus_total_relation_size(regclass);
 
@@ -35,7 +35,18 @@ DROP FUNCTION IF EXISTS pg_catalog.citus_total_relation_size(regclass);
 #include "udfs/worker_change_sequence_dependency/10.0-1.sql"
 #include "udfs/remove_local_tables_from_metadata/10.0-1.sql"
 
+--#include "../../columnar/sql/columnar--9.5-1--10.0-1.sql"
+DO $check_columnar$
+BEGIN
+IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_extension AS e
+             INNER JOIN pg_catalog.pg_depend AS d ON (d.refobjid = e.oid)
+             INNER JOIN pg_catalog.pg_proc AS p ON (p.oid = d.objid)
+             WHERE e.extname='citus_columnar' and p.proname = 'columnar_handler'
+  ) THEN
 #include "../../columnar/sql/columnar--9.5-1--10.0-1.sql"
+END IF;
+END;
+$check_columnar$;
 
 #include "udfs/time_partition_range/10.0-1.sql"
 #include "udfs/time_partitions/10.0-1.sql"
@@ -172,7 +183,19 @@ GRANT SELECT ON pg_catalog.citus_worker_stat_activity TO PUBLIC;
 
 -- copy of citus--10.0-1--10.0-2
 
+--#include "../../columnar/sql/columnar--10.0-1--10.0-2.sql"
+DO $check_columnar$
+BEGIN
+IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_extension AS e
+             INNER JOIN pg_catalog.pg_depend AS d ON (d.refobjid = e.oid)
+             INNER JOIN pg_catalog.pg_proc AS p ON (p.oid = d.objid)
+             WHERE e.extname='citus_columnar' and p.proname = 'columnar_handler'
+  ) THEN
 #include "../../columnar/sql/columnar--10.0-1--10.0-2.sql"
+END IF;
+END;
+$check_columnar$;
+
 
 -- copy of citus--10.0-2--10.0-3
 
@@ -215,3 +238,4 @@ COMMENT ON FUNCTION pg_catalog.citus_get_active_worker_nodes()
 
 
 RESET search_path;
+DO $$ begin raise log '%', ' 9.5-1--10.0-4'; end; $$;

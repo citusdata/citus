@@ -63,7 +63,7 @@ SELECT version_major, version_minor, reserved_stripe_id, reserved_row_number
   FROM columnar_storage_info('no_data_columnar_table');
 
 -- table is already upgraded, make sure that upgrade_columnar_metapage is no-op
-SELECT citus_internal.upgrade_columnar_storage(c.oid)
+SELECT columnar_internal.upgrade_columnar_storage(c.oid)
 FROM pg_class c, pg_am a
 WHERE c.relam = a.oid AND amname = 'columnar' and relname = 'columnar_table_2';
 
