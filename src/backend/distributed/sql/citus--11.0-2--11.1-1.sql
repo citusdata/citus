@@ -39,5 +39,5 @@ BEGIN
 
   END IF;
 END $check_citus$;
---#include "udfs/citus_finish_pg_upgrade/11.1-1.sql"
+#include "udfs/citus_finish_pg_upgrade/11.1-1.sql"
 DO $$ begin raise log '%', ' 11.0-2--11.1-1'; end; $$;
