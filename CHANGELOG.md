@@ -1,3 +1,39 @@
+### citus v11.0.2 (June 15, 2022) ###
+
+* Adds `synchronous` option to `citus_disable_node()` UDF
+
+* Adds a `citus_is_coordinator` function to check whether a node is the coordinator
+
+* Adds a `run_command_on_coordinator` function
+
+* Adds support for distributing `CREATE`/`DROP VIEW` commands
+
+* Adds support for propagating `ALTER VIEW` commands
+
+* Converts `citus.hide_shards_from_app_name_prefixes` to `citus.show_shards_for_app_name_prefixes`
+
+* Fixes a bug that cause false positive distributed deadlocks due to local execution
+
+* Fixes a bug that could cause leaking files when materialized views are refreshed
+
+* Fixes a bug that could cause unqualified `DROP DOMAIN IF EXISTS` to fail
+
+* Fixes a bug that prevents dropping/altering indexes
+
+* Fixes columnar freezing/wraparound bug
+
+* Fixes schema name qualification for `ALTER` and `DROP SEQUENCE`
+
+* Fixes schema name qualification for `ALTER` and `DROP STATISTICS`
+
+* Improves nested execution checks and add GUC to disable
+
+* Introduces a `citus_finish_citus_upgrade()` procedure
+
+* Propagates views when syncing Citus table metadata
+
+* Refrain reading the metadata cache for all tables during upgrade
+
 ### citus v11.0.1_beta (April 11, 2022) ###
 
 * Adds propagation of `DOMAIN` objects
