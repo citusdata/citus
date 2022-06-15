@@ -34,22 +34,31 @@ QualifyDropViewStmt(Node *node)
 	{
 		char *viewName = NULL;
 		char *schemaName = NULL;
+		List *viewNameToAdd = possiblyQualifiedViewName;
 		DeconstructQualifiedName(possiblyQualifiedViewName, &schemaName, &viewName);
 
 		if (schemaName == NULL)
 		{
-			char *objname = NULL;
-			Oid schemaOid = QualifiedNameGetCreationNamespace(possiblyQualifiedViewName,
-															  &objname);
-			schemaName = get_namespace_name(schemaOid);
-			List *qualifiedViewName = list_make2(makeString(schemaName),
-												 makeString(viewName));
-			qualifiedViewNames = lappend(qualifiedViewNames, qualifiedViewName);
+			RangeVar *viewRangeVar = makeRangeVarFromNameList(possiblyQualifiedViewName);
+			Oid viewOid = RangeVarGetRelid(viewRangeVar, AccessExclusiveLock,
+										   stmt->missing_ok);
+
+			/*
+			 * If DROP VIEW IF EXISTS called and the view doesn't exist, oid can be invalid.
+			 * Do not try to qualify it.
+			 */
+			if (OidIsValid(viewOid))
+			{
+				Oid schemaOid = get_rel_namespace(viewOid);
+				schemaName = get_namespace_name(schemaOid);
+
+				List *qualifiedViewName = list_make2(makeString(schemaName),
+													 makeString(viewName));
+				viewNameToAdd = qualifiedViewName;
+			}
 		}
-		else
-		{
-			qualifiedViewNames = lappend(qualifiedViewNames, possiblyQualifiedViewName);
-		}
+
+		qualifiedViewNames = lappend(qualifiedViewNames, viewNameToAdd);
 	}
 
 	stmt->objects = qualifiedViewNames;
