@@ -45,7 +45,7 @@
 
 * Adds support for `CREATE/DROP/ALTER VIEW` commands
 
-* Adds support for `LOCK` commands
+* Adds support for `LOCK` commands on distributed tables from worker nodes
 
 * Adds support for propagating views when syncing Citus table metadata
 
@@ -73,6 +73,8 @@
 
 * Fixes columnar freezing/wraparound bug
 
+* Fixes `invalid read of size 1` memory error with `citus_add_node`
+
 * Fixes schema name qualification for `ALTER/DROP SEQUENCE`
 
 * Fixes schema name qualification for `ALTER/DROP STATISTICS`
@@ -83,6 +85,8 @@
   `citus.allow_nested_distributed_execution`
 
 * Prevents alter table functions from dropping extensions
+
+* Allows `lock_table_if_exits` to be called outside of a transaction blocks
 
 * Refrains reading the metadata cache for all tables during upgrade
 
