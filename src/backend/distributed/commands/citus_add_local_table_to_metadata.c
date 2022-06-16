@@ -330,7 +330,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	EnsureReferenceTablesExistOnAllNodes();
 
 	List *shellTableDDLEvents = GetShellTableDDLEventsForCitusLocalTable(relationId);
-	List *tableViewCreationCommands = GetViewCreationCommandsOfTable(relationId);
+	List *tableViewCreationCommands = GetViewCreationCommandsOfTable(relationId, false);
 
 	char *relationName = get_rel_name(relationId);
 	Oid relationSchemaId = get_rel_namespace(relationId);
@@ -1053,8 +1053,16 @@ DropViewsOnTable(Oid relationId)
 		char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
 
 		StringInfo dropCommand = makeStringInfo();
-		appendStringInfo(dropCommand, "DROP VIEW IF EXISTS %s",
-						 qualifiedViewName);
+		if (get_rel_relkind(viewId) == RELKIND_MATVIEW)
+		{
+			/*
+			 * Since materialized views are not supported with Citus right now,
+			 * skip them
+			 */
+			continue;
+		}
+
+		appendStringInfo(dropCommand, "DROP VIEW IF EXISTS %s", qualifiedViewName);
 
 		ExecuteAndLogUtilityCommand(dropCommand->data);
 	}

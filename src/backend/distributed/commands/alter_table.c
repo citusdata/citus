@@ -585,7 +585,7 @@ ConvertTable(TableConversionState *con)
 
 	postLoadCommands =
 		list_concat(postLoadCommands,
-					GetViewCreationTableDDLCommandsOfTable(con->relationId));
+					GetViewCreationTableDDLCommandsOfTable(con->relationId, true));
 
 	List *foreignKeyCommands = NIL;
 	if (con->conversionType == ALTER_DISTRIBUTED_TABLE)
@@ -1354,7 +1354,7 @@ DoesCascadeDropUnsupportedObject(Oid classId, Oid objectId, HTAB *nodeMap)
  * that recursively depend on the table too.
  */
 List *
-GetViewCreationCommandsOfTable(Oid relationId)
+GetViewCreationCommandsOfTable(Oid relationId, bool includeMatViews)
 {
 	List *views = GetDependingViews(relationId);
 	List *commands = NIL;
@@ -1367,6 +1367,11 @@ GetViewCreationCommandsOfTable(Oid relationId)
 		/* See comments on CreateMaterializedViewDDLCommand for its limitations */
 		if (get_rel_relkind(viewOid) == RELKIND_MATVIEW)
 		{
+			if (!includeMatViews)
+			{
+				continue;
+			}
+
 			char *matViewCreateCommands = CreateMaterializedViewDDLCommand(viewOid);
 			appendStringInfoString(query, matViewCreateCommands);
 		}
@@ -1391,9 +1396,9 @@ GetViewCreationCommandsOfTable(Oid relationId)
  * but the returned list includes objects of TableDDLCommand's, not strings.
  */
 List *
-GetViewCreationTableDDLCommandsOfTable(Oid relationId)
+GetViewCreationTableDDLCommandsOfTable(Oid relationId, bool includeMatViews)
 {
-	List *commands = GetViewCreationCommandsOfTable(relationId);
+	List *commands = GetViewCreationCommandsOfTable(relationId, includeMatViews);
 	List *tableDDLCommands = NIL;
 
 	char *command = NULL;
