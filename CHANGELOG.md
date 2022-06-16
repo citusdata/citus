@@ -45,6 +45,8 @@
 
 * Adds support for `CREATE/DROP/ALTER VIEW` commands
 
+* Adds support for `LOCK` commands
+
 * Adds support for propagating views when syncing Citus table metadata
 
 * Enables distributed execution from `run_command_on_*` functions
@@ -74,6 +76,8 @@
 * Fixes schema name qualification for `ALTER/DROP SEQUENCE`
 
 * Fixes schema name qualification for `ALTER/DROP STATISTICS`
+
+* Fixes schema name qualification for `CREATE STATISTICS`
 
 * Improves nested execution checks and adds GUC
   `citus.allow_nested_distributed_execution`
