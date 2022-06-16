@@ -706,6 +706,13 @@ SELECT count(*) FROM pg14.foreign_table;
 -- should error out
 TRUNCATE foreign_table;
 \c - - - :master_port
+SET search_path TO pg14;
+-- an example with CREATE TABLE LIKE, with statistics with expressions
+CREATE TABLE ctlt1 (a text CHECK (length(a) > 2) PRIMARY KEY, b text);
+CREATE STATISTICS ctlt1_expr_stat ON (a || b) FROM ctlt1;
+CREATE TABLE ctlt_all (LIKE ctlt1 INCLUDING ALL);
+SELECT create_distributed_table('ctlt1', 'a');
+CREATE TABLE ctlt_all_2 (LIKE ctlt1 INCLUDING ALL);
 -- cleanup
 set client_min_messages to error;
 drop extension postgres_fdw cascade;
