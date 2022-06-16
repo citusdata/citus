@@ -53,7 +53,7 @@
 
 * Honors `enable_metadata_sync` in node operations
 
-* Parallelizes metadata syncing on node activate
+* Parallelizes metadata syncing on node activation
 
 * Replaces `citus.hide_shards_from_app_name_prefixes` with
   `citus.show_shards_for_app_name_prefixes`
