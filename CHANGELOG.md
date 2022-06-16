@@ -6,10 +6,8 @@
 
 * Turns metadata syncing on by default
 
-* Adds `citus_finalize_upgrade_to_citus11()` which is necessary to upgrade to
-  Citus 11+ from earlier versions
-
-* Introduces `citus_finish_citus_upgrade()` procedure
+* Introduces `citus_finish_citus_upgrade()` procedure which is necessary to
+  upgrade from earlier versions
 
 * Open sources non-blocking shard moves/shard rebalancer
   (`citus.logical_replication_timeout`)
@@ -39,7 +37,7 @@
   `citus.stat_statements_purge_interval`,
   `citus.stat_statements_track`). This is disabled by default.
 
-* Open sources blocking tenant_isolation
+* Open sources tenant_isolation
 
 * Open sources support for `sslkey` and `sslcert` in `citus.node_conninfo`
 
@@ -322,9 +320,6 @@
 
 * Removes support for dropping distributed and local indexes in the same
   statement
-
-* Replaces `citus.hide_shards_from_app_name_prefixes` with
-  `citus.show_shards_for_app_name_prefixes`
 
 * Replaces `citus.enable_object_propagation` GUC with
   `citus.enable_metadata_sync`
