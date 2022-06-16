@@ -48,11 +48,20 @@
 
 * Converts `citus.hide_shards_from_app_name_prefixes` to `citus.show_shards_for_app_name_prefixes`
 
+* Enables distributed execution from `run_command_on_*` functions
+
+* Honors `enable_metadata_sync` in node operations
+
+* Parallelizes metadata syncing on node activate
+
 * Fixes a bug that could cause false positive distributed deadlocks due to local execution
 
 * Fixes a bug that could cause leaking files when materialized views are refreshed
 
 * Fixes a bug that could cause unqualified `DROP DOMAIN IF EXISTS` to fail
+
+* Fixes a bug that could cause wrong schema and ownership after
+  `alter_distributed_table`
 
 * Fixes a bug that prevents dropping/altering indexes
 
@@ -63,6 +72,8 @@
 * Fixes schema name qualification for `ALTER/DROP STATISTICS`
 
 * Improves nested execution checks and adds GUC `citus.allow_nested_distributed_execution`
+
+* Prevents alter table functions from dropping extensions
 
 * Refrains reading the metadata cache for all tables during upgrade
 
