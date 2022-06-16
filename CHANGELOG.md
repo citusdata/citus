@@ -38,7 +38,8 @@
 
 * Introduces `synchronous` option to `citus_disable_node()` UDF
 
-* Introduces `citus_is_coordinator` UDF to check whether a node is the coordinator
+* Introduces `citus_is_coordinator` UDF to check whether a node is the
+  coordinator
 
 * Introduces `run_command_on_coordinator` UDF
 
@@ -46,7 +47,8 @@
 
 * Adds support for propagating views when syncing Citus table metadata
 
-* Converts `citus.hide_shards_from_app_name_prefixes` to `citus.show_shards_for_app_name_prefixes`
+* Converts `citus.hide_shards_from_app_name_prefixes` to
+  `citus.show_shards_for_app_name_prefixes`
 
 * Enables distributed execution from `run_command_on_*` functions
 
@@ -54,9 +56,11 @@
 
 * Parallelizes metadata syncing on node activate
 
-* Fixes a bug that could cause false positive distributed deadlocks due to local execution
+* Fixes a bug that could cause false positive distributed deadlocks due to local
+  execution
 
-* Fixes a bug that could cause leaking files when materialized views are refreshed
+* Fixes a bug that could cause leaking files when materialized views are
+  refreshed
 
 * Fixes a bug that could cause unqualified `DROP DOMAIN IF EXISTS` to fail
 
@@ -71,7 +75,8 @@
 
 * Fixes schema name qualification for `ALTER/DROP STATISTICS`
 
-* Improves nested execution checks and adds GUC `citus.allow_nested_distributed_execution`
+* Improves nested execution checks and adds GUC
+  `citus.allow_nested_distributed_execution`
 
 * Prevents alter table functions from dropping extensions
 
