@@ -60,5 +60,4 @@ WHERE repmodel = 'c'
 DROP TRIGGER pg_dist_rebalance_strategy_enterprise_check_trigger ON pg_catalog.pg_dist_rebalance_strategy;
 DROP FUNCTION citus_internal.pg_dist_rebalance_strategy_enterprise_check();
 
-DO $$ begin raise log '%', '10.0-4--10.1-1'; end; $$;
 #include "udfs/citus_cleanup_orphaned_shards/10.1-1.sql"

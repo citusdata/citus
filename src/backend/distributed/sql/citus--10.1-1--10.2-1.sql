@@ -33,7 +33,6 @@ $check_columnar$;
 #include "udfs/get_missing_time_partition_ranges/10.2-1.sql"
 #include "udfs/worker_nextval/10.2-1.sql"
 
-DO $$ begin raise log '%', 'begin 10.1-1--10.2-1'; end; $$;
 
 DROP FUNCTION pg_catalog.citus_drop_all_shards(regclass, text, text);
 CREATE FUNCTION pg_catalog.citus_drop_all_shards(logicalrelid regclass,
@@ -48,4 +47,4 @@ COMMENT ON FUNCTION pg_catalog.citus_drop_all_shards(regclass, text, text, boole
 #include "udfs/citus_drop_trigger/10.2-1.sql";
 #include "udfs/citus_prepare_pg_upgrade/10.2-1.sql"
 #include "udfs/citus_finish_pg_upgrade/10.2-1.sql"
-DO $$ begin raise log '%', '10.1-1--10.2-1'; end; $$;
+

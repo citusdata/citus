@@ -1,7 +1,6 @@
 -- citus--10.0-1--10.0-2
 
 --#include "../../columnar/sql/columnar--10.0-1--10.0-2.sql"
-DO $$ begin raise log '%', 'begin 10.0-1--10.0-2'; end; $$;
 DO $check_columnar$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_extension AS e
@@ -15,4 +14,4 @@ END;
 $check_columnar$;
 
 GRANT SELECT ON public.citus_tables TO public;
-DO $$ begin raise log '%', ' 10.0-1--10.0-2'; end; $$;
+

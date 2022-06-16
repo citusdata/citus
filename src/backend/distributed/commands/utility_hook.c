@@ -225,6 +225,23 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 				}
 			}
 		}
+
+		/*Edge case check: citus_columnar are supported on citus version >= 11.1*/
+		if (strcmp(createExtensionStmt->extname, "citus_columnar") == 0)
+		{
+			Oid citusOid = get_extension_oid("citus", true);
+			if (citusOid != InvalidOid)
+			{
+				char *curCitusVersion = strdup(get_extension_version(citusOid));
+				double curCitusVersionNum = GetExtensionVersionNumber(curCitusVersion);
+				if (curCitusVersionNum * 100 < 1110.0)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg(
+										"must upgrade citus to version 11.1-1 first before install citus_columnar")));
+				}
+			}
+		}
 	}
 
 	if (!CitusHasBeenLoaded())

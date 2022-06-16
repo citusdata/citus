@@ -1,4 +1,3 @@
-DO $$ begin raise log '%', 'begin 11.0-2--11.1-1'; end; $$;
 DROP FUNCTION pg_catalog.worker_create_schema(bigint,text);
 DROP FUNCTION pg_catalog.worker_cleanup_job_schema_cache();
 DROP FUNCTION pg_catalog.worker_fetch_foreign_file(text, text, bigint, text[], integer[]);
@@ -40,4 +39,4 @@ BEGIN
   END IF;
 END $check_citus$;
 #include "udfs/citus_finish_pg_upgrade/11.1-1.sql"
-DO $$ begin raise log '%', ' 11.0-2--11.1-1'; end; $$;
+

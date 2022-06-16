@@ -2388,14 +2388,6 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 											"unsupported citus_columnar version 11.1-0")));
 					}
 				}
-
-				/*latest citus requires install columnar first, existing citus can only be an older version */
-				if (get_extension_oid("citus", true) != InvalidOid)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg(
-										"must upgrade citus to version 11.1-1 first")));
-				}
 			}
 		}
 	}

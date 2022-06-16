@@ -6,7 +6,6 @@
 -- cat citus--9.5-1--10.0-1.sql citus--10.0-1--10.0-2.sql citus--10.0-2--10.0-3.sql > citus--9.5-1--10.0-4.sql
 
 -- copy of citus--9.5-1--10.0-1
-DO $$ begin raise log '%', 'begin 9.5-1--10.0-4'; end; $$;
 DROP FUNCTION pg_catalog.upgrade_to_reference_table(regclass);
 DROP FUNCTION IF EXISTS pg_catalog.citus_total_relation_size(regclass);
 
@@ -238,4 +237,4 @@ COMMENT ON FUNCTION pg_catalog.citus_get_active_worker_nodes()
 
 
 RESET search_path;
-DO $$ begin raise log '%', ' 9.5-1--10.0-4'; end; $$;
+

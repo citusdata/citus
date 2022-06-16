@@ -3,7 +3,6 @@
 -- bump version to 10.2-2
 
 --#include "../../columnar/sql/columnar--10.2-1--10.2-2.sql"
-DO $$ begin raise log '%', 'begin 10.2-1--10.2-2'; end; $$;
 DO $check_columnar$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_extension AS e
@@ -15,4 +14,4 @@ BEGIN
   END IF;
 END;
 $check_columnar$;
-DO $$ begin raise log '%', '10.2-1--10.2-2'; end; $$;
+
