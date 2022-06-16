@@ -2,37 +2,37 @@
 
 * Open sources enterprise features, see the rest of changelog items
 
-* Non blocking shard moves/shard rebalancer
+* Open sources non-blocking shard moves/shard rebalancer
   (`citus.logical_replication_timeout`)
 
-* Propagation of `CREATE/DROP/ALTER ROLE` statements
+* Open sources propagation of `CREATE/DROP/ALTER ROLE` statements
 
-* Propagation of `GRANT` statements
+* Open sources propagation of `GRANT` statements
 
-* Propagation of `CLUSTER` statements
+* Open sources propagation of `CLUSTER` statements
 
-* Propagation of `ALTER DATABASE ... OWNER TO ...`
+* Open sources propagation of `ALTER DATABASE ... OWNER TO ...`
 
-* Optimization for `COPY` when loading `JSON` to avoid double parsing of
-  the `JSON` object (`citus.skip_jsonb_validation_in_copy`)
+* Open sources optimization for `COPY` when loading `JSON` to avoid double
+  parsing of the `JSON` object (`citus.skip_jsonb_validation_in_copy`)
 
-* Support for row level security
+* Open sources support for row level security
 
-* Support for `pg_dist_authinfo`, which allows storing different
+* Open sources support for `pg_dist_authinfo`, which allows storing different
   authentication options for different users, e.g. you can store
   passwords or certificates here.
 
-* Support for `pg_dist_poolinfo`, which allows using connection poolers
-  in between coordinator and workers
+* Open sources support for `pg_dist_poolinfo`, which allows using connection
+  poolers in between coordinator and workers
 
-* Tracking distributed query execution times using
+* Open sources tracking distributed query execution times using
   citus_stat_statements (`citus.stat_statements_max`,
   `citus.stat_statements_purge_interval`,
   `citus.stat_statements_track`). This is disabled by default.
 
-* Blocking tenant_isolation
+* Open sources blocking tenant_isolation
 
-* Support for `sslkey` and `sslcert` in `citus.node_conninfo`
+* Open sources support for `sslkey` and `sslcert` in `citus.node_conninfo`
 
 * Introduces `citus_finish_citus_upgrade()` procedure
 
