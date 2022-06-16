@@ -553,10 +553,6 @@ SELECT master_remove_node('localhost', :worker_2_port);
 
  -- the master user needs superuser permissions to change the replication model
 CREATE USER mx_user WITH SUPERUSER;
-\c - - - :worker_1_port
-CREATE USER mx_user;
-\c - - - :worker_2_port
-CREATE USER mx_user;
 
 \c - mx_user - :master_port
 -- Create an mx table as a different user
@@ -605,10 +601,6 @@ UPDATE pg_dist_placement
 \c - - - :master_port
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
-DROP USER mx_user;
-\c - - - :worker_1_port
-DROP USER mx_user;
-\c - - - :worker_2_port
 DROP USER mx_user;
 
 -- Check that create_reference_table creates the metadata on workers

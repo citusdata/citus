@@ -10,36 +10,9 @@ SET citus.enable_ddl_propagation TO off;
 CREATE SCHEMA non_dist_schema;
 SET citus.enable_ddl_propagation TO on;
 -- create roles on all nodes
-SELECT run_command_on_coordinator_and_workers('CREATE USER role_1');
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-CONTEXT:  SQL statement "CREATE USER role_1"
-PL/pgSQL function run_command_on_coordinator_and_workers(text) line XX at EXECUTE
- run_command_on_coordinator_and_workers
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT run_command_on_coordinator_and_workers('CREATE USER role_2');
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-CONTEXT:  SQL statement "CREATE USER role_2"
-PL/pgSQL function run_command_on_coordinator_and_workers(text) line XX at EXECUTE
- run_command_on_coordinator_and_workers
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT run_command_on_coordinator_and_workers('CREATE USER role_3');
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-CONTEXT:  SQL statement "CREATE USER role_3"
-PL/pgSQL function run_command_on_coordinator_and_workers(text) line XX at EXECUTE
- run_command_on_coordinator_and_workers
----------------------------------------------------------------------
-
-(1 row)
-
+CREATE USER role_1;
+CREATE USER role_2;
+CREATE USER role_3;
 -- do some varying grants
 GRANT USAGE, CREATE ON SCHEMA dist_schema TO role_1 WITH GRANT OPTION;
 GRANT USAGE ON SCHEMA dist_schema TO role_2;
@@ -186,7 +159,7 @@ SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'anoth
        nspname       |                            nspacl
 ---------------------------------------------------------------------
  another_dist_schema | {postgres=UC/postgres,role_3=UC/postgres}
- dist_schema         | {postgres=UC/postgres,role_3=UC/postgres,role_1=U*/postgres}
+ dist_schema         | {postgres=UC/postgres,role_3=UC/postgres,role_1=U*C/postgres}
 (2 rows)
 
 \c - - - :master_port
@@ -412,9 +385,4 @@ SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspna
 
 \c - - - :master_port
 DROP TABLE public_schema_table;
-SELECT run_command_on_coordinator_and_workers('DROP ROLE role_1, role_2, role_3');
- run_command_on_coordinator_and_workers
----------------------------------------------------------------------
-
-(1 row)
-
+DROP ROLE role_1, role_2, role_3;

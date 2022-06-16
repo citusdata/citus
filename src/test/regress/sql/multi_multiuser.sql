@@ -19,8 +19,6 @@ CREATE TABLE singleshard (id integer, val integer);
 SELECT create_distributed_table('singleshard', 'id');
 
 -- turn off propagation to avoid Enterprise processing the following section
-SET citus.enable_ddl_propagation TO off;
-
 CREATE USER full_access;
 CREATE USER usage_access;
 CREATE USER read_access;
@@ -28,6 +26,8 @@ CREATE USER no_access;
 CREATE ROLE some_role;
 GRANT some_role TO full_access;
 GRANT some_role TO read_access;
+
+SET citus.enable_ddl_propagation TO off;
 
 GRANT ALL ON TABLE test TO full_access;
 GRANT SELECT ON TABLE test TO read_access;
@@ -40,14 +40,6 @@ GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 SET citus.enable_ddl_propagation TO DEFAULT;
 
 \c - - - :worker_1_port
-CREATE USER full_access;
-CREATE USER usage_access;
-CREATE USER read_access;
-CREATE USER no_access;
-CREATE ROLE some_role;
-GRANT some_role TO full_access;
-GRANT some_role TO read_access;
-
 GRANT ALL ON TABLE test_1420000 TO full_access;
 GRANT SELECT ON TABLE test_1420000 TO read_access;
 
@@ -55,14 +47,6 @@ GRANT ALL ON TABLE test_1420002 TO full_access;
 GRANT SELECT ON TABLE test_1420002 TO read_access;
 
 \c - - - :worker_2_port
-CREATE USER full_access;
-CREATE USER usage_access;
-CREATE USER read_access;
-CREATE USER no_access;
-CREATE ROLE some_role;
-GRANT some_role TO full_access;
-GRANT some_role TO read_access;
-
 GRANT ALL ON TABLE test_1420001 TO full_access;
 GRANT SELECT ON TABLE test_1420001 TO read_access;
 
@@ -370,6 +354,9 @@ DROP TABLE
     test,
     test_coloc,
     colocation_table;
+SELECT run_command_on_workers($$DROP OWNED BY full_access$$);
+SELECT run_command_on_workers($$DROP OWNED BY some_role$$);
+SELECT run_command_on_workers($$DROP OWNED BY read_access$$);
 DROP USER full_access;
 DROP USER read_access;
 DROP USER no_access;

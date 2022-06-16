@@ -53,7 +53,7 @@ INSERT INTO generated_col_table VALUES (1);
 -- Make sure that we currently error out
 ALTER TABLE generated_col_table ALTER COLUMN b DROP EXPRESSION;
 ERROR:  alter table command is currently unsupported
-DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
 -- alter view rename column works fine
 CREATE VIEW v AS SELECT * FROM dist_table;
 ALTER VIEW v RENAME age to new_age;

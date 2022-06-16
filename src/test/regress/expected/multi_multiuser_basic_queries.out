@@ -1,0 +1,177 @@
+--
+-- MULTI_MULTIUSER_BASIC_QUERIES
+--
+SET ROLE full_access;
+-- Execute simple sum, average, and count queries on data recently uploaded to
+-- our partitioned table.
+SELECT count(*) FROM lineitem;
+ count
+---------------------------------------------------------------------
+ 12000
+(1 row)
+
+SELECT sum(l_extendedprice) FROM lineitem;
+     sum
+---------------------------------------------------------------------
+ 457702024.50
+(1 row)
+
+SELECT avg(l_extendedprice) FROM lineitem;
+        avg
+---------------------------------------------------------------------
+ 38141.835375000000
+(1 row)
+
+RESET ROLE;
+-- and again, to check a read-only user can query
+SET ROLE read_access;
+SET citus.task_executor_type TO 'task-tracker';
+SELECT count(*) FROM lineitem;
+ count
+---------------------------------------------------------------------
+ 12000
+(1 row)
+
+RESET citus.task_executor_type;
+SELECT count(*) FROM lineitem;
+ count
+---------------------------------------------------------------------
+ 12000
+(1 row)
+
+-- and yet again, to prove we're failing when a user doesn't have permissions
+SET ROLE no_access;
+SET citus.task_executor_type TO 'task-tracker';
+SELECT count(*) FROM lineitem;
+ERROR:  permission denied for table lineitem
+RESET citus.task_executor_type;
+SELECT count(*) FROM lineitem;
+ERROR:  permission denied for table lineitem
+RESET ROLE;
+-- verify that broadcast joins work
+SET citus.large_table_shard_count TO 2;
+SET ROLE read_access;
+SELECT
+	l_partkey, o_orderkey, count(*)
+FROM
+	lineitem, part, orders, customer
+WHERE
+	l_orderkey = o_orderkey AND
+	l_partkey = p_partkey AND
+	c_custkey = o_custkey AND
+        (l_quantity > 5.0 OR l_extendedprice > 1200.0) AND
+        p_size > 8 AND o_totalprice > 10 AND
+        c_acctbal < 5000.0
+GROUP BY
+	l_partkey, o_orderkey
+ORDER BY
+	l_partkey, o_orderkey
+LIMIT 30;
+ l_partkey | o_orderkey | count
+---------------------------------------------------------------------
+       222 |       9413 |     1
+       278 |       1287 |     1
+       309 |       2374 |     1
+       321 |       5984 |     1
+       337 |      10403 |     1
+       364 |       9347 |     1
+       416 |        640 |     1
+       426 |      10855 |     1
+       484 |       3843 |     1
+       510 |      13569 |     1
+       532 |       3175 |     1
+       641 |        134 |     1
+       669 |      10944 |     1
+       716 |       2885 |     1
+       738 |       4355 |     1
+       802 |       2534 |     1
+       824 |       9287 |     1
+       864 |       3175 |     1
+       960 |      10980 |     1
+       963 |       4580 |     1
+(20 rows)
+
+RESET ROLE;
+SET ROLE no_access;
+SELECT
+	l_partkey, o_orderkey, count(*)
+FROM
+	lineitem, part, orders, customer
+WHERE
+	l_orderkey = o_orderkey AND
+	l_partkey = p_partkey AND
+	c_custkey = o_custkey AND
+        (l_quantity > 5.0 OR l_extendedprice > 1200.0) AND
+        p_size > 8 AND o_totalprice > 10 AND
+        c_acctbal < 5000.0
+GROUP BY
+	l_partkey, o_orderkey
+ORDER BY
+	l_partkey, o_orderkey
+LIMIT 30;
+ERROR:  permission denied for table lineitem
+RESET ROLE;
+-- verify that re-partition queries work
+SET citus.large_table_shard_count TO 1;
+SET citus.task_executor_type TO 'task-tracker';
+SET ROLE read_access;
+SELECT
+	l_partkey, o_orderkey, count(*)
+FROM
+	lineitem, part, orders, customer
+WHERE
+	l_orderkey = o_orderkey AND
+	l_partkey = p_partkey AND
+	c_custkey = o_custkey AND
+        (l_quantity > 5.0 OR l_extendedprice > 1200.0) AND
+        p_size > 8 AND o_totalprice > 10 AND
+        c_acctbal < 5000.0
+GROUP BY
+	l_partkey, o_orderkey
+ORDER BY
+	l_partkey, o_orderkey
+LIMIT 30;
+ l_partkey | o_orderkey | count
+---------------------------------------------------------------------
+       222 |       9413 |     1
+       278 |       1287 |     1
+       309 |       2374 |     1
+       321 |       5984 |     1
+       337 |      10403 |     1
+       364 |       9347 |     1
+       416 |        640 |     1
+       426 |      10855 |     1
+       484 |       3843 |     1
+       510 |      13569 |     1
+       532 |       3175 |     1
+       641 |        134 |     1
+       669 |      10944 |     1
+       716 |       2885 |     1
+       738 |       4355 |     1
+       802 |       2534 |     1
+       824 |       9287 |     1
+       864 |       3175 |     1
+       960 |      10980 |     1
+       963 |       4580 |     1
+(20 rows)
+
+RESET ROLE;
+SET ROLE no_access;
+SELECT
+	l_partkey, o_orderkey, count(*)
+FROM
+	lineitem, part, orders, customer
+WHERE
+	l_orderkey = o_orderkey AND
+	l_partkey = p_partkey AND
+	c_custkey = o_custkey AND
+        (l_quantity > 5.0 OR l_extendedprice > 1200.0) AND
+        p_size > 8 AND o_totalprice > 10 AND
+        c_acctbal < 5000.0
+GROUP BY
+	l_partkey, o_orderkey
+ORDER BY
+	l_partkey, o_orderkey
+LIMIT 30;
+ERROR:  permission denied for table lineitem
+RESET ROLE;

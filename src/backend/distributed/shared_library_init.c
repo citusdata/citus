@@ -40,6 +40,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/cte_inline.h"
 #include "distributed/distributed_deadlock_detection.h"
+#include "distributed/errormessage.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/local_multi_copy.h"
@@ -47,6 +48,7 @@
 #include "distributed/local_distributed_join_planner.h"
 #include "distributed/locally_reserved_shared_connections.h"
 #include "distributed/maintenanced.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -55,6 +57,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_join_order.h"
+#include "distributed/multi_logical_replication.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/combine_query_planner.h"
@@ -62,6 +65,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
+#include "distributed/query_stats.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
@@ -189,6 +193,12 @@ static const struct config_enum_entry propagate_set_commands_options[] = {
 	{NULL, 0, false}
 };
 
+
+static const struct config_enum_entry stat_statements_track_options[] = {
+	{ "none", STAT_STATEMENTS_TRACK_NONE, false },
+	{ "all", STAT_STATEMENTS_TRACK_ALL, false },
+	{ NULL, 0, false }
+};
 
 static const struct config_enum_entry task_assignment_policy_options[] = {
 	{ "greedy", TASK_ASSIGNMENT_GREEDY, false },
@@ -857,7 +867,7 @@ RegisterCitusConfigVariables(void)
 					 "workers"),
 		NULL,
 		&EnableAlterDatabaseOwner,
-		false,
+		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
@@ -908,6 +918,17 @@ RegisterCitusConfigVariables(void)
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_create_role_propagation",
+		gettext_noop("Enables propagating CREATE ROLE "
+					 "and DROP ROLE statements to workers"),
+		NULL,
+		&EnableCreateRolePropagation,
+		true,
+		PGC_USERSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1358,6 +1379,18 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.logical_replication_timeout",
+		gettext_noop("Sets the timeout to error out when logical replication is used"),
+		gettext_noop("Citus uses logical replication when it moves/replicates shards. "
+					 "This setting determines when Citus gives up waiting for progress "
+					 "during logical replication and errors out."),
+		&LogicalReplicationTimeout,
+		2 * 60 * 60 * 1000, 0, 7 * 24 * 3600 * 1000,
+		PGC_SIGHUP,
+		GUC_NO_SHOW_ALL | GUC_UNIT_MS,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.max_adaptive_executor_pool_size",
 		gettext_noop("Sets the maximum number of connections per worker node used by "
 					 "the adaptive executor to execute a multi-shard command"),
@@ -1757,6 +1790,22 @@ RegisterCitusConfigVariables(void)
 		NULL);
 
 	DefineCustomBoolVariable(
+		"citus.skip_jsonb_validation_in_copy",
+		gettext_noop("Skip validation of JSONB columns on the coordinator during COPY "
+					 "into a distributed table"),
+		gettext_noop("Parsing large JSON objects may incur significant CPU overhead, "
+					 "which can lower COPY throughput. If this GUC is set (the default), "
+					 "JSON parsing is skipped on the coordinator, which means you cannot "
+					 "see the line number in case of malformed JSON, but throughput will "
+					 "be higher. This setting does not apply if the input format is "
+					 "binary."),
+		&SkipJsonbValidationInCopy,
+		true,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.sort_returning",
 		gettext_noop("Sorts the RETURNING clause to get consistent test output"),
 		gettext_noop("This feature is not intended for users. It is developed "
@@ -1768,6 +1817,47 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_SUSET,
 		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	/*
+	 * It takes about 140 bytes of shared memory to store one row, therefore
+	 * this setting should be used responsibly. setting it to 10M will require
+	 * 1.4GB of shared memory.
+	 */
+	DefineCustomIntVariable(
+		"citus.stat_statements_max",
+		gettext_noop("Determines maximum number of statements tracked by "
+					 "citus_stat_statements."),
+		NULL,
+		&StatStatementsMax,
+		50000, 1000, 10000000,
+		PGC_POSTMASTER,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.stat_statements_purge_interval",
+		gettext_noop("Determines time interval in seconds for "
+					 "citus_stat_statements to purge expired entries."),
+		NULL,
+		&StatStatementsPurgeInterval,
+		10, -1, INT_MAX,
+		PGC_SIGHUP,
+		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.stat_statements_track",
+		gettext_noop(
+			"Enables/Disables the stats collection for citus_stat_statements."),
+		gettext_noop("Enables the stats collection when set to 'all'. "
+					 "Disables when set to 'none'. Disabling can be useful for "
+					 "avoiding extra CPU cycles needed for the calculations."),
+		&StatStatementsTrack,
+		STAT_STATEMENTS_TRACK_NONE,
+		stat_statements_track_options,
+		PGC_SUSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -2116,8 +2206,10 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 			#if defined(ENABLE_GSS) || defined(ENABLE_SSPI)
 		"krbsrvname",
 			#endif
+		"sslcert",
 		"sslcompression",
 		"sslcrl",
+		"sslkey",
 		"sslmode",
 		"sslrootcert",
 		"tcp_user_timeout",

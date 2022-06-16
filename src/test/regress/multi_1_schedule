@@ -35,6 +35,7 @@ test: distributed_triggers
 test: multi_test_catalog_views
 test: multi_table_ddl
 test: multi_sequence_default
+test: grant_on_sequence_propagation
 test: multi_name_lengths
 test: multi_name_resolution
 test: multi_metadata_access
@@ -228,6 +229,9 @@ test: multi_drop_extension
 # ----------
 test: multi_metadata_sync
 test: multi_unsupported_worker_operations
+
+test: grant_on_function_propagation
+test: grant_on_foreign_server_propagation
 
 # ----------
 # grant_on_schema_propagation tests if the GRANT ... ON SCHEMA queries are propagated correctly

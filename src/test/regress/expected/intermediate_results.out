@@ -571,13 +571,6 @@ WARNING:  Query could not find the intermediate result file "squares_2", it was 
 
 -- test refreshing mat views
 SET client_min_messages TO ERROR;
-SELECT run_command_on_workers($$CREATE USER some_other_user;$$);
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
-(2 rows)
-
 CREATE USER some_other_user;
 SELECT run_command_on_workers($$GRANT ALL ON DATABASE regression TO some_other_user;$$);
   run_command_on_workers

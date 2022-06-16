@@ -421,20 +421,9 @@ ErrorIfCurrentUserCanNotDistributeObject(ObjectType type, ObjectAddress *addr,
 		case OBJECT_EXTENSION:
 		case OBJECT_COLLATION:
 		case OBJECT_VIEW:
-		{
-			check_object_ownership(userId, type, *addr, node, *relation);
-			break;
-		}
-
 		case OBJECT_ROLE:
 		{
-			/* Support only extension owner role with community */
-			if (addr->objectId != CitusExtensionOwner())
-			{
-				ereport(ERROR, (errmsg("Current user does not have required "
-									   "access privileges on role %d with type %d",
-									   addr->objectId, type)));
-			}
+			check_object_ownership(userId, type, *addr, node, *relation);
 			break;
 		}
 

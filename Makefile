@@ -11,7 +11,7 @@ endif
 
 include Makefile.global
 
-all: extension
+all: extension pg_send_cancellation
 
 
 # build columnar only
@@ -37,15 +37,25 @@ clean-extension:
 clean-full:
 	$(MAKE) -C src/backend/distributed/ clean-full
 .PHONY: extension install-extension clean-extension clean-full
-# Add to generic targets
-install: install-extension install-headers
+
 install-downgrades:
 	$(MAKE) -C src/backend/distributed/ install-downgrades
-install-all: install-headers
+install-all: install-headers install-pg_send_cancellation
 	$(MAKE) -C src/backend/columnar/ install-all
 	$(MAKE) -C src/backend/distributed/ install-all
 
-clean: clean-extension
+# build citus_send_cancellation binary
+pg_send_cancellation:
+	$(MAKE) -C src/bin/pg_send_cancellation/ all
+install-pg_send_cancellation: pg_send_cancellation
+	$(MAKE) -C src/bin/pg_send_cancellation/ install
+clean-pg_send_cancellation:
+	$(MAKE) -C src/bin/pg_send_cancellation/ clean
+.PHONY: pg_send_cancellation install-pg_send_cancellation clean-pg_send_cancellation
+
+# Add to generic targets
+install: install-extension install-headers install-pg_send_cancellation
+clean: clean-extension clean-pg_send_cancellation
 
 # apply or check style
 reindent:

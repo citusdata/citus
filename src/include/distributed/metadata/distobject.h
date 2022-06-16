@@ -35,4 +35,6 @@ extern List * GetDistributedObjectAddressList(void);
 extern RoleSpec * GetRoleSpecObjectForUser(Oid roleOid);
 extern void UpdateDistributedObjectColocationId(uint32 oldColocationId, uint32
 												newColocationId);
+extern List * DistributedFunctionList(void);
+extern List * DistributedSequenceList(void);
 #endif /* CITUS_METADATA_DISTOBJECT_H */

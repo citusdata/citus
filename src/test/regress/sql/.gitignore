@@ -12,6 +12,7 @@
 /multi_load_data.sql
 /multi_load_data_superuser.sql
 /multi_load_more_data.sql
+/multi_multiuser_load_data.sql
 /multi_mx_copy_data.sql
 /multi_outer_join.sql
 /multi_outer_join_reference.sql

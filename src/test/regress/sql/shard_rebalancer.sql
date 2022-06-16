@@ -373,7 +373,7 @@ SELECT * FROM replication_test_table_placements_per_node;
 
 -- Replicate the remaining under-replicated shards
 
-SELECT replicate_table_shards('replication_test_table');
+SELECT replicate_table_shards('replication_test_table', shard_transfer_mode:='block_writes');
 
 SELECT * FROM replication_test_table_placements_per_node;
 
@@ -499,6 +499,7 @@ SET ROLE testrole;
 SELECT rebalance_table_shards('rebalance_test_table',
     shard_transfer_mode:='block_writes');
 RESET ROLE;
+CALL citus_cleanup_orphaned_shards();
 -- Confirm no moves took place at all during these errors
 SELECT * FROM table_placements_per_node;
 CALL citus_cleanup_orphaned_shards();
@@ -519,7 +520,7 @@ SELECT * FROM table_placements_per_node;
 
 -- Move the remaining shards using threshold=0
 
-SELECT rebalance_table_shards('rebalance_test_table', threshold := 0);
+SELECT rebalance_table_shards('rebalance_test_table', threshold := 0, shard_transfer_mode:='block_writes');
 CALL citus_cleanup_orphaned_shards();
 
 SELECT * FROM table_placements_per_node;
@@ -639,10 +640,6 @@ SELECT * FROM public.table_placements_per_node;
 
 -- Row count in imbalanced table before rebalance
 SELECT COUNT(*) FROM imbalanced_table;
-
--- Try force_logical
-SELECT rebalance_table_shards('imbalanced_table', threshold:=0, shard_transfer_mode:='force_logical');
-CALL citus_cleanup_orphaned_shards();
 
 -- Test rebalance operation
 SELECT rebalance_table_shards('imbalanced_table', threshold:=0, shard_transfer_mode:='block_writes');
@@ -825,6 +822,16 @@ SELECT * FROM public.table_placements_per_node;
 
 -- Drop some tables for clear consistent error
 DROP TABLE test_schema_support.colocated_rebalance_test2;
+
+-- testing behaviour when a transfer fails when using master_drain_node
+SELECT * from master_drain_node('localhost', :worker_2_port);
+-- Make sure shouldhaveshards is false
+select shouldhaveshards from pg_dist_node where nodeport = :worker_2_port;
+-- Make sure no actual nodes are moved
+SELECT * FROM public.table_placements_per_node;
+
+-- Make it a data node again
+SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
 
 -- Leave no trace on workers
 RESET search_path;
@@ -1324,6 +1331,7 @@ INSERT INTO r2 VALUES (1,2), (3,4);
 
 SELECT 1 from master_add_node('localhost', :worker_2_port);
 
+-- since r2 has no replica identity we expect an error here
 SELECT rebalance_table_shards();
 CALL citus_cleanup_orphaned_shards();
 

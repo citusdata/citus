@@ -6,7 +6,6 @@ SET citus.next_placement_id TO 1500000;
 -- supress notice messages to make sure that the tests
 -- do not diverge with enterprise
 SET client_min_messages TO WARNING;
-SELECT run_command_on_workers($$CREATE ROLE metadata_sync_helper_role WITH LOGIN;$$);
 CREATE ROLE metadata_sync_helper_role WITH LOGIN;
 GRANT ALL ON SCHEMA metadata_sync_helpers TO metadata_sync_helper_role;
 RESET client_min_messages;

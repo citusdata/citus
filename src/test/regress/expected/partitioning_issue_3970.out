@@ -119,7 +119,7 @@ ALTER TABLE part_table RENAME CONSTRAINT my_seq TO my_seq_check;
 ERROR:  renaming constraints belonging to distributed tables is currently unsupported
 ALTER TABLE part_table ALTER CONSTRAINT my_seq DEFERRABLE;
 ERROR:  alter table command is currently unsupported
-DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
 -- verify that we can drop the constraints on partitioned tables
 ALTER TABLE part_table DROP CONSTRAINT my_seq;
 DROP TABLE part_table, dist CASCADE;

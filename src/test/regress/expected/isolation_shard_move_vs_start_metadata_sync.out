@@ -1,0 +1,107 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s1-move-shard-force-logical s2-start-metadata-sync s1-commit s1-count-shards-by-worker
+step s1-begin:
+	BEGIN;
+
+step s1-move-shard-force-logical:
+	SELECT * FROM master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, 'force_logical');
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-start-metadata-sync:
+	SELECT * FROM start_metadata_sync_to_node('localhost', 57637);
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-start-metadata-sync: <... completed>
+start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-count-shards-by-worker:
+	SELECT COUNT(*) FROM pg_dist_placement WHERE groupid=1 AND shardstate != 4;
+	SELECT * FROM run_command_on_workers('SELECT COUNT(*) FROM pg_dist_placement WHERE groupid=1') ORDER BY 1, 2, 3, 4;
+	SELECT COUNT(*) FROM pg_dist_placement WHERE groupid=2 AND shardstate != 4;
+	SELECT * FROM run_command_on_workers('SELECT COUNT(*) FROM pg_dist_placement WHERE groupid=2') ORDER BY 1, 2, 3, 4;
+
+count
+---------------------------------------------------------------------
+    1
+(1 row)
+
+nodename |nodeport|success|result
+---------------------------------------------------------------------
+localhost|   57637|t      |     1
+localhost|   57638|t      |     1
+(2 rows)
+
+count
+---------------------------------------------------------------------
+    3
+(1 row)
+
+nodename |nodeport|success|result
+---------------------------------------------------------------------
+localhost|   57637|t      |     3
+localhost|   57638|t      |     3
+(2 rows)
+
+
+starting permutation: s1-begin s1-move-shard-block-writes s2-start-metadata-sync s1-commit s1-count-shards-by-worker
+step s1-begin:
+	BEGIN;
+
+step s1-move-shard-block-writes:
+	SELECT * FROM master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, 'block_writes');
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-start-metadata-sync:
+	SELECT * FROM start_metadata_sync_to_node('localhost', 57637);
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-start-metadata-sync: <... completed>
+start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-count-shards-by-worker:
+	SELECT COUNT(*) FROM pg_dist_placement WHERE groupid=1 AND shardstate != 4;
+	SELECT * FROM run_command_on_workers('SELECT COUNT(*) FROM pg_dist_placement WHERE groupid=1') ORDER BY 1, 2, 3, 4;
+	SELECT COUNT(*) FROM pg_dist_placement WHERE groupid=2 AND shardstate != 4;
+	SELECT * FROM run_command_on_workers('SELECT COUNT(*) FROM pg_dist_placement WHERE groupid=2') ORDER BY 1, 2, 3, 4;
+
+count
+---------------------------------------------------------------------
+    1
+(1 row)
+
+nodename |nodeport|success|result
+---------------------------------------------------------------------
+localhost|   57637|t      |     1
+localhost|   57638|t      |     1
+(2 rows)
+
+count
+---------------------------------------------------------------------
+    3
+(1 row)
+
+nodename |nodeport|success|result
+---------------------------------------------------------------------
+localhost|   57637|t      |     3
+localhost|   57638|t      |     3
+(2 rows)
+

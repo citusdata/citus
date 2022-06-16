@@ -6,7 +6,9 @@
  *    We currently support replicating function definitions on the
  *    coordinator in all the worker nodes in the form of
  *
- *    CREATE OR REPLACE FUNCTION ... queries.
+ *    CREATE OR REPLACE FUNCTION ... queries and
+ *    GRANT ... ON FUNCTION queries
+ *
  *
  *    ALTER or DROP operations are not yet propagated.
  *
@@ -104,6 +106,7 @@ static void DistributeFunctionColocatedWithDistributedTable(RegProcedure funcOid
 															functionAddress);
 static void DistributeFunctionColocatedWithReferenceTable(const
 														  ObjectAddress *functionAddress);
+static List * FilterDistributedFunctions(GrantStmt *grantStmt);
 
 static void EnsureExtensionFunctionCanBeDistributed(const ObjectAddress functionAddress,
 													const ObjectAddress extensionAddress,
@@ -239,8 +242,17 @@ create_distributed_function(PG_FUNCTION_ARGS)
 		const char *createFunctionSQL = GetFunctionDDLCommand(funcOid, true);
 		const char *alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
 		initStringInfo(&ddlCommand);
-		appendStringInfo(&ddlCommand, "%s;%s;%s;%s", DISABLE_METADATA_SYNC,
-						 createFunctionSQL, alterFunctionOwnerSQL, ENABLE_METADATA_SYNC);
+		appendStringInfo(&ddlCommand, "%s;%s;%s", DISABLE_METADATA_SYNC,
+						 createFunctionSQL, alterFunctionOwnerSQL);
+		List *grantDDLCommands = GrantOnFunctionDDLCommands(funcOid);
+		char *grantOnFunctionSQL = NULL;
+		foreach_ptr(grantOnFunctionSQL, grantDDLCommands)
+		{
+			appendStringInfo(&ddlCommand, ";%s", grantOnFunctionSQL);
+		}
+
+		appendStringInfo(&ddlCommand, ";%s", ENABLE_METADATA_SYNC);
+
 		SendCommandToWorkersAsUser(NON_COORDINATOR_NODES, CurrentUserName(),
 								   ddlCommand.data);
 	}
@@ -1919,4 +1931,163 @@ EnsureExtensionFunctionCanBeDistributed(const ObjectAddress functionAddress,
 							get_func_name(functionAddress.objectId))));
 
 	EnsureDependenciesExistOnAllNodes(&functionAddress);
+}
+
+
+/*
+ * PreprocessGrantOnFunctionStmt is executed before the statement is applied to the local
+ * postgres instance.
+ *
+ * In this stage we can prepare the commands that need to be run on all workers to grant
+ * on distributed functions, procedures, routines.
+ */
+List *
+PreprocessGrantOnFunctionStmt(Node *node, const char *queryString,
+							  ProcessUtilityContext processUtilityContext)
+{
+	GrantStmt *stmt = castNode(GrantStmt, node);
+	Assert(isFunction(stmt->objtype));
+
+	List *distributedFunctions = FilterDistributedFunctions(stmt);
+
+	if (list_length(distributedFunctions) == 0 || !ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	List *grantFunctionList = NIL;
+	ObjectAddress *functionAddress = NULL;
+	foreach_ptr(functionAddress, distributedFunctions)
+	{
+		ObjectWithArgs *distFunction = ObjectWithArgsFromOid(
+			functionAddress->objectId);
+		grantFunctionList = lappend(grantFunctionList, distFunction);
+	}
+
+	List *originalObjects = stmt->objects;
+	GrantTargetType originalTargtype = stmt->targtype;
+
+	stmt->objects = grantFunctionList;
+	stmt->targtype = ACL_TARGET_OBJECT;
+
+	char *sql = DeparseTreeNode((Node *) stmt);
+
+	stmt->objects = originalObjects;
+	stmt->targtype = originalTargtype;
+
+	List *commandList = list_make3(DISABLE_DDL_PROPAGATION,
+								   (void *) sql,
+								   ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commandList);
+}
+
+
+/*
+ * PostprocessGrantOnFunctionStmt makes sure dependencies of each
+ * distributed function in the statement exist on all nodes
+ */
+List *
+PostprocessGrantOnFunctionStmt(Node *node, const char *queryString)
+{
+	GrantStmt *stmt = castNode(GrantStmt, node);
+
+	List *distributedFunctions = FilterDistributedFunctions(stmt);
+
+	if (list_length(distributedFunctions) == 0)
+	{
+		return NIL;
+	}
+
+	ObjectAddress *functionAddress = NULL;
+	foreach_ptr(functionAddress, distributedFunctions)
+	{
+		EnsureDependenciesExistOnAllNodes(functionAddress);
+	}
+	return NIL;
+}
+
+
+/*
+ * FilterDistributedFunctions determines and returns a list of distributed functions
+ * ObjectAddress-es from given grant statement.
+ */
+static List *
+FilterDistributedFunctions(GrantStmt *grantStmt)
+{
+	List *grantFunctionList = NIL;
+
+	bool grantOnFunctionCommand = (grantStmt->targtype == ACL_TARGET_OBJECT &&
+								   isFunction(grantStmt->objtype));
+	bool grantAllFunctionsOnSchemaCommand = (grantStmt->targtype ==
+											 ACL_TARGET_ALL_IN_SCHEMA &&
+											 isFunction(grantStmt->objtype));
+
+	/* we are only interested in function/procedure/routine level grants */
+	if (!grantOnFunctionCommand && !grantAllFunctionsOnSchemaCommand)
+	{
+		return NIL;
+	}
+
+	if (grantAllFunctionsOnSchemaCommand)
+	{
+		List *distributedFunctionList = DistributedFunctionList();
+		ObjectAddress *distributedFunction = NULL;
+		List *namespaceOidList = NIL;
+
+		/* iterate over all namespace names provided to get their oid's */
+		Value *namespaceValue = NULL;
+		foreach_ptr(namespaceValue, grantStmt->objects)
+		{
+			char *nspname = strVal(namespaceValue);
+			bool missing_ok = false;
+			Oid namespaceOid = get_namespace_oid(nspname, missing_ok);
+			namespaceOidList = list_append_unique_oid(namespaceOidList, namespaceOid);
+		}
+
+		/*
+		 * iterate over all distributed functions to filter the ones
+		 * that belong to one of the namespaces from above
+		 */
+		foreach_ptr(distributedFunction, distributedFunctionList)
+		{
+			Oid namespaceOid = get_func_namespace(distributedFunction->objectId);
+
+			/*
+			 * if this distributed function's schema is one of the schemas
+			 * specified in the GRANT .. ALL FUNCTIONS IN SCHEMA ..
+			 * add it to the list
+			 */
+			if (list_member_oid(namespaceOidList, namespaceOid))
+			{
+				grantFunctionList = lappend(grantFunctionList, distributedFunction);
+			}
+		}
+	}
+	else
+	{
+		bool missingOk = false;
+		ObjectWithArgs *objectWithArgs = NULL;
+		foreach_ptr(objectWithArgs, grantStmt->objects)
+		{
+			ObjectAddress *functionAddress = palloc0(sizeof(ObjectAddress));
+			functionAddress->classId = ProcedureRelationId;
+			functionAddress->objectId = LookupFuncWithArgs(grantStmt->objtype,
+														   objectWithArgs,
+														   missingOk);
+			functionAddress->objectSubId = 0;
+
+			/*
+			 * if this function from GRANT .. ON FUNCTION .. is a distributed
+			 * function, add it to the list
+			 */
+			if (IsObjectDistributed(functionAddress))
+			{
+				grantFunctionList = lappend(grantFunctionList, functionAddress);
+			}
+		}
+	}
+	return grantFunctionList;
 }

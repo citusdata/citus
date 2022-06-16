@@ -95,6 +95,7 @@ s/ *$//g
 # pg12 changes
 s/Partitioned table "/Table "/g
 s/\) TABLESPACE pg_default$/\)/g
+s/invalid input syntax for type bigint:/invalid input syntax for integer:/g
 s/invalid input syntax for type /invalid input syntax for /g
 s/_id_ref_id_fkey/_id_fkey/g
 s/_ref_id_id_fkey_/_ref_id_fkey_/g
@@ -250,6 +251,8 @@ s/ERROR:  parallel workers for vacuum must/ERROR:  parallel vacuum degree must/g
 s/(CONTEXT:  PL\/pgSQL function .* line )([0-9]+)/\1XX/g
 s/^(PL\/pgSQL function .* line) [0-9]+ (.*)/\1 XX \2/g
 
+# normalize a test difference in multi_move_mx
+s/ connection to server at "\w+" \(127\.0\.0\.1\), port [0-9]+ failed://g
 # can be removed after dropping PG13 support
 s/ERROR:  parallel workers for vacuum must be between/ERROR:  parallel vacuum degree must be between/g
 s/ERROR:  fake_fetch_row_version not implemented/ERROR:  fake_tuple_update not implemented/g
@@ -265,6 +268,8 @@ s/TRIM\(BOTH FROM value\)/btrim\(value\)/g
 s/pg14\.idx.*/pg14\.xxxxx/g
 
 s/CREATE TABLESPACE test_tablespace LOCATION.*/CREATE TABLESPACE test_tablespace LOCATION XXXX/g
+/DETAIL:  Subqueries are not supported in policies on distributed tables/d
+s/ERROR:  unexpected non-SELECT command in SubLink/ERROR:  cannot create policy/g
 
 # columnar log for var correlation
 s/(.*absolute correlation \()([0,1]\.[0-9]+)(\) of var attribute [0-9]+ is smaller than.*)/\1X\.YZ\3/g

@@ -37,8 +37,9 @@
 #include "distributed/maintenanced.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/metadata_sync.h"
 #include "distributed/shard_cleaner.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/query_stats.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
@@ -288,6 +289,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	ErrorContextCallback errorCallback;
 	TimestampTz lastRecoveryTime = 0;
 	TimestampTz lastShardCleanTime = 0;
+	TimestampTz lastStatStatementsPurgeTime = 0;
 	TimestampTz nextMetadataSyncTime = 0;
 
 
@@ -661,6 +663,34 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			timeout = Min(timeout, DeferShardDeleteInterval);
 		}
 
+		if (StatStatementsPurgeInterval > 0 &&
+			StatStatementsTrack != STAT_STATEMENTS_TRACK_NONE &&
+			TimestampDifferenceExceeds(lastStatStatementsPurgeTime, GetCurrentTimestamp(),
+									   (StatStatementsPurgeInterval * 1000)))
+		{
+			StartTransactionCommand();
+
+			if (!LockCitusExtension())
+			{
+				ereport(DEBUG1, (errmsg("could not lock the citus extension, "
+										"skipping stat statements purging")));
+			}
+			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
+			{
+				/*
+				 * Record last time we perform the purge to ensure we run once per
+				 * StatStatementsPurgeInterval.
+				 */
+				lastStatStatementsPurgeTime = GetCurrentTimestamp();
+
+				CitusQueryStatsSynchronizeEntries();
+			}
+
+			CommitTransactionCommand();
+
+			/* make sure we don't wait too long, need to convert seconds to milliseconds */
+			timeout = Min(timeout, (StatStatementsPurgeInterval * 1000));
+		}
 
 		/*
 		 * Wait until timeout, or until somebody wakes us up. Also cast the timeout to

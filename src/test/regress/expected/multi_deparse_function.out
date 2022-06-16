@@ -370,16 +370,9 @@ CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line XX at RAISE
 
 -- Rename the function back to the original name in the coordinator
 ALTER FUNCTION summation RENAME TO add;
+SET citus.enable_ddl_propagation TO on;
 CREATE ROLE function_role;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-SELECT run_command_on_workers('CREATE ROLE function_role');
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
-(2 rows)
-
+SET citus.enable_ddl_propagation TO off;
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION add OWNER TO function_role
 $cmd$);

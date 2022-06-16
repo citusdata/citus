@@ -66,6 +66,9 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
+#if PG_VERSION_NUM < 120000
+#include "utils/tqual.h"
+#endif
 
 #define DISK_SPACE_FIELDS 2
 
@@ -2175,11 +2178,8 @@ EnsureSuperUser(void)
 }
 
 
-/*
- * Return a table's owner as a string.
- */
-char *
-TableOwner(Oid relationId)
+Oid
+TableOwnerOid(Oid relationId)
 {
 	HeapTuple tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relationId));
 	if (!HeapTupleIsValid(tuple))
@@ -2191,8 +2191,17 @@ TableOwner(Oid relationId)
 	Oid userId = ((Form_pg_class) GETSTRUCT(tuple))->relowner;
 
 	ReleaseSysCache(tuple);
+	return userId;
+}
 
-	return GetUserNameFromId(userId, false);
+
+/*
+ * Return a table's owner as a string.
+ */
+char *
+TableOwner(Oid relationId)
+{
+	return GetUserNameFromId(TableOwnerOid(relationId), false);
 }
 
 

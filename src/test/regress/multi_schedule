@@ -1,5 +1,6 @@
 test: multi_test_helpers multi_test_helpers_superuser
 test: multi_cluster_management
+test: create_role_propagation
 test: multi_create_fdw
 test: multi_test_catalog_views
 test: replicated_table_disable_node

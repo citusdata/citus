@@ -9,6 +9,7 @@
  */
 
 #include "postgres.h"
+#include "miscadmin.h"
 
 #include "catalog/pg_foreign_server.h"
 #include "distributed/commands/utility_hook.h"
@@ -23,8 +24,11 @@
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/primnodes.h"
+#include "utils/builtins.h"
 
+static char * GetForeignServerAlterOwnerCommand(Oid serverId);
 static Node * RecreateForeignServerStmt(Oid serverId);
+static bool NameListHasDistributedServer(List *serverNames);
 static ObjectAddress GetObjectAddressByServerName(char *serverName, bool missing_ok);
 
 
@@ -59,6 +63,53 @@ AlterForeignServerStmtObjectAddress(Node *node, bool missing_ok)
 	AlterForeignServerStmt *stmt = castNode(AlterForeignServerStmt, node);
 
 	return GetObjectAddressByServerName(stmt->servername, missing_ok);
+}
+
+
+/*
+ * PreprocessGrantOnForeignServerStmt is executed before the statement is applied to the
+ * local postgres instance.
+ *
+ * In this stage we can prepare the commands that need to be run on all workers to grant
+ * on servers.
+ */
+List *
+PreprocessGrantOnForeignServerStmt(Node *node, const char *queryString,
+								   ProcessUtilityContext processUtilityContext)
+{
+	GrantStmt *stmt = castNode(GrantStmt, node);
+	Assert(stmt->objtype == OBJECT_FOREIGN_SERVER);
+
+	bool includesDistributedServer = NameListHasDistributedServer(stmt->objects);
+
+	if (!includesDistributedServer)
+	{
+		return NIL;
+	}
+
+	if (list_length(stmt->objects) > 1)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot grant on distributed server with other servers"),
+						errhint("Try granting on each object in separate commands")));
+	}
+
+	if (!ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	Assert(list_length(stmt->objects) == 1);
+
+	char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -109,11 +160,34 @@ GetForeignServerCreateDDLCommand(Oid serverId)
 	Node *stmt = RecreateForeignServerStmt(serverId);
 
 	/* capture ddl command for the create statement */
-	const char *ddlCommand = DeparseTreeNode(stmt);
+	const char *createCommand = DeparseTreeNode(stmt);
+	const char *alterOwnerCommand = GetForeignServerAlterOwnerCommand(serverId);
 
-	List *ddlCommands = list_make1((void *) ddlCommand);
+	List *ddlCommands = list_make2((void *) createCommand,
+								   (void *) alterOwnerCommand);
 
 	return ddlCommands;
+}
+
+
+/*
+ * GetForeignServerAlterOwnerCommand returns "ALTER SERVER .. OWNER TO .." statement
+ * for the specified foreign server.
+ */
+static char *
+GetForeignServerAlterOwnerCommand(Oid serverId)
+{
+	ForeignServer *server = GetForeignServer(serverId);
+	Oid ownerId = server->owner;
+	char *ownerName = GetUserNameFromId(ownerId, false);
+
+	StringInfo alterCommand = makeStringInfo();
+
+	appendStringInfo(alterCommand, "ALTER SERVER %s OWNER TO %s;",
+					 quote_identifier(server->servername),
+					 quote_identifier(ownerName));
+
+	return alterCommand->data;
 }
 
 
@@ -158,6 +232,28 @@ RecreateForeignServerStmt(Oid serverId)
 	}
 
 	return (Node *) createStmt;
+}
+
+
+/*
+ * NameListHasDistributedServer takes a namelist of servers and returns true if at least
+ * one of them is distributed. Returns false otherwise.
+ */
+static bool
+NameListHasDistributedServer(List *serverNames)
+{
+	String *serverValue = NULL;
+	foreach_ptr(serverValue, serverNames)
+	{
+		ObjectAddress address = GetObjectAddressByServerName(strVal(serverValue), false);
+
+		if (IsObjectDistributed(&address))
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 

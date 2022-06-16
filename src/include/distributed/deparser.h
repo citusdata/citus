@@ -67,12 +67,16 @@ extern void QualifyAlterDomainOwnerStmt(Node *node);
 extern void QualifyRenameDomainStmt(Node *node);
 extern void QualifyAlterDomainSchemaStmt(Node *node);
 
+/* forward declarations for deparse_foreign_data_wrapper_stmts.c */
+extern char * DeparseGrantOnFDWStmt(Node *node);
+
 /* forward declarations for deparse_foreign_server_stmts.c */
 extern char * DeparseCreateForeignServerStmt(Node *node);
 extern char * DeparseAlterForeignServerStmt(Node *node);
 extern char * DeparseAlterForeignServerRenameStmt(Node *node);
 extern char * DeparseAlterForeignServerOwnerStmt(Node *node);
 extern char * DeparseDropForeignServerStmt(Node *node);
+extern char * DeparseGrantOnForeignServerStmt(Node *node);
 
 /* forward declarations for deparse_table_stmts.c */
 extern char * DeparseAlterTableSchemaStmt(Node *stmt);
@@ -101,6 +105,9 @@ extern char * DeparseCreateSchemaStmt(Node *node);
 extern char * DeparseDropSchemaStmt(Node *node);
 extern char * DeparseGrantOnSchemaStmt(Node *stmt);
 extern char * DeparseAlterSchemaRenameStmt(Node *stmt);
+
+extern void AppendGrantPrivileges(StringInfo buf, GrantStmt *stmt);
+extern void AppendGrantGrantees(StringInfo buf, GrantStmt *stmt);
 
 /* forward declarations for deparse_statistics_stmts.c */
 extern char * DeparseCreateStatisticsStmt(Node *node);
@@ -156,6 +163,8 @@ extern char * DeparseAlterViewSchemaStmt(Node *node);
 
 
 /* forward declarations for deparse_function_stmts.c */
+extern bool isFunction(ObjectType objectType);
+
 extern char * DeparseDropFunctionStmt(Node *stmt);
 extern char * DeparseAlterFunctionStmt(Node *stmt);
 
@@ -163,6 +172,8 @@ extern char * DeparseRenameFunctionStmt(Node *stmt);
 extern char * DeparseAlterFunctionSchemaStmt(Node *stmt);
 extern char * DeparseAlterFunctionOwnerStmt(Node *stmt);
 extern char * DeparseAlterFunctionDependsStmt(Node *stmt);
+
+extern char * DeparseGrantOnFunctionStmt(Node *node);
 
 extern void AppendVariableSet(StringInfo buf, VariableSetStmt *setStmt);
 
@@ -179,6 +190,9 @@ extern char * DeparseAlterRoleSetStmt(Node *stmt);
 extern List * MakeSetStatementArguments(char *configurationName,
 										char *configurationValue);
 extern void QualifyAlterRoleSetStmt(Node *stmt);
+extern char * DeparseCreateRoleStmt(Node *stmt);
+extern char * DeparseDropRoleStmt(Node *stmt);
+extern char * DeparseGrantRoleStmt(Node *stmt);
 
 /* forward declarations for deparse_extension_stmts.c */
 extern DefElem * GetExtensionOption(List *extensionOptions,
@@ -210,11 +224,13 @@ extern char * DeparseDropSequenceStmt(Node *node);
 extern char * DeparseRenameSequenceStmt(Node *node);
 extern char * DeparseAlterSequenceSchemaStmt(Node *node);
 extern char * DeparseAlterSequenceOwnerStmt(Node *node);
+extern char * DeparseGrantOnSequenceStmt(Node *node);
 
 /* forward declarations for qualify_sequence_stmt.c */
 extern void QualifyRenameSequenceStmt(Node *node);
 extern void QualifyDropSequenceStmt(Node *node);
 extern void QualifyAlterSequenceSchemaStmt(Node *node);
 extern void QualifyAlterSequenceOwnerStmt(Node *node);
+extern void QualifyGrantOnSequenceStmt(Node *node);
 
 #endif /* CITUS_DEPARSER_H */

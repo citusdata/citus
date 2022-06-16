@@ -2,6 +2,9 @@
 -- MULTI_ALTER_TABLE_STATEMENTS
 --
 
+-- this test has different output per version
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 220000;
 
@@ -537,12 +540,37 @@ DROP TABLESPACE super_fast_ssd;
 
 -- Cleanup the table and its shards
 SET citus.enable_ddl_propagation to true;
+
+CREATE USER alter_table_owner WITH LOGIN;
+
+GRANT USAGE ON SCHEMA public TO alter_table_owner;
+
+\c - alter_table_owner - :master_port
+-- should not be able to access table without permission
+SELECT count(*) FROM lineitem_alter;
+
+-- should not be able to drop the table as non table owner
 DROP TABLE lineitem_alter;
+
+\c - postgres - :master_port
+ALTER TABLE lineitem_alter OWNER TO alter_table_owner;
+
+\c - alter_table_owner - :master_port
+-- should be able to query the table as table owner
+SELECT count(*) FROM lineitem_alter;
+
+-- should be able to drop the table as table owner
+DROP TABLE lineitem_alter;
+
 -- check that nothing's left over on workers, other than the leftover shard created
 -- during the unsuccessful COPY
-\c - - - :worker_1_port
+\c - postgres - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%';
 \c - - - :master_port
+
+-- drop the roles created
+REVOKE ALL ON SCHEMA PUBLIC FROM alter_table_owner;
+DROP ROLE alter_table_owner;
 
 -- Test alter table with drop table in the same transaction
 BEGIN;
