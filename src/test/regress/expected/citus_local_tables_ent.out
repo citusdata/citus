@@ -1,0 +1,88 @@
+\set VERBOSITY terse
+SET citus.next_shard_id TO 1511000;
+SET citus.shard_replication_factor TO 1;
+SET citus.enable_local_execution TO ON;
+SET citus.log_local_commands TO ON;
+CREATE SCHEMA citus_local_tables_ent;
+SET search_path TO citus_local_tables_ent;
+-- ensure that coordinator is added to pg_dist_node
+SET client_min_messages to ERROR;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+RESET client_min_messages;
+CREATE TABLE citus_local_table (a int, b int);
+SELECT citus_add_local_table_to_metadata('citus_local_table');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+-- isolate_tenant_to_new_shard is not supported
+SELECT isolate_tenant_to_new_shard('citus_local_table', 100);
+ERROR:  cannot isolate tenant because tenant isolation is only support for hash distributed tables
+-- master_copy_shard_placement is not supported
+SELECT master_copy_shard_placement(shardid, 'localhost', :master_port, 'localhost', :worker_1_port, false)
+FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='citus_local_table'::regclass) as shardid;
+ERROR:  Table 'citus_local_table' is a local table. Replicating shard of a local table added to metadata currently is not supported
+-- master_move_shard_placement is not supported
+SELECT master_move_shard_placement(shardid, 'localhost', :master_port, 'localhost', :worker_1_port)
+FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='citus_local_table'::regclass) as shardid;
+ERROR:  table citus_local_tables_ent.citus_local_table is a local table, moving shard of a local table added to metadata is currently not supported
+-- replicate_table_shards is not suported
+SELECT replicate_table_shards('citus_local_table'::regclass, 2);
+NOTICE:  Copying shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
+ERROR:  Table 'citus_local_table' is a local table. Replicating shard of a local table added to metadata currently is not supported
+-- rebalance_table_shards is not supported
+SELECT rebalance_table_shards('citus_local_table');
+ERROR:  table citus_local_tables_ent.citus_local_table is a local table, moving shard of a local table added to metadata is currently not supported
+-- get_rebalance_table_shards_plan is not supported
+SELECT get_rebalance_table_shards_plan('citus_local_table');
+ERROR:  table citus_local_tables_ent.citus_local_table is a local table, moving shard of a local table added to metadata is currently not supported
+-- test a policy defined after creating a citus local table
+-- create another user for policy test
+CREATE USER user_can_select_a_1;
+ALTER ROLE user_can_select_a_1 SET search_path TO citus_local_tables_ent;
+GRANT USAGE ON SCHEMA citus_local_tables_ent TO user_can_select_a_1;
+INSERT INTO citus_local_table VALUES (1,1);
+NOTICE:  executing the command locally: INSERT INTO citus_local_tables_ent.citus_local_table_1511000 (a, b) VALUES (1, 1)
+INSERT INTO citus_local_table VALUES (2,2);
+NOTICE:  executing the command locally: INSERT INTO citus_local_tables_ent.citus_local_table_1511000 (a, b) VALUES (2, 2)
+-- grant access
+GRANT SELECT ON TABLE citus_local_table TO user_can_select_a_1;
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1511000, 'citus_local_tables_ent', 'GRANT select ON citus_local_table TO user_can_select_a_1')
+-- enable row level security
+ALTER TABLE citus_local_table ENABLE ROW LEVEL SECURITY;
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1511000, 'citus_local_tables_ent', 'ALTER TABLE citus_local_table ENABLE ROW LEVEL SECURITY;')
+-- switch user, it should not be able to see any rows since row level security is enabled
+SET ROLE user_can_select_a_1;
+SELECT * FROM citus_local_table ORDER BY 1, 2;
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_tables_ent.citus_local_table_1511000 citus_local_table ORDER BY a, b
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+RESET ROLE;
+-- create policy for user to read access for rows with a=1
+CREATE POLICY user_mod ON citus_local_table
+FOR SELECT
+TO user_can_select_a_1
+USING (current_user = 'user_can_select_a_1' and a=1);
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1511000, 'citus_local_tables_ent', 'CREATE POLICY user_mod ON citus_local_tables_ent.citus_local_table FOR SELECT TO user_can_select_a_1 USING (((CURRENT_USER = ''user_can_select_a_1''::name) AND (a = 1)))')
+-- switch user, it should be able to see rows with a=1
+SET ROLE user_can_select_a_1;
+SELECT * FROM citus_local_table ORDER BY 1, 2;
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_tables_ent.citus_local_table_1511000 citus_local_table ORDER BY a, b
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+(1 row)
+
+-- reset role
+RESET ROLE;
+-- cleanup at exit
+DROP SCHEMA citus_local_tables_ent CASCADE;
+NOTICE:  drop cascades to 2 other objects

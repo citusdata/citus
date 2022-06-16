@@ -520,12 +520,6 @@ workflows:
   version: 2
   build_and_test:
     jobs:
-      - check-merge-to-enterprise:
-          filters:
-            branches:
-              ignore:
-                - /release-[0-9]+\.[0-9]+.*/ # match with releaseX.Y.*
-
       - build:
           name: build-13
           pg_major: 13
@@ -612,6 +606,81 @@ workflows:
           make: check-failure
           requires: [build-13]
 
+      - test-citus:
+          name: 'test-13_check-enterprise'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-enterprise
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-enterprise-isolation'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-enterprise-isolation
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-enterprise-isolation-logicalrep-1'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-enterprise-isolation-logicalrep-1
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-enterprise-isolation-logicalrep-2'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-enterprise-isolation-logicalrep-2
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-enterprise-isolation-logicalrep-3'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-enterprise-isolation-logicalrep-3
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-enterprise-failure'
+          pg_major: 13
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-enterprise-failure
+          requires: [build-13]
+
+      - test-citus:
+          name: 'test-14_check-enterprise'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-enterprise
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-enterprise-isolation'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-enterprise-isolation
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-enterprise-isolation-logicalrep-1'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-enterprise-isolation-logicalrep-1
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-enterprise-isolation-logicalrep-2'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-enterprise-isolation-logicalrep-2
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-enterprise-isolation-logicalrep-3'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-enterprise-isolation-logicalrep-3
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-enterprise-failure'
+          pg_major: 14
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-enterprise-failure
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-multi'
           pg_major: 14

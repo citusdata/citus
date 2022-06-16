@@ -114,7 +114,6 @@ DROP TEXT SEARCH CONFIGURATION text_search.french_noaccent CASCADE;
 SELECT * FROM run_command_on_workers($$ SELECT 'text_search.french_noaccent'::regconfig; $$) ORDER BY 1,2;
 
 SET client_min_messages TO 'warning';
-SELECT * FROM run_command_on_workers($$CREATE ROLE text_search_owner;$$) ORDER BY 1,2;
 CREATE ROLE text_search_owner;
 RESET client_min_messages;
 

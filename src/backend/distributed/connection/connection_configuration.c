@@ -10,9 +10,12 @@
 
 #include "postgres.h"
 
+#include "access/transam.h"
+#include "access/xact.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
+#include "distributed/intermediate_result_pruning.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/worker_manager.h"
 
@@ -40,6 +43,7 @@ typedef struct ConnParamsInfo
 static ConnParamsInfo ConnParams;
 
 /* helper functions for processing connection info */
+static ConnectionHashKey * GetEffectiveConnKey(ConnectionHashKey *key);
 static Size CalculateMaxSize(void);
 static int uri_prefix_length(const char *connstr);
 
@@ -232,6 +236,7 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	 * already we can add a pointer to the runtimeValues.
 	 */
 	char nodePortString[12] = "";
+	ConnectionHashKey *effectiveKey = GetEffectiveConnKey(key);
 
 	StringInfo applicationName = makeStringInfo();
 	appendStringInfo(applicationName, "%s%ld", CITUS_APPLICATION_NAME_PREFIX,
@@ -260,10 +265,10 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 		"application_name"
 	};
 	const char *runtimeValues[] = {
-		key->hostname,
+		effectiveKey->hostname,
 		nodePortString,
-		key->database,
-		key->user,
+		effectiveKey->database,
+		effectiveKey->user,
 		GetDatabaseEncodingName(),
 		applicationName->data
 	};
@@ -300,7 +305,7 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 						errmsg("too many connParams entries")));
 	}
 
-	pg_ltoa(key->port, nodePortString); /* populate node port string with port */
+	pg_ltoa(effectiveKey->port, nodePortString); /* populate node port string with port */
 
 	/* first step: copy global parameters to beginning of array */
 	for (Size paramIndex = 0; paramIndex < ConnParams.size; paramIndex++)
@@ -321,6 +326,58 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 		connValues[ConnParams.size + runtimeParamIndex] =
 			MemoryContextStrdup(context, runtimeValues[runtimeParamIndex]);
 	}
+
+	/* we look up authinfo by original key, not effective one */
+	char *authinfo = GetAuthinfo(key->hostname, key->port, key->user);
+	char *pqerr = NULL;
+	PQconninfoOption *optionArray = PQconninfoParse(authinfo, &pqerr);
+	if (optionArray == NULL)
+	{
+		/* PQconninfoParse failed, it's unsafe to continue as this has caused segfaults in production */
+		if (pqerr == NULL)
+		{
+			/* parse failed without an error message, treat as OOM error  */
+			ereport(ERROR,
+					(errcode(ERRCODE_OUT_OF_MEMORY),
+					 errmsg("out of memory"),
+					 errdetail("Failed to parse authentication information via libpq")));
+		}
+		else
+		{
+			/*
+			 * Parse error, should not be possible as the validity is checked upon insert into pg_dist_authinfo,
+			 * however, better safe than sorry
+			 */
+
+			/*
+			 * errmsg is populated by PQconninfoParse which requires us to free the message. Since we want to
+			 * incorporate the parse error into the detail of our message we need to copy the error message before
+			 * freeing it. Not freeing the message will leak memory.
+			 */
+			char *pqerrcopy = pstrdup(pqerr);
+			PQfreemem(pqerr);
+
+			ereport(ERROR, (errmsg(
+								"failed to parse node authentication information for %s@%s:%d",
+								key->user, key->hostname, key->port),
+							errdetail("%s", pqerrcopy)));
+		}
+	}
+
+	for (PQconninfoOption *option = optionArray; option->keyword != NULL; option++)
+	{
+		if (option->val == NULL || option->val[0] == '\0')
+		{
+			continue;
+		}
+
+		connKeywords[authParamsIdx] = MemoryContextStrdup(context, option->keyword);
+		connValues[authParamsIdx] = MemoryContextStrdup(context, option->val);
+
+		authParamsIdx++;
+	}
+
+	PQconninfoFree(optionArray);
 
 	/* final step: add terminal NULL, required by libpq */
 	connKeywords[authParamsIdx] = connValues[authParamsIdx] = NULL;
@@ -343,6 +400,116 @@ GetConnParam(const char *keyword)
 	}
 
 	return NULL;
+}
+
+
+/*
+ * GetEffectiveConnKey checks whether there is any pooler configuration for the
+ * provided key (host/port combination). The one case where this logic is not
+ * applied is for loopback connections originating within the task tracker. If
+ * a corresponding row is found in the poolinfo table, a modified (effective)
+ * key is returned with the node, port, and dbname overridden, as applicable,
+ * otherwise, the original key is returned unmodified.
+ */
+ConnectionHashKey *
+GetEffectiveConnKey(ConnectionHashKey *key)
+{
+	PQconninfoOption *option = NULL, *optionArray = NULL;
+
+	if (!IsTransactionState())
+	{
+		/* we're in the task tracker, so should only see loopback */
+		Assert(strncmp(LOCAL_HOST_NAME, key->hostname, MAX_NODE_LENGTH) == 0 &&
+			   PostPortNumber == key->port);
+		return key;
+	}
+
+	WorkerNode *worker = FindWorkerNode(key->hostname, key->port);
+	if (worker == NULL)
+	{
+		/* this can be hit when the key references an unknown node */
+		return key;
+	}
+
+	char *poolinfo = GetPoolinfoViaCatalog(worker->nodeId);
+	if (poolinfo == NULL)
+	{
+		return key;
+	}
+
+	/* copy the key to provide defaults for all fields */
+	ConnectionHashKey *effectiveKey = palloc(sizeof(ConnectionHashKey));
+	*effectiveKey = *key;
+
+	optionArray = PQconninfoParse(poolinfo, NULL);
+	for (option = optionArray; option->keyword != NULL; option++)
+	{
+		if (option->val == NULL || option->val[0] == '\0')
+		{
+			continue;
+		}
+
+		if (strcmp(option->keyword, "host") == 0)
+		{
+			strlcpy(effectiveKey->hostname, option->val, MAX_NODE_LENGTH);
+		}
+		else if (strcmp(option->keyword, "port") == 0)
+		{
+			effectiveKey->port = pg_atoi(option->val, 4, 0);
+		}
+		else if (strcmp(option->keyword, "dbname") == 0)
+		{
+			/* permit dbname for poolers which can key pools based on dbname */
+			strlcpy(effectiveKey->database, option->val, NAMEDATALEN);
+		}
+		else
+		{
+			ereport(FATAL, (errmsg("unrecognized poolinfo keyword")));
+		}
+	}
+
+	PQconninfoFree(optionArray);
+
+	return effectiveKey;
+}
+
+
+/*
+ * GetAuthinfo simply returns the string representation of authentication info
+ * for a specified hostname/port/user combination. If the current transaction
+ * is valid, then we use the catalog, otherwise a shared memory hash is used,
+ * a mode that is currently only useful for getting authentication information
+ * to the Task Tracker, which lacks a database connection and transaction.
+ */
+char *
+GetAuthinfo(char *hostname, int32 port, char *user)
+{
+	char *authinfo = NULL;
+	bool isLoopback = (strncmp(LOCAL_HOST_NAME, hostname, MAX_NODE_LENGTH) == 0 &&
+					   PostPortNumber == port);
+
+	if (IsTransactionState())
+	{
+		int64 nodeId = WILDCARD_NODE_ID;
+
+		/* -1 is a special value for loopback connections (task tracker) */
+		if (isLoopback)
+		{
+			nodeId = LOCALHOST_NODE_ID;
+		}
+		else
+		{
+			WorkerNode *worker = FindWorkerNode(hostname, port);
+			if (worker != NULL)
+			{
+				nodeId = worker->nodeId;
+			}
+		}
+
+		authinfo = GetAuthinfoViaCatalog(user, nodeId);
+	}
+
+	return (authinfo != NULL) ? authinfo : "";
 }
 
 

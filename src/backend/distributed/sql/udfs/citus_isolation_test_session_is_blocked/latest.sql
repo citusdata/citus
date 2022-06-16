@@ -48,7 +48,7 @@ RETURNS boolean AS $$
                 AND blocking_locks.pid != blocked_locks.pid
             JOIN pg_catalog.pg_stat_activity blocking_activity ON blocking_activity.pid = blocking_locks.pid
            WHERE NOT blocked_locks.GRANTED AND blocked_activity.application_name LIKE 'citus_shard_move_subscription_%'
-        $two$) where result='citus_shard_move_subscription_' || pBlockedPid);
+        $two$) where result LIKE 'citus_shard_move_subscription_%_' || pBlockedPid);
 
   END;
 $$ LANGUAGE plpgsql;

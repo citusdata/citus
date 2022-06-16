@@ -163,8 +163,6 @@ citus_check_defaults_for_sslmode(PG_FUNCTION_ARGS)
 		configChanged = true;
 	}
 
-	/* placeholder for extra changes to configuration before reloading */
-
 	if (configChanged)
 	{
 		GloballyReloadConfig();

@@ -1,0 +1,519 @@
+Parsed test spec with 3 sessions
+
+starting permutation: s3-acquire-advisory-lock s1-begin s1-move-placement-partitioned s2-insert-partitioned s3-release-advisory-lock s1-end
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s1-move-placement-partitioned:
+     SELECT master_move_shard_placement((SELECT * FROM selected_partitioned_shard), 'localhost', 57638, 'localhost', 57637);
+ <waiting ...>
+step s2-insert-partitioned: 
+    INSERT INTO logical_replicate_partitioned VALUES (5, 15);
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-move-placement-partitioned: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+
+starting permutation: s3-acquire-advisory-lock s1-begin s1-move-placement-partitioned s2-upsert-partitioned s3-release-advisory-lock s1-end
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s1-move-placement-partitioned:
+     SELECT master_move_shard_placement((SELECT * FROM selected_partitioned_shard), 'localhost', 57638, 'localhost', 57637);
+ <waiting ...>
+step s2-upsert-partitioned: 
+    INSERT INTO logical_replicate_partitioned VALUES (5, 15);
+    INSERT INTO logical_replicate_partitioned VALUES (5, 15) ON CONFLICT (x, y) DO UPDATE SET y = logical_replicate_partitioned.y + 1;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-move-placement-partitioned: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+
+starting permutation: s3-acquire-advisory-lock s1-begin s1-move-placement-partitioned s2-update-partitioned s3-release-advisory-lock s1-end
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s1-move-placement-partitioned:
+     SELECT master_move_shard_placement((SELECT * FROM selected_partitioned_shard), 'localhost', 57638, 'localhost', 57637);
+ <waiting ...>
+step s2-update-partitioned: 
+    UPDATE logical_replicate_partitioned SET y = y + 1 WHERE x = 5;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-move-placement-partitioned: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+
+starting permutation: s3-acquire-advisory-lock s1-begin s1-move-placement-partitioned s2-delete-partitioned s3-release-advisory-lock s1-end
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s1-move-placement-partitioned:
+     SELECT master_move_shard_placement((SELECT * FROM selected_partitioned_shard), 'localhost', 57638, 'localhost', 57637);
+ <waiting ...>
+step s2-delete-partitioned: 
+    DELETE FROM logical_replicate_partitioned WHERE x = 5;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-move-placement-partitioned: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+
+starting permutation: s3-acquire-advisory-lock s1-begin s1-move-placement-partitioned s2-copy-partitioned s3-release-advisory-lock s1-end
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s1-move-placement-partitioned:
+     SELECT master_move_shard_placement((SELECT * FROM selected_partitioned_shard), 'localhost', 57638, 'localhost', 57637);
+ <waiting ...>
+step s2-copy-partitioned: 
+ COPY logical_replicate_partitioned FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-move-placement-partitioned: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+
+starting permutation: s3-acquire-advisory-lock s1-begin s1-move-placement-single-partition s2-insert-partitioned s3-release-advisory-lock s1-end
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s1-move-placement-single-partition:
+     SELECT master_move_shard_placement((SELECT * FROM selected_single_partition_shard), 'localhost', 57638, 'localhost', 57637);
+ <waiting ...>
+step s2-insert-partitioned: 
+    INSERT INTO logical_replicate_partitioned VALUES (5, 15);
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-move-placement-single-partition: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+
+starting permutation: s3-acquire-advisory-lock s1-begin s1-move-placement-single-partition s2-upsert-partitioned s3-release-advisory-lock s1-end
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s1-move-placement-single-partition:
+     SELECT master_move_shard_placement((SELECT * FROM selected_single_partition_shard), 'localhost', 57638, 'localhost', 57637);
+ <waiting ...>
+step s2-upsert-partitioned: 
+    INSERT INTO logical_replicate_partitioned VALUES (5, 15);
+    INSERT INTO logical_replicate_partitioned VALUES (5, 15) ON CONFLICT (x, y) DO UPDATE SET y = logical_replicate_partitioned.y + 1;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-move-placement-single-partition: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+
+starting permutation: s3-acquire-advisory-lock s1-begin s1-move-placement-single-partition s2-update-partitioned s3-release-advisory-lock s1-end
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s1-move-placement-single-partition:
+     SELECT master_move_shard_placement((SELECT * FROM selected_single_partition_shard), 'localhost', 57638, 'localhost', 57637);
+ <waiting ...>
+step s2-update-partitioned: 
+    UPDATE logical_replicate_partitioned SET y = y + 1 WHERE x = 5;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-move-placement-single-partition: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+
+starting permutation: s3-acquire-advisory-lock s1-begin s1-move-placement-single-partition s2-delete-partitioned s3-release-advisory-lock s1-end
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s1-move-placement-single-partition:
+     SELECT master_move_shard_placement((SELECT * FROM selected_single_partition_shard), 'localhost', 57638, 'localhost', 57637);
+ <waiting ...>
+step s2-delete-partitioned: 
+    DELETE FROM logical_replicate_partitioned WHERE x = 5;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-move-placement-single-partition: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+
+starting permutation: s3-acquire-advisory-lock s1-begin s1-move-placement-single-partition s2-copy-partitioned s3-release-advisory-lock s1-end
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s1-move-placement-single-partition:
+     SELECT master_move_shard_placement((SELECT * FROM selected_single_partition_shard), 'localhost', 57638, 'localhost', 57637);
+ <waiting ...>
+step s2-copy-partitioned: 
+ COPY logical_replicate_partitioned FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-move-placement-single-partition: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+
+starting permutation: s1-begin s1-move-placement-partitioned s2-truncate-partitioned s1-end
+step s1-begin:
+ BEGIN;
+
+step s1-move-placement-partitioned:
+     SELECT master_move_shard_placement((SELECT * FROM selected_partitioned_shard), 'localhost', 57638, 'localhost', 57637);
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-truncate-partitioned:
+ TRUNCATE logical_replicate_partitioned;
+ <waiting ...>
+step s1-end: 
+ COMMIT;
+
+step s2-truncate-partitioned: <... completed>
+
+starting permutation: s1-begin s1-move-placement-partitioned s2-alter-table-partitioned s1-end
+step s1-begin:
+ BEGIN;
+
+step s1-move-placement-partitioned:
+     SELECT master_move_shard_placement((SELECT * FROM selected_partitioned_shard), 'localhost', 57638, 'localhost', 57637);
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-alter-table-partitioned:
+ ALTER TABLE logical_replicate_partitioned ADD COLUMN z INT;
+ <waiting ...>
+step s1-end: 
+ COMMIT;
+
+step s2-alter-table-partitioned: <... completed>
+
+starting permutation: s1-begin s2-truncate-partitioned s1-move-placement-partitioned s1-end
+step s1-begin:
+ BEGIN;
+
+step s2-truncate-partitioned:
+ TRUNCATE logical_replicate_partitioned;
+
+step s1-move-placement-partitioned:
+     SELECT master_move_shard_placement((SELECT * FROM selected_partitioned_shard), 'localhost', 57638, 'localhost', 57637);
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+
+starting permutation: s1-begin s2-alter-table-partitioned s1-move-placement-partitioned s1-end
+step s1-begin:
+ BEGIN;
+
+step s2-alter-table-partitioned:
+ ALTER TABLE logical_replicate_partitioned ADD COLUMN z INT;
+
+step s1-move-placement-partitioned:
+     SELECT master_move_shard_placement((SELECT * FROM selected_partitioned_shard), 'localhost', 57638, 'localhost', 57637);
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+
+starting permutation: s1-begin s1-move-placement-single-partition s2-truncate-partitioned s1-end
+step s1-begin:
+ BEGIN;
+
+step s1-move-placement-single-partition:
+     SELECT master_move_shard_placement((SELECT * FROM selected_single_partition_shard), 'localhost', 57638, 'localhost', 57637);
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-truncate-partitioned:
+ TRUNCATE logical_replicate_partitioned;
+ <waiting ...>
+step s1-end: 
+ COMMIT;
+
+step s2-truncate-partitioned: <... completed>
+
+starting permutation: s1-begin s1-move-placement-single-partition s2-alter-table-partitioned s1-end
+step s1-begin:
+ BEGIN;
+
+step s1-move-placement-single-partition:
+     SELECT master_move_shard_placement((SELECT * FROM selected_single_partition_shard), 'localhost', 57638, 'localhost', 57637);
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-alter-table-partitioned:
+ ALTER TABLE logical_replicate_partitioned ADD COLUMN z INT;
+ <waiting ...>
+step s1-end: 
+ COMMIT;
+
+step s2-alter-table-partitioned: <... completed>
+
+starting permutation: s1-begin s2-truncate-partitioned s1-move-placement-single-partition s1-end
+step s1-begin:
+ BEGIN;
+
+step s2-truncate-partitioned:
+ TRUNCATE logical_replicate_partitioned;
+
+step s1-move-placement-single-partition:
+     SELECT master_move_shard_placement((SELECT * FROM selected_single_partition_shard), 'localhost', 57638, 'localhost', 57637);
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+
+starting permutation: s1-begin s2-alter-table-partitioned s1-move-placement-single-partition s1-end
+step s1-begin:
+ BEGIN;
+
+step s2-alter-table-partitioned:
+ ALTER TABLE logical_replicate_partitioned ADD COLUMN z INT;
+
+step s1-move-placement-single-partition:
+     SELECT master_move_shard_placement((SELECT * FROM selected_single_partition_shard), 'localhost', 57638, 'localhost', 57637);
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+

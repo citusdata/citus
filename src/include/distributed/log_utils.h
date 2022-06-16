@@ -23,6 +23,7 @@ extern char * HashLogMessage(const char *text);
 	(log_min_messages <= ereport_loglevel ? HashLogMessage(text) : text)
 
 #undef ereport
+
 #define ereport(elevel, rest) \
 	do { \
 		int ereport_loglevel = elevel; \

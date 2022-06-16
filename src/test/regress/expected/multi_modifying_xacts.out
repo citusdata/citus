@@ -1134,13 +1134,6 @@ SELECT count(*) FROM pg_dist_transaction;
 -- in which we'll make the remote host unavailable
 -- first create the new user on all nodes
 CREATE USER test_user;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-\c - - - :worker_1_port
-CREATE USER test_user;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-\c - - - :worker_2_port
-CREATE USER test_user;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 -- now connect back to the master with the new user
 \c - test_user - :master_port
 SET citus.next_shard_id TO 1200015;
@@ -1311,13 +1304,6 @@ SELECT * FROM run_command_on_workers('ALTER USER test_user_new RENAME TO test_us
 
 DROP TABLE reference_modifying_xacts, hash_modifying_xacts, hash_modifying_xacts_second,
 	reference_failure_test, numbers_hash_failure_test;
-SELECT * FROM run_command_on_workers('DROP USER test_user');
- nodename  | nodeport | success |  result
----------------------------------------------------------------------
- localhost |    57637 | t       | DROP ROLE
- localhost |    57638 | t       | DROP ROLE
-(2 rows)
-
 DROP USER test_user;
 -- set up foreign keys to test transactions with co-located and reference tables
 BEGIN;

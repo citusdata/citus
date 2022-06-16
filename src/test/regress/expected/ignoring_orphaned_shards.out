@@ -147,7 +147,7 @@ SELECT logicalrelid FROM pg_dist_partition WHERE colocationid = 92448300 ORDER B
  rep1
 (1 row)
 
-SELECT citus_move_shard_placement(92448300, 'localhost', :worker_1_port, 'localhost', :master_port);
+SELECT citus_move_shard_placement(92448300, 'localhost', :worker_1_port, 'localhost', :master_port, 'block_writes');
  citus_move_shard_placement
 ---------------------------------------------------------------------
 
@@ -263,7 +263,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ROLLBACK
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- Cause the orphaned shard to be local
-SELECT 1 FROM citus_drain_node('localhost', :master_port);
+SELECT 1 FROM citus_drain_node('localhost', :master_port, 'block_writes');
 NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
  ?column?
 ---------------------------------------------------------------------

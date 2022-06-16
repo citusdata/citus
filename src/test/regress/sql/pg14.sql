@@ -71,8 +71,8 @@ SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regcla
 
 -- test column compression propagation in rebalance
 SELECT shardid INTO moving_shard FROM citus_shards WHERE table_name='col_compression'::regclass AND nodeport=:worker_1_port LIMIT 1;
-SELECT citus_move_shard_placement((SELECT * FROM moving_shard), :'public_worker_1_host', :worker_1_port, :'public_worker_2_host', :worker_2_port);
-SELECT rebalance_table_shards('col_compression', rebalance_strategy := 'by_shard_count');
+SELECT citus_move_shard_placement((SELECT * FROM moving_shard), :'public_worker_1_host', :worker_1_port, :'public_worker_2_host', :worker_2_port, shard_transfer_mode := 'block_writes');
+SELECT rebalance_table_shards('col_compression', rebalance_strategy := 'by_shard_count', shard_transfer_mode := 'block_writes');
 CALL citus_cleanup_orphaned_shards();
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
 SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
@@ -394,10 +394,7 @@ CREATE TABLE st1 (a int, b int);
 CREATE STATISTICS role_s1 ON a, b FROM st1;
 SELECT create_distributed_table('st1','a');
 ALTER STATISTICS role_s1 OWNER TO CURRENT_ROLE;
-SET citus.enable_ddl_propagation TO off; -- for enterprise
 CREATE ROLE role_1 WITH LOGIN SUPERUSER;
-SET citus.enable_ddl_propagation TO on;
-SELECT run_command_on_workers($$CREATE ROLE role_1 WITH LOGIN SUPERUSER;$$);
 ALTER STATISTICS role_s1 OWNER TO CURRENT_ROLE;
 SELECT run_command_on_workers($$SELECT rolname FROM pg_roles WHERE oid IN (SELECT stxowner FROM pg_statistic_ext WHERE stxname LIKE 'role\_s1%');$$);
 SET ROLE role_1;

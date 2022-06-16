@@ -188,7 +188,6 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
 \c - - - :master_port
 
 CREATE USER no_access_mx;
-SELECT run_command_on_workers($$CREATE USER no_access_mx;$$);
 
 SET ROLE no_access_mx;
 

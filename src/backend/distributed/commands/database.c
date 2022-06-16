@@ -33,7 +33,7 @@ static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
 static Oid get_database_owner(Oid db_oid);
 
 /* controlled via GUC */
-bool EnableAlterDatabaseOwner = false;
+bool EnableAlterDatabaseOwner = true;
 
 
 /*

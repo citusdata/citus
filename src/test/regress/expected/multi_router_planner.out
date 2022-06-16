@@ -2451,13 +2451,10 @@ SELECT master_create_worker_shards('failure_test', 2);
 
 SET citus.enable_ddl_propagation TO off;
 CREATE USER router_user;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
 \c - - - :worker_1_port
+SET citus.enable_ddl_propagation TO off;
 CREATE USER router_user;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
 \c - router_user - :master_port
 -- we will fail to connect to worker 2, since the user does not exist

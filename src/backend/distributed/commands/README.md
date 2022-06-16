@@ -12,8 +12,8 @@ they are often moved to files that are named after the command.
 | `create_distributed_table.c` | Implementation of UDF's for creating distributed tables |
 | `drop_distributed_table.c`   | Implementation for dropping metadata for partitions of distributed tables |
 | `extension.c`                | Implementation of `CREATE EXTENSION` commands for citus specific checks |
-| `foreign_constraint.c`       | Implementation of helper functions for foreign key constraints |
-| `grant.c`                    | Placeholder for code granting users access to relations, implemented as enterprise feature |
+| `foreign_constraint.c`       | Implementation of and helper functions for foreign key constraints |
+| `grant.c`                    | Implementation of `GRANT` commands for roles/users on relations |
 | `index.c`                    | Implementation of commands specific to indices on distributed tables |
 | `multi_copy.c`               | Implementation of `COPY` command. There are multiple different copy modes which are described in detail below |
 | `policy.c`                   | Implementation of `CREATE\ALTER POLICY` commands. |
