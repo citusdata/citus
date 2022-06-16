@@ -47,14 +47,14 @@
 
 * Adds support for propagating views when syncing Citus table metadata
 
-* Converts `citus.hide_shards_from_app_name_prefixes` to
-  `citus.show_shards_for_app_name_prefixes`
-
 * Enables distributed execution from `run_command_on_*` functions
 
 * Honors `enable_metadata_sync` in node operations
 
 * Parallelizes metadata syncing on node activate
+
+* Replaces `citus.hide_shards_from_app_name_prefixes` with
+  `citus.show_shards_for_app_name_prefixes`
 
 * Fixes a bug that could cause false positive distributed deadlocks due to local
   execution
