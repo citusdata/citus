@@ -81,8 +81,8 @@
 
 * Fixes schema name qualification for `CREATE STATISTICS`
 
-* Improves nested execution checks and adds GUC
-  `citus.allow_nested_distributed_execution`
+* Improves nested execution checks and adds GUC to control
+  (`citus.allow_nested_distributed_execution`)
 
 * Prevents alter table functions from dropping extensions
 
