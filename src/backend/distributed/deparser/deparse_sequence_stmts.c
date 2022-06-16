@@ -27,6 +27,8 @@ static void AppendSequenceNameList(StringInfo buf, List *objects, ObjectType obj
 static void AppendRenameSequenceStmt(StringInfo buf, RenameStmt *stmt);
 static void AppendAlterSequenceSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
 static void AppendAlterSequenceOwnerStmt(StringInfo buf, AlterTableStmt *stmt);
+static void AppendGrantOnSequenceStmt(StringInfo buf, GrantStmt *stmt);
+static void AppendGrantOnSequenceSequences(StringInfo buf, GrantStmt *stmt);
 
 /*
  * DeparseDropSequenceStmt builds and returns a string representing the DropStmt
@@ -251,6 +253,110 @@ AppendAlterSequenceOwnerStmt(StringInfo buf, AlterTableStmt *stmt)
 								errdetail("sub command type: %d",
 										  alterTableCmd->subtype)));
 			}
+		}
+	}
+}
+
+
+/*
+ * DeparseGrantOnSequenceStmt builds and returns a string representing the GrantOnSequenceStmt
+ */
+char *
+DeparseGrantOnSequenceStmt(Node *node)
+{
+	GrantStmt *stmt = castNode(GrantStmt, node);
+	Assert(stmt->objtype == OBJECT_SEQUENCE);
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendGrantOnSequenceStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+/*
+ * AppendGrantOnSequenceStmt builds and returns an SQL command representing a
+ * GRANT .. ON SEQUENCE command from given GrantStmt object.
+ */
+static void
+AppendGrantOnSequenceStmt(StringInfo buf, GrantStmt *stmt)
+{
+	Assert(stmt->objtype == OBJECT_SEQUENCE);
+
+	if (stmt->targtype == ACL_TARGET_ALL_IN_SCHEMA)
+	{
+		/*
+		 * Normally we shouldn't reach this
+		 * We deparse a GrantStmt with OBJECT_SEQUENCE after setting targtype
+		 * to ACL_TARGET_OBJECT
+		 */
+		elog(ERROR,
+			 "GRANT .. ALL SEQUENCES IN SCHEMA is not supported for formatting.");
+	}
+
+	appendStringInfoString(buf, stmt->is_grant ? "GRANT " : "REVOKE ");
+
+	if (!stmt->is_grant && stmt->grant_option)
+	{
+		appendStringInfoString(buf, "GRANT OPTION FOR ");
+	}
+
+	AppendGrantPrivileges(buf, stmt);
+
+	AppendGrantOnSequenceSequences(buf, stmt);
+
+	AppendGrantGrantees(buf, stmt);
+
+	if (stmt->is_grant && stmt->grant_option)
+	{
+		appendStringInfoString(buf, " WITH GRANT OPTION");
+	}
+	if (!stmt->is_grant)
+	{
+		if (stmt->behavior == DROP_RESTRICT)
+		{
+			appendStringInfoString(buf, " RESTRICT");
+		}
+		else if (stmt->behavior == DROP_CASCADE)
+		{
+			appendStringInfoString(buf, " CASCADE");
+		}
+	}
+	appendStringInfoString(buf, ";");
+}
+
+
+/*
+ * AppendGrantOnSequenceSequences appends the sequence names along with their arguments
+ * to the given StringInfo from the given GrantStmt
+ */
+static void
+AppendGrantOnSequenceSequences(StringInfo buf, GrantStmt *stmt)
+{
+	Assert(stmt->objtype == OBJECT_SEQUENCE);
+
+	appendStringInfoString(buf, " ON SEQUENCE ");
+
+	ListCell *cell = NULL;
+	foreach(cell, stmt->objects)
+	{
+		/*
+		 * GrantOnSequence statement keeps its objects (sequences) as
+		 * a list of RangeVar-s
+		 */
+		RangeVar *sequence = (RangeVar *) lfirst(cell);
+
+		/*
+		 * We have qualified the statement beforehand
+		 */
+		appendStringInfoString(buf, quote_qualified_identifier(sequence->schemaname,
+															   sequence->relname));
+
+		if (cell != list_tail(stmt->objects))
+		{
+			appendStringInfoString(buf, ", ");
 		}
 	}
 }

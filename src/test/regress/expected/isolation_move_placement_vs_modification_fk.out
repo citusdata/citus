@@ -1,0 +1,555 @@
+Parsed test spec with 3 sessions
+
+starting permutation: s2-add-fkey s1-insert-referenced s1-insert-referencing s1-begin s2-begin s2-move-placement-blocking s1-delete s2-commit s1-commit s2-print-cluster
+step s2-add-fkey:
+  ALTER TABLE referencing_table ADD CONSTRAINT fkey_const FOREIGN KEY (value) REFERENCES referenced_table(id) ON DELETE CASCADE;
+
+step s1-insert-referenced:
+  INSERT INTO referenced_table SELECT x,x FROM generate_series(1,10) as f(x);
+
+step s1-insert-referencing:
+  INSERT INTO referencing_table SELECT x,x FROM generate_series(1,10) as f(x);
+
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+  BEGIN;
+
+step s2-move-placement-blocking:
+  SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57638, 'localhost', 57637, shard_transfer_mode:='block_writes');
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-delete:
+  DELETE FROM referenced_table WHERE id < 5;
+ <waiting ...>
+step s2-commit: 
+  COMMIT;
+
+step s1-delete: <... completed>
+step s1-commit:
+  COMMIT;
+
+step s2-print-cluster:
+  -- row count per shard
+  SELECT
+    nodeport, shardid, success, result
+  FROM
+    run_command_on_placements('referencing_table', 'select count(*) from %s')
+  ORDER BY
+    nodeport, shardid;
+  -- rows
+  SELECT * FROM referencing_table ORDER BY 1;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1600002|t      |     4
+   57637|1600003|t      |     2
+(2 rows)
+
+id|value
+---------------------------------------------------------------------
+ 5|    5
+ 6|    6
+ 7|    7
+ 8|    8
+ 9|    9
+10|   10
+(6 rows)
+
+
+starting permutation: s2-add-fkey s1-insert-referenced s1-insert-referencing s1-begin s2-begin s2-move-placement-blocking s1-update s2-commit s1-commit s2-print-cluster
+step s2-add-fkey:
+  ALTER TABLE referencing_table ADD CONSTRAINT fkey_const FOREIGN KEY (value) REFERENCES referenced_table(id) ON DELETE CASCADE;
+
+step s1-insert-referenced:
+  INSERT INTO referenced_table SELECT x,x FROM generate_series(1,10) as f(x);
+
+step s1-insert-referencing:
+  INSERT INTO referencing_table SELECT x,x FROM generate_series(1,10) as f(x);
+
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+  BEGIN;
+
+step s2-move-placement-blocking:
+  SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57638, 'localhost', 57637, shard_transfer_mode:='block_writes');
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-update:
+  UPDATE referenced_table SET value = 5 WHERE id = 5;
+ <waiting ...>
+step s2-commit: 
+  COMMIT;
+
+step s1-update: <... completed>
+step s1-commit:
+  COMMIT;
+
+step s2-print-cluster:
+  -- row count per shard
+  SELECT
+    nodeport, shardid, success, result
+  FROM
+    run_command_on_placements('referencing_table', 'select count(*) from %s')
+  ORDER BY
+    nodeport, shardid;
+  -- rows
+  SELECT * FROM referencing_table ORDER BY 1;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1600006|t      |     7
+   57637|1600007|t      |     3
+(2 rows)
+
+id|value
+---------------------------------------------------------------------
+ 1|    1
+ 2|    2
+ 3|    3
+ 4|    4
+ 5|    5
+ 6|    6
+ 7|    7
+ 8|    8
+ 9|    9
+10|   10
+(10 rows)
+
+
+starting permutation: s2-add-fkey s1-insert-referenced s1-insert-referencing s1-begin s2-begin s2-move-placement-blocking s1-ddl s2-commit s1-commit s2-print-cluster
+step s2-add-fkey:
+  ALTER TABLE referencing_table ADD CONSTRAINT fkey_const FOREIGN KEY (value) REFERENCES referenced_table(id) ON DELETE CASCADE;
+
+step s1-insert-referenced:
+  INSERT INTO referenced_table SELECT x,x FROM generate_series(1,10) as f(x);
+
+step s1-insert-referencing:
+  INSERT INTO referencing_table SELECT x,x FROM generate_series(1,10) as f(x);
+
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+  BEGIN;
+
+step s2-move-placement-blocking:
+  SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57638, 'localhost', 57637, shard_transfer_mode:='block_writes');
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-ddl:
+  CREATE INDEX referenced_table_index ON referenced_table(id);
+ <waiting ...>
+step s2-commit: 
+  COMMIT;
+
+step s1-ddl: <... completed>
+step s1-commit:
+  COMMIT;
+
+step s2-print-cluster:
+  -- row count per shard
+  SELECT
+    nodeport, shardid, success, result
+  FROM
+    run_command_on_placements('referencing_table', 'select count(*) from %s')
+  ORDER BY
+    nodeport, shardid;
+  -- rows
+  SELECT * FROM referencing_table ORDER BY 1;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1600010|t      |     7
+   57637|1600011|t      |     3
+(2 rows)
+
+id|value
+---------------------------------------------------------------------
+ 1|    1
+ 2|    2
+ 3|    3
+ 4|    4
+ 5|    5
+ 6|    6
+ 7|    7
+ 8|    8
+ 9|    9
+10|   10
+(10 rows)
+
+
+starting permutation: s2-add-fkey s1-insert-referenced s1-begin s2-begin s2-move-placement-blocking s1-insert-referencing s2-commit s1-commit s2-print-cluster
+step s2-add-fkey:
+  ALTER TABLE referencing_table ADD CONSTRAINT fkey_const FOREIGN KEY (value) REFERENCES referenced_table(id) ON DELETE CASCADE;
+
+step s1-insert-referenced:
+  INSERT INTO referenced_table SELECT x,x FROM generate_series(1,10) as f(x);
+
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+  BEGIN;
+
+step s2-move-placement-blocking:
+  SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57638, 'localhost', 57637, shard_transfer_mode:='block_writes');
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-insert-referencing:
+  INSERT INTO referencing_table SELECT x,x FROM generate_series(1,10) as f(x);
+ <waiting ...>
+step s2-commit: 
+  COMMIT;
+
+step s1-insert-referencing: <... completed>
+step s1-commit:
+  COMMIT;
+
+step s2-print-cluster:
+  -- row count per shard
+  SELECT
+    nodeport, shardid, success, result
+  FROM
+    run_command_on_placements('referencing_table', 'select count(*) from %s')
+  ORDER BY
+    nodeport, shardid;
+  -- rows
+  SELECT * FROM referencing_table ORDER BY 1;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1600014|t      |     7
+   57637|1600015|t      |     3
+(2 rows)
+
+id|value
+---------------------------------------------------------------------
+ 1|    1
+ 2|    2
+ 3|    3
+ 4|    4
+ 5|    5
+ 6|    6
+ 7|    7
+ 8|    8
+ 9|    9
+10|   10
+(10 rows)
+
+
+starting permutation: s2-add-fkey s3-acquire-advisory-lock s1-insert-referenced s1-insert-referencing s2-begin s2-move-placement-nonblocking s1-delete s3-release-advisory-lock s2-commit s2-print-cluster
+step s2-add-fkey:
+  ALTER TABLE referencing_table ADD CONSTRAINT fkey_const FOREIGN KEY (value) REFERENCES referenced_table(id) ON DELETE CASCADE;
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-insert-referenced:
+  INSERT INTO referenced_table SELECT x,x FROM generate_series(1,10) as f(x);
+
+step s1-insert-referencing:
+  INSERT INTO referencing_table SELECT x,x FROM generate_series(1,10) as f(x);
+
+step s2-begin:
+  BEGIN;
+
+step s2-move-placement-nonblocking:
+  SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57638, 'localhost', 57637);
+ <waiting ...>
+step s1-delete: 
+  DELETE FROM referenced_table WHERE id < 5;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-move-placement-nonblocking: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-commit:
+  COMMIT;
+
+step s2-print-cluster:
+  -- row count per shard
+  SELECT
+    nodeport, shardid, success, result
+  FROM
+    run_command_on_placements('referencing_table', 'select count(*) from %s')
+  ORDER BY
+    nodeport, shardid;
+  -- rows
+  SELECT * FROM referencing_table ORDER BY 1;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1600018|t      |     4
+   57637|1600019|t      |     2
+(2 rows)
+
+id|value
+---------------------------------------------------------------------
+ 5|    5
+ 6|    6
+ 7|    7
+ 8|    8
+ 9|    9
+10|   10
+(6 rows)
+
+
+starting permutation: s2-add-fkey s3-acquire-advisory-lock s1-insert-referenced s1-insert-referencing s2-begin s2-move-placement-nonblocking s1-update s3-release-advisory-lock s2-commit s2-print-cluster
+step s2-add-fkey:
+  ALTER TABLE referencing_table ADD CONSTRAINT fkey_const FOREIGN KEY (value) REFERENCES referenced_table(id) ON DELETE CASCADE;
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-insert-referenced:
+  INSERT INTO referenced_table SELECT x,x FROM generate_series(1,10) as f(x);
+
+step s1-insert-referencing:
+  INSERT INTO referencing_table SELECT x,x FROM generate_series(1,10) as f(x);
+
+step s2-begin:
+  BEGIN;
+
+step s2-move-placement-nonblocking:
+  SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57638, 'localhost', 57637);
+ <waiting ...>
+step s1-update: 
+  UPDATE referenced_table SET value = 5 WHERE id = 5;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-move-placement-nonblocking: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-commit:
+  COMMIT;
+
+step s2-print-cluster:
+  -- row count per shard
+  SELECT
+    nodeport, shardid, success, result
+  FROM
+    run_command_on_placements('referencing_table', 'select count(*) from %s')
+  ORDER BY
+    nodeport, shardid;
+  -- rows
+  SELECT * FROM referencing_table ORDER BY 1;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1600022|t      |     7
+   57637|1600023|t      |     3
+(2 rows)
+
+id|value
+---------------------------------------------------------------------
+ 1|    1
+ 2|    2
+ 3|    3
+ 4|    4
+ 5|    5
+ 6|    6
+ 7|    7
+ 8|    8
+ 9|    9
+10|   10
+(10 rows)
+
+
+starting permutation: s2-add-fkey s3-acquire-advisory-lock s1-insert-referenced s1-insert-referencing s2-begin s2-move-placement-nonblocking s1-ddl s3-release-advisory-lock s2-commit s2-print-cluster
+step s2-add-fkey:
+  ALTER TABLE referencing_table ADD CONSTRAINT fkey_const FOREIGN KEY (value) REFERENCES referenced_table(id) ON DELETE CASCADE;
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-insert-referenced:
+  INSERT INTO referenced_table SELECT x,x FROM generate_series(1,10) as f(x);
+
+step s1-insert-referencing:
+  INSERT INTO referencing_table SELECT x,x FROM generate_series(1,10) as f(x);
+
+step s2-begin:
+  BEGIN;
+
+step s2-move-placement-nonblocking:
+  SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57638, 'localhost', 57637);
+ <waiting ...>
+step s1-ddl: 
+  CREATE INDEX referenced_table_index ON referenced_table(id);
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-move-placement-nonblocking: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-commit:
+  COMMIT;
+
+step s2-print-cluster:
+  -- row count per shard
+  SELECT
+    nodeport, shardid, success, result
+  FROM
+    run_command_on_placements('referencing_table', 'select count(*) from %s')
+  ORDER BY
+    nodeport, shardid;
+  -- rows
+  SELECT * FROM referencing_table ORDER BY 1;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1600026|t      |     7
+   57637|1600027|t      |     3
+(2 rows)
+
+id|value
+---------------------------------------------------------------------
+ 1|    1
+ 2|    2
+ 3|    3
+ 4|    4
+ 5|    5
+ 6|    6
+ 7|    7
+ 8|    8
+ 9|    9
+10|   10
+(10 rows)
+
+
+starting permutation: s2-add-fkey s3-acquire-advisory-lock s1-insert-referenced s2-begin s2-move-placement-nonblocking s1-insert-referencing s3-release-advisory-lock s2-commit s2-print-cluster
+step s2-add-fkey:
+  ALTER TABLE referencing_table ADD CONSTRAINT fkey_const FOREIGN KEY (value) REFERENCES referenced_table(id) ON DELETE CASCADE;
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-insert-referenced:
+  INSERT INTO referenced_table SELECT x,x FROM generate_series(1,10) as f(x);
+
+step s2-begin:
+  BEGIN;
+
+step s2-move-placement-nonblocking:
+  SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57638, 'localhost', 57637);
+ <waiting ...>
+step s1-insert-referencing: 
+  INSERT INTO referencing_table SELECT x,x FROM generate_series(1,10) as f(x);
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-move-placement-nonblocking: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-commit:
+  COMMIT;
+
+step s2-print-cluster:
+  -- row count per shard
+  SELECT
+    nodeport, shardid, success, result
+  FROM
+    run_command_on_placements('referencing_table', 'select count(*) from %s')
+  ORDER BY
+    nodeport, shardid;
+  -- rows
+  SELECT * FROM referencing_table ORDER BY 1;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1600030|t      |     7
+   57637|1600031|t      |     3
+(2 rows)
+
+id|value
+---------------------------------------------------------------------
+ 1|    1
+ 2|    2
+ 3|    3
+ 4|    4
+ 5|    5
+ 6|    6
+ 7|    7
+ 8|    8
+ 9|    9
+10|   10
+(10 rows)
+

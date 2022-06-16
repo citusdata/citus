@@ -120,6 +120,7 @@ RelationGetSmgr(Relation rel)
 #define PQ_LARGE_MESSAGE_LIMIT 0
 #define make_simple_restrictinfo_compat(a, b) make_simple_restrictinfo(b)
 #define pull_varnos_compat(a, b) pull_varnos(b)
+#define ROLE_PG_READ_ALL_STATS DEFAULT_ROLE_READ_ALL_STATS
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_13

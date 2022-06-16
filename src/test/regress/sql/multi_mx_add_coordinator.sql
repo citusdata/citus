@@ -3,7 +3,6 @@ SET search_path TO mx_add_coordinator,public;
 SET client_min_messages TO WARNING;
 
 CREATE USER reprefuser WITH LOGIN;
-SELECT run_command_on_workers('CREATE USER reprefuser WITH LOGIN');
 SET citus.enable_alter_role_propagation TO ON;
 -- alter role for other than the extension owner works in enterprise, output differs accordingly
 ALTER ROLE reprefuser WITH CREATEDB;
@@ -41,17 +40,24 @@ SELECT verify_metadata('localhost', :worker_1_port),
 CREATE TABLE ref(groupid int);
 SELECT create_reference_table('ref');
 
--- alter role from mx worker isn't propagated
 \c - - - :worker_1_port
+-- alter role from mx worker isn't allowed when alter role propagation is on
 SET citus.enable_alter_role_propagation TO ON;
 ALTER ROLE reprefuser WITH CREATEROLE;
-select rolcreatedb, rolcreaterole from pg_roles where rolname = 'reprefuser';
+-- to alter role locally disable alter role propagation first
+SET citus.enable_alter_role_propagation TO OFF;
+ALTER ROLE reprefuser WITH CREATEROLE;
+SELECT rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = 'reprefuser';
+RESET citus.enable_alter_role_propagation;
+
 \c - - - :worker_2_port
-select rolcreatedb, rolcreaterole from pg_roles where rolname = 'reprefuser';
+-- show that altering role locally on worker doesn't propagated to other worker
+SELECT rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = 'reprefuser';
+
 \c - - - :master_port
 SET search_path TO mx_add_coordinator,public;
-SET client_min_messages TO WARNING;
-select rolcreatedb, rolcreaterole from pg_roles where rolname = 'reprefuser';
+-- show that altering role locally on worker doesn't propagated to coordinator
+SELECT rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = 'reprefuser';
 
 SET citus.log_local_commands TO ON;
 SET client_min_messages TO DEBUG;

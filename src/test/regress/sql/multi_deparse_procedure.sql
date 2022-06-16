@@ -176,8 +176,9 @@ ALTER PROCEDURE summation RENAME TO raise_info;
 $cmd$);
 ALTER PROCEDURE summation RENAME TO raise_info;
 
+SET citus.enable_ddl_propagation TO on;
 CREATE ROLE procedure_role;
-SELECT run_command_on_workers($$CREATE ROLE procedure_role;$$);
+SET citus.enable_ddl_propagation TO off;
 
 SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info OWNER TO procedure_role
@@ -222,4 +223,3 @@ $cmd$);
 SET client_min_messages TO WARNING; -- suppress cascading objects dropping
 DROP SCHEMA procedure_tests CASCADE;
 DROP ROLE procedure_role;
-SELECT run_command_on_workers($$DROP ROLE procedure_role;$$);

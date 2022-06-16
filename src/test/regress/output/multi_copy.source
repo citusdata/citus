@@ -669,15 +669,6 @@ DROP TABLE numbers_append;
 -- Test copy failures against connection failures
 -- create and switch to test user
 CREATE USER test_user;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-SELECT * FROM run_command_on_workers('CREATE USER test_user');
- nodename  | nodeport | success |   result
----------------------------------------------------------------------
- localhost |    57637 | t       | CREATE ROLE
- localhost |    57638 | t       | CREATE ROLE
-(2 rows)
-
 \c - test_user
 SET citus.shard_count to 4;
 CREATE TABLE numbers_hash (a int, b int);
@@ -855,13 +846,6 @@ SELECT shardid, shardstate, nodename, nodeport
 (8 rows)
 
 DROP TABLE numbers_hash;
-SELECT * FROM run_command_on_workers('DROP USER test_user');
- nodename  | nodeport | success |  result
----------------------------------------------------------------------
- localhost |    57637 | t       | DROP ROLE
- localhost |    57638 | t       | DROP ROLE
-(2 rows)
-
 DROP USER test_user;
 -- Test copy with built-in type without binary output function
 CREATE TABLE test_binaryless_builtin (
@@ -990,9 +974,27 @@ SELECT * FROM copy_jsonb ORDER BY key;
 \COPY copy_jsonb (key, value) FROM STDIN
 ERROR:  invalid input syntax for json
 DETAIL:  The input string ended unexpectedly.
-CONTEXT:  JSON data, line 1: {"r":255,"g":0,"b":0
-COPY copy_jsonb, line 1, column value: "{"r":255,"g":0,"b":0"
 TRUNCATE copy_jsonb;
+-- JSONB when there is a complex column should work. Complex columns force
+-- non binary copy format between master and workers.
+CREATE TYPE complex_for_copy_test AS (r double precision, i double precision);
+CREATE TABLE copy_jsonb_with_complex(key int, value_1 jsonb, value_2 complex_for_copy_test);
+SELECT create_distributed_table('copy_jsonb_with_complex', 'key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\COPY copy_jsonb_with_complex FROM STDIN
+SELECT * FROM copy_jsonb_with_complex ORDER BY key;
+ key |                  value_1                  | value_2
+---------------------------------------------------------------------
+   1 | {"f1": 3803, "f2": "v1", "f3": {"f4": 1}} | (10,9)
+   2 | {"f5": null, "f6": true}                  | (20,19)
+(2 rows)
+
+DROP TABLE copy_jsonb_with_complex;
+DROP TYPE complex_for_copy_test;
 SET citus.skip_jsonb_validation_in_copy TO off;
 -- JSONB from text should work
 \COPY copy_jsonb (key, value) FROM STDIN

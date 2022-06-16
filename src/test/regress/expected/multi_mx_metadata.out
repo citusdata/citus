@@ -300,15 +300,6 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
 
 \c - - - :master_port
 CREATE USER no_access_mx;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-SELECT run_command_on_workers($$CREATE USER no_access_mx;$$);
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
-(2 rows)
-
 SET ROLE no_access_mx;
 SELECT raise_failed_aclcheck($$
     DROP TABLE distributed_mx_table;

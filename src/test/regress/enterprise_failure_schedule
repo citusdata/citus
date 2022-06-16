@@ -1,0 +1,12 @@
+# import this file (from psql you can use \i) to use mitmproxy manually
+test: failure_test_helpers
+
+# this should only be run by pg_regress_multi, you don't need it
+test: failure_setup
+test: multi_test_helpers multi_test_helpers_superuser
+
+test: failure_online_move_shard_placement
+test: failure_on_create_subscription
+test: failure_offline_move_shard_placement
+test: failure_tenant_isolation
+test: check_mx

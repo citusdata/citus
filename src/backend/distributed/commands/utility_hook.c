@@ -54,6 +54,7 @@
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
+#include "distributed/multi_logical_replication.h"
 #include "distributed/multi_partitioning_utils.h"
 #if PG_VERSION_NUM < 140000
 #include "distributed/metadata_cache.h"
@@ -65,6 +66,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
+#include "distributed/string_utils.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
@@ -76,6 +78,7 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
 int CreateObjectPropagationMode = CREATE_OBJECT_PROPAGATION_IMMEDIATE;
@@ -409,6 +412,31 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		parsetree = ProcessCreateSubscriptionStmt(createSubStmt);
 	}
 
+	if (IsA(parsetree, AlterSubscriptionStmt))
+	{
+		AlterSubscriptionStmt *alterSubStmt = (AlterSubscriptionStmt *) parsetree;
+		if (!superuser() &&
+			StringStartsWith(alterSubStmt->subname,
+							 SHARD_MOVE_SUBSCRIPTION_PREFIX))
+		{
+			ereport(ERROR, (
+						errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+						errmsg("Only superusers can alter shard move subscriptions")));
+		}
+	}
+
+	if (IsA(parsetree, DropSubscriptionStmt))
+	{
+		DropSubscriptionStmt *dropSubStmt = (DropSubscriptionStmt *) parsetree;
+		if (!superuser() &&
+			StringStartsWith(dropSubStmt->subname, SHARD_MOVE_SUBSCRIPTION_PREFIX))
+		{
+			ereport(ERROR, (
+						errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+						errmsg("Only superusers can drop shard move subscriptions")));
+		}
+	}
+
 	/*
 	 * Process SET LOCAL and SET TRANSACTION statements in multi-statement
 	 * transactions.
@@ -565,7 +593,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 						 errhint("You can manually create a database and its "
 								 "extensions on workers.")));
 	}
-	else if (IsA(parsetree, CreateRoleStmt))
+	else if (IsA(parsetree, CreateRoleStmt) && !EnableCreateRolePropagation)
 	{
 		ereport(NOTICE, (errmsg("not propagating CREATE ROLE/USER commands to worker"
 								" nodes"),
@@ -593,6 +621,24 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	if (IsDropCitusExtensionStmt(parsetree))
 	{
 		StopMaintenanceDaemon(MyDatabaseId);
+	}
+
+	/*
+	 * Make sure that dropping the role deletes the pg_dist_object entries. There is a
+	 * separate logic for roles, since roles are not included as dropped objects in the
+	 * drop event trigger. To handle it both on worker and coordinator nodes, it is not
+	 * implemented as a part of process functions but here.
+	 */
+	if (IsA(parsetree, DropRoleStmt))
+	{
+		DropRoleStmt *stmt = castNode(DropRoleStmt, parsetree);
+		List *allDropRoles = stmt->roles;
+
+		List *distributedDropRoles = FilterDistributedRoles(allDropRoles);
+		if (list_length(distributedDropRoles) > 0)
+		{
+			UnmarkRolesDistributed(distributedDropRoles);
+		}
 	}
 
 	pstmt->utilityStmt = parsetree;
@@ -703,6 +749,21 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		if (IsA(parsetree, AlterTableStmt))
 		{
 			PostprocessAlterTableStmt(castNode(AlterTableStmt, parsetree));
+		}
+		if (IsA(parsetree, GrantStmt))
+		{
+			GrantStmt *grantStmt = (GrantStmt *) parsetree;
+			if (grantStmt->targtype == ACL_TARGET_ALL_IN_SCHEMA)
+			{
+				/*
+				 * Grant .. IN SCHEMA causes a deadlock if we don't use local execution
+				 * because standard process utility processes the shard placements as well
+				 * and the row-level locks in pg_class will not be released until the current
+				 * transaction commits. We could skip the local shard placements after standard
+				 * process utility, but for simplicity we just prefer using local execution.
+				 */
+				SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
+			}
 		}
 
 		DDLJob *ddlJob = NULL;
@@ -1589,7 +1650,6 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 	ddlJob->targetObjectAddress = InvalidObjectAddress;
 	ddlJob->metadataSyncCommand = NULL;
 	ddlJob->taskList = list_make1(task);
-
 	return list_make1(ddlJob);
 }
 

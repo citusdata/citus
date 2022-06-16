@@ -40,6 +40,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/query_pushdown_planning.h"
+#include "distributed/string_utils.h"
 #include "distributed/tdigest_extension.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
@@ -57,9 +58,6 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
-
-#define StartsWith(msg, prefix) \
-	(strncmp(msg, prefix, strlen(prefix)) == 0)
 
 /* Config variable managed via guc.c */
 int LimitClauseRowFetchCount = -1; /* number of rows to fetch from each task */
@@ -3418,7 +3416,7 @@ GetAggregateType(Aggref *aggregateExpression)
 	 * perform these checks if there is some chance it will actually result in a positive
 	 * hit.
 	 */
-	if (StartsWith(aggregateProcName, "tdigest"))
+	if (StringStartsWith(aggregateProcName, "tdigest"))
 	{
 		if (aggFunctionId == TDigestExtensionAggTDigest1())
 		{

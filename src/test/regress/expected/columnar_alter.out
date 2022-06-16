@@ -433,11 +433,7 @@ ERROR:  unsupported access method for the index on columnar table circles
 -- Row level security
 CREATE TABLE public.row_level_security_col (id int, pgUser CHARACTER VARYING) USING columnar;
 CREATE USER user1;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 CREATE USER user2;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 INSERT INTO public.row_level_security_col VALUES (1, 'user1'), (2, 'user2');
 GRANT SELECT, UPDATE, INSERT, DELETE ON public.row_level_security_col TO user1;
 GRANT SELECT, UPDATE, INSERT, DELETE ON public.row_level_security_col TO user2;

@@ -32,6 +32,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_join_order.h"
+#include "distributed/multi_logical_replication.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
@@ -53,6 +54,9 @@
 #include "utils/syscache.h"
 
 /* local function forward declarations */
+static void VerifyTablesHaveReplicaIdentity(List *colocatedTableList);
+static bool RelationCanPublishAllModifications(Oid relationId);
+static bool CanUseLogicalReplication(Oid relationId, char shardReplicationMode);
 static void ErrorIfTableCannotBeReplicated(Oid relationId);
 static void RepairShardPlacement(int64 shardId, const char *sourceNodeName,
 								 int32 sourceNodePort, const char *targetNodeName,
@@ -64,6 +68,12 @@ static void ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName
 static void CopyShardTables(List *shardIntervalList, char *sourceNodeName,
 							int32 sourceNodePort, char *targetNodeName,
 							int32 targetNodePort, bool useLogicalReplication);
+static void CopyShardTablesViaLogicalReplication(List *shardIntervalList,
+												 char *sourceNodeName,
+												 int32 sourceNodePort,
+												 char *targetNodeName,
+												 int32 targetNodePort);
+
 static void CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 										  int32 sourceNodePort,
 										  char *targetNodeName, int32 targetNodePort);
@@ -146,11 +156,10 @@ citus_copy_shard_placement(PG_FUNCTION_ARGS)
 	char *targetNodeName = text_to_cstring(targetNodeNameText);
 
 	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
-	if (shardReplicationMode == TRANSFER_MODE_FORCE_LOGICAL)
+	if (doRepair && shardReplicationMode == TRANSFER_MODE_FORCE_LOGICAL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("the force_logical transfer mode is currently "
-							   "unsupported")));
+						errmsg("logical replication cannot be used for repairs")));
 	}
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
@@ -282,8 +291,7 @@ CheckSpaceConstraints(MultiConnection *connection, uint64 colocationSizeInBytes)
  * After that, there are two different paths. First one is blocking shard move in the
  * sense that during shard move all modifications are paused to the shard. The second
  * one relies on logical replication meaning that the writes blocked only for a very
- * short duration almost only when the metadata is actually being updated. This option
- * is currently only available in Citus Enterprise.
+ * short duration almost only when the metadata is actually being updated.
  *
  * After successful move operation, shards in the source node gets deleted. If the move
  * fails at any point, this function throws an error, leaving the cluster without doing
@@ -354,23 +362,52 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	}
 
 	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
-	if (shardReplicationMode == TRANSFER_MODE_FORCE_LOGICAL)
+	if (shardReplicationMode == TRANSFER_MODE_AUTOMATIC)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("the force_logical transfer mode is currently "
-							   "unsupported")));
+		VerifyTablesHaveReplicaIdentity(colocatedTableList);
 	}
 
 	EnsureEnoughDiskSpaceForShardMove(colocatedShardList, sourceNodeName, sourceNodePort,
 									  targetNodeName, targetNodePort);
 
-	BlockWritesToShardList(colocatedShardList);
+	/*
+	 * At this point of the shard moves, we don't need to block the writes to
+	 * shards when logical replication is used.
+	 */
+	bool useLogicalReplication = CanUseLogicalReplication(distributedTableId,
+														  shardReplicationMode);
+	if (!useLogicalReplication)
+	{
+		BlockWritesToShardList(colocatedShardList);
+	}
+	else
+	{
+		/*
+		 * We prevent multiple shard moves in a transaction that use logical
+		 * replication. That's because the first call opens a transaction block
+		 * on the worker to drop the old shard placement and replication slot
+		 * creation waits for pending transactions to finish, which will not
+		 * happen ever. In other words, we prevent a self-deadlock if both
+		 * source shard placements are on the same node.
+		 */
+		if (PlacementMovedUsingLogicalReplicationInTX)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("moving multiple shard placements via logical "
+								   "replication in the same transaction is currently "
+								   "not supported"),
+							errhint("If you wish to move multiple shard placements "
+									"in a single transaction set the shard_transfer_mode "
+									"to 'block_writes'.")));
+		}
+
+		PlacementMovedUsingLogicalReplicationInTX = true;
+	}
 
 	/*
 	 * CopyColocatedShardPlacement function copies given shard with its co-located
 	 * shards.
 	 */
-	bool useLogicalReplication = false;
 	CopyShardTables(colocatedShardList, sourceNodeName, sourceNodePort, targetNodeName,
 					targetNodePort, useLogicalReplication);
 
@@ -523,6 +560,74 @@ ErrorIfMoveUnsupportedTableType(Oid relationId)
 
 
 /*
+ * VerifyTablesHaveReplicaIdentity throws an error if any of the tables
+ * do not have a replica identity, which is required for logical replication
+ * to replicate UPDATE and DELETE commands.
+ */
+static void
+VerifyTablesHaveReplicaIdentity(List *colocatedTableList)
+{
+	ListCell *colocatedTableCell = NULL;
+
+	foreach(colocatedTableCell, colocatedTableList)
+	{
+		Oid colocatedTableId = lfirst_oid(colocatedTableCell);
+
+		if (!RelationCanPublishAllModifications(colocatedTableId))
+		{
+			char *colocatedRelationName = get_rel_name(colocatedTableId);
+
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot use logical replication to transfer shards of "
+								   "the relation %s since it doesn't have a REPLICA "
+								   "IDENTITY or PRIMARY KEY", colocatedRelationName),
+							errdetail("UPDATE and DELETE commands on the shard will "
+									  "error out during logical replication unless "
+									  "there is a REPLICA IDENTITY or PRIMARY KEY."),
+							errhint("If you wish to continue without a replica "
+									"identity set the shard_transfer_mode to "
+									"'force_logical' or 'block_writes'.")));
+		}
+	}
+}
+
+
+/*
+ * RelationCanPublishAllModifications returns true if the relation is safe to publish
+ * all modification while being replicated via logical replication.
+ */
+static bool
+RelationCanPublishAllModifications(Oid relationId)
+{
+	Relation relation = RelationIdGetRelation(relationId);
+	bool canPublish = false;
+
+	if (relation == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("could not open relation with OID %u", relationId)));
+	}
+
+	/* if relation has replica identity we are always good */
+	if (relation->rd_rel->relreplident == REPLICA_IDENTITY_FULL ||
+		OidIsValid(RelationGetReplicaIndex(relation)))
+	{
+		canPublish = true;
+	}
+
+	/* partitioned tables do not contain any data themselves, can always replicate */
+	if (PartitionedTable(relationId))
+	{
+		canPublish = true;
+	}
+
+	RelationClose(relation);
+
+	return canPublish;
+}
+
+
+/*
  * BlockWritesToShardList blocks writes to all shards in the given shard
  * list. The function assumes that all the shards in the list are colocated.
  */
@@ -564,6 +669,49 @@ BlockWritesToShardList(List *shardList)
 		 */
 		LockShardListMetadataOnWorkers(ExclusiveLock, shardList);
 	}
+}
+
+
+/*
+ * CanUseLogicalReplication returns true if the given table can be logically replicated.
+ */
+static bool
+CanUseLogicalReplication(Oid relationId, char shardReplicationMode)
+{
+	if (shardReplicationMode == TRANSFER_MODE_BLOCK_WRITES)
+	{
+		/* user explicitly chose not to use logical replication */
+		return false;
+	}
+
+	/*
+	 * Logical replication doesn't support replicating foreign tables and views.
+	 */
+	if (!RegularTable(relationId))
+	{
+		ereport(LOG, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					  errmsg("Cannot use logical replication for "
+							 "shard move since the relation %s is not "
+							 "a regular relation",
+							 get_rel_name(relationId))));
+
+
+		return false;
+	}
+
+	/* Logical replication doesn't support inherited tables */
+	if (IsParentTable(relationId))
+	{
+		ereport(LOG, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					  errmsg("Cannot use logical replication for "
+							 "shard move since the relation %s is an "
+							 "inherited relation",
+							 get_rel_name(relationId))));
+
+		return false;
+	}
+
+	return true;
 }
 
 
@@ -790,7 +938,16 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 	 */
 	colocatedShardList = SortList(colocatedShardList, CompareShardIntervalsById);
 
-	BlockWritesToShardList(colocatedShardList);
+	/*
+	 * At this point of the shard replication, we don't need to block the writes to
+	 * shards when logical replication is used.
+	 */
+	bool useLogicalReplication = CanUseLogicalReplication(distributedTableId,
+														  shardReplicationMode);
+	if (!useLogicalReplication)
+	{
+		BlockWritesToShardList(colocatedShardList);
+	}
 
 	ShardInterval *colocatedShard = NULL;
 	foreach_ptr(colocatedShard, colocatedShardList)
@@ -803,6 +960,11 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 		 */
 		EnsureShardCanBeCopied(colocatedShardId, sourceNodeName, sourceNodePort,
 							   targetNodeName, targetNodePort);
+	}
+
+	if (shardReplicationMode == TRANSFER_MODE_AUTOMATIC)
+	{
+		VerifyTablesHaveReplicaIdentity(colocatedTableList);
 	}
 
 	if (!IsCitusTableType(distributedTableId, REFERENCE_TABLE))
@@ -818,7 +980,6 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 		EnsureReferenceTablesExistOnAllNodesExtended(shardReplicationMode);
 	}
 
-	bool useLogicalReplication = false;
 	CopyShardTables(colocatedShardList, sourceNodeName, sourceNodePort,
 					targetNodeName, targetNodePort, useLogicalReplication);
 
@@ -912,13 +1073,59 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 
 	if (useLogicalReplication)
 	{
-		/* only supported in Citus enterprise */
+		CopyShardTablesViaLogicalReplication(shardIntervalList, sourceNodeName,
+											 sourceNodePort, targetNodeName,
+											 targetNodePort);
 	}
 	else
 	{
 		CopyShardTablesViaBlockWrites(shardIntervalList, sourceNodeName, sourceNodePort,
 									  targetNodeName, targetNodePort);
 	}
+}
+
+
+/*
+ * CopyShardTablesViaLogicalReplication copies a shard along with its co-located shards
+ * from a source node to target node via logical replication.
+ */
+static void
+CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeName,
+									 int32 sourceNodePort, char *targetNodeName,
+									 int32 targetNodePort)
+{
+	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
+													   "CopyShardTablesViaLogicalReplication",
+													   ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
+
+	/*
+	 * Iterate through the colocated shards and create them on the
+	 * target node. We do not create the indexes yet.
+	 */
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
+	{
+		Oid relationId = shardInterval->relationId;
+		uint64 shardId = shardInterval->shardId;
+		List *tableRecreationCommandList = RecreateTableDDLCommandList(relationId);
+		tableRecreationCommandList =
+			WorkerApplyShardDDLCommandList(tableRecreationCommandList, shardId);
+
+		char *tableOwner = TableOwner(shardInterval->relationId);
+
+		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
+												  tableOwner,
+												  tableRecreationCommandList);
+
+		MemoryContextReset(localContext);
+	}
+
+	MemoryContextSwitchTo(oldContext);
+
+	/* data copy is done seperately when logical replication is used */
+	LogicallyReplicateShards(shardIntervalList, sourceNodeName,
+							 sourceNodePort, targetNodeName, targetNodePort);
 }
 
 
@@ -989,12 +1196,12 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 	{
 		List *shardForeignConstraintCommandList = NIL;
 		List *referenceTableForeignConstraintList = NIL;
-		List *commandList = NIL;
 
 		CopyShardForeignConstraintCommandListGrouped(shardInterval,
 													 &shardForeignConstraintCommandList,
 													 &referenceTableForeignConstraintList);
 
+		List *commandList = NIL;
 		commandList = list_concat(commandList, shardForeignConstraintCommandList);
 		commandList = list_concat(commandList, referenceTableForeignConstraintList);
 

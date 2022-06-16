@@ -534,7 +534,6 @@ DROP TABLE numbers_append;
 -- Test copy failures against connection failures
 -- create and switch to test user
 CREATE USER test_user;
-SELECT * FROM run_command_on_workers('CREATE USER test_user');
 
 \c - test_user
 SET citus.shard_count to 4;
@@ -660,7 +659,6 @@ SELECT shardid, shardstate, nodename, nodeport
 	WHERE logicalrelid = 'numbers_hash'::regclass order by shardid, nodeport;
 
 DROP TABLE numbers_hash;
-SELECT * FROM run_command_on_workers('DROP USER test_user');
 DROP USER test_user;
 
 -- Test copy with built-in type without binary output function
@@ -754,6 +752,22 @@ red	{"r":255,"g":0,"b":0
 \.
 
 TRUNCATE copy_jsonb;
+
+-- JSONB when there is a complex column should work. Complex columns force
+-- non binary copy format between master and workers.
+CREATE TYPE complex_for_copy_test AS (r double precision, i double precision);
+CREATE TABLE copy_jsonb_with_complex(key int, value_1 jsonb, value_2 complex_for_copy_test);
+SELECT create_distributed_table('copy_jsonb_with_complex', 'key');
+
+\COPY copy_jsonb_with_complex FROM STDIN
+1	{"f1": 3803, "f2": "v1", "f3": {"f4": 1}}	(10,9)
+2	{"f5": null, "f6": true}	(20,19)
+\.
+SELECT * FROM copy_jsonb_with_complex ORDER BY key;
+
+DROP TABLE copy_jsonb_with_complex;
+DROP TYPE complex_for_copy_test;
+
 SET citus.skip_jsonb_validation_in_copy TO off;
 
 -- JSONB from text should work

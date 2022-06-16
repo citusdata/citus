@@ -1,7 +1,6 @@
 SET citus.next_shard_id TO 20050000;
 
 CREATE USER collationuser;
-SELECT run_command_on_workers($$CREATE USER collationuser;$$);
 
 CREATE SCHEMA collation_tests AUTHORIZATION collationuser;
 CREATE SCHEMA collation_tests2 AUTHORIZATION collationuser;
@@ -92,7 +91,6 @@ SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA collation_tests CASCADE;
 DROP SCHEMA collation_tests2 CASCADE;
 DROP USER collationuser;
-SELECT run_command_on_workers($$DROP USER collationuser;$$);
 
 \c - - - :worker_1_port
 -- test creating a collation on a worker

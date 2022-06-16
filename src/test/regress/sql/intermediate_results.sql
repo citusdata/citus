@@ -254,7 +254,6 @@ SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2']::text[],
 
 -- test refreshing mat views
 SET client_min_messages TO ERROR;
-SELECT run_command_on_workers($$CREATE USER some_other_user;$$);
 CREATE USER some_other_user;
 SELECT run_command_on_workers($$GRANT ALL ON DATABASE regression TO some_other_user;$$);
 GRANT ALL ON DATABASE regression TO some_other_user;

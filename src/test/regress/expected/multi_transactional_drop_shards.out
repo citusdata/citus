@@ -696,13 +696,6 @@ SELECT master_remove_node('localhost', :master_port);
 DROP TABLE transactional_drop_shards, transactional_drop_reference;
 -- test DROP TABLE as a non-superuser in a transaction block
 CREATE USER try_drop_table WITH LOGIN;
-SELECT run_command_on_workers('CREATE USER try_drop_table WITH LOGIN');
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
-(2 rows)
-
 GRANT ALL ON SCHEMA public TO try_drop_table;
 \c - try_drop_table - :master_port
 BEGIN;

@@ -10,7 +10,6 @@
 #ifndef ERRORMESSAGE_H
 #define ERRORMESSAGE_H
 
-
 #include "c.h"
 #include "distributed/citus_nodes.h"
 
