@@ -38,7 +38,7 @@ typedef struct ShardCopyDestReceiver
 	DestReceiver pub;
 
 	/* Destination Relation Name */
-	FullRelationName *destinationRelation;
+	char* destinationShardFullyQualifiedName;
 
 	/* descriptor of the tuples that are sent to the worker */
 	TupleDesc tupleDescriptor;
@@ -69,7 +69,7 @@ static void ShardCopyDestReceiverStartup(DestReceiver *dest, int operation,
 static void ShardCopyDestReceiverShutdown(DestReceiver *destReceiver);
 static void ShardCopyDestReceiverDestroy(DestReceiver *destReceiver);
 static bool CanUseLocalCopy(uint64 destinationNodeId);
-static StringInfo ConstructCopyStatement(FullRelationName *relation, bool useBinaryFormat);
+static StringInfo ConstructCopyStatement(char* destinationShardFullyQualifiedName, bool useBinaryFormat);
 static void WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDest, CopyOutState localCopyOutState);
 static bool ShouldSendCopyNow(StringInfo buffer);
 static int  ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead);
@@ -113,7 +113,7 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 															NULL);
 		ClaimConnectionExclusively(copyDest->connection);
 
-		StringInfo copyStatement = ConstructCopyStatement(copyDest->destinationRelation,
+		StringInfo copyStatement = ConstructCopyStatement(copyDest->destinationShardFullyQualifiedName,
 			copyDest->destinationNodeId);
 		ExecuteCriticalRemoteCommand(copyDest->connection, copyStatement->data);
 	}
@@ -139,7 +139,7 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 		{
 			ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
 						errmsg("Failed to COPY to shard %s,",
-							   copyDest->destinationRelation->relationName),
+							   copyDest->destinationShardFullyQualifiedName),
 						errdetail("failed to send %d bytes %s", copyOutState->fe_msgbuf->len,
 								  copyOutState->fe_msgbuf->data)));
 		}
@@ -201,7 +201,7 @@ ShardCopyDestReceiverShutdown(DestReceiver *dest)
 		{
 			ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
 							errmsg("Failed to COPY to destination shard %s",
-								   copyDest->destinationRelation->relationName)));
+								   copyDest->destinationShardFullyQualifiedName)));
 		}
 
 		/* check whether there were any COPY errors */
@@ -240,11 +240,11 @@ ShardCopyDestReceiverDestroy(DestReceiver *dest)
  * for copying into a result table
  */
 static StringInfo
-ConstructCopyStatement(FullRelationName *relation, bool useBinaryFormat)
+ConstructCopyStatement(char *destinationShardFullyQualifiedName, bool useBinaryFormat)
 {
 	StringInfo command  = makeStringInfo();
 	appendStringInfo(command, "COPY %s FROM STDIN",
-		quote_qualified_identifier(relation->schemaName, relation->relationName));
+		destinationShardFullyQualifiedName);
 
 	if(useBinaryFormat)
 	{
@@ -255,7 +255,7 @@ ConstructCopyStatement(FullRelationName *relation, bool useBinaryFormat)
 }
 
 DestReceiver * CreateShardCopyDestReceiver(
-	FullRelationName* destinationRelation,
+	char* destinationShardFullyQualifiedName,
 	uint32_t destinationNodeId)
 {
 	ShardCopyDestReceiver *copyDest = (ShardCopyDestReceiver *) palloc0(
@@ -269,7 +269,7 @@ DestReceiver * CreateShardCopyDestReceiver(
 	copyDest->pub.mydest = DestCopyOut;
 
 	copyDest->destinationNodeId = destinationNodeId;
-	copyDest->destinationRelation = destinationRelation;
+	copyDest->destinationShardFullyQualifiedName = destinationShardFullyQualifiedName;
 	copyDest->tuplesSent = 0;
 	copyDest->connection = NULL;
 	copyDest->useLocalCopy = CanUseLocalCopy(destinationNodeId);
@@ -320,8 +320,12 @@ LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState localCopyOutState
 	 */
 	LocalCopyBuffer = localCopyOutState->fe_msgbuf;
 
-	Oid destinationSchemaOid = get_namespace_oid(copyDest->destinationRelation->schemaName, false /* missing_ok */);
-	Oid destinationShardOid = get_relname_relid(copyDest->destinationRelation->relationName, destinationSchemaOid);
+	char *destinationShardSchemaName = NULL;
+	char *destinationShardRelationName = NULL;
+	DeconstructQualifiedName(list_make1(copyDest->destinationShardFullyQualifiedName), &destinationShardSchemaName, &destinationShardRelationName);
+
+	Oid destinationSchemaOid = get_namespace_oid(destinationShardSchemaName, false /* missing_ok */);
+	Oid destinationShardOid = get_relname_relid(destinationShardRelationName, destinationSchemaOid);
 
 	DefElem *binaryFormatOption = NULL;
 	if (isBinaryCopy)

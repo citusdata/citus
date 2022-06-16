@@ -15,12 +15,6 @@
 
 #include "utils/relcache.h"
 
-typedef struct FullRelationName
-{
-	char *schemaName;
-	char *relationName;
-} FullRelationName;
-
 extern char * RelationGetNamespaceName(Relation relation);
 
 #endif /* RELATION_UTILS_H */

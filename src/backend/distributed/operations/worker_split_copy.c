@@ -14,11 +14,13 @@
 #include "postgres.h"
 #include "catalog/namespace.h"
 #include "utils/lsyscache.h"
+#include "utils/builtins.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/relation_utils.h"
 #include "distributed/worker_split_copy.h"
 #include "distributed/worker_shard_copy.h"
+#include "distributed/relay_utility.h"
 
 typedef struct SplitCopyDestReceiver
 {
@@ -35,10 +37,10 @@ typedef struct SplitCopyDestReceiver
 	uint splitFactor;
 
 	/* Source shard name */
-	FullRelationName *sourceShardName;
+	char *sourceShardName;
 
 	/* Source shard Oid */
-	Oid sourceShardOid;
+	Oid sourceShardRelationOid;
 } SplitCopyDestReceiver;
 
 
@@ -49,7 +51,7 @@ static bool SplitCopyDestReceiverReceive(TupleTableSlot *slot,
 static void SplitCopyDestReceiverShutdown(DestReceiver *dest);
 static void SplitCopyDestReceiverDestroy(DestReceiver *copyDest);
 
-DestReceiver * CreateSplitCopyDestReceiver(FullRelationName *sourceShard, List* splitCopyInfoList)
+DestReceiver * CreateSplitCopyDestReceiver(uint64 sourceShardIdToCopy, List* splitCopyInfoList)
 {
 	SplitCopyDestReceiver *splitCopyDest =
 		palloc0(sizeof(SplitCopyDestReceiver));
@@ -60,22 +62,29 @@ DestReceiver * CreateSplitCopyDestReceiver(FullRelationName *sourceShard, List* 
 	splitCopyDest->pub.rShutdown = SplitCopyDestReceiverShutdown;
 	splitCopyDest->pub.rDestroy = SplitCopyDestReceiverDestroy;
 
-	Oid sourceSchemaOid = get_namespace_oid(sourceShard->schemaName, false /* missing_ok */);
-	Oid sourceShardOid = get_relname_relid(sourceShard->relationName, sourceSchemaOid);
-	splitCopyDest->sourceShardOid = sourceShardOid;
-
 	splitCopyDest->splitFactor = splitCopyInfoList->length;
+	ShardInterval *shardIntervalToSplitCopy = LoadShardInterval(sourceShardIdToCopy);
+	splitCopyDest->sourceShardRelationOid = shardIntervalToSplitCopy->relationId;
 
 	DestReceiver **shardCopyDests = palloc0(splitCopyDest->splitFactor * sizeof(DestReceiver *));
 	SplitCopyInfo **splitCopyInfos = palloc0(splitCopyDest->splitFactor * sizeof(SplitCopyInfo *));
 
 	SplitCopyInfo *splitCopyInfo = NULL;
 	int index = 0;
+
+	char *sourceShardNamePrefix = get_rel_name(shardIntervalToSplitCopy->relationId);
 	foreach_ptr(splitCopyInfo, splitCopyInfoList)
 	{
+		char *destinationShardSchemaName = get_namespace_name(get_rel_namespace(splitCopyDest->sourceShardRelationOid));;
+		char *destinationShardNameCopy = strdup(sourceShardNamePrefix);
+		AppendShardIdToName(&destinationShardNameCopy, splitCopyInfo->destinationShardId);
+
+		char *destinationShardFullyQualifiedName =
+			quote_qualified_identifier(destinationShardSchemaName, destinationShardNameCopy);
+
 		DestReceiver *shardCopyDest = CreateShardCopyDestReceiver(
-			splitCopyInfo->destinationShard,
-			splitCopyInfo->nodeId);
+			destinationShardFullyQualifiedName,
+			splitCopyInfo->destinationShardNodeId);
 
 		shardCopyDests[index] = shardCopyDest;
 		splitCopyInfos[index] = splitCopyInfo;
@@ -103,11 +112,11 @@ static bool SplitCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *des
 {
 	SplitCopyDestReceiver *self = (SplitCopyDestReceiver *) dest;
 
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(self->sourceShardOid);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(self->sourceShardRelationOid);
 	if (cacheEntry == NULL)
 	{
 		ereport(ERROR, errmsg("Could not find shard %s for split copy.",
-							  self->sourceShardName->relationName));
+							  self->sourceShardName));
 	}
 
 	/* Partition Column Metadata on source shard */
@@ -122,7 +131,7 @@ static bool SplitCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *des
 	if (columnNulls[partitionColumnIndex])
 	{
 		ereport(ERROR, errmsg("Found null partition value for shard %s during split copy.",
-							   self->sourceShardName->relationName));
+							   self->sourceShardName));
 	}
 
 	Datum hashedValueDatum = FunctionCall1(hashFunction, columnValues[partitionColumnIndex]);
@@ -132,8 +141,8 @@ static bool SplitCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *des
 	{
 		SplitCopyInfo *splitCopyInfo = self->splitCopyInfoArray[index];
 
-		if (splitCopyInfo->shardMinValue <= hashedValue &&
-			splitCopyInfo->shardMaxValue >= hashedValue)
+		if (splitCopyInfo->destinationShardMinHashValue <= hashedValue &&
+			splitCopyInfo->destinationShardMaxHashValue >= hashedValue)
 		{
 			DestReceiver *shardCopyDestReceiver = self->shardCopyDestReceiverArray[index];
 			shardCopyDestReceiver->receiveSlot(slot, shardCopyDestReceiver);
