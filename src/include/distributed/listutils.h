@@ -98,6 +98,27 @@ typedef struct ListCellAndListWrapper
 		 )
 
 /*
+ * forthree_ptr -
+ *	  a convenience macro which loops through three lists of pointers at the same
+ *	  time, without needing a ListCell. It only needs three declared pointer
+ *	  variables to store the pointer of each of the three cells in.
+ */
+#define forthree_ptr(var1, l1, var2, l2, var3, l3) \
+	for (ListCell *(var1 ## CellDoNotUse) = list_head(l1), \
+		 *(var2 ## CellDoNotUse) = list_head(l2), \
+		 *(var3 ## CellDoNotUse) = list_head(l3); \
+		 (var1 ## CellDoNotUse) != NULL && \
+		 (var2 ## CellDoNotUse) != NULL && \
+	     (var3 ## CellDoNotUse) != NULL && \
+		 (((var1) = lfirst(var1 ## CellDoNotUse)) || true) && \
+		 (((var2) = lfirst(var2 ## CellDoNotUse)) || true) && \
+		 (((var3) = lfirst(var3 ## CellDoNotUse)) || true); \
+		 var1 ## CellDoNotUse = lnext_compat(l1, var1 ## CellDoNotUse), \
+		 var2 ## CellDoNotUse = lnext_compat(l2, var2 ## CellDoNotUse), \
+		 var3 ## CellDoNotUse = lnext_compat(l3, var3 ## CellDoNotUse) \
+		 )
+
+/*
  * forboth_ptr_oid -
  *	  a convenience macro which loops through two lists at the same time. The
  *	  first list should contain pointers and the second list should contain
