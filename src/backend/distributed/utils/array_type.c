@@ -12,6 +12,7 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
+#include "catalog/pg_type.h"
 #include "nodes/pg_list.h"
 #include "distributed/utils/array_type.h"
 #include "utils/array.h"
@@ -111,6 +112,39 @@ IntegerArrayTypeToList(ArrayType *arrayObject)
 	for (int index = 0; index < arrayObjectCount; index++)
 	{
 		list = lappend_int(list, datumObjectArray[index]);
+	}
+
+	return list;
+}
+
+/*
+ * Converts Text ArrayType to Integer List.
+ */
+extern List * TextArrayTypeToIntegerList(ArrayType *arrayObject, Oid datumTypeId)
+{
+	List *list = NULL;
+	Datum *datumObjectArray = DeconstructArrayObject(arrayObject);
+	int arrayObjectCount = ArrayObjectCount(arrayObject);
+
+	for (int index = 0; index < arrayObjectCount; index++)
+	{
+		char *intAsStr = text_to_cstring(DatumGetTextP(datumObjectArray[index]));
+
+		switch (datumTypeId)
+		{
+			case INT2OID:
+				list = lappend(list, pg_strtoint16(intAsStr));
+				break;
+			case INT4OID:
+				list = lappend(list, pg_strtoint32(intAsStr));
+				break;
+			case INT8OID:
+				list = lappend(list, pg_strtoint64(intAsStr));
+				break;
+			default:
+				ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+								errmsg("Unsupported datum type for array.")));
+		}
 	}
 
 	return list;

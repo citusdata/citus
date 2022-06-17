@@ -10,6 +10,7 @@
  */
 
 #include "postgres.h"
+#include "catalog/pg_type.h"
 #include "nodes/pg_list.h"
 #include "distributed/utils/array_type.h"
 #include "lib/stringinfo.h"
@@ -45,10 +46,10 @@ citus_split_shard_by_split_points(PG_FUNCTION_ARGS)
 	uint64 shardIdToSplit = DatumGetUInt64(PG_GETARG_DATUM(0));
 
 	ArrayType *splitPointsArrayObject = PG_GETARG_ARRAYTYPE_P(1);
-	List *shardSplitPointsList = IntegerArrayTypeToList(splitPointsArrayObject);
+	List *shardSplitPointsList = TextArrayTypeToIntegerList(splitPointsArrayObject, INT4OID);
 
 	ArrayType *nodeIdsArrayObject = PG_GETARG_ARRAYTYPE_P(2);
-	List *nodeIdsForPlacementList = IntegerArrayTypeToList(nodeIdsArrayObject);
+	List *nodeIdsForPlacementList = TextArrayTypeToIntegerList(nodeIdsArrayObject, INT4OID);
 
 	Oid shardSplitModeOid = PG_GETARG_OID(3);
 	SplitMode shardSplitMode = LookupSplitMode(shardSplitModeOid);
