@@ -221,6 +221,7 @@ extern List * GetPostLoadTableCreationCommands(Oid relationId, bool includeIndex
 extern List * GetPreLoadTableCreationCommands(Oid relationId, IncludeSequenceDefaults
 											  includeSequenceDefaults,
 											  char *accessMethod);
+extern List * GetTableRowLevelSecurityCommands(Oid relationId);
 extern List * GetTableIndexAndConstraintCommands(Oid relationId, int indexFlags);
 extern List * GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(Oid relationId,
 																		 int indexFlags);

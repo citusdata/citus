@@ -1,27 +1,11 @@
 CREATE SCHEMA alter_database_owner;
 SET search_path TO alter_database_owner, public;
 CREATE USER database_owner_1;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 CREATE USER database_owner_2;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-SELECT run_command_on_workers('CREATE USER database_owner_1');
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
-(2 rows)
-
-SELECT run_command_on_workers('CREATE USER database_owner_2');
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
-(2 rows)
-
 -- make sure the propagation of ALTER DATABASE ... OWNER TO ... is on
-SET citus.enable_alter_database_owner TO on;
+-- in enterprise we default to on, to verify this we don't set it explicitly to on and run
+-- the rest of the tests exactly as on community
+-- SET citus.enable_alter_database_owner TO on;
 -- list the owners of the current database on all nodes
 SELECT run_command_on_workers($$
     SELECT u.rolname
@@ -149,6 +133,48 @@ $$);
  (localhost,57638,t,database_owner_1)
 (2 rows)
 
+-- verify that a user not present on the newly added node will automatically be propagated
+SELECT master_remove_node('localhost', :worker_2_port);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE USER database_owner_3;
+ALTER DATABASE regression OWNER TO database_owner_3;
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- list the owners of the current database on all nodes
+SELECT u.rolname
+  FROM pg_database d
+  JOIN pg_roles u
+    ON (d.datdba = u.oid)
+ WHERE d.datname = current_database();
+     rolname
+---------------------------------------------------------------------
+ database_owner_3
+(1 row)
+
+SELECT run_command_on_workers($$
+    SELECT u.rolname
+      FROM pg_database d
+      JOIN pg_roles u
+        ON (d.datdba = u.oid)
+     WHERE d.datname = current_database();
+$$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,database_owner_3)
+ (localhost,57638,t,database_owner_3)
+(2 rows)
+
+-- reset back to original owner to not break subsequent tests and remove enterprise test user
+ALTER DATABASE regression OWNER TO database_owner_1;
+DROP USER database_owner_3;
 CREATE TABLE t (a int PRIMARY KEY);
 SELECT create_distributed_table('t', 'a');
  create_distributed_table
@@ -283,19 +309,5 @@ $$);
 
 DROP USER database_owner_1;
 DROP USER database_owner_2;
-SELECT run_command_on_workers('DROP USER database_owner_1');
-     run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"DROP ROLE")
- (localhost,57638,t,"DROP ROLE")
-(2 rows)
-
-SELECT run_command_on_workers('DROP USER database_owner_2');
-     run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"DROP ROLE")
- (localhost,57638,t,"DROP ROLE")
-(2 rows)
-
 SET client_min_messages TO warning;
 DROP SCHEMA alter_database_owner CASCADE;

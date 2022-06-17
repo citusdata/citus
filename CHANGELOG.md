@@ -1,30 +1,45 @@
-### citus v11.0.1_beta (April 11, 2022) ###
-
-* Adds propagation of `DOMAIN` objects
-
-* Adds support for `TABLESAMPLE`
-
-* Allows adding a unique constraint with an index
-
-* Fixes a bug that could cause `EXPLAIN ANALYZE` to fail for prepared statements
-  with custom type
-
-* Fixes a bug that could cause Citus not to create function in transaction block
-  properly
-
-* Fixes a bug that could cause returning invalid JSON when running
-  `EXPLAIN ANALYZE` with subplans
-
-* Fixes a bug that prevents non-client backends from accessing shards
-
-### citus v11.0.0_beta (March 22, 2022) ###
+### citus v11.0.2 (June 15, 2022) ###
 
 * Drops support for PostgreSQL 12
 
+* Open sources enterprise features, see the rest of changelog items
+
 * Turns metadata syncing on by default
 
-* Adds `citus_finalize_upgrade_to_citus11()` which is necessary to upgrade to
-  Citus 11+ from earlier versions
+* Introduces `citus_finish_citus_upgrade()` procedure which is necessary to
+  upgrade from earlier versions
+
+* Open sources non-blocking shard moves/shard rebalancer
+  (`citus.logical_replication_timeout`)
+
+* Open sources propagation of `CREATE/DROP/ALTER ROLE` statements
+
+* Open sources propagation of `GRANT` statements
+
+* Open sources propagation of `CLUSTER` statements
+
+* Open sources propagation of `ALTER DATABASE ... OWNER TO ...`
+
+* Open sources optimization for `COPY` when loading `JSON` to avoid double
+  parsing of the `JSON` object (`citus.skip_jsonb_validation_in_copy`)
+
+* Open sources support for row level security
+
+* Open sources support for `pg_dist_authinfo`, which allows storing different
+  authentication options for different users, e.g. you can store
+  passwords or certificates here.
+
+* Open sources support for `pg_dist_poolinfo`, which allows using connection
+  poolers in between coordinator and workers
+
+* Open sources tracking distributed query execution times using
+  citus_stat_statements (`citus.stat_statements_max`,
+  `citus.stat_statements_purge_interval`,
+  `citus.stat_statements_track`). This is disabled by default.
+
+* Open sources tenant_isolation
+
+* Open sources support for `sslkey` and `sslcert` in `citus.node_conninfo`
 
 * Adds `citus.max_client_connections` GUC to limit non-Citus connections
 
@@ -52,6 +67,8 @@
 
 * Adds propagation for foreign server commands
 
+* Adds propagation of `DOMAIN` objects
+
 * Adds propagation of `TEXT SEARCH CONFIGURATION` objects
 
 * Adds propagation of `TEXT SEARCH DICTIONARY` objects
@@ -59,6 +76,8 @@
 * Adds support for `ALTER FUNCTION ... SUPPORT ...` commands
 
 * Adds support for `CREATE SCHEMA AUTHORIZATION` statements without schema name
+
+* Adds support for `CREATE/DROP/ALTER VIEW` commands
 
 * Adds support for `TRUNCATE` for foreign tables
 
@@ -79,6 +98,12 @@
 
 * Adds support for shard replication > 1 hash distributed tables on Citus MX
 
+* Adds support for `LOCK` commands on distributed tables from worker nodes
+
+* Adds support for `TABLESAMPLE`
+
+* Adds support for propagating views when syncing Citus table metadata
+
 * Improves handling of `IN`, `OUT` and `INOUT` parameters for functions
 
 * Introduces `citus_backend_gpid()` UDF to get global pid of the current backend
@@ -98,11 +123,22 @@
 
 * Introduces a new flag `force_delegation` in `create_distributed_function()`
 
+* Introduces `run_command_on_coordinator` UDF
+
+* Introduces `synchronous` option to `citus_disable_node()` UDF
+
+* Introduces `citus_is_coordinator` UDF to check whether a node is the
+  coordinator
+
+* Allows adding a unique constraint with an index
+
 * Allows `create_distributed_function()` on a function owned by an extension
 
 * Allows creating distributed tables in sequential mode
 
 * Allows disabling nodes when multiple failures happen
+
+* Allows `lock_table_if_exits` to be called outside of a transaction blocks
 
 * Adds support for pushing procedures with `OUT` arguments down to the worker
   nodes
@@ -127,6 +163,8 @@
 
 * `citus_shards_on_worker` shows all local shards regardless of `search_path`
 
+* Enables distributed execution from `run_command_on_*` functions
+
 * Deprecates inactive shard state, never marks any placement inactive
 
 * Disables distributed & reference foreign tables
@@ -148,6 +186,20 @@
 
 * Avoids unnecessary errors for `ALTER STATISTICS IF EXISTS` when the statistics
   does not exist
+
+* Fixes a bug that prevents dropping/altering indexes
+
+* Fixes a bug that prevents non-client backends from accessing shards
+
+* Fixes columnar freezing/wraparound bug
+
+* Fixes `invalid read of size 1` memory error with `citus_add_node`
+
+* Fixes schema name qualification for `ALTER/DROP SEQUENCE`
+
+* Fixes schema name qualification for `ALTER/DROP STATISTICS`
+
+* Fixes schema name qualification for `CREATE STATISTICS`
 
 * Fixes a bug that causes columnar storage pages to have zero LSN
 
@@ -175,6 +227,26 @@
   objects being not created during pg upgrades
 
 * Fixes a bug that could cause re-partition joins involving local shards to fail
+
+* Fixes a bug that could cause false positive distributed deadlocks due to local
+  execution
+
+* Fixes a bug that could cause leaking files when materialized views are
+  refreshed
+
+* Fixes a bug that could cause unqualified `DROP DOMAIN IF EXISTS` to fail
+
+* Fixes a bug that could cause wrong schema and ownership after
+  `alter_distributed_table`
+
+* Fixes a bug that could cause `EXPLAIN ANALYZE` to fail for prepared statements
+  with custom type
+
+* Fixes a bug that could cause Citus not to create function in transaction block
+  properly
+
+* Fixes a bug that could cause returning invalid JSON when running
+  `EXPLAIN ANALYZE` with subplans
 
 * Fixes a bug that limits usage of sequences in non-int columns
 
@@ -207,16 +279,27 @@
 
 * Fixes naming issues of newly created partitioned indexes
 
+* Honors `enable_metadata_sync` in node operations
+
+* Improves nested execution checks and adds GUC to control
+  (`citus.allow_nested_distributed_execution`)
+
 * Improves self-deadlock prevention for `CREATE INDEX / REINDEX CONCURRENTLY`
   commands for builds using PG14 or higher
 
 * Moves `pg_dist_object` to `pg_catalog` schema
+
+* Parallelizes metadata syncing on node activation
 
 * Partitions shards to be co-located with the parent shards
 
 * Prevents Citus table functions from being called on shards
 
 * Prevents creating distributed functions when there are out of sync nodes
+
+* Prevents alter table functions from dropping extensions
+
+* Refrains reading the metadata cache for all tables during upgrade
 
 * Provides notice message for idempotent `create_distributed_function` calls
 

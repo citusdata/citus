@@ -1142,16 +1142,7 @@ SELECT * FROM "citus-teen's scnd schm."."be$t''t*ble";
 DROP SCHEMA "cItuS.T E E N'sSchema", "citus-teen's scnd schm." CASCADE;
 NOTICE:  drop cascades to table "citus-teen's scnd schm."."be$t''t*ble"
 -- test schema propagation with user other than current user
-SELECT run_command_on_coordinator_and_workers('CREATE USER "test-user"');
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-CONTEXT:  SQL statement "CREATE USER "test-user""
-PL/pgSQL function run_command_on_coordinator_and_workers(text) line XX at EXECUTE
- run_command_on_coordinator_and_workers
----------------------------------------------------------------------
-
-(1 row)
-
+CREATE USER "test-user";
 SELECT run_command_on_coordinator_and_workers('GRANT ALL ON DATABASE postgres to "test-user"');
  run_command_on_coordinator_and_workers
 ---------------------------------------------------------------------
@@ -1187,12 +1178,7 @@ SELECT run_command_on_workers('DROP OWNED BY "test-user" CASCADE');
  (localhost,57638,t,"DROP OWNED")
 (2 rows)
 
-SELECT run_command_on_coordinator_and_workers('DROP USER "test-user"');
- run_command_on_coordinator_and_workers
----------------------------------------------------------------------
-
-(1 row)
-
+DROP USER "test-user";
 DROP FUNCTION run_command_on_coordinator_and_workers(p_sql text);
 -- test run_command_on_* UDFs with schema
 CREATE SCHEMA run_test_schema;

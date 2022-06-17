@@ -40,6 +40,7 @@
 #include "nodes/makefuncs.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/clauses.h"
+#include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/datum.h"
@@ -674,7 +675,10 @@ CitusEndScan(CustomScanState *node)
 		partitionKeyConst = workerJob->partitionKeyValue;
 	}
 
-	/* queryId is not set if pg_stat_statements is not installed */
+	/*
+	 * queryId is not set if pg_stat_statements is not installed,
+	 * it can be set with as of pg14: set compute_query_id to on;
+	 */
 	if (queryId != 0)
 	{
 		if (partitionKeyConst != NULL && executorType == MULTI_EXECUTOR_ADAPTIVE)

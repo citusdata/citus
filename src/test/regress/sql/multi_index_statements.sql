@@ -111,16 +111,31 @@ CREATE INDEX CONCURRENTLY lineitem_concurrently_index ON public.lineitem (l_orde
 CREATE TABLE local_table (id integer, name text);
 CREATE INDEX CONCURRENTLY ON local_table(id);
 
--- Verify that we warn out on CLUSTER command for distributed tables and no parameter
-CLUSTER index_test_hash USING index_test_hash_index_a;
-CLUSTER;
-
 -- Vefify we don't warn out on CLUSTER command for local tables
 CREATE INDEX CONCURRENTLY local_table_index ON local_table(id);
 CLUSTER local_table USING local_table_index;
 
 DROP TABLE local_table;
 
+-- Verify that we can run CLUSTER command
+CLUSTER index_test_hash USING index_test_hash_index_a;
+
+-- Verify that we ERROR on CLUSTER VERBOSE
+CLUSTER VERBOSE index_test_hash USING index_test_hash_index_a;
+
+-- Verify that we WARN on CLUSTER ALL
+CLUSTER;
+
+-- Verify that all indexes got created on the master node and one of the workers
+SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
+\c - - - :worker_1_port
+SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_%' ORDER BY relname LIMIT 1);
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash_%';
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range_%';
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append_%';
+
+-- Verify that we actually run the CLUSTER COMMAND
+SELECT sum(indisclustered::integer) FROM pg_index WHERE indrelid::regclass::text SIMILAR TO '%\d';
 
 \c - - - :master_port
 SET search_path TO multi_index_statements, public;

@@ -21,7 +21,11 @@
 
 static void AppendAlterRoleStmt(StringInfo buf, AlterRoleStmt *stmt);
 static void AppendAlterRoleSetStmt(StringInfo buf, AlterRoleSetStmt *stmt);
+static void AppendCreateRoleStmt(StringInfo buf, CreateRoleStmt *stmt);
 static void AppendRoleOption(StringInfo buf, ListCell *optionCell);
+static void AppendRoleList(StringInfo buf, List *roleList);
+static void AppendDropRoleStmt(StringInfo buf, DropRoleStmt *stmt);
+static void AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt);
 
 
 /*
@@ -169,6 +173,213 @@ AppendRoleOption(StringInfo buf, ListCell *optionCell)
 	else if (strcmp(option->defname, "validUntil") == 0)
 	{
 		appendStringInfo(buf, " VALID UNTIL %s", quote_literal_cstr(strVal(option->arg)));
+	}
+}
+
+
+/*
+ * DeparseCreateRoleStmt builds and returns a string representing of the
+ * CreateRoleStmt for application on a remote server.
+ */
+char *
+DeparseCreateRoleStmt(Node *node)
+{
+	CreateRoleStmt *stmt = castNode(CreateRoleStmt, node);
+
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	AppendCreateRoleStmt(&buf, stmt);
+
+	return buf.data;
+}
+
+
+/*
+ * AppendCreateRoleStmt generates the string representation of the
+ * CreateRoleStmt and appends it to the buffer.
+ */
+static void
+AppendCreateRoleStmt(StringInfo buf, CreateRoleStmt *stmt)
+{
+	ListCell *optionCell = NULL;
+
+	appendStringInfo(buf, "CREATE ");
+
+	switch (stmt->stmt_type)
+	{
+		case ROLESTMT_ROLE:
+		{
+			appendStringInfo(buf, "ROLE ");
+			break;
+		}
+
+		case ROLESTMT_USER:
+		{
+			appendStringInfo(buf, "USER ");
+			break;
+		}
+
+		case ROLESTMT_GROUP:
+		{
+			appendStringInfo(buf, "GROUP ");
+			break;
+		}
+	}
+
+	appendStringInfo(buf, "%s", quote_identifier(stmt->role));
+
+	foreach(optionCell, stmt->options)
+	{
+		AppendRoleOption(buf, optionCell);
+
+		DefElem *option = (DefElem *) lfirst(optionCell);
+
+		if (strcmp(option->defname, "sysid") == 0)
+		{
+			appendStringInfo(buf, " SYSID %s", quote_literal_cstr(strVal(option->arg)));
+		}
+		else if (strcmp(option->defname, "adminmembers") == 0)
+		{
+			appendStringInfo(buf, " ADMIN ");
+			AppendRoleList(buf, (List *) option->arg);
+		}
+		else if (strcmp(option->defname, "rolemembers") == 0)
+		{
+			appendStringInfo(buf, " ROLE ");
+			AppendRoleList(buf, (List *) option->arg);
+		}
+		else if (strcmp(option->defname, "addroleto") == 0)
+		{
+			appendStringInfo(buf, " IN ROLE ");
+			AppendRoleList(buf, (List *) option->arg);
+		}
+	}
+}
+
+
+/*
+ * DeparseDropRoleStmt builds and returns a string representing of the
+ * DropRoleStmt for application on a remote server.
+ */
+char *
+DeparseDropRoleStmt(Node *node)
+{
+	DropRoleStmt *stmt = castNode(DropRoleStmt, node);
+
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	AppendDropRoleStmt(&buf, stmt);
+
+	return buf.data;
+}
+
+
+/*
+ * AppendDropRoleStmt generates the string representation of the
+ * DropRoleStmt and appends it to the buffer.
+ */
+static void
+AppendDropRoleStmt(StringInfo buf, DropRoleStmt *stmt)
+{
+	appendStringInfo(buf, "DROP ROLE ");
+
+	if (stmt->missing_ok)
+	{
+		appendStringInfo(buf, "IF EXISTS ");
+	}
+
+	AppendRoleList(buf, stmt->roles);
+}
+
+
+static void
+AppendRoleList(StringInfo buf, List *roleList)
+{
+	ListCell *cell = NULL;
+	foreach(cell, roleList)
+	{
+		Node *roleNode = (Node *) lfirst(cell);
+		Assert(IsA(roleNode, RoleSpec) || IsA(roleNode, AccessPriv));
+		char const *rolename = NULL;
+		if (IsA(roleNode, RoleSpec))
+		{
+			rolename = RoleSpecString((RoleSpec *) roleNode, true);
+		}
+		if (IsA(roleNode, AccessPriv))
+		{
+			rolename = quote_identifier(((AccessPriv *) roleNode)->priv_name);
+		}
+		appendStringInfoString(buf, rolename);
+		if (cell != list_tail(roleList))
+		{
+			appendStringInfo(buf, ", ");
+		}
+	}
+}
+
+
+/*
+ * DeparseGrantRoleStmt builds and returns a string representing of the
+ * GrantRoleStmt for application on a remote server.
+ */
+char *
+DeparseGrantRoleStmt(Node *node)
+{
+	GrantRoleStmt *stmt = castNode(GrantRoleStmt, node);
+
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	AppendGrantRoleStmt(&buf, stmt);
+
+	return buf.data;
+}
+
+
+/*
+ * AppendGrantRoleStmt generates the string representation of the
+ * GrantRoleStmt and appends it to the buffer.
+ */
+static void
+AppendGrantRoleStmt(StringInfo buf, GrantRoleStmt *stmt)
+{
+	appendStringInfo(buf, "%s ", stmt->is_grant ? "GRANT" : "REVOKE");
+
+	if (!stmt->is_grant && stmt->admin_opt)
+	{
+		appendStringInfo(buf, "ADMIN OPTION FOR ");
+	}
+
+	AppendRoleList(buf, stmt->granted_roles);
+
+	appendStringInfo(buf, "%s ", stmt->is_grant ? " TO " : " FROM ");
+
+	AppendRoleList(buf, stmt->grantee_roles);
+
+	if (stmt->is_grant)
+	{
+		if (stmt->admin_opt)
+		{
+			appendStringInfo(buf, " WITH ADMIN OPTION");
+		}
+
+		if (stmt->grantor)
+		{
+			appendStringInfo(buf, " GRANTED BY %s", RoleSpecString(stmt->grantor, true));
+		}
+	}
+	else
+	{
+		if (stmt->behavior == DROP_RESTRICT)
+		{
+			appendStringInfo(buf, " RESTRICT");
+		}
+		else if (stmt->behavior == DROP_CASCADE)
+		{
+			appendStringInfo(buf, " CASCADE");
+		}
 	}
 }
 

@@ -245,13 +245,9 @@ ROLLBACK;
 -- test propagation of SET LOCAL
 -- gonna need a non-superuser as we'll use RLS to test GUC propagation
 CREATE USER rls_user;
-SELECT run_command_on_workers('CREATE USER rls_user');
 
 GRANT ALL ON SCHEMA multi_real_time_transaction TO rls_user;
 GRANT ALL ON ALL TABLES IN SCHEMA multi_real_time_transaction TO rls_user;
-
-SELECT run_command_on_workers('GRANT ALL ON SCHEMA multi_real_time_transaction TO rls_user');
-SELECT run_command_on_workers('GRANT ALL ON ALL TABLES IN SCHEMA multi_real_time_transaction TO rls_user');
 
 -- create trigger on one worker to reject access if GUC not
 \c - - - :worker_1_port

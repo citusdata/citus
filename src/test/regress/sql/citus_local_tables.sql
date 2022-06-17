@@ -133,7 +133,7 @@ BEGIN;
   SELECT * FROM citus_local_table_3;
 ROLLBACK;
 
--- show that we do not support policies in citus community --
+-- show that we support policies in citus enterprise --
 
 BEGIN;
   CREATE TABLE citus_local_table_3 (table_user text);
@@ -144,7 +144,6 @@ BEGIN;
   CREATE POLICY table_policy ON citus_local_table_3 TO table_users
       USING (table_user = current_user);
 
-  -- this should error out
   SELECT citus_add_local_table_to_metadata('citus_local_table_3');
 ROLLBACK;
 

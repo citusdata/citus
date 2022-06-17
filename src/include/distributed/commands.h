@@ -19,6 +19,7 @@
 #include "nodes/parsenodes.h"
 #include "tcop/dest.h"
 #include "tcop/utility.h"
+#include "utils/acl.h"
 
 
 extern bool AddAllLocalTablesToMetadata;
@@ -180,6 +181,7 @@ extern Oid get_constraint_typid(Oid conoid);
 
 /* extension.c - forward declarations */
 extern bool IsDropCitusExtensionStmt(Node *parsetree);
+extern List * GetDependentFDWsToExtension(Oid extensionId);
 extern bool IsCreateAlterExtensionUpdateCitusStmt(Node *parsetree);
 extern bool ShouldMarkRelationDistributed(Oid relationId);
 extern void ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree);
@@ -244,7 +246,17 @@ extern Oid GetReferencedTableId(Oid foreignKeyId);
 extern Oid GetReferencingTableId(Oid foreignKeyId);
 extern bool RelationInvolvedInAnyNonInheritedForeignKeys(Oid relationId);
 
+
+/* foreign_data_wrapper.c - forward declarations */
+extern List * PreprocessGrantOnFDWStmt(Node *node, const char *queryString,
+									   ProcessUtilityContext processUtilityContext);
+extern Acl * GetPrivilegesForFDW(Oid FDWOid);
+
+
 /* foreign_server.c - forward declarations */
+extern List * PreprocessGrantOnForeignServerStmt(Node *node, const char *queryString,
+												 ProcessUtilityContext
+												 processUtilityContext);
 extern ObjectAddress CreateForeignServerStmtObjectAddress(Node *node, bool missing_ok);
 extern ObjectAddress AlterForeignServerStmtObjectAddress(Node *node, bool missing_ok);
 extern ObjectAddress RenameForeignServerStmtObjectAddress(Node *node, bool missing_ok);
@@ -284,11 +296,16 @@ extern List * PreprocessAlterFunctionDependsStmt(Node *stmt,
 												 processUtilityContext);
 extern ObjectAddress AlterFunctionDependsStmtObjectAddress(Node *stmt,
 														   bool missing_ok);
+extern List * PreprocessGrantOnFunctionStmt(Node *node, const char *queryString,
+											ProcessUtilityContext processUtilityContext);
+extern List * PostprocessGrantOnFunctionStmt(Node *node, const char *queryString);
 
 
 /* grant.c - forward declarations */
 extern List * PreprocessGrantStmt(Node *node, const char *queryString,
 								  ProcessUtilityContext processUtilityContext);
+extern void deparsePrivileges(StringInfo privsString, GrantStmt *grantStmt);
+extern void deparseGrantees(StringInfo granteesString, GrantStmt *grantStmt);
 
 
 /* index.c - forward declarations */
@@ -323,8 +340,8 @@ extern ObjectAddress CreateExtensionStmtObjectAddress(Node *stmt, bool missing_o
 /* policy.c -  forward declarations */
 extern List * CreatePolicyCommands(Oid relationId);
 extern void ErrorIfUnsupportedPolicy(Relation relation);
-extern List * PreprocessCreatePolicyStmt(Node *node, const char *queryString,
-										 ProcessUtilityContext processUtilityContext);
+extern void ErrorIfUnsupportedPolicyExpr(Node *expr);
+extern List * PostprocessCreatePolicyStmt(Node *node, const char *queryString);
 extern List * PreprocessAlterPolicyStmt(Node *node, const char *queryString,
 										ProcessUtilityContext processUtilityContext);
 extern List * PreprocessDropPolicyStmt(Node *stmt, const char *queryString,
@@ -357,7 +374,17 @@ extern ObjectAddress AlterRoleStmtObjectAddress(Node *node,
 												bool missing_ok);
 extern ObjectAddress AlterRoleSetStmtObjectAddress(Node *node,
 												   bool missing_ok);
+extern List * PreprocessCreateRoleStmt(Node *stmt, const char *queryString,
+									   ProcessUtilityContext processUtilityContext);
+extern List * PreprocessDropRoleStmt(Node *stmt, const char *queryString,
+									 ProcessUtilityContext processUtilityContext);
+extern List * PreprocessGrantRoleStmt(Node *stmt, const char *queryString,
+									  ProcessUtilityContext processUtilityContext);
+extern List * PostprocessGrantRoleStmt(Node *stmt, const char *queryString);
 extern List * GenerateCreateOrAlterRoleCommand(Oid roleOid);
+ObjectAddress CreateRoleStmtObjectAddress(Node *stmt, bool missing_ok);
+extern void UnmarkRolesDistributed(List *roles);
+extern List * FilterDistributedRoles(List *roles);
 
 /* schema.c - forward declarations */
 extern List * PreprocessCreateSchemaStmt(Node *node, const char *queryString,
@@ -386,6 +413,9 @@ extern List * PreprocessDropSequenceStmt(Node *node, const char *queryString,
 										 ProcessUtilityContext processUtilityContext);
 extern List * PreprocessRenameSequenceStmt(Node *node, const char *queryString,
 										   ProcessUtilityContext processUtilityContext);
+extern List * PreprocessGrantOnSequenceStmt(Node *node, const char *queryString,
+											ProcessUtilityContext processUtilityContext);
+extern List * PostprocessGrantOnSequenceStmt(Node *node, const char *queryString);
 extern ObjectAddress AlterSequenceStmtObjectAddress(Node *node, bool missing_ok);
 extern ObjectAddress AlterSequenceSchemaStmtObjectAddress(Node *node, bool missing_ok);
 extern ObjectAddress AlterSequenceOwnerStmtObjectAddress(Node *node, bool missing_ok);

@@ -1,0 +1,6 @@
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 12 AS server_version_above_twelve
+\gset
+\if :server_version_above_twelve
+\else
+\q

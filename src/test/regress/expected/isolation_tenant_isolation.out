@@ -1,0 +1,849 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-load-cache s1-insert s1-begin s1-select s2-begin s2-isolate-tenant s1-update s2-commit s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+	TRUNCATE isolation_table;
+
+step s1-insert:
+	INSERT INTO isolation_table VALUES (5, 10);
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+	SELECT count(*) FROM isolation_table WHERE id = 5;
+
+count
+---------------------------------------------------------------------
+    1
+(1 row)
+
+step s2-begin:
+	BEGIN;
+
+step s2-isolate-tenant:
+	SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500004
+(1 row)
+
+step s1-update:
+	UPDATE isolation_table SET value = 5 WHERE id = 5;
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-update: <... completed>
+ERROR:  could not find valid entry for shard xxxxx
+step s1-commit:
+	COMMIT;
+
+step s2-print-cluster:
+	-- row count per shard
+	SELECT
+		nodeport, shardid, success, result
+	FROM
+		run_command_on_placements('isolation_table', 'select count(*) from %s')
+	ORDER BY
+		nodeport, shardid;
+	-- rows
+	SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500003|t      |     0
+   57637|1500004|t      |     1
+   57637|1500005|t      |     0
+   57638|1500002|t      |     0
+(4 rows)
+
+id|value
+---------------------------------------------------------------------
+ 5|   10
+(1 row)
+
+
+starting permutation: s1-load-cache s1-insert s1-begin s1-select s2-begin s2-isolate-tenant s1-delete s2-commit s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+	TRUNCATE isolation_table;
+
+step s1-insert:
+	INSERT INTO isolation_table VALUES (5, 10);
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+	SELECT count(*) FROM isolation_table WHERE id = 5;
+
+count
+---------------------------------------------------------------------
+    1
+(1 row)
+
+step s2-begin:
+	BEGIN;
+
+step s2-isolate-tenant:
+	SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500010
+(1 row)
+
+step s1-delete:
+	DELETE FROM isolation_table WHERE id = 5;
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-delete: <... completed>
+ERROR:  could not find valid entry for shard xxxxx
+step s1-commit:
+	COMMIT;
+
+step s2-print-cluster:
+	-- row count per shard
+	SELECT
+		nodeport, shardid, success, result
+	FROM
+		run_command_on_placements('isolation_table', 'select count(*) from %s')
+	ORDER BY
+		nodeport, shardid;
+	-- rows
+	SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500009|t      |     0
+   57637|1500010|t      |     1
+   57637|1500011|t      |     0
+   57638|1500008|t      |     0
+(4 rows)
+
+id|value
+---------------------------------------------------------------------
+ 5|   10
+(1 row)
+
+
+starting permutation: s1-load-cache s1-begin s1-select s2-begin s2-isolate-tenant s1-insert s2-commit s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+	TRUNCATE isolation_table;
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+	SELECT count(*) FROM isolation_table WHERE id = 5;
+
+count
+---------------------------------------------------------------------
+    0
+(1 row)
+
+step s2-begin:
+	BEGIN;
+
+step s2-isolate-tenant:
+	SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500016
+(1 row)
+
+step s1-insert:
+	INSERT INTO isolation_table VALUES (5, 10);
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-insert: <... completed>
+ERROR:  could not find valid entry for shard xxxxx
+step s1-commit:
+	COMMIT;
+
+step s2-print-cluster:
+	-- row count per shard
+	SELECT
+		nodeport, shardid, success, result
+	FROM
+		run_command_on_placements('isolation_table', 'select count(*) from %s')
+	ORDER BY
+		nodeport, shardid;
+	-- rows
+	SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500015|t      |     0
+   57637|1500016|t      |     0
+   57637|1500017|t      |     0
+   57638|1500014|t      |     0
+(4 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+
+starting permutation: s1-load-cache s1-begin s1-select s2-begin s2-isolate-tenant s1-copy s2-commit s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+	TRUNCATE isolation_table;
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+	SELECT count(*) FROM isolation_table WHERE id = 5;
+
+count
+---------------------------------------------------------------------
+    0
+(1 row)
+
+step s2-begin:
+	BEGIN;
+
+step s2-isolate-tenant:
+	SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500022
+(1 row)
+
+step s1-copy:
+	COPY isolation_table FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-copy: <... completed>
+ERROR:  could not find valid entry for shard xxxxx
+step s1-commit:
+	COMMIT;
+
+step s2-print-cluster:
+	-- row count per shard
+	SELECT
+		nodeport, shardid, success, result
+	FROM
+		run_command_on_placements('isolation_table', 'select count(*) from %s')
+	ORDER BY
+		nodeport, shardid;
+	-- rows
+	SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500021|t      |     0
+   57637|1500022|t      |     0
+   57637|1500023|t      |     0
+   57638|1500020|t      |     0
+(4 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+
+starting permutation: s1-load-cache s1-begin s1-select s2-begin s2-isolate-tenant s1-ddl s2-commit s1-commit s2-print-cluster s2-print-index-count
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+	TRUNCATE isolation_table;
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+	SELECT count(*) FROM isolation_table WHERE id = 5;
+
+count
+---------------------------------------------------------------------
+    0
+(1 row)
+
+step s2-begin:
+	BEGIN;
+
+step s2-isolate-tenant:
+	SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500028
+(1 row)
+
+step s1-ddl:
+	CREATE INDEX test_table_index ON isolation_table(id);
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-ddl: <... completed>
+step s1-commit:
+	COMMIT;
+
+step s2-print-cluster:
+	-- row count per shard
+	SELECT
+		nodeport, shardid, success, result
+	FROM
+		run_command_on_placements('isolation_table', 'select count(*) from %s')
+	ORDER BY
+		nodeport, shardid;
+	-- rows
+	SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500027|t      |     0
+   57637|1500028|t      |     0
+   57637|1500029|t      |     0
+   57638|1500026|t      |     0
+(4 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+step s2-print-index-count:
+	SELECT
+		nodeport, success, result
+	FROM
+		run_command_on_placements('isolation_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
+	ORDER BY
+		nodeport;
+
+nodeport|success|result
+---------------------------------------------------------------------
+   57637|t      |     1
+   57637|t      |     1
+   57637|t      |     1
+   57638|t      |     1
+(4 rows)
+
+
+starting permutation: s1-insert s1-begin s1-select s2-begin s2-isolate-tenant s1-update s2-commit s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-insert:
+	INSERT INTO isolation_table VALUES (5, 10);
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+	SELECT count(*) FROM isolation_table WHERE id = 5;
+
+count
+---------------------------------------------------------------------
+    1
+(1 row)
+
+step s2-begin:
+	BEGIN;
+
+step s2-isolate-tenant:
+	SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500034
+(1 row)
+
+step s1-update:
+	UPDATE isolation_table SET value = 5 WHERE id = 5;
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-update: <... completed>
+ERROR:  could not find valid entry for shard xxxxx
+step s1-commit:
+	COMMIT;
+
+step s2-print-cluster:
+	-- row count per shard
+	SELECT
+		nodeport, shardid, success, result
+	FROM
+		run_command_on_placements('isolation_table', 'select count(*) from %s')
+	ORDER BY
+		nodeport, shardid;
+	-- rows
+	SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500033|t      |     0
+   57637|1500034|t      |     1
+   57637|1500035|t      |     0
+   57638|1500032|t      |     0
+(4 rows)
+
+id|value
+---------------------------------------------------------------------
+ 5|   10
+(1 row)
+
+
+starting permutation: s1-insert s1-begin s1-select s2-begin s2-isolate-tenant s1-delete s2-commit s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-insert:
+	INSERT INTO isolation_table VALUES (5, 10);
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+	SELECT count(*) FROM isolation_table WHERE id = 5;
+
+count
+---------------------------------------------------------------------
+    1
+(1 row)
+
+step s2-begin:
+	BEGIN;
+
+step s2-isolate-tenant:
+	SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500040
+(1 row)
+
+step s1-delete:
+	DELETE FROM isolation_table WHERE id = 5;
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-delete: <... completed>
+ERROR:  could not find valid entry for shard xxxxx
+step s1-commit:
+	COMMIT;
+
+step s2-print-cluster:
+	-- row count per shard
+	SELECT
+		nodeport, shardid, success, result
+	FROM
+		run_command_on_placements('isolation_table', 'select count(*) from %s')
+	ORDER BY
+		nodeport, shardid;
+	-- rows
+	SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500039|t      |     0
+   57637|1500040|t      |     1
+   57637|1500041|t      |     0
+   57638|1500038|t      |     0
+(4 rows)
+
+id|value
+---------------------------------------------------------------------
+ 5|   10
+(1 row)
+
+
+starting permutation: s1-begin s1-select s2-begin s2-isolate-tenant s1-insert s2-commit s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+	SELECT count(*) FROM isolation_table WHERE id = 5;
+
+count
+---------------------------------------------------------------------
+    0
+(1 row)
+
+step s2-begin:
+	BEGIN;
+
+step s2-isolate-tenant:
+	SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500046
+(1 row)
+
+step s1-insert:
+	INSERT INTO isolation_table VALUES (5, 10);
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-insert: <... completed>
+ERROR:  could not find valid entry for shard xxxxx
+step s1-commit:
+	COMMIT;
+
+step s2-print-cluster:
+	-- row count per shard
+	SELECT
+		nodeport, shardid, success, result
+	FROM
+		run_command_on_placements('isolation_table', 'select count(*) from %s')
+	ORDER BY
+		nodeport, shardid;
+	-- rows
+	SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500045|t      |     0
+   57637|1500046|t      |     0
+   57637|1500047|t      |     0
+   57638|1500044|t      |     0
+(4 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+
+starting permutation: s1-begin s1-select s2-begin s2-isolate-tenant s1-copy s2-commit s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+	SELECT count(*) FROM isolation_table WHERE id = 5;
+
+count
+---------------------------------------------------------------------
+    0
+(1 row)
+
+step s2-begin:
+	BEGIN;
+
+step s2-isolate-tenant:
+	SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500052
+(1 row)
+
+step s1-copy:
+	COPY isolation_table FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-copy: <... completed>
+ERROR:  could not find valid entry for shard xxxxx
+step s1-commit:
+	COMMIT;
+
+step s2-print-cluster:
+	-- row count per shard
+	SELECT
+		nodeport, shardid, success, result
+	FROM
+		run_command_on_placements('isolation_table', 'select count(*) from %s')
+	ORDER BY
+		nodeport, shardid;
+	-- rows
+	SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500051|t      |     0
+   57637|1500052|t      |     0
+   57637|1500053|t      |     0
+   57638|1500050|t      |     0
+(4 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+
+starting permutation: s1-begin s1-select s2-begin s2-isolate-tenant s1-ddl s2-commit s1-commit s2-print-cluster s2-print-index-count
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+	SELECT count(*) FROM isolation_table WHERE id = 5;
+
+count
+---------------------------------------------------------------------
+    0
+(1 row)
+
+step s2-begin:
+	BEGIN;
+
+step s2-isolate-tenant:
+	SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500058
+(1 row)
+
+step s1-ddl:
+	CREATE INDEX test_table_index ON isolation_table(id);
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-ddl: <... completed>
+step s1-commit:
+	COMMIT;
+
+step s2-print-cluster:
+	-- row count per shard
+	SELECT
+		nodeport, shardid, success, result
+	FROM
+		run_command_on_placements('isolation_table', 'select count(*) from %s')
+	ORDER BY
+		nodeport, shardid;
+	-- rows
+	SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500057|t      |     0
+   57637|1500058|t      |     0
+   57637|1500059|t      |     0
+   57638|1500056|t      |     0
+(4 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+step s2-print-index-count:
+	SELECT
+		nodeport, success, result
+	FROM
+		run_command_on_placements('isolation_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
+	ORDER BY
+		nodeport;
+
+nodeport|success|result
+---------------------------------------------------------------------
+   57637|t      |     1
+   57637|t      |     1
+   57637|t      |     1
+   57638|t      |     1
+(4 rows)
+
+
+starting permutation: s1-load-cache s1-insert s1-begin s1-isolate-tenant s2-isolate-tenant s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+	TRUNCATE isolation_table;
+
+step s1-insert:
+	INSERT INTO isolation_table VALUES (5, 10);
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-isolate-tenant:
+	SELECT isolate_tenant_to_new_shard('isolation_table', 2);
+
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500064
+(1 row)
+
+step s2-isolate-tenant:
+	SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-isolate-tenant: <... completed>
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500067
+(1 row)
+
+step s2-print-cluster:
+	-- row count per shard
+	SELECT
+		nodeport, shardid, success, result
+	FROM
+		run_command_on_placements('isolation_table', 'select count(*) from %s')
+	ORDER BY
+		nodeport, shardid;
+	-- rows
+	SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500066|t      |     0
+   57637|1500067|t      |     1
+   57637|1500068|t      |     0
+   57638|1500063|t      |     0
+   57638|1500064|t      |     0
+   57638|1500065|t      |     0
+(6 rows)
+
+id|value
+---------------------------------------------------------------------
+ 5|   10
+(1 row)
+
+
+starting permutation: s1-insert s1-begin s1-isolate-tenant s2-isolate-tenant s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-insert:
+	INSERT INTO isolation_table VALUES (5, 10);
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-isolate-tenant:
+	SELECT isolate_tenant_to_new_shard('isolation_table', 2);
+
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500073
+(1 row)
+
+step s2-isolate-tenant:
+	SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-isolate-tenant: <... completed>
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500076
+(1 row)
+
+step s2-print-cluster:
+	-- row count per shard
+	SELECT
+		nodeport, shardid, success, result
+	FROM
+		run_command_on_placements('isolation_table', 'select count(*) from %s')
+	ORDER BY
+		nodeport, shardid;
+	-- rows
+	SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500075|t      |     0
+   57637|1500076|t      |     1
+   57637|1500077|t      |     0
+   57638|1500072|t      |     0
+   57638|1500073|t      |     0
+   57638|1500074|t      |     0
+(6 rows)
+
+id|value
+---------------------------------------------------------------------
+ 5|   10
+(1 row)
+

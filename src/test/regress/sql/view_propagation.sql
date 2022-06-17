@@ -356,6 +356,41 @@ ALTER VIEW IF EXISTS non_existing_view RENAME COLUMN val1 TO val2;
 ALTER VIEW IF EXISTS non_existing_view RENAME val2 TO val1;
 ALTER VIEW IF EXISTS non_existing_view SET SCHEMA view_prop_schema;
 
+-- Show that privileges should be granted to both view and depending table
+-- Set shard id seq and shard replication factor for consistent test result
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1900000;
+SET citus.shard_count to 1;
+CREATE USER grant_view_user;
+
+CREATE TABLE table_to_test_grant_view(id int, val1 text);
+SELECT create_distributed_table('table_to_test_grant_view','id');
+
+CREATE VIEW view_to_test_grant_view AS SELECT * FROM table_to_test_grant_view;
+
+GRANT ALL ON SCHEMA view_prop_schema TO grant_view_user;
+GRANT ALL ON view_to_test_grant_view TO grant_view_user;
+
+SET ROLE grant_view_user;
+-- Should fail since required privileges for dependent tables haven't been granted
+SELECT count(*) FROM view_to_test_grant_view;
+RESET ROLE;
+
+\c - grant_view_user - :worker_1_port
+-- Should it fails in a same way on the worker ndoe
+SET search_path to view_prop_schema;
+SELECT count(*) FROM view_to_test_grant_view;
+
+\c - postgres - :master_port
+SET search_path to view_prop_schema;
+
+GRANT ALL ON table_to_test_grant_view TO grant_view_user;
+
+SET ROLE grant_view_user;
+-- Should work now as privileges for the table have been granted
+SELECT count(*) FROM view_to_test_grant_view;
+RESET ROLE;
+RESET citus.shard_count;
+
 -- Show that create view and alter view commands can be run from same transaction
 -- but not the drop view. Since we can not use metadata connection for drop view commands
 BEGIN;
@@ -442,6 +477,26 @@ SELECT create_distributed_table('employees','employee_id');
 SELECT run_command_on_workers($$SELECT count(*) FROM v_test_1$$);
 SELECT run_command_on_workers($$SELECT count(*) FROM v_test_2$$);
 
+-- create and drop temporary view
+CREATE TEMPORARY VIEW temp_view_to_drop AS SELECT 1;
+DROP VIEW temp_view_to_drop;
+
+-- drop non-existent view
+DROP VIEW IF EXISTS drop_the_nonexistent_view;
+DROP VIEW IF EXISTS non_exist_view_schema.view_to_drop;
+
+-- Check materialized view just for sanity
+CREATE MATERIALIZED VIEW materialized_view_to_test AS SELECT 1;
+DROP VIEW materialized_view_to_test;
+DROP MATERIALIZED VIEW materialized_view_to_test;
+
+CREATE SCHEMA axx;
+create materialized view axx.temp_view_to_drop AS SELECT 1;
+DROP VIEW axx.temp_view_to_drop;
+DROP VIEW IF EXISTS axx.temp_view_to_drop;
+DROP MATERIALIZED VIEW IF EXISTS axx.temp_view_to_drop;
+DROP MATERIALIZED VIEW IF EXISTS axx.temp_view_to_drop;
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA view_prop_schema_inner CASCADE;
-DROP SCHEMA view_prop_schema CASCADE;
+DROP SCHEMA view_prop_schema, axx CASCADE;

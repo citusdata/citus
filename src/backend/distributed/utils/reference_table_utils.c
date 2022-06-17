@@ -346,9 +346,9 @@ ReplicateReferenceTableShardToNode(ShardInterval *shardInterval, char *nodeName,
 	ShardPlacement *sourceShardPlacement = ActiveShardPlacement(shardId, missingOk);
 	char *srcNodeName = sourceShardPlacement->nodeName;
 	uint32 srcNodePort = sourceShardPlacement->nodePort;
-	bool includeData = true;
-	List *ddlCommandList =
-		CopyShardCommandList(shardInterval, srcNodeName, srcNodePort, includeData);
+	bool includeDataCopy = true; /* TODO: consider using logical replication */
+	List *ddlCommandList = CopyShardCommandList(shardInterval, srcNodeName, srcNodePort,
+												includeDataCopy);
 
 	ereport(NOTICE, (errmsg("Replicating reference table \"%s\" to the node %s:%d",
 							get_rel_name(shardInterval->relationId), nodeName,

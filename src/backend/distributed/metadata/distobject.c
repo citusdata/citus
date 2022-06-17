@@ -28,6 +28,7 @@
 #include "catalog/pg_type.h"
 #include "citus_version.h"
 #include "commands/extension.h"
+#include "distributed/listutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
@@ -44,6 +45,7 @@
 #include "parser/parse_type.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
 #include "utils/regproc.h"
 #include "utils/rel.h"
 
@@ -518,4 +520,83 @@ UpdateDistributedObjectColocationId(uint32 oldColocationId,
 	systable_endscan(scanDescriptor);
 	table_close(pgDistObjectRel, NoLock);
 	CommandCounterIncrement();
+}
+
+
+/*
+ * DistributedFunctionList returns the list of ObjectAddress-es of all the
+ * distributed functions found in pg_dist_object
+ */
+List *
+DistributedFunctionList(void)
+{
+	List *distributedFunctionList = NIL;
+
+	ScanKeyData key[1];
+	Relation pgDistObjectRel = table_open(DistObjectRelationId(), AccessShareLock);
+
+	/* scan pg_dist_object for classid = ProcedureRelationId via index */
+	ScanKeyInit(&key[0], Anum_pg_dist_object_classid, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(ProcedureRelationId));
+	SysScanDesc pgDistObjectScan = systable_beginscan(pgDistObjectRel,
+													  DistObjectPrimaryKeyIndexId(),
+													  true, NULL, 1, key);
+
+	HeapTuple pgDistObjectTup = NULL;
+	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext(pgDistObjectScan)))
+	{
+		Form_pg_dist_object pg_dist_object =
+			(Form_pg_dist_object) GETSTRUCT(pgDistObjectTup);
+
+		ObjectAddress *functionAddress = palloc0(sizeof(ObjectAddress));
+		functionAddress->classId = ProcedureRelationId;
+		functionAddress->objectId = pg_dist_object->objid;
+		functionAddress->objectSubId = pg_dist_object->objsubid;
+		distributedFunctionList = lappend(distributedFunctionList, functionAddress);
+	}
+
+	systable_endscan(pgDistObjectScan);
+	relation_close(pgDistObjectRel, AccessShareLock);
+	return distributedFunctionList;
+}
+
+
+/*
+ * DistributedSequenceList returns the list of ObjectAddress-es of all the
+ * distributed sequences found in pg_dist_object
+ */
+List *
+DistributedSequenceList(void)
+{
+	List *distributedSequenceList = NIL;
+
+	ScanKeyData key[1];
+	Relation pgDistObjectRel = table_open(DistObjectRelationId(), AccessShareLock);
+
+	/* scan pg_dist_object for classid = RelationRelationId via index */
+	ScanKeyInit(&key[0], Anum_pg_dist_object_classid, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(RelationRelationId));
+	SysScanDesc pgDistObjectScan = systable_beginscan(pgDistObjectRel,
+													  DistObjectPrimaryKeyIndexId(),
+													  true, NULL, 1, key);
+
+	HeapTuple pgDistObjectTup = NULL;
+	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext(pgDistObjectScan)))
+	{
+		Form_pg_dist_object pg_dist_object =
+			(Form_pg_dist_object) GETSTRUCT(pgDistObjectTup);
+
+		if (get_rel_relkind(pg_dist_object->objid) == RELKIND_SEQUENCE)
+		{
+			ObjectAddress *sequenceAddress = palloc0(sizeof(ObjectAddress));
+			sequenceAddress->classId = RelationRelationId;
+			sequenceAddress->objectId = pg_dist_object->objid;
+			sequenceAddress->objectSubId = pg_dist_object->objsubid;
+			distributedSequenceList = lappend(distributedSequenceList, sequenceAddress);
+		}
+	}
+
+	systable_endscan(pgDistObjectScan);
+	relation_close(pgDistObjectRel, AccessShareLock);
+	return distributedSequenceList;
 }

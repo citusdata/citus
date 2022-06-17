@@ -1,20 +1,18 @@
 setup
 {
+	SET citus.max_cached_conns_per_worker to 0;
 	SELECT citus_internal.replace_isolation_tester_func();
 	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 
 	SET citus.shard_replication_factor TO 1;
 
 	CREATE USER test_user_1;
-	SELECT run_command_on_workers('CREATE USER test_user_1');
 
 	CREATE USER test_user_2;
-	SELECT run_command_on_workers('CREATE USER test_user_2');
 
-	SET ROLE test_user_1;
 	CREATE TABLE test_table(column1 int, column2 int);
+	ALTER TABLE test_table OWNER TO test_user_1;
 	SELECT create_distributed_table('test_table', 'column1');
-	RESET ROLE;
 }
 
 teardown
@@ -24,19 +22,24 @@ teardown
 	BEGIN;
 	DROP TABLE IF EXISTS test_table;
 	DROP USER test_user_1, test_user_2;
-	SELECT run_command_on_workers('DROP USER test_user_1, test_user_2');
 	COMMIT;
 }
 
 session "s1"
 
-// run_command_on_placements is done in a separate step because the setup is executed as a single transaction
+// due to bug #3785 a second permutation of the isolation test would reuse a cached
+// connection bound to the deleted user. This causes the tests to fail with unexplainable
+// permission denied errors.
+// By setting the cached connections to zero we prevent the use of cached conncetions.
+// These steps can be removed once the root cause is solved
+step "s1-no-connection-cache" {
+	SET citus.max_cached_conns_per_worker to 0;
+}
+
 step "s1-grant"
 {
 	SET ROLE test_user_1;
-	SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
 	GRANT ALL ON test_table TO test_user_2;
-	SELECT run_command_on_workers($$SET citus.enable_metadata_sync TO off; GRANT ALL ON test_table TO test_user_2;$$);
 }
 
 step "s1-begin"
@@ -77,6 +80,15 @@ step "s1-commit"
 
 session "s2"
 
+// due to bug #3785 a second permutation of the isolation test would reuse a cached
+// connection bound to the deleted user. This causes the tests to fail with unexplainable
+// permission denied errors.
+// By setting the cached connections to zero we prevent the use of cached conncetions.
+// These steps can be removed once the root cause is solved
+step "s2-no-connection-cache" {
+	SET citus.max_cached_conns_per_worker to 0;
+}
+
 step "s2-begin"
 {
 	BEGIN;
@@ -114,17 +126,17 @@ step "s2-commit"
 }
 
 // REINDEX
-permutation "s1-begin" "s2-begin" "s2-reindex" "s1-insert" "s2-commit" "s1-commit"
-permutation "s1-grant" "s1-begin" "s2-begin" "s2-reindex" "s1-insert" "s2-insert" "s2-commit" "s1-commit"
-permutation "s1-grant" "s1-begin" "s2-begin" "s1-reindex" "s2-insert" "s1-insert" "s1-commit" "s2-commit"
+permutation "s1-no-connection-cache" "s2-no-connection-cache" "s1-begin" "s2-begin" "s2-reindex" "s1-insert" "s2-commit" "s1-commit"
+permutation "s1-no-connection-cache" "s2-no-connection-cache" "s1-grant" "s1-begin" "s2-begin" "s2-reindex" "s1-insert" "s2-insert" "s2-commit" "s1-commit"
+permutation "s1-no-connection-cache" "s2-no-connection-cache" "s1-grant" "s1-begin" "s2-begin" "s1-reindex" "s2-insert" "s1-insert" "s1-commit" "s2-commit"
 
 // CREATE INDEX
-permutation "s1-begin" "s2-begin" "s2-index" "s1-insert" "s2-commit" "s1-commit" "s2-drop-index"
-permutation "s1-grant" "s1-begin" "s2-begin" "s2-insert" "s1-index" "s2-insert" "s2-commit" "s1-commit" "s1-drop-index"
-permutation "s1-grant" "s1-begin" "s2-begin" "s1-index" "s2-index" "s1-insert" "s1-commit" "s2-commit" "s1-drop-index" "s2-drop-index"
+permutation "s1-no-connection-cache" "s2-no-connection-cache" "s1-begin" "s2-begin" "s2-index" "s1-insert" "s2-commit" "s1-commit" "s2-drop-index"
+permutation "s1-no-connection-cache" "s2-no-connection-cache" "s1-grant" "s1-begin" "s2-begin" "s2-insert" "s1-index" "s2-insert" "s2-commit" "s1-commit" "s1-drop-index"
+permutation "s1-no-connection-cache" "s2-no-connection-cache" "s1-grant" "s1-begin" "s2-begin" "s1-index" "s2-index" "s1-insert" "s1-commit" "s2-commit" "s1-drop-index" "s2-drop-index"
 
 // TRUNCATE
-permutation "s1-begin" "s2-begin" "s2-truncate" "s1-insert" "s2-commit" "s1-commit"
-permutation "s1-grant" "s1-begin" "s2-begin" "s1-truncate" "s2-insert" "s1-insert" "s1-commit" "s2-commit"
-permutation "s1-grant" "s1-begin" "s2-begin" "s1-truncate" "s2-truncate" "s1-commit" "s2-commit"
+permutation "s1-no-connection-cache" "s2-no-connection-cache" "s1-begin" "s2-begin" "s2-truncate" "s1-insert" "s2-commit" "s1-commit"
+permutation "s1-no-connection-cache" "s2-no-connection-cache" "s1-grant" "s1-begin" "s2-begin" "s1-truncate" "s2-insert" "s1-insert" "s1-commit" "s2-commit"
+permutation "s1-no-connection-cache" "s2-no-connection-cache" "s1-grant" "s1-begin" "s2-begin" "s1-truncate" "s2-truncate" "s1-commit" "s2-commit"
 

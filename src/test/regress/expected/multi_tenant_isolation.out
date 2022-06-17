@@ -1,0 +1,1265 @@
+--
+-- MULTI_TENANT_ISOLATION
+--
+-- Tests tenant isolation feature
+--
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1230000;
+SELECT nextval('pg_catalog.pg_dist_placement_placementid_seq') AS last_placement_id
+\gset
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 100000;
+CREATE SCHEMA "Tenant Isolation";
+SET search_path to "Tenant Isolation";
+CREATE ROLE mx_isolation_role_ent WITH LOGIN;
+GRANT ALL ON SCHEMA "Tenant Isolation", public TO mx_isolation_role_ent;
+-- connect with this new role
+\c - mx_isolation_role_ent - :master_port
+SET search_path to "Tenant Isolation";
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count to 2;
+CREATE TABLE lineitem_streaming (
+	l_orderkey bigint not null,
+	l_partkey integer not null,
+	l_suppkey integer not null,
+	l_linenumber integer not null,
+	l_quantity decimal(15, 2) not null,
+	l_extendedprice decimal(15, 2) not null,
+	l_discount decimal(15, 2) not null,
+	l_tax decimal(15, 2) not null,
+	l_returnflag char(1) not null,
+	l_linestatus char(1) not null,
+	l_shipdate date not null,
+	l_commitdate date not null,
+	l_receiptdate date not null,
+	l_shipinstruct char(25) not null,
+	l_shipmode char(10) not null,
+	l_comment varchar(44) not null);
+SELECT create_distributed_table('lineitem_streaming', 'l_orderkey');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE orders_streaming (
+	o_orderkey bigint not null primary key,
+	o_custkey integer not null,
+	o_orderstatus char(1) not null,
+	o_totalprice decimal(15,2) not null,
+	o_orderdate date not null,
+	o_orderpriority char(15) not null,
+	o_clerk char(15) not null,
+	o_shippriority integer not null,
+	o_comment varchar(79) not null);
+SELECT create_distributed_table('orders_streaming', 'o_orderkey');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\COPY lineitem_streaming FROM STDIN WITH DELIMITER '|'
+\COPY orders_streaming FROM STDIN WITH DELIMITER '|'
+ALTER TABLE lineitem_streaming ADD CONSTRAINT test_constraint
+	FOREIGN KEY(l_orderkey) REFERENCES orders_streaming(o_orderkey);
+-- test failing foreign constraints
+\COPY lineitem_streaming FROM STDIN WITH DELIMITER '|'
+ERROR:  insert or update on table "lineitem_streaming_1230001" violates foreign key constraint "test_constraint_1230001"
+DETAIL:  Key (l_orderkey)=(128) is not present in table "orders_streaming_1230003".
+-- tests for cluster health
+SELECT count(*) FROM lineitem_streaming;
+ count
+---------------------------------------------------------------------
+    22
+(1 row)
+
+SELECT count(*) FROM orders_streaming;
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+SELECT
+	l_orderkey,
+	sum(l_extendedprice * (1 - l_discount)) as revenue,
+	o_orderdate
+FROM
+	orders_streaming,
+	lineitem_streaming
+WHERE
+	l_orderkey = o_orderkey
+GROUP BY
+	l_orderkey,
+	o_orderdate
+ORDER BY
+	revenue DESC,
+	o_orderdate;
+ l_orderkey  |   revenue   | o_orderdate
+---------------------------------------------------------------------
+         100 | 181042.2683 | 02-28-1998
+         102 | 159639.9677 | 05-09-1997
+         101 | 124074.5328 | 03-17-1996
+         103 | 119741.5469 | 06-20-1996
+          99 | 109604.3256 | 03-13-1994
+ -1995148554 |  16890.6816 | 05-08-1995
+ -1686493264 |   1988.7134 | 09-05-1997
+(7 rows)
+
+-- Checks to see if metadata and data are isolated properly. If there are problems in
+-- metadata and/or data on workers, these queries should return different results below
+-- after tenant isolation operations are applied.
+SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 99;
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 100;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 101;
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 102;
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 103;
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+SELECT count(*) FROM orders_streaming WHERE o_orderkey = 99;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM orders_streaming WHERE o_orderkey = 100;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM orders_streaming WHERE o_orderkey = 101;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM orders_streaming WHERE o_orderkey = 102;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM orders_streaming WHERE o_orderkey = 103;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT * FROM pg_dist_shard
+	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
+	ORDER BY shardminvalue::BIGINT, logicalrelid;
+    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue
+---------------------------------------------------------------------
+ lineitem_streaming | 1230000 | t            | -2147483648   | -1
+ orders_streaming   | 1230002 | t            | -2147483648   | -1
+ lineitem_streaming | 1230001 | t            | 0             | 2147483647
+ orders_streaming   | 1230003 | t            | 0             | 2147483647
+(4 rows)
+
+-- check without cascade option
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100);
+ERROR:  cannot isolate tenant because "lineitem_streaming" has colocated tables
+HINT:  Use CASCADE option to isolate tenants for the colocated tables too. Example usage: isolate_tenant_to_new_shard('lineitem_streaming', '100', 'CASCADE')
+-- check with an input not castable to bigint
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 'abc', 'CASCADE');
+ERROR:  invalid input syntax for integer: "abc"
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE');
+ isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                     1230005
+(1 row)
+
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 101, 'CASCADE');
+ isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                     1230011
+(1 row)
+
+-- add an explain check to see if we hit the new isolated shard
+EXPLAIN (COSTS false) SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 101;
+                                 QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Aggregate
+               ->  Seq Scan on lineitem_streaming_1230011 lineitem_streaming
+                     Filter: (l_orderkey = 101)
+(8 rows)
+
+-- create an MX node
+\c - postgres - :master_port
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - mx_isolation_role_ent - :master_port
+SET search_path to "Tenant Isolation";
+-- test a failing transaction block
+BEGIN;
+SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE');
+ isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                     1230020
+(1 row)
+
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 102, 'CASCADE');
+ERROR:  table "lineitem_streaming" has already been isolated for the given value
+COMMIT;
+-- test a rollback transaction block
+BEGIN;
+SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE');
+ isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                     1230026
+(1 row)
+
+SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE');
+ isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                     1230032
+(1 row)
+
+ROLLBACK;
+-- test a succesfull transaction block
+BEGIN;
+SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE');
+ isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                     1230038
+(1 row)
+
+SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE');
+ isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                     1230044
+(1 row)
+
+COMMIT;
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE');
+ERROR:  table "lineitem_streaming" has already been isolated for the given value
+SELECT isolate_tenant_to_new_shard('orders_streaming', 101, 'CASCADE');
+ERROR:  table "orders_streaming" has already been isolated for the given value
+-- test corner cases: hash(-1995148554) = -2147483648 and hash(-1686493264) = 2147483647
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', -1995148554, 'CASCADE');
+ isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                     1230046
+(1 row)
+
+SELECT isolate_tenant_to_new_shard('orders_streaming', -1686493264, 'CASCADE');
+ isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                     1230053
+(1 row)
+
+SELECT count(*) FROM orders_streaming WHERE o_orderkey = -1995148554;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM orders_streaming WHERE o_orderkey = -1686493264;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- tests for cluster health
+SELECT count(*) FROM lineitem_streaming;
+ count
+---------------------------------------------------------------------
+    22
+(1 row)
+
+SELECT count(*) FROM orders_streaming;
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+SELECT
+	l_orderkey,
+	sum(l_extendedprice * (1 - l_discount)) as revenue,
+	o_orderdate
+FROM
+	orders_streaming,
+	lineitem_streaming
+WHERE
+	l_orderkey = o_orderkey
+GROUP BY
+	l_orderkey,
+	o_orderdate
+ORDER BY
+	revenue DESC,
+	o_orderdate;
+ l_orderkey  |   revenue   | o_orderdate
+---------------------------------------------------------------------
+         100 | 181042.2683 | 02-28-1998
+         102 | 159639.9677 | 05-09-1997
+         101 | 124074.5328 | 03-17-1996
+         103 | 119741.5469 | 06-20-1996
+          99 | 109604.3256 | 03-13-1994
+ -1995148554 |  16890.6816 | 05-08-1995
+ -1686493264 |   1988.7134 | 09-05-1997
+(7 rows)
+
+SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 99;
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 100;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 101;
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 102;
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 103;
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+SELECT count(*) FROM orders_streaming WHERE o_orderkey = 99;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM orders_streaming WHERE o_orderkey = 100;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM orders_streaming WHERE o_orderkey = 101;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM orders_streaming WHERE o_orderkey = 102;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM orders_streaming WHERE o_orderkey = 103;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT * FROM pg_dist_shard
+	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
+	ORDER BY shardminvalue::BIGINT, logicalrelid;
+    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue
+---------------------------------------------------------------------
+ lineitem_streaming | 1230046 | t            | -2147483648   | -2147483648
+ orders_streaming   | 1230048 | t            | -2147483648   | -2147483648
+ lineitem_streaming | 1230047 | t            | -2147483647   | -136164586
+ orders_streaming   | 1230049 | t            | -2147483647   | -136164586
+ lineitem_streaming | 1230041 | t            | -136164585    | -136164585
+ orders_streaming   | 1230044 | t            | -136164585    | -136164585
+ lineitem_streaming | 1230042 | t            | -136164584    | -85071815
+ orders_streaming   | 1230045 | t            | -136164584    | -85071815
+ lineitem_streaming | 1230011 | t            | -85071814     | -85071814
+ orders_streaming   | 1230014 | t            | -85071814     | -85071814
+ lineitem_streaming | 1230012 | t            | -85071813     | -1
+ orders_streaming   | 1230015 | t            | -85071813     | -1
+ lineitem_streaming | 1230004 | t            | 0             | 108199380
+ orders_streaming   | 1230007 | t            | 0             | 108199380
+ lineitem_streaming | 1230005 | t            | 108199381     | 108199381
+ orders_streaming   | 1230008 | t            | 108199381     | 108199381
+ lineitem_streaming | 1230034 | t            | 108199382     | 412880111
+ orders_streaming   | 1230037 | t            | 108199382     | 412880111
+ lineitem_streaming | 1230035 | t            | 412880112     | 412880112
+ orders_streaming   | 1230038 | t            | 412880112     | 412880112
+ lineitem_streaming | 1230050 | t            | 412880113     | 2147483646
+ orders_streaming   | 1230052 | t            | 412880113     | 2147483646
+ lineitem_streaming | 1230051 | t            | 2147483647    | 2147483647
+ orders_streaming   | 1230053 | t            | 2147483647    | 2147483647
+(24 rows)
+
+SELECT * FROM pg_dist_shard_placement WHERE shardid >= 1230000 ORDER BY nodeport, shardid;
+ shardid | shardstate | shardlength | nodename  | nodeport | placementid
+---------------------------------------------------------------------
+ 1230011 |          1 |           0 | localhost |    57637 |      100011
+ 1230012 |          1 |           0 | localhost |    57637 |      100012
+ 1230014 |          1 |           0 | localhost |    57637 |      100014
+ 1230015 |          1 |           0 | localhost |    57637 |      100015
+ 1230041 |          1 |           0 | localhost |    57637 |      100041
+ 1230042 |          1 |           0 | localhost |    57637 |      100042
+ 1230044 |          1 |           0 | localhost |    57637 |      100044
+ 1230045 |          1 |           0 | localhost |    57637 |      100045
+ 1230046 |          1 |           0 | localhost |    57637 |      100046
+ 1230047 |          1 |           0 | localhost |    57637 |      100047
+ 1230048 |          1 |           0 | localhost |    57637 |      100048
+ 1230049 |          1 |           0 | localhost |    57637 |      100049
+ 1230004 |          1 |           0 | localhost |    57638 |      100004
+ 1230005 |          1 |           0 | localhost |    57638 |      100005
+ 1230007 |          1 |           0 | localhost |    57638 |      100007
+ 1230008 |          1 |           0 | localhost |    57638 |      100008
+ 1230034 |          1 |           0 | localhost |    57638 |      100034
+ 1230035 |          1 |           0 | localhost |    57638 |      100035
+ 1230037 |          1 |           0 | localhost |    57638 |      100037
+ 1230038 |          1 |           0 | localhost |    57638 |      100038
+ 1230050 |          1 |           0 | localhost |    57638 |      100050
+ 1230051 |          1 |           0 | localhost |    57638 |      100051
+ 1230052 |          1 |           0 | localhost |    57638 |      100052
+ 1230053 |          1 |           0 | localhost |    57638 |      100053
+(24 rows)
+
+-- test failing foreign constraints after multiple tenant isolation
+\COPY lineitem_streaming FROM STDIN WITH DELIMITER '|'
+ERROR:  insert or update on table "lineitem_streaming_1230050" violates foreign key constraint "test_constraint_1230050"
+DETAIL:  Key (l_orderkey)=(128) is not present in table "orders_streaming_1230052".
+-- connect to the worker node with metadata
+\c - mx_isolation_role_ent - :worker_1_port
+SET search_path to "Tenant Isolation";
+-- check mx tables
+SELECT count(*) FROM lineitem_streaming;
+ count
+---------------------------------------------------------------------
+    22
+(1 row)
+
+SELECT count(*) FROM orders_streaming;
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+SELECT
+	l_orderkey,
+	sum(l_extendedprice * (1 - l_discount)) as revenue,
+	o_orderdate
+FROM
+	orders_streaming,
+	lineitem_streaming
+WHERE
+	l_orderkey = o_orderkey
+GROUP BY
+	l_orderkey,
+	o_orderdate
+ORDER BY
+	revenue DESC,
+	o_orderdate;
+ l_orderkey  |   revenue   | o_orderdate
+---------------------------------------------------------------------
+         100 | 181042.2683 | 02-28-1998
+         102 | 159639.9677 | 05-09-1997
+         101 | 124074.5328 | 03-17-1996
+         103 | 119741.5469 | 06-20-1996
+          99 | 109604.3256 | 03-13-1994
+ -1995148554 |  16890.6816 | 05-08-1995
+ -1686493264 |   1988.7134 | 09-05-1997
+(7 rows)
+
+-- check shards
+SET citus.override_table_visibility TO false;
+\d
+                               List of relations
+      Schema      |            Name            | Type  |         Owner
+---------------------------------------------------------------------
+ Tenant Isolation | lineitem_streaming         | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230011 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230012 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230028 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230029 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230030 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230041 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230042 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230046 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230047 | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming           | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230014   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230015   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230031   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230032   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230033   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230044   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230045   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230048   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230049   | table | mx_isolation_role_ent
+(20 rows)
+
+\c - postgres - :worker_1_port
+SET search_path to "Tenant Isolation";
+SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='orders_streaming_1230045'::regclass;
+     Column      |         Type          | Modifiers
+---------------------------------------------------------------------
+ o_orderkey      | bigint                | not null
+ o_custkey       | integer               | not null
+ o_orderstatus   | character(1)          | not null
+ o_totalprice    | numeric(15,2)         | not null
+ o_orderdate     | date                  | not null
+ o_orderpriority | character(15)         | not null
+ o_clerk         | character(15)         | not null
+ o_shippriority  | integer               | not null
+ o_comment       | character varying(79) | not null
+(9 rows)
+
+\c - mx_isolation_role_ent - :worker_1_port
+SET search_path to "Tenant Isolation";
+-- check MX metadata
+SELECT * FROM pg_dist_shard
+	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
+	ORDER BY shardminvalue::BIGINT, logicalrelid;
+    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue
+---------------------------------------------------------------------
+ lineitem_streaming | 1230046 | t            | -2147483648   | -2147483648
+ orders_streaming   | 1230048 | t            | -2147483648   | -2147483648
+ lineitem_streaming | 1230047 | t            | -2147483647   | -136164586
+ orders_streaming   | 1230049 | t            | -2147483647   | -136164586
+ lineitem_streaming | 1230041 | t            | -136164585    | -136164585
+ orders_streaming   | 1230044 | t            | -136164585    | -136164585
+ lineitem_streaming | 1230042 | t            | -136164584    | -85071815
+ orders_streaming   | 1230045 | t            | -136164584    | -85071815
+ lineitem_streaming | 1230011 | t            | -85071814     | -85071814
+ orders_streaming   | 1230014 | t            | -85071814     | -85071814
+ lineitem_streaming | 1230012 | t            | -85071813     | -1
+ orders_streaming   | 1230015 | t            | -85071813     | -1
+ lineitem_streaming | 1230004 | t            | 0             | 108199380
+ orders_streaming   | 1230007 | t            | 0             | 108199380
+ lineitem_streaming | 1230005 | t            | 108199381     | 108199381
+ orders_streaming   | 1230008 | t            | 108199381     | 108199381
+ lineitem_streaming | 1230034 | t            | 108199382     | 412880111
+ orders_streaming   | 1230037 | t            | 108199382     | 412880111
+ lineitem_streaming | 1230035 | t            | 412880112     | 412880112
+ orders_streaming   | 1230038 | t            | 412880112     | 412880112
+ lineitem_streaming | 1230050 | t            | 412880113     | 2147483646
+ orders_streaming   | 1230052 | t            | 412880113     | 2147483646
+ lineitem_streaming | 1230051 | t            | 2147483647    | 2147483647
+ orders_streaming   | 1230053 | t            | 2147483647    | 2147483647
+(24 rows)
+
+-- return to master node
+\c - mx_isolation_role_ent - :master_port
+-- test a distribution type which does not have a sql hash function
+SET search_path to "Tenant Isolation";
+SET citus.shard_replication_factor TO 2;
+SET citus.shard_count to 2;
+CREATE TABLE lineitem_date (
+	l_orderkey bigint not null,
+	l_partkey integer not null,
+	l_suppkey integer not null,
+	l_linenumber integer not null,
+	l_quantity decimal(15, 2) not null,
+	l_extendedprice decimal(15, 2) not null,
+	l_discount decimal(15, 2) not null,
+	l_tax decimal(15, 2) not null,
+	l_returnflag char(1) not null,
+	l_linestatus char(1) not null,
+	l_shipdate date not null,
+	l_commitdate date not null,
+	l_receiptdate date not null,
+	l_shipinstruct char(25) not null,
+	l_shipmode char(10) not null,
+	l_comment varchar(44) not null);
+SELECT create_distributed_table('lineitem_date', 'l_shipdate');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\COPY lineitem_date FROM STDIN WITH DELIMITER '|'
+SELECT count(*) FROM lineitem_date;
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1998-05-26';
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1997-07-30';
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1998-01-15';
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1997-08-08';
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT isolate_tenant_to_new_shard('lineitem_date', '1998-05-26');
+ isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                     1230057
+(1 row)
+
+SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-07-30');
+ isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                     1230060
+(1 row)
+
+SELECT isolate_tenant_to_new_shard('lineitem_date', '1998-01-15');
+ isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                     1230063
+(1 row)
+
+SELECT count(*) FROM lineitem_date;
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1998-05-26';
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1997-07-30';
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1998-01-15';
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1997-08-08';
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- test with invalid shard placements
+\c - postgres - :master_port
+SET search_path to "Tenant Isolation";
+UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE nodeport = :worker_1_port;
+SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-08-08');
+ERROR:  cannot isolate tenant because relation "lineitem_date" has an inactive shard placement for the shard xxxxx
+HINT:  Use master_copy_shard_placement UDF to repair the inactive shard placement.
+UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE nodeport = :worker_1_port;
+\c - mx_isolation_role_ent - :master_port
+SET search_path to "Tenant Isolation";
+DROP TABLE lineitem_date;
+-- test on append distributed table
+CREATE TABLE test_append (
+	tenant_id integer
+);
+SELECT create_distributed_table('test_append', 'tenant_id', 'append');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT isolate_tenant_to_new_shard('test_append', 100);
+ERROR:  cannot isolate tenant because tenant isolation is only support for hash distributed tables
+-- check metadata for comparison
+SELECT * FROM pg_dist_shard
+	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
+	ORDER BY shardminvalue::BIGINT, logicalrelid;
+    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue
+---------------------------------------------------------------------
+ lineitem_streaming | 1230046 | t            | -2147483648   | -2147483648
+ orders_streaming   | 1230048 | t            | -2147483648   | -2147483648
+ lineitem_streaming | 1230047 | t            | -2147483647   | -136164586
+ orders_streaming   | 1230049 | t            | -2147483647   | -136164586
+ lineitem_streaming | 1230041 | t            | -136164585    | -136164585
+ orders_streaming   | 1230044 | t            | -136164585    | -136164585
+ lineitem_streaming | 1230042 | t            | -136164584    | -85071815
+ orders_streaming   | 1230045 | t            | -136164584    | -85071815
+ lineitem_streaming | 1230011 | t            | -85071814     | -85071814
+ orders_streaming   | 1230014 | t            | -85071814     | -85071814
+ lineitem_streaming | 1230012 | t            | -85071813     | -1
+ orders_streaming   | 1230015 | t            | -85071813     | -1
+ lineitem_streaming | 1230004 | t            | 0             | 108199380
+ orders_streaming   | 1230007 | t            | 0             | 108199380
+ lineitem_streaming | 1230005 | t            | 108199381     | 108199381
+ orders_streaming   | 1230008 | t            | 108199381     | 108199381
+ lineitem_streaming | 1230034 | t            | 108199382     | 412880111
+ orders_streaming   | 1230037 | t            | 108199382     | 412880111
+ lineitem_streaming | 1230035 | t            | 412880112     | 412880112
+ orders_streaming   | 1230038 | t            | 412880112     | 412880112
+ lineitem_streaming | 1230050 | t            | 412880113     | 2147483646
+ orders_streaming   | 1230052 | t            | 412880113     | 2147483646
+ lineitem_streaming | 1230051 | t            | 2147483647    | 2147483647
+ orders_streaming   | 1230053 | t            | 2147483647    | 2147483647
+(24 rows)
+
+-- test failure scenarios with triggers on workers
+\c - postgres - :worker_1_port
+SET search_path to "Tenant Isolation";
+SET citus.enable_metadata_sync TO OFF;
+CREATE OR REPLACE FUNCTION abort_any_command()
+  RETURNS event_trigger
+ LANGUAGE plpgsql
+  AS $$
+BEGIN
+  RAISE EXCEPTION 'command % is disabled', tg_tag;
+END;
+$$;
+RESET citus.enable_metadata_sync;
+CREATE EVENT TRIGGER abort_ddl ON ddl_command_end
+   EXECUTE PROCEDURE abort_any_command();
+SET citus.override_table_visibility TO false;
+\d
+                               List of relations
+      Schema      |            Name            | Type  |         Owner
+---------------------------------------------------------------------
+ Tenant Isolation | lineitem_streaming         | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230011 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230012 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230028 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230029 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230030 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230041 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230042 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230046 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230047 | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming           | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230014   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230015   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230031   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230032   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230033   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230044   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230045   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230048   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230049   | table | mx_isolation_role_ent
+(20 rows)
+
+\c - mx_isolation_role_ent - :master_port
+SET search_path to "Tenant Isolation";
+\set VERBOSITY terse
+SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE');
+ERROR:  command CREATE TABLE is disabled
+\set VERBOSITY default
+\c - postgres - :worker_1_port
+SET search_path to "Tenant Isolation";
+SET citus.override_table_visibility TO false;
+\d
+                               List of relations
+      Schema      |            Name            | Type  |         Owner
+---------------------------------------------------------------------
+ Tenant Isolation | lineitem_streaming         | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230011 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230012 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230028 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230029 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230030 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230041 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230042 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230046 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230047 | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming           | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230014   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230015   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230031   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230032   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230033   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230044   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230045   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230048   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230049   | table | mx_isolation_role_ent
+(20 rows)
+
+DROP EVENT TRIGGER abort_ddl;
+-- create a trigger for drops
+SET citus.enable_metadata_sync TO OFF;
+CREATE OR REPLACE FUNCTION abort_drop_command()
+  RETURNS event_trigger
+ LANGUAGE plpgsql
+  AS $$
+BEGIN
+  RAISE EXCEPTION 'command % is disabled', tg_tag;
+END;
+$$;
+RESET citus.enable_metadata_sync;
+CREATE EVENT TRIGGER abort_drop ON sql_drop
+   EXECUTE PROCEDURE abort_drop_command();
+\c - mx_isolation_role_ent - :master_port
+SET search_path to "Tenant Isolation";
+\set VERBOSITY terse
+SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE');
+ERROR:  command DROP TABLE is disabled
+\set VERBOSITY default
+-- check if metadata is changed
+SELECT * FROM pg_dist_shard
+	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
+	ORDER BY shardminvalue::BIGINT, logicalrelid;
+    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue
+---------------------------------------------------------------------
+ lineitem_streaming | 1230046 | t            | -2147483648   | -2147483648
+ orders_streaming   | 1230048 | t            | -2147483648   | -2147483648
+ lineitem_streaming | 1230047 | t            | -2147483647   | -136164586
+ orders_streaming   | 1230049 | t            | -2147483647   | -136164586
+ lineitem_streaming | 1230041 | t            | -136164585    | -136164585
+ orders_streaming   | 1230044 | t            | -136164585    | -136164585
+ lineitem_streaming | 1230042 | t            | -136164584    | -85071815
+ orders_streaming   | 1230045 | t            | -136164584    | -85071815
+ lineitem_streaming | 1230011 | t            | -85071814     | -85071814
+ orders_streaming   | 1230014 | t            | -85071814     | -85071814
+ lineitem_streaming | 1230012 | t            | -85071813     | -1
+ orders_streaming   | 1230015 | t            | -85071813     | -1
+ lineitem_streaming | 1230004 | t            | 0             | 108199380
+ orders_streaming   | 1230007 | t            | 0             | 108199380
+ lineitem_streaming | 1230005 | t            | 108199381     | 108199381
+ orders_streaming   | 1230008 | t            | 108199381     | 108199381
+ lineitem_streaming | 1230034 | t            | 108199382     | 412880111
+ orders_streaming   | 1230037 | t            | 108199382     | 412880111
+ lineitem_streaming | 1230035 | t            | 412880112     | 412880112
+ orders_streaming   | 1230038 | t            | 412880112     | 412880112
+ lineitem_streaming | 1230050 | t            | 412880113     | 2147483646
+ orders_streaming   | 1230052 | t            | 412880113     | 2147483646
+ lineitem_streaming | 1230051 | t            | 2147483647    | 2147483647
+ orders_streaming   | 1230053 | t            | 2147483647    | 2147483647
+(24 rows)
+
+\c - - - :worker_1_port
+SET search_path to "Tenant Isolation";
+-- however, new tables are already created
+SET citus.override_table_visibility TO false;
+\d
+                               List of relations
+      Schema      |            Name            | Type  |         Owner
+---------------------------------------------------------------------
+ Tenant Isolation | lineitem_streaming         | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230011 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230012 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230028 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230029 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230030 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230041 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230042 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230046 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230047 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230071 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230072 | table | mx_isolation_role_ent
+ Tenant Isolation | lineitem_streaming_1230073 | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming           | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230014   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230015   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230031   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230032   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230033   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230044   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230045   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230048   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230049   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230074   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230075   | table | mx_isolation_role_ent
+ Tenant Isolation | orders_streaming_1230076   | table | mx_isolation_role_ent
+(26 rows)
+
+\c - postgres - :worker_1_port
+DROP EVENT TRIGGER abort_drop;
+\c - mx_isolation_role_ent - :master_port
+SET search_path to "Tenant Isolation";
+-- tests for cluster health
+SELECT count(*) FROM lineitem_streaming;
+ count
+---------------------------------------------------------------------
+    22
+(1 row)
+
+SELECT count(*) FROM orders_streaming;
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+SELECT
+	l_orderkey,
+	sum(l_extendedprice * (1 - l_discount)) as revenue,
+	o_orderdate
+FROM
+	orders_streaming,
+	lineitem_streaming
+WHERE
+	l_orderkey = o_orderkey
+GROUP BY
+	l_orderkey,
+	o_orderdate
+ORDER BY
+	revenue DESC,
+	o_orderdate;
+ l_orderkey  |   revenue   | o_orderdate
+---------------------------------------------------------------------
+         100 | 181042.2683 | 02-28-1998
+         102 | 159639.9677 | 05-09-1997
+         101 | 124074.5328 | 03-17-1996
+         103 | 119741.5469 | 06-20-1996
+          99 | 109604.3256 | 03-13-1994
+ -1995148554 |  16890.6816 | 05-08-1995
+ -1686493264 |   1988.7134 | 09-05-1997
+(7 rows)
+
+SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 99;
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 100;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 101;
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 102;
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 103;
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+SELECT count(*) FROM orders_streaming WHERE o_orderkey = 99;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM orders_streaming WHERE o_orderkey = 100;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM orders_streaming WHERE o_orderkey = 101;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM orders_streaming WHERE o_orderkey = 102;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM orders_streaming WHERE o_orderkey = 103;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- test composite types with tenant isolation
+set search_path to default;
+\c - postgres - :worker_1_port
+SET search_path to "Tenant Isolation", public, pg_catalog;
+-- ... create a test HASH function. Though it is a poor hash function,
+-- it is acceptable for our tests
+SET citus.enable_metadata_sync TO OFF;
+CREATE FUNCTION test_composite_type_hash(test_composite_type) RETURNS int
+AS 'SELECT hashtext( ($1.i + $1.i2)::text);'
+LANGUAGE SQL
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+RESET citus.enable_metadata_sync;
+CREATE OPERATOR CLASS cats_op_fam_class
+DEFAULT FOR TYPE test_composite_type USING HASH AS
+OPERATOR 1 = (test_composite_type, test_composite_type),
+FUNCTION 1 test_composite_type_hash(test_composite_type);
+\c - - - :worker_2_port
+SET search_path to "Tenant Isolation", public, pg_catalog;
+-- ... create a test HASH function. Though it is a poor hash function,
+-- it is acceptable for our tests
+SET citus.enable_metadata_sync TO OFF;
+CREATE FUNCTION test_composite_type_hash(test_composite_type) RETURNS int
+AS 'SELECT hashtext( ($1.i + $1.i2)::text);'
+LANGUAGE SQL
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+RESET citus.enable_metadata_sync;
+CREATE OPERATOR CLASS cats_op_fam_class
+DEFAULT FOR TYPE test_composite_type USING HASH AS
+OPERATOR 1 = (test_composite_type, test_composite_type),
+FUNCTION 1 test_composite_type_hash(test_composite_type);
+\c - mx_isolation_role_ent - :master_port
+SET search_path to "Tenant Isolation", public, pg_catalog;
+CREATE TABLE composite_table (
+	composite_key test_composite_type);
+SELECT create_distributed_table('composite_table', 'composite_key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO composite_table VALUES  ('(1, 2)'::test_composite_type);
+INSERT INTO composite_table VALUES  ('(1, 3)'::test_composite_type);
+INSERT INTO composite_table VALUES  ('(1, 4)'::test_composite_type);
+SELECT isolate_tenant_to_new_shard('composite_table', '(1, 3)');
+ isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                     1230082
+(1 row)
+
+SELECT count(*) FROM composite_table WHERE composite_key = '(1, 2)'::test_composite_type;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM composite_table WHERE composite_key = '(1, 3)'::test_composite_type;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM composite_table WHERE composite_key = '(1, 4)'::test_composite_type;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+DROP TABLE composite_table;
+-- create foreign keys from a reference and distributed table
+-- to another distributed table
+SET search_path to "Tenant Isolation", public, pg_catalog;
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count to 8;
+CREATE TABLE test_reference_table_fkey(id int PRIMARY KEY);
+SELECT create_reference_table('test_reference_table_fkey');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE test_colocated_table_1(id int PRIMARY KEY, value_1 int, FOREIGN KEY(id) REFERENCES test_colocated_table_1(id));
+SELECT create_distributed_table('test_colocated_table_1', 'id', colocate_with => 'NONE');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE test_colocated_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_reference_table_fkey(id), FOREIGN KEY(id) REFERENCES test_colocated_table_1(id));
+SELECT create_distributed_table('test_colocated_table_2', 'id', colocate_with => 'test_colocated_table_1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE test_colocated_table_3(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_reference_table_fkey(id), FOREIGN KEY(id) REFERENCES test_colocated_table_1(id), FOREIGN KEY(id) REFERENCES test_colocated_table_2(id));
+SELECT create_distributed_table('test_colocated_table_3', 'id', colocate_with => 'test_colocated_table_1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_reference_table_fkey SELECT i FROM generate_series (0, 100) i;
+INSERT INTO test_colocated_table_1 SELECT i, i FROM generate_series (0, 100) i;
+INSERT INTO test_colocated_table_2 SELECT i, i FROM generate_series (0, 100) i;
+INSERT INTO test_colocated_table_3 SELECT i, i FROM generate_series (0, 100) i;
+SELECT isolate_tenant_to_new_shard('test_colocated_table_2', 1, 'CASCADE');
+ isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                     1230113
+(1 row)
+
+SELECT count(*) FROM test_colocated_table_2;
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+\c - postgres - :worker_1_port
+-- show the foreign keys of the main table & its colocated shard on other tables
+SELECT tbl.relname, fk."Constraint", fk."Definition"
+FROM pg_catalog.pg_class tbl
+JOIN public.table_fkeys fk on tbl.oid = fk.relid
+WHERE tbl.relname like 'test_colocated_table_%'
+ORDER BY 1, 2;
+            relname             |                 Constraint                  |                                        Definition
+---------------------------------------------------------------------
+ test_colocated_table_1         | test_colocated_table_1_id_fkey              | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1(id)
+ test_colocated_table_1_1230087 | test_colocated_table_1_id_fkey_1230087      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230087(id)
+ test_colocated_table_1_1230089 | test_colocated_table_1_id_fkey_1230089      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230089(id)
+ test_colocated_table_1_1230091 | test_colocated_table_1_id_fkey_1230091      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230091(id)
+ test_colocated_table_1_1230109 | test_colocated_table_1_id_fkey_1230109      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230109(id)
+ test_colocated_table_1_1230110 | test_colocated_table_1_id_fkey_1230110      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230110(id)
+ test_colocated_table_1_1230111 | test_colocated_table_1_id_fkey_1230111      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230111(id)
+ test_colocated_table_2         | test_colocated_table_2_id_fkey              | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1(id)
+ test_colocated_table_2         | test_colocated_table_2_value_1_fkey         | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey(id)
+ test_colocated_table_2_1230095 | test_colocated_table_2_id_fkey_1230095      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230087(id)
+ test_colocated_table_2_1230095 | test_colocated_table_2_value_1_fkey_1230095 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230084(id)
+ test_colocated_table_2_1230097 | test_colocated_table_2_id_fkey_1230097      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230089(id)
+ test_colocated_table_2_1230097 | test_colocated_table_2_value_1_fkey_1230097 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230084(id)
+ test_colocated_table_2_1230099 | test_colocated_table_2_id_fkey_1230099      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230091(id)
+ test_colocated_table_2_1230099 | test_colocated_table_2_value_1_fkey_1230099 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230084(id)
+ test_colocated_table_2_1230112 | test_colocated_table_2_id_fkey_1230112      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230109(id)
+ test_colocated_table_2_1230112 | test_colocated_table_2_value_1_fkey_1230112 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230084(id)
+ test_colocated_table_2_1230113 | test_colocated_table_2_id_fkey_1230113      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230110(id)
+ test_colocated_table_2_1230113 | test_colocated_table_2_value_1_fkey_1230113 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230084(id)
+ test_colocated_table_2_1230114 | test_colocated_table_2_id_fkey_1230114      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230111(id)
+ test_colocated_table_2_1230114 | test_colocated_table_2_value_1_fkey_1230114 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230084(id)
+ test_colocated_table_3         | test_colocated_table_3_id_fkey              | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1(id)
+ test_colocated_table_3         | test_colocated_table_3_id_fkey1             | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2(id)
+ test_colocated_table_3         | test_colocated_table_3_value_1_fkey         | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey(id)
+ test_colocated_table_3_1230103 | test_colocated_table_3_id_fkey1_1230103     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230095(id)
+ test_colocated_table_3_1230103 | test_colocated_table_3_id_fkey_1230103      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230087(id)
+ test_colocated_table_3_1230103 | test_colocated_table_3_value_1_fkey_1230103 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230084(id)
+ test_colocated_table_3_1230105 | test_colocated_table_3_id_fkey1_1230105     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230097(id)
+ test_colocated_table_3_1230105 | test_colocated_table_3_id_fkey_1230105      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230089(id)
+ test_colocated_table_3_1230105 | test_colocated_table_3_value_1_fkey_1230105 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230084(id)
+ test_colocated_table_3_1230107 | test_colocated_table_3_id_fkey1_1230107     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230099(id)
+ test_colocated_table_3_1230107 | test_colocated_table_3_id_fkey_1230107      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230091(id)
+ test_colocated_table_3_1230107 | test_colocated_table_3_value_1_fkey_1230107 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230084(id)
+ test_colocated_table_3_1230115 | test_colocated_table_3_id_fkey1_1230115     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230112(id)
+ test_colocated_table_3_1230115 | test_colocated_table_3_id_fkey_1230115      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230109(id)
+ test_colocated_table_3_1230115 | test_colocated_table_3_value_1_fkey_1230115 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230084(id)
+ test_colocated_table_3_1230116 | test_colocated_table_3_id_fkey1_1230116     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230113(id)
+ test_colocated_table_3_1230116 | test_colocated_table_3_id_fkey_1230116      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230110(id)
+ test_colocated_table_3_1230116 | test_colocated_table_3_value_1_fkey_1230116 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230084(id)
+ test_colocated_table_3_1230117 | test_colocated_table_3_id_fkey1_1230117     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230114(id)
+ test_colocated_table_3_1230117 | test_colocated_table_3_id_fkey_1230117      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230111(id)
+ test_colocated_table_3_1230117 | test_colocated_table_3_value_1_fkey_1230117 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230084(id)
+(42 rows)
+
+\c - mx_isolation_role_ent - :master_port
+SET search_path to "Tenant Isolation";
+--
+-- Make sure that isolate_tenant_to_new_shard() replicats reference tables
+-- when replicate_reference_tables_on_activate is off.
+--
+CREATE TABLE ref_table(a int);
+SELECT create_reference_table('ref_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - postgres - :master_port
+SET search_path to "Tenant Isolation";
+SET citus.replicate_reference_tables_on_activate TO off;
+SET client_min_messages TO WARNING;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupId=>0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass;
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+\c - mx_isolation_role_ent - :master_port
+SET search_path to "Tenant Isolation";
+SELECT 1 FROM isolate_tenant_to_new_shard('test_colocated_table_2', 2, 'CASCADE');
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass;
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+\c - postgres - :master_port
+SELECT 1 FROM master_remove_node('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA "Tenant Isolation" CASCADE;
+-- stop  & resync and stop syncing metadata
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- restart metadata sync for rest of the tests
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- make sure there are no tables with non-zero colocationid
+SELECT count(*) FROM pg_catalog.pg_dist_partition WHERE colocationid > 0;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+TRUNCATE TABLE pg_catalog.pg_dist_colocation;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1;
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART :last_placement_id;

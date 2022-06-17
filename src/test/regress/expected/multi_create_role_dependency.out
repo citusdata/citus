@@ -1,0 +1,47 @@
+-- Show that dependent user/role objects can be created safely
+CREATE USER non_super_user_test_user;
+CREATE SCHEMA role_dependency_schema;
+CREATE TYPE role_dependency_schema.superusers_type AS (a int, b int);
+GRANT CREATE ON SCHEMA role_dependency_schema to non_super_user_test_user;
+GRANT USAGE ON SCHEMA role_dependency_schema to non_super_user_test_user;
+GRANT USAGE ON TYPE role_dependency_schema.superusers_type TO non_super_user_test_user;
+SET ROLE non_super_user_test_user;
+CREATE TABLE role_dependency_schema.non_super_user_table(a int, b role_dependency_schema.superusers_type);
+SELECT create_distributed_table('role_dependency_schema.non_super_user_table','a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Show that table and superuser's type is marked as distributed
+RESET ROLE;
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where pg_identify_object_as_address(classid, objid, objsubid)::text like '%non_super_user_table%';
+                    pg_identify_object_as_address
+---------------------------------------------------------------------
+ (table,"{role_dependency_schema,non_super_user_table}",{})
+(1 row)
+
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where pg_identify_object_as_address(classid, objid, objsubid)::text like '%non_super_user_table%';$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                        result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (table,"{role_dependency_schema,non_super_user_table}",{})
+ localhost |    57638 | t       | (table,"{role_dependency_schema,non_super_user_table}",{})
+(2 rows)
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where pg_identify_object_as_address(classid, objid, objsubid)::text like '%superusers_type%';
+                    pg_identify_object_as_address
+---------------------------------------------------------------------
+ (type,{role_dependency_schema.superusers_type},{})
+(1 row)
+
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where pg_identify_object_as_address(classid, objid, objsubid)::text like '%superusers_type%';$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                        result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (type,{role_dependency_schema.superusers_type},{})
+ localhost |    57638 | t       | (type,{role_dependency_schema.superusers_type},{})
+(2 rows)
+
+DROP SCHEMA role_dependency_schema CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to type role_dependency_schema.superusers_type
+drop cascades to table role_dependency_schema.non_super_user_table
