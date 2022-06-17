@@ -12,10 +12,13 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
+#include "pg_version_compat.h"
+#include "pgtypes.h"
 #include "catalog/pg_type.h"
 #include "nodes/pg_list.h"
 #include "distributed/utils/array_type.h"
 #include "utils/array.h"
+#include "utils/builtins.h"
 #include "utils/lsyscache.h"
 
 
@@ -133,14 +136,26 @@ extern List * TextArrayTypeToIntegerList(ArrayType *arrayObject, Oid datumTypeId
 		switch (datumTypeId)
 		{
 			case INT2OID:
-				list = lappend(list, pg_strtoint16(intAsStr));
+			{
+				int16_t *int16Value = palloc0(sizeof(int16_t));
+				*int16Value = pg_strtoint16(intAsStr);
+				list = lappend(list, (void*) int16Value);
 				break;
+			}
 			case INT4OID:
-				list = lappend(list, pg_strtoint32(intAsStr));
+			{
+				int32_t *int32Value = palloc0(sizeof(int32_t));
+				*int32Value = pg_strtoint32(intAsStr);
+				list = lappend(list, (void*) int32Value);
 				break;
+			}
 			case INT8OID:
-				list = lappend(list, pg_strtoint64(intAsStr));
+			{
+				int64_t *int64Value = palloc0(sizeof(int64_t));
+				*int64Value = pg_strtoint64(intAsStr);
+				list = lappend(list, (void*) int64Value);
 				break;
+			}
 			default:
 				ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 								errmsg("Unsupported datum type for array.")));

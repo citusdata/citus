@@ -33,8 +33,8 @@ static SplitMode LookupSplitMode(Oid shardSplitModeOid);
  * citus_split_shard_by_split_points(shard_id bigint, split_points integer[], node_ids integer[])
  * Split source shard into multiple shards using the given split points.
  * 'shard_id' is the id of source shard to split.
- * 'split_points' is an array of integers that represents the split points.
- * 'node_ids' is an array of integers that represents the placement node ids of the new shards.
+ * 'split_points' is an array that represents the split points.
+ * 'node_ids' is an array that represents the placement node ids of the new shards.
  * 'split_mode citus.split_mode' is the mode of split.
  */
 Datum
@@ -66,7 +66,7 @@ citus_split_shard_by_split_points(PG_FUNCTION_ARGS)
 
 /*
  * LookupSplitMode maps the oids of citus.shard_split_mode enum
- * values to a char.
+ * values to an enum.
  */
 SplitMode
 LookupSplitMode(Oid shardSplitModeOid)
