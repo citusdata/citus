@@ -55,11 +55,13 @@ worker_split_copy(PG_FUNCTION_ARGS)
 																	  shardIdToSplitCopy,
 																	  splitCopyInfoList);
 
+	char *sourceShardToCopyName = generate_qualified_relation_name(
+						 shardIntervalToSplitCopy->relationId);
+	AppendShardIdToName(&sourceShardToCopyName, shardIdToSplitCopy);
+
 	StringInfo selectShardQueryForCopy = makeStringInfo();
 	appendStringInfo(selectShardQueryForCopy,
-					 "SELECT * FROM %s;",
-					 generate_qualified_relation_name(
-						 shardIntervalToSplitCopy->relationId));
+					 "SELECT * FROM %s;", sourceShardToCopyName);
 
 	ParamListInfo params = NULL;
 	ExecuteQueryStringIntoDestReceiver(selectShardQueryForCopy->data, params,

@@ -83,16 +83,12 @@ CreateSplitCopyDestReceiver(EState *executorState, uint64 sourceShardIdToCopy,
 		char *destinationShardSchemaName = get_namespace_name(get_rel_namespace(
 																  splitCopyDest->
 																  sourceShardRelationOid));
-		char *destinationShardNameCopy = strdup(sourceShardNamePrefix);
+		char *destinationShardNameCopy = pstrdup(sourceShardNamePrefix);
 		AppendShardIdToName(&destinationShardNameCopy, splitCopyInfo->destinationShardId);
-
-		char *destinationShardFullyQualifiedName =
-			quote_qualified_identifier(destinationShardSchemaName,
-									   destinationShardNameCopy);
 
 		DestReceiver *shardCopyDest = CreateShardCopyDestReceiver(
 			executorState,
-			destinationShardFullyQualifiedName,
+			list_make2(destinationShardSchemaName, destinationShardNameCopy),
 			splitCopyInfo->destinationShardNodeId);
 
 		shardCopyDests[index] = shardCopyDest;
