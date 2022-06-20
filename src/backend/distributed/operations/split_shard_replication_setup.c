@@ -52,8 +52,7 @@ static ShardSplitInfo * CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 											 int32 nodeId);
 static void AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo);
 static void PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader,
-									   HTAB *shardInfoHashMap,
-									   dsm_handle dsmHandle);
+									   HTAB *shardInfoHashMap);
 
 static void SetupHashMapForShardInfo(void);
 static uint32 NodeShardMappingHash(const void *key, Size keysize);
@@ -150,13 +149,12 @@ worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
 		CreateSharedMemoryForShardSplitInfo(shardSplitInfoCount, &dsmHandle);
 
 	PopulateShardSplitInfoInSM(splitShardInfoSMHeader,
-							   ShardInfoHashMap,
-							   dsmHandle);
+							   ShardInfoHashMap);
 
 	/* store handle in statically allocated shared memory*/
 	StoreSharedMemoryHandle(dsmHandle);
 
-	return dsmHandle;
+	PG_RETURN_VOID();
 }
 
 
@@ -220,8 +218,13 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 
 	if (!IsCitusTableTypeCacheEntry(cachedTableEntry, HASH_DISTRIBUTED))
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("Cannot Support the feature")));
+		Relation distributedRel = RelationIdGetRelation(cachedTableEntry->relationId);
+		ereport(ERROR, (errmsg(
+							"Citus does only support Hash distributed tables to be split."),
+						errdetail("Table '%s' is not Hash distributed",
+								  RelationGetRelationName(distributedRel))
+						));
+		RelationClose(distributedRel);
 	}
 
 	Assert(shardIntervalToSplit->minValueExists);
@@ -241,8 +244,8 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 		destSplitChildShardOid == InvalidOid)
 	{
 		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-						errmsg("Invalid citusTableOid:%u "
-							   "sourceShardToSplitOid: %u,"
+						errmsg("Invalid citusTableOid:%u, "
+							   "sourceShardToSplitOid:%u, "
 							   "destSplitChildShardOid:%u ",
 							   citusTableOid,
 							   sourceShardToSplitOid,
@@ -288,7 +291,7 @@ AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo)
 											  &found);
 	if (!found)
 	{
-		nodeMappingEntry->shardSplitInfoList = NULL;
+		nodeMappingEntry->shardSplitInfoList = NIL;
 	}
 
 	nodeMappingEntry->shardSplitInfoList =
@@ -305,13 +308,10 @@ AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo)
  *
  * shardInfoHashMap    - Hashmap containing parsed split information
  *                       per nodeId wise
- *
- * dsmHandle           - Shared memory segment handle
  */
 static void
 PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader,
-						   HTAB *shardInfoHashMap,
-						   dsm_handle dsmHandle)
+						   HTAB *shardInfoHashMap)
 {
 	HASH_SEQ_STATUS status;
 	hash_seq_init(&status, shardInfoHashMap);
@@ -323,23 +323,15 @@ PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader,
 		uint32_t nodeId = entry->key.nodeId;
 		uint32_t tableOwnerId = entry->key.tableOwnerId;
 		char *derivedSlotName =
-			encode_replication_slot(nodeId, dsmHandle, tableOwnerId);
+			encode_replication_slot(nodeId, tableOwnerId);
 
 		List *shardSplitInfoList = entry->shardSplitInfoList;
 		ShardSplitInfo *splitShardInfo = NULL;
 		foreach_ptr(splitShardInfo, shardSplitInfoList)
 		{
-			ShardSplitInfo *shardInfoInSM =
-				&shardSplitInfoSMHeader->splitInfoArray[index];
-
-			shardInfoInSM->distributedTableOid = splitShardInfo->distributedTableOid;
-			shardInfoInSM->partitionColumnIndex = splitShardInfo->partitionColumnIndex;
-			shardInfoInSM->sourceShardOid = splitShardInfo->sourceShardOid;
-			shardInfoInSM->splitChildShardOid = splitShardInfo->splitChildShardOid;
-			shardInfoInSM->shardMinValue = splitShardInfo->shardMinValue;
-			shardInfoInSM->shardMaxValue = splitShardInfo->shardMaxValue;
-			shardInfoInSM->nodeId = splitShardInfo->nodeId;
-			strcpy_s(shardInfoInSM->slotName, NAMEDATALEN, derivedSlotName);
+			shardSplitInfoSMHeader->splitInfoArray[index] = *splitShardInfo;
+			strcpy_s(shardSplitInfoSMHeader->splitInfoArray[index].slotName, NAMEDATALEN,
+					 derivedSlotName);
 			index++;
 		}
 	}
@@ -397,7 +389,6 @@ ParseShardSplitInfoFromDatum(Datum shardSplitInfoDatum,
 	{
 		ereport(ERROR, (errmsg("source_shard_id for split_shard_info can't be null")));
 	}
-
 	*sourceShardId = DatumGetUInt64(sourceShardIdDatum);
 
 	Datum childShardIdDatum = GetAttributeByName(dataTuple, "child_shard_id", &isnull);
@@ -405,7 +396,6 @@ ParseShardSplitInfoFromDatum(Datum shardSplitInfoDatum,
 	{
 		ereport(ERROR, (errmsg("child_shard_id for split_shard_info can't be null")));
 	}
-
 	*childShardId = DatumGetUInt64(childShardIdDatum);
 
 	Datum minValueDatum = GetAttributeByName(dataTuple, "shard_min_value", &isnull);
@@ -413,16 +403,16 @@ ParseShardSplitInfoFromDatum(Datum shardSplitInfoDatum,
 	{
 		ereport(ERROR, (errmsg("shard_min_value for split_shard_info can't be null")));
 	}
-
-	*minValue = DatumGetInt32(minValueDatum);
+	char *shardMinValueString = text_to_cstring(DatumGetTextP(minValueDatum));
+	*minValue = SafeStringToInt32(shardMinValueString);
 
 	Datum maxValueDatum = GetAttributeByName(dataTuple, "shard_max_value", &isnull);
 	if (isnull)
 	{
 		ereport(ERROR, (errmsg("shard_max_value for split_shard_info can't be null")));
 	}
-
-	*maxValue = DatumGetInt32(maxValueDatum);
+	char *shardMaxValueString = text_to_cstring(DatumGetTextP(maxValueDatum));
+	*maxValue = SafeStringToInt32(shardMaxValueString);
 
 	Datum nodeIdDatum = GetAttributeByName(dataTuple, "node_id", &isnull);
 	if (isnull)

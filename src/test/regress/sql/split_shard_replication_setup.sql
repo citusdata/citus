@@ -11,11 +11,6 @@ SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \
 CREATE TABLE table_to_split (id bigserial PRIMARY KEY, value char);
 SELECT create_distributed_table('table_to_split','id');
 
--- slotName_table is used to persist replication slot name.
--- It is only used for testing as the worker2 needs to create subscription over the same replication slot.
-CREATE TABLE slotName_table (name text, nodeId int, id int primary key);
-SELECT create_distributed_table('slotName_table','id');
-
 -- Test scenario one starts from here
 -- 1. table_to_split is a citus distributed table
 -- 2. Shard table_to_split_1 is located on worker1.
@@ -23,11 +18,11 @@ SELECT create_distributed_table('slotName_table','id');
 --    table_to_split_2/3 are located on worker2
 -- 4. execute UDF split_shard_replication_setup on worker1 with below
 --    params:
---    split_shard_replication_setup
+--    worker_split_shard_replication_setup
 --        (
 --          ARRAY[
---                ARRAY[1 /*source shardId */, 2 /* new shardId */,-2147483648 /* minHashValue */, -1 /* maxHasValue */ , 18 /* nodeId where new shard is placed */ ],
---                ARRAY[1, 3 , 0 , 2147483647, 18 ]
+--                ROW(1 /*source shardId */, 2 /* new shardId */,-2147483648 /* minHashValue */, -1 /* maxHasValue */ , 18 /* nodeId where new shard is placed */ ),
+--                ROW(1, 3 , 0 , 2147483647, 18 )
 --               ]
 --         );
 -- 5. Create Replication slot with 'decoding_plugin_for_shard_split'
@@ -52,8 +47,8 @@ CREATE TABLE table_to_split_3(id bigserial PRIMARY KEY, value char);
 CREATE PUBLICATION pub1 FOR TABLE table_to_split_1, table_to_split_2, table_to_split_3;
 
 SELECT  worker_split_shard_replication_setup(ARRAY[
-    ROW(1,2,-2147483648,-1, :worker_2_node)::citus.split_shard_info,
-    ROW(1,3,0,2147483647, :worker_2_node)::citus.split_shard_info
+    ROW(1, 2, '-2147483648', '-1', :worker_2_node)::citus.split_shard_info,
+    ROW(1, 3, '0', '2147483647', :worker_2_node)::citus.split_shard_info
     ]) AS shared_memory_id \gset
 
 SELECT slot_name FROM pg_create_logical_replication_slot(FORMAT('citus_split_%s_10', :worker_2_node), 'decoding_plugin_for_shard_split') \gset
@@ -71,7 +66,7 @@ CREATE SUBSCRIPTION sub1
                    slot_name=:slot_name,
                    copy_data=false);
 
-select pg_sleep(5);
+SELECT pg_sleep(5);
 
 -- No data is present at this moment in all the below tables at worker2
 SELECT * FROM table_to_split_1;
@@ -130,11 +125,8 @@ SELECT * FROM table_to_split_3;
 \c - - - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
 DROP PUBLICATION pub1;
-DELETE FROM slotName_table;
 
 \c - - - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
 SET client_min_messages TO ERROR;
 DROP SUBSCRIPTION sub1;
-DELETE FROM slotName_table;
-

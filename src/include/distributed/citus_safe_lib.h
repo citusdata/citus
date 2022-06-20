@@ -19,6 +19,7 @@
 
 extern void ereport_constraint_handler(const char *message, void *pointer, errno_t error);
 extern int64 SafeStringToInt64(const char *str);
+extern int32 SafeStringToInt32(const char *str);
 extern uint64 SafeStringToUint64(const char *str);
 extern void SafeQsort(void *ptr, rsize_t count, rsize_t size,
 					  int (*comp)(const void *, const void *));

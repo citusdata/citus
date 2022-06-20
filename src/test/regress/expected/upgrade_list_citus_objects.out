@@ -242,7 +242,7 @@ ORDER BY 1;
  function worker_partitioned_table_size(regclass)
  function worker_record_sequence_dependency(regclass,regclass,name)
  function worker_save_query_explain_analyze(text,jsonb)
- function worker_split_shard_replication_setup(bigint[])
+ function worker_split_shard_replication_setup(citus.split_shard_info[])
  schema citus
  schema citus_internal
  schema columnar
@@ -271,6 +271,7 @@ ORDER BY 1;
  table pg_dist_transaction
  type citus.distribution_type
  type citus.shard_transfer_mode
+ type citus.split_shard_info
  type citus_copy_format
  type noderole
  view citus_dist_stat_activity

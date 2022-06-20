@@ -295,3 +295,50 @@ SafeSnprintf(char *restrict buffer, rsize_t bufsz, const char *restrict format, 
 	va_end(args);
 	return result;
 }
+
+
+/*
+ * SafeStringToInt32 converts a string containing a number to a int32. When it
+ * fails it calls ereport.
+ *
+ * The different error cases are inspired by
+ * https://stackoverflow.com/a/26083517/2570866
+ */
+int32
+SafeStringToInt32(const char *str)
+{
+	char *endptr;
+	errno = 0;
+	long number = strtol(str, &endptr, 10);
+
+	if (str == endptr)
+	{
+		ereport(ERROR, (errmsg("Error parsing %s as int32, no digits found\n", str)));
+	}
+	else if ((errno == ERANGE && number == LONG_MIN) || number < INT32_MIN)
+	{
+		ereport(ERROR, (errmsg("Error parsing %s as int32, underflow occurred\n", str)));
+	}
+	else if ((errno == ERANGE && number == LONG_MAX) || number > INT32_MAX)
+	{
+		ereport(ERROR, (errmsg("Error parsing %s as int32, overflow occurred\n", str)));
+	}
+	else if (errno == EINVAL)
+	{
+		ereport(ERROR, (errmsg(
+							"Error parsing %s as int32, base contains unsupported value\n",
+							str)));
+	}
+	else if (errno != 0 && number == 0)
+	{
+		int err = errno;
+		ereport(ERROR, (errmsg("Error parsing %s as int32, errno %d\n", str, err)));
+	}
+	else if (errno == 0 && str && *endptr != '\0')
+	{
+		ereport(ERROR, (errmsg(
+							"Error parsing %s as int32, aditional characters remain after int32\n",
+							str)));
+	}
+	return number;
+}

@@ -170,7 +170,6 @@ CreateSharedMemoryForShardSplitInfo(int shardSplitInfoCount, dsm_handle *dsmHand
  */
 char *
 encode_replication_slot(uint32_t nodeId,
-						dsm_handle dsmHandle,
 						uint32_t tableOwnerId)
 {
 	StringInfo slotName = makeStringInfo();

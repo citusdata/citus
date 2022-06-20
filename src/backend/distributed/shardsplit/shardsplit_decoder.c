@@ -6,7 +6,7 @@
  * Copyright (c) 2012-2017, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
- *		  src/backend/distributed/shardsplit/pgoutput.c
+ *		  src/backend/distributed/shardsplit/shardsplit_decoder.c
  *
  *-------------------------------------------------------------------------
  */
@@ -24,8 +24,9 @@ PG_MODULE_MAGIC;
 
 extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
 static LogicalDecodeChangeCB pgoutputChangeCB;
-static ShardSplitInfoSMHeader *shardSplitInfoSMHeader = NULL;
-static ShardSplitInfoForReplicationSlot *shardSplitInfoForSlot = NULL;
+
+static ShardSplitInfoSMHeader *ShardSplitInfo_SMHeader = NULL;
+static ShardSplitInfoForReplicationSlot *ShardSplitInfoForSlot = NULL;
 
 /* Plugin callback */
 static void split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
@@ -41,6 +42,11 @@ static Oid FindTargetRelationOid(Relation sourceShardRelation,
 								 HeapTuple tuple,
 								 char *currentSlotName);
 
+/*
+ * Postgres uses 'pgoutput' as default plugin for logical replication.
+ * We want to reuse Postgres pgoutput's functionality as much as possible.
+ * Hence we load all the functions of this plugin and override as required.
+ */
 void
 _PG_output_plugin_init(OutputPluginCallbacks *cb)
 {
@@ -79,10 +85,10 @@ GetHashValueForIncomingTuple(Relation sourceShardRelation,
 	Oid distributedTableOid = InvalidOid;
 
 	Oid sourceShardOid = sourceShardRelation->rd_id;
-	for (int i = shardSplitInfoForSlot->startIndex; i <= shardSplitInfoForSlot->endIndex;
+	for (int i = ShardSplitInfoForSlot->startIndex; i <= ShardSplitInfoForSlot->endIndex;
 		 i++)
 	{
-		shardSplitInfo = &shardSplitInfoSMHeader->splitInfoArray[i];
+		shardSplitInfo = &ShardSplitInfo_SMHeader->splitInfoArray[i];
 		if (shardSplitInfo->sourceShardOid == sourceShardOid)
 		{
 			distributedTableOid = shardSplitInfo->distributedTableOid;
@@ -149,18 +155,18 @@ FindTargetRelationOid(Relation sourceShardRelation,
 	Oid targetRelationOid = InvalidOid;
 	Oid sourceShardRelationOid = sourceShardRelation->rd_id;
 
-	bool bShouldHandleUpdate = false;
+	bool shouldHandleUpdate = false;
 	int hashValue = GetHashValueForIncomingTuple(sourceShardRelation, tuple,
-												 &bShouldHandleUpdate);
-	if (bShouldHandleUpdate == false)
+												 &shouldHandleUpdate);
+	if (shouldHandleUpdate == false)
 	{
 		return InvalidOid;
 	}
 
-	for (int i = shardSplitInfoForSlot->startIndex; i <= shardSplitInfoForSlot->endIndex;
+	for (int i = ShardSplitInfoForSlot->startIndex; i <= ShardSplitInfoForSlot->endIndex;
 		 i++)
 	{
-		ShardSplitInfo *shardSplitInfo = &shardSplitInfoSMHeader->splitInfoArray[i];
+		ShardSplitInfo *shardSplitInfo = &ShardSplitInfo_SMHeader->splitInfoArray[i];
 
 		/*
 		 * Each commit message is processed by all the configured replication slots.
@@ -193,11 +199,11 @@ bool
 IsCommitRecursive(Relation sourceShardRelation)
 {
 	Oid sourceShardOid = sourceShardRelation->rd_id;
-	for (int i = shardSplitInfoForSlot->startIndex; i <= shardSplitInfoForSlot->endIndex;
+	for (int i = ShardSplitInfoForSlot->startIndex; i <= ShardSplitInfoForSlot->endIndex;
 		 i++)
 	{
 		/* skip the commit when destination is equal to the source */
-		ShardSplitInfo *shardSplitInfo = &shardSplitInfoSMHeader->splitInfoArray[i];
+		ShardSplitInfo *shardSplitInfo = &ShardSplitInfo_SMHeader->splitInfoArray[i];
 		if (sourceShardOid == shardSplitInfo->splitChildShardOid)
 		{
 			return true;
@@ -225,11 +231,11 @@ split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 	 * Get ShardSplitInfoForSlot if not already initialized.
 	 * This gets initialized during the replication of first message.
 	 */
-	if (shardSplitInfoForSlot == NULL)
+	if (ShardSplitInfoForSlot == NULL)
 	{
-		shardSplitInfoForSlot = PopulateShardSplitInfoForReplicationSlot(
+		ShardSplitInfoForSlot = PopulateShardSplitInfoForReplicationSlot(
 			ctx->slot->data.name.data);
-		shardSplitInfoSMHeader = shardSplitInfoForSlot->shardSplitInfoHeader;
+		ShardSplitInfo_SMHeader = ShardSplitInfoForSlot->shardSplitInfoHeader;
 	}
 
 	if (IsCommitRecursive(relation))

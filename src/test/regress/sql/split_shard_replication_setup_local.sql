@@ -1,4 +1,4 @@
--- Test scenario three starts from here (parent shard and child shards are located on same machine)
+-- Test scenario (parent shard and child shards are located on same machine)
 -- 1. table_to_split_1 is split into table_to_split_2 and table_to_split_3.
 -- 2. table_to_split_1 is located on worker1.
 -- 3. table_to_split_2 and table_to_split_3 are located on worker1
@@ -14,9 +14,9 @@ CREATE PUBLICATION pub1 for table table_to_split_1, table_to_split_2, table_to_s
 
 -- Worker1 is target for table_to_split_2 and table_to_split_3
 SELECT worker_split_shard_replication_setup(ARRAY[
-    ROW(1,2,-2147483648,-1, :worker_1_node)::citus.split_shard_info,
-    ROW(1,3,0,2147483647, :worker_1_node)::citus.split_shard_info
-    ]) AS shared_memory_id \gset 
+    ROW(1, 2, '-2147483648', '-1', :worker_1_node)::citus.split_shard_info,
+    ROW(1, 3, '0', '2147483647', :worker_1_node)::citus.split_shard_info
+    ]) AS shared_memory_id \gset
 
 SELECT slot_name AS local_slot FROM pg_create_logical_replication_slot(FORMAT('citus_split_%s_10', :worker_1_node), 'decoding_plugin_for_shard_split') \gset
 
@@ -24,7 +24,7 @@ SELECT slot_name AS local_slot FROM pg_create_logical_replication_slot(FORMAT('c
 BEGIN;
 CREATE SUBSCRIPTION local_subscription
         CONNECTION 'host=localhost port=57637 user=postgres dbname=regression'
-        PUBLICATION pub1 
+        PUBLICATION pub1
                WITH (
                    create_slot=false,
                    enabled=true,
@@ -53,4 +53,3 @@ SELECT * FROM table_to_split_3;
 -- clean up
 DROP SUBSCRIPTION local_subscription;
 DROP PUBLICATION pub1;
-DELETE FROM slotName_table;

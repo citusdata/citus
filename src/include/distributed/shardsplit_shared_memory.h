@@ -66,7 +66,5 @@ extern ShardSplitInfoForReplicationSlot * PopulateShardSplitInfoForReplicationSl
 	char *slotName);
 
 
-char * encode_replication_slot(uint32_t nodeId,
-							   dsm_handle dsmHandle,
-							   uint32_t tableOwnerId);
+char * encode_replication_slot(uint32_t nodeId, uint32_t tableOwnerId);
 #endif /* SHARDSPLIT_SHARED_MEMORY_H */
