@@ -9,7 +9,6 @@ CREATE TYPE citus.split_shard_info AS (
     shard_max_value text,
     node_id integer);
 
-
 CREATE OR REPLACE FUNCTION pg_catalog.worker_split_shard_replication_setup(
     splitShardInfo citus.split_shard_info[])
 RETURNS void

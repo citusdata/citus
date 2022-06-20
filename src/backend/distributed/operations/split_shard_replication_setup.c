@@ -62,49 +62,43 @@ static int NodeShardMappingHashCompare(const void *left, const void *right, Size
 /*
  * worker_split_shard_replication_setup UDF creates in-memory data structures
  * to store the meta information about the shard undergoing split and new split
- * children along with their placements required during the catch up phase
- * of logical replication.
+ * children along with their placements. This info is required during the catch up
+ * phase of logical replication.
  * This meta information is stored in a shared memory segment and accessed
  * by logical decoding plugin.
  *
- * Split information is given by user as an Array of source shards undergoing splits
- * in the below format.
- * Array[Array[sourceShardId, childShardId, minValue, maxValue, Destination NodeId]]
+ * Split information is given by user as an Array of custom data type 'citus.split_shard_info'.
+ * (worker_split_shard_replication_setup(citus.split_shard_info[]))
  *
- * sourceShardId - id of the shard that is undergoing a split
- * childShardId  - id of shard that stores a specific range of values
- *                 belonging to sourceShardId(parent)
- * minValue      - lower bound(inclusive) of hash value which childShard stores
+ * Fields of custom data type 'citus.split_shard_info':
+ * source_shard_id - id of the shard that is undergoing a split
  *
- * maxValue      - upper bound(inclusive) of hash value which childShard stores
+ * child_shard_id  - id of shard that stores a specific range of values
+ *                   belonging to sourceShardId(parent)
  *
- * NodeId        - Node where the childShardId is located
+ * shard_min_value - lower bound(inclusive) of hash value which childShard stores.
  *
- * The function parses the data and builds routing map per destination node id.
- * Multiple shards can be placed on the same destiation node. Source and
- * destinations nodes can be same too.
+ * shard_max_value - upper bound(inclusive) of hash value which childShard stores
  *
- * Usage Semantics:
- * This UDF returns a shared memory handle where the information is stored. This shared memory
- * handle is used by caller to encode replication slot name as "citus_split_nodeId_sharedMemoryHandle_tableOnwerId"
- * for every distinct  table owner. The same encoded slot name is stored in one of the fields of the
- * in-memory data structure(ShardSplitInfo).
+ * node_id         - Node where the childShardId is located
  *
- * There is a 1-1 mapping between a table owner id and a replication slot. One replication
+ * The function parses the data and builds routing map with key for each distinct
+ * <nodeId, tableOwner> pair. Multiple shards can be placed on the same destination node.
+ * Source and destination nodes can be same too.
+ *
+ * There is a 1-1 mapping between a table owner and a replication slot. One replication
  * slot takes care of replicating changes for all shards belonging to the same owner on a particular node.
  *
- * During the replication phase, 'decoding_plugin_for_shard_split' called for a change on a particular
- * replication slot, will decode the shared memory handle from its slot name and will attach to the
- * shared memory. The plugin consumes the information from shared memory. It routes the tuple
- * from the source shard to the appropriate destination shard for which the respective slot is
- * responsible.
+ * During the replication phase, 'decoding_plugin_for_shard_split' will attach to the shared memory
+ * populated by current UDF. It routes the tuple from the source shard to the appropriate destination
+ * shard for which the respective slot is responsible.
  */
 Datum
 worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
 {
 	if (PG_ARGISNULL(0))
 	{
-		ereport(ERROR, (errmsg("targets can't be null")));
+		ereport(ERROR, (errmsg("split_shard_info array cannot be NULL")));
 	}
 
 	ArrayType *shardInfoArrayObject = PG_GETARG_ARRAYTYPE_P(0);

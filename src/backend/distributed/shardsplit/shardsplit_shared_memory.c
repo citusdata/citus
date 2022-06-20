@@ -18,7 +18,7 @@
 #include "storage/ipc.h"
 #include "utils/memutils.h"
 
-const char *sharedMemoryNameForHandleManagement =
+const char *SharedMemoryNameForHandleManagement =
 	"SHARED_MEMORY_FOR_SPLIT_SHARD_HANDLE_MANAGEMENT";
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
@@ -67,6 +67,13 @@ GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle dsmHandle)
 	ShardSplitInfoSMHeader *header = (ShardSplitInfoSMHeader *) dsm_segment_address(
 		dsmSegment);
 
+	if (header == NULL)
+	{
+		ereport(ERROR,
+				(errmsg("Could not get shared memory segment header "
+						"corresponding to handle for split workflow:%u", dsmHandle)));
+	}
+
 	return header;
 }
 
@@ -110,13 +117,12 @@ AllocateSharedMemoryForShardSplitInfo(int shardSplitInfoCount, Size shardSplitIn
 	if (shardSplitInfoCount <= 0 || shardSplitInfoSize <= 0)
 	{
 		ereport(ERROR,
-				(errmsg("count and size of each step should be "
+				(errmsg("shardSplitInfoCount and size of each step should be "
 						"positive values")));
 	}
 
 	Size totalSize = offsetof(ShardSplitInfoSMHeader, splitInfoArray) +
-					 shardSplitInfoCount *
-					 shardSplitInfoSize;
+					 (shardSplitInfoCount * shardSplitInfoSize);
 	dsm_segment *dsmSegment = dsm_create(totalSize, DSM_CREATE_NULL_IF_MAXSEGMENTS);
 
 	if (dsmSegment == NULL)
@@ -204,7 +210,7 @@ static void
 ShardSplitShmemInit(void)
 {
 	bool alreadyInitialized = false;
-	ShardSplitShmemData *smData = ShmemInitStruct(sharedMemoryNameForHandleManagement,
+	ShardSplitShmemData *smData = ShmemInitStruct(SharedMemoryNameForHandleManagement,
 												  sizeof(ShardSplitShmemData),
 												  &alreadyInitialized);
 
@@ -238,12 +244,14 @@ ShardSplitShmemInit(void)
 /*
  * StoreSharedMemoryHandle stores a handle of shared memory
  * allocated and populated by 'worker_split_shard_replication_setup' UDF.
+ * This handle is stored in a different shared memory segment with name
+ * 'SHARED_MEMORY_FOR_SPLIT_SHARD_HANDLE_MANAGEMENT'.
  */
 void
 StoreSharedMemoryHandle(dsm_handle dsmHandle)
 {
 	bool found = false;
-	ShardSplitShmemData *smData = ShmemInitStruct(sharedMemoryNameForHandleManagement,
+	ShardSplitShmemData *smData = ShmemInitStruct(SharedMemoryNameForHandleManagement,
 												  sizeof(ShardSplitShmemData),
 												  &found);
 	if (!found)
@@ -253,6 +261,10 @@ StoreSharedMemoryHandle(dsm_handle dsmHandle)
 					"Shared memory for handle management should have been initialized during boot"));
 	}
 
+	/*
+	 * We only support non concurrent split. However, it is fine to take a
+	 * lock and store the handle incase concurrent splits are introduced in future.
+	 */
 	LWLockAcquire(&smData->lock, LW_EXCLUSIVE);
 
 	/*
@@ -285,7 +297,7 @@ dsm_handle
 GetSharedMemoryHandle(void)
 {
 	bool found = false;
-	ShardSplitShmemData *smData = ShmemInitStruct(sharedMemoryNameForHandleManagement,
+	ShardSplitShmemData *smData = ShmemInitStruct(SharedMemoryNameForHandleManagement,
 												  sizeof(ShardSplitShmemData),
 												  &found);
 	if (!found)
@@ -331,7 +343,7 @@ PopulateShardSplitInfoForReplicationSlot(char *slotName)
 			/* Found the starting index from where current slot information begins */
 			infoForReplicationSlot->startIndex = index;
 
-			/* Slide forward to get the end index */
+			/* Slide forward to get the ending index */
 			index++;
 			while (index < smHeader->count && strcmp(
 					   smHeader->splitInfoArray[index].slotName, slotName) == 0)
@@ -339,14 +351,15 @@ PopulateShardSplitInfoForReplicationSlot(char *slotName)
 				index++;
 			}
 
+			/* Found ending index */
 			infoForReplicationSlot->endIndex = index - 1;
 
 			/*
 			 * 'ShardSplitInfo' with same slot name are stored contiguously in shared memory segment.
 			 * After the current 'index' position, we should not encounter any 'ShardSplitInfo' with incoming slot name.
 			 * If this happens, there is shared memory corruption. Its worth to go ahead and assert for this assumption.
-			 * TODO: Traverse further and assert
 			 */
+			break;
 		}
 
 		index++;
