@@ -22,6 +22,8 @@
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "catalog/pg_constraint.h"
+#include "catalog/pg_rewrite.h"
+#include "catalog/pg_rewrite_d.h"
 #include "catalog/pg_statistic_ext.h"
 #include "catalog/pg_trigger.h"
 #include "distributed/coordinator_protocol.h"
@@ -41,6 +43,8 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
+#include "executor/spi.h"
+#include "rewrite/rewriteSupport.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -54,6 +58,9 @@
  * If this variable is set to true, we add all created tables to metadata.
  */
 bool AddAllLocalTablesToMetadata = true;
+
+static SPIPlanPtr plan_getviewrule = NULL;
+static const char *query_getviewrule = "SELECT * FROM pg_catalog.pg_rewrite WHERE ev_class = $1 AND rulename = $2";
 
 static void citus_add_local_table_to_metadata_internal(Oid relationId,
 													   bool cascadeViaForeignKeys);
@@ -81,9 +88,7 @@ static char * GetRenameShardTriggerCommand(Oid shardRelationId, char *triggerNam
 										   uint64 shardId);
 static void DropRelationTruncateTriggers(Oid relationId);
 static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
-static void DropViewsOnTable(Oid relationId);
 static List * GetRenameStatsCommandList(List *statsOidList, uint64 shardId);
-static List * ReversedOidList(List *oidList);
 static void AppendExplicitIndexIdsToList(Form_pg_index indexForm,
 										 List **explicitIndexIdList,
 										 int flags);
@@ -94,7 +99,8 @@ static void TransferSequenceOwnership(Oid ownedSequenceId, Oid targetRelationId,
 									  char *columnName);
 static void InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
 											 bool autoConverted);
-static void FinalizeCitusLocalTableCreation(Oid relationId);
+static void FinalizeCitusLocalTableCreation(Oid shellRelationId, Oid shardRelationId);
+static void UpdateDependentViews(Oid shellRelationId, Oid shardRelationId);
 
 
 PG_FUNCTION_INFO_V1(citus_add_local_table_to_metadata);
@@ -330,7 +336,6 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	EnsureReferenceTablesExistOnAllNodes();
 
 	List *shellTableDDLEvents = GetShellTableDDLEventsForCitusLocalTable(relationId);
-	List *tableViewCreationCommands = GetViewCreationCommandsOfTable(relationId);
 
 	char *relationName = get_rel_name(relationId);
 	Oid relationSchemaId = get_rel_namespace(relationId);
@@ -344,12 +349,6 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 * via process utility.
 	 */
 	ExecuteAndLogUtilityCommandList(shellTableDDLEvents);
-
-	/*
-	 * Execute the view creation commands with the shell table.
-	 * Views will be distributed via FinalizeCitusLocalTableCreation below.
-	 */
-	ExecuteAndLogUtilityCommandListInTableTypeConversion(tableViewCreationCommands);
 
 	/*
 	 * Set shellRelationId as the relation with relationId now points
@@ -371,7 +370,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 
 	InsertMetadataForCitusLocalTable(shellRelationId, shardId, autoConverted);
 
-	FinalizeCitusLocalTableCreation(shellRelationId);
+	FinalizeCitusLocalTableCreation(shellRelationId, shardRelationId);
 }
 
 
@@ -708,9 +707,6 @@ ConvertLocalTableToShard(Oid relationId)
 	 */
 	DropRelationTruncateTriggers(relationId);
 
-	/* drop views that depend on the shard table */
-	DropViewsOnTable(relationId);
-
 	/*
 	 * We create INSERT|DELETE|UPDATE triggers on shard relation too.
 	 * This is because citus prevents postgres executor to fire those
@@ -1032,53 +1028,6 @@ GetDropTriggerCommand(Oid relationId, char *triggerName)
 
 
 /*
- * DropViewsOnTable drops the views that depend on the given relation.
- */
-static void
-DropViewsOnTable(Oid relationId)
-{
-	List *views = GetDependingViews(relationId);
-
-	/*
-	 * GetDependingViews returns views in the dependency order. We should drop views
-	 * in the reversed order since dropping views can cascade to other views below.
-	 */
-	List *reverseOrderedViews = ReversedOidList(views);
-
-	Oid viewId = InvalidOid;
-	foreach_oid(viewId, reverseOrderedViews)
-	{
-		char *viewName = get_rel_name(viewId);
-		char *schemaName = get_namespace_name(get_rel_namespace(viewId));
-		char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
-
-		StringInfo dropCommand = makeStringInfo();
-		appendStringInfo(dropCommand, "DROP VIEW IF EXISTS %s",
-						 qualifiedViewName);
-
-		ExecuteAndLogUtilityCommand(dropCommand->data);
-	}
-}
-
-
-/*
- * ReversedOidList takes a list of oids and returns the reverse ordered version of it.
- */
-static List *
-ReversedOidList(List *oidList)
-{
-	List *reversed = NIL;
-	Oid oid = InvalidOid;
-	foreach_oid(oid, oidList)
-	{
-		reversed = lcons_oid(oid, reversed);
-	}
-
-	return reversed;
-}
-
-
-/*
  * GetExplicitIndexOidList returns a list of index oids defined "explicitly"
  * on the relation with relationId by the "CREATE INDEX" commands. That means,
  * all the constraints defined on the relation except:
@@ -1282,28 +1231,130 @@ InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
  * sequences dependent with the table.
  */
 static void
-FinalizeCitusLocalTableCreation(Oid relationId)
+FinalizeCitusLocalTableCreation(Oid shellRelationId, Oid shardRelationId)
 {
 	/*
 	 * If it is a foreign table, then skip creating citus truncate trigger
 	 * as foreign tables do not support truncate triggers.
 	 */
-	if (RegularTable(relationId))
+	if (RegularTable(shellRelationId))
 	{
-		CreateTruncateTrigger(relationId);
+		CreateTruncateTrigger(shellRelationId);
 	}
 
-	if (ShouldSyncTableMetadata(relationId))
+	if (ShouldSyncTableMetadata(shellRelationId))
 	{
-		SyncCitusTableMetadata(relationId);
+		SyncCitusTableMetadata(shellRelationId);
 	}
 
 	/*
 	 * We've a custom way of foreign key graph invalidation,
 	 * see InvalidateForeignKeyGraph().
 	 */
-	if (TableReferenced(relationId) || TableReferencing(relationId))
+	if (TableReferenced(shellRelationId) || TableReferencing(shellRelationId))
 	{
 		InvalidateForeignKeyGraph();
+	}
+
+	UpdateDependentViews(shellRelationId, shardRelationId);
+}
+
+
+static void
+UpdateDependentViews(Oid shellRelationId, Oid shardRelationId)
+{
+	List *views = GetDependingViews(shardRelationId);
+
+	Oid viewId = InvalidOid;
+	foreach_oid(viewId, views)
+	{
+		// Relation rewriteRel = table_open(RewriteRelationId, AccessShareLock);
+		// ScanKeyData rkey[1];
+
+		// ScanKeyInit(&rkey[0],
+		// 			Anum_pg_rewrite_ev_class,
+		// 			BTEqualStrategyNumber, F_OIDEQ,
+		// 			ObjectIdGetDatum(viewId));
+
+		// SysScanDesc rscan = systable_beginscan(rewriteRel, RewriteOidIndexId,
+		// 									true, NULL, 1, rkey);
+
+		// HeapTuple rewriteTup = systable_getnext(rscan);
+		// if (!HeapTupleIsValid(rewriteTup))
+		// {
+		// 	/*
+		// 	* This function already verified that objid's classid is
+		// 	* RewriteRelationId, so it should exists. But be on the
+		// 	* safe side.
+		// 	*/
+		// 	ereport(ERROR, (errmsg("catalog lookup failed for view %u", viewId)));
+		// }
+		if (SPI_connect() != SPI_OK_CONNECT)
+			elog(ERROR, "SPI_connect failed");
+
+		if (plan_getviewrule == NULL)
+		{
+			Oid			argtypes[2];
+			SPIPlanPtr	plan;
+
+			argtypes[0] = OIDOID;
+			argtypes[1] = NAMEOID;
+			plan = SPI_prepare(query_getviewrule, 2, argtypes);
+			if (plan == NULL)
+				elog(ERROR, "SPI_prepare failed for \"%s\"", query_getviewrule);
+			SPI_keepplan(plan);
+			plan_getviewrule = plan;
+		}
+
+		Datum		args[2];
+		char		nulls[2];
+		args[0] = ObjectIdGetDatum(viewId);
+		args[1] = DirectFunctionCall1(namein, CStringGetDatum(ViewSelectRuleName));
+		nulls[0] = ' ';
+		nulls[1] = ' ';
+		
+		int spirc = SPI_execute_plan(plan_getviewrule, args, nulls, true, 0);
+		if (spirc != SPI_OK_SELECT)
+			elog(ERROR, "failed to get pg_rewrite tuple for view %u", viewId);
+		HeapTuple ruletup;
+		TupleDesc rulettc;
+		if (SPI_processed == 1)
+		{
+			ruletup = SPI_tuptable->vals[0];
+			rulettc = SPI_tuptable->tupdesc;
+			int fno = SPI_fnumber(rulettc, "ev_action");
+			char *ev_action = SPI_getvalue(ruletup, rulettc, fno);
+			elog(WARNING,"%u",viewId);
+			elog(WARNING,"%s",get_rel_name(viewId));
+			elog(WARNING,"%s",ev_action);
+			Assert(ev_action != NULL);
+			List *actions = (List *) stringToNode(ev_action);
+			if (actions == NIL)
+				elog(ERROR, "invalid empty ev_action list");
+			Query *query = (Query *) linitial(actions);
+			elog(WARNING,"=============");
+			elog(WARNING,"%s",nodeToString(query));
+			elog(WARNING,"=============");
+		}
+
+		/*
+		* Disconnect from SPI manager
+		*/
+		if (SPI_finish() != SPI_OK_FINISH)
+			elog(ERROR, "SPI_finish failed");
+
+//////////////
+		// Form_pg_rewrite pg_rewrite = (Form_pg_rewrite) GETSTRUCT(rewriteTup);
+
+		// List *actions = (List *) stringToNode(pg_rewrite->ev_action);
+
+		// if (list_length(actions) != 1)
+		// {
+		// 	/* keep output buffer empty and leave */
+		// 	return;
+		// }
+////////
+		// systable_endscan(rscan);
+		// relation_close(rewriteRel, AccessShareLock);
 	}
 }

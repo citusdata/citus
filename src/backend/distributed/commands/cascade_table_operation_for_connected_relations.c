@@ -513,43 +513,6 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 
 
 /*
- * ExecuteAndLogUtilityCommandListInTableTypeConversion is a wrapper function
- * around ExecuteAndLogUtilityCommandList, that makes it execute with the flag
- * InTableTypeConversionFunctionCall is set to true.
- */
-void
-ExecuteAndLogUtilityCommandListInTableTypeConversion(List *utilityCommandList)
-{
-	bool oldValue = InTableTypeConversionFunctionCall;
-	InTableTypeConversionFunctionCall = true;
-
-	MemoryContext savedMemoryContext = CurrentMemoryContext;
-	PG_TRY();
-	{
-		ExecuteAndLogUtilityCommandList(utilityCommandList);
-	}
-	PG_CATCH();
-	{
-		InTableTypeConversionFunctionCall = oldValue;
-		MemoryContextSwitchTo(savedMemoryContext);
-
-		ErrorData *errorData = CopyErrorData();
-		FlushErrorState();
-
-		if (errorData->elevel != ERROR)
-		{
-			PG_RE_THROW();
-		}
-
-		ThrowErrorData(errorData);
-	}
-	PG_END_TRY();
-
-	InTableTypeConversionFunctionCall = oldValue;
-}
-
-
-/*
  * ExecuteAndLogUtilityCommandList takes a list of utility commands and calls
  * ExecuteAndLogUtilityCommand function for each of them.
  */
