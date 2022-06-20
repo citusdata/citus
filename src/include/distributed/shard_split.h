@@ -39,8 +39,10 @@ extern void SplitShard(SplitMode splitMode,
 					   List *nodeIdsForPlacementList);
 
 /* TODO(niupre): Make all these APIs private when all consumers (Example : ISOLATE_TENANT_TO_NEW_SHARD) directly call 'SplitShard' API. */
-extern void ErrorIfCannotSplitShard(SplitOperation splitOperation, ShardInterval *sourceShard);
-extern void InsertSplitOffShardMetadata(List *splitOffShardList, List *sourcePlacementList);
+extern void ErrorIfCannotSplitShard(SplitOperation splitOperation,
+									ShardInterval *sourceShard);
+extern void InsertSplitOffShardMetadata(List *splitOffShardList,
+										List *sourcePlacementList);
 extern void DropShardList(List *shardIntervalList);
 extern void CreateForeignConstraints(List *splitOffShardList, List *sourcePlacementList);
 extern void ExecuteCommandListOnPlacements(List *commandList, List *placementList);

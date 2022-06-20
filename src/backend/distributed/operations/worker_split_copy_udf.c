@@ -17,8 +17,8 @@
 
 PG_FUNCTION_INFO_V1(worker_split_copy);
 
-static void
-ParseSplitCopyInfoDatum(Datum splitCopyInfoDatum, SplitCopyInfo** splitCopyInfo);
+static void ParseSplitCopyInfoDatum(Datum splitCopyInfoDatum,
+									SplitCopyInfo **splitCopyInfo);
 
 /*
  *
@@ -33,13 +33,15 @@ worker_split_copy(PG_FUNCTION_ARGS)
 	if (array_contains_nulls(splitCopyInfoArrayObject))
 	{
 		ereport(ERROR,
-			(errmsg("Shard Copy Info cannot have null values.")));
+				(errmsg("Shard Copy Info cannot have null values.")));
 	}
 
-	ArrayIterator copyInfo_iterator = array_create_iterator(splitCopyInfoArrayObject, 0 /* slice_ndim */, NULL /* mState */);
+	ArrayIterator copyInfo_iterator = array_create_iterator(splitCopyInfoArrayObject,
+															0 /* slice_ndim */,
+															NULL /* mState */);
 	Datum copyInfoDatum = 0;
 	bool isnull = false;
-	List* splitCopyInfoList = NULL;
+	List *splitCopyInfoList = NULL;
 	while (array_iterate(copyInfo_iterator, &copyInfoDatum, &isnull))
 	{
 		SplitCopyInfo *splitCopyInfo = NULL;
@@ -49,56 +51,69 @@ worker_split_copy(PG_FUNCTION_ARGS)
 	}
 
 	EState *executor = CreateExecutorState();
-	DestReceiver *splitCopyDestReceiver = CreateSplitCopyDestReceiver(executor, shardIdToSplitCopy, splitCopyInfoList);
+	DestReceiver *splitCopyDestReceiver = CreateSplitCopyDestReceiver(executor,
+																	  shardIdToSplitCopy,
+																	  splitCopyInfoList);
 
 	StringInfo selectShardQueryForCopy = makeStringInfo();
 	appendStringInfo(selectShardQueryForCopy,
-						"SELECT * FROM %s;",
-						generate_qualified_relation_name(shardIntervalToSplitCopy->relationId));
+					 "SELECT * FROM %s;",
+					 generate_qualified_relation_name(
+						 shardIntervalToSplitCopy->relationId));
 
 	ParamListInfo params = NULL;
-	ExecuteQueryStringIntoDestReceiver(selectShardQueryForCopy->data, params, (DestReceiver *) splitCopyDestReceiver);
+	ExecuteQueryStringIntoDestReceiver(selectShardQueryForCopy->data, params,
+									   (DestReceiver *) splitCopyDestReceiver);
 
 	FreeExecutorState(executor);
 
 	PG_RETURN_VOID();
 }
 
+
 static void
-ParseSplitCopyInfoDatum(Datum splitCopyInfoDatum, SplitCopyInfo** splitCopyInfo)
+ParseSplitCopyInfoDatum(Datum splitCopyInfoDatum, SplitCopyInfo **splitCopyInfo)
 {
 	HeapTupleHeader dataTuple = DatumGetHeapTupleHeader(splitCopyInfoDatum);
 
 	SplitCopyInfo *copyInfo = palloc0(sizeof(SplitCopyInfo));
 
 	bool isnull = false;
-	Datum destinationShardIdDatum = GetAttributeByName(dataTuple, "destination_shard_id", &isnull);
+	Datum destinationShardIdDatum = GetAttributeByName(dataTuple, "destination_shard_id",
+													   &isnull);
 	if (isnull)
 	{
-		ereport(ERROR, (errmsg("destination_shard_id for split_copy_info cannot be null.")));
+		ereport(ERROR, (errmsg(
+							"destination_shard_id for split_copy_info cannot be null.")));
 	}
 	copyInfo->destinationShardId = DatumGetUInt64(destinationShardIdDatum);
 
-	Datum minValueDatum = GetAttributeByName(dataTuple, "destination_shard_min_value", &isnull);
+	Datum minValueDatum = GetAttributeByName(dataTuple, "destination_shard_min_value",
+											 &isnull);
 	if (isnull)
 	{
-		ereport(ERROR, (errmsg("destination_shard_min_value for split_copy_info cannot be null.")));
+		ereport(ERROR, (errmsg(
+							"destination_shard_min_value for split_copy_info cannot be null.")));
 	}
 	char *destinationMinHash = text_to_cstring(DatumGetTextP(minValueDatum));
 	copyInfo->destinationShardMinHashValue = pg_strtoint64(destinationMinHash);
 
-	Datum maxValueDatum = GetAttributeByName(dataTuple, "destination_shard_max_value", &isnull);
+	Datum maxValueDatum = GetAttributeByName(dataTuple, "destination_shard_max_value",
+											 &isnull);
 	if (isnull)
 	{
-		ereport(ERROR, (errmsg("destination_shard_max_value for split_copy_info cannot be null.")));
+		ereport(ERROR, (errmsg(
+							"destination_shard_max_value for split_copy_info cannot be null.")));
 	}
 	char *destinationMaxHash = text_to_cstring(DatumGetTextP(maxValueDatum));
 	copyInfo->destinationShardMaxHashValue = pg_strtoint64(destinationMaxHash);
 
-	Datum nodeIdDatum = GetAttributeByName(dataTuple, "destination_shard_node_id", &isnull);
+	Datum nodeIdDatum = GetAttributeByName(dataTuple, "destination_shard_node_id",
+										   &isnull);
 	if (isnull)
 	{
-		ereport(ERROR, (errmsg("destination_shard_node_id for split_copy_info cannot be null.")));
+		ereport(ERROR, (errmsg(
+							"destination_shard_node_id for split_copy_info cannot be null.")));
 	}
 	copyInfo->destinationShardNodeId = DatumGetInt32(nodeIdDatum);
 

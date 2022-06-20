@@ -38,7 +38,7 @@ typedef struct ShardCopyDestReceiver
 	DestReceiver pub;
 
 	/* Destination Relation Name */
-	char* destinationShardFullyQualifiedName;
+	char *destinationShardFullyQualifiedName;
 
 	/* descriptor of the tuples that are sent to the worker */
 	TupleDesc tupleDescriptor;
@@ -61,28 +61,31 @@ typedef struct ShardCopyDestReceiver
 
 	/*
 	 * Connection for destination shard (NULL if useLocalCopy is true)
-	*/
+	 */
 	MultiConnection *connection;
-
 } ShardCopyDestReceiver;
 
 static bool ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest);
 static void ShardCopyDestReceiverStartup(DestReceiver *dest, int operation,
-										TupleDesc inputTupleDescriptor);
+										 TupleDesc inputTupleDescriptor);
 static void ShardCopyDestReceiverShutdown(DestReceiver *destReceiver);
 static void ShardCopyDestReceiverDestroy(DestReceiver *destReceiver);
 static bool CanUseLocalCopy(uint64 destinationNodeId);
-static StringInfo ConstructCopyStatement(char* destinationShardFullyQualifiedName, bool useBinaryFormat);
+static StringInfo ConstructCopyStatement(char *destinationShardFullyQualifiedName, bool
+										 useBinaryFormat);
 static void WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDest);
 static bool ShouldSendCopyNow(StringInfo buffer);
-static int  ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead);
-static void LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState localCopyOutState);
+static int ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead);
+static void LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState
+							 localCopyOutState);
 
-static bool CanUseLocalCopy(uint64 destinationNodeId)
+static bool
+CanUseLocalCopy(uint64 destinationNodeId)
 {
 	/* If destination node is same as source, use local copy */
 	return GetLocalNodeId() == destinationNodeId;
 }
+
 
 /*
  * ShouldSendCopyNow returns true if the given buffer size exceeds the
@@ -94,6 +97,7 @@ ShouldSendCopyNow(StringInfo buffer)
 	/* LocalCopyFlushThreshold is in bytes */
 	return buffer->len > LocalCopyFlushThresholdByte;
 }
+
 
 static bool
 ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
@@ -109,19 +113,21 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	MemoryContext oldContext = MemoryContextSwitchTo(executorTupleContext);
 
 	/* Create connection lazily */
-	if(copyDest->tuplesSent == 0 && (!copyDest->useLocalCopy))
+	if (copyDest->tuplesSent == 0 && (!copyDest->useLocalCopy))
 	{
 		int connectionFlags = OUTSIDE_TRANSACTION;
 		char *currentUser = CurrentUserName();
-		WorkerNode *workerNode = FindNodeWithNodeId(copyDest->destinationNodeId, false /* missingOk */);
+		WorkerNode *workerNode = FindNodeWithNodeId(copyDest->destinationNodeId,
+													false /* missingOk */);
 		copyDest->connection = GetNodeUserDatabaseConnection(connectionFlags,
-															workerNode->workerName,
-															workerNode->workerPort,
-															currentUser,
-															NULL /* database (current) */);
+															 workerNode->workerName,
+															 workerNode->workerPort,
+															 currentUser,
+															 NULL /* database (current) */);
 		ClaimConnectionExclusively(copyDest->connection);
 
-		StringInfo copyStatement = ConstructCopyStatement(copyDest->destinationShardFullyQualifiedName,
+		StringInfo copyStatement = ConstructCopyStatement(
+			copyDest->destinationShardFullyQualifiedName,
 			copyDest->copyOutState->binary);
 		ExecuteCriticalRemoteCommand(copyDest->connection, copyStatement->data);
 	}
@@ -131,7 +137,7 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	bool *columnNulls = slot->tts_isnull;
 
 	CopyOutState copyOutState = copyDest->copyOutState;
-	if(copyDest->useLocalCopy)
+	if (copyDest->useLocalCopy)
 	{
 		WriteLocalTuple(slot, copyDest);
 		if (ShouldSendCopyNow(copyOutState->fe_msgbuf))
@@ -145,15 +151,18 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 
 		resetStringInfo(copyOutState->fe_msgbuf);
 		AppendCopyRowData(columnValues, columnNulls, copyDest->tupleDescriptor,
-							copyOutState, columnOutputFunctions, NULL /* columnCoercionPaths */);
-		if (!PutRemoteCopyData(copyDest->connection, copyOutState->fe_msgbuf->data, copyOutState->fe_msgbuf->len))
+						  copyOutState, columnOutputFunctions,
+						  NULL /* columnCoercionPaths */);
+		if (!PutRemoteCopyData(copyDest->connection, copyOutState->fe_msgbuf->data,
+							   copyOutState->fe_msgbuf->len))
 		{
 			ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
-						errmsg("Failed to COPY to shard %s,",
-							   copyDest->destinationShardFullyQualifiedName),
-						errdetail("failed to send %d bytes %s on node %u", copyOutState->fe_msgbuf->len,
-								  copyOutState->fe_msgbuf->data,
-								  copyDest->destinationNodeId)));
+							errmsg("Failed to COPY to shard %s,",
+								   copyDest->destinationShardFullyQualifiedName),
+							errdetail("failed to send %d bytes %s on node %u",
+									  copyOutState->fe_msgbuf->len,
+									  copyOutState->fe_msgbuf->data,
+									  copyDest->destinationNodeId)));
 		}
 	}
 
@@ -164,8 +173,10 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	return true;
 }
 
+
 static void
-ShardCopyDestReceiverStartup(DestReceiver *dest, int operation, TupleDesc inputTupleDescriptor)
+ShardCopyDestReceiverStartup(DestReceiver *dest, int operation, TupleDesc
+							 inputTupleDescriptor)
 {
 	ShardCopyDestReceiver *copyDest = (ShardCopyDestReceiver *) dest;
 	copyDest->tupleDescriptor = inputTupleDescriptor;
@@ -183,16 +194,17 @@ ShardCopyDestReceiverStartup(DestReceiver *dest, int operation, TupleDesc inputT
 	copyOutState->delim = (char *) delimiterCharacter;
 	copyOutState->rowcontext = GetPerTupleMemoryContext(copyDest->executorState);
 	copyDest->columnOutputFunctions = ColumnOutputFunctions(inputTupleDescriptor,
-															  copyOutState->binary);
+															copyOutState->binary);
 	copyDest->copyOutState = copyOutState;
 }
+
 
 static void
 ShardCopyDestReceiverShutdown(DestReceiver *dest)
 {
 	ShardCopyDestReceiver *copyDest = (ShardCopyDestReceiver *) dest;
 
-	if(copyDest->useLocalCopy)
+	if (copyDest->useLocalCopy)
 	{
 		if (copyDest->copyOutState != NULL &&
 			copyDest->copyOutState->fe_msgbuf->len > 0)
@@ -200,10 +212,10 @@ ShardCopyDestReceiverShutdown(DestReceiver *dest)
 			LocalCopyToShard(copyDest, copyDest->copyOutState);
 		}
 	}
-	else if(copyDest->connection != NULL)
+	else if (copyDest->connection != NULL)
 	{
 		resetStringInfo(copyDest->copyOutState->fe_msgbuf);
-		if(copyDest->copyOutState->binary)
+		if (copyDest->copyOutState->binary)
 		{
 			AppendCopyBinaryFooters(copyDest->copyOutState);
 		}
@@ -217,7 +229,8 @@ ShardCopyDestReceiverShutdown(DestReceiver *dest)
 		}
 
 		/* check whether there were any COPY errors */
-		PGresult *result = GetRemoteCommandResult(copyDest->connection, true /* raiseInterrupts */);
+		PGresult *result = GetRemoteCommandResult(copyDest->connection,
+												  true /* raiseInterrupts */);
 		if (PQresultStatus(result) != PGRES_COMMAND_OK)
 		{
 			ReportCopyError(copyDest->connection, result);
@@ -229,10 +242,11 @@ ShardCopyDestReceiverShutdown(DestReceiver *dest)
 	}
 }
 
-DestReceiver * CreateShardCopyDestReceiver(
-	EState *executorState,
-	char* destinationShardFullyQualifiedName,
-	uint32_t destinationNodeId)
+
+DestReceiver *
+CreateShardCopyDestReceiver(EState *executorState,
+							char *destinationShardFullyQualifiedName,
+							uint32_t destinationNodeId)
 {
 	ShardCopyDestReceiver *copyDest = (ShardCopyDestReceiver *) palloc0(
 		sizeof(ShardCopyDestReceiver));
@@ -254,6 +268,7 @@ DestReceiver * CreateShardCopyDestReceiver(
 	return (DestReceiver *) copyDest;
 }
 
+
 static void
 ShardCopyDestReceiverDestroy(DestReceiver *dest)
 {
@@ -272,6 +287,7 @@ ShardCopyDestReceiverDestroy(DestReceiver *dest)
 	pfree(copyDest);
 }
 
+
 /*
  * ConstructCopyStatement constructs the text of a COPY statement
  * for copying into a result table
@@ -279,11 +295,11 @@ ShardCopyDestReceiverDestroy(DestReceiver *dest)
 static StringInfo
 ConstructCopyStatement(char *destinationShardFullyQualifiedName, bool useBinaryFormat)
 {
-	StringInfo command  = makeStringInfo();
+	StringInfo command = makeStringInfo();
 	appendStringInfo(command, "COPY %s FROM STDIN",
-		destinationShardFullyQualifiedName);
+					 destinationShardFullyQualifiedName);
 
-	if(useBinaryFormat)
+	if (useBinaryFormat)
 	{
 		appendStringInfo(command, "WITH (format binary);");
 	}
@@ -295,7 +311,9 @@ ConstructCopyStatement(char *destinationShardFullyQualifiedName, bool useBinaryF
 	return command;
 }
 
-static void WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDest)
+
+static void
+WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDest)
 {
 	CopyOutState localCopyOutState = copyDest->copyOutState;
 
@@ -306,7 +324,8 @@ static void WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDes
 	SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
 
 	bool isBinaryCopy = localCopyOutState->binary;
-	bool shouldAddBinaryHeaders = (isBinaryCopy && localCopyOutState->fe_msgbuf->len == 0);
+	bool shouldAddBinaryHeaders = (isBinaryCopy && localCopyOutState->fe_msgbuf->len ==
+								   0);
 	if (shouldAddBinaryHeaders)
 	{
 		AppendCopyBinaryHeaders(localCopyOutState);
@@ -320,6 +339,7 @@ static void WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDes
 					  localCopyOutState, columnOutputFunctions,
 					  NULL /* columnCoercionPaths */);
 }
+
 
 /*
  * LocalCopyToShard finishes local copy for the given destination shard.
@@ -342,10 +362,13 @@ LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState localCopyOutState
 
 	char *destinationShardSchemaName = NULL;
 	char *destinationShardRelationName = NULL;
-	DeconstructQualifiedName(list_make1(copyDest->destinationShardFullyQualifiedName), &destinationShardSchemaName, &destinationShardRelationName);
+	DeconstructQualifiedName(list_make1(copyDest->destinationShardFullyQualifiedName),
+							 &destinationShardSchemaName, &destinationShardRelationName);
 
-	Oid destinationSchemaOid = get_namespace_oid(destinationShardSchemaName, false /* missing_ok */);
-	Oid destinationShardOid = get_relname_relid(destinationShardRelationName, destinationSchemaOid);
+	Oid destinationSchemaOid = get_namespace_oid(destinationShardSchemaName,
+												 false /* missing_ok */);
+	Oid destinationShardOid = get_relname_relid(destinationShardRelationName,
+												destinationSchemaOid);
 
 	DefElem *binaryFormatOption = NULL;
 	if (isBinaryCopy)
@@ -356,7 +379,8 @@ LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState localCopyOutState
 	Relation shard = table_open(destinationShardOid, RowExclusiveLock);
 	ParseState *pState = make_parsestate(NULL /* parentParseState */);
 	(void) addRangeTableEntryForRelation(pState, shard, AccessShareLock,
-										 NULL /* alias */, false /* inh */, false /* inFromCl */);
+										 NULL /* alias */, false /* inh */,
+										 false /* inFromCl */);
 	CopyFromState cstate = BeginCopyFrom_compat(pState, shard,
 												NULL /* whereClause */,
 												NULL /* fileName */,
@@ -372,6 +396,7 @@ LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState localCopyOutState
 	table_close(shard, NoLock);
 	free_parsestate(pState);
 }
+
 
 /*
  * ReadFromLocalBufferCallback is the copy callback.
@@ -393,4 +418,3 @@ ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead)
 
 	return bytesRead;
 }
-

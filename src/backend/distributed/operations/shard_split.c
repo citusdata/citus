@@ -38,13 +38,13 @@ static void ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 											ShardInterval *shardIntervalToSplit,
 											List *shardSplitPointsList,
 											List *nodeIdsForPlacementList);
-static void CreateSplitShardsForShardGroup(WorkerNode* sourceShardNode,
-											List *sourceColocatedShardIntervalList,
-											List *shardGroupSplitIntervalListList,
-											List *workersForPlacementList,
-											List **splitOffShardList);
+static void CreateSplitShardsForShardGroup(WorkerNode *sourceShardNode,
+										   List *sourceColocatedShardIntervalList,
+										   List *shardGroupSplitIntervalListList,
+										   List *workersForPlacementList,
+										   List **splitOffShardList);
 static void CreateObjectOnPlacement(List *objectCreationCommandList,
-								   WorkerNode *workerNode);
+									WorkerNode *workerNode);
 static List *    CreateSplitIntervalsForShardGroup(List *sourceColocatedShardList,
 												   List *splitPointsForShard);
 static void CreateSplitIntervalsForShard(ShardInterval *sourceShard,
@@ -54,8 +54,13 @@ static void BlockingShardSplit(SplitOperation splitOperation,
 							   ShardInterval *shardIntervalToSplit,
 							   List *shardSplitPointsList,
 							   List *workersForPlacementList);
-static void DoSplitCopy(WorkerNode* sourceShardNode, List *sourceColocatedShardIntervalList, List *shardGroupSplitIntervalListList, List *workersForPlacementList);
-static StringInfo CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval, List* splitChildrenShardIntervalList, List* workersForPlacementList);
+static void DoSplitCopy(WorkerNode *sourceShardNode,
+						List *sourceColocatedShardIntervalList,
+						List *shardGroupSplitIntervalListList,
+						List *workersForPlacementList);
+static StringInfo CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
+										 List *splitChildrenShardIntervalList,
+										 List *workersForPlacementList);
 
 /* Customize error message strings based on operation type */
 static const char *const SplitOperationName[] =
@@ -406,7 +411,7 @@ BlockingShardSplit(SplitOperation splitOperation,
 	/* Only single placement allowed (already validated by caller) */
 	List *sourcePlacementList = ActiveShardPlacementList(shardIntervalToSplit->shardId);
 	Assert(sourcePlacementList->length == 1);
-	WorkerNode* sourceShardToCopyNode = (WorkerNode *) linitial(sourcePlacementList);
+	WorkerNode *sourceShardToCopyNode = (WorkerNode *) linitial(sourcePlacementList);
 
 	/* Physically create split children and perform split copy */
 	List *splitOffShardList = NULL;
@@ -437,9 +442,10 @@ BlockingShardSplit(SplitOperation splitOperation,
 	CitusInvalidateRelcacheByRelid(DistShardRelationId());
 }
 
+
 /* Create ShardGroup split children on a list of corresponding workers. */
 static void
-CreateSplitShardsForShardGroup(WorkerNode* sourceShardNode,
+CreateSplitShardsForShardGroup(WorkerNode *sourceShardNode,
 							   List *sourceColocatedShardIntervalList,
 							   List *shardGroupSplitIntervalListList,
 							   List *workersForPlacementList,
@@ -471,9 +477,10 @@ CreateSplitShardsForShardGroup(WorkerNode* sourceShardNode,
 	}
 
 	/* Perform Split Copy */
-	DoSplitCopy(sourceShardNode, sourceColocatedShardIntervalList, shardGroupSplitIntervalListList, workersForPlacementList);
+	DoSplitCopy(sourceShardNode, sourceColocatedShardIntervalList,
+				shardGroupSplitIntervalListList, workersForPlacementList);
 
-	// TODO(niupre) : Can we use Adaptive execution for creating multiple indexes parallely?
+	/* TODO(niupre) : Can we use Adaptive execution for creating multiple indexes parallely? */
 	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
 		ShardInterval *shardInterval = NULL;
@@ -494,6 +501,7 @@ CreateSplitShardsForShardGroup(WorkerNode* sourceShardNode,
 	}
 }
 
+
 /*
  * Perform Split Copy from source shard(s) to split children.
  * 'sourceShardNode'					: Source shard worker node.
@@ -502,7 +510,8 @@ CreateSplitShardsForShardGroup(WorkerNode* sourceShardNode,
  * 'workersForPlacementList'			: List of workers for split children placement.
  */
 static void
-DoSplitCopy(WorkerNode* sourceShardNode, List *sourceColocatedShardIntervalList, List *shardGroupSplitIntervalListList, List *destinationWorkerNodesList)
+DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
+			List *shardGroupSplitIntervalListList, List *destinationWorkerNodesList)
 {
 	ShardInterval *sourceShardIntervalToCopy = NULL;
 	List *splitShardIntervalList = NULL;
@@ -510,9 +519,11 @@ DoSplitCopy(WorkerNode* sourceShardNode, List *sourceColocatedShardIntervalList,
 	int taskId = 0;
 	List *splitCopyTaskList = NULL;
 	forboth_ptr(sourceShardIntervalToCopy, sourceColocatedShardIntervalList,
-		splitShardIntervalList, shardGroupSplitIntervalListList)
+				splitShardIntervalList, shardGroupSplitIntervalListList)
 	{
-		StringInfo splitCopyUdfCommand = CreateSplitCopyCommand(sourceShardIntervalToCopy, splitShardIntervalList, destinationWorkerNodesList);
+		StringInfo splitCopyUdfCommand = CreateSplitCopyCommand(sourceShardIntervalToCopy,
+																splitShardIntervalList,
+																destinationWorkerNodesList);
 
 		Task *task = CreateBasicTask(
 			sourceShardIntervalToCopy->shardId, /* jobId */
@@ -529,8 +540,10 @@ DoSplitCopy(WorkerNode* sourceShardNode, List *sourceColocatedShardIntervalList,
 		taskId++;
 	}
 
-	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, splitCopyTaskList, MaxAdaptiveExecutorPoolSize, NULL /* jobIdList */);
+	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, splitCopyTaskList,
+									  MaxAdaptiveExecutorPoolSize, NULL /* jobIdList */);
 }
+
 
 /*
  * Create Copy command for a given shard source shard to be copied to corresponding split children.
@@ -539,7 +552,9 @@ DoSplitCopy(WorkerNode* sourceShardNode, List *sourceColocatedShardIntervalList,
  * 'destinationWorkerNodesList' : List of workers for split children placement.
  */
 static StringInfo
-CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval, List* splitChildrenShardIntervalList, List* destinationWorkerNodesList)
+CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
+					   List *splitChildrenShardIntervalList,
+					   List *destinationWorkerNodesList)
 {
 	StringInfo splitCopyInfoArray = makeStringInfo();
 	appendStringInfo(splitCopyInfoArray, "ARRAY[");
@@ -547,19 +562,21 @@ CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval, List* splitChild
 	ShardInterval *splitChildShardInterval = NULL;
 	bool addComma = false;
 	WorkerNode *destinationWorkerNode = NULL;
-	forboth_ptr(splitChildShardInterval, splitChildrenShardIntervalList, destinationWorkerNode, destinationWorkerNodesList)
+	forboth_ptr(splitChildShardInterval, splitChildrenShardIntervalList,
+				destinationWorkerNode, destinationWorkerNodesList)
 	{
-		if(addComma)
+		if (addComma)
 		{
 			appendStringInfo(splitCopyInfoArray, ",");
 		}
 
 		StringInfo splitCopyInfoRow = makeStringInfo();
-		appendStringInfo(splitCopyInfoRow, "ROW(%lu, %lu, %lu, %u)::citus.split_copy_info",
-			splitChildShardInterval->shardId,
-			splitChildShardInterval->minValue,
-			splitChildShardInterval->maxValue,
-			destinationWorkerNode->nodeId);
+		appendStringInfo(splitCopyInfoRow,
+						 "ROW(%lu, %lu, %lu, %u)::citus.split_copy_info",
+						 splitChildShardInterval->shardId,
+						 splitChildShardInterval->minValue,
+						 splitChildShardInterval->maxValue,
+						 destinationWorkerNode->nodeId);
 		appendStringInfo(splitCopyInfoArray, "%s", splitCopyInfoRow->data);
 
 		addComma = true;
@@ -568,18 +585,19 @@ CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval, List* splitChild
 
 	StringInfo splitCopyUdf = makeStringInfo();
 	appendStringInfo(splitCopyUdf, "SELECT worker_split_copy(%lu, %s);",
-		sourceShardSplitInterval->shardId,
-		splitCopyInfoArray->data);
+					 sourceShardSplitInterval->shardId,
+					 splitCopyInfoArray->data);
 
 	return splitCopyUdf;
 }
+
 
 /*
  * Create an object (shard/index) on a worker node.
  */
 static void
 CreateObjectOnPlacement(List *objectCreationCommandList,
-					   WorkerNode *workerPlacementNode)
+						WorkerNode *workerPlacementNode)
 {
 	char *currentUser = CurrentUserName();
 	SendCommandListToWorkerOutsideTransaction(workerPlacementNode->workerName,
@@ -587,6 +605,7 @@ CreateObjectOnPlacement(List *objectCreationCommandList,
 											  currentUser,
 											  objectCreationCommandList);
 }
+
 
 /*
  * Create split children intervals for a shardgroup given list of split points.
@@ -657,6 +676,7 @@ CreateSplitIntervalsForShard(ShardInterval *sourceShard,
 	}
 }
 
+
 /*
  * InsertSplitOffShardMetadata inserts new shard and shard placement data into
  * catolog tables both the coordinator and mx nodes.
@@ -709,6 +729,7 @@ InsertSplitOffShardMetadata(List *splitOffShardList, List *sourcePlacementList)
 		SendCommandToWorkersWithMetadata(command);
 	}
 }
+
 
 /*
  * DropShardList drops shards and their metadata from both the coordinator and
@@ -774,6 +795,7 @@ DropShardList(List *shardIntervalList)
 		DeleteShardRow(oldShardId);
 	}
 }
+
 
 /*
  * CreateForeignConstraints creates the foreign constraints on the newly
@@ -846,6 +868,7 @@ CreateForeignConstraints(List *splitOffShardList, List *sourcePlacementList)
 		}
 	}
 }
+
 
 /*
  * ExecuteCommandListOnPlacements runs the given command list on the nodes of

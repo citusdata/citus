@@ -276,6 +276,7 @@ SplitShardByValue(ShardInterval *sourceShard, Datum distributionValueDatum)
 	return isolatedShardId;
 }
 
+
 /*
  * CreateSplitOffShards gets a shard and a hashed value to pick the split point.
  * First, it creates templates to create new shards. Then, for every colocated

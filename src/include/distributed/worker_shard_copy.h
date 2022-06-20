@@ -14,9 +14,8 @@
 
 struct FullRelationName;
 
-extern DestReceiver * CreateShardCopyDestReceiver(
-	EState *executorState,
-	char* destinationShardFullyQualifiedName,
-	uint32_t destinationNodeId);
+extern DestReceiver * CreateShardCopyDestReceiver(EState *executorState,
+												  char *destinationShardFullyQualifiedName,
+												  uint32_t destinationNodeId);
 
 #endif /* WORKER_SHARD_COPY_H_ */
