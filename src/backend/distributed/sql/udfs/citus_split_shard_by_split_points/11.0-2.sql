@@ -18,5 +18,5 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_split_shard_by_split_points(
 RETURNS void
 LANGUAGE C STRICT
 AS 'MODULE_PATHNAME', $$citus_split_shard_by_split_points$$;
-COMMENT ON FUNCTION pg_catalog.citus_split_shard_by_split_points(shard_id bigint, split_points integer[], nodeIds integer[], citus.split_mode)
+COMMENT ON FUNCTION pg_catalog.citus_split_shard_by_split_points(shard_id bigint, split_points text[], nodeIds integer[], citus.split_mode)
     IS 'split a shard using split mode.';

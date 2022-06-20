@@ -73,10 +73,6 @@ static const char *const SplitTargetName[] =
 	[SHARD_SPLIT_API] = "shard",
 	[ISOLATE_TENANT_TO_NEW_SHARD] = "tenant",
 };
-static const char *const SplitOperationType[] =
-{
-	[BLOCKING_SPLIT] = "blocking"
-};
 
 /* Function definitions */
 
