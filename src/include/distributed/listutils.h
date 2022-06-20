@@ -97,7 +97,6 @@ typedef struct ListCellAndListWrapper
 		 var2 ## CellDoNotUse = lnext_compat(l2, var2 ## CellDoNotUse) \
 		 )
 
-
 /*
  * forboth_ptr_oid -
  *	  a convenience macro which loops through two lists at the same time. The

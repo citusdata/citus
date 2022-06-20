@@ -56,6 +56,9 @@ typedef struct ShardCopyDestReceiver
 	/* local copy if destination shard in same node */
 	bool useLocalCopy;
 
+	/* EState for per-tuple memory allocation */
+	EState *executorState;
+
 	/*
 	 * Connection for destination shard (NULL if useLocalCopy is true)
 	*/
@@ -70,7 +73,7 @@ static void ShardCopyDestReceiverShutdown(DestReceiver *destReceiver);
 static void ShardCopyDestReceiverDestroy(DestReceiver *destReceiver);
 static bool CanUseLocalCopy(uint64 destinationNodeId);
 static StringInfo ConstructCopyStatement(char* destinationShardFullyQualifiedName, bool useBinaryFormat);
-static void WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDest, CopyOutState localCopyOutState);
+static void WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDest);
 static bool ShouldSendCopyNow(StringInfo buffer);
 static int  ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead);
 static void LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState localCopyOutState);
@@ -96,9 +99,14 @@ static bool
 ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 {
 	ShardCopyDestReceiver *copyDest = (ShardCopyDestReceiver *) dest;
-	CopyOutState copyOutState = copyDest->copyOutState;
-	TupleDesc tupleDescriptor = copyDest->tupleDescriptor;
-	FmgrInfo *columnOutputFunctions = copyDest->columnOutputFunctions;
+
+	/*
+	 * Switch to a per-tuple memory memory context. When used in
+	 * context of Split Copy, this is a no-op as switch is already done.
+	 */
+	EState *executorState = copyDest->executorState;
+	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
+	MemoryContext oldContext = MemoryContextSwitchTo(executorTupleContext);
 
 	/* Create connection lazily */
 	if(copyDest->tuplesSent == 0 && (!copyDest->useLocalCopy))
@@ -110,11 +118,11 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 															workerNode->workerName,
 															workerNode->workerPort,
 															currentUser,
-															NULL);
+															NULL /* database (current) */);
 		ClaimConnectionExclusively(copyDest->connection);
 
 		StringInfo copyStatement = ConstructCopyStatement(copyDest->destinationShardFullyQualifiedName,
-			copyDest->destinationNodeId);
+			copyDest->copyOutState->binary);
 		ExecuteCriticalRemoteCommand(copyDest->connection, copyStatement->data);
 	}
 
@@ -122,9 +130,10 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	Datum *columnValues = slot->tts_values;
 	bool *columnNulls = slot->tts_isnull;
 
+	CopyOutState copyOutState = copyDest->copyOutState;
 	if(copyDest->useLocalCopy)
 	{
-		WriteLocalTuple(slot, copyDest, copyOutState);
+		WriteLocalTuple(slot, copyDest);
 		if (ShouldSendCopyNow(copyOutState->fe_msgbuf))
 		{
 			LocalCopyToShard(copyDest, copyOutState);
@@ -132,18 +141,24 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	}
 	else
 	{
+		FmgrInfo *columnOutputFunctions = copyDest->columnOutputFunctions;
+
 		resetStringInfo(copyOutState->fe_msgbuf);
-		AppendCopyRowData(columnValues, columnNulls, tupleDescriptor,
+		AppendCopyRowData(columnValues, columnNulls, copyDest->tupleDescriptor,
 							copyOutState, columnOutputFunctions, NULL /* columnCoercionPaths */);
 		if (!PutRemoteCopyData(copyDest->connection, copyOutState->fe_msgbuf->data, copyOutState->fe_msgbuf->len))
 		{
 			ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
 						errmsg("Failed to COPY to shard %s,",
 							   copyDest->destinationShardFullyQualifiedName),
-						errdetail("failed to send %d bytes %s", copyOutState->fe_msgbuf->len,
-								  copyOutState->fe_msgbuf->data)));
+						errdetail("failed to send %d bytes %s on node %u", copyOutState->fe_msgbuf->len,
+								  copyOutState->fe_msgbuf->data,
+								  copyDest->destinationNodeId)));
 		}
 	}
+
+	MemoryContextSwitchTo(oldContext);
+	ResetPerTupleExprContext(executorState);
 
 	copyDest->tuplesSent++;
 	return true;
@@ -163,16 +178,13 @@ ShardCopyDestReceiverStartup(DestReceiver *dest, int operation, TupleDesc inputT
 	CopyOutState copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
 	copyOutState->binary = CanUseBinaryCopyFormat(inputTupleDescriptor);
 	copyOutState->null_print = (char *) nullPrintCharacter;
+	copyOutState->null_print_client = (char *) nullPrintCharacter;
 	copyOutState->fe_msgbuf = makeStringInfo();
 	copyOutState->delim = (char *) delimiterCharacter;
-	// not used for shard copy
-	copyOutState->null_print_client = (char *) nullPrintCharacter;
-	copyOutState->rowcontext = NULL;
-	copyDest->copyOutState = copyOutState;
-
-	// TODO(niupre): Explain why this is needed.
+	copyOutState->rowcontext = GetPerTupleMemoryContext(copyDest->executorState);
 	copyDest->columnOutputFunctions = ColumnOutputFunctions(inputTupleDescriptor,
 															  copyOutState->binary);
+	copyDest->copyOutState = copyOutState;
 }
 
 static void
@@ -217,6 +229,31 @@ ShardCopyDestReceiverShutdown(DestReceiver *dest)
 	}
 }
 
+DestReceiver * CreateShardCopyDestReceiver(
+	EState *executorState,
+	char* destinationShardFullyQualifiedName,
+	uint32_t destinationNodeId)
+{
+	ShardCopyDestReceiver *copyDest = (ShardCopyDestReceiver *) palloc0(
+		sizeof(ShardCopyDestReceiver));
+
+	/* set up the DestReceiver function pointers */
+	copyDest->pub.receiveSlot = ShardCopyDestReceiverReceive;
+	copyDest->pub.rStartup = ShardCopyDestReceiverStartup;
+	copyDest->pub.rShutdown = ShardCopyDestReceiverShutdown;
+	copyDest->pub.rDestroy = ShardCopyDestReceiverDestroy;
+	copyDest->pub.mydest = DestCopyOut;
+	copyDest->executorState = executorState;
+
+	copyDest->destinationNodeId = destinationNodeId;
+	copyDest->destinationShardFullyQualifiedName = destinationShardFullyQualifiedName;
+	copyDest->tuplesSent = 0;
+	copyDest->connection = NULL;
+	copyDest->useLocalCopy = CanUseLocalCopy(destinationNodeId);
+
+	return (DestReceiver *) copyDest;
+}
+
 static void
 ShardCopyDestReceiverDestroy(DestReceiver *dest)
 {
@@ -248,37 +285,20 @@ ConstructCopyStatement(char *destinationShardFullyQualifiedName, bool useBinaryF
 
 	if(useBinaryFormat)
 	{
-		appendStringInfo(command, "WITH (format binary)");
+		appendStringInfo(command, "WITH (format binary);");
+	}
+	else
+	{
+		appendStringInfo(command, ";");
 	}
 
 	return command;
 }
 
-DestReceiver * CreateShardCopyDestReceiver(
-	char* destinationShardFullyQualifiedName,
-	uint32_t destinationNodeId)
+static void WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDest)
 {
-	ShardCopyDestReceiver *copyDest = (ShardCopyDestReceiver *) palloc0(
-		sizeof(ShardCopyDestReceiver));
+	CopyOutState localCopyOutState = copyDest->copyOutState;
 
-	/* set up the DestReceiver function pointers */
-	copyDest->pub.receiveSlot = ShardCopyDestReceiverReceive;
-	copyDest->pub.rStartup = ShardCopyDestReceiverStartup;
-	copyDest->pub.rShutdown = ShardCopyDestReceiverShutdown;
-	copyDest->pub.rDestroy = ShardCopyDestReceiverDestroy;
-	copyDest->pub.mydest = DestCopyOut;
-
-	copyDest->destinationNodeId = destinationNodeId;
-	copyDest->destinationShardFullyQualifiedName = destinationShardFullyQualifiedName;
-	copyDest->tuplesSent = 0;
-	copyDest->connection = NULL;
-	copyDest->useLocalCopy = CanUseLocalCopy(destinationNodeId);
-
-	return (DestReceiver *) copyDest;
-}
-
-static void WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDest, CopyOutState localCopyOutState)
-{
 	/*
 	 * Since we are doing a local copy, the following statements should
 	 * use local execution to see the changes

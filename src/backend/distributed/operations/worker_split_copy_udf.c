@@ -15,7 +15,6 @@
 #include "distributed/worker_split_copy.h"
 #include "distributed/citus_ruleutils.h"
 
-PG_FUNCTION_INFO_V1(worker_split_shardgroup_copy);
 PG_FUNCTION_INFO_V1(worker_split_copy);
 
 static void
@@ -48,7 +47,9 @@ worker_split_copy(PG_FUNCTION_ARGS)
 
 		splitCopyInfoList = lappend(splitCopyInfoList, splitCopyInfo);
 	}
-	DestReceiver *splitCopyDestReceiver = CreateSplitCopyDestReceiver(shardIdToSplitCopy, splitCopyInfoList);
+
+	EState *executor = CreateExecutorState();
+	DestReceiver *splitCopyDestReceiver = CreateSplitCopyDestReceiver(executor, shardIdToSplitCopy, splitCopyInfoList);
 
 	StringInfo selectShardQueryForCopy = makeStringInfo();
 	appendStringInfo(selectShardQueryForCopy,
@@ -57,6 +58,8 @@ worker_split_copy(PG_FUNCTION_ARGS)
 
 	ParamListInfo params = NULL;
 	ExecuteQueryStringIntoDestReceiver(selectShardQueryForCopy->data, params, (DestReceiver *) splitCopyDestReceiver);
+
+	FreeExecutorState(executor);
 
 	PG_RETURN_VOID();
 }

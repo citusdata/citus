@@ -473,7 +473,7 @@ CreateSplitShardsForShardGroup(WorkerNode* sourceShardNode,
 	/* Perform Split Copy */
 	DoSplitCopy(sourceShardNode, sourceColocatedShardIntervalList, shardGroupSplitIntervalListList, workersForPlacementList);
 
-	// TODO(niupre) : Use Adaptive execution for creating multiple indexes parallely.
+	// TODO(niupre) : Can we use Adaptive execution for creating multiple indexes parallely?
 	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
 		ShardInterval *shardInterval = NULL;

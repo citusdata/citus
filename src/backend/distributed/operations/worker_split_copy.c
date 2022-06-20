@@ -36,8 +36,8 @@ typedef struct SplitCopyDestReceiver
 	/* Split factor */
 	uint splitFactor;
 
-	/* Source shard name */
-	char *sourceShardName;
+	/* EState for per-tuple memory allocation */
+	EState *executorState;
 
 	/* Source shard Oid */
 	Oid sourceShardRelationOid;
@@ -51,7 +51,7 @@ static bool SplitCopyDestReceiverReceive(TupleTableSlot *slot,
 static void SplitCopyDestReceiverShutdown(DestReceiver *dest);
 static void SplitCopyDestReceiverDestroy(DestReceiver *copyDest);
 
-DestReceiver * CreateSplitCopyDestReceiver(uint64 sourceShardIdToCopy, List* splitCopyInfoList)
+DestReceiver * CreateSplitCopyDestReceiver(EState *executorState, uint64 sourceShardIdToCopy, List* splitCopyInfoList)
 {
 	SplitCopyDestReceiver *splitCopyDest =
 		palloc0(sizeof(SplitCopyDestReceiver));
@@ -62,6 +62,7 @@ DestReceiver * CreateSplitCopyDestReceiver(uint64 sourceShardIdToCopy, List* spl
 	splitCopyDest->pub.rShutdown = SplitCopyDestReceiverShutdown;
 	splitCopyDest->pub.rDestroy = SplitCopyDestReceiverDestroy;
 
+	splitCopyDest->executorState = executorState;
 	splitCopyDest->splitFactor = splitCopyInfoList->length;
 	ShardInterval *shardIntervalToSplitCopy = LoadShardInterval(sourceShardIdToCopy);
 	splitCopyDest->sourceShardRelationOid = shardIntervalToSplitCopy->relationId;
@@ -83,6 +84,7 @@ DestReceiver * CreateSplitCopyDestReceiver(uint64 sourceShardIdToCopy, List* spl
 			quote_qualified_identifier(destinationShardSchemaName, destinationShardNameCopy);
 
 		DestReceiver *shardCopyDest = CreateShardCopyDestReceiver(
+			executorState,
 			destinationShardFullyQualifiedName,
 			splitCopyInfo->destinationShardNodeId);
 
@@ -99,24 +101,29 @@ DestReceiver * CreateSplitCopyDestReceiver(uint64 sourceShardIdToCopy, List* spl
 
 static void SplitCopyDestReceiverStartup(DestReceiver *dest, int operation, TupleDesc inputTupleDescriptor)
 {
-	SplitCopyDestReceiver *self = (SplitCopyDestReceiver *) dest;
+	SplitCopyDestReceiver *copyDest = (SplitCopyDestReceiver *) dest;
 
-	for (int index = 0; index < self->splitFactor; index++)
+	for (int index = 0; index < copyDest->splitFactor; index++)
 	{
-		DestReceiver *shardCopyDest = self->shardCopyDestReceiverArray[index];
+		DestReceiver *shardCopyDest = copyDest->shardCopyDestReceiverArray[index];
 		shardCopyDest->rStartup(shardCopyDest, operation, inputTupleDescriptor);
 	}
 }
 
 static bool SplitCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 {
-	SplitCopyDestReceiver *self = (SplitCopyDestReceiver *) dest;
+	SplitCopyDestReceiver *copyDest = (SplitCopyDestReceiver *) dest;
 
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(self->sourceShardRelationOid);
+	/* Switch to a per-tuple memory memory context */
+	EState *executorState = copyDest->executorState;
+	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
+	MemoryContext oldContext = MemoryContextSwitchTo(executorTupleContext);
+
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(copyDest->sourceShardRelationOid);
 	if (cacheEntry == NULL)
 	{
 		ereport(ERROR, errmsg("Could not find shard %s for split copy.",
-							  self->sourceShardName));
+							  get_rel_name(copyDest->sourceShardRelationOid)));
 	}
 
 	/* Partition Column Metadata on source shard */
@@ -131,48 +138,51 @@ static bool SplitCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *des
 	if (columnNulls[partitionColumnIndex])
 	{
 		ereport(ERROR, errmsg("Found null partition value for shard %s during split copy.",
-							   self->sourceShardName));
+							   get_rel_name(copyDest->sourceShardRelationOid)));
 	}
 
 	Datum hashedValueDatum = FunctionCall1(hashFunction, columnValues[partitionColumnIndex]);
 	int32_t hashedValue = DatumGetInt32(hashedValueDatum);
 
-	for(int index = 0 ; index < self->splitFactor; index++)
+	for(int index = 0 ; index < copyDest->splitFactor; index++)
 	{
-		SplitCopyInfo *splitCopyInfo = self->splitCopyInfoArray[index];
+		SplitCopyInfo *splitCopyInfo = copyDest->splitCopyInfoArray[index];
 
 		if (splitCopyInfo->destinationShardMinHashValue <= hashedValue &&
 			splitCopyInfo->destinationShardMaxHashValue >= hashedValue)
 		{
-			DestReceiver *shardCopyDestReceiver = self->shardCopyDestReceiverArray[index];
+			DestReceiver *shardCopyDestReceiver = copyDest->shardCopyDestReceiverArray[index];
 			shardCopyDestReceiver->receiveSlot(slot, shardCopyDestReceiver);
 		}
 	}
+
+	MemoryContextSwitchTo(oldContext);
+	ResetPerTupleExprContext(executorState);
 
 	return true;
 }
 
 static void SplitCopyDestReceiverShutdown(DestReceiver *dest)
 {
-	SplitCopyDestReceiver *self = (SplitCopyDestReceiver *) dest;
+	SplitCopyDestReceiver *copyDest = (SplitCopyDestReceiver *) dest;
 
-	for (int index = 0; index < self->splitFactor; index++)
+	for (int index = 0; index < copyDest->splitFactor; index++)
 	{
-		DestReceiver *shardCopyDest = self->shardCopyDestReceiverArray[index];
+		DestReceiver *shardCopyDest = copyDest->shardCopyDestReceiverArray[index];
 		shardCopyDest->rShutdown(shardCopyDest);
 	}
 }
 
 static void SplitCopyDestReceiverDestroy(DestReceiver *dest)
 {
-	SplitCopyDestReceiver *self = (SplitCopyDestReceiver *) dest;
+	SplitCopyDestReceiver *copyDest = (SplitCopyDestReceiver *) dest;
 
-	for (int index = 0; index < self->splitFactor; index++)
+	for (int index = 0; index < copyDest->splitFactor; index++)
 	{
-		DestReceiver *shardCopyDest = self->shardCopyDestReceiverArray[index];
+		DestReceiver *shardCopyDest = copyDest->shardCopyDestReceiverArray[index];
 		shardCopyDest->rDestroy(shardCopyDest);
 
 		pfree(shardCopyDest);
-		pfree(self->splitCopyInfoArray[index]);
+		pfree(copyDest->splitCopyInfoArray[index]);
 	}
 }
