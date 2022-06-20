@@ -15,6 +15,16 @@
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shardsplit_shared_memory.h"
 #include "distributed/citus_safe_lib.h"
+#include "storage/ipc.h"
+#include "utils/memutils.h"
+
+const char *sharedMemoryNameForHandleManagement =
+	"SHARED_MEMORY_FOR_SPLIT_SHARD_HANDLE_MANAGEMENT";
+
+static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
+
+static
+void ShardSplitShmemInit(void);
 
 /* Function declarations */
 static ShardSplitInfoSMHeader * AllocateSharedMemoryForShardSplitInfo(int
@@ -23,8 +33,6 @@ static ShardSplitInfoSMHeader * AllocateSharedMemoryForShardSplitInfo(int
 																	  shardSplitInfoSize,
 																	  dsm_handle *
 																	  dsmHandle);
-
-static void * ShardSplitInfoSMData(ShardSplitInfoSMHeader *shardSplitInfoSMHeader);
 
 static ShardSplitInfoSMHeader * GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle
 																	   dsmHandle);
@@ -64,32 +72,24 @@ GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle dsmHandle)
 
 
 /*
- * GetShardSplitInfoSMArrayForSlot returns pointer to the array of
- * 'ShardSplitInfo' struct stored in the shared memory segment.
+ * GetShardSplitInfoSMHeader returns pointer to the header of shared memory segment.
  */
-ShardSplitInfo *
-GetShardSplitInfoSMArrayForSlot(char *slotName, int *shardSplitInfoCount)
+ShardSplitInfoSMHeader *
+GetShardSplitInfoSMHeader(char *slotName)
 {
-	if (slotName == NULL ||
-		shardSplitInfoCount == NULL)
+	if (slotName == NULL)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-				 errmsg("Expected slot name and array size arguments")));
+				 errmsg("Expected slot name but found NULL")));
 	}
 
-	dsm_handle dsmHandle;
-	uint32_t nodeId = 0;
-	decode_replication_slot(slotName, &nodeId, &dsmHandle);
+	dsm_handle dsmHandle = GetSharedMemoryHandle();
 
 	ShardSplitInfoSMHeader *shardSplitInfoSMHeader =
 		GetShardSplitInfoSMHeaderFromDSMHandle(dsmHandle);
-	*shardSplitInfoCount = shardSplitInfoSMHeader->shardSplitInfoCount;
 
-	ShardSplitInfo *shardSplitInfoArray =
-		(ShardSplitInfo *) ShardSplitInfoSMData(shardSplitInfoSMHeader);
-
-	return shardSplitInfoArray;
+	return shardSplitInfoSMHeader;
 }
 
 
@@ -114,7 +114,8 @@ AllocateSharedMemoryForShardSplitInfo(int shardSplitInfoCount, Size shardSplitIn
 						"positive values")));
 	}
 
-	Size totalSize = sizeof(ShardSplitInfoSMHeader) + shardSplitInfoCount *
+	Size totalSize = offsetof(ShardSplitInfoSMHeader, splitInfoArray) +
+					 shardSplitInfoCount *
 					 shardSplitInfoSize;
 	dsm_segment *dsmSegment = dsm_create(totalSize, DSM_CREATE_NULL_IF_MAXSEGMENTS);
 
@@ -122,7 +123,7 @@ AllocateSharedMemoryForShardSplitInfo(int shardSplitInfoCount, Size shardSplitIn
 	{
 		ereport(ERROR,
 				(errmsg("could not create a dynamic shared memory segment to "
-						"keep shard split info")));
+						"store shard split info")));
 	}
 
 	*dsmHandle = dsm_segment_handle(dsmSegment);
@@ -136,7 +137,7 @@ AllocateSharedMemoryForShardSplitInfo(int shardSplitInfoCount, Size shardSplitIn
 	ShardSplitInfoSMHeader *shardSplitInfoSMHeader =
 		GetShardSplitInfoSMHeaderFromDSMHandle(*dsmHandle);
 
-	shardSplitInfoSMHeader->shardSplitInfoCount = shardSplitInfoCount;
+	shardSplitInfoSMHeader->count = shardSplitInfoCount;
 
 	return shardSplitInfoSMHeader;
 }
@@ -144,43 +145,27 @@ AllocateSharedMemoryForShardSplitInfo(int shardSplitInfoCount, Size shardSplitIn
 
 /*
  * CreateSharedMemoryForShardSplitInfo is a wrapper function which creates shared memory
- * for storing shard split infomation. The function returns pointer to the first element
- * within this array.
+ * for storing shard split infomation. The function returns pointer to the header of
+ * shared memory segment.
  *
  * shardSplitInfoCount - number of 'ShardSplitInfo ' elements to be allocated
  * dsmHandle           - handle of the allocated shared memory segment
  */
-ShardSplitInfo *
+ShardSplitInfoSMHeader *
 CreateSharedMemoryForShardSplitInfo(int shardSplitInfoCount, dsm_handle *dsmHandle)
 {
 	ShardSplitInfoSMHeader *shardSplitInfoSMHeader =
 		AllocateSharedMemoryForShardSplitInfo(shardSplitInfoCount,
 											  sizeof(ShardSplitInfo),
 											  dsmHandle);
-	ShardSplitInfo *shardSplitInfoSMArray =
-		(ShardSplitInfo *) ShardSplitInfoSMData(shardSplitInfoSMHeader);
-
-	return shardSplitInfoSMArray;
-}
-
-
-/*
- * ShardSplitInfoSMData returns a pointer to the array of 'ShardSplitInfo'.
- * This is simply the data right after the header, so this function is trivial.
- * The main purpose of this function is to make the intent clear to readers
- * of the code.
- */
-static void *
-ShardSplitInfoSMData(ShardSplitInfoSMHeader *shardSplitInfoSMHeader)
-{
-	return shardSplitInfoSMHeader + 1;
+	return shardSplitInfoSMHeader;
 }
 
 
 /*
  * encode_replication_slot returns an encoded replication slot name
  * in the following format.
- * Slot Name = citus_split_nodeId_sharedMemoryHandle_tableOwnerOid
+ * Slot Name = citus_split_nodeId_tableOwnerOid
  * Max supported length of replication slot name is 64 bytes.
  */
 char *
@@ -189,51 +174,194 @@ encode_replication_slot(uint32_t nodeId,
 						uint32_t tableOwnerId)
 {
 	StringInfo slotName = makeStringInfo();
-	appendStringInfo(slotName, "citus_split_%u_%u_%u", nodeId, dsmHandle, tableOwnerId);
+	appendStringInfo(slotName, "citus_split_%u_%u", nodeId, tableOwnerId);
+
+	if (slotName->len > NAMEDATALEN)
+	{
+		ereport(ERROR,
+				(errmsg(
+					 "Replication Slot name:%s having length:%d is greater than maximum allowed length:%d",
+					 slotName->data, slotName->len, NAMEDATALEN)));
+	}
+
 	return slotName->data;
 }
 
 
 /*
- * decode_replication_slot decodes the replication slot name
- * into node id, shared memory handle.
+ * InitializeShardSplitSMHandleManagement requests the necessary shared memory
+ * from Postgres and sets up the shared memory startup hook.
+ * This memory is used to store handle of other shared memories allocated during split workflow.
  */
 void
-decode_replication_slot(char *slotName,
-						uint32_t *nodeId,
-						dsm_handle *dsmHandle)
+InitializeShardSplitSMHandleManagement(void)
 {
-	int index = 0;
-	char *strtokPosition = NULL;
-	char *dupSlotName = pstrdup(slotName);
-	char *slotNameString = strtok_r(dupSlotName, "_", &strtokPosition);
-	while (slotNameString != NULL)
+	prev_shmem_startup_hook = shmem_startup_hook;
+	shmem_startup_hook = ShardSplitShmemInit;
+}
+
+
+static void
+ShardSplitShmemInit(void)
+{
+	bool alreadyInitialized = false;
+	ShardSplitShmemData *smData = ShmemInitStruct(sharedMemoryNameForHandleManagement,
+												  sizeof(ShardSplitShmemData),
+												  &alreadyInitialized);
+
+	if (!alreadyInitialized)
 	{
-		/* third part of the slot name is NodeId */
-		if (index == 2)
-		{
-			*nodeId = strtoul(slotNameString, NULL, 10);
-		}
+		char *trancheName = "Split_Shard_Setup_Tranche";
 
-		/* fourth part of the name is memory handle */
-		else if (index == 3)
-		{
-			*dsmHandle = strtoul(slotNameString, NULL, 10);
-		}
+		NamedLWLockTranche *namedLockTranche =
+			&smData->namedLockTranche;
 
-		slotNameString = strtok_r(NULL, "_", &strtokPosition);
-		index++;
+		/* start by zeroing out all the memory */
+		memset(smData, 0,
+			   sizeof(ShardSplitShmemData));
 
-		/*Ignoring TableOwnerOid*/
+		namedLockTranche->trancheId = LWLockNewTrancheId();
+
+		LWLockRegisterTranche(namedLockTranche->trancheId, trancheName);
+		LWLockInitialize(&smData->lock,
+						 namedLockTranche->trancheId);
+
+		smData->dsmHandle = DSM_HANDLE_INVALID;
 	}
 
-	/*
-	 * Replication slot name is encoded as citus_split_nodeId_sharedMemoryHandle_tableOwnerOid.
-	 * Hence the number of tokens would be strictly five considering "_" as delimiter.
-	 */
-	if (index != 5)
+	if (prev_shmem_startup_hook != NULL)
+	{
+		prev_shmem_startup_hook();
+	}
+}
+
+
+/*
+ * StoreSharedMemoryHandle stores a handle of shared memory
+ * allocated and populated by 'worker_split_shard_replication_setup' UDF.
+ */
+void
+StoreSharedMemoryHandle(dsm_handle dsmHandle)
+{
+	bool found = false;
+	ShardSplitShmemData *smData = ShmemInitStruct(sharedMemoryNameForHandleManagement,
+												  sizeof(ShardSplitShmemData),
+												  &found);
+	if (!found)
 	{
 		ereport(ERROR,
-				(errmsg("Invalid Replication Slot name encoding: %s", slotName)));
+				errmsg(
+					"Shared memory for handle management should have been initialized during boot"));
 	}
+
+	LWLockAcquire(&smData->lock, LW_EXCLUSIVE);
+
+	/*
+	 * In a normal situation, previously stored handle should have been invalidated
+	 * before the current function is called.
+	 * If this handle is still valid, it means cleanup of previous split shard
+	 * workflow failed. Log a waring and continue the current shard split operation.
+	 */
+	if (smData->dsmHandle != DSM_HANDLE_INVALID)
+	{
+		ereport(WARNING,
+				errmsg(
+					"As a part of split shard workflow,unexpectedly found a valid"
+					" shared memory handle while storing a new one."));
+	}
+
+	/* Store the incoming handle */
+	smData->dsmHandle = dsmHandle;
+
+	LWLockRelease(&smData->lock);
+}
+
+
+/*
+ * GetSharedMemoryHandle returns the shared memory handle stored
+ * by 'worker_split_shard_replication_setup' UDF. This handle
+ * is requested by wal sender processes during logical replication phase.
+ */
+dsm_handle
+GetSharedMemoryHandle(void)
+{
+	bool found = false;
+	ShardSplitShmemData *smData = ShmemInitStruct(sharedMemoryNameForHandleManagement,
+												  sizeof(ShardSplitShmemData),
+												  &found);
+	if (!found)
+	{
+		ereport(ERROR,
+				errmsg(
+					"Shared memory for handle management should have been initialized during boot"));
+	}
+
+	LWLockAcquire(&smData->lock, LW_SHARED);
+	dsm_handle dsmHandle = smData->dsmHandle;
+	LWLockRelease(&smData->lock);
+
+	return dsmHandle;
+}
+
+
+/*
+ * PopulateShardSplitInfoForReplicationSlot function traverses 'ShardSplitInfo' array
+ * stored within shared memory segment. It returns the starting and ending index position
+ * of a given slot within this array. When the given replication slot processes a commit,
+ * traversal is only limited within this bound thus enhancing performance.
+ */
+ShardSplitInfoForReplicationSlot *
+PopulateShardSplitInfoForReplicationSlot(char *slotName)
+{
+	ShardSplitInfoSMHeader *smHeader = GetShardSplitInfoSMHeader(slotName);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(TopMemoryContext);
+
+	ShardSplitInfoForReplicationSlot *infoForReplicationSlot =
+		(ShardSplitInfoForReplicationSlot *) palloc(
+			sizeof(ShardSplitInfoForReplicationSlot));
+	infoForReplicationSlot->shardSplitInfoHeader = smHeader;
+	infoForReplicationSlot->startIndex = -1;
+	infoForReplicationSlot->endIndex = -1;
+
+	int index = 0;
+	while (index < smHeader->count)
+	{
+		if (strcmp(smHeader->splitInfoArray[index].slotName, slotName) == 0)
+		{
+			/* Found the starting index from where current slot information begins */
+			infoForReplicationSlot->startIndex = index;
+
+			/* Slide forward to get the end index */
+			index++;
+			while (index < smHeader->count && strcmp(
+					   smHeader->splitInfoArray[index].slotName, slotName) == 0)
+			{
+				index++;
+			}
+
+			infoForReplicationSlot->endIndex = index - 1;
+
+			/*
+			 * 'ShardSplitInfo' with same slot name are stored contiguously in shared memory segment.
+			 * After the current 'index' position, we should not encounter any 'ShardSplitInfo' with incoming slot name.
+			 * If this happens, there is shared memory corruption. Its worth to go ahead and assert for this assumption.
+			 * TODO: Traverse further and assert
+			 */
+		}
+
+		index++;
+	}
+
+	if (infoForReplicationSlot->startIndex == -1)
+	{
+		ereport(ERROR,
+				(errmsg("Unexpectedly could not find information "
+						"corresponding to replication slot name:%s in shared memory.",
+						slotName)));
+	}
+
+	MemoryContextSwitchTo(oldContext);
+
+	return infoForReplicationSlot;
 }

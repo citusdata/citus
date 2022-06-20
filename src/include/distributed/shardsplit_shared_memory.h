@@ -21,24 +21,52 @@
  */
 typedef struct ShardSplitInfoSMHeader
 {
-	int shardSplitInfoCount;          /* number of elements in the shared memory */
+	int count;          /* number of elements in the shared memory */
+	ShardSplitInfo splitInfoArray[FLEXIBLE_ARRAY_MEMBER];
 } ShardSplitInfoSMHeader;
 
+/*
+ * Shard split information is populated and stored in shared memory in the form of one dimensional
+ * array by 'worker_split_shard_replication_setup'. Information belonging to same replication
+ * slot is grouped together and stored contiguously within this array.
+ * 'ShardSplitInfoForReplicationSlot' stores the starting and ending indices for a particular
+ * replication slot within shared memory segment.
+ * When a slot processes a commit, traversing only within this boundary of shared memory segment
+ * improves performance.
+ */
+typedef struct ShardSplitInfoForReplicationSlot
+{
+	ShardSplitInfoSMHeader *shardSplitInfoHeader; /* shared memory segment header */
+	int startIndex;                               /* starting index for a given slot */
+	int endIndex;                                 /* ending index for a given slot */
+} ShardSplitInfoForReplicationSlot;
 
-/* Functions for creating and accessing shared memory segments */
-extern ShardSplitInfo * CreateSharedMemoryForShardSplitInfo(int shardSplitInfoCount,
-															dsm_handle *dsmHandle);
+typedef struct ShardSplitShmemData
+{
+	int trancheId;
+	NamedLWLockTranche namedLockTranche;
+	LWLock lock;
 
-extern ShardSplitInfo * GetShardSplitInfoSMArrayForSlot(char *slotName,
-														int *shardSplitInfoCount);
+	dsm_handle dsmHandle;
+} ShardSplitShmemData;
+
+/* Functions for creating and accessing shared memory used for dsm handle managment */
+void InitializeShardSplitSMHandleManagement(void);
+
+void StoreSharedMemoryHandle(dsm_handle dsmHandle);
+dsm_handle GetSharedMemoryHandle(void);
+
+/* Functions for creating and accessing shared memory segments consisting shard split information */
+extern ShardSplitInfoSMHeader * CreateSharedMemoryForShardSplitInfo(int
+																	shardSplitInfoCount,
+																	dsm_handle *dsmHandle);
+extern ShardSplitInfoSMHeader *  GetShardSplitInfoSMHeader(char *slotName);
+
+extern ShardSplitInfoForReplicationSlot * PopulateShardSplitInfoForReplicationSlot(
+	char *slotName);
 
 
-/* Functions related to encoding-decoding for replication slot name */
 char * encode_replication_slot(uint32_t nodeId,
 							   dsm_handle dsmHandle,
 							   uint32_t tableOwnerId);
-void decode_replication_slot(char *slotName,
-							 uint32_t *nodeId,
-							 dsm_handle *dsmHandle);
-
 #endif /* SHARDSPLIT_SHARED_MEMORY_H */

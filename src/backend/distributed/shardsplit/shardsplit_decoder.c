@@ -24,9 +24,8 @@ PG_MODULE_MAGIC;
 
 extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
 static LogicalDecodeChangeCB pgoutputChangeCB;
-ShardSplitInfo *shardSplitInfoArray = NULL;
-int shardSplitInfoArraySize = 0;
-
+static ShardSplitInfoSMHeader *shardSplitInfoSMHeader = NULL;
+static ShardSplitInfoForReplicationSlot *shardSplitInfoForSlot = NULL;
 
 /* Plugin callback */
 static void split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
@@ -80,9 +79,10 @@ GetHashValueForIncomingTuple(Relation sourceShardRelation,
 	Oid distributedTableOid = InvalidOid;
 
 	Oid sourceShardOid = sourceShardRelation->rd_id;
-	for (int i = 0; i < shardSplitInfoArraySize; i++)
+	for (int i = shardSplitInfoForSlot->startIndex; i <= shardSplitInfoForSlot->endIndex;
+		 i++)
 	{
-		shardSplitInfo = &shardSplitInfoArray[i];
+		shardSplitInfo = &shardSplitInfoSMHeader->splitInfoArray[i];
 		if (shardSplitInfo->sourceShardOid == sourceShardOid)
 		{
 			distributedTableOid = shardSplitInfo->distributedTableOid;
@@ -157,19 +157,18 @@ FindTargetRelationOid(Relation sourceShardRelation,
 		return InvalidOid;
 	}
 
-	for (int i = 0; i < shardSplitInfoArraySize; i++)
+	for (int i = shardSplitInfoForSlot->startIndex; i <= shardSplitInfoForSlot->endIndex;
+		 i++)
 	{
-		ShardSplitInfo *shardSplitInfo = &shardSplitInfoArray[i];
+		ShardSplitInfo *shardSplitInfo = &shardSplitInfoSMHeader->splitInfoArray[i];
 
 		/*
-		 * Each commit message is processed by all the configured
-		 * replication slots. However, a replication is slot only responsible
-		 * for new shard placements belonging to a single node. We check if the
-		 * current slot which is processing the commit should emit
-		 * a target relation Oid.
+		 * Each commit message is processed by all the configured replication slots.
+		 * A replication slot is responsible for shard placements belonging to unique
+		 * table owner and nodeId combination. We check if the current slot which is
+		 * processing the commit should emit a target relation Oid.
 		 */
-		if (strcmp(shardSplitInfo->slotName, currentSlotName) == 0 &&
-			shardSplitInfo->sourceShardOid == sourceShardRelationOid &&
+		if (shardSplitInfo->sourceShardOid == sourceShardRelationOid &&
 			shardSplitInfo->shardMinValue <= hashValue &&
 			shardSplitInfo->shardMaxValue >= hashValue)
 		{
@@ -194,10 +193,11 @@ bool
 IsCommitRecursive(Relation sourceShardRelation)
 {
 	Oid sourceShardOid = sourceShardRelation->rd_id;
-	for (int i = 0; i < shardSplitInfoArraySize; i++)
+	for (int i = shardSplitInfoForSlot->startIndex; i <= shardSplitInfoForSlot->endIndex;
+		 i++)
 	{
 		/* skip the commit when destination is equal to the source */
-		ShardSplitInfo *shardSplitInfo = &shardSplitInfoArray[i];
+		ShardSplitInfo *shardSplitInfo = &shardSplitInfoSMHeader->splitInfoArray[i];
 		if (sourceShardOid == shardSplitInfo->splitChildShardOid)
 		{
 			return true;
@@ -216,19 +216,22 @@ static void
 split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 				Relation relation, ReorderBufferChange *change)
 {
-	/*
-	 * Get ShardSplitInfo array from Shared Memory if not already
-	 * initialized. This gets initialized during the replication of
-	 * first message.
-	 */
-	if (shardSplitInfoArray == NULL)
+	if (!is_publishable_relation(relation))
 	{
-		shardSplitInfoArray =
-			GetShardSplitInfoSMArrayForSlot(ctx->slot->data.name.data,
-											&shardSplitInfoArraySize);
+		return;
 	}
 
-	/* avoid applying recursive commit */
+	/*
+	 * Get ShardSplitInfoForSlot if not already initialized.
+	 * This gets initialized during the replication of first message.
+	 */
+	if (shardSplitInfoForSlot == NULL)
+	{
+		shardSplitInfoForSlot = PopulateShardSplitInfoForReplicationSlot(
+			ctx->slot->data.name.data);
+		shardSplitInfoSMHeader = shardSplitInfoForSlot->shardSplitInfoHeader;
+	}
+
 	if (IsCommitRecursive(relation))
 	{
 		return;

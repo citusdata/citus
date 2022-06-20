@@ -62,44 +62,49 @@ CREATE TABLE table_second_9(id bigserial PRIMARY KEY, value char);
 -- Create publication at worker1
 \c - postgres - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
-BEGIN;
-    CREATE PUBLICATION PUB1 for table table_first_4, table_first_5, table_first_6;
-COMMIT;
-BEGIN;
-    CREATE PUBLICATION PUB2 for table table_second_7, table_second_8, table_second_9;
-COMMIT;
-BEGIN;
-select 1 from public.create_replication_slot_for_colocated_shards(:worker_2_node, :worker_2_node);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-COMMIT;
+CREATE PUBLICATION pub1 FOR TABLE table_first_4, table_first_5, table_first_6;
+CREATE PUBLICATION pub2 FOR TABLE table_second_7, table_second_8, table_second_9;
+SELECT worker_split_shard_replication_setup(ARRAY[
+    ROW(4, 5, -2147483648,-1, :worker_2_node)::citus.split_shard_info,
+    ROW(4, 6, 0 ,2147483647,  :worker_2_node)::citus.split_shard_info,
+    ROW(7, 8, -2147483648,-1,  :worker_2_node)::citus.split_shard_info,
+    ROW(7, 9, 0, 2147483647 , :worker_2_node)::citus.split_shard_info
+    ]) AS shared_memory_id \gset
+WARNING:  As a part of split shard workflow,unexpectedly found a valid shared memory handle while storing a new one.
+SELECT relowner AS table_owner_one FROM pg_class WHERE relname='table_first' \gset
+SELECT relowner AS table_owner_two FROM pg_class WHERE relname='table_second' \gset
+SELECT slot_name AS slot_for_first_owner FROM pg_create_logical_replication_slot(FORMAT('citus_split_%s_%s', :worker_2_node, :table_owner_one), 'decoding_plugin_for_shard_split') \gset
+SELECT slot_name AS slot_for_second_owner FROM pg_create_logical_replication_slot(FORMAT('citus_split_%s_%s', :worker_2_node, :table_owner_two), 'decoding_plugin_for_shard_split') \gset
 SELECT pg_sleep(5);
  pg_sleep
 ---------------------------------------------------------------------
 
 (1 row)
 
--- Create subscription at worker2 with copy_data to 'false' and derived replication slot name
+-- Create subscription at worker2 with copy_data to 'false'
 \c - postgres - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
 SET client_min_messages TO WARNING;
-BEGIN;
-SELECT 1 from public.create_subscription_for_owner_one(:worker_2_node, 'SUB1');
- ?column?
+CREATE SUBSCRIPTION sub1
+        CONNECTION 'host=localhost port=xxxxx user=postgres dbname=regression'
+        PUBLICATION pub1
+               WITH (
+                   create_slot=false,
+                   enabled=true,
+                   slot_name=:slot_for_first_owner,
+                   copy_data=false);
+SELECT pg_sleep(5);
+ pg_sleep
 ---------------------------------------------------------------------
-        1
+
 (1 row)
 
-COMMIT;
 \c - myuser - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
-INSERT into table_first_4 values(100, 'a');
-INSERT into table_first_4 values(400, 'a');
-INSERT into table_first_4 values(500, 'a');
-select pg_sleep(2);
+INSERT INTO table_first_4 VALUES(100, 'a');
+INSERT INTO table_first_4 VALUES(400, 'a');
+INSERT INTO table_first_4 VALUES(500, 'a');
+SELECT pg_sleep(2);
  pg_sleep
 ---------------------------------------------------------------------
 
@@ -107,16 +112,16 @@ select pg_sleep(2);
 
 \c - admin_user - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
-INSERT INTO table_second_7 values(100, 'a');
-INSERT INTO table_second_7 values(400, 'a');
-SELECT * from table_second_7;
+INSERT INTO table_second_7 VALUES(100, 'a');
+INSERT INTO table_second_7 VALUES(400, 'a');
+SELECT * FROM table_second_7;
  id  | value
 ---------------------------------------------------------------------
  100 | a
  400 | a
 (2 rows)
 
-select pg_sleep(2);
+SELECT pg_sleep(2);
  pg_sleep
 ---------------------------------------------------------------------
 
@@ -124,18 +129,18 @@ select pg_sleep(2);
 
 \c - myuser - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
-SELECT * from table_first_4;
+SELECT * FROM table_first_4;
  id | value
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT * from table_first_5;
+SELECT * FROM table_first_5;
  id  | value
 ---------------------------------------------------------------------
  400 | a
 (1 row)
 
-SELECT * from table_first_6;
+SELECT * FROM table_first_6;
  id  | value
 ---------------------------------------------------------------------
  100 | a
@@ -145,17 +150,17 @@ SELECT * from table_first_6;
 -- should have zero rows in all the below tables as the subscription is not yet created for admin_user
 \c - admin_user - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
-SELECT * from table_second_7;
+SELECT * FROM table_second_7;
  id | value
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT * from table_second_8;
+SELECT * FROM table_second_8;
  id | value
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT * from table_second_9;
+SELECT * FROM table_second_9;
  id | value
 ---------------------------------------------------------------------
 (0 rows)
@@ -163,15 +168,15 @@ SELECT * from table_second_9;
 \c - postgres - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
 SET client_min_messages TO WARNING;
-BEGIN;
-SELECT 1 from public.create_subscription_for_owner_two(:worker_2_node, 'SUB2');
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-COMMIT;
-select pg_sleep(5);
+CREATE SUBSCRIPTION sub2
+        CONNECTION 'host=localhost port=xxxxx user=postgres dbname=regression'
+        PUBLICATION pub2
+               WITH (
+                   create_slot=false,
+                   enabled=true,
+                   slot_name=:slot_for_second_owner,
+                   copy_data=false);
+SELECT pg_sleep(5);
  pg_sleep
 ---------------------------------------------------------------------
 
@@ -180,18 +185,18 @@ select pg_sleep(5);
 -- expect data
 \c - admin_user - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
-SELECT * from table_second_7;
+SELECT * FROM table_second_7;
  id | value
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT * from table_second_8;
+SELECT * FROM table_second_8;
  id  | value
 ---------------------------------------------------------------------
  400 | a
 (1 row)
 
-SELECT * from table_second_9;
+SELECT * FROM table_second_9;
  id  | value
 ---------------------------------------------------------------------
  100 | a

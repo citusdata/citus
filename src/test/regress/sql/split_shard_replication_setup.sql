@@ -45,59 +45,65 @@ CREATE TABLE table_to_split_3(id bigserial PRIMARY KEY, value char);
 -- This is needed for Pub/Sub framework to work.
 \c - - - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
-BEGIN;
-    CREATE TABLE table_to_split_2(id bigserial PRIMARY KEY, value char);
-    CREATE TABLE table_to_split_3(id bigserial PRIMARY KEY, value char);
-COMMIT;
+CREATE TABLE table_to_split_2(id bigserial PRIMARY KEY, value char);
+CREATE TABLE table_to_split_3(id bigserial PRIMARY KEY, value char);
 
 -- Create publication at worker1
-BEGIN;
-    CREATE PUBLICATION PUB1 for table table_to_split_1, table_to_split_2, table_to_split_3;
-COMMIT;
+CREATE PUBLICATION pub1 FOR TABLE table_to_split_1, table_to_split_2, table_to_split_3;
 
--- Create replication slot for target node worker2
-BEGIN;
-select 1 from public.create_replication_slot(:worker_2_node, :worker_2_node);
-COMMIT;
+SELECT  worker_split_shard_replication_setup(ARRAY[
+    ROW(1,2,-2147483648,-1, :worker_2_node)::citus.split_shard_info,
+    ROW(1,3,0,2147483647, :worker_2_node)::citus.split_shard_info
+    ]) AS shared_memory_id \gset
+
+SELECT slot_name FROM pg_create_logical_replication_slot(FORMAT('citus_split_%s_10', :worker_2_node), 'decoding_plugin_for_shard_split') \gset
 
 -- Create subscription at worker2 with copy_data to 'false' and derived replication slot name
 \c - - - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
-BEGIN;
-SELECT 1 from public.create_subscription(:worker_2_node, 'SUB1');
-COMMIT;
+
+CREATE SUBSCRIPTION sub1
+        CONNECTION 'host=localhost port=57637 user=postgres dbname=regression'
+        PUBLICATION pub1
+               WITH (
+                   create_slot=false,
+                   enabled=true,
+                   slot_name=:slot_name,
+                   copy_data=false);
+
 select pg_sleep(5);
 
 -- No data is present at this moment in all the below tables at worker2
-SELECT * from table_to_split_1;
-SELECT * from table_to_split_2;
-SELECT * from table_to_split_3;
-
+SELECT * FROM table_to_split_1;
+SELECT * FROM table_to_split_2;
+SELECT * FROM table_to_split_3;
 
 -- Insert data in table_to_split_1 at worker1
 \c - - - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
-INSERT into table_to_split_1 values(100, 'a');
-INSERT into table_to_split_1 values(400, 'a');
-INSERT into table_to_split_1 values(500, 'a');
-SELECT * from table_to_split_1;
-SELECT * from table_to_split_2;
-SELECT * from table_to_split_3;
+INSERT INTO table_to_split_1 values(100, 'a');
+INSERT INTO table_to_split_1 values(400, 'a');
+INSERT INTO table_to_split_1 values(500, 'a');
+
+SELECT * FROM table_to_split_1;
+SELECT * FROM table_to_split_2;
+SELECT * FROM table_to_split_3;
 select pg_sleep(2);
 
 -- Expect data to be present in shard 2 and shard 3 based on the hash value.
 \c - - - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
-SELECT * from table_to_split_1; -- should alwasy have zero rows
-SELECT * from table_to_split_2;
-SELECT * from table_to_split_3;
+SELECT * FROM table_to_split_1; -- should alwasy have zero rows
+SELECT * FROM table_to_split_2;
+SELECT * FROM table_to_split_3;
 
 -- UPDATE data of table_to_split_1 from worker1
 \c - - - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
-UPDATE table_to_split_1 SET value='b' where id = 100;
-UPDATE table_to_split_1 SET value='b' where id = 400;
-UPDATE table_to_split_1 SET value='b' where id = 500;
+UPDATE table_to_split_1 SET value='b' WHERE id = 100;
+UPDATE table_to_split_1 SET value='b' WHERE id = 400;
+UPDATE table_to_split_1 SET value='b' WHERE id = 500;
+
 SELECT pg_sleep(2);
 
 -- Value should be updated in table_to_split_2;
@@ -110,6 +116,7 @@ SELECT * FROM table_to_split_3;
 \c - - - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
 DELETE FROM table_to_split_1;
+
 SELECT pg_sleep(5);
 
 -- Child shard rows should be deleted
@@ -122,144 +129,12 @@ SELECT * FROM table_to_split_3;
  -- drop publication from worker1
 \c - - - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
-drop PUBLICATION PUB1;
+DROP PUBLICATION pub1;
 DELETE FROM slotName_table;
 
 \c - - - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
-SET client_min_messages TO WARNING;
-DROP SUBSCRIPTION SUB1;
+SET client_min_messages TO ERROR;
+DROP SUBSCRIPTION sub1;
 DELETE FROM slotName_table;
 
--- Test scenario two starts from here
--- 1. table_to_split_1 is split into table_to_split_2 and table_to_split_3.
--- 2. table_to_split_1 is located on worker1.
--- 3. table_to_split_2 is located on worker1 and table_to_split_3 is located on worker2
-
-\c - - - :worker_1_port
-SET search_path TO split_shard_replication_setup_schema;
--- Create publication at worker1
-BEGIN;
-    CREATE PUBLICATION PUB1 for table table_to_split_1, table_to_split_2, table_to_split_3;
-COMMIT;
-
--- Create replication slots for two target nodes worker1 and worker2.
--- Worker1 is target for table_to_split_2 and Worker2 is target for table_to_split_3
-BEGIN;
-select 1 from public.create_replication_slot(:worker_1_node, :worker_2_node);
-COMMIT;
-
--- Create subscription at worker1 with copy_data to 'false' and derived replication slot name
-BEGIN;
-SELECT 1 from public.create_subscription(:worker_1_node, 'SUB1');
-COMMIT;
-select pg_sleep(5);
-
-\c - - - :worker_2_port
-SET search_path TO split_shard_replication_setup_schema;
--- Create subscription at worker2 with copy_data to 'false' and derived replication slot name
-BEGIN;
-SELECT 1 from public.create_subscription(:worker_2_node, 'SUB2');
-COMMIT;
-select pg_sleep(5);
-
--- No data is present at this moment in all the below tables at worker2
-SELECT * from table_to_split_1;
-SELECT * from table_to_split_2;
-SELECT * from table_to_split_3;
-
--- Insert data in table_to_split_1 at worker1
-\c - - - :worker_1_port
-SET search_path TO split_shard_replication_setup_schema;
-INSERT into table_to_split_1 values(100, 'a');
-INSERT into table_to_split_1 values(400, 'a');
-INSERT into table_to_split_1 values(500, 'a');
-UPDATE table_to_split_1 SET value='b' where id = 400;
-select pg_sleep(5);
-
--- expect data to present in table_to_split_2 on worker1 as its destination for value '400'
-SELECT * from table_to_split_1;
-SELECT * from table_to_split_2;
-SELECT * from table_to_split_3;
-
--- Expect data to be present only in table_to_split3 on worker2
-\c - - - :worker_2_port
-SET search_path TO split_shard_replication_setup_schema;
-SELECT * from table_to_split_1;
-SELECT * from table_to_split_2;
-SELECT * from table_to_split_3;
-
--- delete all from table_to_split_1
-\c - - - :worker_1_port
-SET search_path TO split_shard_replication_setup_schema;
-DELETE FROM table_to_split_1;
-SELECT pg_sleep(5);
-
--- rows from table_to_split_2 should be deleted
-SELECT * from table_to_split_2;
-
--- rows from table_to_split_3 should be deleted
-\c - - - :worker_2_port
-SET search_path TO split_shard_replication_setup_schema;
-SELECT * from table_to_split_3;
-
- -- drop publication from worker1
-\c - - - :worker_1_port
-SET search_path TO split_shard_replication_setup_schema;
-SET client_min_messages TO WARNING;
-DROP PUBLICATION PUB1;
-DROP SUBSCRIPTION SUB1;
-DELETE FROM slotName_table;
-
-\c - - - :worker_2_port
-SET search_path TO split_shard_replication_setup_schema;
-SET client_min_messages TO WARNING;
-DROP SUBSCRIPTION SUB2;
-DELETE FROM slotName_table;
-
--- Test scenario three starts from here (parent shard and child shards are located on same machine)
--- 1. table_to_split_1 is split into table_to_split_2 and table_to_split_3.
--- 2. table_to_split_1 is located on worker1.
--- 3. table_to_split_2 and table_to_split_3 are located on worker1
-
-\c - - - :worker_1_port
-SET search_path TO split_shard_replication_setup_schema;
-SET client_min_messages TO WARNING;
-
--- Create publication at worker1
-BEGIN;
-    CREATE PUBLICATION PUB1 for table table_to_split_1, table_to_split_2, table_to_split_3;
-COMMIT;
-
--- Worker1 is target for table_to_split_2 and table_to_split_3
-BEGIN;
-select 1 from public.create_replication_slot(:worker_1_node, :worker_1_node);
-COMMIT;
-
--- Create subscription at worker1 with copy_data to 'false' and derived replication slot name
-BEGIN;
-SELECT 1 from public.create_subscription(:worker_1_node, 'SUB1');
-COMMIT;
-SELECT pg_sleep(5);
-
-INSERT into table_to_split_1 values(100, 'a');
-INSERT into table_to_split_1 values(400, 'a');
-INSERT into table_to_split_1 values(500, 'a');
-select pg_sleep(5);
-
--- expect data to present in  table_to_split_2/3 on worker1
-SELECT * from table_to_split_1;
-SELECT * from table_to_split_2;
-SELECT * from table_to_split_3;
-
-
-DELETE FROM table_to_split_1;
-SELECT pg_sleep(5);
-SELECT * from table_to_split_1;
-SELECT * from table_to_split_2;
-SELECT * from table_to_split_3;
-
--- clean up
-DROP PUBLICATION PUB1;
-DELETE FROM slotName_table;
-DROP SUBSCRIPTION SUB1;

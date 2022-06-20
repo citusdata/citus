@@ -7,7 +7,9 @@ DECLARE
     memoryId bigint := 0;
     memoryIdText text;
 begin
-	SELECT * into memoryId from worker_split_shard_replication_setup(ARRAY[ARRAY[1,2,-2147483648,-1, targetNode1], ARRAY[1,3,0,2147483647,targetNode2]]);
+	SELECT * into memoryId from worker_split_shard_replication_setup (
+        ARRAY[ROW(1,2,-2147483648,-1, targetNode1)::citus.split_shard_info,
+              ROW(1,3,0,2147483647, targetNode2)::citus.split_shard_info]);
     SELECT FORMAT('%s', memoryId) into memoryIdText;
     return memoryIdText;
 end
@@ -23,12 +25,12 @@ DECLARE
 begin
 
     SELECT * into sharedMemoryId from public.split_shard_replication_setup_helper(targetNode1, targetNode2);
-    SELECT FORMAT('citus_split_%s_%s_10', targetNode1, sharedMemoryId) into derivedSlotName;
+    SELECT FORMAT('citus_split_%s_10', targetNode1) into derivedSlotName;
     SELECT slot_name into targetOneSlotName from pg_create_logical_replication_slot(derivedSlotName, 'decoding_plugin_for_shard_split');
 
     -- if new child shards are placed on different nodes, create one more replication slot
     if (targetNode1 != targetNode2) then
-        SELECT FORMAT('citus_split_%s_%s_10', targetNode2, sharedMemoryId) into derivedSlotName;
+        SELECT FORMAT('citus_split_%s_10', targetNode2) into derivedSlotName;
         SELECT slot_name into targetTwoSlotName from pg_create_logical_replication_slot(derivedSlotName, 'decoding_plugin_for_shard_split');
         INSERT INTO slotName_table values(targetTwoSlotName, targetNode2, 1);
     end if;
@@ -47,10 +49,10 @@ DECLARE
 begin
 	SELECT * into memoryId from worker_split_shard_replication_setup(
     ARRAY[
-          ARRAY[4, 5, -2147483648,-1, targetNode1],
-          ARRAY[4, 6, 0 ,2147483647,  targetNode2],
-          ARRAY[7, 8, -2147483648,-1,  targetNode1],
-          ARRAY[7, 9, 0, 2147483647 , targetNode2]
+          ROW(4, 5, -2147483648,-1, targetNode1)::citus.split_shard_info,
+          ROW(4, 6, 0 ,2147483647,  targetNode2)::citus.split_shard_info,
+          ROW(7, 8, -2147483648,-1,  targetNode1)::citus.split_shard_info,
+          ROW(7, 9, 0, 2147483647 , targetNode2)::citus.split_shard_info
         ]);
 
     SELECT FORMAT('%s', memoryId) into memoryIdText;
@@ -73,11 +75,11 @@ begin
     SELECT * into sharedMemoryId from public.split_shard_replication_setup_for_colocated_shards(targetNode1, targetNode2);
 
     SELECT relowner into tableOwnerOne from pg_class where relname='table_first';
-    SELECT FORMAT('citus_split_%s_%s_%s', targetNode1, sharedMemoryId, tableOwnerOne) into derivedSlotNameOne;
+    SELECT FORMAT('citus_split_%s_%s', targetNode1, tableOwnerOne) into derivedSlotNameOne;
     SELECT slot_name into targetOneSlotName from pg_create_logical_replication_slot(derivedSlotNameOne, 'decoding_plugin_for_shard_split');
 
     SELECT relowner into tableOwnerTwo from pg_class where relname='table_second';
-    SELECT FORMAT('citus_split_%s_%s_%s', targetNode2, sharedMemoryId, tableOwnerTwo) into derivedSlotNameTwo;
+    SELECT FORMAT('citus_split_%s_%s', targetNode2, tableOwnerTwo) into derivedSlotNameTwo;
     SELECT slot_name into targetTwoSlotName from pg_create_logical_replication_slot(derivedSlotNameTwo, 'decoding_plugin_for_shard_split');
 
 

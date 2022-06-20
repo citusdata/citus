@@ -103,6 +103,8 @@
 #include "utils/syscache.h"
 #include "utils/varlena.h"
 
+#include "distributed/shardsplit_shared_memory.h"
+
 #include "columnar/columnar.h"
 
 ColumnarSupportsIndexAM_type extern_ColumnarSupportsIndexAM = NULL;
@@ -375,6 +377,9 @@ _PG_init(void)
 	InitializeCitusQueryStats();
 	InitializeSharedConnectionStats();
 	InitializeLocallyReservedSharedConnections();
+
+	/* initialize shard split shared memory handle management */
+	InitializeShardSplitSMHandleManagement();
 
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)

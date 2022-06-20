@@ -38,20 +38,20 @@ typedef struct NodeShardMappingEntry
 } NodeShardMappingEntry;
 
 /* Function declarations */
-static void ParseShardSplitInfo(ArrayType *shardInfoArrayObject,
-								int shardSplitInfoIndex,
-								uint64 *sourceShardId,
-								uint64 *desShardId,
-								int32 *minValue,
-								int32 *maxValue,
-								int32 *nodeId);
+static void ParseShardSplitInfoFromDatum(Datum shardSplitInfoDatum,
+										 uint64 *sourceShardId,
+										 uint64 *childShardId,
+										 int32 *minValue,
+										 int32 *maxValue,
+										 int32 *nodeId);
+
 static ShardSplitInfo * CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 											 uint64 desSplitChildShardId,
 											 int32 minValue,
 											 int32 maxValue,
 											 int32 nodeId);
 static void AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo);
-static void PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
+static void PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader,
 									   HTAB *shardInfoHashMap,
 									   dsm_handle dsmHandle);
 
@@ -103,33 +103,40 @@ static int NodeShardMappingHashCompare(const void *left, const void *right, Size
 Datum
 worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
 {
+	if (PG_ARGISNULL(0))
+	{
+		ereport(ERROR, (errmsg("targets can't be null")));
+	}
+
 	ArrayType *shardInfoArrayObject = PG_GETARG_ARRAYTYPE_P(0);
-	int shardInfoArrayLength = ARR_DIMS(shardInfoArrayObject)[0];
+	if (array_contains_nulls(shardInfoArrayObject))
+	{
+		ereport(ERROR, (errmsg("Unexpectedly shard info array contains a null value")));
+	}
 
 	/* SetupMap */
 	SetupHashMapForShardInfo();
 
 	int shardSplitInfoCount = 0;
-	for (int index = 0; index < shardInfoArrayLength; index++)
+
+	ArrayIterator shardInfo_iterator = array_create_iterator(shardInfoArrayObject, 0,
+															 NULL);
+	Datum shardInfoDatum = 0;
+	bool isnull = false;
+	while (array_iterate(shardInfo_iterator, &shardInfoDatum, &isnull))
 	{
 		uint64 sourceShardId = 0;
-		uint64 desShardId = 0;
+		uint64 childShardId = 0;
 		int32 minValue = 0;
 		int32 maxValue = 0;
 		int32 nodeId = 0;
 
-		ParseShardSplitInfo(
-			shardInfoArrayObject,
-			index,
-			&sourceShardId,
-			&desShardId,
-			&minValue,
-			&maxValue,
-			&nodeId);
+		ParseShardSplitInfoFromDatum(shardInfoDatum, &sourceShardId, &childShardId,
+									 &minValue, &maxValue, &nodeId);
 
 		ShardSplitInfo *shardSplitInfo = CreateShardSplitInfo(
 			sourceShardId,
-			desShardId,
+			childShardId,
 			minValue,
 			maxValue,
 			nodeId);
@@ -139,12 +146,15 @@ worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
 	}
 
 	dsm_handle dsmHandle;
-	ShardSplitInfo *splitShardInfoSMArray =
+	ShardSplitInfoSMHeader *splitShardInfoSMHeader =
 		CreateSharedMemoryForShardSplitInfo(shardSplitInfoCount, &dsmHandle);
 
-	PopulateShardSplitInfoInSM(splitShardInfoSMArray,
+	PopulateShardSplitInfoInSM(splitShardInfoSMHeader,
 							   ShardInfoHashMap,
 							   dsmHandle);
+
+	/* store handle in statically allocated shared memory*/
+	StoreSharedMemoryHandle(dsmHandle);
 
 	return dsmHandle;
 }
@@ -173,144 +183,6 @@ SetupHashMapForShardInfo()
 }
 
 
-static void
-ParseShardSplitInfo(ArrayType *shardInfoArrayObject,
-					int shardSplitInfoIndex,
-					uint64 *sourceShardId,
-					uint64 *desShardId,
-					int32 *minValue,
-					int32 *maxValue,
-					int32 *nodeId)
-{
-	Oid elemtypeId = ARR_ELEMTYPE(shardInfoArrayObject);
-	int16 elemtypeLength = 0;
-	bool elemtypeByValue = false;
-	char elemtypeAlignment = 0;
-	get_typlenbyvalalign(elemtypeId, &elemtypeLength, &elemtypeByValue,
-						 &elemtypeAlignment);
-
-	int elementIndex = 0;
-	int indexes[] = { shardSplitInfoIndex + 1, elementIndex + 1 };
-	bool isNull = false;
-
-	/* Get source shard Id */
-	Datum sourceShardIdDat = array_ref(
-		shardInfoArrayObject,
-		2,
-		indexes,
-		-1, /* (> 0 is for fixed-length arrays -- these are assumed to be 1-d, 0-based) */
-		elemtypeLength,
-		elemtypeByValue,
-		elemtypeAlignment,
-		&isNull);
-
-	if (isNull)
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_SYNTAX_ERROR),
-				 errmsg("null entry found for source shardId")));
-	}
-
-	*sourceShardId = DatumGetUInt64(sourceShardIdDat);
-
-	/* Get destination shard Id */
-	elementIndex++;
-	isNull = false;
-	indexes[0] = shardSplitInfoIndex + 1;
-	indexes[1] = elementIndex + 1;
-	Datum destinationShardIdDat = array_ref(
-		shardInfoArrayObject,
-		2,
-		indexes,
-		-1, /* (> 0 is for fixed-length arrays -- these are assumed to be 1-d, 0-based) */
-		elemtypeLength,
-		elemtypeByValue,
-		elemtypeAlignment,
-		&isNull);
-
-	if (isNull)
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_SYNTAX_ERROR),
-				 errmsg("null entry found for destination shardId")));
-	}
-
-	*desShardId = DatumGetUInt64(destinationShardIdDat);
-
-	/* Get minValue for destination shard */
-	elementIndex++;
-	isNull = false;
-	indexes[0] = shardSplitInfoIndex + 1;
-	indexes[1] = elementIndex + 1;
-	Datum minValueDat = array_ref(
-		shardInfoArrayObject,
-		2,
-		indexes,
-		-1, /* (> 0 is for fixed-length arrays -- these are assumed to be 1-d, 0-based) */
-		elemtypeLength,
-		elemtypeByValue,
-		elemtypeAlignment,
-		&isNull);
-
-	if (isNull)
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_SYNTAX_ERROR),
-				 errmsg("null entry found for min value")));
-	}
-
-	*minValue = DatumGetInt32(minValueDat);
-
-	/* Get maxValue for destination shard */
-	elementIndex++;
-	isNull = false;
-	indexes[0] = shardSplitInfoIndex + 1;
-	indexes[1] = elementIndex + 1;
-	Datum maxValueDat = array_ref(
-		shardInfoArrayObject,
-		2,
-		indexes,
-		-1, /* (> 0 is for fixed-length arrays -- these are assumed to be 1-d, 0-based) */
-		elemtypeLength,
-		elemtypeByValue,
-		elemtypeAlignment,
-		&isNull);
-
-	if (isNull)
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_SYNTAX_ERROR),
-				 errmsg("null entry found for max value")));
-	}
-
-	*maxValue = DatumGetInt32(maxValueDat);
-
-	/* Get nodeId for shard placement*/
-	elementIndex++;
-	isNull = false;
-	indexes[0] = shardSplitInfoIndex + 1;
-	indexes[1] = elementIndex + 1;
-	Datum nodeIdDat = array_ref(
-		shardInfoArrayObject,
-		2,
-		indexes,
-		-1, /* (> 0 is for fixed-length arrays -- these are assumed to be 1-d, 0-based) */
-		elemtypeLength,
-		elemtypeByValue,
-		elemtypeAlignment,
-		&isNull);
-
-	if (isNull)
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_SYNTAX_ERROR),
-				 errmsg("null entry found for max value")));
-	}
-
-	*nodeId = DatumGetInt32(nodeIdDat);
-}
-
-
 /*
  * CreateShardSplitInfo function constructs ShardSplitInfo data structure
  * with appropriate OIs' for source and destination relation.
@@ -330,6 +202,19 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 					 int32 nodeId)
 {
 	ShardInterval *shardIntervalToSplit = LoadShardInterval(sourceShardIdToSplit);
+
+	/* If metadata is not synced, we cannot proceed further as split work flow assumes
+	 * metadata to be synced on worker node hosting source shard to split.
+	 */
+	if (shardIntervalToSplit == NULL)
+	{
+		ereport(ERROR,
+				errmsg(
+					"Could not find metadata corresponding to source shard id: %ld. "
+					"Split workflow assumes metadata to be synced across "
+					"worker nodes hosting source shards.", sourceShardIdToSplit));
+	}
+
 	CitusTableCacheEntry *cachedTableEntry = GetCitusTableCacheEntry(
 		shardIntervalToSplit->relationId);
 
@@ -358,7 +243,7 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
 						errmsg("Invalid citusTableOid:%u "
 							   "sourceShardToSplitOid: %u,"
-							   "destSplitChildShardOid :%u ",
+							   "destSplitChildShardOid:%u ",
 							   citusTableOid,
 							   sourceShardToSplitOid,
 							   destSplitChildShardOid)));
@@ -416,8 +301,7 @@ AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo)
  * into shared memory segment. This information is consumed by the WAL sender
  * process during logical replication.
  *
- * shardSplitInfoArray - Shared memory pointer where information has to
- *                       be copied
+ * shardSplitInfoSMHeader - Shared memory header
  *
  * shardInfoHashMap    - Hashmap containing parsed split information
  *                       per nodeId wise
@@ -425,7 +309,7 @@ AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo)
  * dsmHandle           - Shared memory segment handle
  */
 static void
-PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
+PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader,
 						   HTAB *shardInfoHashMap,
 						   dsm_handle dsmHandle)
 {
@@ -445,7 +329,8 @@ PopulateShardSplitInfoInSM(ShardSplitInfo *shardSplitInfoArray,
 		ShardSplitInfo *splitShardInfo = NULL;
 		foreach_ptr(splitShardInfo, shardSplitInfoList)
 		{
-			ShardSplitInfo *shardInfoInSM = &shardSplitInfoArray[index];
+			ShardSplitInfo *shardInfoInSM =
+				&shardSplitInfoSMHeader->splitInfoArray[index];
 
 			shardInfoInSM->distributedTableOid = splitShardInfo->distributedTableOid;
 			shardInfoInSM->partitionColumnIndex = splitShardInfo->partitionColumnIndex;
@@ -493,4 +378,57 @@ NodeShardMappingHashCompare(const void *left, const void *right, Size keysize)
 	{
 		return 0;
 	}
+}
+
+
+static void
+ParseShardSplitInfoFromDatum(Datum shardSplitInfoDatum,
+							 uint64 *sourceShardId,
+							 uint64 *childShardId,
+							 int32 *minValue,
+							 int32 *maxValue,
+							 int32 *nodeId)
+{
+	HeapTupleHeader dataTuple = DatumGetHeapTupleHeader(shardSplitInfoDatum);
+	bool isnull = false;
+
+	Datum sourceShardIdDatum = GetAttributeByName(dataTuple, "source_shard_id", &isnull);
+	if (isnull)
+	{
+		ereport(ERROR, (errmsg("source_shard_id for split_shard_info can't be null")));
+	}
+
+	*sourceShardId = DatumGetUInt64(sourceShardIdDatum);
+
+	Datum childShardIdDatum = GetAttributeByName(dataTuple, "child_shard_id", &isnull);
+	if (isnull)
+	{
+		ereport(ERROR, (errmsg("child_shard_id for split_shard_info can't be null")));
+	}
+
+	*childShardId = DatumGetUInt64(childShardIdDatum);
+
+	Datum minValueDatum = GetAttributeByName(dataTuple, "shard_min_value", &isnull);
+	if (isnull)
+	{
+		ereport(ERROR, (errmsg("shard_min_value for split_shard_info can't be null")));
+	}
+
+	*minValue = DatumGetInt32(minValueDatum);
+
+	Datum maxValueDatum = GetAttributeByName(dataTuple, "shard_max_value", &isnull);
+	if (isnull)
+	{
+		ereport(ERROR, (errmsg("shard_max_value for split_shard_info can't be null")));
+	}
+
+	*maxValue = DatumGetInt32(maxValueDatum);
+
+	Datum nodeIdDatum = GetAttributeByName(dataTuple, "node_id", &isnull);
+	if (isnull)
+	{
+		ereport(ERROR, (errmsg("node_id for split_shard_info can't be null")));
+	}
+
+	*nodeId = DatumGetInt32(nodeIdDatum);
 }
