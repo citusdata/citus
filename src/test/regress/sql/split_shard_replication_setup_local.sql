@@ -16,7 +16,7 @@ CREATE PUBLICATION pub1 for table table_to_split_1, table_to_split_2, table_to_s
 SELECT worker_split_shard_replication_setup(ARRAY[
     ROW(1, 2, '-2147483648', '-1', :worker_1_node)::citus.split_shard_info,
     ROW(1, 3, '0', '2147483647', :worker_1_node)::citus.split_shard_info
-    ]) AS shared_memory_id \gset
+    ]);
 
 SELECT slot_name AS local_slot FROM pg_create_logical_replication_slot(FORMAT('citus_split_%s_10', :worker_1_node), 'citus') \gset
 

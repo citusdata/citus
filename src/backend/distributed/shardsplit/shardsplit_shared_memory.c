@@ -19,7 +19,7 @@
 #include "utils/memutils.h"
 
 const char *SharedMemoryNameForHandleManagement =
-	"SHARED_MEMORY_FOR_SPLIT_SHARD_HANDLE_MANAGEMENT";
+	"Shard memory handle for shard split";
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 

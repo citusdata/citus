@@ -71,7 +71,7 @@ SELECT worker_split_shard_replication_setup(ARRAY[
     ROW(4, 6, '0', '2147483647', :worker_2_node)::citus.split_shard_info,
     ROW(7, 8, '-2147483648', '-1', :worker_2_node)::citus.split_shard_info,
     ROW(7, 9, '0', '2147483647', :worker_2_node)::citus.split_shard_info
-    ]) AS shared_memory_id \gset
+    ]);
 
 SELECT relowner AS table_owner_one FROM pg_class WHERE relname='table_first' \gset
 SELECT relowner AS table_owner_two FROM pg_class WHERE relname='table_second' \gset

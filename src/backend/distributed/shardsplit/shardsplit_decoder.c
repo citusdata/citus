@@ -1,9 +1,7 @@
 /*-------------------------------------------------------------------------
  *
- * pgoutput.c
+ * shardsplit_decoder.c
  *		Logical Replication output plugin
- *
- * Copyright (c) 2012-2017, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *		  src/backend/distributed/shardsplit/shardsplit_decoder.c

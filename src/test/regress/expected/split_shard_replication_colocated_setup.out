@@ -69,8 +69,13 @@ SELECT worker_split_shard_replication_setup(ARRAY[
     ROW(4, 6, '0', '2147483647', :worker_2_node)::citus.split_shard_info,
     ROW(7, 8, '-2147483648', '-1', :worker_2_node)::citus.split_shard_info,
     ROW(7, 9, '0', '2147483647', :worker_2_node)::citus.split_shard_info
-    ]) AS shared_memory_id \gset
+    ]);
 WARNING:  As a part of split shard workflow,unexpectedly found a valid shared memory handle while storing a new one.
+ worker_split_shard_replication_setup
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT relowner AS table_owner_one FROM pg_class WHERE relname='table_first' \gset
 SELECT relowner AS table_owner_two FROM pg_class WHERE relname='table_second' \gset
 SELECT slot_name AS slot_for_first_owner FROM pg_create_logical_replication_slot(FORMAT('citus_split_%s_%s', :worker_2_node, :table_owner_one), 'citus') \gset
