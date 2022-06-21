@@ -15,4 +15,6 @@ RETURNS void
 LANGUAGE C STRICT
 AS 'MODULE_PATHNAME', $$worker_split_shard_replication_setup$$;
 COMMENT ON FUNCTION pg_catalog.worker_split_shard_replication_setup(splitShardInfo citus.split_shard_info[])
-    IS 'Replication setup for splitting a shard'
+    IS 'Replication setup for splitting a shard';
+
+REVOKE ALL ON FUNCTION pg_catalog.worker_split_shard_replication_setup(citus.split_shard_info[]) FROM PUBLIC;

@@ -51,7 +51,7 @@ SELECT  worker_split_shard_replication_setup(ARRAY[
     ROW(1, 3, '0', '2147483647', :worker_2_node)::citus.split_shard_info
     ]) AS shared_memory_id \gset
 
-SELECT slot_name FROM pg_create_logical_replication_slot(FORMAT('citus_split_%s_10', :worker_2_node), 'decoding_plugin_for_shard_split') \gset
+SELECT slot_name FROM pg_create_logical_replication_slot(FORMAT('citus_split_%s_10', :worker_2_node), 'citus') \gset
 
 -- Create subscription at worker2 with copy_data to 'false' and derived replication slot name
 \c - - - :worker_2_port
