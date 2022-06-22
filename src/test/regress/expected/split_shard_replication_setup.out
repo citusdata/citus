@@ -27,7 +27,7 @@ SELECT create_distributed_table('table_to_split','id');
 --                ROW(1, 3 , 0 , 2147483647, 18 )
 --               ]
 --         );
--- 5. Create Replication slot with 'decoding_plugin_for_shard_split'
+-- 5. Create Replication slot with 'citus'
 -- 6. Setup Pub/Sub
 -- 7. Insert into table_to_split_1 at source worker1
 -- 8. Expect the results in either table_to_split_2 or table_to_split_3 at worker2

@@ -89,7 +89,7 @@ static int NodeShardMappingHashCompare(const void *left, const void *right, Size
  * There is a 1-1 mapping between a table owner and a replication slot. One replication
  * slot takes care of replicating changes for all shards belonging to the same owner on a particular node.
  *
- * During the replication phase, 'decoding_plugin_for_shard_split' will attach to the shared memory
+ * During the replication phase, WAL senders will attach to the shared memory
  * populated by current UDF. It routes the tuple from the source shard to the appropriate destination
  * shard for which the respective slot is responsible.
  */
