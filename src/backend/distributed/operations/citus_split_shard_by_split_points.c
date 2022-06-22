@@ -50,8 +50,7 @@ citus_split_shard_by_split_points(PG_FUNCTION_ARGS)
 															INT4OID);
 
 	ArrayType *nodeIdsArrayObject = PG_GETARG_ARRAYTYPE_P(2);
-	List *nodeIdsForPlacementList = TextArrayTypeToIntegerList(nodeIdsArrayObject,
-															   INT4OID);
+	List *nodeIdsForPlacementList = IntegerArrayTypeToList(nodeIdsArrayObject);
 
 	Oid shardSplitModeOid = PG_GETARG_OID(3);
 	SplitMode shardSplitMode = LookupSplitMode(shardSplitModeOid);

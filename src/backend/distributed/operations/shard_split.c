@@ -407,7 +407,8 @@ BlockingShardSplit(SplitOperation splitOperation,
 	/* Only single placement allowed (already validated by caller) */
 	List *sourcePlacementList = ActiveShardPlacementList(shardIntervalToSplit->shardId);
 	Assert(sourcePlacementList->length == 1);
-	WorkerNode *sourceShardToCopyNode = (WorkerNode *) linitial(sourcePlacementList);
+	ShardPlacement *sourceShardPlacement = (ShardPlacement *) linitial(sourcePlacementList);
+	WorkerNode *sourceShardToCopyNode = FindNodeWithNodeId(sourceShardPlacement->nodeId, false /* missingOk */);
 
 	/* Physically create split children and perform split copy */
 	List *splitOffShardList = NULL;
