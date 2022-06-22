@@ -315,7 +315,7 @@ PreprocessDropSequenceStmt(Node *node, const char *queryString,
 								(void *) dropStmtSql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
+	return NodeDDLTaskList(OTHER_METADATA_NODES, commands);
 }
 
 
@@ -350,7 +350,7 @@ PreprocessRenameSequenceStmt(Node *node, const char *queryString, ProcessUtility
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION, (void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
+	return NodeDDLTaskList(OTHER_METADATA_NODES, commands);
 }
 
 
@@ -513,7 +513,7 @@ PreprocessAlterSequenceSchemaStmt(Node *node, const char *queryString,
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION, (void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
+	return NodeDDLTaskList(OTHER_METADATA_NODES, commands);
 }
 
 
@@ -615,7 +615,7 @@ PreprocessAlterSequenceOwnerStmt(Node *node, const char *queryString,
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION, (void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
+	return NodeDDLTaskList(OTHER_METADATA_NODES, commands);
 }
 
 
@@ -718,7 +718,7 @@ PreprocessGrantOnSequenceStmt(Node *node, const char *queryString,
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION, (void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
+	return NodeDDLTaskList(OTHER_METADATA_NODES, commands);
 }
 
 

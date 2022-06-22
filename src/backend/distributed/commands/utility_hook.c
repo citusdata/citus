@@ -1130,7 +1130,10 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 {
 	bool shouldSyncMetadata = false;
 
-	EnsureCoordinator();
+	if (!ddlJob->allowedOnWorkerNode)
+	{
+		EnsureCoordinator();
+	}
 
 	ObjectAddress targetObjectAddress = ddlJob->targetObjectAddress;
 

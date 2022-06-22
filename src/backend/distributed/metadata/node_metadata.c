@@ -2216,7 +2216,7 @@ SetWorkerColumnOptional(WorkerNode *workerNode, int columnIndex, Datum value)
 																	  columnIndex,
 																	  value);
 
-	List *workerNodeList = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
+	List *workerNodeList = TargetWorkerSetNodeList(OTHER_METADATA_NODES,
 												   ShareLock);
 
 	/* open connections in parallel */
