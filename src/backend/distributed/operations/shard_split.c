@@ -256,8 +256,10 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 			ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
 					 errmsg(
-						 "Split point %d is outside the min/max range for shard id %lu.",
+						 "Split point %d is outside the min/max range(%d, %d) for shard id %lu.",
 						 shardSplitPointValue,
+						 DatumGetInt32(shardIntervalToSplit->minValue),
+						 DatumGetInt32(shardIntervalToSplit->maxValue),
 						 shardIntervalToSplit->shardId)));
 		}
 

@@ -7,3 +7,4 @@ test: tablespace
 # Split tests go here.
 test: worker_split_binary_copy_test
 test: worker_split_text_copy_test
+test: citus_split_shard_by_split_points_negative

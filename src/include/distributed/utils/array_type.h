@@ -21,6 +21,6 @@ extern int32 ArrayObjectCount(ArrayType *arrayObject);
 extern ArrayType * DatumArrayToArrayType(Datum *datumArray, int datumCount,
 										 Oid datumTypeId);
 extern List * IntegerArrayTypeToList(ArrayType *arrayObject);
-extern List * TextArrayTypeToIntegerList(ArrayType *arrayObject, Oid datumTypeId);
+extern List * TextArrayTypeToIntegerList(ArrayType *arrayObject);
 
 #endif   /* CITUS_ARRAY_TYPE_H */

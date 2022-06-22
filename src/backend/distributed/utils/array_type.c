@@ -126,7 +126,7 @@ IntegerArrayTypeToList(ArrayType *arrayObject)
  * Converts Text ArrayType to Integer List.
  */
 extern List *
-TextArrayTypeToIntegerList(ArrayType *arrayObject, Oid datumTypeId)
+TextArrayTypeToIntegerList(ArrayType *arrayObject)
 {
 	List *list = NULL;
 	Datum *datumObjectArray = DeconstructArrayObject(arrayObject);
@@ -135,37 +135,7 @@ TextArrayTypeToIntegerList(ArrayType *arrayObject, Oid datumTypeId)
 	for (int index = 0; index < arrayObjectCount; index++)
 	{
 		char *intAsStr = text_to_cstring(DatumGetTextP(datumObjectArray[index]));
-
-		switch (datumTypeId)
-		{
-			case INT2OID:
-			{
-				int16_t *int16Value = palloc0(sizeof(int16_t));
-				*int16Value = pg_strtoint16(intAsStr);
-				list = lappend(list, (void *) int16Value);
-				break;
-			}
-
-			case INT4OID:
-			{
-				int32_t *int32Value = palloc0(sizeof(int32_t));
-				*int32Value = pg_strtoint32(intAsStr);
-				list = lappend(list, (void *) int32Value);
-				break;
-			}
-
-			case INT8OID:
-			{
-				int64_t *int64Value = palloc0(sizeof(int64_t));
-				*int64Value = pg_strtoint64(intAsStr);
-				list = lappend(list, (void *) int64Value);
-				break;
-			}
-
-			default:
-				ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-								errmsg("Unsupported datum type for array.")));
-		}
+		list = lappend_int(list, pg_strtoint32(intAsStr));
 	}
 
 	return list;
