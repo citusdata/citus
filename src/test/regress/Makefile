@@ -43,7 +43,7 @@ output_files := $(patsubst $(citus_abs_srcdir)/output/%.source,expected/%.out, $
 # intermediate, for muscle memory backward compatibility.
 check: check-full check-enterprise-full
 # check-full triggers all tests that ought to be run routinely
-check-full: check-multi check-multi-mx check-multi-1 check-operations check-follower-cluster check-isolation check-failure
+check-full: check-multi check-multi-mx check-multi-1 check-operations check-follower-cluster check-isolation check-failure check-split
 # check-enterprise-full triggers all enterprise specific tests
 check-enterprise-full: check-enterprise check-enterprise-isolation check-enterprise-failure
 
@@ -215,6 +215,10 @@ check-columnar:
 check-columnar-isolation: all  $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/columnar_isolation_schedule $(EXTRA_TESTS)
+
+check-split: all
+	$(pg_regress_multi_check) --load-extension=citus \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/split_schedule $(EXTRA_TESTS)
 
 check-failure: all
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
