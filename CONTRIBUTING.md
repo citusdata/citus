@@ -35,6 +35,12 @@ why we ask this as well as instructions for how to proceed, see the
   # Optionally, you might instead want to use `make install-all`
   # since `multi_extension` regression test would fail due to missing downgrade scripts.
   cd src/test/regress
+
+  pip install pipenv
+  pipenv --rm
+  pipenv install
+  pipenv shell
+
   make check
   ```
 
@@ -53,7 +59,7 @@ why we ask this as well as instructions for how to proceed, see the
                           autoconf flex git libcurl4-gnutls-dev libicu-dev \
                           libkrb5-dev liblz4-dev libpam0g-dev libreadline-dev \
                           libselinux1-dev libssl-dev libxslt1-dev libzstd-dev \
-                          make uuid-dev mitmproxy
+                          make uuid-dev
   ```
 
 2. Get, build, and test the code
@@ -67,6 +73,12 @@ why we ask this as well as instructions for how to proceed, see the
   # Optionally, you might instead want to use `sudo make install-all`
   # since `multi_extension` regression test would fail due to missing downgrade scripts.
   cd src/test/regress
+
+  pip install pipenv
+  pipenv --rm
+  pipenv install
+  pipenv shell
+
   make check
   ```
 
@@ -111,6 +123,12 @@ why we ask this as well as instructions for how to proceed, see the
   # Optionally, you might instead want to use `sudo make install-all`
   # since `multi_extension` regression test would fail due to missing downgrade scripts.
   cd src/test/regress
+
+  pip install pipenv
+  pipenv --rm
+  pipenv install
+  pipenv shell
+
   make check
   ```
 
