@@ -17,9 +17,18 @@ Automated Failure Testing works by inserting a network proxy (mitmproxy) between
 
 ## Getting Started
 
-First off, to use this you'll need mitmproxy, I recommend version `7.0.4`, and I also recommend running it with `python 3.9`. This script integrates pretty deeply with mitmproxy so other versions might fail to work.
+First off, to use this you'll need mitmproxy.
+Currently, we rely on a [fork](https://github.com/thanodnl/mitmproxy/tree/fix/tcp-flow-kill) to run the failure tests.
+We recommned using pipenv to setup your failure testing environment since that will handle installing the fork
+and other dependencies which may be updated/changed.
 
-I highly recommend using pipenv to install mitmproxy. It lets you easily manage isolated environments (instead of installing python packages globally). If you've heard of virtualenv, pipenv is that but much easier to use.
+Setting up pipenv is easy if you already have python and pip set up:
+```bash
+pip install pipenv
+```
+
+If the Pipfile requires a version you do not have, simply install that python version and retry.
+Pipenv should be able to find the newly installed python and set up the environment.
 
 Once you've installed it:
 
