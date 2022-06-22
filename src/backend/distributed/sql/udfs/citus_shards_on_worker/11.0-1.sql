@@ -5,7 +5,6 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_shards_on_worker(
      OUT owner_name name)
  RETURNS SETOF record
  LANGUAGE plpgsql
- SET citus.hide_shards_from_app_name_prefixes = ''
  AS $$
 BEGIN
   -- this is the query that \d produces, except pg_table_is_visible

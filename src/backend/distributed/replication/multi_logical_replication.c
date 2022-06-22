@@ -1808,7 +1808,7 @@ TotalRelationSizeForSubscription(MultiConnection *connection, char *command)
 	{
 		char *resultString = PQgetvalue(result, 0, 0);
 
-		remoteTotalSize = pg_strtouint64(resultString, NULL, 10);
+		remoteTotalSize = strtou64(resultString, NULL, 10);
 	}
 	else
 	{

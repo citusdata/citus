@@ -104,8 +104,6 @@ static BackendData *MyBackendData = NULL;
 static CitusBackendType CurrentBackendType = CITUS_BACKEND_NOT_ASSIGNED;
 
 
-static void BackendManagementShmemInit(void);
-static size_t BackendManagementShmemSize(void);
 static void DetermineCitusBackendType(void);
 
 
@@ -515,12 +513,15 @@ UserHasPermissionToViewStatsOf(Oid currentUserId, Oid backendOwnedId)
 void
 InitializeBackendManagement(void)
 {
+/* on PG 15, we use shmem_request_hook_type */
+#if PG_VERSION_NUM < PG_VERSION_15
+
 	/* allocate shared memory */
 	if (!IsUnderPostmaster)
 	{
 		RequestAddinShmemSpace(BackendManagementShmemSize());
 	}
-
+#endif
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = BackendManagementShmemInit;
 }
@@ -531,7 +532,7 @@ InitializeBackendManagement(void)
  * memory startup hook. The function sets up the necessary shared memory
  * segment for the backend manager.
  */
-static void
+void
 BackendManagementShmemInit(void)
 {
 	bool alreadyInitialized = false;
@@ -599,7 +600,7 @@ BackendManagementShmemInit(void)
  * BackendManagementShmemSize returns the size that should be allocated
  * on the shared memory for backend management.
  */
-static size_t
+size_t
 BackendManagementShmemSize(void)
 {
 	Size size = 0;

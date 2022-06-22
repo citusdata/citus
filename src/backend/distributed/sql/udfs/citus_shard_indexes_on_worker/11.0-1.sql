@@ -6,7 +6,6 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_shard_indexes_on_worker(
      OUT shard_name name)
  RETURNS SETOF record
  LANGUAGE plpgsql
- SET citus.hide_shards_from_app_name_prefixes = ''
  AS $$
 BEGIN
   -- this is the query that \di produces, except pg_table_is_visible

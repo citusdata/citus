@@ -83,7 +83,7 @@ PreprocessGrantOnFDWStmt(Node *node, const char *queryString,
 static bool
 NameListHasFDWOwnedByDistributedExtension(List *FDWNames)
 {
-	Value *FDWValue = NULL;
+	String *FDWValue = NULL;
 	foreach_ptr(FDWValue, FDWNames)
 	{
 		/* captures the extension address during lookup */
