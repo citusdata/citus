@@ -6,3 +6,4 @@ test: multi_test_catalog_views
 test: tablespace
 # Split tests go here.
 test: worker_split_binary_copy_test
+test: worker_split_text_copy_test

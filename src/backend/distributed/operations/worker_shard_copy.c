@@ -415,17 +415,18 @@ LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState localCopyOutState
 	(void) addRangeTableEntryForRelation(pState, shard, AccessShareLock,
 										 NULL /* alias */, false /* inh */,
 										 false /* inFromCl */);
+
+	List *options = (isBinaryCopy) ? list_make1(binaryFormatOption) : NULL;
 	CopyFromState cstate = BeginCopyFrom_compat(pState, shard,
 												NULL /* whereClause */,
 												NULL /* fileName */,
 												false /* is_program */,
 												ReadFromLocalBufferCallback,
 												NULL /* attlist (NULL is all columns) */,
-												list_make1(binaryFormatOption));
-	resetStringInfo(localCopyOutState->fe_msgbuf);
-
+												options);
 	CopyFrom(cstate);
 	EndCopyFrom(cstate);
+	resetStringInfo(localCopyOutState->fe_msgbuf);
 
 	table_close(shard, NoLock);
 	free_parsestate(pState);
