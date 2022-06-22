@@ -103,7 +103,7 @@ GenerateConninfoWithAuth(char *conninfo)
 		}
 		else if (strcmp(option->keyword, "port") == 0)
 		{
-			port = pg_atoi(option->val, 4, 0);
+			port = pg_strtoint32(option->val);
 		}
 		else if (strcmp(option->keyword, "user") == 0)
 		{

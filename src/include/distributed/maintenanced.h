@@ -24,6 +24,8 @@ extern double DistributedDeadlockDetectionTimeoutFactor;
 extern void StopMaintenanceDaemon(Oid databaseId);
 extern void TriggerNodeMetadataSync(Oid databaseId);
 extern void InitializeMaintenanceDaemon(void);
+extern size_t MaintenanceDaemonShmemSize(void);
+extern void MaintenanceDaemonShmemInit(void);
 extern void InitializeMaintenanceDaemonBackend(void);
 extern bool LockCitusExtension(void);
 

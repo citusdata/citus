@@ -123,8 +123,6 @@ static void StoreAllRemoteConnectionStats(Tuplestorestate *tupleStore, TupleDesc
 										  tupleDescriptor);
 static void LockConnectionSharedMemory(LWLockMode lockMode);
 static void UnLockConnectionSharedMemory(void);
-static void SharedConnectionStatsShmemInit(void);
-static size_t SharedConnectionStatsShmemSize(void);
 static bool ShouldWaitForConnection(int currentConnectionCount);
 static uint32 SharedConnectionHashHash(const void *key, Size keysize);
 static int SharedConnectionHashCompare(const void *a, const void *b, Size keysize);
@@ -617,11 +615,15 @@ WaitForSharedConnection(void)
 void
 InitializeSharedConnectionStats(void)
 {
+/* on PG 15, we use shmem_request_hook_type */
+#if PG_VERSION_NUM < PG_VERSION_15
+
 	/* allocate shared memory */
 	if (!IsUnderPostmaster)
 	{
 		RequestAddinShmemSpace(SharedConnectionStatsShmemSize());
 	}
+#endif
 
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = SharedConnectionStatsShmemInit;
@@ -632,7 +634,7 @@ InitializeSharedConnectionStats(void)
  * SharedConnectionStatsShmemSize returns the size that should be allocated
  * on the shared memory for shared connection stats.
  */
-static size_t
+size_t
 SharedConnectionStatsShmemSize(void)
 {
 	Size size = 0;
@@ -652,7 +654,7 @@ SharedConnectionStatsShmemSize(void)
  * SharedConnectionStatsShmemInit initializes the shared memory used
  * for keeping track of connection stats across backends.
  */
-static void
+void
 SharedConnectionStatsShmemInit(void)
 {
 	bool alreadyInitialized = false;

@@ -2038,7 +2038,7 @@ FilterDistributedFunctions(GrantStmt *grantStmt)
 		List *namespaceOidList = NIL;
 
 		/* iterate over all namespace names provided to get their oid's */
-		Value *namespaceValue = NULL;
+		String *namespaceValue = NULL;
 		foreach_ptr(namespaceValue, grantStmt->objects)
 		{
 			char *nspname = strVal(namespaceValue);
