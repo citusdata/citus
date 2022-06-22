@@ -74,6 +74,9 @@ typedef struct DDLJob
 	const char *metadataSyncCommand;
 
 	List *taskList;            /* worker DDL tasks to execute */
+
+	/* whether the DDL can be executed from a worker */
+	bool allowedOnWorkerNode;
 } DDLJob;
 
 extern ProcessUtility_hook_type PrevProcessUtility;

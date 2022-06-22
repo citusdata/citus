@@ -97,9 +97,6 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_tabl
  col_3  | bigint  | not null default nextval('mx_table_col_3_seq'::regclass)
 (3 rows)
 
-CREATE INDEX mx_test_index ON mx_table(col_2);
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
 ALTER TABLE mx_table ADD COLUMN col_4 int;
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
@@ -114,7 +111,6 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_tabl
  col_3  | bigint  | not null default nextval('mx_table_col_3_seq'::regclass)
 (3 rows)
 
-\d mx_test_index
 -- citus_drop_all_shards
 SELECT citus_drop_all_shards('mx_table'::regclass, 'public', 'mx_table');
 ERROR:  operation is not allowed on this node

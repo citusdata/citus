@@ -199,12 +199,12 @@ SELECT success, result FROM run_command_on_all_nodes($$select count(*) from run_
 (3 rows)
 
 -- ddl commands are only allowed from the coordinator
-SELECT success, result FROM run_command_on_all_nodes($$create index on run_command_on_all_nodes.test (x)$$);
+SELECT success, result FROM run_command_on_all_nodes($$ALTER TABLE run_command_on_all_nodes.test ADD COLUMN z int$$);
  success |                    result
 ---------------------------------------------------------------------
  f       | ERROR:  operation is not allowed on this node
  f       | ERROR:  operation is not allowed on this node
- t       | CREATE INDEX
+ t       | ALTER TABLE
 (3 rows)
 
 DROP SCHEMA run_command_on_all_nodes CASCADE;

@@ -84,7 +84,7 @@ SELECT success, result FROM run_command_on_all_nodes($$insert into run_command_o
 SELECT success, result FROM run_command_on_all_nodes($$select count(*) from run_command_on_all_nodes.test$$);
 
 -- ddl commands are only allowed from the coordinator
-SELECT success, result FROM run_command_on_all_nodes($$create index on run_command_on_all_nodes.test (x)$$);
+SELECT success, result FROM run_command_on_all_nodes($$ALTER TABLE run_command_on_all_nodes.test ADD COLUMN z int$$);
 
 DROP SCHEMA run_command_on_all_nodes CASCADE;
 

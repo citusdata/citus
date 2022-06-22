@@ -4273,7 +4273,7 @@ SendOrCollectCommandListToMetadataNodes(MetadataSyncContext *context, List *comm
 
 	if (context->transactionMode == METADATA_SYNC_TRANSACTIONAL)
 	{
-		List *metadataNodes = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
+		List *metadataNodes = TargetWorkerSetNodeList(OTHER_METADATA_NODES,
 													  RowShareLock);
 		SendMetadataCommandListToWorkerListInCoordinatedTransaction(metadataNodes,
 																	CurrentUserName(),
