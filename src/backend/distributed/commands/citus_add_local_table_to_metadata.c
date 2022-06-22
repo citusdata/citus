@@ -1053,7 +1053,9 @@ DropViewsOnTable(Oid relationId)
 		char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
 
 		StringInfo dropCommand = makeStringInfo();
-		appendStringInfo(dropCommand, "DROP VIEW IF EXISTS %s",
+		appendStringInfo(dropCommand, "DROP %sVIEW IF EXISTS %s",
+						 get_rel_relkind(viewId) == RELKIND_MATVIEW ? "MATERIALIZED " :
+						 "",
 						 qualifiedViewName);
 
 		ExecuteAndLogUtilityCommand(dropCommand->data);

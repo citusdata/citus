@@ -26,6 +26,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/worker_protocol.h"
+#include "executor/spi.h"
 #include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -526,7 +527,11 @@ ExecuteAndLogUtilityCommandListInTableTypeConversion(List *utilityCommandList)
 	MemoryContext savedMemoryContext = CurrentMemoryContext;
 	PG_TRY();
 	{
-		ExecuteAndLogUtilityCommandList(utilityCommandList);
+		char *utilityCommand = NULL;
+		foreach_ptr(utilityCommand, utilityCommandList)
+		{
+			ExecuteQueryViaSPI(utilityCommand, SPI_OK_UTILITY);
+		}
 	}
 	PG_CATCH();
 	{
