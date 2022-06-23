@@ -58,7 +58,8 @@ extern TableScanDesc columnar_beginscan_extended(Relation relation, Snapshot sna
 extern int64 ColumnarScanChunkGroupsFiltered(ColumnarScanDesc columnarScanDesc);
 extern bool ColumnarSupportsIndexAM(char *indexAMName);
 extern bool IsColumnarTableAmTable(Oid relationId);
-
+extern void CheckCitusColumnarCreateExtensionStmt(Node *parseTree);
+extern void CheckCitusColumnarAlterExtensionStmt(Node *parseTree);
 extern DefElem * GetExtensionOption(List *extensionOptions,
 									const char *defname);
 
