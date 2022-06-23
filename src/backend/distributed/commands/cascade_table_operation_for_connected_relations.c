@@ -514,12 +514,12 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 
 
 /*
- * ExecuteAndLogUtilityCommandListInTableTypeConversion is a wrapper function
- * around ExecuteAndLogUtilityCommandList, that makes it execute with the flag
- * InTableTypeConversionFunctionCall is set to true.
+ * ExecuteUtilityCommandListViaSPIInTableTypeConversion is a wrapper function
+ * around ExecuteQueryViaSPI, that makes it execute with the flag
+ * InTableTypeConversionFunctionCall set to true.
  */
 void
-ExecuteAndLogUtilityCommandListInTableTypeConversion(List *utilityCommandList)
+ExecuteUtilityCommandListViaSPIInTableTypeConversion(List *utilityCommandList)
 {
 	bool oldValue = InTableTypeConversionFunctionCall;
 	InTableTypeConversionFunctionCall = true;
