@@ -41,7 +41,7 @@ INSERT INTO referenced_table SELECT i,i FROM generate_series (0, 100) i;
 INSERT INTO referencing_table SELECT i,i FROM generate_series (0, 100) i;
 INSERT INTO referencing_table2 SELECT i,i FROM generate_series (0, 100) i;
 
-SELECT master_move_shard_placement(15000009, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_move_shard_placement(15000009, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
 
 SELECT count(*) FROM referencing_table2;
 
@@ -71,7 +71,7 @@ ALTER TABLE referenceing_dist_table ADD CONSTRAINT very_very_very_very_very_very
 SELECT * FROM get_foreign_key_to_reference_table_commands('referenceing_dist_table'::regclass);
 
 -- and show that rebalancer works fine
-SELECT master_move_shard_placement(15000018, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT master_move_shard_placement(15000018, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
 
 \c - - - :worker_2_port
 

@@ -523,7 +523,7 @@ SELECT * FROM replication_test_table_placements_per_node;
 (2 rows)
 
 -- Replicate the remaining under-replicated shards
-SELECT replicate_table_shards('replication_test_table');
+SELECT replicate_table_shards('replication_test_table', shard_transfer_mode:='block_writes');
  replicate_table_shards
 ---------------------------------------------------------------------
 
@@ -671,6 +671,8 @@ CREATE USER testrole;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 GRANT ALL ON SCHEMA public TO testrole;
+ERROR:  operation is not allowed on this node
+HINT:  Connect to the coordinator and run it again.
 \c - - - :master_port
 SET client_min_messages TO WARNING;
 SET ROLE testrole;
@@ -683,6 +685,8 @@ CREATE USER testrole;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 GRANT ALL ON SCHEMA public TO testrole;
+ERROR:  operation is not allowed on this node
+HINT:  Connect to the coordinator and run it again.
 \c - - - :master_port
 SET client_min_messages TO WARNING;
 SET citus.next_shard_id TO 123010;
@@ -692,6 +696,7 @@ SELECT rebalance_table_shards('rebalance_test_table',
 ERROR:  must be owner of table rebalance_test_table
 CONTEXT:  while executing command on localhost:xxxxx
 RESET ROLE;
+CALL citus_cleanup_orphaned_shards();
 -- Confirm no moves took place at all during these errors
 SELECT * FROM table_placements_per_node;
  nodeport |     logicalrelid     | count
@@ -733,7 +738,7 @@ SELECT * FROM table_placements_per_node;
 (2 rows)
 
 -- Move the remaining shards using threshold=0
-SELECT rebalance_table_shards('rebalance_test_table', threshold := 0);
+SELECT rebalance_table_shards('rebalance_test_table', threshold := 0, shard_transfer_mode:='block_writes');
  rebalance_table_shards
 ---------------------------------------------------------------------
 
@@ -889,10 +894,6 @@ SELECT COUNT(*) FROM imbalanced_table;
     12
 (1 row)
 
--- Try force_logical
-SELECT rebalance_table_shards('imbalanced_table', threshold:=0, shard_transfer_mode:='force_logical');
-ERROR:  the force_logical transfer mode is currently unsupported
-CALL citus_cleanup_orphaned_shards();
 -- Test rebalance operation
 SELECT rebalance_table_shards('imbalanced_table', threshold:=0, shard_transfer_mode:='block_writes');
  rebalance_table_shards
@@ -1407,6 +1408,36 @@ SELECT * FROM public.table_placements_per_node;
 
 -- Drop some tables for clear consistent error
 DROP TABLE test_schema_support.colocated_rebalance_test2;
+-- testing behaviour when a transfer fails when using master_drain_node
+SELECT * from master_drain_node('localhost', :worker_2_port);
+ERROR:  cannot use logical replication to transfer shards of the relation colocated_rebalance_test since it doesn't have a REPLICA IDENTITY or PRIMARY KEY
+DETAIL:  UPDATE and DELETE commands on the shard will error out during logical replication unless there is a REPLICA IDENTITY or PRIMARY KEY.
+HINT:  If you wish to continue without a replica identity set the shard_transfer_mode to 'force_logical' or 'block_writes'.
+CONTEXT:  while executing command on localhost:xxxxx
+-- Make sure shouldhaveshards is false
+select shouldhaveshards from pg_dist_node where nodeport = :worker_2_port;
+ shouldhaveshards
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- Make sure no actual nodes are moved
+SELECT * FROM public.table_placements_per_node;
+ nodeport |         logicalrelid         | count
+---------------------------------------------------------------------
+    57637 | colocated_rebalance_test     |     2
+    57638 | colocated_rebalance_test     |     2
+    57637 | non_colocated_rebalance_test |     2
+    57638 | non_colocated_rebalance_test |     2
+(4 rows)
+
+-- Make it a data node again
+SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
+ master_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
 -- Leave no trace on workers
 RESET search_path;
 \set VERBOSITY terse
@@ -2212,12 +2243,9 @@ SELECT 1 from master_add_node('localhost', :worker_2_port);
         1
 (1 row)
 
+-- since r2 has no replica identity we expect an error here
 SELECT rebalance_table_shards();
- rebalance_table_shards
----------------------------------------------------------------------
-
-(1 row)
-
+ERROR:  cannot use logical replication to transfer shards of the relation r2 since it doesn't have a REPLICA IDENTITY or PRIMARY KEY
 CALL citus_cleanup_orphaned_shards();
 DROP TABLE t1, r1, r2;
 -- verify there are no distributed tables before we perform the following tests. Preceding

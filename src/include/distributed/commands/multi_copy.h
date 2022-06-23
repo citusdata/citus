@@ -149,6 +149,9 @@ typedef struct CitusCopyDestReceiver
 } CitusCopyDestReceiver;
 
 
+/* GUCs */
+extern bool SkipJsonbValidationInCopy;
+
 /* managed via GUC, the default is 4MB */
 extern int CopySwitchOverThresholdBytes;
 

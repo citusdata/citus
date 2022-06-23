@@ -29,6 +29,10 @@
 /* used for libpq commands that get an error buffer. Postgres docs recommend 256. */
 #define ERROR_BUFFER_SIZE 256
 
+/* values with special behavior for authinfo lookup */
+#define WILDCARD_NODE_ID 0
+#define LOCALHOST_NODE_ID -1
+
 /* application name used for internal connections in Citus */
 #define CITUS_APPLICATION_NAME_PREFIX "citus_internal gpid="
 
@@ -250,6 +254,7 @@ extern struct MemoryContextData *ConnectionContext;
 extern void AfterXactConnectionHandling(bool isCommit);
 extern void InitializeConnectionManagement(void);
 
+extern char * GetAuthinfo(char *hostname, int32 port, char *user);
 extern void InitConnParams(void);
 extern void ResetConnParams(void);
 extern void InvalidateConnParamsHashEntries(void);

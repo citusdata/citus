@@ -1,27 +1,9 @@
 Parsed test spec with 3 sessions
 
 starting permutation: s1-grant s1-begin-insert s2-begin-insert s3-as-admin s3-as-user-1 s3-as-readonly s3-as-monitor s1-commit s2-commit
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"GRANT ROLE")
-(localhost,57638,t,"GRANT ROLE")
-(2 rows)
-
 step s1-grant:
 	GRANT ALL ON test_table TO test_user_1;
-	SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_1');
 	GRANT ALL ON test_table TO test_user_2;
-	SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
-
-bool_and
----------------------------------------------------------------------
-t
-(1 row)
-
-bool_and
----------------------------------------------------------------------
-t
-(1 row)
 
 step s1-begin-insert:
 	BEGIN;
@@ -49,7 +31,7 @@ count
 (1 row)
 
 step s3-as-user-1:
-	-- Eventhough we change the user via SET ROLE, the backends' (e.g., s1/2-begin-insert)
+	-- Even though we change the user via SET ROLE, the backends' (e.g., s1/2-begin-insert)
 	-- userId (e.g., PG_PROC->userId) does not change, and hence none of the
 	-- transactions show up because here we are using test_user_1. This is a
 	-- limitation of isolation tester, we should be able to re-connect with
@@ -69,7 +51,7 @@ count
 (1 row)
 
 step s3-as-readonly:
-	-- Eventhough we change the user via SET ROLE, the backends' (e.g., s1/2-begin-insert)
+	-- Even though we change the user via SET ROLE, the backends' (e.g., s1/2-begin-insert)
 	-- userId (e.g., PG_PROC->userId) does not change, and hence none of the
 	-- transactions show up because here we are using test_readonly. This is a
 	-- limitation of isolation tester, we should be able to re-connect with
@@ -110,10 +92,4 @@ step s1-commit:
 
 step s2-commit:
 	COMMIT;
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,f,"ERROR:  role ""test_user_1"" cannot be dropped because some objects depend on it")
-(localhost,57638,f,"ERROR:  role ""test_user_1"" cannot be dropped because some objects depend on it")
-(2 rows)
 

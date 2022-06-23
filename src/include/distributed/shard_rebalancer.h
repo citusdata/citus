@@ -4,7 +4,9 @@
  *
  * Type and function declarations for the shard rebalancer tool.
  *
- * Copyright (c), Citus Data, Inc.
+ * Copyright (c) 2016, Citus Data, Inc.
+ *
+ * $Id$
  *
  *-------------------------------------------------------------------------
  */

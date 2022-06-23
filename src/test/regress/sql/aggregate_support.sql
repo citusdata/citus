@@ -355,7 +355,6 @@ select array_collect_sort(val) from aggdata;
 
 -- Test multiuser scenario
 create user notsuper;
-select run_command_on_workers($$create user notsuper$$);
 grant all on schema aggregate_support to notsuper;
 grant all on all tables in schema aggregate_support to notsuper;
 select 1 from run_command_on_workers($$

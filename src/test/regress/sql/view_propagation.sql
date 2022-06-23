@@ -356,6 +356,41 @@ ALTER VIEW IF EXISTS non_existing_view RENAME COLUMN val1 TO val2;
 ALTER VIEW IF EXISTS non_existing_view RENAME val2 TO val1;
 ALTER VIEW IF EXISTS non_existing_view SET SCHEMA view_prop_schema;
 
+-- Show that privileges should be granted to both view and depending table
+-- Set shard id seq and shard replication factor for consistent test result
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1900000;
+SET citus.shard_count to 1;
+CREATE USER grant_view_user;
+
+CREATE TABLE table_to_test_grant_view(id int, val1 text);
+SELECT create_distributed_table('table_to_test_grant_view','id');
+
+CREATE VIEW view_to_test_grant_view AS SELECT * FROM table_to_test_grant_view;
+
+GRANT ALL ON SCHEMA view_prop_schema TO grant_view_user;
+GRANT ALL ON view_to_test_grant_view TO grant_view_user;
+
+SET ROLE grant_view_user;
+-- Should fail since required privileges for dependent tables haven't been granted
+SELECT count(*) FROM view_to_test_grant_view;
+RESET ROLE;
+
+\c - grant_view_user - :worker_1_port
+-- Should it fails in a same way on the worker ndoe
+SET search_path to view_prop_schema;
+SELECT count(*) FROM view_to_test_grant_view;
+
+\c - postgres - :master_port
+SET search_path to view_prop_schema;
+
+GRANT ALL ON table_to_test_grant_view TO grant_view_user;
+
+SET ROLE grant_view_user;
+-- Should work now as privileges for the table have been granted
+SELECT count(*) FROM view_to_test_grant_view;
+RESET ROLE;
+RESET citus.shard_count;
+
 -- Show that create view and alter view commands can be run from same transaction
 -- but not the drop view. Since we can not use metadata connection for drop view commands
 BEGIN;

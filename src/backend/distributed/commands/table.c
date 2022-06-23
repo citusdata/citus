@@ -2600,6 +2600,7 @@ ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
  * ALTER TABLE ADD|DROP CONSTRAINT
  * ALTER TABLE REPLICA IDENTITY
  * ALTER TABLE SET ()
+ * ALTER TABLE ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY
  * ALTER TABLE RESET ()
  * ALTER TABLE ENABLE/DISABLE TRIGGER (if enable_unsafe_triggers is not set, we only support triggers for citus local tables)
  */
@@ -2943,6 +2944,10 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			case AT_SetNotNull:
 			case AT_ReplicaIdentity:
 			case AT_ChangeOwner:
+			case AT_EnableRowSecurity:
+			case AT_DisableRowSecurity:
+			case AT_ForceRowSecurity:
+			case AT_NoForceRowSecurity:
 			case AT_ValidateConstraint:
 			case AT_DropConstraint: /* we do the check for invalidation in AlterTableDropsForeignKey */
 #if PG_VERSION_NUM >= PG_VERSION_14
@@ -2987,6 +2992,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 						 errdetail("Only ADD|DROP COLUMN, SET|DROP NOT NULL, "
 								   "SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, "
 								   "SET (), RESET (), "
+								   "ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, "
 								   "ATTACH|DETACH PARTITION and TYPE subcommands "
 								   "are supported.")));
 			}

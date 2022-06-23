@@ -1,6 +1,17 @@
 Parsed test spec with 2 sessions
 
-starting permutation: s1-begin s2-begin s2-reindex s1-insert s2-commit s1-commit
+starting permutation: s1-no-connection-cache s2-no-connection-cache s1-begin s2-begin s2-reindex s1-insert s2-commit s1-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
+step s2-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
 step s1-begin:
 	BEGIN;
 	SET ROLE test_user_1;
@@ -23,23 +34,21 @@ step s1-commit:
 	COMMIT;
 
 
-starting permutation: s1-grant s1-begin s2-begin s2-reindex s1-insert s2-insert s2-commit s1-commit
-step s1-grant:
-	SET ROLE test_user_1;
-	SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
-	GRANT ALL ON test_table TO test_user_2;
-	SELECT run_command_on_workers($$SET citus.enable_metadata_sync TO off; GRANT ALL ON test_table TO test_user_2;$$);
-
-bool_and
+starting permutation: s1-no-connection-cache s2-no-connection-cache s1-grant s1-begin s2-begin s2-reindex s1-insert s2-insert s2-commit s1-commit
+create_distributed_table
 ---------------------------------------------------------------------
-t
+
 (1 row)
 
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,SET)
-(localhost,57638,t,SET)
-(2 rows)
+step s1-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
+step s2-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
+step s1-grant:
+	SET ROLE test_user_1;
+	GRANT ALL ON test_table TO test_user_2;
 
 step s1-begin:
 	BEGIN;
@@ -67,23 +76,21 @@ step s1-commit:
 	COMMIT;
 
 
-starting permutation: s1-grant s1-begin s2-begin s1-reindex s2-insert s1-insert s1-commit s2-commit
-step s1-grant:
-	SET ROLE test_user_1;
-	SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
-	GRANT ALL ON test_table TO test_user_2;
-	SELECT run_command_on_workers($$SET citus.enable_metadata_sync TO off; GRANT ALL ON test_table TO test_user_2;$$);
-
-bool_and
+starting permutation: s1-no-connection-cache s2-no-connection-cache s1-grant s1-begin s2-begin s1-reindex s2-insert s1-insert s1-commit s2-commit
+create_distributed_table
 ---------------------------------------------------------------------
-t
+
 (1 row)
 
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,SET)
-(localhost,57638,t,SET)
-(2 rows)
+step s1-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
+step s2-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
+step s1-grant:
+	SET ROLE test_user_1;
+	GRANT ALL ON test_table TO test_user_2;
 
 step s1-begin:
 	BEGIN;
@@ -110,7 +117,18 @@ step s2-commit:
 	COMMIT;
 
 
-starting permutation: s1-begin s2-begin s2-index s1-insert s2-commit s1-commit s2-drop-index
+starting permutation: s1-no-connection-cache s2-no-connection-cache s1-begin s2-begin s2-index s1-insert s2-commit s1-commit s2-drop-index
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
+step s2-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
 step s1-begin:
 	BEGIN;
 	SET ROLE test_user_1;
@@ -136,23 +154,21 @@ step s2-drop-index:
 	DROP INDEX IF EXISTS test_index;
 
 
-starting permutation: s1-grant s1-begin s2-begin s2-insert s1-index s2-insert s2-commit s1-commit s1-drop-index
-step s1-grant:
-	SET ROLE test_user_1;
-	SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
-	GRANT ALL ON test_table TO test_user_2;
-	SELECT run_command_on_workers($$SET citus.enable_metadata_sync TO off; GRANT ALL ON test_table TO test_user_2;$$);
-
-bool_and
+starting permutation: s1-no-connection-cache s2-no-connection-cache s1-grant s1-begin s2-begin s2-insert s1-index s2-insert s2-commit s1-commit s1-drop-index
+create_distributed_table
 ---------------------------------------------------------------------
-t
+
 (1 row)
 
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,SET)
-(localhost,57638,t,SET)
-(2 rows)
+step s1-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
+step s2-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
+step s1-grant:
+	SET ROLE test_user_1;
+	GRANT ALL ON test_table TO test_user_2;
 
 step s1-begin:
 	BEGIN;
@@ -182,23 +198,21 @@ step s1-drop-index:
 	DROP INDEX IF EXISTS test_index;
 
 
-starting permutation: s1-grant s1-begin s2-begin s1-index s2-index s1-insert s1-commit s2-commit s1-drop-index s2-drop-index
-step s1-grant:
-	SET ROLE test_user_1;
-	SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
-	GRANT ALL ON test_table TO test_user_2;
-	SELECT run_command_on_workers($$SET citus.enable_metadata_sync TO off; GRANT ALL ON test_table TO test_user_2;$$);
-
-bool_and
+starting permutation: s1-no-connection-cache s2-no-connection-cache s1-grant s1-begin s2-begin s1-index s2-index s1-insert s1-commit s2-commit s1-drop-index s2-drop-index
+create_distributed_table
 ---------------------------------------------------------------------
-t
+
 (1 row)
 
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,SET)
-(localhost,57638,t,SET)
-(2 rows)
+step s1-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
+step s2-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
+step s1-grant:
+	SET ROLE test_user_1;
+	GRANT ALL ON test_table TO test_user_2;
 
 step s1-begin:
 	BEGIN;
@@ -231,7 +245,18 @@ step s2-drop-index:
 	DROP INDEX IF EXISTS test_index;
 
 
-starting permutation: s1-begin s2-begin s2-truncate s1-insert s2-commit s1-commit
+starting permutation: s1-no-connection-cache s2-no-connection-cache s1-begin s2-begin s2-truncate s1-insert s2-commit s1-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
+step s2-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
 step s1-begin:
 	BEGIN;
 	SET ROLE test_user_1;
@@ -254,23 +279,21 @@ step s1-commit:
 	COMMIT;
 
 
-starting permutation: s1-grant s1-begin s2-begin s1-truncate s2-insert s1-insert s1-commit s2-commit
-step s1-grant:
-	SET ROLE test_user_1;
-	SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
-	GRANT ALL ON test_table TO test_user_2;
-	SELECT run_command_on_workers($$SET citus.enable_metadata_sync TO off; GRANT ALL ON test_table TO test_user_2;$$);
-
-bool_and
+starting permutation: s1-no-connection-cache s2-no-connection-cache s1-grant s1-begin s2-begin s1-truncate s2-insert s1-insert s1-commit s2-commit
+create_distributed_table
 ---------------------------------------------------------------------
-t
+
 (1 row)
 
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,SET)
-(localhost,57638,t,SET)
-(2 rows)
+step s1-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
+step s2-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
+step s1-grant:
+	SET ROLE test_user_1;
+	GRANT ALL ON test_table TO test_user_2;
 
 step s1-begin:
 	BEGIN;
@@ -297,23 +320,21 @@ step s2-commit:
 	COMMIT;
 
 
-starting permutation: s1-grant s1-begin s2-begin s1-truncate s2-truncate s1-commit s2-commit
-step s1-grant:
-	SET ROLE test_user_1;
-	SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
-	GRANT ALL ON test_table TO test_user_2;
-	SELECT run_command_on_workers($$SET citus.enable_metadata_sync TO off; GRANT ALL ON test_table TO test_user_2;$$);
-
-bool_and
+starting permutation: s1-no-connection-cache s2-no-connection-cache s1-grant s1-begin s2-begin s1-truncate s2-truncate s1-commit s2-commit
+create_distributed_table
 ---------------------------------------------------------------------
-t
+
 (1 row)
 
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,SET)
-(localhost,57638,t,SET)
-(2 rows)
+step s1-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
+step s2-no-connection-cache:
+	SET citus.max_cached_conns_per_worker to 0;
+
+step s1-grant:
+	SET ROLE test_user_1;
+	GRANT ALL ON test_table TO test_user_2;
 
 step s1-begin:
 	BEGIN;

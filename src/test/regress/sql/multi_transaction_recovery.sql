@@ -197,12 +197,12 @@ SELECT shardid INTO selected_shard FROM pg_dist_shard WHERE logicalrelid='test_2
 SELECT COUNT(*) FROM pg_dist_transaction;
 BEGIN;
 SET LOCAL citus.defer_drop_after_shard_move TO OFF;
-SELECT citus_move_shard_placement((SELECT * FROM selected_shard), 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT citus_move_shard_placement((SELECT * FROM selected_shard), 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode := 'block_writes');
 COMMIT;
 SELECT COUNT(*) FROM pg_dist_transaction;
 SELECT recover_prepared_transactions();
 
-SELECT citus_move_shard_placement((SELECT * FROM selected_shard), 'localhost', :worker_2_port, 'localhost', :worker_1_port);
+SELECT citus_move_shard_placement((SELECT * FROM selected_shard), 'localhost', :worker_2_port, 'localhost', :worker_1_port, shard_transfer_mode := 'block_writes');
 
 
 -- for the following test, ensure that 6 and 7 go to different shards on different workers

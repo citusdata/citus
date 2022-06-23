@@ -22,6 +22,7 @@
 #include "access/nbtree.h"
 #include "access/xact.h"
 #include "access/sysattr.h"
+#include "catalog/index.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_collation.h"
@@ -39,6 +40,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/multi_executor.h"
 #include "distributed/function_utils.h"
+#include "distributed/listutils.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_utility.h"
@@ -54,6 +56,7 @@
 #include "distributed/pg_dist_placement.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/utils/array_type.h"
 #include "distributed/utils/function.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
@@ -65,6 +68,7 @@
 #include "parser/parse_func.h"
 #include "parser/parse_type.h"
 #include "storage/lmgr.h"
+#include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/catcache.h"
 #include "utils/datum.h"
@@ -165,6 +169,7 @@ typedef struct MetadataCacheData
 	Oid workerHashFunctionId;
 	Oid anyValueFunctionId;
 	Oid textSendAsJsonbFunctionId;
+	Oid textoutFunctionId;
 	Oid extensionOwner;
 	Oid binaryCopyFormatId;
 	Oid textCopyFormatId;
@@ -172,6 +177,10 @@ typedef struct MetadataCacheData
 	Oid secondaryNodeRoleId;
 	Oid pgTableIsVisibleFuncId;
 	Oid citusTableIsVisibleFuncId;
+	Oid distAuthinfoRelationId;
+	Oid distAuthinfoIndexId;
+	Oid distPoolinfoRelationId;
+	Oid distPoolinfoIndexId;
 	Oid relationIsAKnownShardFuncId;
 	Oid jsonbExtractPathFuncId;
 	Oid jsonbExtractPathTextFuncId;
@@ -237,6 +246,7 @@ static void InitializeWorkerNodeCache(void);
 static void RegisterForeignKeyGraphCacheCallbacks(void);
 static void RegisterWorkerNodeCacheCallbacks(void);
 static void RegisterLocalGroupIdCacheCallbacks(void);
+static void RegisterAuthinfoCacheCallbacks(void);
 static void RegisterCitusTableCacheEntryReleaseCallbacks(void);
 static uint32 WorkerNodeHashCode(const void *key, Size keySize);
 static void ResetCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry);
@@ -248,6 +258,7 @@ static void InvalidateForeignRelationGraphCacheCallback(Datum argument, Oid rela
 static void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateLocalGroupIdRelationCacheCallback(Datum argument, Oid relationId);
+static void InvalidateConnParamsCacheCallback(Datum argument, Oid relationId);
 static void CitusTableCacheEntryReleaseCallback(ResourceReleasePhase phase, bool isCommit,
 												bool isTopLevel, void *arg);
 static HeapTuple LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId);
@@ -275,6 +286,10 @@ static bool IsCitusTableTypeInternal(char partitionMethod, char replicationModel
 									 CitusTableType tableType);
 static bool RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry);
 
+static Oid DistAuthinfoRelationId(void);
+static Oid DistAuthinfoIndexId(void);
+static Oid DistPoolinfoRelationId(void);
+static Oid DistPoolinfoIndexId(void);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(citus_dist_partition_cache_invalidate);
@@ -2594,6 +2609,50 @@ DistPlacementGroupidIndexId(void)
 }
 
 
+/* return oid of pg_dist_authinfo relation */
+static Oid
+DistAuthinfoRelationId(void)
+{
+	CachedRelationLookup("pg_dist_authinfo",
+						 &MetadataCache.distAuthinfoRelationId);
+
+	return MetadataCache.distAuthinfoRelationId;
+}
+
+
+/* return oid of pg_dist_authinfo identification index */
+static Oid
+DistAuthinfoIndexId(void)
+{
+	CachedRelationLookup("pg_dist_authinfo_identification_index",
+						 &MetadataCache.distAuthinfoIndexId);
+
+	return MetadataCache.distAuthinfoIndexId;
+}
+
+
+/* return oid of pg_dist_poolinfo relation */
+static Oid
+DistPoolinfoRelationId(void)
+{
+	CachedRelationLookup("pg_dist_poolinfo",
+						 &MetadataCache.distPoolinfoRelationId);
+
+	return MetadataCache.distPoolinfoRelationId;
+}
+
+
+/* return oid of pg_dist_poolinfo primary key index */
+static Oid
+DistPoolinfoIndexId(void)
+{
+	CachedRelationLookup("pg_dist_poolinfo_pkey",
+						 &MetadataCache.distPoolinfoIndexId);
+
+	return MetadataCache.distPoolinfoIndexId;
+}
+
+
 /* return oid of the read_intermediate_result(text,citus_copy_format) function */
 Oid
 CitusReadIntermediateResultFuncId(void)
@@ -2710,6 +2769,42 @@ CitusAnyValueFunctionId(void)
 	}
 
 	return MetadataCache.anyValueFunctionId;
+}
+
+
+/* return oid of the citus_text_send_as_jsonb(text) function */
+Oid
+CitusTextSendAsJsonbFunctionId(void)
+{
+	if (MetadataCache.textSendAsJsonbFunctionId == InvalidOid)
+	{
+		List *nameList = list_make2(makeString("pg_catalog"),
+									makeString("citus_text_send_as_jsonb"));
+		Oid paramOids[1] = { TEXTOID };
+
+		MetadataCache.textSendAsJsonbFunctionId =
+			LookupFuncName(nameList, 1, paramOids, false);
+	}
+
+	return MetadataCache.textSendAsJsonbFunctionId;
+}
+
+
+/* return oid of the textout(text) function */
+Oid
+TextOutFunctionId(void)
+{
+	if (MetadataCache.textoutFunctionId == InvalidOid)
+	{
+		List *nameList = list_make2(makeString("pg_catalog"),
+									makeString("textout"));
+		Oid paramOids[1] = { TEXTOID };
+
+		MetadataCache.textoutFunctionId =
+			LookupFuncName(nameList, 1, paramOids, false);
+	}
+
+	return MetadataCache.textoutFunctionId;
 }
 
 
@@ -3301,7 +3396,7 @@ citus_conninfo_cache_invalidate(PG_FUNCTION_ARGS)
 						errmsg("must be called as trigger")));
 	}
 
-	/* no-op in community edition */
+	CitusInvalidateRelcacheByRelid(DistAuthinfoRelationId());
 
 	PG_RETURN_DATUM(PointerGetDatum(NULL));
 }
@@ -3429,6 +3524,7 @@ InitializeCaches(void)
 			RegisterForeignKeyGraphCacheCallbacks();
 			RegisterWorkerNodeCacheCallbacks();
 			RegisterLocalGroupIdCacheCallbacks();
+			RegisterAuthinfoCacheCallbacks();
 			RegisterCitusTableCacheEntryReleaseCallbacks();
 		}
 		PG_CATCH();
@@ -3831,6 +3927,18 @@ RegisterLocalGroupIdCacheCallbacks(void)
 	/* Watch for invalidation events. */
 	CacheRegisterRelcacheCallback(InvalidateLocalGroupIdRelationCacheCallback,
 								  (Datum) 0);
+}
+
+
+/*
+ * RegisterAuthinfoCacheCallbacks registers the callbacks required to
+ * maintain cached connection parameters at fresh values.
+ */
+static void
+RegisterAuthinfoCacheCallbacks(void)
+{
+	/* Watch for invalidation events. */
+	CacheRegisterRelcacheCallback(InvalidateConnParamsCacheCallback, (Datum) 0);
 }
 
 
@@ -4328,6 +4436,30 @@ InvalidateLocalGroupIdRelationCacheCallback(Datum argument, Oid relationId)
 	if (relationId == InvalidOid || relationId == MetadataCache.distLocalGroupRelationId)
 	{
 		LocalGroupId = -1;
+	}
+}
+
+
+/*
+ * InvalidateConnParamsCacheCallback sets isValid flag to false for all entries
+ * in ConnParamsHash, a cache used during connection establishment.
+ */
+static void
+InvalidateConnParamsCacheCallback(Datum argument, Oid relationId)
+{
+	if (relationId == MetadataCache.distAuthinfoRelationId ||
+		relationId == MetadataCache.distPoolinfoRelationId ||
+		relationId == InvalidOid)
+	{
+		ConnParamsHashEntry *entry = NULL;
+		HASH_SEQ_STATUS status;
+
+		hash_seq_init(&status, ConnParamsHash);
+
+		while ((entry = (ConnParamsHashEntry *) hash_seq_search(&status)) != NULL)
+		{
+			entry->isValid = false;
+		}
 	}
 }
 
@@ -4939,37 +5071,164 @@ role_exists(PG_FUNCTION_ARGS)
 
 
 /*
- * authinfo_valid is a check constraint which errors on all rows, intended for
- * use in prohibiting writes to pg_dist_authinfo in Citus Community.
+ * GetPoolinfoViaCatalog searches the pg_dist_poolinfo table for a row matching
+ * the provided nodeId and returns the poolinfo field of this row if found.
+ * Otherwise, this function returns NULL.
  */
-Datum
-authinfo_valid(PG_FUNCTION_ARGS)
+char *
+GetPoolinfoViaCatalog(int64 nodeId)
 {
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("cannot write to pg_dist_authinfo"),
-					errdetail(
-						"Citus Community Edition does not support the use of "
-						"custom authentication options."),
-					errhint(
-						"To learn more about using advanced authentication schemes "
-						"with Citus, please contact us at "
-						"https://citusdata.com/about/contact_us")));
+	ScanKeyData scanKey[1];
+	const int scanKeyCount = 1;
+	const AttrNumber nodeIdIdx = 1, poolinfoIdx = 2;
+	Relation pgDistPoolinfo = table_open(DistPoolinfoRelationId(), AccessShareLock);
+	bool indexOK = true;
+	char *poolinfo = NULL;
+
+	/* set scan arguments */
+	ScanKeyInit(&scanKey[0], nodeIdIdx, BTEqualStrategyNumber, F_INT4EQ,
+				Int32GetDatum(nodeId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistPoolinfo, DistPoolinfoIndexId(),
+													indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		TupleDesc tupleDescriptor = RelationGetDescr(pgDistPoolinfo);
+		bool isNull = false;
+
+		Datum poolinfoDatum = heap_getattr(heapTuple, poolinfoIdx, tupleDescriptor,
+										   &isNull);
+
+		Assert(!isNull);
+
+		poolinfo = TextDatumGetCString(poolinfoDatum);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistPoolinfo, AccessShareLock);
+
+	return poolinfo;
 }
 
 
 /*
- * poolinfo_valid is a check constraint which errors on all rows, intended for
- * use in prohibiting writes to pg_dist_poolinfo in Citus Community.
+ * GetAuthinfoViaCatalog searches pg_dist_authinfo for a row matching a pro-
+ * vided role and node id. Three types of rules are currently permitted: those
+ * matching a specific node (non-zero nodeid), those matching all nodes (a
+ * nodeid of zero), and those denoting a loopback connection (nodeid of -1).
+ * Rolename must always be specified. If both types of rules exist for a given
+ * user/host, the more specific (host-specific) rule wins. This means that when
+ * both a zero and non-zero row exist for a given rolename, the non-zero row
+ * has precedence.
+ *
+ * In short, this function will return a rule matching nodeId, or if that's
+ * absent the rule for 0, or if that's absent, an empty string. Callers can
+ * just use the returned authinfo and know the precedence has been honored.
+ */
+char *
+GetAuthinfoViaCatalog(const char *roleName, int64 nodeId)
+{
+	char *authinfo = "";
+	Datum nodeIdDatumArray[2] = {
+		Int32GetDatum(nodeId),
+		Int32GetDatum(WILDCARD_NODE_ID)
+	};
+	ArrayType *nodeIdArrayType = DatumArrayToArrayType(nodeIdDatumArray,
+													   lengthof(nodeIdDatumArray),
+													   INT4OID);
+	ScanKeyData scanKey[2];
+	const AttrNumber nodeIdIdx = 1, roleIdx = 2, authinfoIdx = 3;
+
+	/*
+	 * Our index's definition ensures correct precedence for positive nodeIds,
+	 * but when handling a negative value we need to traverse backwards to keep
+	 * the invariant that the zero rule has lowest precedence.
+	 */
+	ScanDirection direction = (nodeId < 0) ? BackwardScanDirection : ForwardScanDirection;
+
+	if (ReindexIsProcessingIndex(DistAuthinfoIndexId()))
+	{
+		ereport(ERROR, (errmsg("authinfo is being reindexed; try again")));
+	}
+
+	memset(&scanKey, 0, sizeof(scanKey));
+
+	/* first column in index is rolename, need exact match there ... */
+	ScanKeyInit(&scanKey[0], roleIdx, BTEqualStrategyNumber,
+				F_NAMEEQ, CStringGetDatum(roleName));
+
+	/* second column is nodeId, match against array of nodeid and zero (any node) ... */
+	ScanKeyInit(&scanKey[1], nodeIdIdx, BTEqualStrategyNumber,
+				F_INT4EQ, PointerGetDatum(nodeIdArrayType));
+	scanKey[1].sk_flags |= SK_SEARCHARRAY;
+
+	/*
+	 * It's important that we traverse the index in order: we need to ensure
+	 * that rules with nodeid 0 are encountered last. We'll use the first tuple
+	 * we find. This ordering defines the precedence order of authinfo rules.
+	 */
+	Relation pgDistAuthinfo = table_open(DistAuthinfoRelationId(), AccessShareLock);
+	Relation pgDistAuthinfoIdx = index_open(DistAuthinfoIndexId(), AccessShareLock);
+	SysScanDesc scanDescriptor = systable_beginscan_ordered(pgDistAuthinfo,
+															pgDistAuthinfoIdx,
+															NULL, lengthof(scanKey),
+															scanKey);
+
+	/* first tuple represents highest-precedence rule for this node */
+	HeapTuple authinfoTuple = systable_getnext_ordered(scanDescriptor, direction);
+	if (HeapTupleIsValid(authinfoTuple))
+	{
+		TupleDesc tupleDescriptor = RelationGetDescr(pgDistAuthinfo);
+		bool isNull = false;
+
+		Datum authinfoDatum = heap_getattr(authinfoTuple, authinfoIdx,
+										   tupleDescriptor, &isNull);
+
+		Assert(!isNull);
+
+		authinfo = TextDatumGetCString(authinfoDatum);
+	}
+
+	systable_endscan_ordered(scanDescriptor);
+	index_close(pgDistAuthinfoIdx, AccessShareLock);
+	table_close(pgDistAuthinfo, AccessShareLock);
+
+	return authinfo;
+}
+
+
+/*
+ * authinfo_valid is a check constraint to verify that an inserted authinfo row
+ * uses only permitted libpq parameters.
+ */
+Datum
+authinfo_valid(PG_FUNCTION_ARGS)
+{
+	char *authinfo = TextDatumGetCString(PG_GETARG_DATUM(0));
+
+	/* this array _must_ be kept in an order usable by bsearch */
+	const char *allowList[] = { "password", "sslcert", "sslkey" };
+	bool authinfoValid = CheckConninfo(authinfo, allowList, lengthof(allowList), NULL);
+
+	PG_RETURN_BOOL(authinfoValid);
+}
+
+
+/*
+ * poolinfo_valid is a check constraint to verify that an inserted poolinfo row
+ * uses only permitted libpq parameters.
  */
 Datum
 poolinfo_valid(PG_FUNCTION_ARGS)
 {
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("cannot write to pg_dist_poolinfo"),
-					errdetail(
-						"Citus Community Edition does not support the use of "
-						"pooler options."),
-					errhint("To learn more about using advanced pooling schemes "
-							"with Citus, please contact us at "
-							"https://citusdata.com/about/contact_us")));
+	char *poolinfo = TextDatumGetCString(PG_GETARG_DATUM(0));
+
+	/* this array _must_ be kept in an order usable by bsearch */
+	const char *allowList[] = { "dbname", "host", "port" };
+	bool poolinfoValid = CheckConninfo(poolinfo, allowList, lengthof(allowList), NULL);
+
+	PG_RETURN_BOOL(poolinfoValid);
 }

@@ -412,7 +412,10 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 		case OCLASS_PROC:
 		{
-			return CreateFunctionDDLCommandsIdempotent(dependency);
+			List *DDLCommands = CreateFunctionDDLCommandsIdempotent(dependency);
+			List *grantDDLCommands = GrantOnFunctionDDLCommands(dependency->objectId);
+			DDLCommands = list_concat(DDLCommands, grantDDLCommands);
+			return DDLCommands;
 		}
 
 		case OCLASS_ROLE:
@@ -455,7 +458,13 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 		case OCLASS_FOREIGN_SERVER:
 		{
-			return GetForeignServerCreateDDLCommand(dependency->objectId);
+			Oid serverId = dependency->objectId;
+
+			List *DDLCommands = GetForeignServerCreateDDLCommand(serverId);
+			List *grantDDLCommands = GrantOnForeignServerDDLCommands(serverId);
+			DDLCommands = list_concat(DDLCommands, grantDDLCommands);
+
+			return DDLCommands;
 		}
 
 		default:

@@ -67,6 +67,9 @@ static void AppendAlterFunctionSchemaStmt(StringInfo buf, AlterObjectSchemaStmt 
 static void AppendAlterFunctionOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendAlterFunctionDependsStmt(StringInfo buf, AlterObjectDependsStmt *stmt);
 
+static void AppendGrantOnFunctionStmt(StringInfo buf, GrantStmt *stmt);
+static void AppendGrantOnFunctionFunctions(StringInfo buf, GrantStmt *stmt);
+
 static char * CopyAndConvertToUpperCase(const char *str);
 
 /*
@@ -710,4 +713,114 @@ CopyAndConvertToUpperCase(const char *str)
 	}
 
 	return result;
+}
+
+
+/*
+ * DeparseGrantOnFunctionStmt builds and returns a string representing the GrantOnFunctionStmt
+ */
+char *
+DeparseGrantOnFunctionStmt(Node *node)
+{
+	GrantStmt *stmt = castNode(GrantStmt, node);
+	Assert(isFunction(stmt->objtype));
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendGrantOnFunctionStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+/*
+ * AppendGrantOnFunctionStmt builds and returns an SQL command representing a
+ * GRANT .. ON FUNCTION command from given GrantStmt object.
+ */
+static void
+AppendGrantOnFunctionStmt(StringInfo buf, GrantStmt *stmt)
+{
+	Assert(isFunction(stmt->objtype));
+
+	if (stmt->targtype == ACL_TARGET_ALL_IN_SCHEMA)
+	{
+		elog(ERROR,
+			 "GRANT .. ALL FUNCTIONS/PROCEDURES IN SCHEMA is not supported for formatting.");
+	}
+
+	appendStringInfoString(buf, stmt->is_grant ? "GRANT " : "REVOKE ");
+
+	if (!stmt->is_grant && stmt->grant_option)
+	{
+		appendStringInfoString(buf, "GRANT OPTION FOR ");
+	}
+
+	AppendGrantPrivileges(buf, stmt);
+
+	AppendGrantOnFunctionFunctions(buf, stmt);
+
+	AppendGrantGrantees(buf, stmt);
+
+	if (stmt->is_grant && stmt->grant_option)
+	{
+		appendStringInfoString(buf, " WITH GRANT OPTION");
+	}
+	if (!stmt->is_grant)
+	{
+		if (stmt->behavior == DROP_RESTRICT)
+		{
+			appendStringInfoString(buf, " RESTRICT");
+		}
+		else if (stmt->behavior == DROP_CASCADE)
+		{
+			appendStringInfoString(buf, " CASCADE");
+		}
+	}
+	appendStringInfoString(buf, ";");
+}
+
+
+/*
+ * AppendGrantOnFunctionFunctions appends the function names along with their arguments
+ * to the given StringInfo from the given GrantStmt
+ */
+static void
+AppendGrantOnFunctionFunctions(StringInfo buf, GrantStmt *stmt)
+{
+	ListCell *cell = NULL;
+	appendStringInfo(buf, " ON %s ", ObjectTypeToKeyword(stmt->objtype));
+
+	foreach(cell, stmt->objects)
+	{
+		/*
+		 * GrantOnFunction statement keeps its objects (functions) as
+		 * a list of ObjectWithArgs
+		 */
+		ObjectWithArgs *function = (ObjectWithArgs *) lfirst(cell);
+
+		appendStringInfoString(buf, NameListToString(function->objname));
+		if (!function->args_unspecified)
+		{
+			/* if args are specified, we should append "(arg1, arg2, ...)" to the function name */
+			const char *args = TypeNameListToString(function->objargs);
+			appendStringInfo(buf, "(%s)", args);
+		}
+		if (cell != list_tail(stmt->objects))
+		{
+			appendStringInfoString(buf, ", ");
+		}
+	}
+}
+
+
+/*
+ * isFunction returns true if the given ObjectType is a function, a procedure or a routine
+ * otherwise returns false
+ */
+bool
+isFunction(ObjectType objectType)
+{
+	return (objectType == OBJECT_FUNCTION || objectType == OBJECT_PROCEDURE ||
+			objectType == OBJECT_ROUTINE);
 }

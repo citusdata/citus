@@ -646,17 +646,11 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
 
 -- test DROP OWNED BY
 
--- Citus does not support "ALTER TABLE OWNER TO" commands. Also, not to deal with tests output
--- difference between community and enterprise, let's disable enable_ddl_propagation here.
-SET citus.enable_ddl_propagation to OFF;
-
 CREATE USER another_user;
-SELECT run_command_on_workers('CREATE USER another_user');
 
+-- Citus does not support "ALTER TABLE OWNER TO" commands.
 ALTER TABLE reference_table_1 OWNER TO another_user;
 SELECT run_command_on_placements('reference_table_1', 'ALTER TABLE %s OWNER TO another_user');
-
-SET citus.enable_ddl_propagation to ON;
 
 BEGIN;
   DROP OWNED BY another_user cascade;

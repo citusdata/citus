@@ -4,8 +4,6 @@ insert into no_access values(2);
 insert into no_access values(3);
 select current_user \gset
 create user columnar_user;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 \c - columnar_user
 -- owned by columnar_user
 create table columnar_permissions(i int) using columnar;

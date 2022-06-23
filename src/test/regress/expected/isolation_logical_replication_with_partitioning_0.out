@@ -1,0 +1,4 @@
+Parsed test spec with 3 sessions
+
+starting permutation: s3-acquire-advisory-lock s1-begin s1-move-placement-partitioned s2-insert-partitioned s3-release-advisory-lock s1-end
+setup failed: ERROR:  primary key constraints are not supported on partitioned tables

@@ -6,6 +6,8 @@
  *
  * Copyright (c) Citus Data, Inc.
  *
+ * $Id$
+ *
  *-------------------------------------------------------------------------
  */
 
@@ -317,7 +319,7 @@ CheckRebalanceStateInvariants(const RebalanceState *state)
 
 		/* Check that utilization field is up to date. */
 		Assert(fillState->utilization == CalculateUtilization(fillState->totalCost,
-															  fillState->capacity));
+															  fillState->capacity)); /* lgtm[cpp/equality-on-floats] */
 
 		/*
 		 * Check that fillState->totalCost is within 0.1% difference of
@@ -697,14 +699,6 @@ ExecutePlacementUpdates(List *placementUpdateList, Oid shardReplicationModeOid,
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
 	ListCell *placementUpdateCell = NULL;
-
-	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
-	if (shardReplicationMode == TRANSFER_MODE_FORCE_LOGICAL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("the force_logical transfer mode is currently "
-							   "unsupported")));
-	}
 
 	DropOrphanedShardsInSeparateTransaction();
 
@@ -2341,7 +2335,7 @@ FindAndMoveShardCost(float4 utilizationLowerBound,
 				}
 				if (newTargetUtilization == sourceFillState->utilization &&
 					newSourceUtilization <= targetFillState->utilization
-					)
+					) /* lgtm[cpp/equality-on-floats] */
 				{
 					/*
 					 * this can trigger when capacity of the nodes is not the

@@ -523,31 +523,13 @@ SELECT create_distributed_table('seq_test_9', 'x');
 
 -- we can change the owner role of a sequence
 CREATE ROLE seq_role_0;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 CREATE ROLE seq_role_1;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 ALTER SEQUENCE seq_10 OWNER TO seq_role_0;
 SELECT sequencename, sequenceowner FROM pg_sequences WHERE sequencename = 'seq_10' ORDER BY 1, 2;
  sequencename | sequenceowner
 ---------------------------------------------------------------------
  seq_10       | seq_role_0
 (1 row)
-
-SELECT run_command_on_workers('CREATE ROLE seq_role_0');
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
-(2 rows)
-
-SELECT run_command_on_workers('CREATE ROLE seq_role_1');
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
-(2 rows)
 
 ALTER TABLE seq_test_9 ALTER COLUMN y SET DEFAULT nextval('seq_10');
 ALTER SEQUENCE seq_10 OWNER TO seq_role_1;
@@ -600,13 +582,6 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 DROP SEQUENCE seq_10 CASCADE;
 NOTICE:  drop cascades to default value for column y of table seq_test_9
 DROP ROLE seq_role_0, seq_role_1;
-SELECT run_command_on_workers('DROP ROLE IF EXISTS seq_role_0, seq_role_1');
-     run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"DROP ROLE")
- (localhost,57638,t,"DROP ROLE")
-(2 rows)
-
 -- Check some cases when default is defined by
 -- DEFAULT nextval('seq_name'::text) (not by DEFAULT nextval('seq_name'))
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);

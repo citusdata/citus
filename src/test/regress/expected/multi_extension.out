@@ -1216,8 +1216,6 @@ ALTER EXTENSION citus UPDATE;
 \c - - - :master_port
 -- test https://github.com/citusdata/citus/issues/3409
 CREATE USER testuser2 SUPERUSER;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 SET ROLE testuser2;
 DROP EXTENSION Citus;
 -- Loop until we see there's no maintenance daemon running

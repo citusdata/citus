@@ -304,16 +304,9 @@ $cmd$);
 (2 rows)
 
 ALTER PROCEDURE summation RENAME TO raise_info;
+SET citus.enable_ddl_propagation TO on;
 CREATE ROLE procedure_role;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-SELECT run_command_on_workers($$CREATE ROLE procedure_role;$$);
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
-(2 rows)
-
+SET citus.enable_ddl_propagation TO off;
 SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE raise_info OWNER TO procedure_role
 $cmd$);
@@ -403,10 +396,3 @@ $cmd$);
 SET client_min_messages TO WARNING; -- suppress cascading objects dropping
 DROP SCHEMA procedure_tests CASCADE;
 DROP ROLE procedure_role;
-SELECT run_command_on_workers($$DROP ROLE procedure_role;$$);
-     run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"DROP ROLE")
- (localhost,57638,t,"DROP ROLE")
-(2 rows)
-

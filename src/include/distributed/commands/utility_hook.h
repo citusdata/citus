@@ -41,6 +41,7 @@ extern PropSetCmdBehavior PropagateSetCommands;
 extern bool EnableDDLPropagation;
 extern int CreateObjectPropagationMode;
 extern bool EnableCreateTypePropagation;
+extern bool EnableCreateRolePropagation;
 extern bool EnableAlterRolePropagation;
 extern bool EnableAlterRoleSetPropagation;
 extern bool EnableAlterDatabaseOwner;
