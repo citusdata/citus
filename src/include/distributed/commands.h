@@ -553,7 +553,7 @@ extern void UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 										   bool *forceDelegation);
 
 /* vacuum.c - forward declarations */
-extern void PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
+extern List * PostprocessVacuumStmt(Node *node, const char *vacuumCommand);
 
 /* view.c - forward declarations */
 extern List * PreprocessViewStmt(Node *node, const char *queryString,
