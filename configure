@@ -644,6 +644,7 @@ LDFLAGS
 CFLAGS
 CC
 vpath_build
+with_pg_version_check
 PATH
 PG_CONFIG
 FLEX
@@ -692,6 +693,7 @@ ac_subst_files=''
 ac_user_opts='
 enable_option_checking
 with_extra_version
+with_pg_version_check
 enable_coverage
 with_libcurl
 with_reports_hostname
@@ -1337,6 +1339,8 @@ Optional Packages:
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-extra-version=STRING
                           append STRING to version
+  --without-pg-version-check
+                          do not check postgres version during build
   --without-libcurl       do not use libcurl for anonymous statistics
                           collection
   --with-reports-hostname=HOSTNAME
@@ -2555,7 +2559,37 @@ if test -z "$version_num"; then
   as_fn_error $? "Could not detect PostgreSQL version from pg_config." "$LINENO" 5
 fi
 
-if test "$version_num" != '13' -a "$version_num" != '14'; then
+
+
+
+# Check whether --with-pg-version-check was given.
+if test ${with_pg_version_check+y}
+then :
+  withval=$with_pg_version_check;
+  case $withval in
+    yes)
+      :
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --with-pg-version-check option" "$LINENO" 5
+      ;;
+  esac
+
+else $as_nop
+  with_pg_version_check=yes
+
+fi
+
+
+
+
+if test "$with_pg_version_check" = no; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: building against PostgreSQL $version_num (skipped compatibility check)" >&5
+printf "%s\n" "$as_me: building against PostgreSQL $version_num (skipped compatibility check)" >&6;}
+elif test "$version_num" != '13' -a "$version_num" != '14'; then
    as_fn_error $? "Citus is not compatible with the detected PostgreSQL version ${version_num}." "$LINENO" 5
 else
    { $as_echo "$as_me:${as_lineno-$LINENO}: building against PostgreSQL $version_num" >&5
