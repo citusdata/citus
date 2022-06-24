@@ -13,7 +13,6 @@
 #include "miscadmin.h"
 
 #include "pg_version_compat.h"
-#include "pgtypes.h"
 #include "catalog/pg_type.h"
 #include "nodes/pg_list.h"
 #include "distributed/utils/array_type.h"
