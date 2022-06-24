@@ -75,6 +75,7 @@ worker_split_copy(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+
 /* Parse a single SplitCopyInfo Tuple */
 static void
 ParseSplitCopyInfoDatum(Datum splitCopyInfoDatum, SplitCopyInfo **splitCopyInfo)

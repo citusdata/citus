@@ -124,7 +124,8 @@ ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 		ReportConnectionError(copyDest->connection, ERROR);
 	}
 
-	PGresult *result = GetRemoteCommandResult(copyDest->connection, true /* raiseInterrupts */);
+	PGresult *result = GetRemoteCommandResult(copyDest->connection,
+											  true /* raiseInterrupts */);
 	if (PQresultStatus(result) != PGRES_COPY_IN)
 	{
 		ReportResultError(copyDest->connection, result, ERROR);
@@ -330,6 +331,7 @@ CreateShardCopyDestReceiver(EState *executorState,
 
 	return (DestReceiver *) copyDest;
 }
+
 
 /*
  * ShardCopyDestReceiverDestroy frees the DestReceiver.
