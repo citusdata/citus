@@ -63,6 +63,7 @@ static void InsertSplitOffShardMetadata(List *splitOffShardList,
 static void CreateForeignConstraints(List *splitOffShardList, List *sourcePlacementList);
 static void ExecuteCommandListOnWorker(char *nodeName, int nodePort, List *commandList);
 
+
 /*
  * isolate_tenant_to_new_shard isolates a tenant to its own shard by spliting
  * the current matching shard.

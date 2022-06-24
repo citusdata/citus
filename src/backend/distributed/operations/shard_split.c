@@ -304,12 +304,13 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 
 
 /*
- * SplitShard API to split a given shard (or shard group) in blocking / non-blocking fashion
- * based on specified split points to a set of destination nodes.
+ * SplitShard API to split a given shard (or shard group) based on specified split points
+ * to a set of destination nodes.
+ * 'splitMode'					: Mode of split operation.
  * 'splitOperation'             : Customer operation that triggered split.
  * 'shardInterval'              : Source shard interval to be split.
  * 'shardSplitPointsList'		: Split Points list for the source 'shardInterval'.
- * 'workersForPlacementList'	: Placement list corresponding to split children.
+ * 'nodeIdsForPlacementList'	: Placement list corresponding to split children.
  */
 void
 SplitShard(SplitMode splitMode,
@@ -389,7 +390,7 @@ SplitShard(SplitMode splitMode,
  * SplitShard API to split a given shard (or shard group) in blocking fashion
  * based on specified split points to a set of destination nodes.
  * 'splitOperation'             : Customer operation that triggered split.
- * 'shardInterval'              : Source shard interval to be split.
+ * 'shardIntervalToSplit'       : Source shard interval to be split.
  * 'shardSplitPointsList'		: Split Points list for the source 'shardInterval'.
  * 'workersForPlacementList'	: Placement list corresponding to split children.
  */
@@ -409,7 +410,7 @@ BlockingShardSplit(SplitOperation splitOperation,
 		sourceColocatedShardIntervalList,
 		shardSplitPointsList);
 
-	/* Only single placement allowed (already validated by caller) */
+	/* Only single placement allowed (already validated RelationReplicationFactor = 1) */
 	List *sourcePlacementList = ActiveShardPlacementList(shardIntervalToSplit->shardId);
 	Assert(sourcePlacementList->length == 1);
 	ShardPlacement *sourceShardPlacement = (ShardPlacement *) linitial(
@@ -417,7 +418,11 @@ BlockingShardSplit(SplitOperation splitOperation,
 	WorkerNode *sourceShardToCopyNode = FindNodeWithNodeId(sourceShardPlacement->nodeId,
 														   false /* missingOk */);
 
-	/* Physically create split children and perform split copy */
+	/*
+	 * Physically create split children, perform split copy and create auxillary structures.
+	 * This includes: indexes, replicaIdentity. triggers and statistics.
+	 * Foreign key constraints are created after Metadata changes (see CreateForeignKeyConstraints).
+	 */
 	CreateSplitShardsForShardGroup(
 		sourceShardToCopyNode,
 		sourceColocatedShardIntervalList,
@@ -453,10 +458,11 @@ CreateSplitShardsForShardGroup(WorkerNode *sourceShardNode,
 							   List *shardGroupSplitIntervalListList,
 							   List *workersForPlacementList)
 {
-	/* Iterate on shard intervals for shard group */
+	/* Iterate on shard interval list for shard group */
 	List *shardIntervalList = NULL;
 	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
+		/* Iterate on split shard interval list and corresponding placement worker */
 		ShardInterval *shardInterval = NULL;
 		WorkerNode *workerPlacementNode = NULL;
 		forboth_ptr(shardInterval, shardIntervalList, workerPlacementNode,
@@ -481,11 +487,11 @@ CreateSplitShardsForShardGroup(WorkerNode *sourceShardNode,
 				shardGroupSplitIntervalListList, workersForPlacementList);
 
 	/*
-	 * Create Indexes post copy.
-	 * TODO(niupre) : Can we use Adaptive execution for creating multiple indexes parallely
+	 * Create auxillary structures post copy.
 	 */
 	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
+		/* Iterate on split shard interval list and corresponding placement worker */
 		ShardInterval *shardInterval = NULL;
 		WorkerNode *workerPlacementNode = NULL;
 		forboth_ptr(shardInterval, shardIntervalList, workerPlacementNode,
@@ -528,7 +534,7 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 																splitShardIntervalList,
 																destinationWorkerNodesList);
 
-		Task *task = CreateBasicTask(
+		Task *splitCopyTask = CreateBasicTask(
 			sourceShardIntervalToCopy->shardId, /* jobId */
 			taskId,
 			READ_TASK,
@@ -537,14 +543,15 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 		ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
 		SetPlacementNodeMetadata(taskPlacement, sourceShardNode);
 
-		task->taskPlacementList = list_make1(taskPlacement);
+		splitCopyTask->taskPlacementList = list_make1(taskPlacement);
 
-		splitCopyTaskList = lappend(splitCopyTaskList, task);
+		splitCopyTaskList = lappend(splitCopyTaskList, splitCopyTask);
 		taskId++;
 	}
 
 	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, splitCopyTaskList,
-									  MaxAdaptiveExecutorPoolSize, NULL /* jobIdList */);
+									  MaxAdaptiveExecutorPoolSize,
+									  NULL /* jobIdList (ignored by API implementation) */);
 }
 
 
@@ -596,7 +603,7 @@ CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 
 
 /*
- * Create an object (shard/index) on a worker node.
+ * Create an object on a worker node.
  */
 static void
 CreateObjectOnPlacement(List *objectCreationCommandList,
@@ -682,6 +689,7 @@ CreateSplitIntervalsForShard(ShardInterval *sourceShard,
 
 /*
  * Insert new shard and placement metadata.
+ * Sync the Metadata with all nodes if enabled.
  */
 static void
 InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
@@ -709,7 +717,7 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 				shardInterval->shardId,
 				INVALID_PLACEMENT_ID, /* triggers generation of new id */
 				SHARD_STATE_ACTIVE,
-				0, /* shard length */
+				0, /* shard length (zero for HashDistributed Table) */
 				workerPlacementNode->groupId);
 		}
 
@@ -740,6 +748,7 @@ CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 	List *shardIntervalList = NULL;
 	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
+		/* Iterate on split children shards along with the respective placement workers */
 		ShardInterval *shardInterval = NULL;
 		WorkerNode *workerPlacementNode = NULL;
 		forboth_ptr(shardInterval, shardIntervalList, workerPlacementNode,

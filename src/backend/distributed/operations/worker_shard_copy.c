@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * worker_shard_copy.c
- *   Functions for copying a shard to desintaion with push copy.
+ *   Functions for copying a shard to destination.
  *
  * Copyright (c) Citus Data, Inc.
  *
@@ -100,6 +100,7 @@ ShouldSendCopyNow(StringInfo buffer)
 }
 
 
+/* Connect to node with source shard and trigger copy start.  */
 static void
 ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 {
@@ -123,8 +124,7 @@ ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 		ReportConnectionError(copyDest->connection, ERROR);
 	}
 
-	PGresult *result = GetRemoteCommandResult(copyDest->connection,
-											  true /* raiseInterrupts */);
+	PGresult *result = GetRemoteCommandResult(copyDest->connection, true /* raiseInterrupts */);
 	if (PQresultStatus(result) != PGRES_COPY_IN)
 	{
 		ReportResultError(copyDest->connection, result, ERROR);
@@ -134,6 +134,11 @@ ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 }
 
 
+/*
+ * ShardCopyDestReceiverReceive implements the receiveSlot function of
+ * ShardCopyDestReceiver. It takes a TupleTableSlot and sends the contents to
+ * the appropriate destination node.
+ */
 static bool
 ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 {
@@ -168,16 +173,17 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	}
 	else
 	{
-		FmgrInfo *columnOutputFunctions = copyDest->columnOutputFunctions;
 		resetStringInfo(copyOutState->fe_msgbuf);
-
 		if (copyDest->copyOutState->binary && copyDest->tuplesSent == 0)
 		{
 			AppendCopyBinaryHeaders(copyDest->copyOutState);
 		}
 
-		AppendCopyRowData(columnValues, columnNulls, copyDest->tupleDescriptor,
-						  copyOutState, columnOutputFunctions,
+		AppendCopyRowData(columnValues,
+						  columnNulls,
+						  copyDest->tupleDescriptor,
+						  copyOutState,
+						  copyDest->columnOutputFunctions,
 						  NULL /* columnCoercionPaths */);
 		if (!PutRemoteCopyData(copyDest->connection, copyOutState->fe_msgbuf->data,
 							   copyOutState->fe_msgbuf->len))
@@ -188,7 +194,6 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 				copyDest->destinationShardFullyQualifiedName);
 
 			char *errorMessage = PQerrorMessage(copyDest->connection->pgConn);
-
 			ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
 							errmsg("Failed to COPY to shard %s.%s : %s,",
 								   destinationShardSchemaName,
@@ -209,6 +214,9 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 }
 
 
+/*
+ * ShardCopyDestReceiverStartup implements the rStartup interface of ShardCopyDestReceiver.
+ */
 static void
 ShardCopyDestReceiverStartup(DestReceiver *dest, int operation, TupleDesc
 							 inputTupleDescriptor)
@@ -234,6 +242,11 @@ ShardCopyDestReceiverStartup(DestReceiver *dest, int operation, TupleDesc
 }
 
 
+/*
+ * ShardCopyDestReceiverShutdown implements the rShutdown interface of
+ * ShardCopyDestReceiver. It ends all open COPY operations, copying any pending
+ * data in buffer.
+ */
 static void
 ShardCopyDestReceiverShutdown(DestReceiver *dest)
 {
@@ -244,6 +257,7 @@ ShardCopyDestReceiverShutdown(DestReceiver *dest)
 		if (copyDest->copyOutState != NULL &&
 			copyDest->copyOutState->fe_msgbuf->len > 0)
 		{
+			/* end the COPY input */
 			LocalCopyToShard(copyDest, copyDest->copyOutState);
 		}
 	}
@@ -266,7 +280,11 @@ ShardCopyDestReceiverShutdown(DestReceiver *dest)
 			ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
 							errmsg("Failed to COPY to destination shard %s.%s",
 								   destinationShardSchemaName,
-								   destinationShardRelationName)));
+								   destinationShardRelationName),
+							errdetail("failed to send %d bytes %s on node %u",
+									  copyDest->copyOutState->fe_msgbuf->len,
+									  copyDest->copyOutState->fe_msgbuf->data,
+									  copyDest->destinationNodeId)));
 		}
 
 		/* check whether there were any COPY errors */
@@ -284,6 +302,10 @@ ShardCopyDestReceiverShutdown(DestReceiver *dest)
 }
 
 
+/*
+ * CreateShardCopyDestReceiver creates a DestReceiver that copies into
+ * a destinationShardFullyQualifiedName on destinationNodeId.
+ */
 DestReceiver *
 CreateShardCopyDestReceiver(EState *executorState,
 							List *destinationShardFullyQualifiedName,
@@ -309,7 +331,9 @@ CreateShardCopyDestReceiver(EState *executorState,
 	return (DestReceiver *) copyDest;
 }
 
-
+/*
+ * ShardCopyDestReceiverDestroy frees the DestReceiver.
+ */
 static void
 ShardCopyDestReceiverDestroy(DestReceiver *dest)
 {
@@ -356,6 +380,7 @@ ConstructCopyStatement(List *destinationShardFullyQualifiedName, bool useBinaryF
 }
 
 
+/* Write Tuple to Local Shard. */
 static void
 WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDest)
 {
@@ -386,7 +411,7 @@ WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDest)
 
 
 /*
- * LocalCopyToShard finishes local copy for the given destination shard.
+ * LocalCopyToShard performs local copy for the given destination shard.
  */
 static void
 LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState localCopyOutState)

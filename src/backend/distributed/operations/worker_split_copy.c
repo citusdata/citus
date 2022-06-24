@@ -51,6 +51,11 @@ static bool SplitCopyDestReceiverReceive(TupleTableSlot *slot,
 static void SplitCopyDestReceiverShutdown(DestReceiver *dest);
 static void SplitCopyDestReceiverDestroy(DestReceiver *copyDest);
 
+/*
+ * CreateSplitCopyDestReceiver creates a DestReceiver that performs
+ * split copy for sourceShardIdToCopy to destination split children
+ * based on splitCopyInfoList.
+ */
 DestReceiver *
 CreateSplitCopyDestReceiver(EState *executorState, uint64 sourceShardIdToCopy,
 							List *splitCopyInfoList)
@@ -76,7 +81,6 @@ CreateSplitCopyDestReceiver(EState *executorState, uint64 sourceShardIdToCopy,
 
 	SplitCopyInfo *splitCopyInfo = NULL;
 	int index = 0;
-
 	char *sourceShardNamePrefix = get_rel_name(shardIntervalToSplitCopy->relationId);
 	foreach_ptr(splitCopyInfo, splitCopyInfoList)
 	{
@@ -103,6 +107,9 @@ CreateSplitCopyDestReceiver(EState *executorState, uint64 sourceShardIdToCopy,
 }
 
 
+/*
+ * SplitCopyDestReceiverStartup implements the rStartup interface of SplitCopyDestReceiver.
+ */
 static void
 SplitCopyDestReceiverStartup(DestReceiver *dest, int operation, TupleDesc
 							 inputTupleDescriptor)
@@ -117,6 +124,11 @@ SplitCopyDestReceiverStartup(DestReceiver *dest, int operation, TupleDesc
 }
 
 
+/*
+ * SplitCopyDestReceiverReceive implements the receiveSlot function of
+ * SplitCopyDestReceiver. It takes a TupleTableSlot and sends the contents to
+ * the appropriate destination shard.
+ */
 static bool
 SplitCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 {
@@ -175,6 +187,10 @@ SplitCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 }
 
 
+/*
+ * SplitCopyDestReceiverShutdown implements the rShutdown interface of
+ * SplitCopyDestReceiver. It ends all open COPY operations.
+ */
 static void
 SplitCopyDestReceiverShutdown(DestReceiver *dest)
 {
@@ -188,6 +204,9 @@ SplitCopyDestReceiverShutdown(DestReceiver *dest)
 }
 
 
+/*
+ * SplitCopyDestReceiverDestroy frees the DestReceiver.
+ */
 static void
 SplitCopyDestReceiverDestroy(DestReceiver *dest)
 {

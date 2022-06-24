@@ -21,7 +21,10 @@ static void ParseSplitCopyInfoDatum(Datum splitCopyInfoDatum,
 									SplitCopyInfo **splitCopyInfo);
 
 /*
- *
+ * worker_split_copy(source_shard_id bigint, splitCopyInfo citus.split_copy_info[])
+ * UDF to split copy shard to list of destination shards.
+ * 'source_shard_id' : Source ShardId to split copy.
+ * 'splitCopyInfos'   : Array of Split Copy Info (destination_shard's id, min/max ranges and node_id)
  */
 Datum
 worker_split_copy(PG_FUNCTION_ARGS)
@@ -72,7 +75,7 @@ worker_split_copy(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
-
+/* Parse a single SplitCopyInfo Tuple */
 static void
 ParseSplitCopyInfoDatum(Datum splitCopyInfoDatum, SplitCopyInfo **splitCopyInfo)
 {
