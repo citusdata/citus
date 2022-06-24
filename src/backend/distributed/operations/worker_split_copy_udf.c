@@ -98,7 +98,7 @@ ParseSplitCopyInfoDatum(Datum splitCopyInfoDatum, SplitCopyInfo **splitCopyInfo)
 							"destination_shard_min_value for split_copy_info cannot be null.")));
 	}
 	char *destinationMinHash = text_to_cstring(DatumGetTextP(minValueDatum));
-	copyInfo->destinationShardMinHashValue = pg_strtoint64(destinationMinHash);
+	copyInfo->destinationShardMinHashValue = pg_strtoint32(destinationMinHash);
 
 	Datum maxValueDatum = GetAttributeByName(dataTuple, "destination_shard_max_value",
 											 &isnull);
@@ -108,7 +108,7 @@ ParseSplitCopyInfoDatum(Datum splitCopyInfoDatum, SplitCopyInfo **splitCopyInfo)
 							"destination_shard_max_value for split_copy_info cannot be null.")));
 	}
 	char *destinationMaxHash = text_to_cstring(DatumGetTextP(maxValueDatum));
-	copyInfo->destinationShardMaxHashValue = pg_strtoint64(destinationMaxHash);
+	copyInfo->destinationShardMaxHashValue = pg_strtoint32(destinationMaxHash);
 
 	Datum nodeIdDatum = GetAttributeByName(dataTuple, "destination_shard_node_id",
 										   &isnull);

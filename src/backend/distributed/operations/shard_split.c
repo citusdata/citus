@@ -570,10 +570,10 @@ CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 
 		StringInfo splitCopyInfoRow = makeStringInfo();
 		appendStringInfo(splitCopyInfoRow,
-						 "ROW(%lu, %lu, %lu, %u)::citus.split_copy_info",
+						 "ROW(%lu, %d, %d, %u)::citus.split_copy_info",
 						 splitChildShardInterval->shardId,
-						 splitChildShardInterval->minValue,
-						 splitChildShardInterval->maxValue,
+						 DatumGetInt32(splitChildShardInterval->minValue),
+						 DatumGetInt32(splitChildShardInterval->maxValue),
 						 destinationWorkerNode->nodeId);
 		appendStringInfo(splitCopyInfoArray, "%s", splitCopyInfoRow->data);
 

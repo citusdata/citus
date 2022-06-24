@@ -560,7 +560,7 @@ SplitOffCommandList(ShardInterval *sourceShard, ShardInterval *splitOffShard)
  * commands in parallel. Finally, it sends commit messages to all connections
  * and close them.
  */
-void
+static void
 ExecuteCommandListOnPlacements(List *commandList, List *placementList)
 {
 	List *workerConnectionList = NIL;
