@@ -146,7 +146,7 @@ worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
 							   ShardInfoHashMap);
 
 	/* store handle in statically allocated shared memory*/
-	StoreSharedMemoryHandle(dsmHandle);
+	StoreShardSplitSharedMemoryHandle(dsmHandle);
 
 	PG_RETURN_VOID();
 }

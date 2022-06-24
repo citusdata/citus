@@ -19,7 +19,7 @@
 #include "utils/memutils.h"
 
 const char *SharedMemoryNameForHandleManagement =
-	"Shard memory handle for shard split";
+	"Shared memory handle for shard split";
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
@@ -91,7 +91,7 @@ GetShardSplitInfoSMHeader(char *slotName)
 				 errmsg("Expected slot name but found NULL")));
 	}
 
-	dsm_handle dsmHandle = GetSharedMemoryHandle();
+	dsm_handle dsmHandle = GetShardSplitSharedMemoryHandle();
 
 	ShardSplitInfoSMHeader *shardSplitInfoSMHeader =
 		GetShardSplitInfoSMHeaderFromDSMHandle(dsmHandle);
@@ -242,13 +242,13 @@ ShardSplitShmemInit(void)
 
 
 /*
- * StoreSharedMemoryHandle stores a handle of shared memory
+ * StoreShardSplitSharedMemoryHandle stores a handle of shared memory
  * allocated and populated by 'worker_split_shard_replication_setup' UDF.
  * This handle is stored in a different shared memory segment with name
- * 'SHARED_MEMORY_FOR_SPLIT_SHARD_HANDLE_MANAGEMENT'.
+ * 'Shared memory handle for shard split'.
  */
 void
-StoreSharedMemoryHandle(dsm_handle dsmHandle)
+StoreShardSplitSharedMemoryHandle(dsm_handle dsmHandle)
 {
 	bool found = false;
 	ShardSplitShmemData *smData = ShmemInitStruct(SharedMemoryNameForHandleManagement,
@@ -289,12 +289,12 @@ StoreSharedMemoryHandle(dsm_handle dsmHandle)
 
 
 /*
- * GetSharedMemoryHandle returns the shared memory handle stored
+ * GetShardSplitSharedMemoryHandle returns the shared memory handle stored
  * by 'worker_split_shard_replication_setup' UDF. This handle
  * is requested by wal sender processes during logical replication phase.
  */
 dsm_handle
-GetSharedMemoryHandle(void)
+GetShardSplitSharedMemoryHandle(void)
 {
 	bool found = false;
 	ShardSplitShmemData *smData = ShmemInitStruct(SharedMemoryNameForHandleManagement,

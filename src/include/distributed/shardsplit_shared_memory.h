@@ -53,8 +53,8 @@ typedef struct ShardSplitShmemData
 /* Functions for creating and accessing shared memory used for dsm handle managment */
 void InitializeShardSplitSMHandleManagement(void);
 
-void StoreSharedMemoryHandle(dsm_handle dsmHandle);
-dsm_handle GetSharedMemoryHandle(void);
+void StoreShardSplitSharedMemoryHandle(dsm_handle dsmHandle);
+dsm_handle GetShardSplitSharedMemoryHandle(void);
 
 /* Functions for creating and accessing shared memory segments consisting shard split information */
 extern ShardSplitInfoSMHeader * CreateSharedMemoryForShardSplitInfo(int
