@@ -131,7 +131,7 @@ jobs:
           name: 'Configure'
           command: |
             chown -R circleci .
-            gosu circleci ./configure
+            gosu circleci ./configure --without-pg-version-check
       - run:
           name: 'Enable core dumps'
           command: |
@@ -212,7 +212,7 @@ jobs:
           name: 'Configure'
           command: |
             chown -R circleci .
-            gosu circleci ./configure
+            gosu circleci ./configure --without-pg-version-check
       - run:
           name: 'Enable core dumps'
           command: |
@@ -286,7 +286,7 @@ jobs:
           name: 'Configure'
           command: |
             chown -R circleci .
-            gosu circleci ./configure
+            gosu circleci ./configure --without-pg-version-check
       - run:
           name: 'Enable core dumps'
           command: |
@@ -374,7 +374,7 @@ jobs:
           name: 'Configure'
           command: |
             chown -R circleci .
-            gosu circleci ./configure
+            gosu circleci ./configure --without-pg-version-check
       - run:
           name: 'Enable core dumps'
           command: |
@@ -451,7 +451,7 @@ jobs:
           name: 'Configure'
           command: |
             chown -R circleci .
-            gosu circleci ./configure
+            gosu circleci ./configure --without-pg-version-check
       - run:
           name: 'Enable core dumps'
           command: |
@@ -840,7 +840,7 @@ workflows:
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-follower-cluster
-          requires: [build-14]
+          requires: [build-15]
       - test-citus:
           name: 'test-15_check-columnar'
           pg_major: 15
