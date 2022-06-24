@@ -42,6 +42,5 @@ extern void SplitShard(SplitMode splitMode,
 extern void ErrorIfCannotSplitShard(SplitOperation splitOperation,
 									ShardInterval *sourceShard);
 extern void DropShardList(List *shardIntervalList);
-extern void ExecuteCommandListOnPlacements(List *commandList, List *placementList);
 
 #endif /* SHARDSPLIT_H_ */

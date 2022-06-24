@@ -57,6 +57,7 @@ static ShardInterval * CreateSplitOffShardFromTemplate(ShardInterval *shardTempl
 													   Oid relationId);
 static List * SplitOffCommandList(ShardInterval *sourceShard,
 								  ShardInterval *splitOffShard);
+static void ExecuteCommandListOnPlacements(List *commandList, List *placementList);
 static void InsertSplitOffShardMetadata(List *splitOffShardList,
 										List *sourcePlacementList);
 static void CreateForeignConstraints(List *splitOffShardList, List *sourcePlacementList);
@@ -548,6 +549,95 @@ SplitOffCommandList(ShardInterval *sourceShard, ShardInterval *splitOffShard)
 	splitOffCommandList = list_concat(splitOffCommandList, indexCommandList);
 
 	return splitOffCommandList;
+}
+
+
+/*
+ * ExecuteCommandListOnPlacements runs the given command list on the nodes of
+ * the given shard placement list. First, it creates connections. Then it sends
+ * commands one by one. For every command, first it send the command to all
+ * connections and then checks the results. This helps to run long running
+ * commands in parallel. Finally, it sends commit messages to all connections
+ * and close them.
+ */
+void
+ExecuteCommandListOnPlacements(List *commandList, List *placementList)
+{
+	List *workerConnectionList = NIL;
+	ListCell *workerConnectionCell = NULL;
+	ListCell *shardPlacementCell = NULL;
+	ListCell *commandCell = NULL;
+
+	/* create connections and start transactions */
+	foreach(shardPlacementCell, placementList)
+	{
+		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
+		char *nodeName = shardPlacement->nodeName;
+		int32 nodePort = shardPlacement->nodePort;
+
+		int connectionFlags = FORCE_NEW_CONNECTION;
+		char *currentUser = CurrentUserName();
+
+		/* create a new connection */
+		MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
+																		  nodeName,
+																		  nodePort,
+																		  currentUser,
+																		  NULL);
+
+		/* mark connection as critical ans start transaction */
+		MarkRemoteTransactionCritical(workerConnection);
+		RemoteTransactionBegin(workerConnection);
+
+		/* add connection to the list */
+		workerConnectionList = lappend(workerConnectionList, workerConnection);
+	}
+
+	/* send and check results for every command one by one */
+	foreach(commandCell, commandList)
+	{
+		char *command = lfirst(commandCell);
+
+		/* first only send the command */
+		foreach(workerConnectionCell, workerConnectionList)
+		{
+			MultiConnection *workerConnection =
+				(MultiConnection *) lfirst(workerConnectionCell);
+
+			int querySent = SendRemoteCommand(workerConnection, command);
+			if (querySent == 0)
+			{
+				ReportConnectionError(workerConnection, ERROR);
+			}
+		}
+
+		/* then check the result separately to run long running commands in parallel */
+		foreach(workerConnectionCell, workerConnectionList)
+		{
+			MultiConnection *workerConnection =
+				(MultiConnection *) lfirst(workerConnectionCell);
+			bool raiseInterrupts = true;
+
+			PGresult *result = GetRemoteCommandResult(workerConnection, raiseInterrupts);
+			if (!IsResponseOK(result))
+			{
+				ReportResultError(workerConnection, result, ERROR);
+			}
+
+			PQclear(result);
+			ForgetResults(workerConnection);
+		}
+	}
+
+	/* finally commit each transaction and close connections */
+	foreach(workerConnectionCell, workerConnectionList)
+	{
+		MultiConnection *workerConnection =
+			(MultiConnection *) lfirst(workerConnectionCell);
+
+		RemoteTransactionCommit(workerConnection);
+		CloseConnection(workerConnection);
+	}
 }
 
 
