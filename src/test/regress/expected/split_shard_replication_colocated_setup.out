@@ -80,12 +80,6 @@ SELECT relowner AS table_owner_one FROM pg_class WHERE relname='table_first' \gs
 SELECT relowner AS table_owner_two FROM pg_class WHERE relname='table_second' \gset
 SELECT slot_name AS slot_for_first_owner FROM pg_create_logical_replication_slot(FORMAT('citus_split_%s_%s', :worker_2_node, :table_owner_one), 'citus') \gset
 SELECT slot_name AS slot_for_second_owner FROM pg_create_logical_replication_slot(FORMAT('citus_split_%s_%s', :worker_2_node, :table_owner_two), 'citus') \gset
-SELECT pg_sleep(5);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
 -- Create subscription at worker2 with copy_data to 'false'
 \c - postgres - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
@@ -98,39 +92,41 @@ CREATE SUBSCRIPTION sub1
                    enabled=true,
                    slot_name=:slot_for_first_owner,
                    copy_data=false);
-SELECT pg_sleep(5);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
 \c - myuser - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
 INSERT INTO table_first_4 VALUES(100, 'a');
 INSERT INTO table_first_4 VALUES(400, 'a');
 INSERT INTO table_first_4 VALUES(500, 'a');
-SELECT pg_sleep(2);
- pg_sleep
+SELECT wait_for_expected_rowcount_at_table('table_first_4', 3);
+ wait_for_expected_rowcount_at_table
 ---------------------------------------------------------------------
 
 (1 row)
+
+SELECT * FROM table_first_4;
+ id  | value
+---------------------------------------------------------------------
+ 100 | a
+ 400 | a
+ 500 | a
+(3 rows)
 
 \c - admin_user - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
 INSERT INTO table_second_7 VALUES(100, 'a');
 INSERT INTO table_second_7 VALUES(400, 'a');
+SELECT wait_for_expected_rowcount_at_table('table_second_7', 2);
+ wait_for_expected_rowcount_at_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT * FROM table_second_7;
  id  | value
 ---------------------------------------------------------------------
  100 | a
  400 | a
 (2 rows)
-
-SELECT pg_sleep(2);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
 
 -- expect data in table_first_5/6
 \c - myuser - :worker_2_port
@@ -140,10 +136,22 @@ SELECT * FROM table_first_4;
 ---------------------------------------------------------------------
 (0 rows)
 
+SELECT wait_for_expected_rowcount_at_table('table_first_5', 1);
+ wait_for_expected_rowcount_at_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT * FROM table_first_5;
  id  | value
 ---------------------------------------------------------------------
  400 | a
+(1 row)
+
+SELECT wait_for_expected_rowcount_at_table('table_first_6', 2);
+ wait_for_expected_rowcount_at_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT * FROM table_first_6;
@@ -182,12 +190,6 @@ CREATE SUBSCRIPTION sub2
                    enabled=true,
                    slot_name=:slot_for_second_owner,
                    copy_data=false);
-SELECT pg_sleep(5);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
 -- expect data
 \c - admin_user - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
@@ -196,10 +198,22 @@ SELECT * FROM table_second_7;
 ---------------------------------------------------------------------
 (0 rows)
 
+SELECT wait_for_expected_rowcount_at_table('table_second_8', 1);
+ wait_for_expected_rowcount_at_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT * FROM table_second_8;
  id  | value
 ---------------------------------------------------------------------
  400 | a
+(1 row)
+
+SELECT wait_for_expected_rowcount_at_table('table_second_9', 1);
+ wait_for_expected_rowcount_at_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT * FROM table_second_9;

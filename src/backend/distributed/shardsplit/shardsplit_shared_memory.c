@@ -329,30 +329,30 @@ PopulateShardSplitInfoForReplicationSlot(char *slotName)
 	MemoryContext oldContext = MemoryContextSwitchTo(TopMemoryContext);
 
 	ShardSplitInfoForReplicationSlot *infoForReplicationSlot =
-		(ShardSplitInfoForReplicationSlot *) palloc(
+		(ShardSplitInfoForReplicationSlot *) palloc0(
 			sizeof(ShardSplitInfoForReplicationSlot));
 	infoForReplicationSlot->shardSplitInfoHeader = smHeader;
 	infoForReplicationSlot->startIndex = -1;
 	infoForReplicationSlot->endIndex = -1;
 
-	int index = 0;
-	while (index < smHeader->count)
+	int splitInfoIndex = 0;
+	while (splitInfoIndex < smHeader->count)
 	{
-		if (strcmp(smHeader->splitInfoArray[index].slotName, slotName) == 0)
+		if (strcmp(smHeader->splitInfoArray[splitInfoIndex].slotName, slotName) == 0)
 		{
 			/* Found the starting index from where current slot information begins */
-			infoForReplicationSlot->startIndex = index;
+			infoForReplicationSlot->startIndex = splitInfoIndex;
 
 			/* Slide forward to get the ending index */
-			index++;
-			while (index < smHeader->count && strcmp(
-					   smHeader->splitInfoArray[index].slotName, slotName) == 0)
+			splitInfoIndex++;
+			while (splitInfoIndex < smHeader->count && strcmp(
+					   smHeader->splitInfoArray[splitInfoIndex].slotName, slotName) == 0)
 			{
-				index++;
+				splitInfoIndex++;
 			}
 
 			/* Found ending index */
-			infoForReplicationSlot->endIndex = index - 1;
+			infoForReplicationSlot->endIndex = splitInfoIndex - 1;
 
 			/*
 			 * 'ShardSplitInfo' with same slot name are stored contiguously in shared memory segment.
@@ -362,7 +362,7 @@ PopulateShardSplitInfoForReplicationSlot(char *slotName)
 			break;
 		}
 
-		index++;
+		splitInfoIndex++;
 	}
 
 	if (infoForReplicationSlot->startIndex == -1)

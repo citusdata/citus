@@ -311,7 +311,7 @@ PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader,
 	hash_seq_init(&status, shardInfoHashMap);
 
 	NodeShardMappingEntry *entry = NULL;
-	int index = 0;
+	int splitInfoIndex = 0;
 	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
 	{
 		uint32_t nodeId = entry->key.nodeId;
@@ -323,10 +323,11 @@ PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader,
 		ShardSplitInfo *splitShardInfo = NULL;
 		foreach_ptr(splitShardInfo, shardSplitInfoList)
 		{
-			shardSplitInfoSMHeader->splitInfoArray[index] = *splitShardInfo;
-			strcpy_s(shardSplitInfoSMHeader->splitInfoArray[index].slotName, NAMEDATALEN,
+			shardSplitInfoSMHeader->splitInfoArray[splitInfoIndex] = *splitShardInfo;
+			strcpy_s(shardSplitInfoSMHeader->splitInfoArray[splitInfoIndex].slotName,
+					 NAMEDATALEN,
 					 derivedSlotName);
-			index++;
+			splitInfoIndex++;
 		}
 	}
 }

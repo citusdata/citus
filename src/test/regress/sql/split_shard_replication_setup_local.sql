@@ -31,23 +31,29 @@ CREATE SUBSCRIPTION local_subscription
                    slot_name=:local_slot,
                    copy_data=false);
 COMMIT;
-select pg_sleep(5);
 
 INSERT INTO table_to_split_1 VALUES(100, 'a');
 INSERT INTO table_to_split_1 VALUES(400, 'a');
 INSERT INTO table_to_split_1 VALUES(500, 'a');
-select pg_sleep(5);
 
 -- expect data to present in  table_to_split_2/3 on worker1
 SELECT * FROM table_to_split_1;
+
+SELECT wait_for_expected_rowcount_at_table('table_to_split_2', 1);
 SELECT * FROM table_to_split_2;
+
+SELECT wait_for_expected_rowcount_at_table('table_to_split_3', 2);
 SELECT * FROM table_to_split_3;
 
-
 DELETE FROM table_to_split_1;
-SELECT pg_sleep(5);
+
+SELECT wait_for_expected_rowcount_at_table('table_to_split_1', 0);
 SELECT * FROM table_to_split_1;
+
+SELECT wait_for_expected_rowcount_at_table('table_to_split_2', 0);
 SELECT * FROM table_to_split_2;
+
+SELECT wait_for_expected_rowcount_at_table('table_to_split_3', 0);
 SELECT * FROM table_to_split_3;
 
 -- clean up

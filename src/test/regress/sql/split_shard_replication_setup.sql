@@ -7,6 +7,26 @@ SET citus.next_shard_id TO 1;
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
 SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 
+CREATE OR REPLACE FUNCTION wait_for_expected_rowcount_at_table(tableName text, expectedCount integer) RETURNS void AS $$
+DECLARE
+actualCount integer;
+BEGIN
+    EXECUTE FORMAT('SELECT COUNT(*) FROM %s', tableName) INTO actualCount;
+    WHILE  expectedCount != actualCount LOOP
+	 EXECUTE FORMAT('SELECT COUNT(*) FROM %s', tableName) INTO actualCount;
+    END LOOP;
+END$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION wait_for_updated_rowcount_at_table(tableName text, expectedCount integer) RETURNS void AS $$
+DECLARE
+actualCount integer;
+BEGIN
+    EXECUTE FORMAT($query$SELECT COUNT(*) FROM %s WHERE value='b'$query$, tableName) INTO actualCount;
+    WHILE  expectedCount != actualCount LOOP
+    EXECUTE FORMAT($query$SELECT COUNT(*) FROM %s WHERE value='b'$query$, tableName) INTO actualCount;
+    END LOOP;
+END$$ LANGUAGE plpgsql;
+
 -- Create distributed table (non co-located)
 CREATE TABLE table_to_split (id bigserial PRIMARY KEY, value char);
 SELECT create_distributed_table('table_to_split','id');
@@ -36,7 +56,7 @@ CREATE TABLE table_to_split_1(id bigserial PRIMARY KEY, value char);
 CREATE TABLE table_to_split_2(id bigserial PRIMARY KEY, value char);
 CREATE TABLE table_to_split_3(id bigserial PRIMARY KEY, value char);
 
--- Create dummy shard tables(table_to_split_2/3) at worker1
+-- Create dummy shard tables(table_to_split_2/3b) at worker1
 -- This is needed for Pub/Sub framework to work.
 \c - - - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
@@ -66,8 +86,6 @@ CREATE SUBSCRIPTION sub1
                    slot_name=:slot_name,
                    copy_data=false);
 
-SELECT pg_sleep(5);
-
 -- No data is present at this moment in all the below tables at worker2
 SELECT * FROM table_to_split_1;
 SELECT * FROM table_to_split_2;
@@ -83,13 +101,17 @@ INSERT INTO table_to_split_1 values(500, 'a');
 SELECT * FROM table_to_split_1;
 SELECT * FROM table_to_split_2;
 SELECT * FROM table_to_split_3;
-select pg_sleep(2);
+
 
 -- Expect data to be present in shard 2 and shard 3 based on the hash value.
 \c - - - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
 SELECT * FROM table_to_split_1; -- should alwasy have zero rows
+
+SELECT wait_for_expected_rowcount_at_table('table_to_split_2', 1);
 SELECT * FROM table_to_split_2;
+
+SELECT wait_for_expected_rowcount_at_table('table_to_split_3', 2);
 SELECT * FROM table_to_split_3;
 
 -- UPDATE data of table_to_split_1 from worker1
@@ -99,26 +121,33 @@ UPDATE table_to_split_1 SET value='b' WHERE id = 100;
 UPDATE table_to_split_1 SET value='b' WHERE id = 400;
 UPDATE table_to_split_1 SET value='b' WHERE id = 500;
 
-SELECT pg_sleep(2);
-
--- Value should be updated in table_to_split_2;
 \c - - - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
 SELECT * FROM table_to_split_1;
+
+-- Value should be updated in table_to_split_2;
+SELECT wait_for_updated_rowcount_at_table('table_to_split_2', 1);
 SELECT * FROM table_to_split_2;
+
+-- Value should be updated in table_to_split_3;
+SELECT wait_for_updated_rowcount_at_table('table_to_split_3', 2);
 SELECT * FROM table_to_split_3;
 
 \c - - - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
 DELETE FROM table_to_split_1;
 
-SELECT pg_sleep(5);
-
 -- Child shard rows should be deleted
 \c - - - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
+
+SELECT wait_for_expected_rowcount_at_table('table_to_split_1', 0);
 SELECT * FROM table_to_split_1;
+
+SELECT wait_for_expected_rowcount_at_table('table_to_split_2', 0);
 SELECT * FROM table_to_split_2;
+
+SELECT wait_for_expected_rowcount_at_table('table_to_split_3', 0);
 SELECT * FROM table_to_split_3;
 
  -- drop publication from worker1

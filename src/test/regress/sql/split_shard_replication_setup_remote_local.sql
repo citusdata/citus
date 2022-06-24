@@ -28,7 +28,6 @@ CREATE SUBSCRIPTION sub_worker1
                    enabled=true,
                    slot_name=:slot_for_worker1,
                    copy_data=false);
-SELECT pg_sleep(5);
 
 \c - - - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
@@ -42,7 +41,6 @@ CREATE SUBSCRIPTION sub_worker2
                    enabled=true,
                    slot_name=:slot_for_worker2,
                    copy_data=false);
-SELECT pg_sleep(5);
 
 -- No data is present at this moment in all the below tables at worker2
 SELECT * FROM table_to_split_1;
@@ -56,10 +54,10 @@ INSERT INTO table_to_split_1 VALUES(100, 'a');
 INSERT INTO table_to_split_1 VALUES(400, 'a');
 INSERT INTO table_to_split_1 VALUES(500, 'a');
 UPDATE table_to_split_1 SET value='b' WHERE id = 400;
-SELECT pg_sleep(5);
+SELECT * FROM table_to_split_1;
 
 -- expect data to present in table_to_split_2 on worker1 as its destination for value '400'
-SELECT * FROM table_to_split_1;
+SELECT wait_for_expected_rowcount_at_table('table_to_split_2', 1);
 SELECT * FROM table_to_split_2;
 SELECT * FROM table_to_split_3;
 
@@ -68,20 +66,24 @@ SELECT * FROM table_to_split_3;
 SET search_path TO split_shard_replication_setup_schema;
 SELECT * FROM table_to_split_1;
 SELECT * FROM table_to_split_2;
+
+SELECT wait_for_expected_rowcount_at_table('table_to_split_3', 2);
 SELECT * FROM table_to_split_3;
 
 -- delete all from table_to_split_1
 \c - - - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
 DELETE FROM table_to_split_1;
-SELECT pg_sleep(5);
 
 -- rows from table_to_split_2 should be deleted
+SELECT wait_for_expected_rowcount_at_table('table_to_split_2', 0);
 SELECT * FROM table_to_split_2;
 
 -- rows from table_to_split_3 should be deleted
 \c - - - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
+
+SELECT wait_for_expected_rowcount_at_table('table_to_split_3', 0);
 SELECT * FROM table_to_split_3;
 
 \c - - - :worker_2_port

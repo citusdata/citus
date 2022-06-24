@@ -80,8 +80,6 @@ SELECT slot_name AS slot_for_first_owner FROM pg_create_logical_replication_slot
 
 SELECT slot_name AS slot_for_second_owner FROM pg_create_logical_replication_slot(FORMAT('citus_split_%s_%s', :worker_2_node, :table_owner_two), 'citus') \gset
 
-SELECT pg_sleep(5);
-
 -- Create subscription at worker2 with copy_data to 'false'
 \c - postgres - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
@@ -94,27 +92,33 @@ CREATE SUBSCRIPTION sub1
                    enabled=true,
                    slot_name=:slot_for_first_owner,
                    copy_data=false);
-SELECT pg_sleep(5);
 
 \c - myuser - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
 INSERT INTO table_first_4 VALUES(100, 'a');
 INSERT INTO table_first_4 VALUES(400, 'a');
 INSERT INTO table_first_4 VALUES(500, 'a');
-SELECT pg_sleep(2);
+
+SELECT wait_for_expected_rowcount_at_table('table_first_4', 3);
+SELECT * FROM table_first_4;
 
 \c - admin_user - :worker_1_port
 SET search_path TO split_shard_replication_setup_schema;
 INSERT INTO table_second_7 VALUES(100, 'a');
 INSERT INTO table_second_7 VALUES(400, 'a');
+
+SELECT wait_for_expected_rowcount_at_table('table_second_7', 2);
 SELECT * FROM table_second_7;
-SELECT pg_sleep(2);
 
 -- expect data in table_first_5/6
 \c - myuser - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
 SELECT * FROM table_first_4;
+
+SELECT wait_for_expected_rowcount_at_table('table_first_5', 1);
 SELECT * FROM table_first_5;
+
+SELECT wait_for_expected_rowcount_at_table('table_first_6', 2);
 SELECT * FROM table_first_6;
 
 -- should have zero rows in all the below tables as the subscription is not yet created for admin_user
@@ -135,11 +139,14 @@ CREATE SUBSCRIPTION sub2
                    enabled=true,
                    slot_name=:slot_for_second_owner,
                    copy_data=false);
-SELECT pg_sleep(5);
 
 -- expect data
 \c - admin_user - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;
 SELECT * FROM table_second_7;
+
+SELECT wait_for_expected_rowcount_at_table('table_second_8', 1);
 SELECT * FROM table_second_8;
+
+SELECT wait_for_expected_rowcount_at_table('table_second_9', 1);
 SELECT * FROM table_second_9;

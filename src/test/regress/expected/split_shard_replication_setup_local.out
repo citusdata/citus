@@ -31,21 +31,9 @@ CREATE SUBSCRIPTION local_subscription
                    slot_name=:local_slot,
                    copy_data=false);
 COMMIT;
-select pg_sleep(5);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
 INSERT INTO table_to_split_1 VALUES(100, 'a');
 INSERT INTO table_to_split_1 VALUES(400, 'a');
 INSERT INTO table_to_split_1 VALUES(500, 'a');
-select pg_sleep(5);
- pg_sleep
----------------------------------------------------------------------
-
-(1 row)
-
 -- expect data to present in  table_to_split_2/3 on worker1
 SELECT * FROM table_to_split_1;
  id  | value
@@ -55,10 +43,22 @@ SELECT * FROM table_to_split_1;
  500 | a
 (3 rows)
 
+SELECT wait_for_expected_rowcount_at_table('table_to_split_2', 1);
+ wait_for_expected_rowcount_at_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT * FROM table_to_split_2;
  id  | value
 ---------------------------------------------------------------------
  400 | a
+(1 row)
+
+SELECT wait_for_expected_rowcount_at_table('table_to_split_3', 2);
+ wait_for_expected_rowcount_at_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT * FROM table_to_split_3;
@@ -69,8 +69,8 @@ SELECT * FROM table_to_split_3;
 (2 rows)
 
 DELETE FROM table_to_split_1;
-SELECT pg_sleep(5);
- pg_sleep
+SELECT wait_for_expected_rowcount_at_table('table_to_split_1', 0);
+ wait_for_expected_rowcount_at_table
 ---------------------------------------------------------------------
 
 (1 row)
@@ -80,10 +80,22 @@ SELECT * FROM table_to_split_1;
 ---------------------------------------------------------------------
 (0 rows)
 
+SELECT wait_for_expected_rowcount_at_table('table_to_split_2', 0);
+ wait_for_expected_rowcount_at_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT * FROM table_to_split_2;
  id | value
 ---------------------------------------------------------------------
 (0 rows)
+
+SELECT wait_for_expected_rowcount_at_table('table_to_split_3', 0);
+ wait_for_expected_rowcount_at_table
+---------------------------------------------------------------------
+
+(1 row)
 
 SELECT * FROM table_to_split_3;
  id | value
