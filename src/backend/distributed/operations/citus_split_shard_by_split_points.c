@@ -30,7 +30,7 @@ PG_FUNCTION_INFO_V1(citus_split_shard_by_split_points);
 static SplitMode LookupSplitMode(Oid shardSplitModeOid);
 
 /*
- * citus_split_shard_by_split_points(shard_id bigint, split_points integer[], node_ids integer[])
+ * citus_split_shard_by_split_points(shard_id bigint, split_points text[], node_ids integer[], split_mode citus.split_mode)
  * Split source shard into multiple shards using the given split points.
  * 'shard_id' is the id of source shard to split.
  * 'split_points' is an array that represents the split points.

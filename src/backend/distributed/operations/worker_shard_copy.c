@@ -99,6 +99,7 @@ ShouldSendCopyNow(StringInfo buffer)
 	return buffer->len > LocalCopyFlushThresholdByte;
 }
 
+
 static void
 ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 {
@@ -107,10 +108,10 @@ ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 	WorkerNode *workerNode = FindNodeWithNodeId(copyDest->destinationNodeId,
 												false /* missingOk */);
 	copyDest->connection = GetNodeUserDatabaseConnection(connectionFlags,
-															workerNode->workerName,
-															workerNode->workerPort,
-															currentUser,
-															NULL /* database (current) */);
+														 workerNode->workerName,
+														 workerNode->workerPort,
+														 currentUser,
+														 NULL /* database (current) */);
 	ClaimConnectionExclusively(copyDest->connection);
 
 	StringInfo copyStatement = ConstructCopyStatement(
@@ -122,7 +123,8 @@ ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 		ReportConnectionError(copyDest->connection, ERROR);
 	}
 
-	PGresult *result = GetRemoteCommandResult(copyDest->connection, true /* raiseInterrupts */);
+	PGresult *result = GetRemoteCommandResult(copyDest->connection,
+											  true /* raiseInterrupts */);
 	if (PQresultStatus(result) != PGRES_COPY_IN)
 	{
 		ReportResultError(copyDest->connection, result, ERROR);
@@ -130,6 +132,7 @@ ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 
 	PQclear(result);
 }
+
 
 static bool
 ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
@@ -179,8 +182,10 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 		if (!PutRemoteCopyData(copyDest->connection, copyOutState->fe_msgbuf->data,
 							   copyOutState->fe_msgbuf->len))
 		{
-			char *destinationShardSchemaName = linitial(copyDest->destinationShardFullyQualifiedName);
-			char *destinationShardRelationName = lsecond(copyDest->destinationShardFullyQualifiedName);
+			char *destinationShardSchemaName = linitial(
+				copyDest->destinationShardFullyQualifiedName);
+			char *destinationShardRelationName = lsecond(
+				copyDest->destinationShardFullyQualifiedName);
 
 			char *errorMessage = PQerrorMessage(copyDest->connection->pgConn);
 
@@ -253,12 +258,15 @@ ShardCopyDestReceiverShutdown(DestReceiver *dest)
 		/* end the COPY input */
 		if (!PutRemoteCopyEnd(copyDest->connection, NULL /* errormsg */))
 		{
-			char *destinationShardSchemaName = linitial(copyDest->destinationShardFullyQualifiedName);
-			char *destinationShardRelationName = lsecond(copyDest->destinationShardFullyQualifiedName);
+			char *destinationShardSchemaName = linitial(
+				copyDest->destinationShardFullyQualifiedName);
+			char *destinationShardRelationName = lsecond(
+				copyDest->destinationShardFullyQualifiedName);
 
 			ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
 							errmsg("Failed to COPY to destination shard %s.%s",
-								   destinationShardSchemaName, destinationShardRelationName)));
+								   destinationShardSchemaName,
+								   destinationShardRelationName)));
 		}
 
 		/* check whether there were any COPY errors */
@@ -396,8 +404,10 @@ LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState localCopyOutState
 	 */
 	LocalCopyBuffer = localCopyOutState->fe_msgbuf;
 
-	char *destinationShardSchemaName = linitial(copyDest->destinationShardFullyQualifiedName);
-	char *destinationShardRelationName = lsecond(copyDest->destinationShardFullyQualifiedName);
+	char *destinationShardSchemaName = linitial(
+		copyDest->destinationShardFullyQualifiedName);
+	char *destinationShardRelationName = lsecond(
+		copyDest->destinationShardFullyQualifiedName);
 
 	Oid destinationSchemaOid = get_namespace_oid(destinationShardSchemaName,
 												 false /* missing_ok */);

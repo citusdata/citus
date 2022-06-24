@@ -60,8 +60,10 @@ static void DoSplitCopy(WorkerNode *sourceShardNode,
 static StringInfo CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 										 List *splitChildrenShardIntervalList,
 										 List *workersForPlacementList);
-static void InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList, List *workersForPlacementList);
-static void CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList, List *workersForPlacementList);
+static void InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
+											 List *workersForPlacementList);
+static void CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
+										List *workersForPlacementList);
 
 /* Customize error message strings based on operation type */
 static const char *const SplitOperationName[] =
@@ -410,8 +412,10 @@ BlockingShardSplit(SplitOperation splitOperation,
 	/* Only single placement allowed (already validated by caller) */
 	List *sourcePlacementList = ActiveShardPlacementList(shardIntervalToSplit->shardId);
 	Assert(sourcePlacementList->length == 1);
-	ShardPlacement *sourceShardPlacement = (ShardPlacement *) linitial(sourcePlacementList);
-	WorkerNode *sourceShardToCopyNode = FindNodeWithNodeId(sourceShardPlacement->nodeId, false /* missingOk */);
+	ShardPlacement *sourceShardPlacement = (ShardPlacement *) linitial(
+		sourcePlacementList);
+	WorkerNode *sourceShardToCopyNode = FindNodeWithNodeId(sourceShardPlacement->nodeId,
+														   false /* missingOk */);
 
 	/* Physically create split children and perform split copy */
 	CreateSplitShardsForShardGroup(
@@ -428,7 +432,8 @@ BlockingShardSplit(SplitOperation splitOperation,
 	DropShardList(sourceColocatedShardIntervalList);
 
 	/* Insert new shard and placement metdata */
-	InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList, workersForPlacementList);
+	InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
+									 workersForPlacementList);
 
 	/*
 	 * Create foreign keys if exists after the metadata changes happening in
@@ -679,7 +684,8 @@ CreateSplitIntervalsForShard(ShardInterval *sourceShard,
  * Insert new shard and placement metadata.
  */
 static void
-InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList, List *workersForPlacementList)
+InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
+								 List *workersForPlacementList)
 {
 	/* Iterate on shard intervals for shard group */
 	List *shardIntervalList = NULL;
@@ -727,10 +733,11 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList, List *wo
  * Create foreign key constraints on the split children shards.
  */
 static void
-CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList, List *workersForPlacementList)
+CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
+							List *workersForPlacementList)
 {
 	/* Create constraints between shards */
-	List* shardIntervalList = NULL;
+	List *shardIntervalList = NULL;
 	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
 		ShardInterval *shardInterval = NULL;
@@ -742,8 +749,10 @@ CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList, List *workers
 			List *referenceTableForeignConstraintList = NIL;
 
 			CopyShardForeignConstraintCommandListGrouped(shardInterval,
-														&shardForeignConstraintCommandList,
-														&referenceTableForeignConstraintList);
+														 &
+														 shardForeignConstraintCommandList,
+														 &
+														 referenceTableForeignConstraintList);
 
 			List *commandList = NIL;
 			commandList = list_concat(commandList, shardForeignConstraintCommandList);

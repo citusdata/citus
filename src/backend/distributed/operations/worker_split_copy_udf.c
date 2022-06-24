@@ -56,7 +56,7 @@ worker_split_copy(PG_FUNCTION_ARGS)
 																	  splitCopyInfoList);
 
 	char *sourceShardToCopyName = generate_qualified_relation_name(
-						 shardIntervalToSplitCopy->relationId);
+		shardIntervalToSplitCopy->relationId);
 	AppendShardIdToName(&sourceShardToCopyName, shardIdToSplitCopy);
 
 	StringInfo selectShardQueryForCopy = makeStringInfo();
