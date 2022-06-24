@@ -57,6 +57,10 @@ static ShardInterval * CreateSplitOffShardFromTemplate(ShardInterval *shardTempl
 													   Oid relationId);
 static List * SplitOffCommandList(ShardInterval *sourceShard,
 								  ShardInterval *splitOffShard);
+static void InsertSplitOffShardMetadata(List *splitOffShardList,
+										List *sourcePlacementList);
+static void CreateForeignConstraints(List *splitOffShardList, List *sourcePlacementList);
+static void ExecuteCommandListOnWorker(char *nodeName, int nodePort, List *commandList);
 
 /*
  * isolate_tenant_to_new_shard isolates a tenant to its own shard by spliting
@@ -278,6 +282,94 @@ SplitShardByValue(ShardInterval *sourceShard, Datum distributionValueDatum)
 
 
 /*
+ * CreateForeignConstraints creates the foreign constraints on the newly
+ * created shards via the tenant isolation.
+ *
+ * The function treats foreign keys to reference tables and foreign keys to
+ * co-located distributed tables differently. The former one needs to be
+ * executed over a single connection to prevent self-deadlocks. The latter
+ * one can be executed in parallel if there are multiple replicas.
+ */
+static void
+CreateForeignConstraints(List *splitOffShardList, List *sourcePlacementList)
+{
+	ListCell *splitOffShardCell = NULL;
+
+	List *colocatedShardForeignConstraintCommandList = NIL;
+	List *referenceTableForeignConstraintList = NIL;
+
+	foreach(splitOffShardCell, splitOffShardList)
+	{
+		ShardInterval *splitOffShard = (ShardInterval *) lfirst(splitOffShardCell);
+
+		List *currentColocatedForeignKeyList = NIL;
+		List *currentReferenceForeignKeyList = NIL;
+
+		CopyShardForeignConstraintCommandListGrouped(splitOffShard,
+													 &currentColocatedForeignKeyList,
+													 &currentReferenceForeignKeyList);
+
+		colocatedShardForeignConstraintCommandList =
+			list_concat(colocatedShardForeignConstraintCommandList,
+						currentColocatedForeignKeyList);
+		referenceTableForeignConstraintList =
+			list_concat(referenceTableForeignConstraintList,
+						currentReferenceForeignKeyList);
+	}
+
+	/*
+	 * We can use parallel connections to while creating co-located foreign keys
+	 * if the source placement .
+	 * However, foreign keys to reference tables need to be created using a single
+	 * connection per worker to prevent self-deadlocks.
+	 */
+	if (colocatedShardForeignConstraintCommandList != NIL)
+	{
+		ExecuteCommandListOnPlacements(colocatedShardForeignConstraintCommandList,
+									   sourcePlacementList);
+	}
+
+	if (referenceTableForeignConstraintList != NIL)
+	{
+		ListCell *shardPlacementCell = NULL;
+		foreach(shardPlacementCell, sourcePlacementList)
+		{
+			ShardPlacement *shardPlacement =
+				(ShardPlacement *) lfirst(shardPlacementCell);
+
+			char *nodeName = shardPlacement->nodeName;
+			int32 nodePort = shardPlacement->nodePort;
+
+			/*
+			 * We're using the connections that we've used for dropping the
+			 * source placements within the same coordinated transaction.
+			 */
+			ExecuteCommandListOnWorker(nodeName, nodePort,
+									   referenceTableForeignConstraintList);
+		}
+	}
+}
+
+
+/*
+ * ExecuteCommandListOnWorker executes the command on the given node within
+ * the coordinated 2PC.
+ */
+static void
+ExecuteCommandListOnWorker(char *nodeName, int nodePort, List *commandList)
+{
+	ListCell *commandCell = NULL;
+
+	foreach(commandCell, commandList)
+	{
+		char *command = (char *) lfirst(commandCell);
+
+		SendCommandToWorker(nodeName, nodePort, command);
+	}
+}
+
+
+/*
  * CreateSplitOffShards gets a shard and a hashed value to pick the split point.
  * First, it creates templates to create new shards. Then, for every colocated
  * shard, it creates new split shards data and physically creates them on the
@@ -456,4 +548,58 @@ SplitOffCommandList(ShardInterval *sourceShard, ShardInterval *splitOffShard)
 	splitOffCommandList = list_concat(splitOffCommandList, indexCommandList);
 
 	return splitOffCommandList;
+}
+
+
+/*
+ * InsertSplitOffShardMetadata inserts new shard and shard placement data into
+ * catolog tables both the coordinator and mx nodes.
+ */
+static void
+InsertSplitOffShardMetadata(List *splitOffShardList, List *sourcePlacementList)
+{
+	List *syncedShardList = NIL;
+	ListCell *shardCell = NULL;
+	ListCell *commandCell = NULL;
+
+	/* add new metadata */
+	foreach(shardCell, splitOffShardList)
+	{
+		ShardInterval *splitOffShard = (ShardInterval *) lfirst(shardCell);
+		Oid relationId = splitOffShard->relationId;
+		uint64 shardId = splitOffShard->shardId;
+		char storageType = splitOffShard->storageType;
+		ListCell *shardPlacementCell = NULL;
+
+		int32 shardMinValue = DatumGetInt32(splitOffShard->minValue);
+		int32 shardMaxValue = DatumGetInt32(splitOffShard->maxValue);
+		text *shardMinValueText = IntegerToText(shardMinValue);
+		text *shardMaxValueText = IntegerToText(shardMaxValue);
+
+		InsertShardRow(relationId, shardId, storageType, shardMinValueText,
+					   shardMaxValueText);
+
+		/* split off shard placement metadata */
+		foreach(shardPlacementCell, sourcePlacementList)
+		{
+			ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
+			uint64 shardSize = 0;
+
+			InsertShardPlacementRow(shardId, INVALID_PLACEMENT_ID, SHARD_STATE_ACTIVE,
+									shardSize, placement->groupId);
+		}
+
+		if (ShouldSyncTableMetadata(relationId))
+		{
+			syncedShardList = lappend(syncedShardList, splitOffShard);
+		}
+	}
+
+	/* send commands to synced nodes one by one */
+	List *splitOffShardMetadataCommandList = ShardListInsertCommand(syncedShardList);
+	foreach(commandCell, splitOffShardMetadataCommandList)
+	{
+		char *command = (char *) lfirst(commandCell);
+		SendCommandToWorkersWithMetadata(command);
+	}
 }
