@@ -35,62 +35,54 @@ SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \
 -- UDF fails for range partitioned tables.
 SELECT citus_split_shard_by_split_points(
 	60761300,
-	ARRAY[-1073741826],
+	ARRAY['-1073741826'],
 	ARRAY[:worker_1_node, :worker_2_node]);
-ERROR:  function citus_split_shard_by_split_points(integer, integer[], integer[]) does not exist
-HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+ERROR:  Cannot split shard as operation is only supported for hash distributed tables.
 -- UDF fails if number of placement node list does not exceed split points by one.
 -- Example: One split point defines two way split (2 worker nodes needed).
 SELECT citus_split_shard_by_split_points(
 	49761300,
     -- 2 split points defined making it a 3 way split but we only specify 2 placement lists.
-	ARRAY[-1073741826, -107374182],
+	ARRAY['-1073741826', '-107374182'],
 	ARRAY[:worker_1_node, :worker_2_node]); -- 2 worker nodes.
-ERROR:  function citus_split_shard_by_split_points(integer, integer[], integer[]) does not exist
-HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+ERROR:  Number of worker node ids should be one greater split points. NodeId count is '2' and SplitPoint count is '2'.
 -- UDF fails if split ranges specified are not within the shard id to split.
 SELECT citus_split_shard_by_split_points(
 	49761300, -- Shard range is from (-2147483648, -1073741825)
-	ARRAY[0], -- The range we specified is 0 which is not in the range.
+	ARRAY['0'], -- The range we specified is 0 which is not in the range.
 	ARRAY[:worker_1_node, :worker_2_node]);
-ERROR:  function citus_split_shard_by_split_points(integer, integer[], integer[]) does not exist
-HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+ERROR:  Split point 0 is outside the min/max range(-2147483648, -1073741825) for shard id 49761300.
 -- UDF fails if split points are not strictly increasing.
 SELECT citus_split_shard_by_split_points(
 	49761302,
-	ARRAY[50, 35],
-	ARRAY[:worker_1_node, :worker_2_node, :worker_1_node]);
-ERROR:  function citus_split_shard_by_split_points(integer, integer[], integer[]) does not exist
-HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+	ARRAY['50', '35'],
+    ARRAY[:worker_1_node, :worker_2_node, :worker_1_node]);
+ERROR:  Invalid Split Points '50' followed by '35'. All split points should be strictly increasing.
 SELECT citus_split_shard_by_split_points(
 	49761302,
-	ARRAY[50, 50],
+	ARRAY['50', '50'],
 	ARRAY[:worker_1_node, :worker_2_node, :worker_1_node]);
-ERROR:  function citus_split_shard_by_split_points(integer, integer[], integer[]) does not exist
-HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+ERROR:  Invalid Split Points '50' followed by '50'. All split points should be strictly increasing.
 -- UDF fails if nodeIds are < 1 or Invalid.
 SELECT citus_split_shard_by_split_points(
 	49761302,
-	ARRAY[50],
+	ARRAY['50'],
 	ARRAY[0, :worker_2_node]);
-ERROR:  function citus_split_shard_by_split_points(integer, integer[], integer[]) does not exist
-HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+ERROR:  Invalid Node Id '0'.
 SELECT citus_split_shard_by_split_points(
 	49761302,
-	ARRAY[50],
+	ARRAY['50'],
 	ARRAY[101, 201]);
-ERROR:  function citus_split_shard_by_split_points(integer, integer[], integer[]) does not exist
-HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+ERROR:  Invalid Node Id '101'.
 -- UDF fails if split point specified is equal to the max value in the range.
 -- Example: ShardId 81060002 range is from (-2147483648, -1073741825)
 -- '-1073741825' as split point is invalid.
 -- '-1073741826' is valid and will split to: (-2147483648, -1073741826) and (-1073741825, -1073741825)
 SELECT citus_split_shard_by_split_points(
 	49761300, -- Shard range is from (-2147483648, -1073741825)
-	ARRAY[-1073741825], -- Split point equals shard's max value.
+	ARRAY['-1073741825'], -- Split point equals shard's max value.
 	ARRAY[:worker_1_node, :worker_2_node]);
-ERROR:  function citus_split_shard_by_split_points(integer, integer[], integer[]) does not exist
-HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+ERROR:  Invalid split point -1073741825, as split points should be inclusive. Please use -1073741826 instead.
 -- UDF fails where source shard cannot be split further i.e min and max range is equal.
 -- Create a Shard where range cannot be split further
 SELECT isolate_tenant_to_new_shard('table_to_split', 1);
@@ -101,10 +93,9 @@ SELECT isolate_tenant_to_new_shard('table_to_split', 1);
 
 SELECT citus_split_shard_by_split_points(
 	49761305,
-	ARRAY[-1073741826],
+	ARRAY['-1073741826'],
 	ARRAY[:worker_1_node, :worker_2_node]);
-ERROR:  function citus_split_shard_by_split_points(integer, integer[], integer[]) does not exist
-HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+ERROR:  Cannot split shard id "49761305" as min/max range are equal: ('-1905060026', '-1905060026').
 -- Create distributed table with replication factor > 1
 SET citus.shard_replication_factor TO 2;
 SET citus.next_shard_id TO 51261400;
@@ -118,10 +109,9 @@ SELECT create_distributed_table('table_to_split_replication_factor_2','id');
 -- UDF fails for replication factor > 1
 SELECT citus_split_shard_by_split_points(
 	51261400,
-	ARRAY[-1073741826],
+	ARRAY['-1073741826'],
 	ARRAY[:worker_1_node, :worker_2_node]);
-ERROR:  function citus_split_shard_by_split_points(integer, integer[], integer[]) does not exist
-HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+ERROR:  Operation split not supported for shard as replication factor '2' is greater than 1.
 -- Create distributed table with columnar type.
 SET citus.next_shard_id TO 51271400;
 CREATE TABLE table_to_split_columnar (id bigserial PRIMARY KEY, value char) USING columnar;
@@ -134,7 +124,22 @@ SELECT create_distributed_table('table_to_split_columnar','id');
 -- UDF fails for columnar table.
 SELECT citus_split_shard_by_split_points(
 	51271400,
-	ARRAY[-1073741826],
+	ARRAY['-1073741826'],
 	ARRAY[:worker_1_node, :worker_2_node]);
-ERROR:  function citus_split_shard_by_split_points(integer, integer[], integer[]) does not exist
-HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+ERROR:  Cannot split shard as operation is not supported for Columnar tables.
+-- Create distributed table which is partitioned.
+SET citus.next_shard_id TO 51271900;
+CREATE TABLE table_to_split_partitioned(id integer, dt date) PARTITION BY RANGE(dt);
+SELECT create_distributed_table('table_to_split_partitioned','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- UDF fails for partitioned table.
+SELECT citus_split_shard_by_split_points(
+	51271900,
+	ARRAY['-1073741826'],
+	ARRAY[:worker_1_node, :worker_2_node]);
+ERROR:  cannot split of 'table_to_split_partitioned', because it is a partitioned table
+DETAIL:  In colocation group of 'table_to_split_partitioned', a partitioned relation exists: 'table_to_split_partitioned'. Citus does not support split of partitioned tables.

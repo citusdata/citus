@@ -1,0 +1,133 @@
+-- Split Shards by Split Points tests.
+-- Setup for Test.
+CREATE SCHEMA citus_split_shard_by_split_points;
+SET search_path TO citus_split_shard_by_split_points;
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 82060000;
+-- Create distributed table 'lineitem_streaming'
+CREATE TABLE lineitem_streaming (
+	l_orderkey bigint not null,
+	l_partkey integer not null,
+	l_suppkey integer not null,
+	l_linenumber integer not null,
+	l_quantity decimal(15, 2) not null,
+	l_extendedprice decimal(15, 2) not null,
+	l_discount decimal(15, 2) not null,
+	l_tax decimal(15, 2) not null,
+	l_returnflag char(1) not null,
+	l_linestatus char(1) not null,
+	l_shipdate date not null,
+	l_commitdate date not null,
+	l_receiptdate date not null,
+	l_shipinstruct char(25) not null,
+	l_shipmode char(10) not null,
+	l_comment varchar(44) not null);
+SELECT create_distributed_table('lineitem_streaming', 'l_orderkey');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Create distributed table 'orders_streaming'
+CREATE TABLE orders_streaming (
+	o_orderkey bigint not null primary key,
+	o_custkey integer not null,
+	o_orderstatus char(1) not null,
+	o_totalprice decimal(15,2) not null,
+	o_orderdate date not null,
+	o_orderpriority char(15) not null,
+	o_clerk char(15) not null,
+	o_shippriority integer not null,
+	o_comment varchar(79) not null);
+SELECT create_distributed_table('orders_streaming', 'o_orderkey');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Insert data into 'lineitem_streaming'
+\COPY lineitem_streaming FROM STDIN WITH DELIMITER '|'
+-- Insert data into 'orders_streaming'
+\COPY orders_streaming FROM STDIN WITH DELIMITER '|'
+-- Initial Row Count in Shard
+SELECT COUNT(*) FROM orders_streaming;
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+SELECT COUNT(*) FROM lineitem_streaming;
+ count
+---------------------------------------------------------------------
+    22
+(1 row)
+
+-- Create Foreign constraint between two shards.
+ALTER TABLE lineitem_streaming ADD CONSTRAINT test_constraint
+	FOREIGN KEY(l_orderkey) REFERENCES orders_streaming(o_orderkey);
+-- Before Split, List shard and placement data.
+SELECT shard.shardid, logicalrelid, shardstorage, shardminvalue, shardmaxvalue nodename, nodeport, placementid
+  FROM pg_dist_shard AS shard
+  INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
+  INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
+  WHERE node.noderole = 'primary' AND (logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass)
+  ORDER BY logicalrelid, shardminvalue::BIGINT;
+ shardid  |    logicalrelid    | shardstorage | shardminvalue |  nodename  | nodeport | placementid
+---------------------------------------------------------------------
+ 82060000 | lineitem_streaming | t            | -2147483648   | 2147483647 |    57637 |         117
+ 82060001 | orders_streaming   | t            | -2147483648   | 2147483647 |    57637 |         118
+(2 rows)
+
+-- Trigger five way way Split on Shard.
+SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
+SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
+SELECT * FROM citus_split_shard_by_split_points(
+    82060000,
+    ARRAY['268435455', '536870911', '1073741823', '1610612735'],
+    ARRAY[:worker_1_node, :worker_1_node, :worker_2_node, :worker_2_node, :worker_2_node],
+    'blocking');
+ citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+ -- Row Count in Shard after Split (should be same as before)
+SELECT COUNT(*) FROM orders_streaming;
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+SELECT COUNT(*) FROM lineitem_streaming;
+ count
+---------------------------------------------------------------------
+    22
+(1 row)
+
+-- After Split, List shard and placement data.
+SELECT shard.shardid, logicalrelid, shardstorage, shardminvalue, shardmaxvalue nodename, nodeport, placementid
+  FROM pg_dist_shard AS shard
+  INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
+  INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
+  WHERE node.noderole = 'primary' AND (logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass)
+  ORDER BY logicalrelid, shardminvalue::BIGINT;
+ shardid  |    logicalrelid    | shardstorage | shardminvalue |  nodename  | nodeport | placementid
+---------------------------------------------------------------------
+ 82060012 | lineitem_streaming | t            | -2147483648   | 268435455  |    57637 |         129
+ 82060013 | lineitem_streaming | t            | 268435456     | 536870911  |    57637 |         130
+ 82060014 | lineitem_streaming | t            | 536870912     | 1073741823 |    57638 |         131
+ 82060015 | lineitem_streaming | t            | 1073741824    | 1610612735 |    57638 |         132
+ 82060016 | lineitem_streaming | t            | 1610612736    | 2147483647 |    57638 |         133
+ 82060017 | orders_streaming   | t            | -2147483648   | 268435455  |    57637 |         134
+ 82060018 | orders_streaming   | t            | 268435456     | 536870911  |    57637 |         135
+ 82060019 | orders_streaming   | t            | 536870912     | 1073741823 |    57638 |         136
+ 82060020 | orders_streaming   | t            | 1073741824    | 1610612735 |    57638 |         137
+ 82060021 | orders_streaming   | t            | 1610612736    | 2147483647 |    57638 |         138
+(10 rows)
+
+-- Cleanup for Test.
+\c - - - :master_port
+SET client_min_messages TO WARNING;
+DROP SCHEMA citus_split_shard_by_split_points_blocking CASCADE;
+ERROR:  schema "citus_split_shard_by_split_points_blocking" does not exist
