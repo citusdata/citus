@@ -69,7 +69,7 @@ static void CostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relati
 static void CostColumnarSeqPath(RelOptInfo *rel, Oid relationId, Path *path);
 static void CostColumnarScan(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
 							 CustomPath *cpath, int numberOfColumnsRead,
-							 int nClauses);
+							 List *usefulClauses);
 
 /* functions to add new paths */
 static void AddColumnarScanPaths(PlannerInfo *root, RelOptInfo *rel,
@@ -1314,7 +1314,7 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 		allClauses = list_concat(allClauses, path->param_info->ppi_clauses);
 	}
 
-	allClauses = FilterPushdownClauses(root, rel, allClauses);
+	List *usefulClauses = FilterPushdownClauses(root, rel, allClauses);
 
 	/*
 	 * Plain clauses may contain extern params, but not exec params, and can
@@ -1354,10 +1354,11 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 	}
 
 	int numberOfColumnsRead = bms_num_members(rte->selectedCols);
+	/* not sure if we want usefulClauses or allClauses */
 	int numberOfClausesPushed = list_length(allClauses);
 
 	CostColumnarScan(root, rel, rte->relid, cpath, numberOfColumnsRead,
-					 numberOfClausesPushed);
+					 usefulClauses);
 
 
 	StringInfoData buf;
@@ -1380,13 +1381,13 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
  */
 static void
 CostColumnarScan(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
-				 CustomPath *cpath, int numberOfColumnsRead, int nClauses)
+				 CustomPath *cpath, int numberOfColumnsRead, List *usefulClauses)
 {
 	Path *path = &cpath->path;
 
-	List *allClauses = lsecond(cpath->custom_private);
+	/*List *allClauses = lsecond(cpath->custom_private); */
 	Selectivity clauseSel = clauselist_selectivity(
-		root, allClauses, rel->relid, JOIN_INNER, NULL);
+		root, usefulClauses, rel->relid, JOIN_INNER, NULL);
 
 	/*
 	 * We already filtered out clauses where the overall selectivity would be
