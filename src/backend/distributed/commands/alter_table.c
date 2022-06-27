@@ -223,6 +223,8 @@ PG_FUNCTION_INFO_V1(worker_change_sequence_dependency);
 /* global variable keeping track of whether we are in a table type conversion function */
 bool InTableTypeConversionFunctionCall = false;
 
+/* controlled by GUC, in MB */
+int MaxMatViewSizeToAutoDistribute = 1024;
 
 /*
  * undistribute_table gets a distributed table name and
@@ -1367,6 +1369,22 @@ GetViewCreationCommandsOfTable(Oid relationId)
 		/* See comments on CreateMaterializedViewDDLCommand for its limitations */
 		if (get_rel_relkind(viewOid) == RELKIND_MATVIEW)
 		{
+			Datum relSizeDatum = DirectFunctionCall1(pg_total_relation_size,
+													 ObjectIdGetDatum(viewOid));
+			uint64 matViewSize = DatumGetInt64(relSizeDatum);
+
+			/* convert from MB to bytes */
+			uint64 limitSizeInBytes = MaxMatViewSizeToAutoDistribute * 1024L * 1024L;
+
+			if (matViewSize > limitSizeInBytes)
+			{
+				ereport(ERROR, (errmsg("materialized view %s is too large to "
+									   "automatically distribute",
+									   get_rel_name(viewOid)),
+								errhint("consider increasing the size limit by setting "
+										"citus.max_matview_size_to_auto_distribute")));
+			}
+
 			char *matViewCreateCommands = CreateMaterializedViewDDLCommand(viewOid);
 			appendStringInfoString(query, matViewCreateCommands);
 		}

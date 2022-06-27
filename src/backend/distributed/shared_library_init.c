@@ -1461,6 +1461,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.max_matview_size_to_auto_distribute",
+		gettext_noop("Sets the maximum size of materialized views in MB to "
+					 "automatically distribute them."),
+		NULL,
+		&MaxMatViewSizeToAutoDistribute,
+		1024, -1, MAX_KILOBYTES,
+		PGC_USERSET,
+		GUC_UNIT_MB | GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.max_rebalancer_logged_ignored_moves",
 		gettext_noop("Sets the maximum number of ignored moves the rebalance logs"),
 		NULL,

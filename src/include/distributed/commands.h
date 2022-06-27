@@ -29,6 +29,7 @@ extern bool EnableLocalReferenceForeignKeys;
 
 extern bool EnableUnsafeTriggers;
 
+extern int MaxMatViewSizeToAutoDistribute;
 
 extern void SwitchToSequentialAndLocalExecutionIfRelationNameTooLong(Oid relationId,
 																	 char *
