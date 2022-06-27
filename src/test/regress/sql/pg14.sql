@@ -12,7 +12,7 @@ SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 980000;
 SET citus.shard_count TO 2;
 
--- test the new vacuum option, process_toast
+-- test the new vacuum option, process_toast and also auto option for index_cleanup
 CREATE TABLE t1 (a int);
 SELECT create_distributed_table('t1','a');
 SET citus.log_remote_commands TO ON;
@@ -21,6 +21,34 @@ VACUUM (FULL, PROCESS_TOAST) t1;
 VACUUM (FULL, PROCESS_TOAST true) t1;
 VACUUM (FULL, PROCESS_TOAST false) t1;
 VACUUM (PROCESS_TOAST false) t1;
+VACUUM (INDEX_CLEANUP AUTO) t1;
+VACUUM (INDEX_CLEANUP) t1;
+VACUUM (INDEX_CLEANUP AuTo) t1;
+VACUUM (INDEX_CLEANUP false) t1;
+VACUUM (INDEX_CLEANUP true) t1;
+VACUUM (INDEX_CLEANUP "AUTOX") t1;
+VACUUM (FULL, FREEZE, VERBOSE false, ANALYZE, SKIP_LOCKED, INDEX_CLEANUP, PROCESS_TOAST, TRUNCATE) t1;
+VACUUM (FULL, FREEZE false, VERBOSE false, ANALYZE false, SKIP_LOCKED false, INDEX_CLEANUP "Auto", PROCESS_TOAST true, TRUNCATE false) t1;
+
+-- vacuum (process_toast true) should be vacuuming toast tables (default is true)
+CREATE TABLE local_vacuum_table(name text);
+select reltoastrelid from pg_class where relname='local_vacuum_table'
+\gset
+
+SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass
+\gset
+VACUUM (FREEZE, PROCESS_TOAST true) local_vacuum_table;
+SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
+WHERE oid=:reltoastrelid::regclass;
+
+-- vacuum (process_toast false) should not be vacuuming toast tables (default is true)
+SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass
+\gset
+VACUUM (FREEZE, PROCESS_TOAST false) local_vacuum_table;
+SELECT relfrozenxid::text::integer = :frozenxid AS frozen_not_performed FROM pg_class
+WHERE oid=:reltoastrelid::regclass;
+
+DROP TABLE local_vacuum_table;
 SET citus.log_remote_commands TO OFF;
 
 create table dist(a int, b int);
