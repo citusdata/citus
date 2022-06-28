@@ -1,11 +1,11 @@
-CREATE SCHEMA worker_shard_binary_copy_test;
-SET search_path TO worker_shard_binary_copy_test;
+CREATE SCHEMA worker_split_binary_copy_test;
+SET search_path TO worker_split_binary_copy_test;
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 81060000;
 
 -- BEGIN: Create distributed table and insert data.
-CREATE TABLE worker_shard_binary_copy_test.shard_to_split_copy (
+CREATE TABLE worker_split_binary_copy_test.shard_to_split_copy (
 	l_orderkey bigint not null,
 	l_partkey integer not null,
 	l_suppkey integer not null,
@@ -53,7 +53,7 @@ SELECT create_distributed_table('shard_to_split_copy', 'l_orderkey');
 
 -- BEGIN: Switch to Worker1, Create target shards in worker for local 2-way split copy.
 \c - - - :worker_1_port
-CREATE TABLE worker_shard_binary_copy_test.shard_to_split_copy_81060015 (
+CREATE TABLE worker_split_binary_copy_test.shard_to_split_copy_81060015 (
 	l_orderkey bigint not null,
 	l_partkey integer not null,
 	l_suppkey integer not null,
@@ -70,7 +70,7 @@ CREATE TABLE worker_shard_binary_copy_test.shard_to_split_copy_81060015 (
 	l_shipinstruct char(25) not null,
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null);
-CREATE TABLE worker_shard_binary_copy_test.shard_to_split_copy_81060016 (
+CREATE TABLE worker_split_binary_copy_test.shard_to_split_copy_81060016 (
 	l_orderkey bigint not null,
 	l_partkey integer not null,
 	l_suppkey integer not null,
@@ -91,7 +91,7 @@ CREATE TABLE worker_shard_binary_copy_test.shard_to_split_copy_81060016 (
 
 -- BEGIN: Switch to Worker2, Create target shards in worker for remote 2-way split copy.
 \c - - - :worker_2_port
-CREATE TABLE worker_shard_binary_copy_test.shard_to_split_copy_81060015 (
+CREATE TABLE worker_split_binary_copy_test.shard_to_split_copy_81060015 (
 	l_orderkey bigint not null,
 	l_partkey integer not null,
 	l_suppkey integer not null,
@@ -108,7 +108,7 @@ CREATE TABLE worker_shard_binary_copy_test.shard_to_split_copy_81060015 (
 	l_shipinstruct char(25) not null,
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null);
-CREATE TABLE worker_shard_binary_copy_test.shard_to_split_copy_81060016 (
+CREATE TABLE worker_split_binary_copy_test.shard_to_split_copy_81060016 (
 	l_orderkey bigint not null,
 	l_partkey integer not null,
 	l_suppkey integer not null,
@@ -129,15 +129,15 @@ CREATE TABLE worker_shard_binary_copy_test.shard_to_split_copy_81060016 (
 
 -- BEGIN: List row count for source shard and targets shard in Worker1.
 \c - - - :worker_1_port
-SELECT COUNT(*) FROM worker_shard_binary_copy_test.shard_to_split_copy_81060000;
-SELECT COUNT(*) FROM worker_shard_binary_copy_test.shard_to_split_copy_81060015;
-SELECT COUNT(*) FROM worker_shard_binary_copy_test.shard_to_split_copy_81060016;
+SELECT COUNT(*) FROM worker_split_binary_copy_test.shard_to_split_copy_81060000;
+SELECT COUNT(*) FROM worker_split_binary_copy_test.shard_to_split_copy_81060015;
+SELECT COUNT(*) FROM worker_split_binary_copy_test.shard_to_split_copy_81060016;
 -- END: List row count for source shard and targets shard in Worker1.
 
 -- BEGIN: List row count for target shard in Worker2.
 \c - - - :worker_2_port
-SELECT COUNT(*) FROM worker_shard_binary_copy_test.shard_to_split_copy_81060015;
-SELECT COUNT(*) FROM worker_shard_binary_copy_test.shard_to_split_copy_81060016;
+SELECT COUNT(*) FROM worker_split_binary_copy_test.shard_to_split_copy_81060015;
+SELECT COUNT(*) FROM worker_split_binary_copy_test.shard_to_split_copy_81060016;
 -- END: List row count for targets shard in Worker2.
 
 -- BEGIN: Set worker_1_node and worker_2_node
@@ -148,7 +148,7 @@ SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \
 
 -- BEGIN: Trigger 2-way local shard split copy.
 -- Ensure we will perform binary copy.
-SET citus.enable_binary_protocol = TRUE;
+SET citus.enable_binary_protocol = true;
 
 SELECT * from worker_split_copy(
     81060000, -- source shard id to copy
@@ -186,18 +186,18 @@ SELECT * from worker_split_copy(
 -- END: Trigger 2-way remote shard split copy.
 
 -- BEGIN: List updated row count for local targets shard.
-SELECT COUNT(*) FROM worker_shard_binary_copy_test.shard_to_split_copy_81060015;
-SELECT COUNT(*) FROM worker_shard_binary_copy_test.shard_to_split_copy_81060016;
+SELECT COUNT(*) FROM worker_split_binary_copy_test.shard_to_split_copy_81060015;
+SELECT COUNT(*) FROM worker_split_binary_copy_test.shard_to_split_copy_81060016;
 -- END: List updated row count for local targets shard.
 
 -- BEGIN: List updated row count for remote targets shard.
 \c - - - :worker_2_port
-SELECT COUNT(*) FROM worker_shard_binary_copy_test.shard_to_split_copy_81060015;
-SELECT COUNT(*) FROM worker_shard_binary_copy_test.shard_to_split_copy_81060016;
+SELECT COUNT(*) FROM worker_split_binary_copy_test.shard_to_split_copy_81060015;
+SELECT COUNT(*) FROM worker_split_binary_copy_test.shard_to_split_copy_81060016;
 -- END: List updated row count for remote targets shard.
 
 -- BEGIN: CLEANUP.
 \c - - - :master_port
 SET client_min_messages TO WARNING;
-DROP SCHEMA citus_split_shard_by_split_points_local CASCADE;
+DROP SCHEMA worker_split_binary_copy_test CASCADE;
 -- END: CLEANUP.

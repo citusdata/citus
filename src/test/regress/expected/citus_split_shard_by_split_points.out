@@ -114,16 +114,16 @@ SELECT shard.shardid, logicalrelid, shardstorage, shardminvalue, shardmaxvalue n
   ORDER BY logicalrelid, shardminvalue::BIGINT;
  shardid  |    logicalrelid    | shardstorage | shardminvalue |  nodename  | nodeport | placementid
 ---------------------------------------------------------------------
- 82060012 | lineitem_streaming | t            | -2147483648   | 268435455  |    57637 |         129
- 82060013 | lineitem_streaming | t            | 268435456     | 536870911  |    57637 |         130
- 82060014 | lineitem_streaming | t            | 536870912     | 1073741823 |    57638 |         131
- 82060015 | lineitem_streaming | t            | 1073741824    | 1610612735 |    57638 |         132
- 82060016 | lineitem_streaming | t            | 1610612736    | 2147483647 |    57638 |         133
- 82060017 | orders_streaming   | t            | -2147483648   | 268435455  |    57637 |         134
- 82060018 | orders_streaming   | t            | 268435456     | 536870911  |    57637 |         135
- 82060019 | orders_streaming   | t            | 536870912     | 1073741823 |    57638 |         136
- 82060020 | orders_streaming   | t            | 1073741824    | 1610612735 |    57638 |         137
- 82060021 | orders_streaming   | t            | 1610612736    | 2147483647 |    57638 |         138
+ 82060002 | lineitem_streaming | t            | -2147483648   | 268435455  |    57637 |         119
+ 82060003 | lineitem_streaming | t            | 268435456     | 536870911  |    57637 |         120
+ 82060004 | lineitem_streaming | t            | 536870912     | 1073741823 |    57638 |         121
+ 82060005 | lineitem_streaming | t            | 1073741824    | 1610612735 |    57638 |         122
+ 82060006 | lineitem_streaming | t            | 1610612736    | 2147483647 |    57638 |         123
+ 82060007 | orders_streaming   | t            | -2147483648   | 268435455  |    57637 |         124
+ 82060008 | orders_streaming   | t            | 268435456     | 536870911  |    57637 |         125
+ 82060009 | orders_streaming   | t            | 536870912     | 1073741823 |    57638 |         126
+ 82060010 | orders_streaming   | t            | 1073741824    | 1610612735 |    57638 |         127
+ 82060011 | orders_streaming   | t            | 1610612736    | 2147483647 |    57638 |         128
 (10 rows)
 
 -- Cleanup for Test.

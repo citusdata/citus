@@ -4,33 +4,111 @@ SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 81070000;
 -- BEGIN: Create distributed table and insert data.
--- Add a complex type to table that will force text / non-binary copy.
-CREATE TYPE worker_split_text_copy_test.complex_type_to_force_text_copy AS (value char, numval int);
-CREATE TABLE worker_split_text_copy_test.shard_to_split_copy (id bigserial PRIMARY KEY, complexvalue worker_split_text_copy_test.complex_type_to_force_text_copy);
-SELECT create_distributed_table('shard_to_split_copy','id');
+CREATE TABLE worker_split_text_copy_test.shard_to_split_copy (
+	l_orderkey bigint not null,
+	l_partkey integer not null,
+	l_suppkey integer not null,
+	l_linenumber integer not null,
+	l_quantity decimal(15, 2) not null,
+	l_extendedprice decimal(15, 2) not null,
+	l_discount decimal(15, 2) not null,
+	l_tax decimal(15, 2) not null,
+	l_returnflag char(1) not null,
+	l_linestatus char(1) not null,
+	l_shipdate date not null,
+	l_commitdate date not null,
+	l_receiptdate date not null,
+	l_shipinstruct char(25) not null,
+	l_shipmode char(10) not null,
+	l_comment varchar(44) not null);
+SELECT create_distributed_table('shard_to_split_copy', 'l_orderkey');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-INSERT INTO worker_split_text_copy_test.shard_to_split_copy (id, complexvalue) (SELECT g.id, ROW('c', g.id)::worker_split_text_copy_test.complex_type_to_force_text_copy FROM generate_series(1, 1000) AS g(id));
+\COPY shard_to_split_copy FROM STDIN WITH DELIMITER '|'
 -- END: Create distributed table and insert data.
 -- BEGIN: Switch to Worker1, Create target shards in worker for local 2-way split copy.
 \c - - - :worker_1_port
-CREATE TABLE worker_split_text_copy_test.shard_to_split_copy_81070015 (id bigserial PRIMARY KEY, complexvalue worker_split_text_copy_test.complex_type_to_force_text_copy);
-CREATE TABLE worker_split_text_copy_test.shard_to_split_copy_81070016 (id bigserial PRIMARY KEY, complexvalue worker_split_text_copy_test.complex_type_to_force_text_copy);
+CREATE TABLE worker_split_text_copy_test.shard_to_split_copy_81070015 (
+	l_orderkey bigint not null,
+	l_partkey integer not null,
+	l_suppkey integer not null,
+	l_linenumber integer not null,
+	l_quantity decimal(15, 2) not null,
+	l_extendedprice decimal(15, 2) not null,
+	l_discount decimal(15, 2) not null,
+	l_tax decimal(15, 2) not null,
+	l_returnflag char(1) not null,
+	l_linestatus char(1) not null,
+	l_shipdate date not null,
+	l_commitdate date not null,
+	l_receiptdate date not null,
+	l_shipinstruct char(25) not null,
+	l_shipmode char(10) not null,
+	l_comment varchar(44) not null);
+CREATE TABLE worker_split_text_copy_test.shard_to_split_copy_81070016 (
+	l_orderkey bigint not null,
+	l_partkey integer not null,
+	l_suppkey integer not null,
+	l_linenumber integer not null,
+	l_quantity decimal(15, 2) not null,
+	l_extendedprice decimal(15, 2) not null,
+	l_discount decimal(15, 2) not null,
+	l_tax decimal(15, 2) not null,
+	l_returnflag char(1) not null,
+	l_linestatus char(1) not null,
+	l_shipdate date not null,
+	l_commitdate date not null,
+	l_receiptdate date not null,
+	l_shipinstruct char(25) not null,
+	l_shipmode char(10) not null,
+	l_comment varchar(44) not null);
 -- End: Switch to Worker1, Create target shards in worker for local 2-way split copy.
 -- BEGIN: Switch to Worker2, Create target shards in worker for remote 2-way split copy.
 \c - - - :worker_2_port
-CREATE TABLE worker_split_text_copy_test.shard_to_split_copy_81070015 (id bigserial PRIMARY KEY, complexvalue worker_split_text_copy_test.complex_type_to_force_text_copy);
-CREATE TABLE worker_split_text_copy_test.shard_to_split_copy_81070016 (id bigserial PRIMARY KEY, complexvalue worker_split_text_copy_test.complex_type_to_force_text_copy);
+CREATE TABLE worker_split_text_copy_test.shard_to_split_copy_81070015 (
+	l_orderkey bigint not null,
+	l_partkey integer not null,
+	l_suppkey integer not null,
+	l_linenumber integer not null,
+	l_quantity decimal(15, 2) not null,
+	l_extendedprice decimal(15, 2) not null,
+	l_discount decimal(15, 2) not null,
+	l_tax decimal(15, 2) not null,
+	l_returnflag char(1) not null,
+	l_linestatus char(1) not null,
+	l_shipdate date not null,
+	l_commitdate date not null,
+	l_receiptdate date not null,
+	l_shipinstruct char(25) not null,
+	l_shipmode char(10) not null,
+	l_comment varchar(44) not null);
+CREATE TABLE worker_split_text_copy_test.shard_to_split_copy_81070016 (
+	l_orderkey bigint not null,
+	l_partkey integer not null,
+	l_suppkey integer not null,
+	l_linenumber integer not null,
+	l_quantity decimal(15, 2) not null,
+	l_extendedprice decimal(15, 2) not null,
+	l_discount decimal(15, 2) not null,
+	l_tax decimal(15, 2) not null,
+	l_returnflag char(1) not null,
+	l_linestatus char(1) not null,
+	l_shipdate date not null,
+	l_commitdate date not null,
+	l_receiptdate date not null,
+	l_shipinstruct char(25) not null,
+	l_shipmode char(10) not null,
+	l_comment varchar(44) not null);
 -- End: Switch to Worker2, Create target shards in worker for remote 2-way split copy.
 -- BEGIN: List row count for source shard and targets shard in Worker1.
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM worker_split_text_copy_test.shard_to_split_copy_81070000;
  count
 ---------------------------------------------------------------------
-  1000
+    22
 (1 row)
 
 SELECT COUNT(*) FROM worker_split_text_copy_test.shard_to_split_copy_81070015;
@@ -67,6 +145,8 @@ SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \
 SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 -- END: Set worker_1_node and worker_2_node
 -- BEGIN: Trigger 2-way local shard split copy.
+-- Ensure we will perform text copy.
+SET citus.enable_binary_protocol = false;
 SELECT * from worker_split_copy(
     81070000, -- source shard id to copy
     ARRAY[
@@ -114,13 +194,13 @@ SELECT * from worker_split_copy(
 SELECT COUNT(*) FROM worker_split_text_copy_test.shard_to_split_copy_81070015;
  count
 ---------------------------------------------------------------------
-   748
+    21
 (1 row)
 
 SELECT COUNT(*) FROM worker_split_text_copy_test.shard_to_split_copy_81070016;
  count
 ---------------------------------------------------------------------
-   252
+     1
 (1 row)
 
 -- END: List updated row count for local targets shard.
@@ -129,19 +209,18 @@ SELECT COUNT(*) FROM worker_split_text_copy_test.shard_to_split_copy_81070016;
 SELECT COUNT(*) FROM worker_split_text_copy_test.shard_to_split_copy_81070015;
  count
 ---------------------------------------------------------------------
-   748
+    21
 (1 row)
 
 SELECT COUNT(*) FROM worker_split_text_copy_test.shard_to_split_copy_81070016;
  count
 ---------------------------------------------------------------------
-   252
+     1
 (1 row)
 
 -- END: List updated row count for remote targets shard.
 -- BEGIN: CLEANUP.
 \c - - - :master_port
 SET client_min_messages TO WARNING;
-DROP SCHEMA citus_split_shard_by_split_points_local CASCADE;
-ERROR:  schema "citus_split_shard_by_split_points_local" does not exist
+DROP SCHEMA worker_split_text_copy_test CASCADE;
 -- END: CLEANUP.
