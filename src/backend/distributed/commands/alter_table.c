@@ -1369,20 +1369,27 @@ GetViewCreationCommandsOfTable(Oid relationId)
 		/* See comments on CreateMaterializedViewDDLCommand for its limitations */
 		if (get_rel_relkind(viewOid) == RELKIND_MATVIEW)
 		{
-			Datum relSizeDatum = DirectFunctionCall1(pg_total_relation_size,
-													 ObjectIdGetDatum(viewOid));
-			uint64 matViewSize = DatumGetInt64(relSizeDatum);
-
-			/* convert from MB to bytes */
-			uint64 limitSizeInBytes = MaxMatViewSizeToAutoDistribute * 1024L * 1024L;
-
-			if (matViewSize > limitSizeInBytes)
+			if (MaxMatViewSizeToAutoDistribute > 0)
 			{
-				ereport(ERROR, (errmsg("materialized view %s is too large to "
-									   "automatically distribute",
-									   get_rel_name(viewOid)),
-								errhint("consider increasing the size limit by setting "
-										"citus.max_matview_size_to_auto_distribute")));
+				/* if it's below 0, it means the user has removed the limit */
+				Datum relSizeDatum = DirectFunctionCall1(pg_total_relation_size,
+														 ObjectIdGetDatum(viewOid));
+				uint64 matViewSize = DatumGetInt64(relSizeDatum);
+
+				/* convert from MB to bytes */
+				uint64 limitSizeInBytes = MaxMatViewSizeToAutoDistribute * 1024L * 1024L;
+
+				if (matViewSize > limitSizeInBytes)
+				{
+					ereport(ERROR, (errmsg("materialized view %s is too large to "
+										   "automatically distribute",
+										   get_rel_name(viewOid)),
+									errhint(
+										"consider increasing the size limit by setting "
+										"citus.max_matview_size_to_auto_distribute; "
+										"or you can remove the limit "
+										"by setting it to -1")));
+				}
 			}
 
 			char *matViewCreateCommands = CreateMaterializedViewDDLCommand(viewOid);
