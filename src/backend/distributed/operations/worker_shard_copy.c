@@ -231,7 +231,8 @@ ShardCopyDestReceiverStartup(DestReceiver *dest, int operation, TupleDesc
 
 	/* define how tuples will be serialised */
 	CopyOutState copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
-	copyOutState->binary = EnableBinaryProtocol && CanUseBinaryCopyFormat(inputTupleDescriptor);
+	copyOutState->binary = EnableBinaryProtocol && CanUseBinaryCopyFormat(
+		inputTupleDescriptor);
 	copyOutState->null_print = (char *) nullPrintCharacter;
 	copyOutState->null_print_client = (char *) nullPrintCharacter;
 	copyOutState->fe_msgbuf = makeStringInfo();

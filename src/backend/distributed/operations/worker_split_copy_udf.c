@@ -31,12 +31,16 @@ typedef struct SplitCopyInfo
 
 static void ParseSplitCopyInfoDatum(Datum splitCopyInfoDatum,
 									SplitCopyInfo **splitCopyInfo);
-static DestReceiver** CreateShardCopyDestReceivers(EState *estate, ShardInterval *shardIntervalToSplitCopy, List *splitCopyInfoList);
-static DestReceiver*  CreatePartitionedSplitCopyDestReceiver(
-	EState *executor,
-	ShardInterval *shardIntervalToSplitCopy,
-	List *splitCopyInfoList);
-static void BuildMinMaxRangeArrays(List *splitCopyInfoList, ArrayType **minValueArray, ArrayType **maxValueArray);
+static DestReceiver ** CreateShardCopyDestReceivers(EState *estate,
+													ShardInterval *
+													shardIntervalToSplitCopy,
+													List *splitCopyInfoList);
+static DestReceiver *  CreatePartitionedSplitCopyDestReceiver(EState *executor,
+															  ShardInterval *
+															  shardIntervalToSplitCopy,
+															  List *splitCopyInfoList);
+static void BuildMinMaxRangeArrays(List *splitCopyInfoList, ArrayType **minValueArray,
+								   ArrayType **maxValueArray);
 
 /*
  * worker_split_copy(source_shard_id bigint, splitCopyInfo citus.split_copy_info[])
@@ -73,8 +77,8 @@ worker_split_copy(PG_FUNCTION_ARGS)
 
 	EState *executor = CreateExecutorState();
 	DestReceiver *splitCopyDestReceiver = CreatePartitionedSplitCopyDestReceiver(executor,
-																	   shardIntervalToSplitCopy,
-																	   splitCopyInfoList);
+																				 shardIntervalToSplitCopy,
+																				 splitCopyInfoList);
 
 	char *sourceShardToCopyName = generate_qualified_relation_name(
 		shardIntervalToSplitCopy->relationId);
@@ -145,7 +149,8 @@ ParseSplitCopyInfoDatum(Datum splitCopyInfoDatum, SplitCopyInfo **splitCopyInfo)
 
 /* Build 'min/max' hash range arrays for PartitionedResultDestReceiver */
 static void
-BuildMinMaxRangeArrays(List *splitCopyInfoList, ArrayType **minValueArray, ArrayType **maxValueArray)
+BuildMinMaxRangeArrays(List *splitCopyInfoList, ArrayType **minValueArray,
+					   ArrayType **maxValueArray)
 {
 	int partitionCount = list_length(splitCopyInfoList);
 
@@ -167,8 +172,10 @@ BuildMinMaxRangeArrays(List *splitCopyInfoList, ArrayType **minValueArray, Array
 		index++;
 	}
 
-	*minValueArray = CreateArrayFromDatums(minValues, minValueNulls, partitionCount, TEXTOID);
-	*maxValueArray = CreateArrayFromDatums(maxValues, maxValueNulls, partitionCount, TEXTOID);
+	*minValueArray = CreateArrayFromDatums(minValues, minValueNulls, partitionCount,
+										   TEXTOID);
+	*maxValueArray = CreateArrayFromDatums(maxValues, maxValueNulls, partitionCount,
+										   TEXTOID);
 }
 
 
@@ -177,10 +184,12 @@ BuildMinMaxRangeArrays(List *splitCopyInfoList, ArrayType **minValueArray, Array
  * Each ShardCopyDestReceivers will be responsible for copying tuples from source shard,
  * that fall under its min/max range, to specified destination shard.
  */
-static DestReceiver**
-CreateShardCopyDestReceivers(EState *estate, ShardInterval *shardIntervalToSplitCopy, List *splitCopyInfoList)
+static DestReceiver **
+CreateShardCopyDestReceivers(EState *estate, ShardInterval *shardIntervalToSplitCopy,
+							 List *splitCopyInfoList)
 {
-	DestReceiver **shardCopyDests = palloc0(splitCopyInfoList->length * sizeof(DestReceiver *));
+	DestReceiver **shardCopyDests = palloc0(splitCopyInfoList->length *
+											sizeof(DestReceiver *));
 
 	SplitCopyInfo *splitCopyInfo = NULL;
 	int index = 0;
@@ -188,7 +197,8 @@ CreateShardCopyDestReceivers(EState *estate, ShardInterval *shardIntervalToSplit
 	foreach_ptr(splitCopyInfo, splitCopyInfoList)
 	{
 		char *destinationShardSchemaName = get_namespace_name(get_rel_namespace(
-																  shardIntervalToSplitCopy->relationId));
+																  shardIntervalToSplitCopy
+																  ->relationId));
 		char *destinationShardNameCopy = pstrdup(sourceShardNamePrefix);
 		AppendShardIdToName(&destinationShardNameCopy, splitCopyInfo->destinationShardId);
 
@@ -206,11 +216,13 @@ CreateShardCopyDestReceivers(EState *estate, ShardInterval *shardIntervalToSplit
 
 
 /* Create PartitionedSplitCopyDestReceiver along with underlying ShardCopyDestReceivers */
-static DestReceiver*
-CreatePartitionedSplitCopyDestReceiver(EState *estate, ShardInterval *shardIntervalToSplitCopy, List *splitCopyInfoList)
+static DestReceiver *
+CreatePartitionedSplitCopyDestReceiver(EState *estate,
+									   ShardInterval *shardIntervalToSplitCopy,
+									   List *splitCopyInfoList)
 {
 	/* Create underlying ShardCopyDestReceivers */
-	DestReceiver** shardCopyDestReceivers = CreateShardCopyDestReceivers(
+	DestReceiver **shardCopyDestReceivers = CreateShardCopyDestReceivers(
 		estate,
 		shardIntervalToSplitCopy,
 		splitCopyInfoList);
@@ -219,9 +231,11 @@ CreatePartitionedSplitCopyDestReceiver(EState *estate, ShardInterval *shardInter
 	ArrayType *minValuesArray = NULL;
 	ArrayType *maxValuesArray = NULL;
 	BuildMinMaxRangeArrays(splitCopyInfoList, &minValuesArray, &maxValuesArray);
-	char partitionMethod = PartitionMethodViaCatalog(shardIntervalToSplitCopy->relationId);
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(shardIntervalToSplitCopy->relationId);
-	Var* partitionColumn = cacheEntry->partitionColumn;
+	char partitionMethod = PartitionMethodViaCatalog(
+		shardIntervalToSplitCopy->relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(
+		shardIntervalToSplitCopy->relationId);
+	Var *partitionColumn = cacheEntry->partitionColumn;
 
 	CitusTableCacheEntry *shardSearchInfo =
 		QueryTupleShardSearchInfo(minValuesArray, maxValuesArray,
