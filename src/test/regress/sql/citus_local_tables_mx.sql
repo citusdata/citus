@@ -453,6 +453,14 @@ CREATE VIEW v100 AS SELECT * FROM loc_tb;
 CREATE VIEW v101 AS SELECT * FROM loc_tb JOIN ref_tb USING (a);
 CREATE VIEW v102 AS SELECT * FROM v101;
 
+-- a regular matview that depends on local table
+CREATE MATERIALIZED VIEW matview_101 AS SELECT * from loc_tb;
+-- two matviews that depend on the local table + each other
+CREATE MATERIALIZED VIEW matview_102 AS SELECT * from loc_tb;
+CREATE MATERIALIZED VIEW matview_103 AS SELECT * from loc_tb;
+CREATE MATERIALIZED VIEW IF NOT EXISTS matview_102 AS SELECT * from loc_tb JOIN matview_102 USING (a);
+CREATE MATERIALIZED VIEW IF NOT EXISTS matview_103 AS SELECT * from loc_tb JOIN matview_102 USING (a);
+
 ALTER TABLE loc_tb ADD CONSTRAINT fkey FOREIGN KEY (a) references ref_tb(a);
 
 -- works fine
