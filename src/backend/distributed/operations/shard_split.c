@@ -798,7 +798,7 @@ DropShardList(List *shardIntervalList)
 		{
 			ListCell *commandCell = NULL;
 
-			/* send the commands one by one */
+			/* send the commands one by one (calls citus_internal_delete_shard_metadata internally) */
 			List *shardMetadataDeleteCommandList = ShardDeleteCommandList(shardInterval);
 			foreach(commandCell, shardMetadataDeleteCommandList)
 			{

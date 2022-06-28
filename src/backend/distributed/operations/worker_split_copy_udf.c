@@ -15,7 +15,6 @@
 #include "distributed/listutils.h"
 #include "distributed/multi_executor.h"
 #include "distributed/worker_shard_copy.h"
-#include "distributed/worker_split_copy.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/citus_ruleutils.h"
 
