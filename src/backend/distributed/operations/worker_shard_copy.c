@@ -136,6 +136,36 @@ ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 
 
 /*
+ * CreateShardCopyDestReceiver creates a DestReceiver that copies into
+ * a destinationShardFullyQualifiedName on destinationNodeId.
+ */
+DestReceiver *
+CreateShardCopyDestReceiver(EState *executorState,
+							List *destinationShardFullyQualifiedName,
+							uint32_t destinationNodeId)
+{
+	ShardCopyDestReceiver *copyDest = (ShardCopyDestReceiver *) palloc0(
+		sizeof(ShardCopyDestReceiver));
+
+	/* set up the DestReceiver function pointers */
+	copyDest->pub.receiveSlot = ShardCopyDestReceiverReceive;
+	copyDest->pub.rStartup = ShardCopyDestReceiverStartup;
+	copyDest->pub.rShutdown = ShardCopyDestReceiverShutdown;
+	copyDest->pub.rDestroy = ShardCopyDestReceiverDestroy;
+	copyDest->pub.mydest = DestCopyOut;
+	copyDest->executorState = executorState;
+
+	copyDest->destinationNodeId = destinationNodeId;
+	copyDest->destinationShardFullyQualifiedName = destinationShardFullyQualifiedName;
+	copyDest->tuplesSent = 0;
+	copyDest->connection = NULL;
+	copyDest->useLocalCopy = CanUseLocalCopy(destinationNodeId);
+
+	return (DestReceiver *) copyDest;
+}
+
+
+/*
  * ShardCopyDestReceiverReceive implements the receiveSlot function of
  * ShardCopyDestReceiver. It takes a TupleTableSlot and sends the contents to
  * the appropriate destination node.
@@ -301,36 +331,6 @@ ShardCopyDestReceiverShutdown(DestReceiver *dest)
 		ForgetResults(copyDest->connection);
 		CloseConnection(copyDest->connection);
 	}
-}
-
-
-/*
- * CreateShardCopyDestReceiver creates a DestReceiver that copies into
- * a destinationShardFullyQualifiedName on destinationNodeId.
- */
-DestReceiver *
-CreateShardCopyDestReceiver(EState *executorState,
-							List *destinationShardFullyQualifiedName,
-							uint32_t destinationNodeId)
-{
-	ShardCopyDestReceiver *copyDest = (ShardCopyDestReceiver *) palloc0(
-		sizeof(ShardCopyDestReceiver));
-
-	/* set up the DestReceiver function pointers */
-	copyDest->pub.receiveSlot = ShardCopyDestReceiverReceive;
-	copyDest->pub.rStartup = ShardCopyDestReceiverStartup;
-	copyDest->pub.rShutdown = ShardCopyDestReceiverShutdown;
-	copyDest->pub.rDestroy = ShardCopyDestReceiverDestroy;
-	copyDest->pub.mydest = DestCopyOut;
-	copyDest->executorState = executorState;
-
-	copyDest->destinationNodeId = destinationNodeId;
-	copyDest->destinationShardFullyQualifiedName = destinationShardFullyQualifiedName;
-	copyDest->tuplesSent = 0;
-	copyDest->connection = NULL;
-	copyDest->useLocalCopy = CanUseLocalCopy(destinationNodeId);
-
-	return (DestReceiver *) copyDest;
 }
 
 

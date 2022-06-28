@@ -575,6 +575,22 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
  * 'sourceShardSplitInterval' : Source shard interval to be copied.
  * 'splitChildrenShardINnerIntervalList' : List of shard intervals for split children.
  * 'destinationWorkerNodesList' : List of workers for split children placement.
+ * Here is an example of a 2 way split copy :
+ * SELECT * from worker_split_copy(
+ *  81060000, -- source shard id to split copy
+ *  ARRAY[
+ *       -- split copy info for split children 1
+ *      ROW(81060015, -- destination shard id
+ *           -2147483648, -- split range begin
+ *          1073741823, --split range end
+ *          10 -- worker node id)::citus.split_copy_info,
+ *      -- split copy info for split children 2
+ *      ROW(81060016,  --destination shard id
+ *          1073741824, --split range begin
+ *          2147483647, --split range end
+ *          11 -- workef node id)::citus.split_copy_info
+ *      ]
+ *  );
  */
 static StringInfo
 CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,

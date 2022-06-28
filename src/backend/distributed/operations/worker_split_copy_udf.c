@@ -60,9 +60,11 @@ worker_split_copy(PG_FUNCTION_ARGS)
 				(errmsg("Shard Copy Info cannot have null values.")));
 	}
 
+	const int slice_ndim = 0;
+	ArrayMetaState *mState = NULL;
 	ArrayIterator copyInfo_iterator = array_create_iterator(splitCopyInfoArrayObject,
-															0 /* slice_ndim */,
-															NULL /* mState */);
+															slice_ndim,
+															mState);
 	Datum copyInfoDatum = 0;
 	bool isnull = false;
 	List *splitCopyInfoList = NULL;
@@ -230,10 +232,9 @@ CreatePartitionedSplitCopyDestReceiver(EState *estate,
 	ArrayType *minValuesArray = NULL;
 	ArrayType *maxValuesArray = NULL;
 	BuildMinMaxRangeArrays(splitCopyInfoList, &minValuesArray, &maxValuesArray);
-	char partitionMethod = PartitionMethodViaCatalog(
-		shardIntervalToSplitCopy->relationId);
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(
 		shardIntervalToSplitCopy->relationId);
+	char partitionMethod = cacheEntry->partitionMethod;
 	Var *partitionColumn = cacheEntry->partitionColumn;
 
 	CitusTableCacheEntry *shardSearchInfo =
