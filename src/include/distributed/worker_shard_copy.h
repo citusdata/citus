@@ -12,7 +12,8 @@
 #ifndef WORKER_SHARD_COPY_H_
 #define WORKER_SHARD_COPY_H_
 
-struct FullRelationName;
+/* GUC, determining whether Binary Copy is enabled */
+extern bool EnableBinaryProtocol;
 
 extern DestReceiver * CreateShardCopyDestReceiver(EState *executorState,
 												  List *destinationShardFullyQualifiedName,
