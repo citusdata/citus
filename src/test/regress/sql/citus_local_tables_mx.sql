@@ -455,11 +455,10 @@ CREATE VIEW v102 AS SELECT * FROM v101;
 
 -- a regular matview that depends on local table
 CREATE MATERIALIZED VIEW matview_101 AS SELECT * from loc_tb;
--- two matviews that depend on the local table + each other
-CREATE MATERIALIZED VIEW matview_102 AS SELECT * from loc_tb;
-CREATE MATERIALIZED VIEW matview_103 AS SELECT * from loc_tb;
-CREATE MATERIALIZED VIEW IF NOT EXISTS matview_102 AS SELECT * from loc_tb JOIN matview_102 USING (a);
-CREATE MATERIALIZED VIEW IF NOT EXISTS matview_103 AS SELECT * from loc_tb JOIN matview_102 USING (a);
+-- a matview and a view that depend on the local table + each other
+CREATE VIEW v103 AS SELECT * from loc_tb;
+CREATE MATERIALIZED VIEW matview_102 AS SELECT * from loc_tb JOIN v103 USING (a);
+CREATE OR REPLACE VIEW v103 AS SELECT * from loc_tb JOIN matview_102 USING (a);
 
 SET client_min_messages TO DEBUG1;
 ALTER TABLE loc_tb ADD CONSTRAINT fkey FOREIGN KEY (a) references ref_tb(a);
