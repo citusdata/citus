@@ -2024,6 +2024,19 @@ ExecuteQueryViaSPI(char *query, int SPIOK)
 
 
 /*
+ * ExecuteAndLogQueryViaSPI is a wrapper around ExecuteQueryViaSPI, that logs
+ * the query to be executed, as DEBUG1.
+ */
+void
+ExecuteAndLogQueryViaSPI(char *query, int SPIOK)
+{
+	ereport(DEBUG1, (errmsg("executing \"%s\"", query)));
+
+	ExecuteQueryViaSPI(query, SPIOK);
+}
+
+
+/*
  * SwitchToSequentialAndLocalExecutionIfRelationNameTooLong generates the longest shard name
  * on the shards of a distributed table, and if exceeds the limit switches to sequential and
  * local execution to prevent self-deadlocks.

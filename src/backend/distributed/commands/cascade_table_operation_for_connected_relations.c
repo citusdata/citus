@@ -530,7 +530,7 @@ ExecuteViewCreationCommandsViaSPI(List *utilityCommandList)
 		char *utilityCommand = NULL;
 		foreach_ptr(utilityCommand, utilityCommandList)
 		{
-			ExecuteQueryViaSPI(utilityCommand, SPI_OK_UTILITY);
+			ExecuteAndLogQueryViaSPI(utilityCommand, SPI_OK_UTILITY);
 		}
 	}
 	PG_CATCH();
