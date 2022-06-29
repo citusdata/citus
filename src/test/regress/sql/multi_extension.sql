@@ -466,6 +466,14 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Test downgrade script (result should be empty)
 ALTER EXTENSION citus UPDATE TO '11.0-1';
 ALTER EXTENSION citus UPDATE TO '11.0-2';
+
+-- Snapshot of state at 11.0-3
+ALTER EXTENSION citus UPDATE TO '11.0-3';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test downgrade script (result should be empty)
+ALTER EXTENSION citus UPDATE TO '11.0-2';
+ALTER EXTENSION citus UPDATE TO '11.0-3';
 SELECT * FROM multi_extension.print_extension_changes();
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
