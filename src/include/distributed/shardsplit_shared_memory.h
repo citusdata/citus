@@ -29,17 +29,15 @@ typedef struct ShardSplitInfoSMHeader
  * Shard split information is populated and stored in shared memory in the form of one dimensional
  * array by 'worker_split_shard_replication_setup'. Information belonging to same replication
  * slot is grouped together and stored contiguously within this array.
- * 'ShardSplitInfoForReplicationSlot' stores the starting and ending indices for a particular
- * replication slot within shared memory segment.
- * When a slot processes a commit, traversing only within this boundary of shared memory segment
- * improves performance.
+ * 'SourceToDestinationShardMap' maps list of child(destination) shards that should be processed by a replication
+ * slot corresponding to a parent(source) shard. When a parent shard receives a change, the decoder can use this map
+ * to traverse only the list of child shards corresponding the given parent.
  */
-typedef struct ShardSplitInfoForReplicationSlot
+typedef struct SourceToDestinationShardMapEntry
 {
-	ShardSplitInfoSMHeader *shardSplitInfoHeader; /* shared memory segment header */
-	int startIndex;                               /* starting index for a given slot */
-	int endIndex;                                 /* ending index for a given slot */
-} ShardSplitInfoForReplicationSlot;
+	Oid sourceShardKey;
+	List *shardSplitInfoList;
+} SourceToDestinationShardMapEntry;
 
 typedef struct ShardSplitShmemData
 {
@@ -60,11 +58,11 @@ dsm_handle GetShardSplitSharedMemoryHandle(void);
 extern ShardSplitInfoSMHeader * CreateSharedMemoryForShardSplitInfo(int
 																	shardSplitInfoCount,
 																	dsm_handle *dsmHandle);
-extern ShardSplitInfoSMHeader *  GetShardSplitInfoSMHeader(char *slotName);
+extern void ReleaseSharedMemoryOfShardSplitInfo(void);
 
-extern ShardSplitInfoForReplicationSlot * PopulateShardSplitInfoForReplicationSlot(
-	char *slotName);
+extern ShardSplitInfoSMHeader *  GetShardSplitInfoSMHeader(void);
 
+extern HTAB * PopulateSourceToDestinationShardMapForSlot(char *slotName);
 
 char * encode_replication_slot(uint32_t nodeId, uint32_t tableOwnerId);
 #endif /* SHARDSPLIT_SHARED_MEMORY_H */

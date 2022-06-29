@@ -70,7 +70,7 @@ SELECT worker_split_shard_replication_setup(ARRAY[
     ROW(7, 8, '-2147483648', '-1', :worker_2_node)::citus.split_shard_info,
     ROW(7, 9, '0', '2147483647', :worker_2_node)::citus.split_shard_info
     ]);
-WARNING:  As a part of split shard workflow,unexpectedly found a valid shared memory handle while storing a new one.
+WARNING:  Previous split shard worflow was not successfully and could not complete the cleanup phase. Continuing with the current split shard workflow.
  worker_split_shard_replication_setup
 ---------------------------------------------------------------------
 

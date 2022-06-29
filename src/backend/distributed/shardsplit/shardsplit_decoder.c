@@ -11,6 +11,7 @@
 #include "postgres.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shardsplit_shared_memory.h"
+#include "distributed/listutils.h"
 #include "replication/logical.h"
 
 /*
@@ -23,18 +24,17 @@ PG_MODULE_MAGIC;
 extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
 static LogicalDecodeChangeCB pgoutputChangeCB;
 
-static ShardSplitInfoSMHeader *ShardSplitInfo_SMHeader = NULL;
-static ShardSplitInfoForReplicationSlot *ShardSplitInfoForSlot = NULL;
+static HTAB *SourceToDestinationShardMap = NULL;
 
 /* Plugin callback */
 static void split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 							Relation relation, ReorderBufferChange *change);
 
 /* Helper methods */
-static bool IsCommitRecursive(Relation sourceShardRelation);
 static int32_t GetHashValueForIncomingTuple(Relation sourceShardRelation,
 											HeapTuple tuple,
-											bool *shouldHandleUpdate);
+											int partitionColumIndex,
+											Oid distributedTableOid);
 
 static Oid FindTargetRelationOid(Relation sourceShardRelation,
 								 HeapTuple tuple,
@@ -68,151 +68,6 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
 
 
 /*
- * GetHashValueForIncomingTuple returns the hash value of the partition
- * column for the incoming tuple. It also checks if the change should be
- * handled as the incoming committed change can belong to a relation
- * that is not under going split.
- */
-static int32_t
-GetHashValueForIncomingTuple(Relation sourceShardRelation,
-							 HeapTuple tuple,
-							 bool *shouldHandleChange)
-{
-	ShardSplitInfo *shardSplitInfo = NULL;
-	int partitionColumnIndex = -1;
-	Oid distributedTableOid = InvalidOid;
-
-	Oid sourceShardOid = sourceShardRelation->rd_id;
-	for (int i = ShardSplitInfoForSlot->startIndex; i <= ShardSplitInfoForSlot->endIndex;
-		 i++)
-	{
-		shardSplitInfo = &ShardSplitInfo_SMHeader->splitInfoArray[i];
-		if (shardSplitInfo->sourceShardOid == sourceShardOid)
-		{
-			distributedTableOid = shardSplitInfo->distributedTableOid;
-			partitionColumnIndex = shardSplitInfo->partitionColumnIndex;
-			break;
-		}
-	}
-
-	/*
-	 * The commit can belong to any other table that is not going
-	 * under split. Ignore such commit's.
-	 */
-	if (partitionColumnIndex == -1 ||
-		distributedTableOid == InvalidOid)
-	{
-		/*
-		 * TODO(saawasek): Change below warning to DEBUG once more test case
-		 * are added.
-		 */
-		ereport(WARNING, errmsg("Skipping Commit as "
-								"Relation: %s isn't splitting",
-								RelationGetRelationName(sourceShardRelation)));
-		*shouldHandleChange = false;
-		return 0;
-	}
-
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableOid);
-	if (cacheEntry == NULL)
-	{
-		ereport(ERROR, errmsg("null entry found for cacheEntry"));
-	}
-
-	TupleDesc relationTupleDes = RelationGetDescr(sourceShardRelation);
-	bool isNull = false;
-	Datum partitionColumnValue = heap_getattr(tuple,
-											  partitionColumnIndex + 1,
-											  relationTupleDes,
-											  &isNull);
-
-	FmgrInfo *hashFunction = cacheEntry->hashFunction;
-
-	/* get hashed value of the distribution value */
-	Datum hashedValueDatum = FunctionCall1(hashFunction, partitionColumnValue);
-	int32_t hashedValue = DatumGetInt32(hashedValueDatum);
-
-	*shouldHandleChange = true;
-
-	return hashedValue;
-}
-
-
-/*
- * FindTargetRelationOid returns the destination relation Oid for the incoming
- * tuple.
- * sourceShardRelation - Relation on which a commit has happened.
- * tuple               - changed tuple.
- * currentSlotName     - Name of replication slot that is processing this update.
- */
-static Oid
-FindTargetRelationOid(Relation sourceShardRelation,
-					  HeapTuple tuple,
-					  char *currentSlotName)
-{
-	Oid targetRelationOid = InvalidOid;
-	Oid sourceShardRelationOid = sourceShardRelation->rd_id;
-
-	bool shouldHandleUpdate = false;
-	int hashValue = GetHashValueForIncomingTuple(sourceShardRelation, tuple,
-												 &shouldHandleUpdate);
-	if (shouldHandleUpdate == false)
-	{
-		return InvalidOid;
-	}
-
-	for (int i = ShardSplitInfoForSlot->startIndex; i <= ShardSplitInfoForSlot->endIndex;
-		 i++)
-	{
-		ShardSplitInfo *shardSplitInfo = &ShardSplitInfo_SMHeader->splitInfoArray[i];
-
-		/*
-		 * Each commit message is processed by all the configured replication slots.
-		 * A replication slot is responsible for shard placements belonging to unique
-		 * table owner and nodeId combination. We check if the current slot which is
-		 * processing the commit should emit a target relation Oid.
-		 */
-		if (shardSplitInfo->sourceShardOid == sourceShardRelationOid &&
-			shardSplitInfo->shardMinValue <= hashValue &&
-			shardSplitInfo->shardMaxValue >= hashValue)
-		{
-			targetRelationOid = shardSplitInfo->splitChildShardOid;
-			break;
-		}
-	}
-
-	return targetRelationOid;
-}
-
-
-/*
- * IsCommitRecursive returns true when commit is recursive. When the source shard
- * recives a commit(1), the WAL sender processes this commit message. This
- * commit is applied to a child shard which is placed on the same node as a
- * part of replication. This in turn creates one more commit(2) which is recursive in nature.
- * Commit 2 should be skipped as the source shard and destination for commit 2
- * are same and the commit has already been applied.
- */
-bool
-IsCommitRecursive(Relation sourceShardRelation)
-{
-	Oid sourceShardOid = sourceShardRelation->rd_id;
-	for (int i = ShardSplitInfoForSlot->startIndex; i <= ShardSplitInfoForSlot->endIndex;
-		 i++)
-	{
-		/* skip the commit when destination is equal to the source */
-		ShardSplitInfo *shardSplitInfo = &ShardSplitInfo_SMHeader->splitInfoArray[i];
-		if (sourceShardOid == shardSplitInfo->splitChildShardOid)
-		{
-			return true;
-		}
-	}
-
-	return false;
-}
-
-
-/*
  * split_change function emits the incoming tuple change
  * to the appropriate destination shard.
  */
@@ -226,19 +81,13 @@ split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 	}
 
 	/*
-	 * Get ShardSplitInfoForSlot if not already initialized.
+	 * Initialize SourceToDestinationShardMap if not already initialized.
 	 * This gets initialized during the replication of first message.
 	 */
-	if (ShardSplitInfoForSlot == NULL)
+	if (SourceToDestinationShardMap == NULL)
 	{
-		ShardSplitInfoForSlot = PopulateShardSplitInfoForReplicationSlot(
+		SourceToDestinationShardMap = PopulateSourceToDestinationShardMapForSlot(
 			ctx->slot->data.name.data);
-		ShardSplitInfo_SMHeader = ShardSplitInfoForSlot->shardSplitInfoHeader;
-	}
-
-	if (IsCommitRecursive(relation))
-	{
-		return;
 	}
 
 	Oid targetRelationOid = InvalidOid;
@@ -287,4 +136,96 @@ split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 	Relation targetRelation = RelationIdGetRelation(targetRelationOid);
 	pgoutputChangeCB(ctx, txn, targetRelation, change);
 	RelationClose(targetRelation);
+}
+
+
+/*
+ * FindTargetRelationOid returns the destination relation Oid for the incoming
+ * tuple.
+ * sourceShardRelation - Relation on which a commit has happened.
+ * tuple               - changed tuple.
+ * currentSlotName     - Name of replication slot that is processing this update.
+ */
+static Oid
+FindTargetRelationOid(Relation sourceShardRelation,
+					  HeapTuple tuple,
+					  char *currentSlotName)
+{
+	Oid targetRelationOid = InvalidOid;
+	Oid sourceShardRelationOid = sourceShardRelation->rd_id;
+
+	/* Get child shard list for source(parent) shard from hashmap*/
+	bool found = false;
+	SourceToDestinationShardMapEntry *entry =
+		(SourceToDestinationShardMapEntry *) hash_search(
+			SourceToDestinationShardMap, &sourceShardRelationOid, HASH_FIND, &found);
+
+	/*
+	 * Source shard Oid might not exist in the hash map. This can happen
+	 * in below cases:
+	 * 1) The commit can belong to any other table that is not under going split.
+	 * 2) The commit can be recursive in nature. When the source shard
+	 * receives a commit(a), the WAL sender processes this commit message. This
+	 * commit is applied to a child shard which is placed on the same node as a
+	 * part of replication. This in turn creates one more commit(b) which is recursive in nature.
+	 * Commit 'b' should be skipped as the source shard and destination for commit 'b'
+	 * are same and the commit has already been applied.
+	 */
+	if (!found)
+	{
+		return InvalidOid;
+	}
+
+	ShardSplitInfo *shardSplitInfo = (ShardSplitInfo *) lfirst(list_head(
+																   entry->
+																   shardSplitInfoList));
+	int hashValue = GetHashValueForIncomingTuple(sourceShardRelation, tuple,
+												 shardSplitInfo->partitionColumnIndex,
+												 shardSplitInfo->distributedTableOid);
+
+	shardSplitInfo = NULL;
+	foreach_ptr(shardSplitInfo, entry->shardSplitInfoList)
+	{
+		if (shardSplitInfo->shardMinValue <= hashValue &&
+			shardSplitInfo->shardMaxValue >= hashValue)
+		{
+			targetRelationOid = shardSplitInfo->splitChildShardOid;
+			break;
+		}
+	}
+
+	return targetRelationOid;
+}
+
+
+/*
+ * GetHashValueForIncomingTuple returns the hash value of the partition
+ * column for the incoming tuple.
+ */
+static int32_t
+GetHashValueForIncomingTuple(Relation sourceShardRelation,
+							 HeapTuple tuple,
+							 int partitionColumnIndex,
+							 Oid distributedTableOid)
+{
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableOid);
+	if (cacheEntry == NULL)
+	{
+		ereport(ERROR, errmsg(
+					"Expected valid Citus Cache entry to be present. But found null"));
+	}
+
+	TupleDesc relationTupleDes = RelationGetDescr(sourceShardRelation);
+	bool isNull = false;
+	Datum partitionColumnValue = heap_getattr(tuple,
+											  partitionColumnIndex + 1,
+											  relationTupleDes,
+											  &isNull);
+
+	FmgrInfo *hashFunction = cacheEntry->hashFunction;
+
+	/* get hashed value of the distribution value */
+	Datum hashedValueDatum = FunctionCall1(hashFunction, partitionColumnValue);
+
+	return DatumGetInt32(hashedValueDatum);
 }
