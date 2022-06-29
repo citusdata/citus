@@ -3,8 +3,7 @@
  * shardsplit_decoder.c
  *		Logical Replication output plugin
  *
- * IDENTIFICATION
- *		  src/backend/distributed/shardsplit/shardsplit_decoder.c
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -80,6 +79,8 @@ split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 		return;
 	}
 
+	char *replicationSlotName = ctx->slot->data.name.data;
+
 	/*
 	 * Initialize SourceToDestinationShardMap if not already initialized.
 	 * This gets initialized during the replication of first message.
@@ -87,11 +88,10 @@ split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 	if (SourceToDestinationShardMap == NULL)
 	{
 		SourceToDestinationShardMap = PopulateSourceToDestinationShardMapForSlot(
-			ctx->slot->data.name.data);
+			replicationSlotName, TopMemoryContext);
 	}
 
 	Oid targetRelationOid = InvalidOid;
-	char *replicationSlotName = ctx->slot->data.name.data;
 	switch (change->action)
 	{
 		case REORDER_BUFFER_CHANGE_INSERT:

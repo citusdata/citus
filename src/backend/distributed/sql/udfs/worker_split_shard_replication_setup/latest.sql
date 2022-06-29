@@ -1,7 +1,3 @@
-DROP TYPE IF EXISTS citus.split_shard_info;
-
-DROP FUNCTION IF EXISTS pg_catalog.worker_split_shard_replication_setup;
-
 CREATE TYPE citus.split_shard_info AS (
     source_shard_id bigint,
     child_shard_id bigint,

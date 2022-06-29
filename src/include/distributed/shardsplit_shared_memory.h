@@ -62,7 +62,8 @@ extern void ReleaseSharedMemoryOfShardSplitInfo(void);
 
 extern ShardSplitInfoSMHeader *  GetShardSplitInfoSMHeader(void);
 
-extern HTAB * PopulateSourceToDestinationShardMapForSlot(char *slotName);
+extern HTAB * PopulateSourceToDestinationShardMapForSlot(char *slotName, MemoryContext
+														 cxt);
 
 char * encode_replication_slot(uint32_t nodeId, uint32_t tableOwnerId);
 #endif /* SHARDSPLIT_SHARED_MEMORY_H */

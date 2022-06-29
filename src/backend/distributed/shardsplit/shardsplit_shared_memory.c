@@ -236,7 +236,7 @@ ShardSplitShmemInit(void)
 
 	if (!alreadyInitialized)
 	{
-		char *trancheName = "Split_Shard_Setup_Tranche";
+		char *trancheName = "Split Shard Setup Tranche";
 
 		NamedLWLockTranche *namedLockTranche =
 			&smData->namedLockTranche;
@@ -341,20 +341,20 @@ GetShardSplitSharedMemoryHandle(void)
  * To populate the map, the function traverses 'ShardSplitInfo' array stored within shared memory segment.
  */
 HTAB *
-PopulateSourceToDestinationShardMapForSlot(char *slotName)
+PopulateSourceToDestinationShardMapForSlot(char *slotName, MemoryContext cxt)
 {
 	HASHCTL info;
 	memset(&info, 0, sizeof(info));
 	info.keysize = sizeof(Oid);
 	info.entrysize = sizeof(SourceToDestinationShardMapEntry);
 	info.hash = uint32_hash;
-	info.hcxt = TopMemoryContext;
+	info.hcxt = cxt;
 
 	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION);
 	HTAB *sourceShardToDesShardMap = hash_create("SourceToDestinationShardMap", 128,
 												 &info, hashFlags);
 
-	MemoryContext oldContext = MemoryContextSwitchTo(TopMemoryContext);
+	MemoryContext oldContext = MemoryContextSwitchTo(cxt);
 
 	ShardSplitInfoSMHeader *smHeader = GetShardSplitInfoSMHeader();
 	for (int index = 0; index < smHeader->count; index++)
