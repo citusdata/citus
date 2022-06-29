@@ -207,7 +207,8 @@ static char * CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaNa
 														  char *sourceName,
 														  char *targetSchemaName,
 														  char *targetName);
-static void NoticeMatViewCountToRecreate(List *relOids);
+static void NoticeMatViewCountToRecreate(List *viewOids, Oid relationId);
+static void ErrorIfMatViewSizeExceedsTheLimit(Oid matViewOid);
 static char * CreateMaterializedViewDDLCommand(Oid matViewOid);
 static char * GetAccessMethodForMatViewIfExists(Oid viewOid);
 static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
@@ -225,7 +226,7 @@ PG_FUNCTION_INFO_V1(worker_change_sequence_dependency);
 bool InTableTypeConversionFunctionCall = false;
 
 /* controlled by GUC, in MB */
-int MaxMatViewSizeToAutoDistribute = 1024;
+int MaxMatViewSizeToAutoRecreate = 1024;
 
 /*
  * undistribute_table gets a distributed table name and
@@ -1361,7 +1362,8 @@ GetViewCreationCommandsOfTable(Oid relationId)
 {
 	List *views = GetDependingViews(relationId);
 
-	NoticeMatViewCountToRecreate(views);
+	/* we provide a notice message, as it could take a while to recreate the matviews */
+	NoticeMatViewCountToRecreate(views, relationId);
 
 	List *commands = NIL;
 
@@ -1373,28 +1375,7 @@ GetViewCreationCommandsOfTable(Oid relationId)
 		/* See comments on CreateMaterializedViewDDLCommand for its limitations */
 		if (get_rel_relkind(viewOid) == RELKIND_MATVIEW)
 		{
-			if (MaxMatViewSizeToAutoDistribute > 0)
-			{
-				/* if it's below 0, it means the user has removed the limit */
-				Datum relSizeDatum = DirectFunctionCall1(pg_total_relation_size,
-														 ObjectIdGetDatum(viewOid));
-				uint64 matViewSize = DatumGetInt64(relSizeDatum);
-
-				/* convert from MB to bytes */
-				uint64 limitSizeInBytes = MaxMatViewSizeToAutoDistribute * 1024L * 1024L;
-
-				if (matViewSize > limitSizeInBytes)
-				{
-					ereport(ERROR, (errmsg("materialized view %s is too large to "
-										   "automatically distribute",
-										   get_rel_name(viewOid)),
-									errhint(
-										"consider increasing the size limit by setting "
-										"citus.max_matview_size_to_auto_distribute; "
-										"or you can remove the limit "
-										"by setting it to -1")));
-				}
-			}
+			ErrorIfMatViewSizeExceedsTheLimit(viewOid);
 
 			char *matViewCreateCommands = CreateMaterializedViewDDLCommand(viewOid);
 			appendStringInfoString(query, matViewCreateCommands);
@@ -1436,16 +1417,16 @@ GetViewCreationTableDDLCommandsOfTable(Oid relationId)
 
 
 /*
- * NoticeMatViewCountToRecreate takes a list of relation oids and counts the number
+ * NoticeMatViewCountToRecreate takes a list of view/matview oids and counts the number
  * of materialized view objects in the list. Logs a NOTICE message that tells the user
  * that we are going to recreate that number of materialized views.
  */
 static void
-NoticeMatViewCountToRecreate(List *relOids)
+NoticeMatViewCountToRecreate(List *viewOids, Oid relationId)
 {
 	int count = 0;
 	Oid relOid = InvalidOid;
-	foreach_oid(relOid, relOids)
+	foreach_oid(relOid, viewOids)
 	{
 		if (get_rel_relkind(relOid) == RELKIND_MATVIEW)
 		{
@@ -1455,9 +1436,45 @@ NoticeMatViewCountToRecreate(List *relOids)
 
 	if (count > 0)
 	{
-		ereport(NOTICE, (errmsg("%d materialized view objects are going to be recreated,"
-								" it may take a while",
-								count)));
+		ereport(NOTICE, (errmsg("%d materialized view objects on relation %s are going "
+								"to be recreated, it may take a while",
+								count, generate_qualified_relation_name(relationId))));
+	}
+}
+
+
+/*
+ * ErrorIfMatViewSizeExceedsTheLimit takes the oid of a materialized view and errors
+ * out if the size of the matview exceeds the limit set by the GUC
+ * citus.max_matview_size_to_auto_recreate.
+ */
+static void
+ErrorIfMatViewSizeExceedsTheLimit(Oid matViewOid)
+{
+	if (MaxMatViewSizeToAutoRecreate >= 0)
+	{
+		/* if it's below 0, it means the user has removed the limit */
+		Datum relSizeDatum = DirectFunctionCall1(pg_total_relation_size,
+												 ObjectIdGetDatum(matViewOid));
+		uint64 matViewSize = DatumGetInt64(relSizeDatum);
+
+		/* convert from MB to bytes */
+		uint64 limitSizeInBytes = MaxMatViewSizeToAutoRecreate * 1024L * 1024L;
+
+		if (matViewSize > limitSizeInBytes)
+		{
+			ereport(ERROR, (errmsg("size of the materialized view %s exceeds "
+								   "citus.max_matview_size_to_auto_recreate "
+								   "(currently %d MB)", get_rel_name(matViewOid),
+								   MaxMatViewSizeToAutoRecreate),
+							errdetail("Citus restricts automatically recreating "
+									  "materialized views that are larger than the "
+									  "limit, because it could take too long."),
+							errhint(
+								"Consider increasing the size limit by setting "
+								"citus.max_matview_size_to_auto_recreate; "
+								"or you can remove the limit by setting it to -1")));
+		}
 	}
 }
 

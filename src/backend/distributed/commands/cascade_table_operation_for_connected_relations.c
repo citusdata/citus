@@ -530,6 +530,10 @@ ExecuteViewCreationCommandsViaSPI(List *utilityCommandList)
 		char *utilityCommand = NULL;
 		foreach_ptr(utilityCommand, utilityCommandList)
 		{
+			/*
+			 * CREATE MATERIALIZED VIEW commands need to be parsed/transformed,
+			 * which SPI does for us.
+			 */
 			ExecuteAndLogQueryViaSPI(utilityCommand, SPI_OK_UTILITY);
 		}
 	}
