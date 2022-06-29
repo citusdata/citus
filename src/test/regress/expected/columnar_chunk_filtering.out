@@ -1066,3 +1066,32 @@ RESET columnar.max_custom_scan_paths;
 RESET columnar.qual_pushdown_correlation_threshold;
 RESET columnar.planner_debug_level;
 DROP TABLE pushdown_test;
+--
+-- https://github.com/citusdata/citus/issues/5803
+--
+
+create table clause_check (id int, company_name text) using columnar;
+INSERT INTO clause_check VALUES(1, 'AAPL');
+INSERT INTO clause_check VALUES(2, 'IBM');
+INSERT INTO clause_check VALUES(3, 'TSLA');
+INSERT INTO clause_check VALUES (generate_series(4,100000), md5(random()::text));
+EXPLAIN ANALYZE SELECT * FROM clause_check WHERE company_name = 'AAPL' or company_name = 'IBM' or     company_name = 'TSLA';
+                                                            QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on clause_check  (cost=0.00..63.72 rows=1493 width=36) (actual time=0.277..70.351 rows=3 loops=1)
+   Filter: ((company_name = 'AAPL'::text) OR (company_name = 'IBM'::text) OR (company_name = 'TSLA'::text))
+   Rows Removed by Filter: 99997
+   Columnar Projected Columns: id, company_name
+   Columnar Chunk Group Filters: ((company_name = 'AAPL'::text) OR (company_name = 'IBM'::text) OR (company_name = 'TSLA'::text))
+   Columnar Chunk Groups Removed by Filter: 0
+(8 rows)
+EXPLAIN ANALYZE SELECT * FROM clause_check where company_name IN ('APPLE', 'IBM', 'TSLA');
+                                                          QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on clause_check  (cost=0.00..254.86 rows=1500 width=36) (actual time=0.324..28.994 rows=2 loops=1)
+   Filter: (company_name = ANY ('{APPLE,IBM,TSLA}'::text[]))
+   Rows Removed by Filter: 99997
+   Columnar Projected Columns: id, company_name
+   Columnar Chunk Group Filters: (company_name = ANY ('{APPLE,IBM,TSLA}'::text[]))
+   Columnar Chunk Groups Removed by Filter: 1
+(8 rows)
