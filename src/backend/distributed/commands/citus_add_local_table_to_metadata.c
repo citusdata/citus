@@ -349,7 +349,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 * Execute the view creation commands with the shell table.
 	 * Views will be distributed via FinalizeCitusLocalTableCreation below.
 	 */
-	ExecuteUtilityCommandListViaSPIInTableTypeConversion(tableViewCreationCommands);
+	ExecuteViewCreationCommandsViaSPI(tableViewCreationCommands);
 
 	/*
 	 * Set shellRelationId as the relation with relationId now points

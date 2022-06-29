@@ -207,6 +207,7 @@ static char * CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaNa
 														  char *sourceName,
 														  char *targetSchemaName,
 														  char *targetName);
+static void NoticeMatViewCountToRecreate(List *relOids);
 static char * CreateMaterializedViewDDLCommand(Oid matViewOid);
 static char * GetAccessMethodForMatViewIfExists(Oid viewOid);
 static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
@@ -1359,6 +1360,9 @@ List *
 GetViewCreationCommandsOfTable(Oid relationId)
 {
 	List *views = GetDependingViews(relationId);
+
+	NoticeMatViewCountToRecreate(views);
+
 	List *commands = NIL;
 
 	Oid viewOid = InvalidOid;
@@ -1428,6 +1432,33 @@ GetViewCreationTableDDLCommandsOfTable(Oid relationId)
 	}
 
 	return tableDDLCommands;
+}
+
+
+/*
+ * NoticeMatViewCountToRecreate takes a list of relation oids and counts the number
+ * of materialized view objects in the list. Logs a NOTICE message that tells the user
+ * that we are going to recreate that number of materialized views.
+ */
+static void
+NoticeMatViewCountToRecreate(List *relOids)
+{
+	int count = 0;
+	Oid relOid = InvalidOid;
+	foreach_oid(relOid, relOids)
+	{
+		if (get_rel_relkind(relOid) == RELKIND_MATVIEW)
+		{
+			count++;
+		}
+	}
+
+	if (count > 0)
+	{
+		ereport(NOTICE, (errmsg("%d materialized view objects are going to be recreated,"
+								" it may take a while",
+								count)));
+	}
 }
 
 
