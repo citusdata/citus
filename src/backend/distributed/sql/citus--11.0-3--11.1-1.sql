@@ -7,6 +7,18 @@ DROP FUNCTION pg_catalog.worker_merge_files_into_table(bigint, integer, text[], 
 DROP FUNCTION pg_catalog.worker_range_partition_table(bigint, integer, text, text, oid, anyarray);
 DROP FUNCTION pg_catalog.worker_repartition_cleanup(bigint);
 
+DO $check_columnar$
+BEGIN
+IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_extension AS e
+             INNER JOIN pg_catalog.pg_depend AS d ON (d.refobjid = e.oid)
+             INNER JOIN pg_catalog.pg_proc AS p ON (p.oid = d.objid)
+             WHERE e.extname='citus_columnar' and p.proname = 'columnar_handler'
+  ) THEN
+    #include "../../columnar/sql/columnar--11.0-3--11.1-1.sql"
+END IF;
+END;
+$check_columnar$;
+
 -- If upgrading citus, the columnar objects are already being a part of the
 -- citus extension, and must be detached so that they can be attached
 -- to the citus_columnar extension.
@@ -18,18 +30,27 @@ BEGIN
              WHERE e.extname='citus' and p.proname = 'columnar_handler'
   ) THEN
     ALTER EXTENSION citus DROP SCHEMA columnar;
-    ALTER EXTENSION citus DROP SEQUENCE columnar.storageid_seq;
+    ALTER EXTENSION citus DROP SCHEMA columnar_internal;
+    ALTER EXTENSION citus DROP SEQUENCE columnar_internal.storageid_seq;
 
     -- columnar tables
-    ALTER EXTENSION citus DROP TABLE columnar.options;
-    ALTER EXTENSION citus DROP TABLE columnar.stripe;
-    ALTER EXTENSION citus DROP TABLE columnar.chunk_group;
-    ALTER EXTENSION citus DROP TABLE columnar.chunk;
+    ALTER EXTENSION citus DROP TABLE columnar_internal.options;
+    ALTER EXTENSION citus DROP TABLE columnar_internal.stripe;
+    ALTER EXTENSION citus DROP TABLE columnar_internal.chunk_group;
+    ALTER EXTENSION citus DROP TABLE columnar_internal.chunk;
 
-    ALTER EXTENSION citus DROP FUNCTION columnar.columnar_handler;
+    ALTER EXTENSION citus DROP FUNCTION columnar_internal.columnar_handler;
     ALTER EXTENSION citus DROP ACCESS METHOD columnar;
     ALTER EXTENSION citus DROP FUNCTION pg_catalog.alter_columnar_table_set;
     ALTER EXTENSION citus DROP FUNCTION pg_catalog.alter_columnar_table_reset;
+    ALTER EXTENSION citus DROP FUNCTION columnar.get_storage_id;
+
+    -- columnar view
+    ALTER EXTENSION citus DROP VIEW columnar.storage;
+    ALTER EXTENSION citus DROP VIEW columnar.options;
+    ALTER EXTENSION citus DROP VIEW columnar.stripe;
+    ALTER EXTENSION citus DROP VIEW columnar.chunk_group;
+    ALTER EXTENSION citus DROP VIEW columnar.chunk;
 
     -- functions under citus_internal for columnar
     ALTER EXTENSION citus DROP FUNCTION citus_internal.upgrade_columnar_storage;
@@ -39,4 +60,3 @@ BEGIN
   END IF;
 END $check_citus$;
 #include "udfs/citus_finish_pg_upgrade/11.1-1.sql"
-

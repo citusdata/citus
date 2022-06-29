@@ -62,3 +62,4 @@ ALTER EXTENSION citus ADD FUNCTION pg_catalog.alter_columnar_table_reset;
 ALTER EXTENSION citus ADD FUNCTION citus_internal.upgrade_columnar_storage;
 ALTER EXTENSION citus ADD FUNCTION citus_internal.downgrade_columnar_storage;
 ALTER EXTENSION citus ADD FUNCTION citus_internal.columnar_ensure_am_depends_catalog;
+

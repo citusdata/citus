@@ -713,6 +713,30 @@ CREATE STATISTICS ctlt1_expr_stat ON (a || b) FROM ctlt1;
 CREATE TABLE ctlt_all (LIKE ctlt1 INCLUDING ALL);
 SELECT create_distributed_table('ctlt1', 'a');
 CREATE TABLE ctlt_all_2 (LIKE ctlt1 INCLUDING ALL);
+
+CREATE TABLE compression_and_defaults (
+    data text COMPRESSION lz4 DEFAULT '"{}"'::text COLLATE "C" NOT NULL PRIMARY KEY,
+    rev text
+)
+WITH (
+    autovacuum_vacuum_scale_factor='0.01',
+    fillfactor='75'
+);
+
+SELECT create_distributed_table('compression_and_defaults', 'data', colocate_with:='none');
+
+CREATE TABLE compression_and_generated_col (
+    data text COMPRESSION lz4 GENERATED ALWAYS AS (rev || '{]') STORED COLLATE "C" NOT NULL,
+    rev text
+)
+WITH (
+    autovacuum_vacuum_scale_factor='0.01',
+    fillfactor='75'
+);
+SELECT create_distributed_table('compression_and_generated_col', 'rev', colocate_with:='none');
+
+DROP TABLE compression_and_defaults, compression_and_generated_col;
+
 -- cleanup
 set client_min_messages to error;
 drop extension postgres_fdw cascade;
