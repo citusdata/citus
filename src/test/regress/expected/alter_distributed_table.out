@@ -847,6 +847,7 @@ SELECT create_distributed_table('mat_view_test', 'a');
 INSERT INTO mat_view_test VALUES (1,1), (2,2);
 CREATE MATERIALIZED VIEW mat_view AS SELECT * FROM mat_view_test;
 SELECT alter_distributed_table('mat_view_test', shard_count := 5, cascade_to_colocated := false);
+NOTICE:  1 materialized view objects are going to be recreated, it may take a while
 NOTICE:  creating a new table for alter_distributed_table.mat_view_test
 NOTICE:  moving the data of alter_distributed_table.mat_view_test
 NOTICE:  dropping the old alter_distributed_table.mat_view_test
@@ -955,6 +956,7 @@ SELECT create_distributed_table('test_am_matview' ,'a', colocate_with:='none');
 
 CREATE MATERIALIZED VIEW test_mat_view_am USING COLUMNAR AS SELECT count(*), a FROM test_am_matview GROUP BY a ;
 SELECT alter_distributed_table('test_am_matview', shard_count:= 52);
+NOTICE:  1 materialized view objects are going to be recreated, it may take a while
 NOTICE:  creating a new table for alter_distributed_table.test_am_matview
 NOTICE:  moving the data of alter_distributed_table.test_am_matview
 NOTICE:  dropping the old alter_distributed_table.test_am_matview

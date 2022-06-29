@@ -463,7 +463,7 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS matview_103 AS SELECT * from loc_tb JOIN 
 
 SET client_min_messages TO DEBUG1;
 ALTER TABLE loc_tb ADD CONSTRAINT fkey FOREIGN KEY (a) references ref_tb(a);
-RESET client_min_messages;
+SET client_min_messages TO WARNING;
 
 -- works fine
 select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100, citus_local_tables_mx.v101, citus_local_tables_mx.v102$$);

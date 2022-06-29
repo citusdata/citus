@@ -552,6 +552,7 @@ CREATE TABLE mat_view_test (a int);
 INSERT INTO mat_view_test VALUES (1), (2);
 CREATE MATERIALIZED VIEW mat_view AS SELECT * FROM mat_view_test;
 SELECT alter_table_set_access_method('mat_view_test','columnar');
+NOTICE:  1 materialized view objects are going to be recreated, it may take a while
 NOTICE:  creating a new table for alter_table_set_access_method.mat_view_test
 NOTICE:  moving the data of alter_table_set_access_method.mat_view_test
 NOTICE:  dropping the old alter_table_set_access_method.mat_view_test
@@ -599,6 +600,7 @@ INSERT INTO dist VALUES (7),(9);
 create materialized view m_dist as select * from dist;
 create view v_dist as select * from dist;
 select alter_table_set_access_method('local','columnar');
+NOTICE:  1 materialized view objects are going to be recreated, it may take a while
 NOTICE:  creating a new table for alter_table_set_access_method.local
 NOTICE:  moving the data of alter_table_set_access_method.local
 NOTICE:  dropping the old alter_table_set_access_method.local
@@ -613,6 +615,7 @@ NOTICE:  renaming the new table to alter_table_set_access_method.local
 (1 row)
 
 select alter_table_set_access_method('ref','columnar');
+NOTICE:  1 materialized view objects are going to be recreated, it may take a while
 NOTICE:  creating a new table for alter_table_set_access_method.ref
 NOTICE:  moving the data of alter_table_set_access_method.ref
 NOTICE:  dropping the old alter_table_set_access_method.ref
@@ -627,6 +630,7 @@ NOTICE:  renaming the new table to alter_table_set_access_method.ref
 (1 row)
 
 select alter_table_set_access_method('dist','columnar');
+NOTICE:  1 materialized view objects are going to be recreated, it may take a while
 NOTICE:  creating a new table for alter_table_set_access_method.dist
 NOTICE:  moving the data of alter_table_set_access_method.dist
 NOTICE:  dropping the old alter_table_set_access_method.dist
@@ -641,6 +645,7 @@ NOTICE:  renaming the new table to alter_table_set_access_method.dist
 (1 row)
 
 SELECT alter_distributed_table('dist', shard_count:=1, cascade_to_colocated:=false);
+NOTICE:  1 materialized view objects are going to be recreated, it may take a while
 NOTICE:  creating a new table for alter_table_set_access_method.dist
 NOTICE:  moving the data of alter_table_set_access_method.dist
 NOTICE:  dropping the old alter_table_set_access_method.dist
@@ -655,6 +660,7 @@ NOTICE:  renaming the new table to alter_table_set_access_method.dist
 (1 row)
 
 select alter_table_set_access_method('local','heap');
+NOTICE:  1 materialized view objects are going to be recreated, it may take a while
 NOTICE:  creating a new table for alter_table_set_access_method.local
 NOTICE:  moving the data of alter_table_set_access_method.local
 NOTICE:  dropping the old alter_table_set_access_method.local
@@ -669,6 +675,7 @@ NOTICE:  renaming the new table to alter_table_set_access_method.local
 (1 row)
 
 select alter_table_set_access_method('ref','heap');
+NOTICE:  1 materialized view objects are going to be recreated, it may take a while
 NOTICE:  creating a new table for alter_table_set_access_method.ref
 NOTICE:  moving the data of alter_table_set_access_method.ref
 NOTICE:  dropping the old alter_table_set_access_method.ref
@@ -683,6 +690,7 @@ NOTICE:  renaming the new table to alter_table_set_access_method.ref
 (1 row)
 
 select alter_table_set_access_method('dist','heap');
+NOTICE:  1 materialized view objects are going to be recreated, it may take a while
 NOTICE:  creating a new table for alter_table_set_access_method.dist
 NOTICE:  moving the data of alter_table_set_access_method.dist
 NOTICE:  dropping the old alter_table_set_access_method.dist
