@@ -461,6 +461,7 @@ CREATE MATERIALIZED VIEW matview_102 AS SELECT * from loc_tb JOIN v103 USING (a)
 CREATE OR REPLACE VIEW v103 AS SELECT * from loc_tb JOIN matview_102 USING (a);
 
 SET client_min_messages TO DEBUG1;
+-- auto undistribute
 ALTER TABLE loc_tb ADD CONSTRAINT fkey FOREIGN KEY (a) references ref_tb(a);
 SET client_min_messages TO WARNING;
 
@@ -472,6 +473,13 @@ ALTER TABLE loc_tb DROP CONSTRAINT fkey;
 select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100$$);
 	select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v101$$);
 	select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v102$$);
+
+-- test REFRESH MAT VIEW
+INSERT INTO loc_tb VALUES (1), (2);
+SELECT citus_add_local_table_to_metadata('loc_tb', true);
+SELECT * FROM matview_101 ORDER BY a;
+REFRESH MATERIALIZED VIEW matview_101;
+SELECT * FROM matview_101 ORDER BY a;
 
 -- cleanup at exit
 set client_min_messages to error;

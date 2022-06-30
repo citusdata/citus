@@ -883,6 +883,7 @@ CREATE VIEW v103 AS SELECT * from loc_tb;
 CREATE MATERIALIZED VIEW matview_102 AS SELECT * from loc_tb JOIN v103 USING (a);
 CREATE OR REPLACE VIEW v103 AS SELECT * from loc_tb JOIN matview_102 USING (a);
 SET client_min_messages TO DEBUG1;
+-- auto undistribute
 ALTER TABLE loc_tb ADD CONSTRAINT fkey FOREIGN KEY (a) references ref_tb(a);
 NOTICE:  1 materialized view objects on relation citus_local_tables_mx.loc_tb are going to be recreated, it may take a while
 DEBUG:  executing "CREATE OR REPLACE VIEW citus_local_tables_mx.v100 (a) AS  SELECT loc_tb.a
@@ -928,6 +929,27 @@ select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100$
 ---------------------------------------------------------------------
  (localhost,57637,f,"ERROR:  relation ""citus_local_tables_mx.v102"" does not exist")
  (localhost,57638,f,"ERROR:  relation ""citus_local_tables_mx.v102"" does not exist")
+(2 rows)
+
+-- test REFRESH MAT VIEW
+INSERT INTO loc_tb VALUES (1), (2);
+SELECT citus_add_local_table_to_metadata('loc_tb', true);
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM matview_101 ORDER BY a;
+ a
+---------------------------------------------------------------------
+(0 rows)
+
+REFRESH MATERIALIZED VIEW matview_101;
+SELECT * FROM matview_101 ORDER BY a;
+ a
+---------------------------------------------------------------------
+ 1
+ 2
 (2 rows)
 
 -- cleanup at exit
