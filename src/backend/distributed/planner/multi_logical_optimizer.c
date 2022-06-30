@@ -1490,9 +1490,7 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 	masterExtendedOpNode->hasDistinctOn = originalOpNode->hasDistinctOn;
 	masterExtendedOpNode->limitCount = originalOpNode->limitCount;
 	masterExtendedOpNode->limitOffset = originalOpNode->limitOffset;
-#if PG_VERSION_NUM >= PG_VERSION_13
 	masterExtendedOpNode->limitOption = originalOpNode->limitOption;
-#endif
 	masterExtendedOpNode->havingQual = newHavingQual;
 
 	if (!extendedOpNodeProperties->onlyPushableWindowFunctions)
@@ -2489,14 +2487,12 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	workerExtendedOpNode->windowClause = queryWindowClause.workerWindowClauseList;
 	workerExtendedOpNode->sortClauseList = queryOrderByLimit.workerSortClauseList;
 	workerExtendedOpNode->limitCount = queryOrderByLimit.workerLimitCount;
-#if PG_VERSION_NUM >= PG_VERSION_13
 
 	/*
 	 * If the limitCount cannot be pushed down it will be NULL, so the deparser will
 	 * ignore the limitOption.
 	 */
 	workerExtendedOpNode->limitOption = originalOpNode->limitOption;
-#endif
 
 	return workerExtendedOpNode;
 }

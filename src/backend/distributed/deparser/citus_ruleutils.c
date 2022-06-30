@@ -999,7 +999,6 @@ deparse_index_columns(StringInfo buffer, List *indexParameterList, List *deparse
 			appendStringInfo(buffer, "%s ",
 							 NameListToQuotedString(indexElement->opclass));
 		}
-#if PG_VERSION_NUM >= PG_VERSION_13
 
 		/* Commit on postgres: 911e70207703799605f5a0e8aad9f06cff067c63*/
 		if (indexElement->opclassopts != NIL)
@@ -1008,7 +1007,6 @@ deparse_index_columns(StringInfo buffer, List *indexParameterList, List *deparse
 			AppendStorageParametersToString(buffer, indexElement->opclassopts);
 			appendStringInfoString(buffer, ") ");
 		}
-#endif
 
 		if (indexElement->ordering != SORTBY_DEFAULT)
 		{

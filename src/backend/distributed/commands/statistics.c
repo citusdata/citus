@@ -55,9 +55,7 @@ static char * GenerateAlterIndexColumnSetStatsCommand(char *indexNameWithSchema,
 													  int32 attstattarget);
 static Oid GetRelIdByStatsOid(Oid statsOid);
 static char * CreateAlterCommandIfOwnerNotDefault(Oid statsOid);
-#if PG_VERSION_NUM >= PG_VERSION_13
 static char * CreateAlterCommandIfTargetNotDefault(Oid statsOid);
-#endif
 
 /*
  * PreprocessCreateStatisticsStmt is called during the planning phase for
@@ -343,8 +341,6 @@ AlterStatisticsSchemaStmtObjectAddress(Node *node, bool missingOk)
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_13
-
 /*
  * PreprocessAlterStatisticsStmt is called during the planning phase for
  * ALTER STATISTICS .. SET STATISTICS.
@@ -392,8 +388,6 @@ PreprocessAlterStatisticsStmt(Node *node, const char *queryString,
 	return ddlJobs;
 }
 
-
-#endif
 
 /*
  * PreprocessAlterStatisticsOwnerStmt is called during the planning phase for
@@ -507,7 +501,6 @@ GetExplicitStatisticsCommandList(Oid relationId)
 		explicitStatisticsCommandList =
 			lappend(explicitStatisticsCommandList,
 					makeTableDDLCommandString(createStatisticsCommand));
-#if PG_VERSION_NUM >= PG_VERSION_13
 
 		/* we need to alter stats' target if it's getting distributed after creation */
 		char *alterStatisticsTargetCommand =
@@ -519,7 +512,6 @@ GetExplicitStatisticsCommandList(Oid relationId)
 				lappend(explicitStatisticsCommandList,
 						makeTableDDLCommandString(alterStatisticsTargetCommand));
 		}
-#endif
 
 		/* we need to alter stats' owner if it's getting distributed after creation */
 		char *alterStatisticsOwnerCommand =
@@ -709,8 +701,6 @@ CreateAlterCommandIfOwnerNotDefault(Oid statsOid)
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_13
-
 /*
  * CreateAlterCommandIfTargetNotDefault returns an ALTER STATISTICS .. SET STATISTICS
  * command if the stats object with given id has a target different than the default one.
@@ -745,6 +735,3 @@ CreateAlterCommandIfTargetNotDefault(Oid statsOid)
 
 	return DeparseAlterStatisticsStmt((Node *) alterStatsStmt);
 }
-
-
-#endif

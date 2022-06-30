@@ -1734,9 +1734,7 @@ MultiExtendedOpNode(Query *queryTree, Query *originalQuery)
 	extendedOpNode->sortClauseList = queryTree->sortClause;
 	extendedOpNode->limitCount = queryTree->limitCount;
 	extendedOpNode->limitOffset = queryTree->limitOffset;
-#if PG_VERSION_NUM >= PG_VERSION_13
 	extendedOpNode->limitOption = queryTree->limitOption;
-#endif
 	extendedOpNode->havingQual = queryTree->havingQual;
 	extendedOpNode->distinctClause = queryTree->distinctClause;
 	extendedOpNode->hasDistinctOn = queryTree->hasDistinctOn;

@@ -1567,11 +1567,7 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 		ExecuteQueryViaSPI(query->data, SPI_OK_INSERT);
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_13
 	List *ownedSequences = getOwnedSequences(sourceId);
-#else
-	List *ownedSequences = getOwnedSequences(sourceId, InvalidAttrNumber);
-#endif
 	Oid sequenceOid = InvalidOid;
 	foreach_oid(sequenceOid, ownedSequences)
 	{

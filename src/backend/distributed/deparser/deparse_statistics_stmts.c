@@ -27,9 +27,7 @@ static void AppendCreateStatisticsStmt(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendDropStatisticsStmt(StringInfo buf, List *nameList, bool ifExists);
 static void AppendAlterStatisticsRenameStmt(StringInfo buf, RenameStmt *stmt);
 static void AppendAlterStatisticsSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
-#if PG_VERSION_NUM >= PG_VERSION_13
 static void AppendAlterStatisticsStmt(StringInfo buf, AlterStatsStmt *stmt);
-#endif
 static void AppendAlterStatisticsOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendStatisticsName(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt);
@@ -90,7 +88,6 @@ DeparseAlterStatisticsSchemaStmt(Node *node)
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_13
 char *
 DeparseAlterStatisticsStmt(Node *node)
 {
@@ -105,7 +102,6 @@ DeparseAlterStatisticsStmt(Node *node)
 }
 
 
-#endif
 char *
 DeparseAlterStatisticsOwnerStmt(Node *node)
 {
@@ -177,7 +173,6 @@ AppendAlterStatisticsSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_13
 static void
 AppendAlterStatisticsStmt(StringInfo buf, AlterStatsStmt *stmt)
 {
@@ -186,7 +181,6 @@ AppendAlterStatisticsStmt(StringInfo buf, AlterStatsStmt *stmt)
 }
 
 
-#endif
 static void
 AppendAlterStatisticsOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 {

@@ -36,12 +36,7 @@
 #include "distributed/time_constants.h"
 #include "distributed/tuplestore.h"
 #include "utils/builtins.h"
-#if PG_VERSION_NUM < PG_VERSION_13
-#include "utils/hsearch.h"
-#include "utils/hashutils.h"
-#else
 #include "common/hashfn.h"
-#endif
 #include "storage/ipc.h"
 
 

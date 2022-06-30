@@ -35,9 +35,6 @@ Node *
 ProcessCreateSubscriptionStmt(CreateSubscriptionStmt *createSubStmt)
 {
 	ListCell *currCell = NULL;
-	#if PG_VERSION_NUM < PG_VERSION_13
-	ListCell *prevCell = NULL;
-	#endif
 	bool useAuthinfo = false;
 
 	foreach(currCell, createSubStmt->options)
@@ -54,9 +51,6 @@ ProcessCreateSubscriptionStmt(CreateSubscriptionStmt *createSubStmt)
 
 			break;
 		}
-		#if PG_VERSION_NUM < PG_VERSION_13
-		prevCell = currCell;
-		#endif
 	}
 
 	if (useAuthinfo)

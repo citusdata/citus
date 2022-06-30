@@ -167,10 +167,7 @@ static bool FindQueryContainingRTEIdentityInternal(Node *node,
 												   FindQueryContainingRteIdentityContext *
 												   context);
 
-
-#if PG_VERSION_NUM >= PG_VERSION_13
 static int ParentCountPriorToAppendRel(List *appendRelList, AppendRelInfo *appendRelInfo);
-#endif
 
 
 /*
@@ -398,12 +395,10 @@ SafeToPushdownUnionSubquery(Query *originalQuery,
 
 /*
  * RangeTableOffsetCompat returns the range table offset(in glob->finalrtable) for the appendRelInfo.
- * For PG < 13 this is a no op.
  */
 static int
 RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo)
 {
-	#if PG_VERSION_NUM >= PG_VERSION_13
 	int parentCount = ParentCountPriorToAppendRel(root->append_rel_list, appendRelInfo);
 	int skipParentCount = parentCount - 1;
 
@@ -434,9 +429,6 @@ RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo)
 	 */
 	int parentRelIndex = appendRelInfo->parent_relid - 1;
 	return parentRelIndex - indexInRtable;
-	#else
-	return 0;
-	#endif
 }
 
 
@@ -1482,8 +1474,6 @@ AddUnionAllSetOperationsToAttributeEquivalenceClass(AttributeEquivalenceClass *
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_13
-
 /*
  * ParentCountPriorToAppendRel returns the number of parents that come before
  * the given append rel info.
@@ -1505,8 +1495,6 @@ ParentCountPriorToAppendRel(List *appendRelList, AppendRelInfo *targetAppendRelI
 	return bms_num_members(parent_ids);
 }
 
-
-#endif
 
 /*
  * AddUnionSetOperationsToAttributeEquivalenceClass recursively iterates on all the

@@ -48,11 +48,7 @@
 #include "distributed/tuplestore.h"
 #include "distributed/worker_manager.h"
 #include "utils/builtins.h"
-#if PG_VERSION_NUM < PG_VERSION_13
-#include "utils/hashutils.h"
-#else
 #include "common/hashfn.h"
-#endif
 
 
 #define RESERVED_CONNECTION_COLUMNS 4
