@@ -6,11 +6,6 @@ SELECT create_distributed_table ('test_table', 'key');
 
 INSERT INTO test_table SELECT i % 10, 'test' || i, row_to_json(row(i, i*18, 'test' || i)) FROM generate_series (0, 100) i;
 
--- server version because CTE inlining might produce
--- different debug messages in PG 11 vs PG 12
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 12;
-
 SET client_min_messages TO DEBUG;
 
 -- Citus should not inline this CTE because otherwise it cannot

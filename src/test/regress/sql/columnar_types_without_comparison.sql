@@ -71,14 +71,6 @@ SELECT * FROM test_user_defined_color WHERE a = 'red';
 DROP TABLE test_user_defined_color;
 DROP TYPE user_defined_color;
 
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 12 AS server_version_above_twelve
-\gset
-\if :server_version_above_twelve
-\else
-\q
-\endif
-
 -- pg_snapshot
 CREATE TABLE test_pg_snapshot (a pg_snapshot) USING columnar;
 INSERT INTO test_pg_snapshot VALUES ('10:20:10,14,15');

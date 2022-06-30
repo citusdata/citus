@@ -1,7 +1,3 @@
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 12 AS have_table_am
-\gset
-
 CREATE TEMPORARY TABLE output (line text);
 
 CREATE SCHEMA dumper;
@@ -29,19 +25,11 @@ COPY data FROM STDIN WITH (format csv, delimiter '|', escape '\');
 -- data should now appear twice
 COPY data TO STDOUT;
 
-\if :have_table_am
 CREATE TABLE simple_columnar(i INT, t TEXT) USING columnar;
-\else
-CREATE TABLE simple_columnar(i INT, t TEXT);
-\endif
 
 INSERT INTO simple_columnar VALUES (1, 'one'), (2, 'two');
 
-\if :have_table_am
 CREATE TABLE dist_columnar(i INT, t TEXT) USING columnar;
-\else
-CREATE TABLE dist_columnar(i INT, t TEXT);
-\endif
 
 SELECT create_distributed_table('dist_columnar', 'i');
 

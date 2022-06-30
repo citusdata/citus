@@ -1,7 +1,3 @@
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 11 AS server_version_above_eleven;
-\gset
-
 CREATE SCHEMA alter_distributed_table;
 SET search_path TO alter_distributed_table;
 SET citus.shard_count TO 4;
@@ -137,14 +133,12 @@ SELECT alter_distributed_table('col_with_ref_to_ref', shard_count:=10, cascade_t
 SELECT alter_distributed_table('col_with_ref_to_dist', shard_count:=6, cascade_to_colocated:=true);
 
 
-\if :server_version_above_eleven
 -- test altering columnar table
 CREATE TABLE columnar_table (a INT) USING columnar;
 SELECT create_distributed_table('columnar_table', 'a', colocate_with:='none');
 SELECT table_name::text, shard_count, access_method FROM public.citus_tables WHERE table_name::text = 'columnar_table';
 SELECT alter_distributed_table('columnar_table', shard_count:=6);
 SELECT table_name::text, shard_count, access_method FROM public.citus_tables WHERE table_name::text = 'columnar_table';
-\endif
 
 
 -- test complex cascade operations

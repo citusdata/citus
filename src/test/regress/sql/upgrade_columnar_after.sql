@@ -1,11 +1,3 @@
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 11 AS server_version_above_eleven
-\gset
-\if :server_version_above_eleven
-\else
-\q
-\endif
-
 SET search_path TO upgrade_columnar, public;
 
 -- test we retained data
