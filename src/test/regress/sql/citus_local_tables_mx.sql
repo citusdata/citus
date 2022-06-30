@@ -474,12 +474,20 @@ select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100$
 	select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v101$$);
 	select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v102$$);
 
+-- test a matview with columnar
+CREATE MATERIALIZED VIEW matview_columnar USING COLUMNAR AS SELECT * FROM loc_tb;
+
 -- test REFRESH MAT VIEW
 INSERT INTO loc_tb VALUES (1), (2);
 SELECT citus_add_local_table_to_metadata('loc_tb', true);
 SELECT * FROM matview_101 ORDER BY a;
 REFRESH MATERIALIZED VIEW matview_101;
 SELECT * FROM matview_101 ORDER BY a;
+
+-- verify columnar matview works on a table added to metadata
+SELECT * FROM matview_columnar;
+REFRESH MATERIALIZED VIEW matview_columnar;
+SELECT * FROM matview_columnar ORDER BY a;
 
 -- cleanup at exit
 set client_min_messages to error;

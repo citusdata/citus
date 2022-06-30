@@ -931,6 +931,8 @@ select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100$
  (localhost,57638,f,"ERROR:  relation ""citus_local_tables_mx.v102"" does not exist")
 (2 rows)
 
+-- test a matview with columnar
+CREATE MATERIALIZED VIEW matview_columnar USING COLUMNAR AS SELECT * FROM loc_tb;
 -- test REFRESH MAT VIEW
 INSERT INTO loc_tb VALUES (1), (2);
 SELECT citus_add_local_table_to_metadata('loc_tb', true);
@@ -946,6 +948,20 @@ SELECT * FROM matview_101 ORDER BY a;
 
 REFRESH MATERIALIZED VIEW matview_101;
 SELECT * FROM matview_101 ORDER BY a;
+ a
+---------------------------------------------------------------------
+ 1
+ 2
+(2 rows)
+
+-- verify columnar matview works on a table added to metadata
+SELECT * FROM matview_columnar;
+ a
+---------------------------------------------------------------------
+(0 rows)
+
+REFRESH MATERIALIZED VIEW matview_columnar;
+SELECT * FROM matview_columnar ORDER BY a;
  a
 ---------------------------------------------------------------------
  1
