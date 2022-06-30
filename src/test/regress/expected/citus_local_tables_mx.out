@@ -968,6 +968,108 @@ SELECT * FROM matview_columnar ORDER BY a;
  2
 (2 rows)
 
+-- test with partitioned tables
+SET citus.use_citus_managed_tables TO ON;
+CREATE TABLE parent_1 (a INT UNIQUE) PARTITION BY RANGE(a);
+SET citus.use_citus_managed_tables TO OFF;
+CREATE MATERIALIZED VIEW part_matview1 as SELECT count(*) FROM parent_1 JOIN parent_1 p2 ON (true);
+CREATE MATERIALIZED VIEW part_matview2 as SELECT count(*) FROM parent_1 JOIN part_matview1 on (true);
+SELECT count(*) FROM citus_local_tables_mx.part_matview1 JOIN citus_local_tables_mx.part_matview2 ON (true);
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+CREATE TABLE parent_1_child_1 (a int);
+CREATE TABLE parent_1_child_2 (a int);
+-- create matviews on partition tables
+CREATE MATERIALIZED VIEW mv1 AS SELECT * FROM parent_1_child_1;
+CREATE MATERIALIZED VIEW mv2 AS SELECT * FROM parent_1_child_2;
+CREATE MATERIALIZED VIEW mv3 AS SELECT parent_1_child_2.* FROM parent_1_child_2 JOIN parent_1_child_1 USING(a);
+CREATE MATERIALIZED VIEW mv4 AS SELECT * FROM mv3;
+alter table parent_1 attach partition parent_1_child_1 FOR VALUES FROM (0) TO (10) ;
+-- all matviews work
+SELECT count(*) FROM citus_local_tables_mx.mv1;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM citus_local_tables_mx.mv2;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM citus_local_tables_mx.mv3;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM citus_local_tables_mx.mv4;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- recreate matviews and verify they still work
+alter table parent_1 attach partition parent_1_child_2 FOR VALUES FROM (10) TO (20);
+SELECT count(*) FROM citus_local_tables_mx.mv1;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM citus_local_tables_mx.mv2;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM citus_local_tables_mx.mv3;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM citus_local_tables_mx.mv4;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- verify matviews work after undistributing
+SELECT undistribute_table('parent_1');
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) FROM citus_local_tables_mx.mv1;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM citus_local_tables_mx.mv2;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM citus_local_tables_mx.mv3;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM citus_local_tables_mx.mv4;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
 -- cleanup at exit
 set client_min_messages to error;
 DROP SCHEMA citus_local_tables_mx CASCADE;
