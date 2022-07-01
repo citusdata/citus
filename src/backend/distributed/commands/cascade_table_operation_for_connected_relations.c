@@ -514,12 +514,12 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 
 
 /*
- * ExecuteViewCreationCommandsViaSPI is a wrapper function
- * around ExecuteQueryViaSPI, that executes view creation commands
+ * ExecuteAndLogUtilityCommandListInTableTypeConversionViaSPI is a wrapper function
+ * around ExecuteAndLogQueryViaSPI, that executes view creation commands
  * with the flag InTableTypeConversionFunctionCall set to true.
  */
 void
-ExecuteViewCreationCommandsViaSPI(List *utilityCommandList)
+ExecuteAndLogUtilityCommandListInTableTypeConversionViaSPI(List *utilityCommandList)
 {
 	bool oldValue = InTableTypeConversionFunctionCall;
 	InTableTypeConversionFunctionCall = true;
@@ -534,7 +534,7 @@ ExecuteViewCreationCommandsViaSPI(List *utilityCommandList)
 			 * CREATE MATERIALIZED VIEW commands need to be parsed/transformed,
 			 * which SPI does for us.
 			 */
-			ExecuteAndLogQueryViaSPI(utilityCommand, SPI_OK_UTILITY);
+			ExecuteAndLogQueryViaSPI(utilityCommand, SPI_OK_UTILITY, DEBUG1);
 		}
 	}
 	PG_CATCH();

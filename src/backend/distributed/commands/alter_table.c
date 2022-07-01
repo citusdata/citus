@@ -1362,9 +1362,6 @@ GetViewCreationCommandsOfTable(Oid relationId)
 {
 	List *views = GetDependingViews(relationId);
 
-	/* we provide a notice message, as it could take a while to recreate the matviews */
-	NoticeMatViewCountToRecreate(views, relationId);
-
 	List *commands = NIL;
 
 	Oid viewOid = InvalidOid;
@@ -1391,6 +1388,9 @@ GetViewCreationCommandsOfTable(Oid relationId)
 
 		commands = lappend(commands, query->data);
 	}
+
+	/* we provide a notice message, as it could take a while to recreate the matviews */
+	NoticeMatViewCountToRecreate(views, relationId);
 
 	return commands;
 }
@@ -2042,12 +2042,12 @@ ExecuteQueryViaSPI(char *query, int SPIOK)
 
 /*
  * ExecuteAndLogQueryViaSPI is a wrapper around ExecuteQueryViaSPI, that logs
- * the query to be executed, as DEBUG1.
+ * the query to be executed, with the given log level.
  */
 void
-ExecuteAndLogQueryViaSPI(char *query, int SPIOK)
+ExecuteAndLogQueryViaSPI(char *query, int SPIOK, int logLevel)
 {
-	ereport(DEBUG1, (errmsg("executing \"%s\"", query)));
+	ereport(logLevel, (errmsg("executing \"%s\"", query)));
 
 	ExecuteQueryViaSPI(query, SPIOK);
 }

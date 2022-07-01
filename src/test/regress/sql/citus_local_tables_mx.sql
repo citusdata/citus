@@ -531,6 +531,8 @@ SELECT count(*) FROM citus_local_tables_mx.mv2;
 SELECT count(*) FROM citus_local_tables_mx.mv3;
 SELECT count(*) FROM citus_local_tables_mx.mv4;
 
+-- todo: add more matview tests once 5968 and 6028 are fixed
+
 -- cleanup at exit
 set client_min_messages to error;
 DROP SCHEMA citus_local_tables_mx CASCADE;
