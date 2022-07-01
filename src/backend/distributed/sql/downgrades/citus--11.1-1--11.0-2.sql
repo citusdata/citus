@@ -46,4 +46,15 @@ CREATE FUNCTION pg_catalog.worker_repartition_cleanup(bigint)
  STRICT
 AS 'MODULE_PATHNAME', $function$worker_repartition_cleanup$function$;
 
+DROP TYPE IF EXISTS citus.split_mode;
+DROP TYPE IF EXISTS citus.split_copy_info;
+DROP FUNCTION pg_catalog.citus_split_shard_by_split_points(
+    shard_id bigint,
+    split_points text[],
+    node_ids integer[],
+    split_mode citus.split_mode);
+DROP FUNCTION pg_catalog.worker_split_copy(
+    source_shard_id bigint,
+    splitCopyInfos citus.split_copy_info[]);
+
 #include "../../../columnar/sql/downgrades/columnar--11.1-1--11.0-2.sql"

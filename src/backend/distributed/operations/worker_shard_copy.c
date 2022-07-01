@@ -368,7 +368,8 @@ ConstructCopyStatement(List *destinationShardFullyQualifiedName, bool useBinaryF
 
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command, "COPY %s.%s FROM STDIN",
-					 destinationShardSchemaName, destinationShardRelationName);
+					 quote_identifier(destinationShardSchemaName), quote_identifier(
+						 destinationShardRelationName));
 
 	if (useBinaryFormat)
 	{
