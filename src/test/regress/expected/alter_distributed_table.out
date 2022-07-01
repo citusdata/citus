@@ -1,11 +1,3 @@
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 11 AS server_version_above_eleven;
- server_version_above_eleven
----------------------------------------------------------------------
- t
-(1 row)
-
-\gset
 CREATE SCHEMA alter_distributed_table;
 SET search_path TO alter_distributed_table;
 SET citus.shard_count TO 4;
@@ -469,7 +461,6 @@ SELECT alter_distributed_table('col_with_ref_to_dist', shard_count:=6, cascade_t
 
 (1 row)
 
-\if :server_version_above_eleven
 -- test altering columnar table
 CREATE TABLE columnar_table (a INT) USING columnar;
 SELECT create_distributed_table('columnar_table', 'a', colocate_with:='none');
@@ -496,7 +487,6 @@ SELECT table_name::text, shard_count, access_method FROM public.citus_tables WHE
  columnar_table |           6 | columnar
 (1 row)
 
-\endif
 -- test complex cascade operations
 CREATE TABLE cas_1 (a INT UNIQUE);
 CREATE TABLE cas_2 (a INT UNIQUE);

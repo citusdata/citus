@@ -1,6 +1,3 @@
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 12 AS have_table_am
-\gset
 CREATE TEMPORARY TABLE output (line text);
 CREATE SCHEMA dumper;
 SET search_path TO 'dumper';
@@ -29,17 +26,9 @@ COPY data TO STDOUT;
 4	{}
 2	{$":9}
 2	{$":9}
-\if :have_table_am
 CREATE TABLE simple_columnar(i INT, t TEXT) USING columnar;
-\else
-CREATE TABLE simple_columnar(i INT, t TEXT);
-\endif
 INSERT INTO simple_columnar VALUES (1, 'one'), (2, 'two');
-\if :have_table_am
 CREATE TABLE dist_columnar(i INT, t TEXT) USING columnar;
-\else
-CREATE TABLE dist_columnar(i INT, t TEXT);
-\endif
 SELECT create_distributed_table('dist_columnar', 'i');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -123,13 +112,8 @@ COPY dumper."weird.table" ("data.jsonb", "?empty(") TO STDOUT WITH (format csv, 
 data.jsonb,?empty(
 "{""weird"": {""table"": ""{:""}}",""
 "{""?\"""": []}",""
--- If server supports table access methods, check to be sure that the
--- recreated table is still columnar. Otherwise, just return true.
-\if :have_table_am
+-- Check to be sure that the recreated table is still columnar.
 \set is_columnar '(SELECT amname=''columnar'' from pg_am where relam=oid)'
-\else
-\set is_columnar TRUE
-\endif
 SELECT :is_columnar AS check_columnar FROM pg_class WHERE oid='simple_columnar'::regclass;
  check_columnar
 ---------------------------------------------------------------------

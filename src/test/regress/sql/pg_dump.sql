@@ -70,13 +70,8 @@ SELECT create_distributed_table('dist_columnar', 'i');
 COPY data (value) TO STDOUT WITH (format csv, force_quote *);
 COPY dumper."weird.table" ("data.jsonb", "?empty(") TO STDOUT WITH (format csv, force_quote ("?empty("), null 'null', header true);
 
--- If server supports table access methods, check to be sure that the
--- recreated table is still columnar. Otherwise, just return true.
-\if :have_table_am
+-- Check to be sure that the recreated table is still columnar.
 \set is_columnar '(SELECT amname=''columnar'' from pg_am where relam=oid)'
-\else
-\set is_columnar TRUE
-\endif
 
 SELECT :is_columnar AS check_columnar FROM pg_class WHERE oid='simple_columnar'::regclass;
 

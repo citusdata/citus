@@ -5,7 +5,7 @@
 --
 -- It'd be nice to script generation of this file, but alas, that's
 -- not done yet.
-
+--
 -- Upgrade tests verify the objects are added in citus_finish_pg_upgrade()
 
 SET citus.next_shard_id TO 580000;
