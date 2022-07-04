@@ -1,0 +1,69 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-record-gpid s1-begin s2-show-locks s1-alter-dist-table s2-show-locks s1-commit s2-show-locks
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-record-gpid:
+ SELECT citus_backend_gpid() INTO selected_gpid;
+
+step s1-begin:
+ BEGIN;
+
+step s2-show-locks:
+ SELECT relation_name, citus_nodename_for_nodeid(nodeid), citus_nodeport_for_nodeid(nodeid), mode
+ FROM citus_locks
+ WHERE global_pid IN (SELECT * FROM selected_gpid) AND relation_name LIKE 'dist_table%'
+ ORDER BY 1, 2, 3, 4;
+
+relation_name|citus_nodename_for_nodeid|citus_nodeport_for_nodeid|mode
+---------------------------------------------------------------------
+(0 rows)
+
+step s1-alter-dist-table:
+ ALTER TABLE dist_table ADD COLUMN data text;
+
+step s2-show-locks:
+ SELECT relation_name, citus_nodename_for_nodeid(nodeid), citus_nodeport_for_nodeid(nodeid), mode
+ FROM citus_locks
+ WHERE global_pid IN (SELECT * FROM selected_gpid) AND relation_name LIKE 'dist_table%'
+ ORDER BY 1, 2, 3, 4;
+
+relation_name      |citus_nodename_for_nodeid|citus_nodeport_for_nodeid|mode
+---------------------------------------------------------------------
+dist_table         |localhost                |                    57636|AccessExclusiveLock
+dist_table         |localhost                |                    57636|AccessShareLock
+dist_table         |localhost                |                    57637|AccessExclusiveLock
+dist_table         |localhost                |                    57637|AccessShareLock
+dist_table         |localhost                |                    57638|AccessExclusiveLock
+dist_table         |localhost                |                    57638|AccessShareLock
+dist_table_12345000|localhost                |                    57637|AccessExclusiveLock
+dist_table_12345000|localhost                |                    57637|AccessShareLock
+dist_table_12345001|localhost                |                    57638|AccessExclusiveLock
+dist_table_12345001|localhost                |                    57638|AccessShareLock
+dist_table_12345002|localhost                |                    57637|AccessExclusiveLock
+dist_table_12345002|localhost                |                    57637|AccessShareLock
+dist_table_12345003|localhost                |                    57638|AccessExclusiveLock
+dist_table_12345003|localhost                |                    57638|AccessShareLock
+(14 rows)
+
+step s1-commit:
+ COMMIT;
+
+step s2-show-locks:
+ SELECT relation_name, citus_nodename_for_nodeid(nodeid), citus_nodeport_for_nodeid(nodeid), mode
+ FROM citus_locks
+ WHERE global_pid IN (SELECT * FROM selected_gpid) AND relation_name LIKE 'dist_table%'
+ ORDER BY 1, 2, 3, 4;
+
+relation_name|citus_nodename_for_nodeid|citus_nodeport_for_nodeid|mode
+---------------------------------------------------------------------
+(0 rows)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
