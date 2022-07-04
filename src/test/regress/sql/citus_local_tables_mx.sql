@@ -474,12 +474,18 @@ select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100$
 	select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v101$$);
 	select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v102$$);
 
+INSERT INTO loc_tb VALUES (1), (2);
 -- test a matview with columnar
-CREATE MATERIALIZED VIEW matview_columnar USING COLUMNAR AS SELECT * FROM loc_tb;
+CREATE MATERIALIZED VIEW matview_columnar USING COLUMNAR AS SELECT * FROM loc_tb WITH DATA;
+
+-- cant recreate matviews, because the size limit is set to zero, by the GUC
+SET citus.max_matview_size_to_auto_recreate TO 0;
+SELECT citus_add_local_table_to_metadata('loc_tb', true);
+-- remove the limit
+SET citus.max_matview_size_to_auto_recreate TO -1;
+SELECT citus_add_local_table_to_metadata('loc_tb', true);
 
 -- test REFRESH MAT VIEW
-INSERT INTO loc_tb VALUES (1), (2);
-SELECT citus_add_local_table_to_metadata('loc_tb', true);
 SELECT * FROM matview_101 ORDER BY a;
 REFRESH MATERIALIZED VIEW matview_101;
 SELECT * FROM matview_101 ORDER BY a;

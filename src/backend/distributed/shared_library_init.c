@@ -1461,12 +1461,12 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citus.max_matview_size_to_auto_distribute",
+		"citus.max_matview_size_to_auto_recreate",
 		gettext_noop("Sets the maximum size of materialized views in MB to "
 					 "automatically distribute them."),
 		NULL,
 		&MaxMatViewSizeToAutoRecreate,
-		1024, -1, MAX_KILOBYTES,
+		1024, -1, INT_MAX,
 		PGC_USERSET,
 		GUC_UNIT_MB | GUC_STANDARD,
 		NULL, NULL, NULL);
