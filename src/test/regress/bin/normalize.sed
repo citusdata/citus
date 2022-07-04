@@ -75,9 +75,6 @@ s/(job_[0-9]+\/task_[0-9]+\/p_[0-9]+\.)[0-9]+/\1xxxx/g
 # isolation_ref2ref_foreign_keys
 s/"(ref_table_[0-9]_|ref_table_[0-9]_value_fkey_)[0-9]+"/"\1xxxxxxx"/g
 
-# pg11/pg12 varies in isolation debug output
-s/s1: DEBUG:/DEBUG:/g
-
 # commands cascading to shard relations
 s/(NOTICE:  .*_)[0-9]{5,}( CASCADE)/\1xxxxx\2/g
 s/(NOTICE:  [a-z]+ cascades to table ".*)_[0-9]{5,}"/\1_xxxxx"/g
@@ -156,21 +153,6 @@ s/Citus.*currently supports/Citus currently supports/g
 # Warnings in multi_explain
 s/prepared transaction with identifier .* does not exist/prepared transaction with identifier "citus_x_yyyyyy_zzz_w" does not exist/g
 s/failed to roll back prepared transaction '.*'/failed to roll back prepared transaction 'citus_x_yyyyyy_zzz_w'/g
-
-# Table aliases for partitioned tables in explain outputs might change
-# regardless of postgres appended an _int suffix to alias, we always append _xxx suffix
-# Can be removed when we remove support for pg11 and pg12.
-# "->  <scanMethod> Scan on <tableName>_<partitionId>_<shardId> <tableName>_<aliasId>" and
-# "->  <scanMethod> Scan on <tableName>_<partitionId>_<shardId> <tableName>" becomes
-# "->  <scanMethod> Scan on <tableName>_<partitionId>_<shardId> <tableName>_xxx"
-s/(->.*Scan on\ +)(.*)(_[0-9]+)(_[0-9]+) \2(_[0-9]+|_xxx)?/\1\2\3\4 \2_xxx/g
-
-# Table aliases for partitioned tables in "Hash Cond:" lines of explain outputs might change
-# This is only for multi_partitioning.sql test file
-# regardless of postgres appended an _int suffix to alias, we always append _xxx suffix
-# Can be removed when we remove support for pg11 and pg12.
-s/(partitioning_hash_join_test)(_[0-9]|_xxx)?(\.[a-zA-Z]+)/\1_xxx\3/g
-s/(partitioning_hash_test)(_[0-9]|_xxx)?(\.[a-zA-Z]+)/\1_xxx\3/g
 
 # Errors with binary decoding where OIDs should be normalized
 s/wrong data type: [0-9]+, expected [0-9]+/wrong data type: XXXX, expected XXXX/g
