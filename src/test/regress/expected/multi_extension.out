@@ -1095,10 +1095,12 @@ SELECT * FROM multi_extension.print_extension_changes();
  table columnar.chunk_group                                                             |
  table columnar.options                                                                 |
  table columnar.stripe                                                                  |
+                                                                                        | function citus_locks() SETOF record
                                                                                         | function citus_split_shard_by_split_points(bigint,text[],integer[],citus.shard_transfer_mode) void
                                                                                         | function worker_split_copy(bigint,split_copy_info[]) void
                                                                                         | type split_copy_info
-(24 rows)
+                                                                                        | view citus_locks
+(26 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
