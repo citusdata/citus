@@ -207,7 +207,6 @@ static char * CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaNa
 														  char *sourceName,
 														  char *targetSchemaName,
 														  char *targetName);
-static void NoticeMatViewCountToRecreate(List *viewOids, Oid relationId);
 static void ErrorIfMatViewSizeExceedsTheLimit(Oid matViewOid);
 static char * CreateMaterializedViewDDLCommand(Oid matViewOid);
 static char * GetAccessMethodForMatViewIfExists(Oid viewOid);
@@ -1389,9 +1388,6 @@ GetViewCreationCommandsOfTable(Oid relationId)
 		commands = lappend(commands, query->data);
 	}
 
-	/* we provide a notice message, as it could take a while to recreate the matviews */
-	NoticeMatViewCountToRecreate(views, relationId);
-
 	return commands;
 }
 
@@ -1413,33 +1409,6 @@ GetViewCreationTableDDLCommandsOfTable(Oid relationId)
 	}
 
 	return tableDDLCommands;
-}
-
-
-/*
- * NoticeMatViewCountToRecreate takes a list of view/matview oids and counts the number
- * of materialized view objects in the list. Logs a NOTICE message that tells the user
- * that we are going to recreate that number of materialized views.
- */
-static void
-NoticeMatViewCountToRecreate(List *viewOids, Oid relationId)
-{
-	int count = 0;
-	Oid relOid = InvalidOid;
-	foreach_oid(relOid, viewOids)
-	{
-		if (get_rel_relkind(relOid) == RELKIND_MATVIEW)
-		{
-			count++;
-		}
-	}
-
-	if (count > 0)
-	{
-		ereport(NOTICE, (errmsg("%d materialized view objects on relation %s are going "
-								"to be recreated, it may take a while",
-								count, generate_qualified_relation_name(relationId))));
-	}
 }
 
 

@@ -885,7 +885,6 @@ CREATE OR REPLACE VIEW v103 AS SELECT * from loc_tb JOIN matview_102 USING (a);
 SET client_min_messages TO DEBUG1;
 -- auto undistribute
 ALTER TABLE loc_tb ADD CONSTRAINT fkey FOREIGN KEY (a) references ref_tb(a);
-NOTICE:  1 materialized view objects on relation citus_local_tables_mx.loc_tb are going to be recreated, it may take a while
 DEBUG:  executing "CREATE OR REPLACE VIEW citus_local_tables_mx.v100 (a) AS  SELECT loc_tb.a
    FROM citus_local_tables_mx.loc_tb; ALTER VIEW citus_local_tables_mx.v100 OWNER TO postgres"
 DEBUG:  "view v100" has dependency to "table loc_tb" that is not in Citus' metadata
