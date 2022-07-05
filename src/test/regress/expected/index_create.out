@@ -38,3 +38,73 @@ ALTER INDEX idx2 ALTER COLUMN 1 SET STATISTICS 1000;
 -- test reindex
 REINDEX INDEX idx1;
 ALTER TABLE test_tbl REPLICA IDENTITY USING INDEX a_index;
+-- postgres allows ALTER INDEX rename on tables, and so Citus..
+-- and, also ALTER TABLE rename on indexes..
+CREATE TABLE alter_idx_rename_test (a INT);
+CREATE INDEX alter_idx_rename_test_idx ON alter_idx_rename_test (a);
+CREATE TABLE alter_idx_rename_test_parted (a INT) PARTITION BY LIST (a);
+CREATE INDEX alter_idx_rename_test_parted_idx ON alter_idx_rename_test_parted (a);
+BEGIN;
+-- rename index/table with weird syntax
+ALTER INDEX alter_idx_rename_test RENAME TO alter_idx_rename_test_2;
+ALTER TABLE alter_idx_rename_test_idx RENAME TO alter_idx_rename_test_idx_2;
+ALTER INDEX alter_idx_rename_test_parted RENAME TO alter_idx_rename_test_parted_2;
+ALTER TABLE alter_idx_rename_test_parted_idx RENAME TO alter_idx_rename_test_parted_idx_2;
+-- also, rename index/table with proper syntax
+ALTER INDEX alter_idx_rename_test_idx_2 RENAME TO alter_idx_rename_test_idx_3;
+ALTER TABLE alter_idx_rename_test_2 RENAME TO alter_idx_rename_test_3;
+ALTER INDEX alter_idx_rename_test_parted_idx_2 RENAME TO alter_idx_rename_test_parted_idx_3;
+ALTER TABLE alter_idx_rename_test_parted_2 RENAME TO alter_idx_rename_test_parted_3;
+SELECT 'alter_idx_rename_test_3'::regclass, 'alter_idx_rename_test_idx_3'::regclass;
+        regclass         |          regclass
+---------------------------------------------------------------------
+ alter_idx_rename_test_3 | alter_idx_rename_test_idx_3
+(1 row)
+
+SELECT 'alter_idx_rename_test_parted_3'::regclass, 'alter_idx_rename_test_parted_idx_3'::regclass;
+        regclass         |          regclass
+---------------------------------------------------------------------
+ alter_idx_rename_test_parted_3 | alter_idx_rename_test_parted_idx_3
+(1 row)
+
+ROLLBACK;
+-- now, on distributed tables
+SELECT create_distributed_table('alter_idx_rename_test', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('alter_idx_rename_test_parted', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- rename index/table with weird syntax
+ALTER INDEX alter_idx_rename_test RENAME TO alter_idx_rename_test_2;
+ALTER TABLE alter_idx_rename_test_idx RENAME TO alter_idx_rename_test_idx_2;
+ALTER INDEX alter_idx_rename_test_parted RENAME TO alter_idx_rename_test_parted_2;
+ALTER TABLE alter_idx_rename_test_parted_idx RENAME TO alter_idx_rename_test_parted_idx_2;
+-- also, rename index/table with proper syntax
+ALTER INDEX alter_idx_rename_test_idx_2 RENAME TO alter_idx_rename_test_idx_3;
+ALTER TABLE alter_idx_rename_test_2 RENAME TO alter_idx_rename_test_3;
+ALTER INDEX alter_idx_rename_test_parted_idx_2 RENAME TO alter_idx_rename_test_parted_idx_3;
+ALTER TABLE alter_idx_rename_test_parted_2 RENAME TO alter_idx_rename_test_parted_3;
+SELECT 'alter_idx_rename_test_3'::regclass, 'alter_idx_rename_test_idx_3'::regclass;
+        regclass         |          regclass
+---------------------------------------------------------------------
+ alter_idx_rename_test_3 | alter_idx_rename_test_idx_3
+(1 row)
+
+SELECT 'alter_idx_rename_test_parted_3'::regclass, 'alter_idx_rename_test_parted_idx_3'::regclass;
+        regclass         |          regclass
+---------------------------------------------------------------------
+ alter_idx_rename_test_parted_3 | alter_idx_rename_test_parted_idx_3
+(1 row)
+
+ALTER INDEX alter_idx_rename_test_idx_3 RENAME TO alter_idx_rename_test_idx_4;
+DROP INDEX alter_idx_rename_test_idx_4;
+DROP TABLE alter_idx_rename_test_3;
+DROP INDEX alter_idx_rename_test_parted_idx_3;
+DROP TABLE alter_idx_rename_test_parted_3;
