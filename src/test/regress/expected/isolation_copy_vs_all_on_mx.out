@@ -89,11 +89,6 @@ count
    11
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-copy s2-begin s2-coordinator-drop s1-commit-worker s2-commit s1-stop-connection s3-select-count
 step s1-start-session-level-connection:
@@ -150,11 +145,6 @@ step s3-select-count:
  SELECT COUNT(*) FROM copy_table;
 
 ERROR:  relation "copy_table" does not exist
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-copy s2-start-session-level-connection s2-begin-on-worker s2-select-for-update s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
 step s1-start-session-level-connection:
@@ -243,10 +233,5 @@ step s3-select-count:
 count
 ---------------------------------------------------------------------
     8
-(1 row)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
 (1 row)
 

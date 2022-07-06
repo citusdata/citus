@@ -1,8 +1,5 @@
 setup
 {
-  SELECT citus_internal.replace_isolation_tester_func();
-  SELECT citus_internal.refresh_isolation_tester_prepared_statement();
-
   CREATE TABLE deadlock_detection_reference (user_id int UNIQUE, some_val int);
   SELECT create_reference_table('deadlock_detection_reference');
 
@@ -26,7 +23,6 @@ teardown
   DROP TABLE local_deadlock_table;
   DROP TABLE deadlock_detection_test_rep_2;
   DROP TABLE deadlock_detection_reference;
-  SELECT citus_internal.restore_isolation_tester_func();
   SET citus.shard_replication_factor = 1;
 }
 

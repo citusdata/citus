@@ -23,9 +23,6 @@ setup
         LANGUAGE C STRICT VOLATILE
         AS 'citus', $$stop_session_level_connection_to_node$$;
 
-  SELECT citus_internal.replace_isolation_tester_func();
-  SELECT citus_internal.refresh_isolation_tester_prepared_statement();
-
 CREATE OR REPLACE PROCEDURE isolation_cleanup_orphaned_shards()
     LANGUAGE C
     AS 'citus', $$isolation_cleanup_orphaned_shards$$;
@@ -44,8 +41,6 @@ COMMENT ON PROCEDURE isolation_cleanup_orphaned_shards()
 
 teardown
 {
-  SELECT citus_internal.restore_isolation_tester_func();
-
   DROP TABLE selected_shard;
   DROP TABLE t1;
 }

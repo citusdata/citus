@@ -8,7 +8,7 @@ nodeid|nodename |nodeport
 (2 rows)
 
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-update-node-1:
     SELECT 1 FROM master_update_node(
@@ -28,7 +28,7 @@ step s2-update-node-2:
         58638);
  <waiting ...>
 step s1-commit: 
-	COMMIT;
+ COMMIT;
 
 step s2-update-node-2: <... completed>
 ?column?
@@ -98,7 +98,7 @@ nodeid|nodename |nodeport
 (2 rows)
 
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-update-node-1:
     SELECT 1 FROM master_update_node(
@@ -112,7 +112,7 @@ step s1-update-node-1:
 (1 row)
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-update-node-1:
     SELECT 1 FROM master_update_node(
@@ -121,7 +121,7 @@ step s2-update-node-1:
         58637);
  <waiting ...>
 step s1-commit: 
-	COMMIT;
+ COMMIT;
 
 step s2-update-node-1: <... completed>
 ?column?
@@ -130,7 +130,7 @@ step s2-update-node-1: <... completed>
 (1 row)
 
 step s2-abort:
-	ABORT;
+ ABORT;
 
 step s1-show-nodes:
     SELECT nodeid, nodename, nodeport, isactive
@@ -192,7 +192,7 @@ create_distributed_table
 (1 row)
 
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-update-node-nonexistent:
     SELECT 1 FROM master_update_node(

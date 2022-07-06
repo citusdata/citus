@@ -5,9 +5,6 @@
 // create distributed table to test behavior of DROP in concurrent operations
 setup
 {
-	SELECT citus_internal.replace_isolation_tester_func();
-	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
-
 	SET citus.shard_replication_factor TO 1;
 	CREATE SCHEMA drop_tests;
 	CREATE TABLE drop_tests.drop_hash(id integer, data text);
@@ -23,8 +20,6 @@ teardown
 {
 	DROP TABLE IF EXISTS drop_tests.drop_hash, drop_tests_2.drop_hash_2 CASCADE;
 	DROP SCHEMA IF EXISTS drop_tests, drop_tests_2 CASCADE;
-
-	SELECT citus_internal.restore_isolation_tester_func();
 }
 
 // session 1

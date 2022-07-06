@@ -22,8 +22,3 @@ ERROR:  duplicate key value violates unique constraint "test_locking_a_key_14000
 step s2-commit:
   COMMIT;
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-

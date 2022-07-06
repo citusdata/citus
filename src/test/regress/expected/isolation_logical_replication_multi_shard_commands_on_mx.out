@@ -89,11 +89,6 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-insert s3-acquire-advisory-lock s1-begin s1-move-placement s2-start-session-level-connection s2-begin-on-worker s2-update s2-commit-worker s3-release-advisory-lock s1-commit s1-select s1-get-shard-distribution s2-stop-connection
 step s1-insert:
@@ -183,11 +178,6 @@ step s2-stop-connection:
   SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-restore_isolation_tester_func
 ---------------------------------------------------------------------
 
 (1 row)
@@ -283,11 +273,6 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-insert s3-acquire-advisory-lock s1-begin s1-move-placement s2-start-session-level-connection s2-begin-on-worker s2-select s2-commit-worker s3-release-advisory-lock s1-commit s1-get-shard-distribution s2-stop-connection
 step s1-insert:
@@ -372,11 +357,6 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-begin s2-start-session-level-connection s2-begin-on-worker s2-insert s1-move-placement s2-commit-worker s1-commit s1-select s1-get-shard-distribution s2-stop-connection
 step s1-begin:
@@ -447,11 +427,6 @@ step s2-stop-connection:
   SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-restore_isolation_tester_func
 ---------------------------------------------------------------------
 
 (1 row)
@@ -533,11 +508,6 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-insert s1-begin s2-start-session-level-connection s2-begin-on-worker s2-delete s1-move-placement s2-commit-worker s1-commit s1-select s1-get-shard-distribution s2-stop-connection
 step s1-insert:
@@ -613,11 +583,6 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-insert s1-begin s2-start-session-level-connection s2-begin-on-worker s2-select s1-move-placement s2-commit-worker s1-commit s1-get-shard-distribution s2-stop-connection
 step s1-insert:
@@ -681,11 +646,6 @@ step s2-stop-connection:
   SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-restore_isolation_tester_func
 ---------------------------------------------------------------------
 
 (1 row)

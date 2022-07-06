@@ -12,7 +12,6 @@ setup
 teardown
 {
         DROP TABLE IF EXISTS copy_table CASCADE;
-        SELECT citus_internal.restore_isolation_tester_func();
 }
 
 session "s1"

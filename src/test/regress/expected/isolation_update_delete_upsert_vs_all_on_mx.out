@@ -94,11 +94,6 @@ count
     0
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-delete s2-start-session-level-connection s2-begin-on-worker s2-copy s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
 create_distributed_table
@@ -194,11 +189,6 @@ count
     3
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-update s2-start-session-level-connection s2-begin-on-worker s2-alter-table s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
 create_distributed_table
@@ -290,11 +280,6 @@ count
     0
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-update s2-start-session-level-connection s2-begin-on-worker s2-select-for-update s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
 create_distributed_table
@@ -378,11 +363,6 @@ step s2-stop-connection:
         SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-restore_isolation_tester_func
 ---------------------------------------------------------------------
 
 (1 row)

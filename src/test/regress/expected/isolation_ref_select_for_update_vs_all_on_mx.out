@@ -87,11 +87,6 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select-for-update s2-start-session-level-connection s2-begin-on-worker s2-insert s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
 create_reference_table
@@ -188,11 +183,6 @@ count
     2
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select-for-update s2-start-session-level-connection s2-begin-on-worker s2-select s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
 create_reference_table
@@ -276,11 +266,6 @@ step s2-stop-connection:
         SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-restore_isolation_tester_func
 ---------------------------------------------------------------------
 
 (1 row)
@@ -369,11 +354,6 @@ step s2-stop-connection:
         SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-restore_isolation_tester_func
 ---------------------------------------------------------------------
 
 (1 row)
@@ -474,11 +454,6 @@ count
     2
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select-for-update s2-start-session-level-connection s2-begin-on-worker s2-alter s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
 create_reference_table
@@ -558,11 +533,6 @@ step s2-stop-connection:
         SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-restore_isolation_tester_func
 ---------------------------------------------------------------------
 
 (1 row)
@@ -655,11 +625,6 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select-for-update s2-coordinator-create-index-concurrently s1-commit-worker s1-stop-connection
 create_reference_table
@@ -706,11 +671,6 @@ step s1-stop-connection:
  SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-restore_isolation_tester_func
 ---------------------------------------------------------------------
 
 (1 row)
