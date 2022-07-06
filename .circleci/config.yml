@@ -6,7 +6,7 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-vabaecad'
+    default: '-dev-b07a192'
   pg13_version:
     type: string
     default: '13.4'
