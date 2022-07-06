@@ -694,12 +694,6 @@ workflows:
           make: check-enterprise-failure
           requires: [build-14]
       - test-citus:
-          name: 'test-14_check-enterprise-split'
-          pg_major: 14
-          image_tag: '<< pipeline.parameters.pg14_version >>'
-          make: check-enterprise-split
-          requires: [build-14]
-      - test-citus:
           name: 'test-14_check-multi'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
