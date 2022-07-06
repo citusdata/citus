@@ -1,3 +1,4 @@
+test: isolation_setup
 test: isolation_add_remove_node
 test: isolation_update_node
 test: isolation_update_node_lock_writes

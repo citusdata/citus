@@ -11,7 +11,6 @@ setup
 teardown
 {
     DROP TABLE dist_table;
-    SELECT citus_internal.restore_isolation_tester_func();
     SELECT citus_remove_node('localhost', 57636);
 }
 

@@ -5,9 +5,6 @@
 // create range distributed table to test behavior of SELECT in concurrent operations
 setup
 {
-	SELECT citus_internal.replace_isolation_tester_func();
-	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
-
 	SET citus.shard_replication_factor TO 1;
 	SET citus.next_shard_id TO 6780300;
 	CREATE TABLE select_append(id integer, data text, int_data int);
@@ -19,7 +16,6 @@ setup
 teardown
 {
 	DROP TABLE IF EXISTS select_append CASCADE;
-	SELECT citus_internal.restore_isolation_tester_func();
 }
 
 // session 1

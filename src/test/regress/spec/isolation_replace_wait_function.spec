@@ -5,8 +5,6 @@
 
 setup
 {
-  SELECT citus_internal.replace_isolation_tester_func();
-  SELECT citus_internal.refresh_isolation_tester_prepared_statement();
   select setval('pg_dist_shardid_seq', GREATEST(1400000, nextval('pg_dist_shardid_seq')));
 
   CREATE TABLE test_locking (a int unique);
@@ -16,7 +14,6 @@ setup
 teardown
 {
   DROP TABLE test_locking;
-  SELECT citus_internal.restore_isolation_tester_func();
 }
 
 session "s1"

@@ -1,8 +1,5 @@
 setup
 {
-    SELECT citus_internal.replace_isolation_tester_func();
-    SELECT citus_internal.refresh_isolation_tester_prepared_statement();
-
     CREATE TABLE dist_table(a INT, b INT);
     SELECT create_distributed_table('dist_table', 'a');
     INSERT INTO dist_table VALUES (1, 2), (3, 4), (5, 6);
@@ -11,7 +8,6 @@ setup
 teardown
 {
     DROP TABLE IF EXISTS dist_table;
-    SELECT citus_internal.restore_isolation_tester_func();
 }
 
 session "s1"
