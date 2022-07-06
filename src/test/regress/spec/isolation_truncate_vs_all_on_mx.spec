@@ -24,7 +24,6 @@ teardown
 	DROP TABLE IF EXISTS referencing_table_2;
 	DROP TABLE IF EXISTS referencing_table_1;
 	DROP TABLE IF EXISTS truncate_table CASCADE;
-	SELECT citus_internal.restore_isolation_tester_func();
 }
 
 session "s1"

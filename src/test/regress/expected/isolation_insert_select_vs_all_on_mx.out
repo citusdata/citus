@@ -89,11 +89,6 @@ count
    15
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-select-via-coordinator s2-start-session-level-connection s2-begin-on-worker s2-colocated-insert-select s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
 step s1-start-session-level-connection:
@@ -182,11 +177,6 @@ step s3-select-count:
 count
 ---------------------------------------------------------------------
    15
-(1 row)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
 (1 row)
 
 
@@ -279,11 +269,6 @@ count
    15
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-select-via-coordinator s2-start-session-level-connection s2-begin-on-worker s2-insert-select-via-coordinator s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
 step s1-start-session-level-connection:
@@ -372,11 +357,6 @@ step s3-select-count:
 count
 ---------------------------------------------------------------------
    15
-(1 row)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
 (1 row)
 
 
@@ -469,11 +449,6 @@ count
    12
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-select-via-coordinator s2-start-session-level-connection s2-begin-on-worker s2-select s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
 step s1-start-session-level-connection:
@@ -562,11 +537,6 @@ step s3-select-count:
 count
 ---------------------------------------------------------------------
    10
-(1 row)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
 (1 row)
 
 
@@ -659,11 +629,6 @@ count
    10
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-select-via-coordinator s2-start-session-level-connection s2-begin-on-worker s2-update s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
 step s1-start-session-level-connection:
@@ -752,11 +717,6 @@ step s3-select-count:
 count
 ---------------------------------------------------------------------
    10
-(1 row)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
 (1 row)
 
 
@@ -849,11 +809,6 @@ count
    13
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-select-via-coordinator s2-start-session-level-connection s2-begin-on-worker s2-copy s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
 step s1-start-session-level-connection:
@@ -944,11 +899,6 @@ count
    13
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-colocated-insert-select s2-begin s2-coordinator-drop s1-commit-worker s2-commit s1-stop-connection s2-stop-connection s3-select-count
 step s1-start-session-level-connection:
@@ -1013,11 +963,6 @@ step s3-select-count:
  SELECT COUNT(*) FROM dist_table;
 
 ERROR:  relation "dist_table" does not exist
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-select-via-coordinator s2-begin s2-coordinator-drop s1-commit-worker s2-commit s1-stop-connection s2-stop-connection s3-select-count
 step s1-start-session-level-connection:
@@ -1082,11 +1027,6 @@ step s3-select-count:
  SELECT COUNT(*) FROM dist_table;
 
 ERROR:  relation "dist_table" does not exist
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-colocated-insert-select s2-start-session-level-connection s2-begin-on-worker s2-select-for-update s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
 step s1-start-session-level-connection:
@@ -1177,11 +1117,6 @@ count
    10
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-select-via-coordinator s2-start-session-level-connection s2-begin-on-worker s2-select-for-update s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
 step s1-start-session-level-connection:
@@ -1270,10 +1205,5 @@ step s3-select-count:
 count
 ---------------------------------------------------------------------
    10
-(1 row)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
 (1 row)
 

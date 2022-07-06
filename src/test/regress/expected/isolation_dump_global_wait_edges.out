@@ -56,11 +56,6 @@ step s2-update: <... completed>
 step s2-abort:
     ABORT;
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-begin s2-begin s3-begin s1-update s2-update s3-update detector-dump-wait-edges s1-abort s2-abort s3-abort
 step s1-begin:
@@ -136,9 +131,4 @@ step s2-abort:
 step s3-update: <... completed>
 step s3-abort:
     ABORT;
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 

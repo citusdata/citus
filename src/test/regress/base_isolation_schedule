@@ -1,4 +1,5 @@
 # ----------
 # isolation setup steps
 # ----------
+test: isolation_setup
 test: isolation_cluster_management

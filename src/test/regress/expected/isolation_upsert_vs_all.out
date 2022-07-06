@@ -20,11 +20,6 @@ count
     5
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-update s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -44,11 +39,6 @@ step s1-select-count: SELECT COUNT(*) FROM upsert_hash;
 count
 ---------------------------------------------------------------------
     5
-(1 row)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
 (1 row)
 
 
@@ -72,11 +62,6 @@ count
     4
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-truncate s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -98,11 +83,6 @@ count
     0
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-drop s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -120,11 +100,6 @@ step s2-drop: <... completed>
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM upsert_hash;
 ERROR:  relation "upsert_hash" does not exist
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-ddl-create-index s1-commit s2-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -152,11 +127,6 @@ run_command_on_workers
 (localhost,57637,t,4)
 (localhost,57638,t,4)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-upsert s2-ddl-drop-index s1-commit s2-commit s1-select-count s1-show-indexes
@@ -187,11 +157,6 @@ run_command_on_workers
 (localhost,57638,t,2)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s1-upsert s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -217,11 +182,6 @@ run_command_on_workers
 (localhost,57637,t,4)
 (localhost,57638,t,4)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-ddl-add-column s1-commit s2-commit s1-select-count s1-show-columns
@@ -250,11 +210,6 @@ run_command_on_workers
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-upsert s2-ddl-drop-column s1-commit s2-commit s1-select-count s1-show-columns
@@ -285,11 +240,6 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-ddl-rename-column s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -318,11 +268,6 @@ run_command_on_workers
 (localhost,57638,t,new_column)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-table-size s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -348,11 +293,6 @@ count
     5
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-master-modify-multiple-shards s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -372,11 +312,6 @@ step s1-select-count: SELECT COUNT(*) FROM upsert_hash;
 count
 ---------------------------------------------------------------------
     0
-(1 row)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
 (1 row)
 
 
@@ -407,11 +342,6 @@ count
     5
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-update s2-upsert s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -431,11 +361,6 @@ step s1-select-count: SELECT COUNT(*) FROM upsert_hash;
 count
 ---------------------------------------------------------------------
     5
-(1 row)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
 (1 row)
 
 
@@ -459,11 +384,6 @@ count
     5
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-truncate s2-upsert s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -485,11 +405,6 @@ count
     1
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-upsert s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -508,11 +423,6 @@ ERROR:  relation "upsert_hash" does not exist
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM upsert_hash;
 ERROR:  relation "upsert_hash" does not exist
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-upsert s1-commit s2-commit s1-select-count s1-show-indexes
 create_distributed_table
@@ -540,11 +450,6 @@ run_command_on_workers
 (localhost,57637,t,4)
 (localhost,57638,t,4)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-ddl-drop-index s2-upsert s1-commit s2-commit s1-select-count s1-show-indexes
@@ -575,11 +480,6 @@ run_command_on_workers
 (localhost,57638,t,2)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-upsert s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -607,11 +507,6 @@ run_command_on_workers
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-ddl-drop-column s2-upsert s1-commit s2-commit s1-select-count s1-show-columns
@@ -642,11 +537,6 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-upsert s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
@@ -676,11 +566,6 @@ run_command_on_workers
 (localhost,57638,t,new_column)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-table-size s2-upsert s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -706,11 +591,6 @@ count
     5
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-master-modify-multiple-shards s2-upsert s1-commit s2-commit s1-select-count
 create_distributed_table
@@ -730,10 +610,5 @@ step s1-select-count: SELECT COUNT(*) FROM upsert_hash;
 count
 ---------------------------------------------------------------------
     1
-(1 row)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
 (1 row)
 

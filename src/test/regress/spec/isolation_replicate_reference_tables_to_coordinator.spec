@@ -1,8 +1,5 @@
 setup
 {
-  SELECT citus_internal.replace_isolation_tester_func();
-  SELECT citus_internal.refresh_isolation_tester_prepared_statement();
-
   CREATE TABLE ref_table(a int primary key);
   SELECT create_reference_table('ref_table');
   INSERT INTO ref_table VALUES (1), (3), (5), (7);
@@ -13,7 +10,6 @@ setup
 
 teardown
 {
-  SELECT citus_internal.restore_isolation_tester_func();
   DROP TABLE ref_table, dist_table;
   SELECT master_remove_node('localhost', 57636);
 }
