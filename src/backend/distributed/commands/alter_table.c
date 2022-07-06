@@ -857,6 +857,11 @@ static void
 DropIndexesNotSupportedByColumnar(Oid relationId, bool suppressNoticeMessages)
 {
 	Relation columnarRelation = RelationIdGetRelation(relationId);
+	if (!RelationIsValid(columnarRelation))
+	{
+		ereport(ERROR, (errmsg("could not open relation with OID %u", relationId)));
+	}
+
 	List *indexIdList = RelationGetIndexList(columnarRelation);
 
 	/*
