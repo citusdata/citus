@@ -891,6 +891,11 @@ static void
 RenameShardRelationStatistics(Oid shardRelationId, uint64 shardId)
 {
 	Relation shardRelation = RelationIdGetRelation(shardRelationId);
+	if (!RelationIsValid(shardRelation))
+	{
+		ereport(ERROR, (errmsg("could not open relation with OID %u", shardRelationId)));
+	}
+
 	List *statsOidList = RelationGetStatExtList(shardRelation);
 	RelationClose(shardRelation);
 

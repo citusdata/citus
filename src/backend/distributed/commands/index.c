@@ -321,6 +321,11 @@ ExecuteFunctionOnEachTableIndex(Oid relationId, PGIndexProcessor pgIndexProcesso
 	List *result = NIL;
 
 	Relation relation = RelationIdGetRelation(relationId);
+	if (!RelationIsValid(relation))
+	{
+		ereport(ERROR, (errmsg("could not open relation with OID %u", relationId)));
+	}
+
 	List *indexIdList = RelationGetIndexList(relation);
 	Oid indexId = InvalidOid;
 	foreach_oid(indexId, indexIdList)

@@ -506,6 +506,11 @@ CreateFixPartitionShardIndexNamesTaskList(Oid parentRelationId, Oid partitionRel
 	}
 
 	Relation parentRelation = RelationIdGetRelation(parentRelationId);
+	if (!RelationIsValid(parentRelation))
+	{
+		ereport(ERROR, (errmsg("could not open relation with OID %u", parentRelationId)));
+	}
+
 	List *parentIndexIdList = NIL;
 
 	if (parentIndexOid != InvalidOid)
