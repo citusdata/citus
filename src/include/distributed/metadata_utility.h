@@ -24,6 +24,7 @@
 #include "distributed/citus_nodes.h"
 #include "distributed/connection_management.h"
 #include "distributed/errormessage.h"
+#include "distributed/pg_dist_rebalance_jobs.h"
 #include "distributed/relay_utility.h"
 #include "distributed/worker_manager.h"
 #include "utils/acl.h"
@@ -203,6 +204,38 @@ typedef enum SizeQueryType
 	TABLE_SIZE /* pg_table_size() */
 } SizeQueryType;
 
+typedef enum RebalanceJobStatus
+{
+	REBALANCE_JOB_STATUS_UNKNOWN,
+	REBALANCE_JOB_STATUS_SCHEDULED,
+	REBALANCE_JOB_STATUS_DONE
+} RebalanceJobStatus;
+
+typedef enum RebalanceJobType
+{
+	REBALANCE_JOB_TYPE_UNKNOWN,
+	REBALANCE_JOB_TYPE_MOVE
+} RebalanceJobType;
+
+typedef struct RebalanceJob
+{
+	int64 jobid;
+	RebalanceJobStatus status;
+
+	RebalanceJobType jobType;
+	union
+	{
+		struct
+		{
+			uint32 shardId;
+			char *sourceName;
+			int32 sourcePort;
+			char *targetName;
+			int32 targetPort;
+		} move;
+	} jobArguments;
+} RebalanceJob;
+
 
 /* Size functions */
 extern Datum citus_table_size(PG_FUNCTION_ARGS);
@@ -311,4 +344,7 @@ extern void EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid
 										ownerRelationId);
 extern void AlterSequenceType(Oid seqOid, Oid typeOid);
 extern void EnsureRelationHasCompatibleSequenceTypes(Oid relationId);
+extern bool HasScheduledRebalanceJobs(void);
+extern RebalanceJob * GetScheduledRebalanceJob(void);
+extern void UpdateJobStatus(RebalanceJob *job, RebalanceJobStatus newStatus);
 #endif   /* METADATA_UTILITY_H */

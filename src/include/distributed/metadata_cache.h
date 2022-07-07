@@ -227,6 +227,7 @@ extern Oid DistPartitionRelationId(void);
 extern Oid DistShardRelationId(void);
 extern Oid DistPlacementRelationId(void);
 extern Oid DistNodeRelationId(void);
+extern Oid DistRebalanceJobsRelationId(void);
 extern Oid DistRebalanceStrategyRelationId(void);
 extern Oid DistLocalGroupIdRelationId(void);
 extern Oid DistObjectRelationId(void);
@@ -236,6 +237,8 @@ extern Oid DistEnabledCustomAggregatesId(void);
 extern Oid DistNodeNodeIdIndexId(void);
 extern Oid DistPartitionLogicalRelidIndexId(void);
 extern Oid DistPartitionColocationidIndexId(void);
+extern Oid DistRebalanceJobsJobsIdIndexId(void);
+extern Oid DistRebalanceJobsStatusJobsIdIndexId(void);
 extern Oid DistShardLogicalRelidIndexId(void);
 extern Oid DistShardShardidIndexId(void);
 extern Oid DistPlacementShardidIndexId(void);
@@ -268,6 +271,8 @@ extern Oid SecondaryNodeRoleId(void);
 extern Oid CitusCopyFormatTypeId(void);
 extern Oid TextCopyFormatId(void);
 extern Oid BinaryCopyFormatId(void);
+extern Oid JobStatusDoneId(void);
+extern Oid JobStatusScheduledId(void);
 
 /* user related functions */
 extern Oid CitusExtensionOwner(void);

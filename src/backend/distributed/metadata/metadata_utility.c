@@ -45,6 +45,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/pg_dist_rebalance_jobs.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/pg_dist_placement.h"
 #include "distributed/reference_table_utils.h"
@@ -2216,4 +2217,238 @@ bool
 IsForeignTable(Oid relationId)
 {
 	return get_rel_relkind(relationId) == RELKIND_FOREIGN_TABLE;
+}
+
+
+bool
+HasScheduledRebalanceJobs()
+{
+	const int scanKeyCount = 1;
+	ScanKeyData scanKey[1];
+	bool indexOK = true;
+
+	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
+											  AccessShareLock);
+
+	/* pg_dist_rebalance_jobs.status == 'scheduled' */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_status,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(JobStatusScheduledId()));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
+													DistRebalanceJobsStatusJobsIdIndexId(),
+													indexOK, NULL, scanKeyCount, scanKey);
+
+	HeapTuple jobTuple = systable_getnext(scanDescriptor);
+
+	bool hasScheduledJob = false;
+	if (HeapTupleIsValid(jobTuple))
+	{
+		hasScheduledJob = true;
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistRebalanceJobs, AccessShareLock);
+
+	return hasScheduledJob;
+}
+
+
+static RebalanceJobStatus
+RebalanceJobStatusByOid(Oid enumOid)
+{
+	if (enumOid == JobStatusDoneId())
+	{
+		return REBALANCE_JOB_STATUS_DONE;
+	}
+	else if (enumOid == JobStatusScheduledId())
+	{
+		return REBALANCE_JOB_STATUS_SCHEDULED;
+	}
+	ereport(ERROR, (errmsg("unknown enum value for citus_job_status")));
+	return REBALANCE_JOB_STATUS_UNKNOWN;
+}
+
+
+static Oid
+RebalanceJobStatusOid(RebalanceJobStatus status)
+{
+	switch (status)
+	{
+		case REBALANCE_JOB_STATUS_SCHEDULED:
+		{
+			return JobStatusScheduledId();
+		}
+
+		case REBALANCE_JOB_STATUS_DONE:
+		{
+			return JobStatusDoneId();
+		}
+
+		default:
+		{
+			return InvalidOid;
+		}
+	}
+}
+
+
+static void
+ParseMoveJob(RebalanceJob *target, Datum moveArgs)
+{
+	HeapTupleHeader t = DatumGetHeapTupleHeader(moveArgs);
+	bool isnull = false;
+
+	Datum shardIdDatum = GetAttributeByName(t, "shard_id", &isnull);
+	if (isnull)
+	{
+		ereport(ERROR, (errmsg(
+							"shard_id for citus_move_shard_placement_arguments "
+							"can't be null")));
+	}
+	uint64 shardId = DatumGetUInt64(shardIdDatum);
+
+	Datum sourceNodeNameDatum = GetAttributeByName(t, "source_node_name", &isnull);
+	if (isnull)
+	{
+		ereport(ERROR, (errmsg(
+							"source_node_name for citus_move_shard_placement_arguments "
+							"can't be null")));
+	}
+	text *sourceNodeNameText = DatumGetTextP(sourceNodeNameDatum);
+
+	Datum sourceNodePortDatum = GetAttributeByName(t, "source_node_port", &isnull);
+	if (isnull)
+	{
+		ereport(ERROR, (errmsg(
+							"source_node_port for citus_move_shard_placement_arguments "
+							"can't be null")));
+	}
+	int32 sourceNodePort = DatumGetInt32(sourceNodePortDatum);
+
+	Datum targetNodeNameDatum = GetAttributeByName(t, "target_node_name", &isnull);
+	if (isnull)
+	{
+		ereport(ERROR, (errmsg(
+							"target_node_name for citus_move_shard_placement_arguments "
+							"can't be null")));
+	}
+	text *targetNodeNameText = DatumGetTextP(targetNodeNameDatum);
+
+	Datum targetNodePortDatum = GetAttributeByName(t, "target_node_port", &isnull);
+	if (isnull)
+	{
+		ereport(ERROR, (errmsg(
+							"target_node_port for citus_move_shard_placement_arguments "
+							"can't be null")));
+	}
+	int32 targetNodePort = DatumGetInt32(targetNodePortDatum);
+
+	target->jobType = REBALANCE_JOB_TYPE_MOVE;
+	target->jobArguments.move.shardId = shardId;
+	target->jobArguments.move.sourceName = text_to_cstring(sourceNodeNameText);
+	target->jobArguments.move.sourcePort = sourceNodePort;
+	target->jobArguments.move.targetName = text_to_cstring(targetNodeNameText);
+	target->jobArguments.move.targetPort = targetNodePort;
+}
+
+
+RebalanceJob *
+GetScheduledRebalanceJob(void)
+{
+	const int scanKeyCount = 1;
+	ScanKeyData scanKey[1];
+	bool indexOK = true;
+
+	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
+											  AccessShareLock);
+
+	/* pg_dist_rebalance_jobs.status == 'scheduled' */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_status,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(JobStatusScheduledId()));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
+													DistRebalanceJobsStatusJobsIdIndexId(),
+													indexOK, NULL, scanKeyCount, scanKey);
+
+	HeapTuple jobTuple = systable_getnext(scanDescriptor);
+	RebalanceJob *job = NULL;
+	if (HeapTupleIsValid(jobTuple))
+	{
+		Form_pg_dist_rebalance_job jobData = NULL;
+		jobData = (Form_pg_dist_rebalance_job) GETSTRUCT(jobTuple);
+
+		job = palloc0(sizeof(RebalanceJob));
+		job->jobid = jobData->jobid;
+		job->status = RebalanceJobStatusByOid(jobData->status);
+
+		/* TODO parse the actual job */
+		Datum datumArray[Natts_pg_dist_rebalance_jobs];
+		bool isNullArray[Natts_pg_dist_rebalance_jobs];
+		TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
+		heap_deform_tuple(jobTuple, tupleDescriptor, datumArray, isNullArray);
+
+		if (!isNullArray[Anum_pg_dist_rebalance_jobs_citus_move_shard_placement - 1])
+		{
+			/* citus_move_shard_placement job */
+			ParseMoveJob(
+				job,
+				datumArray[Anum_pg_dist_rebalance_jobs_citus_move_shard_placement - 1]);
+		}
+		else
+		{
+			ereport(ERROR, (errmsg("undefined job type")));
+		}
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistRebalanceJobs, AccessShareLock);
+
+	return job;
+}
+
+
+void
+UpdateJobStatus(RebalanceJob *job, RebalanceJobStatus newStatus)
+{
+	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
+											  RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
+
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+
+	/* WHERE jobid = job->jobid */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_jobid,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(job->jobid));
+
+	const bool indexOK = true;
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
+													DistRebalanceJobsJobsIdIndexId(),
+													indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find rebalance job entry for jobid: "
+							   UINT64_FORMAT, job->jobid)));
+	}
+
+	Datum values[Natts_pg_dist_rebalance_jobs] = { 0 };
+	bool isnull[Natts_pg_dist_rebalance_jobs] = { 0 };
+	bool replace[Natts_pg_dist_rebalance_jobs] = { 0 };
+
+	values[Anum_pg_dist_rebalance_jobs_status - 1] =
+		ObjectIdGetDatum(RebalanceJobStatusOid(newStatus));
+	isnull[Anum_pg_dist_rebalance_jobs_status - 1] = false;
+	replace[Anum_pg_dist_rebalance_jobs_status - 1] = true;
+
+	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+
+	CatalogTupleUpdate(pgDistRebalanceJobs, &heapTuple->t_self, heapTuple);
+
+	CommandCounterIncrement();
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistRebalanceJobs, NoLock);
 }

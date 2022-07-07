@@ -141,6 +141,11 @@ typedef struct MetadataCacheData
 	bool extensionLoaded;
 	Oid distShardRelationId;
 	Oid distPlacementRelationId;
+	Oid distRebalanceJobsRelationId;
+	Oid distRebalanceJobsJobsIndexId;
+	Oid distRebalanceJobsStatusJobsIndexId;
+	Oid jobStatusScheduledId;
+	Oid jobStatusDoneId;
 	Oid distRebalanceStrategyRelationId;
 	Oid distNodeRelationId;
 	Oid distNodeNodeIdIndexId;
@@ -2364,6 +2369,36 @@ DistLocalGroupIdRelationId(void)
 }
 
 
+Oid
+DistRebalanceJobsRelationId(void)
+{
+	CachedRelationLookup("pg_dist_rebalance_jobs",
+						 &MetadataCache.distRebalanceJobsRelationId);
+
+	return MetadataCache.distRebalanceJobsRelationId;
+}
+
+
+Oid
+DistRebalanceJobsJobsIdIndexId(void)
+{
+	CachedRelationLookup("pg_dist_rebalance_jobs_jobid_index",
+						 &MetadataCache.distRebalanceJobsJobsIndexId);
+
+	return MetadataCache.distRebalanceJobsJobsIndexId;
+}
+
+
+Oid
+DistRebalanceJobsStatusJobsIdIndexId(void)
+{
+	CachedRelationLookup("pg_dist_rebalance_jobs_status_jobid_index",
+						 &MetadataCache.distRebalanceJobsStatusJobsIndexId);
+
+	return MetadataCache.distRebalanceJobsStatusJobsIndexId;
+}
+
+
 /* return oid of pg_dist_rebalance_strategy relation */
 Oid
 DistRebalanceStrategyRelationId(void)
@@ -3083,6 +3118,32 @@ SecondaryNodeRoleId(void)
 	}
 
 	return MetadataCache.secondaryNodeRoleId;
+}
+
+
+Oid
+JobStatusScheduledId(void)
+{
+	if (!MetadataCache.jobStatusScheduledId)
+	{
+		MetadataCache.jobStatusScheduledId =
+			LookupStringEnumValueId("citus_job_status", "scheduled");
+	}
+
+	return MetadataCache.jobStatusScheduledId;
+}
+
+
+Oid
+JobStatusDoneId(void)
+{
+	if (!MetadataCache.jobStatusDoneId)
+	{
+		MetadataCache.jobStatusDoneId =
+			LookupStringEnumValueId("citus_job_status", "done");
+	}
+
+	return MetadataCache.jobStatusDoneId;
 }
 
 

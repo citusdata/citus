@@ -1883,6 +1883,16 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.rebalance_check_interval",
+		gettext_noop("Time to wait between checks for scheduled rebalance jobs."),
+		NULL,
+		&RebalanceCheckInterval,
+		1000, -1, 7 * 24 * 3600 * 1000,
+		PGC_SIGHUP,
+		GUC_UNIT_MS,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.recover_2pc_interval",
 		gettext_noop("Sets the time to wait between recovering 2PCs."),
 		gettext_noop("2PC transaction recovery needs to run every so often "

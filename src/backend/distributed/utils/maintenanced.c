@@ -93,6 +93,7 @@ typedef struct MaintenanceDaemonDBData
 double DistributedDeadlockDetectionTimeoutFactor = 2.0;
 int Recover2PCInterval = 60000;
 int DeferShardDeleteInterval = 15000;
+int RebalanceCheckInterval = 1000;
 
 /* config variables for metadata sync timeout */
 int MetadataSyncInterval = 60000;
@@ -119,7 +120,8 @@ static void MaintenanceDaemonShmemExit(int code, Datum arg);
 static void MaintenanceDaemonErrorContext(void *arg);
 static bool MetadataSyncTriggeredCheckAndReset(MaintenanceDaemonDBData *dbData);
 static void WarnMaintenanceDaemonNotStarted(void);
-
+static BackgroundWorkerHandle * StartRebalanceJobsBackgroundWorker(Oid database,
+																   Oid extensionOwner);
 
 /*
  * InitializeMaintenanceDaemon, called at server start, is responsible for
@@ -283,6 +285,9 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	TimestampTz lastStatStatementsPurgeTime = 0;
 	TimestampTz nextMetadataSyncTime = 0;
 
+	/* state kept for the reabalance check */
+	TimestampTz lastRebalanceCheck = 0;
+	BackgroundWorkerHandle *rebalanceBgwHandle = NULL;
 
 	/*
 	 * We do metadata sync in a separate background worker. We need its
@@ -683,6 +688,65 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			timeout = Min(timeout, (StatStatementsPurgeInterval * 1000));
 		}
 
+		pid_t rebalanceWorkerPid = 0;
+		BgwHandleStatus rebalanceWorkerStatus =
+			rebalanceBgwHandle != NULL ?
+			GetBackgroundWorkerPid(rebalanceBgwHandle, &rebalanceWorkerPid) :
+			BGWH_STOPPED;
+		if (TimestampDifferenceExceeds(lastRebalanceCheck, GetCurrentTimestamp(),
+									   RebalanceCheckInterval) &&
+			rebalanceWorkerStatus == BGWH_STOPPED)
+		{
+			/* clear old background worker for rebalancing before checking for new jobs */
+			if (rebalanceBgwHandle)
+			{
+				TerminateBackgroundWorker(rebalanceBgwHandle);
+				pfree(rebalanceBgwHandle);
+				rebalanceBgwHandle = NULL;
+			}
+
+			StartTransactionCommand();
+
+			bool shouldStartRebalanceJobsBackgroundWorker = false;
+			if (!LockCitusExtension())
+			{
+				ereport(DEBUG1, (errmsg("could not lock the citus extension, "
+										"skipping stat statements purging")));
+			}
+			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
+			{
+				/* perform catalog precheck */
+				shouldStartRebalanceJobsBackgroundWorker = HasScheduledRebalanceJobs();
+			}
+
+			CommitTransactionCommand();
+
+			if (shouldStartRebalanceJobsBackgroundWorker)
+			{
+				/* spawn background worker */
+				ereport(LOG, (errmsg("found scheduled job waiting for rebalance. "
+									 "Starting background worker for execution.")));
+
+				rebalanceBgwHandle =
+					StartRebalanceJobsBackgroundWorker(MyDatabaseId,
+													   myDbData->userOid);
+
+				if (!rebalanceBgwHandle ||
+					GetBackgroundWorkerPid(rebalanceBgwHandle, &rebalanceWorkerPid) ==
+					BGWH_STOPPED)
+				{
+					ereport(WARNING, (errmsg("unable to start background worker for "
+											 "rebalance jobs")));
+
+					/* todo cooldown timer */
+				}
+			}
+
+			/* interval management */
+			lastRebalanceCheck = GetCurrentTimestamp();
+			timeout = Min(timeout, RebalanceCheckInterval);
+		}
+
 		/*
 		 * Wait until timeout, or until somebody wakes us up. Also cast the timeout to
 		 * integer where we've calculated it using double for not losing the precision.
@@ -727,6 +791,100 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	if (metadataSyncBgwHandle)
 	{
 		TerminateBackgroundWorker(metadataSyncBgwHandle);
+	}
+}
+
+
+static BackgroundWorkerHandle *
+StartRebalanceJobsBackgroundWorker(Oid database, Oid extensionOwner)
+{
+	BackgroundWorker worker;
+	BackgroundWorkerHandle *handle = NULL;
+
+	/* Configure a worker. */
+	memset(&worker, 0, sizeof(worker));
+	SafeSnprintf(worker.bgw_name, BGW_MAXLEN,
+				 "Citus Rebalance Jobs Worker: %u/%u",
+				 database, extensionOwner);
+	worker.bgw_flags =
+		BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
+	worker.bgw_start_time = BgWorkerStart_ConsistentState;
+
+	/* don't restart, we manage restarts from maintenance daemon */
+	worker.bgw_restart_time = BGW_NEVER_RESTART;
+	strcpy_s(worker.bgw_library_name, sizeof(worker.bgw_library_name), "citus");
+	strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_library_name),
+			 "RebalanceJobsBackgroundWorkerMain");
+	worker.bgw_main_arg = ObjectIdGetDatum(MyDatabaseId);
+	memcpy_s(worker.bgw_extra, sizeof(worker.bgw_extra), &extensionOwner,
+			 sizeof(Oid));
+	worker.bgw_notify_pid = MyProcPid;
+
+	if (!RegisterDynamicBackgroundWorker(&worker, &handle))
+	{
+		return NULL;
+	}
+
+	pid_t pid;
+	WaitForBackgroundWorkerStartup(handle, &pid);
+
+	return handle;
+}
+
+
+void
+RebalanceJobsBackgroundWorkerMain(Datum arg)
+{
+	Oid databaseOid = DatumGetObjectId(arg);
+
+	/* extension owner is passed via bgw_extra */
+	Oid extensionOwner = InvalidOid;
+	memcpy_s(&extensionOwner, sizeof(extensionOwner),
+			 MyBgworkerEntry->bgw_extra, sizeof(Oid));
+
+	BackgroundWorkerUnblockSignals();
+
+	/* connect to database, after that we can actually access catalogs */
+	BackgroundWorkerInitializeConnectionByOid(databaseOid, extensionOwner, 0);
+
+	/* make worker recognizable in pg_stat_activity */
+	pgstat_report_appname("rebalance jobs worker");
+
+	bool hasJobs = true;
+	while (hasJobs)
+	{
+		CHECK_FOR_INTERRUPTS();
+
+		InvalidateMetadataSystemCache();
+		StartTransactionCommand();
+
+		PushActiveSnapshot(GetTransactionSnapshot());
+
+		if (!LockCitusExtension())
+		{
+			ereport(DEBUG1, (errmsg("could not lock the citus extension, "
+									"skipping metadata sync")));
+		}
+		else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
+		{
+			RebalanceJob *job = GetScheduledRebalanceJob();
+			if (job)
+			{
+				ereport(LOG, (errmsg("found job with jobid: %ld", job->jobid)));
+
+				/* TODO execute job */
+
+				UpdateJobStatus(job, REBALANCE_JOB_STATUS_DONE);
+			}
+			else
+			{
+				hasJobs = false;
+			}
+		}
+
+		PopActiveSnapshot();
+		CommitTransactionCommand();
+		ProcessCompletedNotifies();
 	}
 }
 
