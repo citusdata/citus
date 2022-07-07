@@ -750,11 +750,11 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 				SHARD_STATE_ACTIVE,
 				0, /* shard length (zero for HashDistributed Table) */
 				workerPlacementNode->groupId);
-		}
 
-		if (ShouldSyncTableMetadata(shardInterval->relationId))
-		{
-			syncedShardList = lappend(syncedShardList, shardInterval);
+			if (ShouldSyncTableMetadata(shardInterval->relationId))
+			{
+				syncedShardList = lappend(syncedShardList, shardInterval);
+			}
 		}
 	}
 
