@@ -2109,6 +2109,16 @@ GetDependingViews(Oid relationId)
 		ViewDependencyNode *dependingNode = NULL;
 		foreach_ptr(dependingNode, node->dependingNodes)
 		{
+			ObjectAddress relationAddress = { 0 };
+			ObjectAddressSet(relationAddress, RelationRelationId, dependingNode->id);
+
+			DeferredErrorMessage *depError =
+				DeferErrorIfCircularDependencyExists(&relationAddress);
+			if (depError != NULL)
+			{
+				RaiseDeferredError(depError, ERROR);
+			}
+
 			dependingNode->remainingDependencyCount--;
 			if (dependingNode->remainingDependencyCount == 0)
 			{
