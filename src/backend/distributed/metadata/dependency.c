@@ -784,7 +784,8 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 				relKind == RELKIND_SEQUENCE ||
 				relKind == RELKIND_INDEX ||
 				relKind == RELKIND_PARTITIONED_INDEX ||
-				relKind == RELKIND_VIEW)
+				relKind == RELKIND_VIEW ||
+				relKind == RELKIND_MATVIEW)
 			{
 				return true;
 			}
@@ -1615,7 +1616,7 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			 * rule and that rule has dependencies to other objects.
 			 */
 			char relKind = get_rel_relkind(relationId);
-			if (relKind == RELKIND_VIEW)
+			if (relKind == RELKIND_VIEW || relKind == RELKIND_MATVIEW)
 			{
 				List *ruleRefDepList = GetViewRuleReferenceDependencyList(relationId);
 				result = list_concat(result, ruleRefDepList);
