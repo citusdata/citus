@@ -791,15 +791,18 @@ CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 														 &
 														 referenceTableForeignConstraintList);
 
-			List *commandList = NIL;
-			commandList = list_concat(commandList, shardForeignConstraintCommandList);
-			commandList = list_concat(commandList, referenceTableForeignConstraintList);
+			List *constraintCommandList = NIL;
+			constraintCommandList = list_concat(constraintCommandList, shardForeignConstraintCommandList);
+			constraintCommandList = list_concat(constraintCommandList, referenceTableForeignConstraintList);
 
-			SendCommandListToWorkerOutsideTransaction(
-				workerPlacementNode->workerName,
-				workerPlacementNode->workerPort,
-				TableOwner(shardInterval->relationId),
-				commandList);
+			char *constraintCommand = NULL;
+			foreach_ptr(constraintCommand, constraintCommandList)
+			{
+				SendCommandToWorker(
+					workerPlacementNode->workerName,
+					workerPlacementNode->workerPort,
+					constraintCommand);
+			}
 		}
 	}
 }

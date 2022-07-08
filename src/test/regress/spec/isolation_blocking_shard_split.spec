@@ -2,7 +2,7 @@ setup
 {
 	SET citus.shard_count to 2;
 	SET citus.shard_replication_factor to 1;
-    select setval('pg_dist_shardid_seq', 1500000);
+    SELECT setval('pg_dist_shardid_seq', 1500000);
 
 	CREATE TABLE to_split_table (id int, value int);
 	SELECT create_distributed_table('to_split_table', 'id');
