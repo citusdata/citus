@@ -17,3 +17,5 @@ extern void ErrorIfMoveUnsupportedTableType(Oid relationId);
 extern void CopyShardsToNode(WorkerNode *sourceNode, WorkerNode *targetNode,
 							 List *shardIntervalList, char *snapshotName);
 extern void VerifyTablesHaveReplicaIdentity(List *colocatedTableList);
+
+extern Datum citus_move_shard_placement(PG_FUNCTION_ARGS);
