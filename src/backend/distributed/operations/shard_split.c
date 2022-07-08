@@ -253,10 +253,13 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 	{
 		int32 shardSplitPointValue = DatumGetInt32(shardSplitPoint);
 
-		/* All Split points should lie within the shard interval range. */
-		int splitPointShardIndex = FindShardIntervalIndex(shardSplitPoint,
-														  cachedTableEntry);
-		if (shardIntervalToSplit->shardIndex != splitPointShardIndex)
+		/*
+		 * 1) All Split points should lie within the shard interval range.
+		 * 2) Given our split points inclusive, you cannot specify the max value in a range as a split point.
+		 * Example: Shard 81060002 range is from (0,1073741823). '1073741823' as split point is invalid.
+		 * '1073741822' is correct and will split shard to: (0, 1073741822) and (1073741823, 1073741823).
+		 */
+		if (shardSplitPointValue < minValue || shardSplitPointValue > maxValue)
 		{
 			ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
@@ -266,6 +269,16 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 						 DatumGetInt32(shardIntervalToSplit->minValue),
 						 DatumGetInt32(shardIntervalToSplit->maxValue),
 						 shardIntervalToSplit->shardId)));
+		}
+		else if (maxValue == shardSplitPointValue)
+		{
+			int32 validSplitPoint = shardIntervalToSplit->maxValue - 1;
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg(
+						 "Invalid split point %d, as split points should be inclusive. Please use %d instead.",
+						 maxValue,
+						 validSplitPoint)));
 		}
 
 		/* Split points should be in strictly increasing order */
@@ -280,22 +293,6 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 						 "All split points should be strictly increasing.",
 						 lastShardSplitPointValue,
 						 shardSplitPointValue)));
-		}
-
-		/*
-		 * Given our split points inclusive, you cannot specify the max value in a range as a split point.
-		 * Example: Shard 81060002 range is from (0,1073741823). '1073741823' as split point is invalid.
-		 * '1073741822' is correct and will split shard to: (0, 1073741822) and (1073741823, 1073741823).
-		 */
-		if (maxValue == shardSplitPointValue)
-		{
-			int32 validSplitPoint = shardIntervalToSplit->maxValue - 1;
-			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
-					 errmsg(
-						 "Invalid split point %d, as split points should be inclusive. Please use %d instead.",
-						 maxValue,
-						 validSplitPoint)));
 		}
 
 		lastShardSplitPoint = (NullableDatum) {
