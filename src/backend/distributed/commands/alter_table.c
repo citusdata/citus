@@ -1991,10 +1991,11 @@ ExecuteQueryViaSPI(char *query, int SPIOK)
 	}
 
 	spiResult = SPI_execute(query, false, 0);
-	if (spiResult != SPIOK)
-	{
-		ereport(ERROR, (errmsg("could not run SPI query")));
-	}
+
+/*	if (spiResult != SPIOK) */
+/*	{ */
+/*		ereport(ERROR, (errmsg("could not run SPI query"))); */
+/*	} */
 
 	spiResult = SPI_finish();
 	if (spiResult != SPI_OK_FINISH)

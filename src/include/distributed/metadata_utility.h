@@ -211,29 +211,12 @@ typedef enum RebalanceJobStatus
 	REBALANCE_JOB_STATUS_DONE
 } RebalanceJobStatus;
 
-typedef enum RebalanceJobType
-{
-	REBALANCE_JOB_TYPE_UNKNOWN,
-	REBALANCE_JOB_TYPE_MOVE
-} RebalanceJobType;
 
 typedef struct RebalanceJob
 {
 	int64 jobid;
 	RebalanceJobStatus status;
-
-	RebalanceJobType jobType;
-	union
-	{
-		struct
-		{
-			uint32 shardId;
-			char *sourceName;
-			int32 sourcePort;
-			char *targetName;
-			int32 targetPort;
-		} move;
-	} jobArguments;
+	char *command;
 } RebalanceJob;
 
 
@@ -347,4 +330,5 @@ extern void EnsureRelationHasCompatibleSequenceTypes(Oid relationId);
 extern bool HasScheduledRebalanceJobs(void);
 extern RebalanceJob * GetScheduledRebalanceJob(void);
 extern void UpdateJobStatus(RebalanceJob *job, RebalanceJobStatus newStatus);
+extern void UpdateJobError(RebalanceJob *job, ErrorData *edata);
 #endif   /* METADATA_UTILITY_H */

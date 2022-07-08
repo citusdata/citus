@@ -19,6 +19,7 @@
 #include "distributed/pg_version_constants.h"
 
 #include <time.h>
+#include <executor/spi.h>
 
 #include "miscadmin.h"
 #include "pgstat.h"
@@ -855,6 +856,8 @@ RebalanceJobsBackgroundWorkerMain(Datum arg)
 
 	ereport(LOG, (errmsg("background jobs runner")));
 
+/*	pg_usleep(30 * 1000 * 1000); */
+
 	bool hasJobs = true;
 	while (hasJobs)
 	{
@@ -876,11 +879,35 @@ RebalanceJobsBackgroundWorkerMain(Datum arg)
 			if (job)
 			{
 				ereport(LOG, (errmsg("found job with jobid: %ld", job->jobid)));
+				MemoryContext savedContext = CurrentMemoryContext;
+				BeginInternalSubTransaction(NULL);
 
-				if (ExecuteRebalanceJob(job))
+				PG_TRY();
 				{
-					UpdateJobStatus(job, REBALANCE_JOB_STATUS_DONE);
+					if (ExecuteRebalanceJob(job))
+					{
+						UpdateJobStatus(job, REBALANCE_JOB_STATUS_DONE);
+					}
+
+					ReleaseCurrentSubTransaction();
 				}
+				PG_CATCH();
+				{
+					MemoryContextSwitchTo(savedContext);
+
+					ErrorData *edata = CopyErrorData();
+					FlushErrorState();
+
+					RollbackAndReleaseCurrentSubTransaction();
+
+					UpdateJobError(job, edata);
+
+					FreeErrorData(edata);
+					edata = NULL;
+
+					/* TODO log that there was an error */
+				}
+				PG_END_TRY();
 			}
 			else
 			{
@@ -896,36 +923,28 @@ RebalanceJobsBackgroundWorkerMain(Datum arg)
 
 
 static bool
-ExecuteMoveRebalanceJob(RebalanceJob *job)
-{
-	DirectFunctionCall6Coll(citus_move_shard_placement, InvalidOid,
-							Int64GetDatum(job->jobArguments.move.shardId),
-							CStringGetTextDatum(job->jobArguments.move.sourceName),
-							Int32GetDatum(job->jobArguments.move.sourcePort),
-							CStringGetTextDatum(job->jobArguments.move.targetName),
-							Int32GetDatum(job->jobArguments.move.targetPort),
-							ObjectIdGetDatum(16598)); /* fix hardcoded value of 'block_writes' */
-
-	return true;
-}
-
-
-static bool
 ExecuteRebalanceJob(RebalanceJob *job)
 {
-	switch (job->jobType)
+	int spiResult = SPI_connect();
+	if (spiResult != SPI_OK_CONNECT)
 	{
-		case REBALANCE_JOB_TYPE_MOVE:
-		{
-			return ExecuteMoveRebalanceJob(job);
-		}
-
-		default:
-		{
-			ereport(ERROR, (errmsg("undefined rebalance job for jobid: %ld",
-								   job->jobid)));
-		}
+		ereport(ERROR, (errmsg("could not connect to SPI manager")));
 	}
+
+	spiResult = SPI_execute(job->command, false, 0);
+
+/*	if (spiResult != SPIOK) */
+/*	{ */
+/*		ereport(ERROR, (errmsg("could not run SPI query"))); */
+/*	} */
+
+	spiResult = SPI_finish();
+	if (spiResult != SPI_OK_FINISH)
+	{
+		ereport(ERROR, (errmsg("could not finish SPI connection")));
+	}
+
+	return true;
 }
 
 

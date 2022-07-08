@@ -271,8 +271,9 @@ extern Oid SecondaryNodeRoleId(void);
 extern Oid CitusCopyFormatTypeId(void);
 extern Oid TextCopyFormatId(void);
 extern Oid BinaryCopyFormatId(void);
-extern Oid JobStatusDoneId(void);
 extern Oid JobStatusScheduledId(void);
+extern Oid JobStatusDoneId(void);
+extern Oid JobStatusErrorId(void);
 
 /* user related functions */
 extern Oid CitusExtensionOwner(void);

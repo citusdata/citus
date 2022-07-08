@@ -11,7 +11,9 @@ typedef struct FormData_pg_dist_rebalance_job
 	int64 jobid;
 	Oid status;
 #ifdef CATALOG_VARLEN    /* variable-length fields start here */
-	text citus_move_shard_placement; /* text? we need to understand how to read a variable length stored custon type */
+	text command;
+	int32 retry_count;
+	text message;
 #endif
 } FormData_pg_dist_rebalance_job;
 
@@ -26,9 +28,11 @@ typedef FormData_pg_dist_rebalance_job *Form_pg_dist_rebalance_job;
  *      compiler constants for pg_dist_rebalance_jobs
  * ----------------
  */
-#define Natts_pg_dist_rebalance_jobs 3
+#define Natts_pg_dist_rebalance_jobs 5
 #define Anum_pg_dist_rebalance_jobs_jobid 1
 #define Anum_pg_dist_rebalance_jobs_status 2
-#define Anum_pg_dist_rebalance_jobs_citus_move_shard_placement 3
+#define Anum_pg_dist_rebalance_jobs_command 3
+#define Anum_pg_dist_rebalance_jobs_retry_count 4
+#define Anum_pg_dist_rebalance_jobs_message 5
 
 #endif /* CITUS_PG_DIST_REBALANCE_JOBS_H */

@@ -2292,66 +2292,6 @@ RebalanceJobStatusOid(RebalanceJobStatus status)
 }
 
 
-static void
-ParseMoveJob(RebalanceJob *target, Datum moveArgs)
-{
-	HeapTupleHeader t = DatumGetHeapTupleHeader(moveArgs);
-	bool isnull = false;
-
-	Datum shardIdDatum = GetAttributeByName(t, "shard_id", &isnull);
-	if (isnull)
-	{
-		ereport(ERROR, (errmsg(
-							"shard_id for citus_move_shard_placement_arguments "
-							"can't be null")));
-	}
-	uint64 shardId = DatumGetUInt64(shardIdDatum);
-
-	Datum sourceNodeNameDatum = GetAttributeByName(t, "source_node_name", &isnull);
-	if (isnull)
-	{
-		ereport(ERROR, (errmsg(
-							"source_node_name for citus_move_shard_placement_arguments "
-							"can't be null")));
-	}
-	text *sourceNodeNameText = DatumGetTextP(sourceNodeNameDatum);
-
-	Datum sourceNodePortDatum = GetAttributeByName(t, "source_node_port", &isnull);
-	if (isnull)
-	{
-		ereport(ERROR, (errmsg(
-							"source_node_port for citus_move_shard_placement_arguments "
-							"can't be null")));
-	}
-	int32 sourceNodePort = DatumGetInt32(sourceNodePortDatum);
-
-	Datum targetNodeNameDatum = GetAttributeByName(t, "target_node_name", &isnull);
-	if (isnull)
-	{
-		ereport(ERROR, (errmsg(
-							"target_node_name for citus_move_shard_placement_arguments "
-							"can't be null")));
-	}
-	text *targetNodeNameText = DatumGetTextP(targetNodeNameDatum);
-
-	Datum targetNodePortDatum = GetAttributeByName(t, "target_node_port", &isnull);
-	if (isnull)
-	{
-		ereport(ERROR, (errmsg(
-							"target_node_port for citus_move_shard_placement_arguments "
-							"can't be null")));
-	}
-	int32 targetNodePort = DatumGetInt32(targetNodePortDatum);
-
-	target->jobType = REBALANCE_JOB_TYPE_MOVE;
-	target->jobArguments.move.shardId = shardId;
-	target->jobArguments.move.sourceName = text_to_cstring(sourceNodeNameText);
-	target->jobArguments.move.sourcePort = sourceNodePort;
-	target->jobArguments.move.targetName = text_to_cstring(targetNodeNameText);
-	target->jobArguments.move.targetPort = targetNodePort;
-}
-
-
 RebalanceJob *
 GetScheduledRebalanceJob(void)
 {
@@ -2387,17 +2327,8 @@ GetScheduledRebalanceJob(void)
 		TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
 		heap_deform_tuple(jobTuple, tupleDescriptor, datumArray, isNullArray);
 
-		if (!isNullArray[Anum_pg_dist_rebalance_jobs_citus_move_shard_placement - 1])
-		{
-			/* citus_move_shard_placement job */
-			ParseMoveJob(
-				job,
-				datumArray[Anum_pg_dist_rebalance_jobs_citus_move_shard_placement - 1]);
-		}
-		else
-		{
-			ereport(ERROR, (errmsg("undefined job type")));
-		}
+		job->command = text_to_cstring(
+			DatumGetTextP(datumArray[Anum_pg_dist_rebalance_jobs_command - 1]));
 	}
 
 	systable_endscan(scanDescriptor);
@@ -2442,6 +2373,117 @@ UpdateJobStatus(RebalanceJob *job, RebalanceJobStatus newStatus)
 		ObjectIdGetDatum(RebalanceJobStatusOid(newStatus));
 	isnull[Anum_pg_dist_rebalance_jobs_status - 1] = false;
 	replace[Anum_pg_dist_rebalance_jobs_status - 1] = true;
+
+	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+
+	CatalogTupleUpdate(pgDistRebalanceJobs, &heapTuple->t_self, heapTuple);
+
+	CommandCounterIncrement();
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistRebalanceJobs, NoLock);
+}
+
+
+void
+UpdateJobError(RebalanceJob *job, ErrorData *edata)
+{
+	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
+											  RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
+
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+
+	/* WHERE jobid = job->jobid */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_jobid,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(job->jobid));
+
+	const bool indexOK = true;
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
+													DistRebalanceJobsJobsIdIndexId(),
+													indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find rebalance job entry for jobid: "
+							   UINT64_FORMAT, job->jobid)));
+	}
+
+	Datum values[Natts_pg_dist_rebalance_jobs] = { 0 };
+	bool isnull[Natts_pg_dist_rebalance_jobs] = { 0 };
+	bool replace[Natts_pg_dist_rebalance_jobs] = { 0 };
+
+	heap_deform_tuple(heapTuple, tupleDescriptor, values, isnull);
+
+	/* increment retry count */
+	int retryCount = 0;
+	if (!isnull[Anum_pg_dist_rebalance_jobs_retry_count - 1])
+	{
+		retryCount = DatumGetInt32(values[Anum_pg_dist_rebalance_jobs_retry_count - 1]);
+		retryCount++;
+	}
+	values[Anum_pg_dist_rebalance_jobs_retry_count - 1] = Int32GetDatum(retryCount);
+	isnull[Anum_pg_dist_rebalance_jobs_retry_count - 1] = false;
+	replace[Anum_pg_dist_rebalance_jobs_retry_count - 1] = true;
+
+	if (retryCount >= 3)
+	{
+		/* after 3 failures we will transition the job to error and stop executing */
+		values[Anum_pg_dist_rebalance_jobs_status - 1] =
+			ObjectIdGetDatum(JobStatusErrorId());
+		isnull[Anum_pg_dist_rebalance_jobs_status - 1] = false;
+		replace[Anum_pg_dist_rebalance_jobs_status - 1] = true;
+	}
+
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	if (edata->message)
+	{
+		if (buf.len > 0)
+		{
+			appendStringInfo(&buf, "\n");
+		}
+		appendStringInfoString(&buf, "ERROR: ");
+		appendStringInfoString(&buf, edata->message);
+	}
+
+	if (edata->hint)
+	{
+		if (buf.len > 0)
+		{
+			appendStringInfo(&buf, "\n");
+		}
+		appendStringInfoString(&buf, "HINT: ");
+		appendStringInfoString(&buf, edata->hint);
+	}
+
+	if (edata->detail)
+	{
+		if (buf.len > 0)
+		{
+			appendStringInfo(&buf, "\n");
+		}
+		appendStringInfoString(&buf, "DETAIL: ");
+		appendStringInfoString(&buf, edata->detail);
+	}
+
+	if (edata->context)
+	{
+		if (buf.len > 0)
+		{
+			appendStringInfo(&buf, "\n");
+		}
+		appendStringInfoString(&buf, "CONTEXT: ");
+		appendStringInfoString(&buf, edata->context);
+	}
+
+	values[Anum_pg_dist_rebalance_jobs_message - 1] = CStringGetTextDatum(buf.data);
+	isnull[Anum_pg_dist_rebalance_jobs_message - 1] = false;
+	replace[Anum_pg_dist_rebalance_jobs_message - 1] = true;
 
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
 
