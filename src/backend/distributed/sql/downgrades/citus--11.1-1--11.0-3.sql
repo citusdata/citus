@@ -57,7 +57,6 @@ DROP FUNCTION pg_catalog.worker_split_copy(
     source_shard_id bigint,
     splitCopyInfos citus.split_copy_info[]);
 
-#include "../../../columnar/sql/downgrades/columnar--11.1-1--11.0-2.sql"
 #include "../../../columnar/sql/downgrades/columnar--11.1-1--11.0-3.sql"
 
 DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_id int, OUT initiator_node_identifier int4,

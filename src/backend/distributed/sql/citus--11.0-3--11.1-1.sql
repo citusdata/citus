@@ -13,5 +13,5 @@ DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_
                                                      OUT worker_query BOOL, OUT transaction_number int8, OUT transaction_stamp timestamptz,
                                                      OUT global_pid int8);
 #include "udfs/get_all_active_transactions/11.1-1.sql"
-#include "udfs/citus_split_shard_by_split_points/11.0-2.sql"
-#include "udfs/worker_split_copy/11.0-2.sql"
+#include "udfs/citus_split_shard_by_split_points/11.1-1.sql"
+#include "udfs/worker_split_copy/11.1-1.sql"
