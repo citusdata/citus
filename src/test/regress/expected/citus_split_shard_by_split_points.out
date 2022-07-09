@@ -74,21 +74,21 @@ INSERT INTO sensors SELECT i, '2020-01-05', '{}', 11011.10, 'A', 'I <3 Citus' FR
 -- END: Load data into tables.
 -- BEGIN : Display current state.
 -- TODO(niupre): Can we refactor this to be a function?
-SELECT cls.relnamespace, shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport, placementid
+SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport, placementid
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
   INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
   INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
   WHERE node.noderole = 'primary' AND (logicalrelid = 'sensors'::regclass OR logicalrelid = 'colocated_dist_table'::regclass OR logicalrelid = 'table_with_index_rep_identity'::regclass)
   ORDER BY logicalrelid, shardminvalue::BIGINT;
- relnamespace | shardid |         logicalrelid          | shardminvalue | shardmaxvalue | nodename  | nodeport | placementid
+ shardid |         logicalrelid          | shardminvalue | shardmaxvalue | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
-        18296 | 8981000 | sensors                       | -2147483648   | -1            | localhost |    57637 |     8610000
-        18296 | 8981001 | sensors                       | 0             | 2147483647    | localhost |    57638 |     8610001
-        18296 | 8981003 | colocated_dist_table          | -2147483648   | -1            | localhost |    57637 |     8610004
-        18296 | 8981004 | colocated_dist_table          | 0             | 2147483647    | localhost |    57638 |     8610005
-        18296 | 8981005 | table_with_index_rep_identity | -2147483648   | -1            | localhost |    57637 |     8610006
-        18296 | 8981006 | table_with_index_rep_identity | 0             | 2147483647    | localhost |    57638 |     8610007
+ 8981000 | sensors                       | -2147483648   | -1            | localhost |    57637 |     8610000
+ 8981001 | sensors                       | 0             | 2147483647    | localhost |    57638 |     8610001
+ 8981003 | colocated_dist_table          | -2147483648   | -1            | localhost |    57637 |     8610004
+ 8981004 | colocated_dist_table          | 0             | 2147483647    | localhost |    57638 |     8610005
+ 8981005 | table_with_index_rep_identity | -2147483648   | -1            | localhost |    57637 |     8610006
+ 8981006 | table_with_index_rep_identity | 0             | 2147483647    | localhost |    57638 |     8610007
 (6 rows)
 
 \c - - - :worker_1_port
@@ -224,30 +224,30 @@ SELECT citus_move_shard_placement(8981007, 'localhost', :worker_1_port, 'localho
 -- END : Move a shard post split.
 -- BEGIN : Display current state.
 -- TODO(niupre): Can we refactor this to be a function?
-SELECT cls.relnamespace, shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport, placementid
+SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport, placementid
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
   INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
   INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
   WHERE node.noderole = 'primary' AND (logicalrelid = 'sensors'::regclass OR logicalrelid = 'colocated_dist_table'::regclass OR logicalrelid = 'table_with_index_rep_identity'::regclass)
   ORDER BY logicalrelid, shardminvalue::BIGINT;
- relnamespace | shardid |         logicalrelid          | shardminvalue | shardmaxvalue | nodename  | nodeport | placementid
+ shardid |         logicalrelid          | shardminvalue | shardmaxvalue | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
-        18296 | 8981007 | sensors                       | -2147483648   | -1073741824   | localhost |    57638 |         135
-        18296 | 8981008 | sensors                       | -1073741823   | -1            | localhost |    57638 |         121
-        18296 | 8981013 | sensors                       | 0             | 536870911     | localhost |    57637 |         126
-        18296 | 8981014 | sensors                       | 536870912     | 1610612735    | localhost |    57637 |         127
-        18296 | 8981015 | sensors                       | 1610612736    | 2147483647    | localhost |    57638 |         128
-        18296 | 8981009 | colocated_dist_table          | -2147483648   | -1073741824   | localhost |    57638 |         136
-        18296 | 8981010 | colocated_dist_table          | -1073741823   | -1            | localhost |    57638 |         123
-        18296 | 8981016 | colocated_dist_table          | 0             | 536870911     | localhost |    57637 |         129
-        18296 | 8981017 | colocated_dist_table          | 536870912     | 1610612735    | localhost |    57637 |         130
-        18296 | 8981018 | colocated_dist_table          | 1610612736    | 2147483647    | localhost |    57638 |         131
-        18296 | 8981011 | table_with_index_rep_identity | -2147483648   | -1073741824   | localhost |    57638 |         137
-        18296 | 8981012 | table_with_index_rep_identity | -1073741823   | -1            | localhost |    57638 |         125
-        18296 | 8981019 | table_with_index_rep_identity | 0             | 536870911     | localhost |    57637 |         132
-        18296 | 8981020 | table_with_index_rep_identity | 536870912     | 1610612735    | localhost |    57637 |         133
-        18296 | 8981021 | table_with_index_rep_identity | 1610612736    | 2147483647    | localhost |    57638 |         134
+ 8981007 | sensors                       | -2147483648   | -1073741824   | localhost |    57638 |         136
+ 8981008 | sensors                       | -1073741823   | -1            | localhost |    57638 |         122
+ 8981013 | sensors                       | 0             | 536870911     | localhost |    57637 |         127
+ 8981014 | sensors                       | 536870912     | 1610612735    | localhost |    57637 |         128
+ 8981015 | sensors                       | 1610612736    | 2147483647    | localhost |    57638 |         129
+ 8981009 | colocated_dist_table          | -2147483648   | -1073741824   | localhost |    57638 |         137
+ 8981010 | colocated_dist_table          | -1073741823   | -1            | localhost |    57638 |         124
+ 8981016 | colocated_dist_table          | 0             | 536870911     | localhost |    57637 |         130
+ 8981017 | colocated_dist_table          | 536870912     | 1610612735    | localhost |    57637 |         131
+ 8981018 | colocated_dist_table          | 1610612736    | 2147483647    | localhost |    57638 |         132
+ 8981011 | table_with_index_rep_identity | -2147483648   | -1073741824   | localhost |    57638 |         138
+ 8981012 | table_with_index_rep_identity | -1073741823   | -1            | localhost |    57638 |         126
+ 8981019 | table_with_index_rep_identity | 0             | 536870911     | localhost |    57637 |         133
+ 8981020 | table_with_index_rep_identity | 536870912     | 1610612735    | localhost |    57637 |         134
+ 8981021 | table_with_index_rep_identity | 1610612736    | 2147483647    | localhost |    57638 |         135
 (15 rows)
 
 \c - - - :worker_1_port
@@ -377,33 +377,33 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 (1 row)
 
 SET search_path TO "citus_split_test_schema";
-SELECT cls.relnamespace, shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport, placementid
+SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport, placementid
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
   INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
   INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
   WHERE node.noderole = 'primary' AND (logicalrelid = 'sensors'::regclass OR logicalrelid = 'colocated_dist_table'::regclass OR logicalrelid = 'table_with_index_rep_identity'::regclass)
   ORDER BY logicalrelid, shardminvalue::BIGINT;
- relnamespace | shardid |         logicalrelid          | shardminvalue | shardmaxvalue | nodename  | nodeport | placementid
+ shardid |         logicalrelid          | shardminvalue | shardmaxvalue | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
-        18296 | 8981031 | sensors                       | -2147483648   | -2100000000   | localhost |    57637 |         138
-        18296 | 8981032 | sensors                       | -2099999999   | -1073741824   | localhost |    57638 |         139
-        18296 | 8981008 | sensors                       | -1073741823   | -1            | localhost |    57638 |         121
-        18296 | 8981013 | sensors                       | 0             | 536870911     | localhost |    57637 |         126
-        18296 | 8981014 | sensors                       | 536870912     | 1610612735    | localhost |    57637 |         127
-        18296 | 8981015 | sensors                       | 1610612736    | 2147483647    | localhost |    57638 |         128
-        18296 | 8981033 | colocated_dist_table          | -2147483648   | -2100000000   | localhost |    57637 |         140
-        18296 | 8981034 | colocated_dist_table          | -2099999999   | -1073741824   | localhost |    57638 |         141
-        18296 | 8981010 | colocated_dist_table          | -1073741823   | -1            | localhost |    57638 |         123
-        18296 | 8981016 | colocated_dist_table          | 0             | 536870911     | localhost |    57637 |         129
-        18296 | 8981017 | colocated_dist_table          | 536870912     | 1610612735    | localhost |    57637 |         130
-        18296 | 8981018 | colocated_dist_table          | 1610612736    | 2147483647    | localhost |    57638 |         131
-        18296 | 8981035 | table_with_index_rep_identity | -2147483648   | -2100000000   | localhost |    57637 |         142
-        18296 | 8981036 | table_with_index_rep_identity | -2099999999   | -1073741824   | localhost |    57638 |         143
-        18296 | 8981012 | table_with_index_rep_identity | -1073741823   | -1            | localhost |    57638 |         125
-        18296 | 8981019 | table_with_index_rep_identity | 0             | 536870911     | localhost |    57637 |         132
-        18296 | 8981020 | table_with_index_rep_identity | 536870912     | 1610612735    | localhost |    57637 |         133
-        18296 | 8981021 | table_with_index_rep_identity | 1610612736    | 2147483647    | localhost |    57638 |         134
+ 8981031 | sensors                       | -2147483648   | -2100000000   | localhost |    57637 |         139
+ 8981032 | sensors                       | -2099999999   | -1073741824   | localhost |    57638 |         140
+ 8981008 | sensors                       | -1073741823   | -1            | localhost |    57638 |         122
+ 8981013 | sensors                       | 0             | 536870911     | localhost |    57637 |         127
+ 8981014 | sensors                       | 536870912     | 1610612735    | localhost |    57637 |         128
+ 8981015 | sensors                       | 1610612736    | 2147483647    | localhost |    57638 |         129
+ 8981033 | colocated_dist_table          | -2147483648   | -2100000000   | localhost |    57637 |         141
+ 8981034 | colocated_dist_table          | -2099999999   | -1073741824   | localhost |    57638 |         142
+ 8981010 | colocated_dist_table          | -1073741823   | -1            | localhost |    57638 |         124
+ 8981016 | colocated_dist_table          | 0             | 536870911     | localhost |    57637 |         130
+ 8981017 | colocated_dist_table          | 536870912     | 1610612735    | localhost |    57637 |         131
+ 8981018 | colocated_dist_table          | 1610612736    | 2147483647    | localhost |    57638 |         132
+ 8981035 | table_with_index_rep_identity | -2147483648   | -2100000000   | localhost |    57637 |         143
+ 8981036 | table_with_index_rep_identity | -2099999999   | -1073741824   | localhost |    57638 |         144
+ 8981012 | table_with_index_rep_identity | -1073741823   | -1            | localhost |    57638 |         126
+ 8981019 | table_with_index_rep_identity | 0             | 536870911     | localhost |    57637 |         133
+ 8981020 | table_with_index_rep_identity | 536870912     | 1610612735    | localhost |    57637 |         134
+ 8981021 | table_with_index_rep_identity | 1610612736    | 2147483647    | localhost |    57638 |         135
 (18 rows)
 
 -- END: Split second time on another schema

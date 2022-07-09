@@ -64,7 +64,7 @@ INSERT INTO sensors SELECT i, '2020-01-05', '{}', 11011.10, 'A', 'I <3 Citus' FR
 
 -- BEGIN : Display current state.
 -- TODO(niupre): Can we refactor this to be a function?
-SELECT cls.relnamespace, shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport, placementid
+SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport, placementid
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
   INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
@@ -145,7 +145,7 @@ SELECT citus_move_shard_placement(8981007, 'localhost', :worker_1_port, 'localho
 
 -- BEGIN : Display current state.
 -- TODO(niupre): Can we refactor this to be a function?
-SELECT cls.relnamespace, shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport, placementid
+SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport, placementid
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
   INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
@@ -210,7 +210,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     'blocking');
 
 SET search_path TO "citus_split_test_schema";
-SELECT cls.relnamespace, shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport, placementid
+SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport, placementid
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
   INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
