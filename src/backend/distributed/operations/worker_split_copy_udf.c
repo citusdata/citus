@@ -197,9 +197,9 @@ CreateShardCopyDestReceivers(EState *estate, ShardInterval *shardIntervalToSplit
 	char *sourceShardNamePrefix = get_rel_name(shardIntervalToSplitCopy->relationId);
 	foreach_ptr(splitCopyInfo, splitCopyInfoList)
 	{
-		char *destinationShardSchemaName = get_namespace_name(get_rel_namespace(
-																  shardIntervalToSplitCopy
-																  ->relationId));
+		char *destinationShardSchemaOid = get_rel_namespace(
+			shardIntervalToSplitCopy->relationId);
+		char *destinationShardSchemaName = get_namespace_name(destinationShardSchemaOid);
 		char *destinationShardNameCopy = pstrdup(sourceShardNamePrefix);
 		AppendShardIdToName(&destinationShardNameCopy, splitCopyInfo->destinationShardId);
 

@@ -792,8 +792,10 @@ CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 														 referenceTableForeignConstraintList);
 
 			List *constraintCommandList = NIL;
-			constraintCommandList = list_concat(constraintCommandList, shardForeignConstraintCommandList);
-			constraintCommandList = list_concat(constraintCommandList, referenceTableForeignConstraintList);
+			constraintCommandList = list_concat(constraintCommandList,
+												shardForeignConstraintCommandList);
+			constraintCommandList = list_concat(constraintCommandList,
+												referenceTableForeignConstraintList);
 
 			char *constraintCommand = NULL;
 			foreach_ptr(constraintCommand, constraintCommandList)

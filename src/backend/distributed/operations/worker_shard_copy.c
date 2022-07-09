@@ -74,7 +74,6 @@ static bool CanUseLocalCopy(uint64 destinationNodeId);
 static StringInfo ConstructCopyStatement(List *destinationShardFullyQualifiedName, bool
 										 useBinaryFormat);
 static void WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDest);
-static bool ShouldSendCopyNow(StringInfo buffer);
 static int ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead);
 static void LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState
 							 localCopyOutState);
@@ -85,18 +84,6 @@ CanUseLocalCopy(uint64 destinationNodeId)
 {
 	/* If destination node is same as source, use local copy */
 	return GetLocalNodeId() == destinationNodeId;
-}
-
-
-/*
- * ShouldSendCopyNow returns true if the given buffer size exceeds the
- * local copy buffer size threshold.
- */
-static bool
-ShouldSendCopyNow(StringInfo buffer)
-{
-	/* LocalCopyFlushThreshold is in bytes */
-	return buffer->len > LocalCopyFlushThresholdByte;
 }
 
 
@@ -197,7 +184,7 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	if (copyDest->useLocalCopy)
 	{
 		WriteLocalTuple(slot, copyDest);
-		if (ShouldSendCopyNow(copyOutState->fe_msgbuf))
+		if (copyOutState->fe_msgbuf->len > LocalCopyFlushThresholdByte)
 		{
 			LocalCopyToShard(copyDest, copyOutState);
 		}

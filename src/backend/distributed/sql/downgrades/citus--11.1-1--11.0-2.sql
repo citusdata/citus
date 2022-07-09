@@ -46,8 +46,8 @@ CREATE FUNCTION pg_catalog.worker_repartition_cleanup(bigint)
  STRICT
 AS 'MODULE_PATHNAME', $function$worker_repartition_cleanup$function$;
 
-DROP TYPE IF EXISTS citus.split_mode;
-DROP TYPE IF EXISTS citus.split_copy_info;
+DROP TYPE citus.split_mode;
+DROP TYPE citus.split_copy_info;
 DROP FUNCTION pg_catalog.citus_split_shard_by_split_points(
     shard_id bigint,
     split_points text[],
