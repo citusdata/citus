@@ -290,5 +290,5 @@ ORDER BY 1;
  view columnar.stripe
  view pg_dist_shard_placement
  view time_partitions
-(270 rows)
+(274 rows)
 
