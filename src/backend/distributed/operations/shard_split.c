@@ -38,10 +38,14 @@ static void ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 											ShardInterval *shardIntervalToSplit,
 											List *shardSplitPointsList,
 											List *nodeIdsForPlacementList);
-static void CreateSplitShardsForShardGroup(WorkerNode *sourceShardNode,
-										   List *sourceColocatedShardIntervalList,
-										   List *shardGroupSplitIntervalListList,
+static void CreateAndCopySplitShardsForShardGroup(WorkerNode *sourceShardNode,
+												  List *sourceColocatedShardIntervalList,
+												  List *shardGroupSplitIntervalListList,
+												  List *workersForPlacementList);
+static void CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 										   List *workersForPlacementList);
+static void CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
+												   List *workersForPlacementList);
 static void CreateObjectOnPlacement(List *objectCreationCommandList,
 									WorkerNode *workerNode);
 static List *    CreateSplitIntervalsForShardGroup(List *sourceColocatedShardList,
@@ -420,11 +424,11 @@ BlockingShardSplit(SplitOperation splitOperation,
 	PG_TRY();
 	{
 		/*
-		 * Physically create split children, perform split copy and create auxillary structures.
+		 * Physically create split children, perform split copy and create auxiliary structures.
 		 * This includes: indexes, replicaIdentity. triggers and statistics.
 		 * Foreign key constraints are created after Metadata changes (see CreateForeignKeyConstraints).
 		 */
-		CreateSplitShardsForShardGroup(
+		CreateAndCopySplitShardsForShardGroup(
 			sourceShardToCopyNode,
 			sourceColocatedShardIntervalList,
 			shardGroupSplitIntervalListList,
@@ -465,9 +469,7 @@ BlockingShardSplit(SplitOperation splitOperation,
 
 /* Create ShardGroup split children on a list of corresponding workers. */
 static void
-CreateSplitShardsForShardGroup(WorkerNode *sourceShardNode,
-							   List *sourceColocatedShardIntervalList,
-							   List *shardGroupSplitIntervalListList,
+CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 							   List *workersForPlacementList)
 {
 	/* Iterate on shard interval list for shard group */
@@ -493,14 +495,20 @@ CreateSplitShardsForShardGroup(WorkerNode *sourceShardNode,
 			CreateObjectOnPlacement(splitShardCreationCommandList, workerPlacementNode);
 		}
 	}
+}
 
-	/* Perform Split Copy */
-	DoSplitCopy(sourceShardNode, sourceColocatedShardIntervalList,
-				shardGroupSplitIntervalListList, workersForPlacementList);
 
+/* Create ShardGroup auxiliary structures (indexes, stats, replicaindentities, triggers)
+ * on a list of corresponding workers.
+ */
+static void
+CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
+									   List *workersForPlacementList)
+{
 	/*
-	 * Create auxillary structures post copy.
+	 * Create auxiliary structures post copy.
 	 */
+	List *shardIntervalList = NULL;
 	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
 		/* Iterate on split shard interval list and corresponding placement worker */
@@ -520,6 +528,28 @@ CreateSplitShardsForShardGroup(WorkerNode *sourceShardNode,
 			CreateObjectOnPlacement(indexCommandList, workerPlacementNode);
 		}
 	}
+}
+
+
+/*
+ * Create ShardGroup split children, perform copy and create auxiliary structures
+ * on a list of corresponding workers.
+ */
+static void
+CreateAndCopySplitShardsForShardGroup(WorkerNode *sourceShardNode,
+									  List *sourceColocatedShardIntervalList,
+									  List *shardGroupSplitIntervalListList,
+									  List *workersForPlacementList)
+{
+	CreateSplitShardsForShardGroup(shardGroupSplitIntervalListList,
+								   workersForPlacementList);
+
+	DoSplitCopy(sourceShardNode, sourceColocatedShardIntervalList,
+				shardGroupSplitIntervalListList, workersForPlacementList);
+
+	/* Create auxiliary structures (indexes, stats, replicaindentities, triggers) */
+	CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
+										   workersForPlacementList);
 }
 
 

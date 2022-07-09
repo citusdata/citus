@@ -77,11 +77,11 @@ LookupSplitMode(Oid shardSplitModeOid)
 	Datum enumLabelDatum = DirectFunctionCall1(enum_out, shardSplitModeOid);
 	char *enumLabel = DatumGetCString(enumLabelDatum);
 
+	/* Extend with other modes as we support them */
 	if (strncmp(enumLabel, "blocking", NAMEDATALEN) == 0)
 	{
 		shardSplitMode = BLOCKING_SPLIT;
 	}
-	/* Extend with other modes as we support them */
 	else
 	{
 		ereport(ERROR, (errmsg("Invalid split mode: %s. Expected split mode is blocking.",
