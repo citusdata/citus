@@ -15,8 +15,6 @@ teardown
 {
 	DROP TABLE selected_shard;
 	DROP TABLE logical_replicate_placement;
-
-  SELECT citus_internal.restore_isolation_tester_func();
 }
 
 

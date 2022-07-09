@@ -349,7 +349,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 * Execute the view creation commands with the shell table.
 	 * Views will be distributed via FinalizeCitusLocalTableCreation below.
 	 */
-	ExecuteAndLogUtilityCommandListInTableTypeConversion(tableViewCreationCommands);
+	ExecuteAndLogUtilityCommandListInTableTypeConversionViaSPI(tableViewCreationCommands);
 
 	/*
 	 * Set shellRelationId as the relation with relationId now points
@@ -891,6 +891,11 @@ static void
 RenameShardRelationStatistics(Oid shardRelationId, uint64 shardId)
 {
 	Relation shardRelation = RelationIdGetRelation(shardRelationId);
+	if (!RelationIsValid(shardRelation))
+	{
+		ereport(ERROR, (errmsg("could not open relation with OID %u", shardRelationId)));
+	}
+
 	List *statsOidList = RelationGetStatExtList(shardRelation);
 	RelationClose(shardRelation);
 
@@ -1053,7 +1058,9 @@ DropViewsOnTable(Oid relationId)
 		char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
 
 		StringInfo dropCommand = makeStringInfo();
-		appendStringInfo(dropCommand, "DROP VIEW IF EXISTS %s",
+		appendStringInfo(dropCommand, "DROP %sVIEW IF EXISTS %s",
+						 get_rel_relkind(viewId) == RELKIND_MATVIEW ? "MATERIALIZED " :
+						 "",
 						 qualifiedViewName);
 
 		ExecuteAndLogUtilityCommand(dropCommand->data);

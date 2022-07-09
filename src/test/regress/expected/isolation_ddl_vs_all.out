@@ -22,11 +22,6 @@ run_command_on_workers
 (localhost,57638,t,2)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s1-ddl-create-index s2-ddl-create-index-concurrently s1-commit s1-show-indexes
 create_distributed_table
@@ -47,11 +42,6 @@ run_command_on_workers
 (localhost,57637,t,2)
 (localhost,57638,t,2)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-ddl-add-column s1-commit s2-commit s1-show-indexes s1-show-columns
@@ -82,11 +72,6 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-ddl-rename-column s1-commit s2-commit s1-show-indexes s1-show-columns
 create_distributed_table
@@ -115,11 +100,6 @@ run_command_on_workers
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-ddl-create-index s1-commit s2-commit s1-show-columns s1-show-indexes
@@ -150,11 +130,6 @@ run_command_on_workers
 (localhost,57638,t,2)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-ddl-create-index-concurrently s1-commit s1-show-columns s1-show-indexes
 create_distributed_table
@@ -182,11 +157,6 @@ run_command_on_workers
 (localhost,57638,t,2)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-ddl-add-column s1-commit s2-commit s1-show-columns
 create_distributed_table
@@ -209,11 +179,6 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-ddl-rename-column s1-commit s2-commit s1-show-columns
 create_distributed_table
@@ -235,11 +200,6 @@ run_command_on_workers
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-ddl-create-index s1-commit s2-commit s1-show-columns s1-show-indexes
@@ -270,11 +230,6 @@ run_command_on_workers
 (localhost,57638,t,2)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s1-ddl-rename-column s2-ddl-create-index-concurrently s1-commit s1-show-columns s1-show-indexes
 create_distributed_table
@@ -302,11 +257,6 @@ run_command_on_workers
 (localhost,57638,t,2)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-ddl-add-column s1-commit s2-commit s1-show-columns
 create_distributed_table
@@ -328,11 +278,6 @@ run_command_on_workers
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-ddl-rename-column s1-commit s2-commit s1-show-columns
@@ -356,11 +301,6 @@ run_command_on_workers
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-table-size s1-commit s2-commit s1-show-indexes
@@ -388,11 +328,6 @@ run_command_on_workers
 (localhost,57638,t,2)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-master-modify-multiple-shards s1-commit s2-commit s1-show-indexes
 create_distributed_table
@@ -414,11 +349,6 @@ run_command_on_workers
 (localhost,57637,t,2)
 (localhost,57638,t,2)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-ddl-create-index s2-distribute-table s1-commit s2-commit s1-show-indexes
@@ -449,11 +379,6 @@ run_command_on_workers
 (localhost,57638,t,4)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-table-size s1-commit s2-commit s1-show-columns
 create_distributed_table
@@ -481,11 +406,6 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-master-modify-multiple-shards s1-commit s2-commit s1-show-columns
 create_distributed_table
@@ -507,11 +427,6 @@ run_command_on_workers
 (localhost,57637,t,"")
 (localhost,57638,t,"")
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-ddl-add-column s2-distribute-table s1-commit s2-commit s1-show-columns
@@ -542,11 +457,6 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-table-size s1-commit s2-commit s1-show-columns
 create_distributed_table
@@ -574,11 +484,6 @@ run_command_on_workers
 (localhost,57638,t,new_column)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-master-modify-multiple-shards s1-commit s2-commit s1-show-columns
 create_distributed_table
@@ -600,11 +505,6 @@ run_command_on_workers
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-distribute-table s1-commit s2-commit s1-show-columns
@@ -635,11 +535,6 @@ run_command_on_workers
 (localhost,57638,t,new_column)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-table-size s2-ddl-create-index s1-commit s2-commit s1-show-indexes
 create_distributed_table
@@ -666,11 +561,6 @@ run_command_on_workers
 (localhost,57638,t,2)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-master-modify-multiple-shards s2-ddl-create-index s1-commit s2-commit s1-show-indexes
 create_distributed_table
@@ -692,11 +582,6 @@ run_command_on_workers
 (localhost,57637,t,2)
 (localhost,57638,t,2)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-distribute-table s2-ddl-create-index s1-commit s2-commit s1-show-indexes
@@ -727,11 +612,6 @@ run_command_on_workers
 (localhost,57638,t,4)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s1-table-size s2-ddl-create-index-concurrently s1-commit s1-show-indexes
 create_distributed_table
@@ -756,11 +636,6 @@ run_command_on_workers
 (localhost,57638,t,2)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s1-master-modify-multiple-shards s2-ddl-create-index-concurrently s1-commit s1-show-indexes
 create_distributed_table
@@ -780,11 +655,6 @@ run_command_on_workers
 (localhost,57637,t,2)
 (localhost,57638,t,2)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s1-distribute-table s2-ddl-create-index-concurrently s1-commit s1-show-indexes
@@ -813,11 +683,6 @@ run_command_on_workers
 (localhost,57638,t,4)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-table-size s2-ddl-add-column s1-commit s2-commit s1-show-columns
 create_distributed_table
@@ -844,11 +709,6 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-master-modify-multiple-shards s2-ddl-add-column s1-commit s2-commit s1-show-columns
 create_distributed_table
@@ -870,11 +730,6 @@ run_command_on_workers
 (localhost,57637,t,"")
 (localhost,57638,t,"")
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-distribute-table s2-ddl-add-column s1-commit s2-commit s1-show-columns
@@ -905,11 +760,6 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-table-size s2-ddl-rename-column s1-commit s2-commit s1-show-columns
 create_distributed_table
@@ -936,11 +786,6 @@ run_command_on_workers
 (localhost,57638,t,new_column)
 (2 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-initialize s1-begin s2-begin s1-master-modify-multiple-shards s2-ddl-rename-column s1-commit s2-commit s1-show-columns
 create_distributed_table
@@ -962,11 +807,6 @@ run_command_on_workers
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-distribute-table s2-ddl-rename-column s1-commit s2-commit s1-show-columns
@@ -996,9 +836,4 @@ run_command_on_workers
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 

@@ -5,9 +5,6 @@
 // create range distributed table to test behavior of DDL in concurrent operations
 setup
 {
-	SELECT citus_internal.replace_isolation_tester_func();
-	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
-
 	SET citus.shard_replication_factor TO 1;
 	CREATE TABLE ddl_hash(id integer, data text);
 	SELECT create_distributed_table('ddl_hash', 'id');
@@ -17,8 +14,6 @@ setup
 teardown
 {
 	DROP TABLE IF EXISTS ddl_hash CASCADE;
-
-	SELECT citus_internal.restore_isolation_tester_func();
 }
 
 // session 1

@@ -377,6 +377,14 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 				atttypmod);
 			appendStringInfoString(&buffer, attributeTypeName);
 
+#if PG_VERSION_NUM >= PG_VERSION_14
+			if (CompressionMethodIsValid(attributeForm->attcompression))
+			{
+				appendStringInfo(&buffer, " COMPRESSION %s",
+								 GetCompressionMethodName(attributeForm->attcompression));
+			}
+#endif
+
 			/* if this column has a default value, append the default value */
 			if (attributeForm->atthasdef)
 			{
@@ -447,14 +455,6 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 			{
 				appendStringInfoString(&buffer, " NOT NULL");
 			}
-
-#if PG_VERSION_NUM >= PG_VERSION_14
-			if (CompressionMethodIsValid(attributeForm->attcompression))
-			{
-				appendStringInfo(&buffer, " COMPRESSION %s",
-								 GetCompressionMethodName(attributeForm->attcompression));
-			}
-#endif
 
 			if (attributeForm->attcollation != InvalidOid &&
 				attributeForm->attcollation != DEFAULT_COLLATION_OID)

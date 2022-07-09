@@ -1,8 +1,5 @@
 setup
 {
-    SELECT citus_internal.replace_isolation_tester_func();
-    SELECT citus_internal.refresh_isolation_tester_prepared_statement();
-
     CREATE TABLE ref_table_1(id int PRIMARY KEY, value int);
 	SELECT create_reference_table('ref_table_1');
 
@@ -20,7 +17,6 @@ setup
 teardown
 {
 	DROP TABLE ref_table_1, ref_table_2, ref_table_3;
-    SELECT citus_internal.restore_isolation_tester_func();
 }
 
 session "s1"

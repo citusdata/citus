@@ -830,14 +830,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		}
 	}
 
-	/* TODO: fold VACUUM's processing into the above block */
-	if (IsA(parsetree, VacuumStmt))
-	{
-		VacuumStmt *vacuumStmt = (VacuumStmt *) parsetree;
-
-		PostprocessVacuumStmt(vacuumStmt, queryString);
-	}
-
 	if (!IsDropCitusExtensionStmt(parsetree) && !IsA(parsetree, DropdbStmt))
 	{
 		/*

@@ -25,7 +25,6 @@ setup
 teardown
 {
 	DROP TABLE replicated_table, replicated_table_2, single_replicated_table;
-	SELECT citus_internal.restore_isolation_tester_func();
 }
 
 session "s1"

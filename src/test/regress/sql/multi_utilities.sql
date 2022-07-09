@@ -170,13 +170,10 @@ WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
 \c - - :master_host :master_port
 SET citus.log_remote_commands TO ON;
 
--- verify warning for unqualified VACUUM
-VACUUM;
-
 -- check for multiple table vacuum
 VACUUM dustbunnies, second_dustbunnies;
 
--- and warning when using targeted VACUUM without DDL propagation
+-- and do not propagate when using targeted VACUUM without DDL propagation
 SET citus.enable_ddl_propagation to false;
 VACUUM dustbunnies;
 ANALYZE dustbunnies;
@@ -198,3 +195,129 @@ SELECT worker_create_or_alter_role(NULL, 'create role dontcrash', NULL);
 
 -- confirm that citus_create_restore_point works
 SELECT 1 FROM citus_create_restore_point('regression-test');
+
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 970000;
+
+SET citus.log_remote_commands TO OFF;
+
+CREATE TABLE local_vacuum_table(id int primary key, b text);
+
+CREATE TABLE reference_vacuum_table(id int);
+SELECT create_reference_table('reference_vacuum_table');
+
+CREATE TABLE distributed_vacuum_table(id int);
+SELECT create_distributed_table('distributed_vacuum_table', 'id');
+
+SET citus.log_remote_commands TO ON;
+
+-- should propagate to all workers because no table is specified
+VACUUM;
+
+-- should not propagate because no distributed table is specified
+insert into local_vacuum_table select i from generate_series(1,1000000) i;
+delete from local_vacuum_table;
+VACUUM local_vacuum_table;
+SELECT pg_size_pretty( pg_total_relation_size('local_vacuum_table') );
+
+-- vacuum full deallocates pages of dead tuples whereas normal vacuum only marks dead tuples on visibility map
+VACUUM FULL local_vacuum_table;
+SELECT pg_size_pretty( pg_total_relation_size('local_vacuum_table') );
+
+-- should propagate to all workers because table is reference table
+VACUUM reference_vacuum_table;
+
+-- should propagate to all workers because table is distributed table
+VACUUM distributed_vacuum_table;
+
+-- only distributed_vacuum_table and reference_vacuum_table should propagate
+VACUUM distributed_vacuum_table, local_vacuum_table, reference_vacuum_table;
+
+-- only reference_vacuum_table should propagate
+VACUUM local_vacuum_table, reference_vacuum_table;
+
+-- vacuum (disable_page_skipping) aggressively process pages of the relation, it does not respect visibility map
+VACUUM (DISABLE_PAGE_SKIPPING true) local_vacuum_table;
+VACUUM (DISABLE_PAGE_SKIPPING false) local_vacuum_table;
+
+-- vacuum (index_cleanup on, parallel 1) should execute index vacuuming and index cleanup phases in parallel
+insert into local_vacuum_table select i from generate_series(1,1000000) i;
+delete from local_vacuum_table;
+VACUUM (INDEX_CLEANUP OFF, PARALLEL 1) local_vacuum_table;
+SELECT pg_size_pretty( pg_total_relation_size('local_vacuum_table') );
+
+insert into local_vacuum_table select i from generate_series(1,1000000) i;
+delete from local_vacuum_table;
+VACUUM (INDEX_CLEANUP ON, PARALLEL 1) local_vacuum_table;
+SELECT pg_size_pretty( pg_total_relation_size('local_vacuum_table') );
+
+-- vacuum (truncate false) should not attempt to truncate off any empty pages at the end of the table (default is true)
+insert into local_vacuum_table select i from generate_series(1,1000000) i;
+delete from local_vacuum_table;
+vacuum (TRUNCATE false) local_vacuum_table;
+SELECT pg_total_relation_size('local_vacuum_table') as size1 \gset
+
+insert into local_vacuum_table select i from generate_series(1,1000000) i;
+delete from local_vacuum_table;
+vacuum (TRUNCATE true) local_vacuum_table;
+SELECT pg_total_relation_size('local_vacuum_table') as size2 \gset
+
+SELECT :size1 > :size2 as truncate_less_size;
+
+-- vacuum (analyze) should be analyzing the table to generate statistics after vacuuming
+select analyze_count from pg_stat_all_tables where relname = 'local_vacuum_table' or relname = 'reference_vacuum_table';
+vacuum (analyze) local_vacuum_table, reference_vacuum_table;
+
+-- give enough time for stats to be updated.(updated per 500ms by default)
+select pg_sleep(1);
+
+select analyze_count from pg_stat_all_tables where relname = 'local_vacuum_table' or relname = 'reference_vacuum_table';
+
+-- should not propagate because ddl propagation is disabled
+SET citus.enable_ddl_propagation TO OFF;
+VACUUM distributed_vacuum_table;
+SET citus.enable_ddl_propagation TO ON;
+
+SET citus.log_remote_commands TO OFF;
+
+-- ANALYZE tests
+CREATE TABLE local_analyze_table(id int);
+
+CREATE TABLE reference_analyze_table(id int);
+SELECT create_reference_table('reference_analyze_table');
+
+CREATE TABLE distributed_analyze_table(id int);
+SELECT create_distributed_table('distributed_analyze_table', 'id');
+
+CREATE TABLE loc (a INT, b INT);
+CREATE TABLE dist (a INT);
+SELECT create_distributed_table ('dist', 'a');
+
+SET citus.log_remote_commands TO ON;
+
+-- should propagate to all workers because no table is specified
+ANALYZE;
+
+-- should not propagate because no distributed table is specified
+ANALYZE local_analyze_table;
+
+-- should propagate to all workers because table is reference table
+ANALYZE reference_analyze_table;
+
+-- should propagate to all workers because table is distributed table
+ANALYZE distributed_analyze_table;
+
+-- only distributed_analyze_table and reference_analyze_table should propagate
+ANALYZE distributed_analyze_table, local_analyze_table, reference_analyze_table;
+
+-- only reference_analyze_table should propagate
+ANALYZE local_analyze_table, reference_analyze_table;
+
+-- should not propagate because ddl propagation is disabled
+SET citus.enable_ddl_propagation TO OFF;
+ANALYZE distributed_analyze_table;
+SET citus.enable_ddl_propagation TO ON;
+
+-- analyze only specified columns for corresponding tables
+ANALYZE loc(b), dist(a);
