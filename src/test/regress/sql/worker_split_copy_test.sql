@@ -1,6 +1,6 @@
 CREATE SCHEMA worker_split_copy_test;
 SET search_path TO worker_split_copy_test;
-SET citus.shard_count TO 1;
+SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 81070000;
 
@@ -9,7 +9,7 @@ SET citus.next_shard_id TO 81070000;
 CREATE TABLE worker_split_copy_test."test !/ \n _""dist_123_table"(id int primary key, value char);
 SELECT create_distributed_table('"test !/ \n _""dist_123_table"', 'id');
 
-INSERT INTO "test !/ \n _""dist_123_table" (id, value) (SELECT g.id, 'N' FROM generate_series(1, 100) AS g(id));
+INSERT INTO "test !/ \n _""dist_123_table" (id, value) (SELECT g.id, 'N' FROM generate_series(1, 1000) AS g(id));
 
 -- END: Create distributed table and insert data.
 
@@ -21,8 +21,12 @@ CREATE TABLE worker_split_copy_test."test !/ \n _""dist_123_table_81070016"(id i
 
 -- BEGIN: List row count for source shard and targets shard in Worker1.
 \c - - - :worker_1_port
+SELECT COUNT(*) FROM worker_split_copy_test."test !/ \n _""dist_123_table_81070000";
 SELECT COUNT(*) FROM worker_split_copy_test."test !/ \n _""dist_123_table_81070015";
 SELECT COUNT(*) FROM worker_split_copy_test."test !/ \n _""dist_123_table_81070016";
+
+\c - - - :worker_2_port
+SELECT COUNT(*) FROM worker_split_copy_test."test !/ \n _""dist_123_table_81070001";
 -- END: List row count for source shard and targets shard in Worker1.
 
 -- BEGIN: Set worker_1_node and worker_2_node
@@ -40,12 +44,12 @@ SELECT * from worker_split_copy(
          -- split copy info for split children 1
         ROW(81070015, -- destination shard id
              -2147483648, -- split range begin
-            1073741823, --split range end
+            -1073741824, --split range end
             :worker_1_node)::citus.split_copy_info,
         -- split copy info for split children 2
         ROW(81070016,  --destination shard id
-            1073741824, --split range begin
-            2147483647, --split range end
+            -1073741823, --split range begin
+            -1, --split range end
             :worker_1_node)::citus.split_copy_info
         ]
     );

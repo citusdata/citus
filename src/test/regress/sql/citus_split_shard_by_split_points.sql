@@ -60,11 +60,15 @@ ALTER TABLE sensors ADD CONSTRAINT fkey_table_to_dist FOREIGN KEY (measureid) RE
 INSERT INTO reference_table SELECT i FROM generate_series(0,1000)i;
 INSERT INTO colocated_dist_table SELECT i FROM generate_series(0,1000)i;
 INSERT INTO sensors SELECT i, '2020-01-05', '{}', 11011.10, 'A', 'I <3 Citus' FROM generate_series(0,1000)i;
+
+SELECT COUNT(*) FROM sensors;
+SELECT COUNT(*) FROM reference_table;
+SELECT COUNT(*) FROM colocated_dist_table;
 -- END: Load data into tables.
 
 -- BEGIN : Display current state.
 -- TODO(niupre): Can we refactor this to be a function?
-SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport, placementid
+SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
   INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
@@ -145,7 +149,7 @@ SELECT citus_move_shard_placement(8981007, 'localhost', :worker_1_port, 'localho
 
 -- BEGIN : Display current state.
 -- TODO(niupre): Can we refactor this to be a function?
-SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport, placementid
+SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
   INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
@@ -210,7 +214,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     'blocking');
 
 SET search_path TO "citus_split_test_schema";
-SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport, placementid
+SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
   INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
@@ -218,6 +222,12 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
   WHERE node.noderole = 'primary' AND (logicalrelid = 'sensors'::regclass OR logicalrelid = 'colocated_dist_table'::regclass OR logicalrelid = 'table_with_index_rep_identity'::regclass)
   ORDER BY logicalrelid, shardminvalue::BIGINT;
 -- END: Split second time on another schema
+
+-- BEGIN: Validate Data Count
+SELECT COUNT(*) FROM sensors;
+SELECT COUNT(*) FROM reference_table;
+SELECT COUNT(*) FROM colocated_dist_table;
+-- END: Validate Data Count
 
 --BEGIN : Cleanup
 \c - postgres - :master_port
