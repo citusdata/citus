@@ -677,6 +677,14 @@ CreateObjectOnPlacement(List *objectCreationCommandList,
 
 /*
  * Create split children intervals for a shardgroup given list of split points.
+ * Example:
+ * 'sourceColocatedShardIntervalList': Colocated shard S1[-2147483648, 2147483647] & S2[-2147483648, 2147483647]
+ * 'splitPointsForShard': [0] (2 way split)
+ * 'shardGroupSplitIntervalListList':
+ *  [
+ *      [ S1_1(-2147483648, 0), S1_2(1, 2147483647) ], // Split Interval List for S1.
+ *      [ S2_1(-2147483648, 0), S2_2(1, 2147483647) ]  // Split Interval List for S2.
+ *  ]
  */
 static List *
 CreateSplitIntervalsForShardGroup(List *sourceColocatedShardIntervalList,
