@@ -652,7 +652,7 @@ CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 	appendStringInfo(splitCopyInfoArray, "]");
 
 	StringInfo splitCopyUdf = makeStringInfo();
-	appendStringInfo(splitCopyUdf, "SELECT worker_split_copy(%lu, %s);",
+	appendStringInfo(splitCopyUdf, "SELECT pg_catalog.worker_split_copy(%lu, %s);",
 					 sourceShardSplitInterval->shardId,
 					 splitCopyInfoArray->data);
 

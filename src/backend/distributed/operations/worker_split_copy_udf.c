@@ -81,11 +81,13 @@ worker_split_copy(PG_FUNCTION_ARGS)
 																				 shardIntervalToSplitCopy,
 																				 splitCopyInfoList);
 
-	Oid sourceShardToCopySchemaOId = get_rel_namespace(shardIntervalToSplitCopy->relationId);
+	Oid sourceShardToCopySchemaOId = get_rel_namespace(
+		shardIntervalToSplitCopy->relationId);
 	char *sourceShardToCopySchemaName = get_namespace_name(sourceShardToCopySchemaOId);
 	char *sourceShardToCopyName = get_rel_name(shardIntervalToSplitCopy->relationId);
 	AppendShardIdToName(&sourceShardToCopyName, shardIdToSplitCopy);
-	char *sourceShardToCopyQualifiedName = quote_qualified_identifier(sourceShardToCopySchemaName,
+	char *sourceShardToCopyQualifiedName = quote_qualified_identifier(
+		sourceShardToCopySchemaName,
 		sourceShardToCopyName);
 
 	StringInfo selectShardQueryForCopy = makeStringInfo();
