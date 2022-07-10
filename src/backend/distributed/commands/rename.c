@@ -48,11 +48,12 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 
 	/*
 	 * The lock levels here should be same as the ones taken in
-	 * RenameRelation(), renameatt() and RenameConstraint(). However, since all
-	 * four statements have identical lock levels, we just use a single statement.
+	 * RenameRelation(), renameatt() and RenameConstraint(). All statements
+	 * have identical lock levels except alter index rename.
 	 */
-	objectRelationId = RangeVarGetRelid(renameStmt->relation,
-										AccessExclusiveLock,
+	LOCKMODE lockmode = (IsIndexRenameStmt(renameStmt)) ?
+						ShareUpdateExclusiveLock : AccessExclusiveLock;
+	objectRelationId = RangeVarGetRelid(renameStmt->relation, lockmode,
 										renameStmt->missing_ok);
 
 	/*
@@ -99,6 +100,18 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 		case OBJECT_TABCONSTRAINT:
 		case OBJECT_POLICY:
 		{
+			if (relKind == RELKIND_INDEX ||
+				relKind == RELKIND_PARTITIONED_INDEX)
+			{
+				/*
+				 * Although weird, postgres allows ALTER TABLE .. RENAME command
+				 * on indexes. We don't want to break non-distributed tables,
+				 * so allow.
+				 */
+				tableRelationId = IndexGetRelation(objectRelationId, false);
+				break;
+			}
+
 			/* the target object is our tableRelationId. */
 			tableRelationId = objectRelationId;
 			break;
@@ -106,6 +119,25 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 
 		case OBJECT_INDEX:
 		{
+			if (relKind == RELKIND_RELATION ||
+				relKind == RELKIND_PARTITIONED_TABLE)
+			{
+				/*
+				 * Although weird, postgres allows ALTER INDEX .. RENAME command
+				 * on tables. We don't want to break non-distributed tables,
+				 * so allow.
+				 * Because of the weird syntax, we locked with wrong level, so relock
+				 * the relation to acquire true level of lock. Same logic
+				 * can be found in the function RenameRelation(RenameStmt) at tablecmds.c
+				 */
+				UnlockRelationOid(objectRelationId, lockmode);
+				objectRelationId = RangeVarGetRelid(renameStmt->relation,
+													AccessExclusiveLock,
+													renameStmt->missing_ok);
+				tableRelationId = objectRelationId;
+				break;
+			}
+
 			/*
 			 * here, objRelationId points to the index relation entry, and we
 			 * are interested into the entry of the table on which the index is

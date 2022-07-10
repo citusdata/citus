@@ -522,7 +522,7 @@ SELECT table_name, citus_table_type, distribution_column, shard_count, access_me
 (2 rows)
 
 SELECT c.relname, a.amname FROM pg_class c, pg_am a where c.relname SIMILAR TO 'table_type\D*' AND c.relnamespace = 'alter_table_set_access_method'::regnamespace AND c.relam = a.oid;
-        relname         | amname
+        relname         |  amname
 ---------------------------------------------------------------------
  table_type_citus_local | columnar
  table_type_dist        | columnar

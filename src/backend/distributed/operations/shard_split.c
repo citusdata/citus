@@ -40,9 +40,11 @@ static void ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 											ShardInterval *shardIntervalToSplit,
 											List *shardSplitPointsList,
 											List *nodeIdsForPlacementList);
-static void CreateSplitShardsForShardGroup(WorkerNode *sourceShardNode,
-										   List *sourceColocatedShardIntervalList,
-										   List *shardGroupSplitIntervalListList,
+static void CreateAndCopySplitShardsForShardGroup(WorkerNode *sourceShardNode,
+												  List *sourceColocatedShardIntervalList,
+												  List *shardGroupSplitIntervalListList,
+												  List *workersForPlacementList);
+static void CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 										   List *workersForPlacementList);
 static void CreateSplitShardsForShardGroupTwo(WorkerNode *sourceShardNode,
 										   List *sourceColocatedShardIntervalList,
@@ -57,6 +59,8 @@ static void SplitShardReplicationSetup(List *sourceColocatedShardIntervalList,
 									   WorkerNode *sourceWorkerNode,
 									   List *workersForPlacementList);
 static HTAB * CreateWorkerForPlacementSet(List *workersForPlacementList);
+static void CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
+												   List *workersForPlacementList);
 static void CreateObjectOnPlacement(List *objectCreationCommandList,
 									WorkerNode *workerNode);
 static List *    CreateSplitIntervalsForShardGroup(List *sourceColocatedShardList,
@@ -273,10 +277,13 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 	{
 		int32 shardSplitPointValue = DatumGetInt32(shardSplitPoint);
 
-		/* All Split points should lie within the shard interval range. */
-		int splitPointShardIndex = FindShardIntervalIndex(shardSplitPoint,
-														  cachedTableEntry);
-		if (shardIntervalToSplit->shardIndex != splitPointShardIndex)
+		/*
+		 * 1) All Split points should lie within the shard interval range.
+		 * 2) Given our split points inclusive, you cannot specify the max value in a range as a split point.
+		 * Example: Shard 81060002 range is from (0,1073741823). '1073741823' as split point is invalid.
+		 * '1073741822' is correct and will split shard to: (0, 1073741822) and (1073741823, 1073741823).
+		 */
+		if (shardSplitPointValue < minValue || shardSplitPointValue > maxValue)
 		{
 			ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
@@ -286,6 +293,16 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 						 DatumGetInt32(shardIntervalToSplit->minValue),
 						 DatumGetInt32(shardIntervalToSplit->maxValue),
 						 shardIntervalToSplit->shardId)));
+		}
+		else if (maxValue == shardSplitPointValue)
+		{
+			int32 validSplitPoint = shardIntervalToSplit->maxValue - 1;
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg(
+						 "Invalid split point %d, as split points should be inclusive. Please use %d instead.",
+						 maxValue,
+						 validSplitPoint)));
 		}
 
 		/* Split points should be in strictly increasing order */
@@ -300,22 +317,6 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 						 "All split points should be strictly increasing.",
 						 lastShardSplitPointValue,
 						 shardSplitPointValue)));
-		}
-
-		/*
-		 * Given our split points inclusive, you cannot specify the max value in a range as a split point.
-		 * Example: Shard 81060002 range is from (0,1073741823). '1073741823' as split point is invalid.
-		 * '1073741822' is correct and will split shard to: (0, 1073741822) and (1073741823, 1073741823).
-		 */
-		if (maxValue == shardSplitPointValue)
-		{
-			int32 validSplitPoint = shardIntervalToSplit->maxValue - 1;
-			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
-					 errmsg(
-						 "Invalid split point %d, as split points should be inclusive. Please use %d instead.",
-						 maxValue,
-						 validSplitPoint)));
 		}
 
 		lastShardSplitPoint = (NullableDatum) {
@@ -446,11 +447,11 @@ BlockingShardSplit(SplitOperation splitOperation,
 	PG_TRY();
 	{
 		/*
-		 * Physically create split children, perform split copy and create auxillary structures.
+		 * Physically create split children, perform split copy and create auxiliary structures.
 		 * This includes: indexes, replicaIdentity. triggers and statistics.
 		 * Foreign key constraints are created after Metadata changes (see CreateForeignKeyConstraints).
 		 */
-		CreateSplitShardsForShardGroup(
+		CreateAndCopySplitShardsForShardGroup(
 			sourceShardToCopyNode,
 			sourceColocatedShardIntervalList,
 			shardGroupSplitIntervalListList,
@@ -491,9 +492,7 @@ BlockingShardSplit(SplitOperation splitOperation,
 
 /* Create ShardGroup split children on a list of corresponding workers. */
 static void
-CreateSplitShardsForShardGroup(WorkerNode *sourceShardNode,
-							   List *sourceColocatedShardIntervalList,
-							   List *shardGroupSplitIntervalListList,
+CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 							   List *workersForPlacementList)
 {
 	/* Iterate on shard interval list for shard group */
@@ -519,14 +518,20 @@ CreateSplitShardsForShardGroup(WorkerNode *sourceShardNode,
 			CreateObjectOnPlacement(splitShardCreationCommandList, workerPlacementNode);
 		}
 	}
+}
 
-	/* Perform Split Copy */
-	DoSplitCopy(sourceShardNode, sourceColocatedShardIntervalList,
-				shardGroupSplitIntervalListList, workersForPlacementList);
 
+/* Create ShardGroup auxiliary structures (indexes, stats, replicaindentities, triggers)
+ * on a list of corresponding workers.
+ */
+static void
+CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
+									   List *workersForPlacementList)
+{
 	/*
-	 * Create auxillary structures post copy.
+	 * Create auxiliary structures post copy.
 	 */
+	List *shardIntervalList = NULL;
 	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
 		/* Iterate on split shard interval list and corresponding placement worker */
@@ -546,6 +551,28 @@ CreateSplitShardsForShardGroup(WorkerNode *sourceShardNode,
 			CreateObjectOnPlacement(indexCommandList, workerPlacementNode);
 		}
 	}
+}
+
+
+/*
+ * Create ShardGroup split children, perform copy and create auxiliary structures
+ * on a list of corresponding workers.
+ */
+static void
+CreateAndCopySplitShardsForShardGroup(WorkerNode *sourceShardNode,
+									  List *sourceColocatedShardIntervalList,
+									  List *shardGroupSplitIntervalListList,
+									  List *workersForPlacementList)
+{
+	CreateSplitShardsForShardGroup(shardGroupSplitIntervalListList,
+								   workersForPlacementList);
+
+	DoSplitCopy(sourceShardNode, sourceColocatedShardIntervalList,
+				shardGroupSplitIntervalListList, workersForPlacementList);
+
+	/* Create auxiliary structures (indexes, stats, replicaindentities, triggers) */
+	CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
+										   workersForPlacementList);
 }
 
 
@@ -648,7 +675,7 @@ CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 	appendStringInfo(splitCopyInfoArray, "]");
 
 	StringInfo splitCopyUdf = makeStringInfo();
-	appendStringInfo(splitCopyUdf, "SELECT worker_split_copy(%lu, %s);",
+	appendStringInfo(splitCopyUdf, "SELECT pg_catalog.worker_split_copy(%lu, %s);",
 					 sourceShardSplitInterval->shardId,
 					 splitCopyInfoArray->data);
 
@@ -673,6 +700,14 @@ CreateObjectOnPlacement(List *objectCreationCommandList,
 
 /*
  * Create split children intervals for a shardgroup given list of split points.
+ * Example:
+ * 'sourceColocatedShardIntervalList': Colocated shard S1[-2147483648, 2147483647] & S2[-2147483648, 2147483647]
+ * 'splitPointsForShard': [0] (2 way split)
+ * 'shardGroupSplitIntervalListList':
+ *  [
+ *      [ S1_1(-2147483648, 0), S1_2(1, 2147483647) ], // Split Interval List for S1.
+ *      [ S2_1(-2147483648, 0), S2_2(1, 2147483647) ]  // Split Interval List for S2.
+ *  ]
  */
 static List *
 CreateSplitIntervalsForShardGroup(List *sourceColocatedShardIntervalList,
@@ -774,10 +809,10 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 				0, /* shard length (zero for HashDistributed Table) */
 				workerPlacementNode->groupId);
 
-				if (ShouldSyncTableMetadata(shardInterval->relationId))
-				{
-					syncedShardList = lappend(syncedShardList, shardInterval);
-				}
+			if (ShouldSyncTableMetadata(shardInterval->relationId))
+			{
+				syncedShardList = lappend(syncedShardList, shardInterval);
+			}
 		}
 	}
 
@@ -817,15 +852,20 @@ CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 														 &
 														 referenceTableForeignConstraintList);
 
-			List *commandList = NIL;
-			commandList = list_concat(commandList, shardForeignConstraintCommandList);
-			commandList = list_concat(commandList, referenceTableForeignConstraintList);
+			List *constraintCommandList = NIL;
+			constraintCommandList = list_concat(constraintCommandList,
+												shardForeignConstraintCommandList);
+			constraintCommandList = list_concat(constraintCommandList,
+												referenceTableForeignConstraintList);
 
-			SendCommandListToWorkerOutsideTransaction(
-				workerPlacementNode->workerName,
-				workerPlacementNode->workerPort,
-				TableOwner(shardInterval->relationId),
-				commandList);
+			char *constraintCommand = NULL;
+			foreach_ptr(constraintCommand, constraintCommandList)
+			{
+				SendCommandToWorker(
+					workerPlacementNode->workerName,
+					workerPlacementNode->workerPort,
+					constraintCommand);
+			}
 		}
 	}
 }

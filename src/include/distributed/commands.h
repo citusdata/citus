@@ -29,6 +29,7 @@ extern bool EnableLocalReferenceForeignKeys;
 
 extern bool EnableUnsafeTriggers;
 
+extern int MaxMatViewSizeToAutoRecreate;
 
 extern void SwitchToSequentialAndLocalExecutionIfRelationNameTooLong(Oid relationId,
 																	 char *
@@ -553,7 +554,7 @@ extern void UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 										   bool *forceDelegation);
 
 /* vacuum.c - forward declarations */
-extern void PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
+extern List * PostprocessVacuumStmt(Node *node, const char *vacuumCommand);
 
 /* view.c - forward declarations */
 extern List * PreprocessViewStmt(Node *node, const char *queryString,
@@ -642,7 +643,7 @@ extern bool RelationIdListHasReferenceTable(List *relationIdList);
 extern List * GetFKeyCreationCommandsForRelationIdList(List *relationIdList);
 extern void DropRelationForeignKeys(Oid relationId, int flags);
 extern void SetLocalEnableLocalReferenceForeignKeys(bool state);
-extern void ExecuteAndLogUtilityCommandListInTableTypeConversion(
+extern void ExecuteAndLogUtilityCommandListInTableTypeConversionViaSPI(
 	List *utilityCommandList);
 extern void ExecuteAndLogUtilityCommandList(List *ddlCommandList);
 extern void ExecuteAndLogUtilityCommand(const char *commandString);

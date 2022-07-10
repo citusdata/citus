@@ -51,8 +51,6 @@ teardown
 	DROP TABLE partitioned_table;
 
 	SELECT citus_remove_node('localhost', 57636);
-
-	SELECT citus_internal.restore_isolation_tester_func();
 }
 
 // coordinator session

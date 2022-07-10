@@ -1,3 +1,12 @@
+### citus v11.0.3 (July 5, 2022) ###
+
+* Fixes a bug that prevents adding local tables with materialized views to
+  Citus metadata
+
+* Fixes a bug that prevents using `COMPRESSION` and `CONSTRAINT` on a column
+
+* Fixes upgrades to Citus 11 when there are no nodes in the metadata
+
 ### citus v11.0.2 (June 15, 2022) ###
 
 * Drops support for PostgreSQL 12

@@ -144,8 +144,3 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 ---------------------------------------------------------------------
 (0 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-

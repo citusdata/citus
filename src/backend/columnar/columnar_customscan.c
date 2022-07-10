@@ -277,6 +277,11 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 	 * into the scan of the table to minimize the data read.
 	 */
 	Relation relation = RelationIdGetRelation(rte->relid);
+	if (!RelationIsValid(relation))
+	{
+		ereport(ERROR, (errmsg("could not open relation with OID %u", rte->relid)));
+	}
+
 	if (relation->rd_tableam == GetColumnarTableAmRoutine())
 	{
 		if (rte->tablesample != NULL)
@@ -501,6 +506,11 @@ ColumnarIndexScanAdditionalCost(PlannerInfo *root, RelOptInfo *rel,
 				   &indexCorrelation, &fakeIndexPages);
 
 	Relation relation = RelationIdGetRelation(relationId);
+	if (!RelationIsValid(relation))
+	{
+		ereport(ERROR, (errmsg("could not open relation with OID %u", relationId)));
+	}
+
 	uint64 rowCount = ColumnarTableRowCount(relation);
 	RelationClose(relation);
 	double estimatedRows = rowCount * indexSelectivity;
@@ -596,6 +606,11 @@ static int
 RelationIdGetNumberOfAttributes(Oid relationId)
 {
 	Relation relation = RelationIdGetRelation(relationId);
+	if (!RelationIsValid(relation))
+	{
+		ereport(ERROR, (errmsg("could not open relation with OID %u", relationId)));
+	}
+
 	int nattrs = relation->rd_att->natts;
 	RelationClose(relation);
 	return nattrs;
@@ -1399,6 +1414,11 @@ static Cost
 ColumnarPerStripeScanCost(RelOptInfo *rel, Oid relationId, int numberOfColumnsRead)
 {
 	Relation relation = RelationIdGetRelation(relationId);
+	if (!RelationIsValid(relation))
+	{
+		ereport(ERROR, (errmsg("could not open relation with OID %u", relationId)));
+	}
+
 	List *stripeList = StripesForRelfilenode(relation->rd_node);
 	RelationClose(relation);
 
@@ -1451,6 +1471,11 @@ static uint64
 ColumnarTableStripeCount(Oid relationId)
 {
 	Relation relation = RelationIdGetRelation(relationId);
+	if (!RelationIsValid(relation))
+	{
+		ereport(ERROR, (errmsg("could not open relation with OID %u", relationId)));
+	}
+
 	List *stripeList = StripesForRelfilenode(relation->rd_node);
 	int stripeCount = list_length(stripeList);
 	RelationClose(relation);

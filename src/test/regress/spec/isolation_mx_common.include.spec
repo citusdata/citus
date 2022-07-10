@@ -29,9 +29,6 @@ setup
         AS 'citus', $$stop_session_level_connection_to_node$$;
     RESET citus.enable_metadata_sync;
 
-    SELECT citus_internal.replace_isolation_tester_func();
-    SELECT citus_internal.refresh_isolation_tester_prepared_statement();
-
     -- start_metadata_sync_to_node can not be run inside a transaction block
     -- following is a workaround to overcome that
     -- port numbers are hard coded at the moment

@@ -1,9 +1,6 @@
 
 setup
 {
-	SELECT citus_internal.replace_isolation_tester_func();
-	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
-
 	SET citus.shard_replication_factor to 1;
 
 	CREATE TABLE test_table_1_rf1(id int, val_1 int);
@@ -28,8 +25,6 @@ teardown
 	DROP TABLE test_table_1_rf1 CASCADE;
 	DROP TABLE test_table_2_rf1;
 	DROP TABLE ref_table;
-
-	SELECT citus_internal.restore_isolation_tester_func();
 }
 
 session "s1"

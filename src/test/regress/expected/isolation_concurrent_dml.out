@@ -19,11 +19,6 @@ step s1-commit:
     COMMIT;
 
 step s2-update: <... completed>
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-insert s2-update
 create_distributed_table
@@ -36,11 +31,6 @@ step s1-insert:
 
 step s2-update:
     UPDATE test_concurrent_dml SET data = 'blarg' WHERE test_id = 1;
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-begin s1-multi-insert s2-update s1-commit
@@ -62,11 +52,6 @@ step s1-commit:
     COMMIT;
 
 step s2-update: <... completed>
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-begin s1-multi-insert s2-multi-insert-overlap s1-commit
 create_distributed_table
@@ -85,11 +70,6 @@ step s2-multi-insert-overlap:
 
 step s1-commit:
     COMMIT;
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-begin s2-begin s1-multi-insert s2-multi-insert s1-commit s2-commit
@@ -115,9 +95,4 @@ step s1-commit:
 
 step s2-commit:
     COMMIT;
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 

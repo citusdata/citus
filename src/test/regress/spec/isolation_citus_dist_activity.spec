@@ -1,5 +1,8 @@
 setup
 {
+    -- revert back to pg_isolation_test_session_is_blocked until the tests are fixed
+    SELECT citus_internal.restore_isolation_tester_func();
+
     CREATE OR REPLACE FUNCTION test_assign_global_pid()
         RETURNS void
         LANGUAGE C STRICT
@@ -14,6 +17,9 @@ setup
 
 teardown
 {
+    -- replace pg_isolation_test_session_is_blocked so that next tests are run with Citus implementation
+    SELECT citus_internal.replace_isolation_tester_func();
+
     DROP TABLE test_table;
 }
 

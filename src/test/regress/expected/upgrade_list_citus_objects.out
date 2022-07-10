@@ -113,7 +113,7 @@ ORDER BY 1;
  function citus_shard_indexes_on_worker()
  function citus_shard_sizes()
  function citus_shards_on_worker()
- function citus_split_shard_by_split_points(bigint,integer[],integer[])
+ function citus_split_shard_by_split_points(bigint,text[],integer[],citus.split_mode)
  function citus_stat_activity()
  function citus_stat_statements()
  function citus_stat_statements_reset()
@@ -243,6 +243,7 @@ ORDER BY 1;
  function worker_record_sequence_dependency(regclass,regclass,name)
  function worker_save_query_explain_analyze(text,jsonb)
  function worker_split_shard_replication_setup(citus.split_shard_info[])
+ function worker_split_copy(bigint,citus.split_copy_info[])
  schema citus
  schema citus_internal
  schema columnar
@@ -272,6 +273,8 @@ ORDER BY 1;
  type citus.distribution_type
  type citus.shard_transfer_mode
  type citus.split_shard_info
+ type citus.split_copy_info
+ type citus.split_mode
  type citus_copy_format
  type noderole
  view citus_dist_stat_activity
@@ -289,5 +292,5 @@ ORDER BY 1;
  view columnar.stripe
  view pg_dist_shard_placement
  view time_partitions
-(270 rows)
+(274 rows)
 
