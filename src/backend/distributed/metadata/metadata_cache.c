@@ -248,7 +248,6 @@ static void RegisterWorkerNodeCacheCallbacks(void);
 static void RegisterLocalGroupIdCacheCallbacks(void);
 static void RegisterAuthinfoCacheCallbacks(void);
 static void RegisterCitusTableCacheEntryReleaseCallbacks(void);
-static uint32 WorkerNodeHashCode(const void *key, Size keySize);
 static void ResetCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry);
 static void RemoveStaleShardIdCacheEntries(CitusTableCacheEntry *tableEntry);
 static void CreateDistTableCache(void);
@@ -3939,26 +3938,6 @@ RegisterAuthinfoCacheCallbacks(void)
 {
 	/* Watch for invalidation events. */
 	CacheRegisterRelcacheCallback(InvalidateConnParamsCacheCallback, (Datum) 0);
-}
-
-
-/*
- * WorkerNodeHashCode computes the hash code for a worker node from the node's
- * host name and port number. Nodes that only differ by their rack locations
- * hash to the same value.
- */
-static uint32
-WorkerNodeHashCode(const void *key, Size keySize)
-{
-	const WorkerNode *worker = (const WorkerNode *) key;
-	const char *workerName = worker->workerName;
-	const uint32 *workerPort = &(worker->workerPort);
-
-	/* standard hash function outlined in Effective Java, Item 8 */
-	uint32 result = 17;
-	result = 37 * result + string_hash(workerName, WORKER_LENGTH);
-	result = 37 * result + tag_hash(workerPort, sizeof(uint32));
-	return result;
 }
 
 

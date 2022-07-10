@@ -159,3 +159,4 @@ DROP PUBLICATION pub1;
 SET search_path TO split_shard_replication_setup_schema;
 SET client_min_messages TO ERROR;
 DROP SUBSCRIPTION sub1;
+

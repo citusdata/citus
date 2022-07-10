@@ -14,4 +14,4 @@ RETURNS void
 LANGUAGE C STRICT
 AS 'MODULE_PATHNAME', $$worker_split_copy$$;
 COMMENT ON FUNCTION pg_catalog.worker_split_copy(source_shard_id bigint, splitCopyInfos citus.split_copy_info[])
-    IS 'Perform split copy for shard'
+    IS 'Perform split copy for shard';

@@ -29,5 +29,6 @@ extern void LogicallyReplicateShards(List *shardList, char *sourceNodeName,
 #define SHARD_MOVE_PUBLICATION_PREFIX "citus_shard_move_publication_"
 #define SHARD_MOVE_SUBSCRIPTION_PREFIX "citus_shard_move_subscription_"
 #define SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX "citus_shard_move_subscription_role_"
+#define SHARD_SPLIT_PUBLICATION_PREFIX "citus_shard_split_publication_"
 
 #endif /* MULTI_LOGICAL_REPLICATION_H_ */

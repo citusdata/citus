@@ -81,7 +81,10 @@ LookupSplitMode(Oid shardSplitModeOid)
 	{
 		shardSplitMode = BLOCKING_SPLIT;
 	}
-
+	else if (strncmp(enumLabel, "non_blocking", NAMEDATALEN) == 0)
+	{
+		shardSplitMode = NON_BLOCKING_SPLIT;
+	}
 	/* Extend with other modes as we support them */
 	else
 	{

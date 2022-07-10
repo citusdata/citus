@@ -32,6 +32,11 @@
 #include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
+#if PG_VERSION_NUM < PG_VERSION_13
+#include "utils/hashutils.h"
+#else
+#include "common/hashfn.h"
+#endif
 
 
 /* Config variables managed via guc.c */
@@ -358,6 +363,26 @@ WorkerNodeCompare(const void *lhsKey, const void *rhsKey, Size keySize)
 
 	return NodeNamePortCompare(workerLhs->workerName, workerRhs->workerName,
 							   workerLhs->workerPort, workerRhs->workerPort);
+}
+
+
+/*
+ * WorkerNodeHashCode computes the hash code for a worker node from the node's
+ * host name and port number. Nodes that only differ by their rack locations
+ * hash to the same value.
+ */
+uint32
+WorkerNodeHashCode(const void *key, Size keySize)
+{
+	const WorkerNode *worker = (const WorkerNode *) key;
+	const char *workerName = worker->workerName;
+	const uint32 *workerPort = &(worker->workerPort);
+
+	/* standard hash function outlined in Effective Java, Item 8 */
+	uint32 result = 17;
+	result = 37 * result + string_hash(workerName, WORKER_LENGTH);
+	result = 37 * result + tag_hash(workerPort, sizeof(uint32));
+	return result;
 }
 
 

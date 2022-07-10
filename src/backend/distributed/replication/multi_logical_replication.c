@@ -147,6 +147,7 @@ static XLogRecPtr GetSubscriptionPosition(MultiConnection *connection,
 										  Bitmapset *tableOwnerIds);
 static char * ShardMovePublicationName(Oid ownerId);
 static char * ShardMoveSubscriptionName(Oid ownerId);
+static char * ShardSplitPublicationName(Oid ownerId, uint32 nodeId);
 static void AcquireLogicalReplicationLock(void);
 static void DropAllShardMoveLeftovers(void);
 static void DropAllShardMoveSubscriptions(MultiConnection *connection);
@@ -2060,4 +2061,13 @@ GetSubscriptionPosition(MultiConnection *connection, Bitmapset *tableOwnerIds)
 	return GetRemoteLSN(connection, psprintf(
 							"SELECT min(latest_end_lsn) FROM pg_stat_subscription "
 							"WHERE subname IN %s", subscriptionValueList));
+}
+
+/*
+ * ShardSplitPublicationName returns the name of the publication for the given
+ * table owner.
+ */
+static char * ShardSplitPublicationName(Oid ownerId, uint32 nodeId)
+{
+	return psprintf("%s%i_%u", SHARD_SPLIT_PUBLICATION_PREFIX, ownerId, nodeId);
 }
