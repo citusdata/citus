@@ -63,3 +63,8 @@ ALTER EXTENSION citus ADD FUNCTION citus_internal.upgrade_columnar_storage;
 ALTER EXTENSION citus ADD FUNCTION citus_internal.downgrade_columnar_storage;
 ALTER EXTENSION citus ADD FUNCTION citus_internal.columnar_ensure_am_depends_catalog;
 
+
+DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_id int, OUT initiator_node_identifier int4,
+                                                     OUT worker_query BOOL, OUT transaction_number int8, OUT transaction_stamp timestamptz,
+                                                     OUT global_pid int8);
+#include "../udfs/get_all_active_transactions/11.0-1.sql"

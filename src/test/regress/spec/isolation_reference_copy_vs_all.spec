@@ -5,8 +5,6 @@
 // create append distributed table to test behavior of COPY in concurrent operations
 setup
 {
-	SELECT citus_internal.replace_isolation_tester_func();
-	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 	SET citus.shard_replication_factor TO 1;
 	CREATE TABLE reference_copy(id integer, data text, int_data int);
 	SELECT create_reference_table('reference_copy');
@@ -16,7 +14,6 @@ setup
 teardown
 {
 	DROP TABLE IF EXISTS reference_copy CASCADE;
-	SELECT citus_internal.restore_isolation_tester_func();
 }
 
 // session 1

@@ -380,10 +380,33 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 
 	if (vacuumParams.index_cleanup != VACOPTVALUE_UNSPECIFIED)
 	{
-		appendStringInfoString(vacuumPrefix,
-							   vacuumParams.index_cleanup == VACOPTVALUE_ENABLED ?
-							   "INDEX_CLEANUP," : "INDEX_CLEANUP false,"
-							   );
+		switch (vacuumParams.index_cleanup)
+		{
+			case VACOPTVALUE_ENABLED:
+			{
+				appendStringInfoString(vacuumPrefix, "INDEX_CLEANUP true,");
+				break;
+			}
+
+			case VACOPTVALUE_DISABLED:
+			{
+				appendStringInfoString(vacuumPrefix, "INDEX_CLEANUP false,");
+				break;
+			}
+
+			#if PG_VERSION_NUM >= PG_VERSION_14
+			case VACOPTVALUE_AUTO:
+			{
+				appendStringInfoString(vacuumPrefix, "INDEX_CLEANUP auto,");
+				break;
+			}
+			#endif
+
+			default:
+			{
+				break;
+			}
+		}
 	}
 
 #if PG_VERSION_NUM >= PG_VERSION_13
@@ -541,8 +564,32 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 		#endif
 		else if (strcmp(opt->defname, "index_cleanup") == 0)
 		{
+			#if PG_VERSION_NUM >= PG_VERSION_14
+
+			/* Interpret no string as the default, which is 'auto' */
+			if (!opt->arg)
+			{
+				params.index_cleanup = VACOPTVALUE_AUTO;
+			}
+			else
+			{
+				char *sval = defGetString(opt);
+
+				/* Try matching on 'auto' string, or fall back on boolean */
+				if (pg_strcasecmp(sval, "auto") == 0)
+				{
+					params.index_cleanup = VACOPTVALUE_AUTO;
+				}
+				else
+				{
+					params.index_cleanup = defGetBoolean(opt) ? VACOPTVALUE_ENABLED :
+										   VACOPTVALUE_DISABLED;
+				}
+			}
+			#else
 			params.index_cleanup = defGetBoolean(opt) ? VACOPTVALUE_ENABLED :
 								   VACOPTVALUE_DISABLED;
+			#endif
 		}
 		else if (strcmp(opt->defname, "truncate") == 0)
 		{

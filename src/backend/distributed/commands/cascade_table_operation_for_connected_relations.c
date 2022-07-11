@@ -26,6 +26,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/worker_protocol.h"
+#include "executor/spi.h"
 #include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -513,12 +514,12 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 
 
 /*
- * ExecuteAndLogUtilityCommandListInTableTypeConversion is a wrapper function
- * around ExecuteAndLogUtilityCommandList, that makes it execute with the flag
- * InTableTypeConversionFunctionCall is set to true.
+ * ExecuteAndLogUtilityCommandListInTableTypeConversionViaSPI is a wrapper function
+ * around ExecuteAndLogQueryViaSPI, that executes view creation commands
+ * with the flag InTableTypeConversionFunctionCall set to true.
  */
 void
-ExecuteAndLogUtilityCommandListInTableTypeConversion(List *utilityCommandList)
+ExecuteAndLogUtilityCommandListInTableTypeConversionViaSPI(List *utilityCommandList)
 {
 	bool oldValue = InTableTypeConversionFunctionCall;
 	InTableTypeConversionFunctionCall = true;
@@ -526,7 +527,15 @@ ExecuteAndLogUtilityCommandListInTableTypeConversion(List *utilityCommandList)
 	MemoryContext savedMemoryContext = CurrentMemoryContext;
 	PG_TRY();
 	{
-		ExecuteAndLogUtilityCommandList(utilityCommandList);
+		char *utilityCommand = NULL;
+		foreach_ptr(utilityCommand, utilityCommandList)
+		{
+			/*
+			 * CREATE MATERIALIZED VIEW commands need to be parsed/transformed,
+			 * which SPI does for us.
+			 */
+			ExecuteAndLogQueryViaSPI(utilityCommand, SPI_OK_UTILITY, DEBUG1);
+		}
 	}
 	PG_CATCH();
 	{

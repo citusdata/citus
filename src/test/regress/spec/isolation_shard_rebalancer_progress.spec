@@ -1,7 +1,5 @@
 setup
 {
-	SELECT citus_internal.replace_isolation_tester_func();
-	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 	select setval('pg_dist_shardid_seq', GREATEST(1500000, nextval('pg_dist_shardid_seq')));
 	SET citus.shard_count TO 4;
 	SET citus.shard_replication_factor TO 1;
@@ -23,7 +21,6 @@ teardown
 {
 	DROP TABLE colocated2;
 	DROP TABLE colocated1;
-	SELECT citus_internal.restore_isolation_tester_func();
 }
 
 session "s1"

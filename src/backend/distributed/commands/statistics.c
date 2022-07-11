@@ -469,6 +469,11 @@ GetExplicitStatisticsCommandList(Oid relationId)
 	List *explicitStatisticsCommandList = NIL;
 
 	Relation relation = RelationIdGetRelation(relationId);
+	if (!RelationIsValid(relation))
+	{
+		ereport(ERROR, (errmsg("could not open relation with OID %u", relationId)));
+	}
+
 	List *statisticsIdList = RelationGetStatExtList(relation);
 	RelationClose(relation);
 
@@ -540,6 +545,11 @@ GetExplicitStatisticsSchemaIdList(Oid relationId)
 	List *schemaIdList = NIL;
 
 	Relation relation = RelationIdGetRelation(relationId);
+	if (!RelationIsValid(relation))
+	{
+		ereport(ERROR, (errmsg("could not open relation with OID %u", relationId)));
+	}
+
 	List *statsIdList = RelationGetStatExtList(relation);
 	RelationClose(relation);
 

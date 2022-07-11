@@ -252,24 +252,6 @@ delete from local_vacuum_table;
 VACUUM (INDEX_CLEANUP ON, PARALLEL 1) local_vacuum_table;
 SELECT pg_size_pretty( pg_total_relation_size('local_vacuum_table') );
 
------------------ PROCESS_TOAST is only available for pg14
--- vacuum (process_toast false) should not be vacuuming toast tables (default is true)
---select reltoastrelid from pg_class where relname='local_vacuum_table'
---\gset
-
---SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass
---\gset
---VACUUM (FREEZE, PROCESS_TOAST true) local_vacuum_table;
---SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
---WHERE oid=:reltoastrelid::regclass;
-
---SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass
---\gset
---VACUUM (FREEZE, PROCESS_TOAST false) local_vacuum_table;
---SELECT relfrozenxid::text::integer = :frozenxid AS frozen_not_performed FROM pg_class
---WHERE oid=:reltoastrelid::regclass;
----------------
-
 -- vacuum (truncate false) should not attempt to truncate off any empty pages at the end of the table (default is true)
 insert into local_vacuum_table select i from generate_series(1,1000000) i;
 delete from local_vacuum_table;

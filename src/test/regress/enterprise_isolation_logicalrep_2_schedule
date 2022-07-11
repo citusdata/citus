@@ -1,3 +1,5 @@
+test: isolation_setup
+
 # tests that change node metadata should precede
 # isolation_cluster_management such that tests
 # that come later can be parallelized

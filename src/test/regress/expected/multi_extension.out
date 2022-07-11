@@ -1032,6 +1032,15 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                       | view citus_stat_activity
 (41 rows)
 
+-- Test downgrade to 11.0-1 from 11.0-2
+ALTER EXTENSION citus UPDATE TO '11.0-2';
+ALTER EXTENSION citus UPDATE TO '11.0-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
 -- Snapshot of state at 11.0-2
 ALTER EXTENSION citus UPDATE TO '11.0-2';
 SELECT * FROM multi_extension.print_extension_changes();
@@ -1043,9 +1052,10 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function start_metadata_sync_to_all_nodes() boolean
 (4 rows)
 
--- Test downgrade script (result should be empty)
-ALTER EXTENSION citus UPDATE TO '11.0-1';
+-- Test downgrade to 11.0-2 from 11.0-3
+ALTER EXTENSION citus UPDATE TO '11.0-3';
 ALTER EXTENSION citus UPDATE TO '11.0-2';
+-- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
@@ -1058,9 +1068,10 @@ SELECT * FROM multi_extension.print_extension_changes();
 ---------------------------------------------------------------------
 (0 rows)
 
--- Test downgrade script (result should be empty)
-ALTER EXTENSION citus UPDATE TO '11.0-2';
+-- Test downgrade to 11.0-3 from 11.1-1
+ALTER EXTENSION citus UPDATE TO '11.1-1';
 ALTER EXTENSION citus UPDATE TO '11.0-3';
+-- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
@@ -1093,14 +1104,6 @@ SELECT * FROM multi_extension.print_extension_changes();
  table columnar.options                                                                 |
  table columnar.stripe                                                                  |
 (21 rows)
-
--- Test downgrade script (result should be empty)
-ALTER EXTENSION citus UPDATE TO '11.0-3';
-ALTER EXTENSION citus UPDATE TO '11.1-1';
-SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
----------------------------------------------------------------------
-(0 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

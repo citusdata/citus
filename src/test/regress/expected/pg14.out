@@ -10,7 +10,7 @@ set search_path to pg14;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 980000;
 SET citus.shard_count TO 2;
--- test the new vacuum option, process_toast
+-- test the new vacuum option, process_toast and also auto option for index_cleanup
 CREATE TABLE t1 (a int);
 SELECT create_distributed_table('t1','a');
  create_distributed_table
@@ -41,6 +41,69 @@ NOTICE:  issuing VACUUM pg14.t1_980000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing VACUUM pg14.t1_980001
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (INDEX_CLEANUP AUTO) t1;
+NOTICE:  issuing VACUUM (INDEX_CLEANUP auto) pg14.t1_980000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (INDEX_CLEANUP auto) pg14.t1_980001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (INDEX_CLEANUP) t1;
+NOTICE:  issuing VACUUM (INDEX_CLEANUP auto) pg14.t1_980000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (INDEX_CLEANUP auto) pg14.t1_980001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (INDEX_CLEANUP AuTo) t1;
+NOTICE:  issuing VACUUM (INDEX_CLEANUP auto) pg14.t1_980000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (INDEX_CLEANUP auto) pg14.t1_980001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (INDEX_CLEANUP false) t1;
+NOTICE:  issuing VACUUM (INDEX_CLEANUP false) pg14.t1_980000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (INDEX_CLEANUP false) pg14.t1_980001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (INDEX_CLEANUP true) t1;
+NOTICE:  issuing VACUUM (INDEX_CLEANUP true) pg14.t1_980000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (INDEX_CLEANUP true) pg14.t1_980001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (INDEX_CLEANUP "AUTOX") t1;
+ERROR:  index_cleanup requires a Boolean value
+VACUUM (FULL, FREEZE, VERBOSE false, ANALYZE, SKIP_LOCKED, INDEX_CLEANUP, PROCESS_TOAST, TRUNCATE) t1;
+NOTICE:  issuing VACUUM (ANALYZE,FREEZE,FULL,SKIP_LOCKED,PROCESS_TOAST,TRUNCATE,INDEX_CLEANUP auto) pg14.t1_980000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (ANALYZE,FREEZE,FULL,SKIP_LOCKED,PROCESS_TOAST,TRUNCATE,INDEX_CLEANUP auto) pg14.t1_980001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (FULL, FREEZE false, VERBOSE false, ANALYZE false, SKIP_LOCKED false, INDEX_CLEANUP "Auto", PROCESS_TOAST true, TRUNCATE false) t1;
+NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST,TRUNCATE false,INDEX_CLEANUP auto) pg14.t1_980000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST,TRUNCATE false,INDEX_CLEANUP auto) pg14.t1_980001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- vacuum (process_toast true) should be vacuuming toast tables (default is true)
+CREATE TABLE local_vacuum_table(name text);
+select reltoastrelid from pg_class where relname='local_vacuum_table'
+\gset
+SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass
+\gset
+VACUUM (FREEZE, PROCESS_TOAST true) local_vacuum_table;
+SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
+WHERE oid=:reltoastrelid::regclass;
+ frozen_performed
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- vacuum (process_toast false) should not be vacuuming toast tables (default is true)
+SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid=:reltoastrelid::regclass
+\gset
+VACUUM (FREEZE, PROCESS_TOAST false) local_vacuum_table;
+SELECT relfrozenxid::text::integer = :frozenxid AS frozen_not_performed FROM pg_class
+WHERE oid=:reltoastrelid::regclass;
+ frozen_not_performed
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP TABLE local_vacuum_table;
 SET citus.log_remote_commands TO OFF;
 create table dist(a int, b int);
 select create_distributed_table('dist','a');

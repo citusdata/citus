@@ -20,11 +20,6 @@ step s1-commit:
 
 step s2-undistribute: <... completed>
 ERROR:  cannot complete operation because no such table exists
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-begin s1-undistribute s2-select s1-commit
 step s1-begin:
@@ -51,11 +46,6 @@ a|b
 3|4
 5|6
 (3 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-begin s1-undistribute s2-insert s1-commit s2-select
@@ -88,11 +78,6 @@ a| b
 7| 8
 9|10
 (5 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-begin s1-undistribute s2-insert-select s1-commit s2-select
@@ -127,11 +112,6 @@ a|b
 5|6
 (6 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-begin s1-undistribute s2-delete s1-commit s2-select
 step s1-begin:
@@ -160,11 +140,6 @@ a|b
 1|2
 5|6
 (2 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-begin s1-undistribute s2-copy s1-commit s2-select
@@ -198,11 +173,6 @@ step s2-select:
 13|14
 (5 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-begin s1-undistribute s2-drop s1-commit s2-select
 step s1-begin:
@@ -227,11 +197,6 @@ step s2-select:
     SELECT * FROM dist_table ORDER BY 1, 2;
 
 ERROR:  relation "dist_table" does not exist
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-begin s1-undistribute s2-truncate s1-commit s2-select
 step s1-begin:
@@ -264,11 +229,6 @@ a|b
 5|6
 (3 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-begin s1-undistribute s2-select-for-update s1-commit
 step s1-begin:
@@ -294,11 +254,6 @@ a|b
 5|6
 (1 row)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-begin s1-undistribute s2-create-index-concurrently s1-commit
 step s1-begin:
@@ -319,8 +274,3 @@ step s1-commit:
     COMMIT;
 
 step s2-create-index-concurrently: <... completed>
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
