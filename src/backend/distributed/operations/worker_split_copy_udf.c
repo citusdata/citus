@@ -12,6 +12,7 @@
 #include "utils/lsyscache.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
+#include "distributed/utils/array_type.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_executor.h"
 #include "distributed/worker_shard_copy.h"
@@ -54,10 +55,12 @@ worker_split_copy(PG_FUNCTION_ARGS)
 	ShardInterval *shardIntervalToSplitCopy = LoadShardInterval(shardIdToSplitCopy);
 
 	ArrayType *splitCopyInfoArrayObject = PG_GETARG_ARRAYTYPE_P(1);
-	if (array_contains_nulls(splitCopyInfoArrayObject))
+	bool arrayHasNull = ARR_HASNULL(splitCopyInfoArrayObject);
+	if (arrayHasNull)
 	{
-		ereport(ERROR,
-				(errmsg("Shard Copy Info cannot have null values.")));
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+						errmsg(
+							"citus.split_copy_info array cannot contain null values")));
 	}
 
 	const int slice_ndim = 0;
@@ -67,7 +70,7 @@ worker_split_copy(PG_FUNCTION_ARGS)
 															mState);
 	Datum copyInfoDatum = 0;
 	bool isnull = false;
-	List *splitCopyInfoList = NULL;
+	List *splitCopyInfoList = NIL;
 	while (array_iterate(copyInfo_iterator, &copyInfoDatum, &isnull))
 	{
 		SplitCopyInfo *splitCopyInfo = NULL;

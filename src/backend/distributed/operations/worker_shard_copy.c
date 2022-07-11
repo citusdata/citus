@@ -71,8 +71,9 @@ static void ShardCopyDestReceiverStartup(DestReceiver *dest, int operation,
 static void ShardCopyDestReceiverShutdown(DestReceiver *destReceiver);
 static void ShardCopyDestReceiverDestroy(DestReceiver *destReceiver);
 static bool CanUseLocalCopy(uint64 destinationNodeId);
-static StringInfo ConstructCopyStatement(List *destinationShardFullyQualifiedName, bool
-										 useBinaryFormat);
+static StringInfo ConstructShardCopyStatement(List *destinationShardFullyQualifiedName,
+											  bool
+											  useBinaryFormat);
 static void WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDest);
 static int ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead);
 static void LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState
@@ -102,7 +103,7 @@ ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 														 NULL /* database (current) */);
 	ClaimConnectionExclusively(copyDest->connection);
 
-	StringInfo copyStatement = ConstructCopyStatement(
+	StringInfo copyStatement = ConstructShardCopyStatement(
 		copyDest->destinationShardFullyQualifiedName,
 		copyDest->copyOutState->binary);
 
@@ -344,11 +345,12 @@ ShardCopyDestReceiverDestroy(DestReceiver *dest)
 
 
 /*
- * ConstructCopyStatement constructs the text of a COPY statement
+ * ConstructShardCopyStatement constructs the text of a COPY statement
  * for copying into a result table
  */
 static StringInfo
-ConstructCopyStatement(List *destinationShardFullyQualifiedName, bool useBinaryFormat)
+ConstructShardCopyStatement(List *destinationShardFullyQualifiedName, bool
+							useBinaryFormat)
 {
 	char *destinationShardSchemaName = linitial(destinationShardFullyQualifiedName);
 	char *destinationShardRelationName = lsecond(destinationShardFullyQualifiedName);
