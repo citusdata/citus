@@ -511,3 +511,11 @@ SELECT start_metadata_sync_to_all_nodes();
 
 -- verify that at the end of this file, all primary nodes have metadata synced
 SELECT bool_and(hasmetadata) AND bool_and(metadatasynced) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';
+
+-- Remove extra nodes added, this causes GetLocalNodeId() to behave incorrectly in other tests.
+SELECT master_remove_node('localhost', 8887);
+SELECT master_remove_node('localhost', 9995);
+SELECT master_remove_node('localhost', 9992);
+SELECT master_remove_node('localhost', 9998);
+SELECT master_remove_node('localhost', 9997);
+SELECT master_remove_node('localhost', 8888);

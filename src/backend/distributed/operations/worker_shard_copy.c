@@ -70,7 +70,7 @@ static void ShardCopyDestReceiverStartup(DestReceiver *dest, int operation,
 										 TupleDesc inputTupleDescriptor);
 static void ShardCopyDestReceiverShutdown(DestReceiver *destReceiver);
 static void ShardCopyDestReceiverDestroy(DestReceiver *destReceiver);
-static bool CanUseLocalCopy(uint64 destinationNodeId);
+static bool CanUseLocalCopy(uint32_t destinationNodeId);
 static StringInfo ConstructShardCopyStatement(List *destinationShardFullyQualifiedName,
 											  bool
 											  useBinaryFormat);
@@ -81,10 +81,10 @@ static void LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState
 static void ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest);
 
 static bool
-CanUseLocalCopy(uint64 destinationNodeId)
+CanUseLocalCopy(uint32_t destinationNodeId)
 {
 	/* If destination node is same as source, use local copy */
-	return GetLocalNodeId() == destinationNodeId;
+	return GetLocalNodeId() == (int32) destinationNodeId;
 }
 
 

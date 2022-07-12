@@ -91,7 +91,6 @@ SELECT COUNT(*) FROM colocated_dist_table;
 
 -- END: Load data into tables.
 -- BEGIN : Display current state.
--- TODO(niupre): Can we refactor this to be a function?
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
@@ -241,7 +240,6 @@ SELECT citus_move_shard_placement(8981007, 'localhost', :worker_1_port, 'localho
 
 -- END : Move a shard post split.
 -- BEGIN : Display current state.
--- TODO(niupre): Can we refactor this to be a function?
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
