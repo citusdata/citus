@@ -16,6 +16,7 @@
 #include "lib/stringinfo.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+#include "distributed/shared_library_init.h"
 #include "distributed/adaptive_executor.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/metadata_cache.h"
@@ -223,7 +224,8 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 
 	int splitPointsCount = list_length(shardSplitPointsList);
 	int nodeIdsCount = list_length(nodeIdsForPlacementList);
-	if (nodeIdsCount != splitPointsCount + 1)
+	int shardsCount = splitPointsCount + 1;
+	if (nodeIdsCount != shardsCount)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
@@ -234,6 +236,12 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 					 splitPointsCount)));
 	}
 
+	if (shardsCount > MAX_SHARD_COUNT)
+	{
+		ereport(ERROR, (errmsg(
+							"Resulting shard count '%d' with split is greater than max shard count '%d' limit.",
+							shardsCount, MAX_SHARD_COUNT)));
+	}
 
 	Assert(shardIntervalToSplit->minValueExists);
 	Assert(shardIntervalToSplit->maxValueExists);
