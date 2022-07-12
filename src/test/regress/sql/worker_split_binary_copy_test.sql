@@ -4,6 +4,14 @@ SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 81060000;
 
+-- Remove extra nodes added, otherwise GetLocalNodeId() does not bahave correctly.
+SELECT citus_remove_node('localhost', 8887);
+SELECT citus_remove_node('localhost', 9995);
+SELECT citus_remove_node('localhost', 9992);
+SELECT citus_remove_node('localhost', 9998);
+SELECT citus_remove_node('localhost', 9997);
+SELECT citus_remove_node('localhost', 8888);
+
 -- BEGIN: Create distributed table and insert data.
 CREATE TABLE worker_split_binary_copy_test.shard_to_split_copy (
 	l_orderkey bigint not null,

@@ -3,6 +3,43 @@ SET search_path TO worker_split_binary_copy_test;
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 81060000;
+-- Remove extra nodes added, otherwise GetLocalNodeId() does not bahave correctly.
+SELECT citus_remove_node('localhost', 8887);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_remove_node('localhost', 9995);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_remove_node('localhost', 9992);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_remove_node('localhost', 9998);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_remove_node('localhost', 9997);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_remove_node('localhost', 8888);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
 -- BEGIN: Create distributed table and insert data.
 CREATE TABLE worker_split_binary_copy_test.shard_to_split_copy (
 	l_orderkey bigint not null,
