@@ -132,14 +132,14 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     8981000,
     ARRAY['-1073741824'],
     ARRAY[:worker_1_node, :worker_2_node],
-    'blocking');
+    'block_writes');
 
 -- Perform 3 way split
 SELECT pg_catalog.citus_split_shard_by_split_points(
     8981001,
     ARRAY['536870911', '1610612735'],
     ARRAY[:worker_1_node, :worker_1_node, :worker_2_node],
-    'blocking');
+    'block_writes');
 -- END : Split two shards : One with move and One without move.
 
 -- BEGIN : Move a shard post split.
@@ -209,7 +209,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     8981007,
     ARRAY['-2100000000'],
     ARRAY[:worker_1_node, :worker_2_node],
-    'blocking');
+    'block_writes');
 
 SET search_path TO "citus_split_test_schema";
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport

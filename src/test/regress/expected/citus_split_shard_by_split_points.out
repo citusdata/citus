@@ -213,7 +213,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     8981000,
     ARRAY['-1073741824'],
     ARRAY[:worker_1_node, :worker_2_node],
-    'blocking');
+    'block_writes');
  citus_split_shard_by_split_points
 ---------------------------------------------------------------------
 
@@ -224,7 +224,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     8981001,
     ARRAY['536870911', '1610612735'],
     ARRAY[:worker_1_node, :worker_1_node, :worker_2_node],
-    'blocking');
+    'block_writes');
  citus_split_shard_by_split_points
 ---------------------------------------------------------------------
 
@@ -386,7 +386,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     8981007,
     ARRAY['-2100000000'],
     ARRAY[:worker_1_node, :worker_2_node],
-    'blocking');
+    'block_writes');
  citus_split_shard_by_split_points
 ---------------------------------------------------------------------
 
