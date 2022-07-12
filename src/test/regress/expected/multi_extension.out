@@ -1111,7 +1111,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                         | view columnar.options
                                                                                         | view columnar.storage
                                                                                         | view columnar.stripe
-(31 rows)
+(30 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
