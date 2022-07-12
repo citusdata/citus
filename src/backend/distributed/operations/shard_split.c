@@ -558,11 +558,18 @@ CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
 				ddlCommandList,
 				shardInterval->shardId);
 
-			uint64 jobId = shardInterval->shardId;
-			Task *ddlTask = CreateTaskForDDLCommandList(jobId, ddlCommandList,
-														workerPlacementNode);
+			/*
+			 * A task is expected to be instantiated with a non-null 'ddlCommandList'.
+			 * The list can be empty, if no auxiliary structures are present.
+			 */
+			if (ddlCommandList != NULL)
+			{
+				uint64 jobId = shardInterval->shardId;
+				Task *ddlTask = CreateTaskForDDLCommandList(jobId, ddlCommandList,
+															workerPlacementNode);
 
-			ddlTaskExecList = lappend(ddlTaskExecList, ddlTask);
+				ddlTaskExecList = lappend(ddlTaskExecList, ddlTask);
+			}
 		}
 	}
 
