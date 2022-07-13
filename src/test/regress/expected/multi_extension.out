@@ -1105,7 +1105,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                         | table columnar_internal.chunk_group
                                                                                         | table columnar_internal.options
                                                                                         | table columnar_internal.stripe
-                                                                                        | type split_copy_info 
+                                                                                        | type split_copy_info
                                                                                         | view columnar.chunk
                                                                                         | view columnar.chunk_group
                                                                                         | view columnar.options
