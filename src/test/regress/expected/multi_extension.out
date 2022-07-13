@@ -1098,14 +1098,14 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                         | function citus_split_shard_by_split_points(bigint,text[],integer[],citus.shard_transfer_mode) void
                                                                                         | function columnar.get_storage_id(regclass) bigint
                                                                                         | function columnar_internal.columnar_handler(internal) table_am_handler
-                                                                                        | function worker_split_copy(bigint,pg_catalog.split_copy_info[]) void
+                                                                                        | function worker_split_copy(bigint,split_copy_info[]) void
                                                                                         | schema columnar_internal
                                                                                         | sequence columnar_internal.storageid_seq
                                                                                         | table columnar_internal.chunk
                                                                                         | table columnar_internal.chunk_group
                                                                                         | table columnar_internal.options
                                                                                         | table columnar_internal.stripe
-                                                                                        | type pg_catalog.split_copy_info
+                                                                                        | type split_copy_info 
                                                                                         | view columnar.chunk
                                                                                         | view columnar.chunk_group
                                                                                         | view columnar.options
