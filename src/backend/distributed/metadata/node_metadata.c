@@ -1687,7 +1687,7 @@ citus_is_coordinator(PG_FUNCTION_ARGS)
 	bool isCoordinator = false;
 
 	if (GetLocalGroupId() == COORDINATOR_GROUP_ID &&
-		ActivePrimaryNodeCount() > 0)
+		ActiveReadableNodeCount() > 0)
 	{
 		isCoordinator = true;
 	}
