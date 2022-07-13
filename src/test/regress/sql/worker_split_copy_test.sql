@@ -43,12 +43,12 @@ SELECT * from worker_split_copy(
         ROW(81070015, -- destination shard id
              -2147483648, -- split range begin
             -1073741824, --split range end
-            :worker_1_node)::citus.split_copy_info,
+            :worker_1_node)::pg_catalog.split_copy_info,
         -- split copy info for split children 2
         ROW(81070016,  --destination shard id
             -1073741823, --split range begin
             -1, --split range end
-            :worker_1_node)::citus.split_copy_info
+            :worker_1_node)::pg_catalog.split_copy_info
         ]
     );
 
@@ -64,7 +64,7 @@ SELECT * from worker_split_copy(
 
 SELECT * from worker_split_copy(
     81070000, -- source shard id to copy
-    ARRAY[NULL::citus.split_copy_info]-- empty array
+    ARRAY[NULL::pg_catalog.split_copy_info]-- empty array
     );
 
 SELECT * from worker_split_copy(
@@ -74,7 +74,7 @@ SELECT * from worker_split_copy(
 
 SELECT * from worker_split_copy(
     81070000, -- source shard id to copy
-    ARRAY[ROW(NULL, NULL, NULL, NULL)::citus.split_copy_info] -- empty array
+    ARRAY[ROW(NULL, NULL, NULL, NULL)::pg_catalog.split_copy_info] -- empty array
     );
 -- END: Test Negative scenario
 
@@ -88,12 +88,12 @@ SELECT * from worker_split_copy(
         ROW(81070015, -- destination shard id
              -2147483648, -- split range begin
             -1073741824, --split range end
-            :worker_1_node)::citus.split_copy_info,
+            :worker_1_node)::pg_catalog.split_copy_info,
         -- split copy info for split children 2
         ROW(81070016,  --destination shard id
             -1073741823, --split range begin
             -1, --split range end
-            :worker_1_node)::citus.split_copy_info
+            :worker_1_node)::pg_catalog.split_copy_info
         ]
     );
 -- END: Trigger 2-way local shard split copy.

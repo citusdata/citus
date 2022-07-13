@@ -165,12 +165,12 @@ SELECT * from worker_split_copy(
         ROW(81060015, -- destination shard id
              -2147483648, -- split range begin
             1073741823, --split range end
-            :worker_1_node)::citus.split_copy_info,
+            :worker_1_node)::pg_catalog.split_copy_info,
         -- split copy info for split children 2
         ROW(81060016,  --destination shard id
             1073741824, --split range begin
             2147483647, --split range end
-            :worker_1_node)::citus.split_copy_info
+            :worker_1_node)::pg_catalog.split_copy_info
         ]
     );
 -- END: Trigger 2-way local shard split copy.
@@ -183,12 +183,12 @@ SELECT * from worker_split_copy(
         ROW(81060015, -- destination shard id
              -2147483648, -- split range begin
             1073741823, --split range end
-            :worker_2_node)::citus.split_copy_info,
+            :worker_2_node)::pg_catalog.split_copy_info,
         -- split copy info for split children 2
         ROW(81060016,  --destination shard id
             1073741824, --split range begin
             2147483647, --split range end
-            :worker_2_node)::citus.split_copy_info
+            :worker_2_node)::pg_catalog.split_copy_info
         ]
     );
 -- END: Trigger 2-way remote shard split copy.

@@ -668,12 +668,12 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
  *      ROW(81060015, -- destination shard id
  *           -2147483648, -- split range begin
  *          1073741823, --split range end
- *          10 -- worker node id)::citus.split_copy_info,
+ *          10 -- worker node id)::pg_catalog.split_copy_info,
  *      -- split copy info for split children 2
  *      ROW(81060016,  --destination shard id
  *          1073741824, --split range begin
  *          2147483647, --split range end
- *          11 -- workef node id)::citus.split_copy_info
+ *          11 -- workef node id)::pg_catalog.split_copy_info
  *      ]
  *  );
  */
@@ -698,7 +698,7 @@ CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 
 		StringInfo splitCopyInfoRow = makeStringInfo();
 		appendStringInfo(splitCopyInfoRow,
-						 "ROW(%lu, %d, %d, %u)::citus.split_copy_info",
+						 "ROW(%lu, %d, %d, %u)::pg_catalog.split_copy_info",
 						 splitChildShardInterval->shardId,
 						 DatumGetInt32(splitChildShardInterval->minValue),
 						 DatumGetInt32(splitChildShardInterval->maxValue),

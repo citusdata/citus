@@ -59,12 +59,12 @@ SELECT * from worker_split_copy(
         ROW(81070015, -- destination shard id
              -2147483648, -- split range begin
             -1073741824, --split range end
-            :worker_1_node)::citus.split_copy_info,
+            :worker_1_node)::pg_catalog.split_copy_info,
         -- split copy info for split children 2
         ROW(81070016,  --destination shard id
             -1073741823, --split range begin
             -1, --split range end
-            :worker_1_node)::citus.split_copy_info
+            :worker_1_node)::pg_catalog.split_copy_info
         ]
     );
 ERROR:  could not find valid entry for shard xxxxx
@@ -82,9 +82,9 @@ ERROR:  function worker_split_copy(integer, text[]) does not exist
 HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
 SELECT * from worker_split_copy(
     81070000, -- source shard id to copy
-    ARRAY[NULL::citus.split_copy_info]-- empty array
+    ARRAY[NULL::pg_catalog.split_copy_info]-- empty array
     );
-ERROR:  citus.split_copy_info array cannot contain null values
+ERROR:  pg_catalog.split_copy_info array cannot contain null values
 SELECT * from worker_split_copy(
     81070000, -- source shard id to copy
     ARRAY[ROW(NULL)]-- empty array
@@ -93,9 +93,9 @@ ERROR:  function worker_split_copy(integer, record[]) does not exist
 HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
 SELECT * from worker_split_copy(
     81070000, -- source shard id to copy
-    ARRAY[ROW(NULL, NULL, NULL, NULL)::citus.split_copy_info] -- empty array
+    ARRAY[ROW(NULL, NULL, NULL, NULL)::pg_catalog.split_copy_info] -- empty array
     );
-ERROR:  destination_shard_id for split_copy_info cannot be null.
+ERROR:  destination_shard_id for pg_catalog.split_copy_info cannot be null.
 -- END: Test Negative scenario
 -- BEGIN: Trigger 2-way local shard split copy.
 -- Ensure we will perform text copy.
@@ -107,12 +107,12 @@ SELECT * from worker_split_copy(
         ROW(81070015, -- destination shard id
              -2147483648, -- split range begin
             -1073741824, --split range end
-            :worker_1_node)::citus.split_copy_info,
+            :worker_1_node)::pg_catalog.split_copy_info,
         -- split copy info for split children 2
         ROW(81070016,  --destination shard id
             -1073741823, --split range begin
             -1, --split range end
-            :worker_1_node)::citus.split_copy_info
+            :worker_1_node)::pg_catalog.split_copy_info
         ]
     );
  worker_split_copy
