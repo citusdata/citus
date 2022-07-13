@@ -2503,7 +2503,7 @@ SchemaOwnerName(Oid objectId)
 static bool
 HasMetadataWorkers(void)
 {
-	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(NoLock);
+	List *workerNodeList = ActiveReadableNonCoordinatorNodeList();
 
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
