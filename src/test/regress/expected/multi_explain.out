@@ -1411,21 +1411,20 @@ WITH cte1 AS (SELECT * FROM cte1 WHERE EXISTS (SELECT * FROM cte1) LIMIT 5)
 SELECT s FROM cte1 WHERE EXISTS (SELECT * FROM cte1);
 Custom Scan (Citus INSERT ... SELECT)
   INSERT/SELECT method: pull to coordinator
-  ->  Subquery Scan on citus_insert_select_subquery
+  ->  Result
+        One-Time Filter: $3
         CTE cte1
           ->  Function Scan on generate_series s
-        ->  Result
-              One-Time Filter: $3
-              CTE cte1
-                ->  Limit
-                      InitPlan 2 (returns $1)
-                        ->  CTE Scan on cte1 cte1_1
-                      ->  Result
-                            One-Time Filter: $1
-                            ->  CTE Scan on cte1 cte1_2
-              InitPlan 4 (returns $3)
-                ->  CTE Scan on cte1 cte1_3
-              ->  CTE Scan on cte1
+        CTE cte1
+          ->  Limit
+                InitPlan 2 (returns $1)
+                  ->  CTE Scan on cte1 cte1_1
+                ->  Result
+                      One-Time Filter: $1
+                      ->  CTE Scan on cte1 cte1_2
+        InitPlan 4 (returns $3)
+          ->  CTE Scan on cte1 cte1_3
+        ->  CTE Scan on cte1
 EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part
 ( SELECT s FROM generate_series(1,5) s) UNION

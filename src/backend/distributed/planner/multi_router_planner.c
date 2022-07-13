@@ -3558,19 +3558,9 @@ DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *query)
 							 NULL, NULL);
 	}
 
-	if (contain_nextval_expression_walker((Node *) query->targetList, NULL))
-	{
-		/*
-		 * We let queries with nextval in the target list fall through to
-		 * the logical planner, which knows how to handle those queries.
-		 */
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "Sequences cannot be used in router queries",
-							 NULL, NULL);
-	}
-
 	bool hasPostgresOrCitusLocalTable = false;
 	bool hasDistributedTable = false;
+	bool hasReferenceTable = false;
 
 	ExtractRangeTableRelationWalker((Node *) query, &rangeTableRelationList);
 	foreach(rangeTableRelationCell, rangeTableRelationList)
@@ -3584,6 +3574,11 @@ DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *query)
 			if (!IsCitusTable(distributedTableId))
 			{
 				hasPostgresOrCitusLocalTable = true;
+				continue;
+			}
+			else if (IsCitusTableType(distributedTableId, REFERENCE_TABLE))
+			{
+				hasReferenceTable = true;
 				continue;
 			}
 			else if (IsCitusTableType(distributedTableId, CITUS_LOCAL_TABLE))
@@ -3626,6 +3621,28 @@ DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *query)
 				}
 			}
 		}
+	}
+
+	/*
+	 * We want to make sure nextval happens on the coordinator / the current
+	 * node, since the user may have certain expectations around the values
+	 * produced by the sequence. We therefore cannot push down the nextval
+	 * call as part of a router query.
+	 *
+	 * We let queries with nextval in the target list fall through to
+	 * the logical planner, which will ensure that the nextval is called
+	 * in the combine query on the coordinator.
+	 *
+	 * If there are no distributed or reference tables in the query,
+	 * then the query will anyway happen on the coordinator, so we can
+	 * allow nextval.
+	 */
+	if (contain_nextval_expression_walker((Node *) query->targetList, NULL) &&
+		(hasDistributedTable || hasReferenceTable))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "Sequences cannot be used in router queries",
+							 NULL, NULL);
 	}
 
 	/* local tables are not allowed if there are distributed tables */
