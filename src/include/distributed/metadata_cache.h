@@ -263,6 +263,7 @@ extern Oid CitusTableVisibleFuncId(void);
 extern Oid RelationIsAKnownShardFuncId(void);
 extern Oid JsonbExtractPathFuncId(void);
 extern Oid JsonbExtractPathTextFuncId(void);
+extern Oid CitusDependentObjectFuncId(void);
 
 /* enum oids */
 extern Oid PrimaryNodeRoleId(void);

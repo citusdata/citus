@@ -34,7 +34,9 @@
 #include "catalog/pg_rewrite_d.h"
 #include "catalog/pg_shdepend.h"
 #include "catalog/pg_type.h"
+#include "commands/extension.h"
 #include "common/hashfn.h"
+#include "distributed/citus_depended_object.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/listutils.h"
@@ -168,11 +170,18 @@ static bool FollowNewSupportedDependencies(ObjectAddressCollector *collector,
 										   DependencyDefinition *definition);
 static bool FollowAllDependencies(ObjectAddressCollector *collector,
 								  DependencyDefinition *definition);
+static bool FollowExtAndInternalDependencies(ObjectAddressCollector *collector,
+											 DependencyDefinition *definition);
 static void ApplyAddToDependencyList(ObjectAddressCollector *collector,
 									 DependencyDefinition *definition);
+static void ApplyAddCitusDependedObjectsToDependencyList(
+	ObjectAddressCollector *collector,
+	DependencyDefinition *definition);
 static List * GetViewRuleReferenceDependencyList(Oid relationId);
 static List * ExpandCitusSupportedTypes(ObjectAddressCollector *collector,
 										ObjectAddress target);
+static List * ExpandForPgVanilla(ObjectAddressCollector *collector,
+								 ObjectAddress target);
 static List * GetDependentRoleIdsFDW(Oid FDWOid);
 static List * ExpandRolesToGroups(Oid roleid);
 static ViewDependencyNode * BuildViewDependencyGraph(Oid relationId, HTAB *nodeMap);
@@ -274,6 +283,26 @@ GetAllDependenciesForObject(const ObjectAddress *target)
 							  &ExpandCitusSupportedTypes,
 							  &FollowAllDependencies,
 							  &ApplyAddToDependencyList,
+							  &collector);
+
+	return collector.dependencyList;
+}
+
+
+/*
+ * GetAllCitusDependedDependenciesForObject returns all the dependencies
+ * which are owned by citus extension for the target.
+ */
+List *
+GetAllCitusDependedDependenciesForObject(const ObjectAddress *target)
+{
+	ObjectAddressCollector collector = { 0 };
+	InitObjectAddressCollector(&collector);
+
+	RecurseObjectDependencies(*target,
+							  &ExpandForPgVanilla,
+							  &FollowExtAndInternalDependencies,
+							  &ApplyAddCitusDependedObjectsToDependencyList,
 							  &collector);
 
 	return collector.dependencyList;
@@ -1122,6 +1151,37 @@ IsAnyObjectAddressOwnedByExtension(const List *targets,
 
 
 /*
+ * IsObjectAddressOwnedByCitus returns true if the given object address
+ * is owned by the citus or citus_columnar extensions.
+ */
+bool
+IsObjectAddressOwnedByCitus(const ObjectAddress *objectAddress)
+{
+	Oid citusId = get_extension_oid("citus", true);
+	Oid citusColumnarId = get_extension_oid("citus_columnar", true);
+
+	/* return false because we could not find any citus extension */
+	if (!OidIsValid(citusId) && !OidIsValid(citusColumnarId))
+	{
+		return false;
+	}
+
+	ObjectAddress extObjectAddress = InvalidObjectAddress;
+	bool ownedByExt = IsObjectAddressOwnedByExtension(objectAddress,
+													  &extObjectAddress);
+	if (!ownedByExt)
+	{
+		return false;
+	}
+
+	bool ownedByCitus = extObjectAddress.objectId == citusId;
+	bool ownedByCitusColumnar = extObjectAddress.objectId == citusColumnarId;
+
+	return ownedByCitus || ownedByCitusColumnar;
+}
+
+
+/*
  * FollowNewSupportedDependencies applies filters on pg_depend entries to follow all
  * objects which should be distributed before the root object can safely be created.
  */
@@ -1303,6 +1363,39 @@ FollowAllDependencies(ObjectAddressCollector *collector,
 
 
 /*
+ * FollowExtAndInternalDependencies applies filters on pg_depend entries to follow
+ * the dependency tree of objects in depth first order. We will visit all objects
+ * irrespective of it is supported by Citus or not and it is internal or not.
+ */
+static bool
+FollowExtAndInternalDependencies(ObjectAddressCollector *collector,
+								 DependencyDefinition *definition)
+{
+	ObjectAddress address = DependencyDefinitionObjectAddress(definition);
+
+	/*
+	 * If the object is already in our dependency list we do not have to follow any
+	 * further
+	 */
+	if (IsObjectAddressCollected(address, collector))
+	{
+		return false;
+	}
+
+	if (CitusExtensionObject(&address))
+	{
+		/*
+		 * We do not need to follow citus extension because the purpose
+		 * of our walk is to find if an object is owned by citus.
+		 */
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
  * ApplyAddToDependencyList is an apply function for RecurseObjectDependencies that will
  * collect all the ObjectAddresses for pg_depend entries to the context, except it is
  * extension owned one.
@@ -1329,6 +1422,30 @@ ApplyAddToDependencyList(ObjectAddressCollector *collector,
 	}
 
 	CollectObjectAddress(collector, &address);
+}
+
+
+/*
+ * ApplyAddCitusDependedObjectsToDependencyList is an apply function for
+ * RecurseObjectDependencies that will collect all the ObjectAddresses for
+ * pg_depend entries to the context if it is citus extension owned one.
+ *
+ * The context here is assumed to be a (ObjectAddressCollector *) to the location where
+ * all ObjectAddresses will be collected.
+ */
+static void
+ApplyAddCitusDependedObjectsToDependencyList(ObjectAddressCollector *collector,
+											 DependencyDefinition *definition)
+{
+	ObjectAddress address = DependencyDefinitionObjectAddress(definition);
+
+	/*
+	 * We only collect the object if it is owned by citus extension.
+	 */
+	if (IsObjectAddressOwnedByCitus(&address))
+	{
+		CollectObjectAddress(collector, &address);
+	}
 }
 
 
@@ -1511,6 +1628,39 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			break;
 		}
 	}
+	return result;
+}
+
+
+/*
+ * ExpandForPgVanilla only expands only comosite types because other types
+ * will find their dependencies in pg_depend. The method should only be called by
+ * is_citus_depended_object udf.
+ */
+static List *
+ExpandForPgVanilla(ObjectAddressCollector *collector,
+				   ObjectAddress target)
+{
+	/* should only be called if GUC is enabled */
+	Assert(HideCitusDependentObjects == true);
+
+	List *result = NIL;
+
+	if (target.classId == TypeRelationId && get_typtype(target.objectId) ==
+		TYPTYPE_COMPOSITE)
+	{
+		/*
+		 * types depending on other types are not captured in pg_depend, instead
+		 * they are described with their dependencies by the relation that
+		 * describes the composite type.
+		 */
+		Oid typeRelationId = get_typ_typrelid(target.objectId);
+		DependencyDefinition *dependency =
+			CreateObjectAddressDependencyDef(RelationRelationId,
+											 typeRelationId);
+		result = lappend(result, dependency);
+	}
+
 	return result;
 }
 

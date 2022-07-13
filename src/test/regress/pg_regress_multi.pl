@@ -60,6 +60,7 @@ my $MASTER_FOLLOWERDIR = 'master-follower';
 # Option parsing
 my $isolationtester = 0;
 my $vanillatest = 0;
+my $vanillaDev = 0;
 my $followercluster = 0;
 my $bindir = "";
 my $libdir = undef;
@@ -96,6 +97,7 @@ if ($Config{osname} eq "MSWin32")
 GetOptions(
     'isolationtester' => \$isolationtester,
     'vanillatest' => \$vanillatest,
+    'vanilla-dev' => \$vanillaDev,
     'follower-cluster' => \$followercluster,
     'bindir=s' => \$bindir,
     'libdir=s' => \$libdir,
@@ -485,6 +487,20 @@ push(@pgOptions, "citus.show_shards_for_app_name_prefixes='pg_regress'");
 
 # we disable slow start by default to encourage parallelism within tests
 push(@pgOptions, "citus.executor_slow_start_interval=0ms");
+
+###
+# we set some GUCs to not break postgres vanilla tests
+#
+# NOTE: we do not want to set the option right now because
+# vanilla tests currently fail. We will remove the vanillaDev flag
+# after fully supported pg vanilla tests with citus
+# extension created.
+###
+if(!$vanillaDev && $vanillatest)
+{
+    # we enable hiding the citus dependent objects from pg meta class queries to not break postgres vanilla test behaviour
+    push(@pgOptions, "citus.hide_citus_dependent_objects=true");
+}
 
 if ($useMitmproxy)
 {
@@ -994,26 +1010,88 @@ my $startTime = time();
 
 my $exitcode = 0;
 
+sub PrepForVanillaTest
+{
+    ###
+    # We want to add is_citus_depended_object function to the default db.
+    # But without use-existing flag, pg_regress drops if exist and creates
+    # the default db. Thus, we set use-existing flag and manually create
+    # the default db, citus extension and the is_citus_depended_object
+    # function.
+    ###
+
+    my $dbName = shift;
+
+    # prepare tablespace folder
+    rmdir "./testtablespace";
+    mkdir "./testtablespace";
+
+    # create default db
+    system(catfile($bindir, "psql"),
+            ('-X', '-h', $host, '-p', $masterPort, '-U', $user, "-d", "postgres",
+                '-c', "CREATE DATABASE $dbName;")) == 0
+            or die "Could not create $dbName database on master";
+
+    # alter default db's lc_monetary to C
+    system(catfile($bindir, "psql"),
+            ('-X', '-h', $host, '-p', $masterPort, '-U', $user, "-d", $dbName,
+                '-c', "ALTER DATABASE $dbName SET lc_monetary TO 'C';")) == 0
+            or die "Could not create $dbName database on master";
+
+    if ($vanillaDev)
+    {
+        return;
+    }
+
+    # create extension citus
+    system(catfile($bindir, "psql"),
+            ('-X', '-h', $host, '-p', $masterPort, '-U', $user, "-d", $dbName,
+                '-c', "CREATE EXTENSION citus;")) == 0
+            or die "Could not create citus extension on master";
+
+    # we do not want to expose that udf other than vanilla tests
+    my $citus_depended_object_def = "CREATE OR REPLACE FUNCTION
+                                        pg_catalog.is_citus_depended_object(oid,oid)
+                                        RETURNS bool
+                                        LANGUAGE C
+                                        AS 'citus', \$\$is_citus_depended_object\$\$;";
+    system(catfile($bindir, "psql"),
+                    ('-X', '-h', $host, '-p', $masterPort, '-U', $user, "-d", $dbName,
+                    '-c', $citus_depended_object_def)) == 0
+                or die "Could not create FUNCTION is_citus_depended_object on master";
+}
+
 # Finally run the tests
 if ($vanillatest)
 {
-    $ENV{PGHOST} = $host;
-    $ENV{PGPORT} = $masterPort;
-    $ENV{PGUSER} = $user;
 	$ENV{VANILLATEST} = "1";
+
+    my $dbName = "regression";
+    PrepForVanillaTest($dbName);
 
 	if (-f "$vanillaSchedule")
 	{
-	    rmdir "./testtablespace";
-	    mkdir "./testtablespace";
-
 	    my $pgregressdir=catfile(dirname("$pgxsdir"), "regress");
-	    $exitcode = system("$plainRegress", ("--inputdir",  $pgregressdir),
-	           ("--schedule",  catfile("$pgregressdir", "parallel_schedule")))
+	    $exitcode = system("$plainRegress",
+                ("--inputdir",  $pgregressdir),
+                ("--schedule",  catfile("$pgregressdir", "parallel_schedule")),
+                ("--use-existing"),
+                ("--host","$host"),
+                ("--port","$masterPort"),
+                ("--user","$user"),
+                ("--dbname", "$dbName"))
 	}
 	else
 	{
-	    $exitcode = system("make", ("-C", catfile("$postgresBuilddir", "src", "test", "regress"), "installcheck-parallel"))
+	    my $pgregressdir=catfile("$postgresSrcdir", "src", "test", "regress");
+        $exitcode = system("$plainRegress",
+                ("--inputdir",  $pgregressdir),
+                ("--schedule",  catfile("$pgregressdir", "parallel_schedule")),
+                ("--use-existing"),
+                ("--host","$host"),
+                ("--port","$masterPort"),
+                ("--user","$user"),
+                ("--dbname", "$dbName"))
 	}
 }
 elsif ($isolationtester)

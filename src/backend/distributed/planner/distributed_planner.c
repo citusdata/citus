@@ -17,9 +17,11 @@
 #include <limits.h>
 
 #include "access/htup_details.h"
+#include "access/xact.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
+#include "distributed/citus_depended_object.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_ruleutils.h"
@@ -204,6 +206,13 @@ distributed_planner(Query *parse,
 	 */
 	HideShardsFromSomeApplications(parse);
 
+	/*
+	 * If GUC is set, we prevent queries, which contain pg meta relations, from
+	 * showing any citus dependent object. The flag is expected to be set only before
+	 * postgres vanilla tests.
+	 */
+	HideCitusDependentObjectsOnQueriesOfPgMetaTables((Node *) parse, NULL);
+
 	/* create a restriction context and put it at the end if context list */
 	planContext.plannerRestrictionContext = CreateAndPushPlannerRestrictionContext();
 
@@ -342,6 +351,17 @@ ListContainsDistributedTableRTE(List *rangeTableList,
 
 		if (rangeTableEntry->rtekind != RTE_RELATION)
 		{
+			continue;
+		}
+
+		if (HideCitusDependentObjects && IsolationIsSerializable() && IsPgLocksTable(
+				rangeTableEntry))
+		{
+			/*
+			 * Postgres tidscan.sql test fails if we do not filter pg_locks table because
+			 * test results, which show taken locks in serializable isolation mode,
+			 * fails by showing extra lock taken by IsCitusTable below.
+			 */
 			continue;
 		}
 

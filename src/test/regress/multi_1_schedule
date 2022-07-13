@@ -46,7 +46,7 @@ test: multi_read_from_secondaries
 # ----------
 # multi_citus_tools tests utility functions written for citus tools
 # ----------
-test: multi_citus_tools
+test: multi_citus_tools citus_depended_object
 
 # ----------
 # multi_replicate_reference_table tests replicating reference tables to new nodes after we add new nodes

@@ -35,6 +35,7 @@
 #include "commands/extension.h"
 #include "commands/trigger.h"
 #include "distributed/backend_data.h"
+#include "distributed/citus_depended_object.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/citus_ruleutils.h"
@@ -182,6 +183,7 @@ typedef struct MetadataCacheData
 	Oid relationIsAKnownShardFuncId;
 	Oid jsonbExtractPathFuncId;
 	Oid jsonbExtractPathTextFuncId;
+	Oid CitusDependentObjectFuncId;
 	bool databaseNameValid;
 	char databaseName[NAMEDATALEN];
 } MetadataCacheData;
@@ -2893,6 +2895,30 @@ JsonbExtractPathTextFuncId(void)
 	}
 
 	return MetadataCache.jsonbExtractPathTextFuncId;
+}
+
+
+/*
+ * CitusDependentObjectFuncId returns oid of the is_citus_depended_object function.
+ */
+Oid
+CitusDependentObjectFuncId(void)
+{
+	if (!HideCitusDependentObjects)
+	{
+		ereport(ERROR, (errmsg(
+							"is_citus_depended_object can only be used while running the regression tests")));
+	}
+
+	if (MetadataCache.CitusDependentObjectFuncId == InvalidOid)
+	{
+		const int argCount = 2;
+
+		MetadataCache.CitusDependentObjectFuncId =
+			FunctionOid("pg_catalog", "is_citus_depended_object", argCount);
+	}
+
+	return MetadataCache.CitusDependentObjectFuncId;
 }
 
 

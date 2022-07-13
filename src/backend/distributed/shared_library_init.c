@@ -32,6 +32,7 @@
 #include "common/string.h"
 #include "executor/executor.h"
 #include "distributed/backend_data.h"
+#include "distributed/citus_depended_object.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/commands.h"
@@ -1270,6 +1271,18 @@ RegisterCitusConfigVariables(void)
 		"",
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.hide_citus_dependent_objects",
+		gettext_noop(
+			"Hides some objects, which depends on citus extension, from pg meta class queries."
+			"It is intended to be used only before postgres vanilla tests to not break them."),
+		NULL,
+		&HideCitusDependentObjects,
+		false,
+		PGC_USERSET,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	/*
