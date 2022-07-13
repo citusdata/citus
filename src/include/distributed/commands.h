@@ -147,6 +147,8 @@ extern List * PostprocessAlterDistributedObjectStmt(Node *stmt, const char *quer
 extern List * PreprocessDropDistributedObjectStmt(Node *node, const char *queryString,
 												  ProcessUtilityContext
 												  processUtilityContext);
+extern List * DropTextSearchConfigObjectAddress(Node *node, bool missing_ok);
+extern List * DropTextSearchDictObjectAddress(Node *node, bool missing_ok);
 
 /* index.c */
 typedef void (*PGIndexProcessor)(Form_pg_index, List **, int);
@@ -328,6 +330,7 @@ extern LOCKMODE GetCreateIndexRelationLockMode(IndexStmt *createIndexStatement);
 extern List * PreprocessReindexStmt(Node *ReindexStatement,
 									const char *ReindexCommand,
 									ProcessUtilityContext processUtilityContext);
+extern List * ReindexStmtObjectAddress(Node *stmt, bool missing_ok);
 extern List * PreprocessDropIndexStmt(Node *dropIndexStatement,
 									  const char *dropIndexCommand,
 									  ProcessUtilityContext processUtilityContext);
@@ -417,6 +420,7 @@ extern List * PreprocessAlterSequenceOwnerStmt(Node *node, const char *queryStri
 extern List * PostprocessAlterSequenceOwnerStmt(Node *node, const char *queryString);
 extern List * PreprocessDropSequenceStmt(Node *node, const char *queryString,
 										 ProcessUtilityContext processUtilityContext);
+extern List * SequenceDropStmtObjectAddress(Node *stmt, bool missing_ok);
 extern List * PreprocessRenameSequenceStmt(Node *node, const char *queryString,
 										   ProcessUtilityContext processUtilityContext);
 extern List * PreprocessGrantOnSequenceStmt(Node *node, const char *queryString,
@@ -439,6 +443,7 @@ extern List * PostprocessCreateStatisticsStmt(Node *node, const char *queryStrin
 extern List * CreateStatisticsStmtObjectAddress(Node *node, bool missingOk);
 extern List * PreprocessDropStatisticsStmt(Node *node, const char *queryString,
 										   ProcessUtilityContext processUtilityContext);
+extern List * DropStatisticsObjectAddress(Node *node, bool missing_ok);
 extern List * PreprocessAlterStatisticsRenameStmt(Node *node, const char *queryString,
 												  ProcessUtilityContext
 												  processUtilityContext);
@@ -569,6 +574,7 @@ extern List * ViewStmtObjectAddress(Node *node, bool missing_ok);
 extern List * AlterViewStmtObjectAddress(Node *node, bool missing_ok);
 extern List * PreprocessDropViewStmt(Node *node, const char *queryString,
 									 ProcessUtilityContext processUtilityContext);
+extern List * DropViewStmtObjectAddress(Node *node, bool missing_ok);
 extern char * CreateViewDDLCommand(Oid viewOid);
 extern List * GetViewCreationCommandsOfTable(Oid relationId);
 extern List * GetViewCreationTableDDLCommandsOfTable(Oid relationId);

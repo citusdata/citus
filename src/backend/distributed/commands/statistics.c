@@ -211,6 +211,33 @@ PreprocessDropStatisticsStmt(Node *node, const char *queryString,
 
 
 /*
+ * DropStatisticsObjectAddress returns list of object addresses in the drop statistics
+ * statement.
+ */
+List *
+DropStatisticsObjectAddress(Node *node, bool missing_ok)
+{
+	DropStmt *dropStatisticsStmt = castNode(DropStmt, node);
+	Assert(dropStatisticsStmt->removeType == OBJECT_STATISTIC_EXT);
+
+	List *objectAddresses = NIL;
+
+	List *objectNameList = NULL;
+	foreach_ptr(objectNameList, dropStatisticsStmt->objects)
+	{
+		Oid statsOid = get_statistics_object_oid(objectNameList,
+												 dropStatisticsStmt->missing_ok);
+
+		ObjectAddress *objectAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*objectAddress, StatisticExtRelationId, statsOid);
+		objectAddresses = lappend(objectAddresses, objectAddress);
+	}
+
+	return objectAddresses;
+}
+
+
+/*
  * PreprocessAlterStatisticsRenameStmt is called during the planning phase for
  * ALTER STATISTICS RENAME.
  */

@@ -222,6 +222,33 @@ PreprocessDropViewStmt(Node *node, const char *queryString, ProcessUtilityContex
 
 
 /*
+ * DropViewStmtObjectAddress returns list of object addresses in the drop view
+ * statement.
+ */
+List *
+DropViewStmtObjectAddress(Node *stmt, bool missing_ok)
+{
+	DropStmt *dropStmt = castNode(DropStmt, stmt);
+
+	List *objectAddresses = NIL;
+
+	List *possiblyQualifiedViewName = NULL;
+	foreach_ptr(possiblyQualifiedViewName, dropStmt->objects)
+	{
+		RangeVar *viewRangeVar = makeRangeVarFromNameList(possiblyQualifiedViewName);
+		Oid viewOid = RangeVarGetRelid(viewRangeVar, AccessShareLock,
+									   missing_ok);
+
+		ObjectAddress *objectAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*objectAddress, RelationRelationId, viewOid);
+		objectAddresses = lappend(objectAddresses, objectAddress);
+	}
+
+	return objectAddresses;
+}
+
+
+/*
  * FilterNameListForDistributedViews takes a list of view names and filters against the
  * views that are distributed.
  *

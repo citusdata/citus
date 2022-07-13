@@ -314,6 +314,34 @@ PreprocessDropSequenceStmt(Node *node, const char *queryString,
 
 
 /*
+ * SequenceDropStmtObjectAddress returns list of object addresses in the drop sequence
+ * statement.
+ */
+List *
+SequenceDropStmtObjectAddress(Node *stmt, bool missing_ok)
+{
+	DropStmt *dropSeqStmt = castNode(DropStmt, stmt);
+
+	List *objectAddresses = NIL;
+
+	List *droppingSequencesList = dropSeqStmt->objects;
+	List *objectNameList = NULL;
+	foreach_ptr(objectNameList, droppingSequencesList)
+	{
+		RangeVar *seq = makeRangeVarFromNameList(objectNameList);
+
+		Oid seqOid = RangeVarGetRelid(seq, AccessShareLock, missing_ok);
+
+		ObjectAddress *objectAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*objectAddress, SequenceRelationId, seqOid);
+		objectAddresses = lappend(objectAddresses, objectAddress);
+	}
+
+	return objectAddresses;
+}
+
+
+/*
  * PreprocessRenameSequenceStmt is called when the user is renaming a sequence. The invocation
  * happens before the statement is applied locally.
  *

@@ -291,7 +291,7 @@ static DistributeObjectOps Any_Reindex = {
 	.qualify = NULL,
 	.preprocess = PreprocessReindexStmt,
 	.postprocess = NULL,
-	.address = NULL,
+	.address = ReindexStmtObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps Any_Rename = {
@@ -531,7 +531,7 @@ static DistributeObjectOps View_Drop = {
 	.qualify = QualifyDropViewStmt,
 	.preprocess = PreprocessDropViewStmt,
 	.postprocess = NULL,
-	.address = NULL,
+	.address = DropViewStmtObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps Function_Rename = {
@@ -655,7 +655,7 @@ static DistributeObjectOps Sequence_Drop = {
 	.qualify = QualifyDropSequenceStmt,
 	.preprocess = PreprocessDropSequenceStmt,
 	.postprocess = NULL,
-	.address = NULL,
+	.address = SequenceDropStmtObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps Sequence_Grant = {
@@ -724,7 +724,7 @@ static DistributeObjectOps TextSearchConfig_Drop = {
 	.qualify = QualifyDropTextSearchConfigurationStmt,
 	.preprocess = PreprocessDropDistributedObjectStmt,
 	.postprocess = NULL,
-	.address = NULL,
+	.address = DropTextSearchConfigObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchConfig_Rename = {
@@ -786,7 +786,7 @@ static DistributeObjectOps TextSearchDict_Drop = {
 	.qualify = QualifyDropTextSearchDictionaryStmt,
 	.preprocess = PreprocessDropDistributedObjectStmt,
 	.postprocess = NULL,
-	.address = NULL,
+	.address = DropTextSearchDictObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchDict_Rename = {
@@ -903,7 +903,7 @@ static DistributeObjectOps Statistics_Drop = {
 	.qualify = QualifyDropStatisticsStmt,
 	.preprocess = PreprocessDropStatisticsStmt,
 	.postprocess = NULL,
-	.address = NULL,
+	.address = DropStatisticsObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps Statistics_Rename = {
