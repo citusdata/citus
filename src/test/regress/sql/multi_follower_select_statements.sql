@@ -89,6 +89,12 @@ FROM
 ORDER BY
   node_name, node_port;
 
+-- basic helper utilities should work fine
+SELECT citus_is_coordinator();
+SELECT count(*) FROM citus_lock_waits;
+SELECT count(*) FROM citus_dist_stat_activity WHERE global_pid = citus_backend_gpid();
+
+
 -- okay, now let's play with nodecluster. If we change the cluster of our follower node
 -- queries should stat failing again, since there are no worker nodes in the new cluster
 
