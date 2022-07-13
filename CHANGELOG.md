@@ -1,3 +1,7 @@
+### citus v11.0.4 (July 13, 2022) ###
+
+* Fixes a bug that prevents promoting read-replicas as primaries
+
 ### citus v11.0.3 (July 5, 2022) ###
 
 * Fixes a bug that prevents adding local tables with materialized views to
