@@ -34,6 +34,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_physical_planner.h"
 #include "commands/dbcommands.h"
+#include "distributed/shardsplit_logical_replication.h"
 
 /* Function declarations */
 static void ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
@@ -1186,47 +1187,10 @@ static void SplitShardReplicationSetup(List *sourceColocatedShardIntervalList,
 									   WorkerNode *sourceWorkerNode,
 									   List *destinationWorkerNodesList)
 {
-	StringInfo splitChildrenRows = makeStringInfo();
 
-	ShardInterval *sourceShardIntervalToCopy = NULL;
-	List *splitChildShardIntervalList = NULL;
-	bool addComma = false;
-	forboth_ptr(sourceShardIntervalToCopy, sourceColocatedShardIntervalList,
-				splitChildShardIntervalList, shardGroupSplitIntervalListList)
-	{
-		int64 sourceShardId = sourceShardIntervalToCopy->shardId;
-
-		ShardInterval *splitChildShardInterval = NULL;
-		WorkerNode *destinationWorkerNode = NULL;
-		forboth_ptr(splitChildShardInterval, splitChildShardIntervalList,
-				destinationWorkerNode, destinationWorkerNodesList)
-		{
-			if (addComma)
-			{
-				appendStringInfo(splitChildrenRows, ",");
-			}
-
-			StringInfo minValueString = makeStringInfo();
-			appendStringInfo(minValueString, "%d", DatumGetInt32(splitChildShardInterval->minValue));
-
-			StringInfo maxValueString = makeStringInfo();
-			appendStringInfo(maxValueString, "%d", DatumGetInt32(splitChildShardInterval->maxValue));
-
-			appendStringInfo(splitChildrenRows,
-			"ROW(%lu, %lu, %s, %s, %u)::citus.split_shard_info",
-			 sourceShardId,
-			 splitChildShardInterval->shardId,
-			 quote_literal_cstr(minValueString->data),
-			 quote_literal_cstr(maxValueString->data),
-			 destinationWorkerNode->nodeId);
-
-			 addComma = true;
-		}
-	}
-
-	StringInfo splitShardReplicationUDF = makeStringInfo();
-	appendStringInfo(splitShardReplicationUDF, 
-		"SELECT * FROM worker_split_shard_replication_setup(ARRAY[%s])", splitChildrenRows->data);
+	StringInfo splitShardReplicationUDF = CreateSplitShardReplicationSetupUDF(sourceColocatedShardIntervalList,
+										shardGroupSplitIntervalListList,
+										destinationWorkerNodesList);
 
 	int connectionFlags = FORCE_NEW_CONNECTION;
 	MultiConnection *sourceConnection = GetNodeUserDatabaseConnection(connectionFlags,
@@ -1241,7 +1205,6 @@ static void SplitShardReplicationSetup(List *sourceColocatedShardIntervalList,
 
 	PGresult *result = NULL;
 	int queryResult = ExecuteOptionalRemoteCommand(sourceConnection, splitShardReplicationUDF->data, &result);
-
 	if (queryResult != RESPONSE_OKAY || !IsResponseOK(result))
 	{
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
@@ -1250,4 +1213,15 @@ static void SplitShardReplicationSetup(List *sourceColocatedShardIntervalList,
 		PQclear(result);
 		ForgetResults(sourceConnection);
 	}
+
+	/* Get replication slot information */
+	List * replicationSlotInfoList = ParseReplicationSlotInfoFromResult(result);
+
+	List * shardSplitPubSubMetadata = CreateShardSplitPubSubMetadataList(sourceColocatedShardIntervalList,
+	 								shardGroupSplitIntervalListList,
+	 								destinationWorkerNodesList,
+									replicationSlotInfoList);
+
+	LogicallReplicateSplitShards(sourceWorkerNode, shardSplitPubSubMetadata);
 }
+

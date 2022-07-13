@@ -11,7 +11,7 @@ SET search_path TO split_shard_replication_setup_schema;
 -- Create publication at worker1
 CREATE PUBLICATION pub1 FOR TABLE table_to_split_1, table_to_split_2, table_to_split_3;
 
-SELECT  worker_split_shard_replication_setup(ARRAY[
+SELECT count(*) FROM worker_split_shard_replication_setup(ARRAY[
     ROW(1, 2, '-2147483648', '-1', :worker_1_node)::citus.split_shard_info,
     ROW(1, 3, '0', '2147483647', :worker_2_node)::citus.split_shard_info
     ]);

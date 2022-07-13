@@ -5,12 +5,15 @@ test: multi_cluster_management
 test: multi_test_catalog_views
 test: tablespace
 # Helpers for foreign key catalogs.
-test: foreign_key_to_reference_table
+#test: foreign_key_to_reference_table
 # Split tests go here.
-#test: citus_sameer
+test: citus_sameer
 #test: split_shard_replication_setup
-test: worker_split_copy_test
-test: worker_split_binary_copy_test
-test: worker_split_text_copy_test
-test: citus_split_shard_by_split_points_negative
-test: citus_split_shard_by_split_points
+#test: split_shard_replication_setup_remote_local
+#test: split_shard_replication_setup_local
+#test: split_shard_replication_colocated_setup
+#test: worker_split_copy_test
+#test: worker_split_binary_copy_test
+#test: worker_split_text_copy_test
+#test: citus_split_shard_by_split_points_negative
+#test: citus_split_shard_by_split_points

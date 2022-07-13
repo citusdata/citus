@@ -19,28 +19,17 @@
 #include "distributed/citus_safe_lib.h"
 #include "distributed/listutils.h"
 #include "distributed/remote_commands.h"
+#include "distributed/tuplestore.h"
+#include "distributed/shardsplit_logical_replication.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "commands/dbcommands.h"
+
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(worker_split_shard_replication_setup);
 
 static HTAB *ShardInfoHashMap = NULL;
-
-/* key for NodeShardMappingEntry */
-typedef struct NodeShardMappingKey
-{
-	uint32_t nodeId;
-	Oid tableOwnerId;
-} NodeShardMappingKey;
-
-/* Entry for hash map */
-typedef struct NodeShardMappingEntry
-{
-	NodeShardMappingKey key;
-	List *shardSplitInfoList;
-} NodeShardMappingEntry;
 
 /* Function declarations */
 static void ParseShardSplitInfoFromDatum(Datum shardSplitInfoDatum,
@@ -58,11 +47,8 @@ static ShardSplitInfo * CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 static void AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo);
 static void PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader,
 									   HTAB *shardInfoHashMap);
-
-static void SetupHashMapForShardInfo(void);
-static uint32 NodeShardMappingHash(const void *key, Size keysize);
-static int NodeShardMappingHashCompare(const void *left, const void *right, Size keysize);
-
+									   
+static void ReturnReplicationSlotInfo(HTAB *shardInfoHashMap, Tuplestorestate *tupleStore, TupleDesc tupleDescriptor);
 
 static void CreatePublishersForSplitChildren(HTAB *shardInfoHashMap);
 StringInfo GetSoureAndDestinationShardNames(List* shardSplitInfoList);
@@ -117,7 +103,7 @@ worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
 	}
 
 	/* SetupMap */
-	SetupHashMapForShardInfo();
+	ShardInfoHashMap = SetupHashMapForShardInfo();
 
 	int shardSplitInfoCount = 0;
 
@@ -157,7 +143,9 @@ worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
 	/* store handle in statically allocated shared memory*/
 	StoreShardSplitSharedMemoryHandle(dsmHandle);
 
-	CreatePublishersForSplitChildren(ShardInfoHashMap);
+	TupleDesc tupleDescriptor = NULL;
+	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
+	ReturnReplicationSlotInfo(ShardInfoHashMap, tupleStore, tupleDescriptor);
 
 	PG_RETURN_VOID();
 }
@@ -169,7 +157,7 @@ worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
  * is 'nodeId' and value is a list of ShardSplitInfo that are placed on
  * this particular node.
  */
-static void
+HTAB *
 SetupHashMapForShardInfo()
 {
 	HASHCTL info;
@@ -182,7 +170,8 @@ SetupHashMapForShardInfo()
 
 	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION | HASH_COMPARE);
 
-	ShardInfoHashMap = hash_create("ShardInfoMap", 128, &info, hashFlags);
+	HTAB * shardInfoMap = hash_create("ShardInfoMap", 128, &info, hashFlags);
+	return shardInfoMap;
 }
 
 
@@ -350,7 +339,7 @@ PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader,
  * NodeShardMappingHash returns hash value by combining hash of node id
  * and tableowner Id.
  */
-static uint32
+uint32
 NodeShardMappingHash(const void *key, Size keysize)
 {
 	NodeShardMappingKey *entry = (NodeShardMappingKey *) key;
@@ -363,7 +352,7 @@ NodeShardMappingHash(const void *key, Size keysize)
 /*
  * Comparator function for hash keys
  */
-static int
+int
 NodeShardMappingHashCompare(const void *left, const void *right, Size keysize)
 {
 	NodeShardMappingKey *leftKey = (NodeShardMappingKey *) left;
@@ -530,4 +519,30 @@ ConstructFullyQualifiedSplitChildShardName(ShardSplitInfo* shardSplitInfo)
 	shardName = quote_qualified_identifier(schemaName, shardName);
 
 	return shardName;
+}
+
+static void ReturnReplicationSlotInfo(HTAB *shardInfoHashMap, Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
+{
+	HASH_SEQ_STATUS status;
+	hash_seq_init(&status, shardInfoHashMap);
+
+	NodeShardMappingEntry *entry = NULL;
+	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
+	{
+		Datum values[3];
+		bool nulls[3];
+
+		memset(values, 0, sizeof(values));
+		memset(nulls, false, sizeof(nulls));
+
+		values[0] = Int32GetDatum(entry->key.nodeId);
+		
+		char * tableOwnerName = GetUserNameFromId(entry->key.tableOwnerId, false);
+		values[1] = CStringGetTextDatum(tableOwnerName);
+
+		char * slotName = encode_replication_slot(entry->key.nodeId, entry->key.tableOwnerId);
+		values[2] = CStringGetTextDatum(slotName);
+
+		tuplestore_putvalues(tupleStore, tupleDescriptor, values, nulls);
+	}
 }

@@ -15,7 +15,6 @@ CREATE TABLE table_second (id bigserial PRIMARY KEY, value char);
 SELECT create_distributed_table('table_to_split','id');
 SELECT create_distributed_table('table_second', 'id', colocate_with => 'table_to_split');
 
-
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
 SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 
@@ -49,7 +48,7 @@ SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \
 SELECT citus_split_shard_by_split_points(
 	1,
 	ARRAY['-1073741826'],
-	ARRAY[:worker_1_node, :worker_2_node],
+	ARRAY[:worker_2_node, :worker_2_node],
 	'non_blocking');
 -- On worker2, we want child shard 2 and dummy shard 1  -- 
 -- on worker1, we want child shard 3 and 1 and dummy shard 2  --
