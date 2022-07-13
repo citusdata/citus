@@ -149,5 +149,79 @@ INSERT INTO non_dist_2 SELECT a, c FROM ref_table;
 SELECT * FROM non_dist_2 ORDER BY 1, 2;
 TRUNCATE non_dist_2;
 
+-- check issue https://github.com/citusdata/citus/issues/5858
+CREATE TABLE local_table(
+  col_1 integer,
+  col_2 integer,
+  col_3 text,
+  col_4 text,
+  col_5 int,
+  col_6 text,
+  col_7 text,
+  col_8 text
+);
+
+CREATE TABLE dist_table_1(
+  dist_col integer,
+  int_col integer,
+  text_col_1 text,
+  text_col_2 text
+);
+SELECT create_distributed_table('dist_table_1', 'dist_col');
+
+INSERT INTO dist_table_1 VALUES (1, 1, 'string', 'string');
+
+CREATE TABLE dist_table_2(
+  dist_col integer,
+  int_col integer
+);
+SELECT create_distributed_table('dist_table_2', 'dist_col');
+
+INSERT INTO dist_table_2 VALUES (1, 1);
+
+INSERT INTO local_table
+SELECT
+  t1.dist_col,
+  1,
+  'string',
+  'string',
+  1,
+  'string',
+  t1.text_col_1,
+  t1.text_col_2
+FROM dist_table_1 t1
+WHERE t1.int_col IN (SELECT int_col FROM dist_table_2);
+
+INSERT INTO local_table
+SELECT
+  t1.dist_col,
+  1,
+  'string',
+  'string',
+  1,
+  'string',
+  t1.text_col_1,
+  t1.text_col_2
+FROM dist_table_1 t1
+returning *;
+INSERT INTO local_table (col_3, col_4) SELECT
+  'string',
+  'string'::text
+FROM dist_table_1 t1
+returning *;
+
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) INSERT INTO local_table
+  SELECT
+    t1.dist_col,
+    1,
+    'string',
+    'string',
+    1,
+    'string',
+    t1.text_col_1,
+    t1.text_col_2
+  FROM dist_table_1 t1
+  RETURNING *;
+
 \set VERBOSITY terse
 DROP SCHEMA insert_select_into_local_table CASCADE;

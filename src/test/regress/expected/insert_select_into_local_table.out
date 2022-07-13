@@ -354,6 +354,105 @@ SELECT * FROM non_dist_2 ORDER BY 1, 2;
 (3 rows)
 
 TRUNCATE non_dist_2;
+-- check issue https://github.com/citusdata/citus/issues/5858
+CREATE TABLE local_table(
+  col_1 integer,
+  col_2 integer,
+  col_3 text,
+  col_4 text,
+  col_5 int,
+  col_6 text,
+  col_7 text,
+  col_8 text
+);
+CREATE TABLE dist_table_1(
+  dist_col integer,
+  int_col integer,
+  text_col_1 text,
+  text_col_2 text
+);
+SELECT create_distributed_table('dist_table_1', 'dist_col');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist_table_1 VALUES (1, 1, 'string', 'string');
+CREATE TABLE dist_table_2(
+  dist_col integer,
+  int_col integer
+);
+SELECT create_distributed_table('dist_table_2', 'dist_col');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist_table_2 VALUES (1, 1);
+INSERT INTO local_table
+SELECT
+  t1.dist_col,
+  1,
+  'string',
+  'string',
+  1,
+  'string',
+  t1.text_col_1,
+  t1.text_col_2
+FROM dist_table_1 t1
+WHERE t1.int_col IN (SELECT int_col FROM dist_table_2);
+INSERT INTO local_table
+SELECT
+  t1.dist_col,
+  1,
+  'string',
+  'string',
+  1,
+  'string',
+  t1.text_col_1,
+  t1.text_col_2
+FROM dist_table_1 t1
+returning *;
+ col_1 | col_2 | col_3  | col_4  | col_5 | col_6  | col_7  | col_8
+---------------------------------------------------------------------
+     1 |     1 | string | string |     1 | string | string | string
+(1 row)
+
+INSERT INTO local_table (col_3, col_4) SELECT
+  'string',
+  'string'::text
+FROM dist_table_1 t1
+returning *;
+ col_1 | col_2 | col_3  | col_4  | col_5 | col_6 | col_7 | col_8
+---------------------------------------------------------------------
+       |       | string | string |       |       |       |
+(1 row)
+
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) INSERT INTO local_table
+  SELECT
+    t1.dist_col,
+    1,
+    'string',
+    'string',
+    1,
+    'string',
+    t1.text_col_1,
+    t1.text_col_2
+  FROM dist_table_1 t1
+  RETURNING *;
+                                   QUERY PLAN
+---------------------------------------------------------------------
+ Insert on local_table (actual rows=1 loops=1)
+   ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+         Task Count: 4
+         Tuple data received from nodes: 42 bytes
+         Tasks Shown: One of 4
+         ->  Task
+               Tuple data received from node: 42 bytes
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Seq Scan on dist_table_1_11235805 t1 (actual rows=1 loops=1)
+(9 rows)
+
 \set VERBOSITY terse
 DROP SCHEMA insert_select_into_local_table CASCADE;
-NOTICE:  drop cascades to 5 other objects
+NOTICE:  drop cascades to 8 other objects
