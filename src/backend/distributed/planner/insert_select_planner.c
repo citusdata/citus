@@ -370,14 +370,27 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
  * combineQuery, this function also creates a dummy combineQuery for that.
  */
 DistributedPlan *
-CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *originalQuery, ParamListInfo
-									 boundParams, bool hasUnresolvedParams,
+CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *insertSelectQuery,
+									 ParamListInfo boundParams, bool hasUnresolvedParams,
 									 PlannerRestrictionContext *plannerRestrictionContext)
 {
-	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(originalQuery);
+	RangeTblEntry *insertRte = ExtractResultRelationRTEOrError(insertSelectQuery);
+	Oid targetRelationId = insertRte->relid;
+	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
 
-	Query *selectQuery = BuildSelectForInsertSelect(originalQuery);
-	originalQuery->cteList = NIL;
+	Query *selectQuery = BuildSelectForInsertSelect(insertSelectQuery);
+
+	/*
+	 * Cast types of insert target list and select projection list to
+	 * match the column types of the target relation.
+	 */
+	selectQuery->targetList =
+		AddInsertSelectCasts(insertSelectQuery->targetList,
+							 selectQuery->targetList,
+							 targetRelationId);
+
+	insertSelectQuery->cteList = NIL;
+
 	DistributedPlan *distPlan = CreateDistributedPlan(planId, selectQuery,
 													  copyObject(selectQuery),
 													  boundParams, hasUnresolvedParams,
@@ -417,7 +430,7 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *originalQuery, ParamL
 	 * distributed select instead of returning it.
 	 */
 	selectRte->subquery = distPlan->combineQuery;
-	distPlan->combineQuery = originalQuery;
+	distPlan->combineQuery = insertSelectQuery;
 
 	return distPlan;
 }
@@ -1536,30 +1549,23 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 	List *projectedEntries = NIL;
 	List *nonProjectedEntries = NIL;
 
-	/*
-	 * ReorderInsertSelectTargetLists() makes sure that first few columns of
-	 * the SELECT query match the insert targets. It might contain additional
-	 * items for GROUP BY, etc.
-	 */
-	Assert(list_length(insertTargetList) <= list_length(selectTargetList));
-
 	Relation distributedRelation = table_open(targetRelationId, RowExclusiveLock);
 	TupleDesc destTupleDescriptor = RelationGetDescr(distributedRelation);
 
 	int targetEntryIndex = 0;
 	TargetEntry *insertEntry = NULL;
 	TargetEntry *selectEntry = NULL;
+
 	forboth_ptr(insertEntry, insertTargetList, selectEntry, selectTargetList)
 	{
-		Var *insertColumn = (Var *) insertEntry->expr;
 		Form_pg_attribute attr = TupleDescAttr(destTupleDescriptor,
 											   insertEntry->resno - 1);
 
-		Oid sourceType = insertColumn->vartype;
+		Oid sourceType = exprType((Node *) selectEntry->expr);
 		Oid targetType = attr->atttypid;
 		if (sourceType != targetType)
 		{
-			insertEntry->expr = CastExpr((Expr *) insertColumn, sourceType, targetType,
+			insertEntry->expr = CastExpr(insertEntry->expr, sourceType, targetType,
 										 attr->attcollation, attr->atttypmod);
 
 			/*
