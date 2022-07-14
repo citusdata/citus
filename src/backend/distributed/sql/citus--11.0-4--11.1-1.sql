@@ -91,3 +91,5 @@ CREATE TABLE citus.pg_dist_rebalance_jobs(
 ALTER TABLE citus.pg_dist_rebalance_jobs SET SCHEMA pg_catalog;
 CREATE UNIQUE INDEX pg_dist_rebalance_jobs_jobid_index ON pg_catalog.pg_dist_rebalance_jobs using btree(jobid);
 CREATE INDEX pg_dist_rebalance_jobs_status_jobid_index ON pg_catalog.pg_dist_rebalance_jobs using btree(status, jobid);
+
+#include "udfs/citus_wait_for_rebalance_job/11.1-1.sql"

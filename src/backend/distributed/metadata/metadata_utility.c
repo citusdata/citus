@@ -2264,8 +2264,31 @@ RebalanceJobStatusByOid(Oid enumOid)
 	{
 		return REBALANCE_JOB_STATUS_SCHEDULED;
 	}
+	else if (enumOid == JobStatusErrorId())
+	{
+		return REBALANCE_JOB_STATUS_ERROR;
+	}
 	ereport(ERROR, (errmsg("unknown enum value for citus_job_status")));
 	return REBALANCE_JOB_STATUS_UNKNOWN;
+}
+
+
+bool
+IsRebalanceJobStatusTerminal(RebalanceJobStatus status)
+{
+	switch (status)
+	{
+		case REBALANCE_JOB_STATUS_DONE:
+		case REBALANCE_JOB_STATUS_ERROR:
+		{
+			return true;
+		}
+
+		default:
+		{
+			return false;
+		}
+	}
 }
 
 
@@ -2305,6 +2328,52 @@ GetScheduledRebalanceJob(void)
 	/* pg_dist_rebalance_jobs.status == 'scheduled' */
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_status,
 				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(JobStatusScheduledId()));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
+													DistRebalanceJobsStatusJobsIdIndexId(),
+													indexOK, NULL, scanKeyCount, scanKey);
+
+	HeapTuple jobTuple = systable_getnext(scanDescriptor);
+	RebalanceJob *job = NULL;
+	if (HeapTupleIsValid(jobTuple))
+	{
+		Form_pg_dist_rebalance_job jobData = NULL;
+		jobData = (Form_pg_dist_rebalance_job) GETSTRUCT(jobTuple);
+
+		job = palloc0(sizeof(RebalanceJob));
+		job->jobid = jobData->jobid;
+		job->status = RebalanceJobStatusByOid(jobData->status);
+
+		/* TODO parse the actual job */
+		Datum datumArray[Natts_pg_dist_rebalance_jobs];
+		bool isNullArray[Natts_pg_dist_rebalance_jobs];
+		TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
+		heap_deform_tuple(jobTuple, tupleDescriptor, datumArray, isNullArray);
+
+		job->command = text_to_cstring(
+			DatumGetTextP(datumArray[Anum_pg_dist_rebalance_jobs_command - 1]));
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistRebalanceJobs, AccessShareLock);
+
+	return job;
+}
+
+
+RebalanceJob *
+GetScheduledRebalanceJobyJobID(int64 jobId)
+{
+	const int scanKeyCount = 1;
+	ScanKeyData scanKey[1];
+	bool indexOK = true;
+
+	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
+											  AccessShareLock);
+
+	/* pg_dist_rebalance_jobs.jobid == $jobId */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_jobid,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
 													DistRebalanceJobsStatusJobsIdIndexId(),
