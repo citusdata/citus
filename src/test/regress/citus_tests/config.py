@@ -224,7 +224,7 @@ class CitusSmallSharedPoolSizeConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {
-             "citus.local_shared_pool_size": 5,
+            "citus.local_shared_pool_size": 5,
             "citus.max_shared_pool_size": 5,
         }
 

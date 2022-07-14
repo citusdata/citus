@@ -91,11 +91,11 @@ CREATE TYPE user_composite_type AS
 -- it is acceptable for our tests
 SELECT run_command_on_master_and_workers($f$
 
-	CREATE FUNCTION test_composite_type_hash(user_composite_type) RETURNS int
-	AS 'SELECT hashtext( ($1.tenant_id + $1.tenant_id)::text);'
-	LANGUAGE SQL
-	IMMUTABLE
-	RETURNS NULL ON NULL INPUT;
+    CREATE FUNCTION test_composite_type_hash(user_composite_type) RETURNS int
+    AS 'SELECT hashtext( ($1.tenant_id + $1.tenant_id)::text);'
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
 $f$);
 
 SET citus.next_shard_id TO 1400297;

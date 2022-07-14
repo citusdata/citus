@@ -215,9 +215,9 @@ s/^(ERROR:  child table is missing constraint "\w+)_([0-9])+"/\1_xxxxxx"/g
 # session. Sometimes happens that deadlock detector cancels the session before
 # lock detection, so we normalize it by removing these two lines.
 /^ <waiting ...>$/ {
-    N; /\nstep s1-update-2: <... completed>$/ {
-        s/.*//g
-    }
+	N; /\nstep s1-update-2: <... completed>$/ {
+		s/.*//g
+	}
 }
 
 # normalize for random waits for CREATE INDEX CONCURRENTLY isolation tests.

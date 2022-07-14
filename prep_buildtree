@@ -11,11 +11,11 @@ help="\
 Usage: $me sourcetree [buildtree]"
 
 if test -z "$1"; then
-    echo "$help" 1>&2
-    exit 1
+	echo "$help" 1>&2
+	exit 1
 elif test x"$1" = x"--help"; then
-    echo "$help"
-    exit 0
+	echo "$help"
+	exit 0
 fi
 
 unset CDPATH
@@ -29,19 +29,19 @@ buildtree=`cd ${2:-'.'} && pwd`
 # the source tree, if a VPATH build is done from a distribution tarball.
 # See bug #5595.
 for item in `find "$sourcetree" -type d \( \( -name CVS -prune \) -o \( -name .git -prune \) -o -print \) | grep -v "$sourcetree/doc/src/sgml/\+"`; do
-    subdir=`expr "$item" : "$sourcetree\(.*\)"`
-    if test ! -d "$buildtree/$subdir"; then
-        mkdir -p "$buildtree/$subdir" || exit 1
-    fi
+	subdir=`expr "$item" : "$sourcetree\(.*\)"`
+	if test ! -d "$buildtree/$subdir"; then
+		mkdir -p "$buildtree/$subdir" || exit 1
+	fi
 done
 
 for item in `find "$sourcetree" -not -path '*/.git/hg/*' \( -name Makefile -print -o -name GNUmakefile -print \)`; do
-    filename=`expr "$item" : "$sourcetree\(.*\)"`
-    if test ! -f "${item}.in"; then
-        if cmp "$item" "$buildtree/$filename" >/dev/null 2>&1; then : ; else
-            ln -fs "$item" "$buildtree/$filename" || exit 1
-        fi
-    fi
+	filename=`expr "$item" : "$sourcetree\(.*\)"`
+	if test ! -f "${item}.in"; then
+		if cmp "$item" "$buildtree/$filename" >/dev/null 2>&1; then : ; else
+			ln -fs "$item" "$buildtree/$filename" || exit 1
+		fi
+	fi
 done
 
 exit 0

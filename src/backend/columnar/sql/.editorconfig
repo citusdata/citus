@@ -1,0 +1,2 @@
+# do not use any .editorconfig files in upper level dir
+root = true

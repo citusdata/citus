@@ -4,7 +4,7 @@
 
 -- COPY with incorrect delimiter
 COPY contestant FROM '@abs_srcdir@/data/contestants.1.csv'
-	WITH DELIMITER '|'; -- ERROR
+    WITH DELIMITER '|'; -- ERROR
 
 -- COPY with invalid program
 COPY contestant FROM PROGRAM 'invalid_program' WITH CSV; -- ERROR
@@ -24,7 +24,7 @@ COPY contestant_compressed FROM '@abs_srcdir@/data/contestants.1.csv' WITH CSV;
 
 -- COPY into uncompressed table from program
 COPY contestant_compressed FROM PROGRAM 'cat @abs_srcdir@/data/contestants.2.csv'
-	WITH CSV;
+    WITH CSV;
 
 select
   version_major, version_minor, reserved_stripe_id, reserved_row_number

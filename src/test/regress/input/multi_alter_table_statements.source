@@ -13,23 +13,23 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 220000;
 -- We set the shardid sequence here so that the shardids in this test
 -- aren't affected by changes to the previous tests.
 CREATE TABLE lineitem_alter (
-	l_orderkey bigint not null,
-	l_partkey integer not null,
-	l_suppkey integer not null,
-	l_linenumber integer not null,
-	l_quantity decimal(15, 2) not null,
-	l_extendedprice decimal(15, 2) not null,
-	l_discount decimal(15, 2) not null,
-	l_tax decimal(15, 2) not null,
-	l_returnflag char(1) not null,
-	l_linestatus char(1) not null,
-	l_shipdate date not null,
-	l_commitdate date not null,
-	l_receiptdate date not null,
-	l_shipinstruct char(25) not null,
-	l_shipmode char(10) not null,
-	l_comment varchar(44) not null
-	)
+    l_orderkey bigint not null,
+    l_partkey integer not null,
+    l_suppkey integer not null,
+    l_linenumber integer not null,
+    l_quantity decimal(15, 2) not null,
+    l_extendedprice decimal(15, 2) not null,
+    l_discount decimal(15, 2) not null,
+    l_tax decimal(15, 2) not null,
+    l_returnflag char(1) not null,
+    l_linestatus char(1) not null,
+    l_shipdate date not null,
+    l_commitdate date not null,
+    l_receiptdate date not null,
+    l_shipinstruct char(25) not null,
+    l_shipmode char(10) not null,
+    l_comment varchar(44) not null
+    )
   WITH ( fillfactor = 80 );
 SELECT create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
 SELECT master_create_empty_shard('lineitem_alter') AS shardid \gset
@@ -138,11 +138,11 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineite
 -- Verify that we can execute commands with multiple subcommands
 
 ALTER TABLE lineitem_alter ADD COLUMN int_column1 INTEGER,
-	ADD COLUMN int_column2 INTEGER;
+    ADD COLUMN int_column2 INTEGER;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
 
 ALTER TABLE lineitem_alter ADD COLUMN int_column3 INTEGER,
-	ALTER COLUMN int_column1 SET STATISTICS 10;
+    ALTER COLUMN int_column1 SET STATISTICS 10;
 
 ALTER TABLE lineitem_alter DROP COLUMN int_column1, DROP COLUMN int_column2;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
@@ -299,9 +299,9 @@ CREATE TABLE ddl_commands (command text UNIQUE DEFERRABLE INITIALLY DEFERRED);
 -- Use an event trigger to log all DDL event tags in it
 SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION log_ddl_tag() RETURNS event_trigger AS $ldt$
-	BEGIN
-		INSERT INTO ddl_commands VALUES (tg_tag);
-	END;
+    BEGIN
+        INSERT INTO ddl_commands VALUES (tg_tag);
+    END;
 $ldt$ LANGUAGE plpgsql;
 RESET citus.enable_metadata_sync;
 
@@ -497,8 +497,8 @@ SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 1;
 
 CREATE TABLE trigger_table (
-	id int,
-	value text
+    id int,
+    value text
 );
 
 SELECT create_distributed_table('trigger_table', 'id');
@@ -507,8 +507,8 @@ SELECT create_distributed_table('trigger_table', 'id');
 SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION update_value() RETURNS trigger AS $up$
     BEGIN
-		NEW.value := 'trigger enabled';
-		RETURN NEW;
+        NEW.value := 'trigger enabled';
+        RETURN NEW;
     END;
 $up$ LANGUAGE plpgsql;
 RESET citus.enable_metadata_sync;

@@ -13,7 +13,7 @@ echo_and_restore() {
         builtin echo "$*"
         #shellcheck disable=SC2154
         case "$save_flags" in
-         (*x*)  set -x
+        (*x*)  set -x
         esac
 }
 
@@ -29,4 +29,3 @@ hint_on_fail() {
     exit $exit_code
 }
 trap hint_on_fail EXIT
-

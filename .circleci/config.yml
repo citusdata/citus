@@ -232,7 +232,7 @@ jobs:
             find src/test/regress/tmp_citus_test/ -name "regression*.diffs" -exec cat {} +
             lines=$(find src/test/regress/tmp_citus_test/ -name "regression*.diffs" | wc -l)
             if [ $lines -ne 0 ]; then
-               exit 1
+              exit 1
             fi
 
           when: on_fail

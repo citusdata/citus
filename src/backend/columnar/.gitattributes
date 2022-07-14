@@ -23,4 +23,3 @@ configure				-whitespace
 
 # all C files (implementation and header) use our style...
 *.[ch] citus-style
-

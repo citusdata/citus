@@ -16,7 +16,7 @@ CREATE TABLE customer_copy_hash (
         c_acctbal decimal(15,2),
         c_mktsegment char(10),
         c_comment varchar(117),
-		primary key (c_custkey));
+        primary key (c_custkey));
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('customer_copy_hash', 'c_custkey', shard_count:=64);
 
@@ -170,7 +170,7 @@ CREATE TABLE customer_copy_range (
         c_acctbal decimal(15,2),
         c_mktsegment char(10),
         c_comment varchar(117),
-		primary key (c_custkey));
+        primary key (c_custkey));
 
 SELECT master_create_distributed_table('customer_copy_range', 'c_custkey', 'range');
 
@@ -445,8 +445,8 @@ SELECT create_distributed_table('numbers_append', 'a', 'append');
 
 -- no shards is created yet
 SELECT shardid, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
-	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
+    FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
+    WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
 
 SELECT master_create_empty_shard('numbers_append') AS shardid1 \gset
 SELECT master_create_empty_shard('numbers_append') AS shardid2 \gset
@@ -462,8 +462,8 @@ COPY numbers_append FROM STDIN WITH (FORMAT 'csv', append_to_shard :shardid2);
 
 -- verify there are shards at both workers
 SELECT shardid, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
-	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
+    FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
+    WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
 
 -- disable the first node
 SET client_min_messages TO ERROR;
@@ -493,8 +493,8 @@ COPY numbers_append FROM STDIN WITH (FORMAT 'csv', append_to_shard :shardid2);
 \.
 
 SELECT shardid, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
-	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
+    FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
+    WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
 
 -- add the node back
 -- before adding the node, add pg_dist_object entry for tables created with
@@ -527,8 +527,8 @@ COPY numbers_append FROM STDIN WITH (FORMAT 'csv', append_to_shard :shardid2);
 \.
 
 SELECT shardid, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
-	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
+    FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
+    WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
 DROP TABLE numbers_append;
 
 -- Test copy failures against connection failures
@@ -553,8 +553,8 @@ COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
 
 -- verify each placement is active
 SELECT shardid, shardstate, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
-	WHERE logicalrelid = 'numbers_hash'::regclass order by shardid, nodeport;
+    FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
+    WHERE logicalrelid = 'numbers_hash'::regclass order by shardid, nodeport;
 
 -- create a reference table
 CREATE TABLE numbers_reference(a int, b int);
@@ -568,8 +568,8 @@ COPY numbers_reference FROM STDIN WITH (FORMAT 'csv');
 CREATE TABLE numbers_hash_other(a int, b int);
 SELECT create_distributed_table('numbers_hash_other', 'a', colocate_with:='numbers_hash');
 SELECT shardid, shardstate, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
-	WHERE logicalrelid = 'numbers_hash_other'::regclass order by shardid, nodeport;
+    FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
+    WHERE logicalrelid = 'numbers_hash_other'::regclass order by shardid, nodeport;
 
 -- manually corrupt pg_dist_shard such that both copies of one shard is placed in
 -- worker_1+10. This is to test the behavior when no replica of a shard is accessible.
@@ -591,16 +591,16 @@ COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
 
 -- verify shards in the none of the workers as marked invalid
 SELECT shardid, shardstate, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
-	WHERE logicalrelid = 'numbers_hash'::regclass order by shardid, nodeport;
+    FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
+    WHERE logicalrelid = 'numbers_hash'::regclass order by shardid, nodeport;
 
 -- try to insert into a reference table copy should fail
 COPY numbers_reference FROM STDIN WITH (FORMAT 'csv');
 
 -- verify shards for reference table are still valid
 SELECT shardid, shardstate, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
-	WHERE logicalrelid = 'numbers_reference'::regclass order by placementid;
+    FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
+    WHERE logicalrelid = 'numbers_reference'::regclass order by placementid;
 
 
 -- try to insert into numbers_hash_other. copy should fail and rollback
@@ -611,8 +611,8 @@ COPY numbers_hash_other FROM STDIN WITH (FORMAT 'csv');
 -- verify shards for numbers_hash_other are still valid
 -- since copy has failed altogether
 SELECT shardid, shardstate, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
-	WHERE logicalrelid = 'numbers_hash_other'::regclass order by shardid, nodeport;
+    FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
+    WHERE logicalrelid = 'numbers_hash_other'::regclass order by shardid, nodeport;
 
 -- re-enable test_user on the first worker
 \c - :default_user - :worker_1_port
@@ -655,8 +655,8 @@ SELECT count(a) FROM numbers_hash;
 
 -- verify shard is still marked as valid
 SELECT shardid, shardstate, nodename, nodeport
-	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
-	WHERE logicalrelid = 'numbers_hash'::regclass order by shardid, nodeport;
+    FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
+    WHERE logicalrelid = 'numbers_hash'::regclass order by shardid, nodeport;
 
 DROP TABLE numbers_hash;
 DROP USER test_user;

@@ -89,14 +89,14 @@ SELECT create_distributed_table('impressions', 'company_id');
 \copy impressions from '@abs_srcdir@/data/impressions.csv' with csv
 
 SELECT a.campaign_id,
-       RANK() OVER (
-         PARTITION BY a.campaign_id
-         ORDER BY a.campaign_id, count(*) desc
-       ), count(*) as n_impressions, a.id
+        RANK() OVER (
+        PARTITION BY a.campaign_id
+        ORDER BY a.campaign_id, count(*) desc
+        ), count(*) as n_impressions, a.id
   FROM ads as a
   JOIN impressions as i
     ON i.company_id = a.company_id
-   AND i.ad_id      = a.id
+    AND i.ad_id      = a.id
  WHERE a.company_id = 5
 GROUP BY a.campaign_id, a.id
 ORDER BY a.campaign_id, n_impressions desc
@@ -187,14 +187,14 @@ SELECT create_distributed_table('clicks',      'company_id');
 SELECT create_distributed_table('impressions', 'company_id');
 
 SELECT a.campaign_id,
-       RANK() OVER (
-         PARTITION BY a.campaign_id
-         ORDER BY a.campaign_id, count(*) desc
-       ), count(*) as n_impressions, a.id
+        RANK() OVER (
+        PARTITION BY a.campaign_id
+        ORDER BY a.campaign_id, count(*) desc
+        ), count(*) as n_impressions, a.id
   FROM ads as a
   JOIN impressions as i
     ON i.company_id = a.company_id
-   AND i.ad_id      = a.id
+    AND i.ad_id      = a.id
  WHERE a.company_id = 8
 GROUP BY a.campaign_id, a.id
 ORDER BY a.campaign_id, n_impressions desc

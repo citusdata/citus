@@ -16,7 +16,7 @@
 
 # Convert type and name to shell variable name (e.g., "enable_long_strings")
 m4_define([pgac_arg_to_variable],
-          [$1[]_[]patsubst($2, -, _)])
+		  [$1[]_[]patsubst($2, -, _)])
 
 
 # PGAC_ARG(TYPE, NAME, HELP-STRING-LHS-EXTRA, HELP-STRING-RHS,
@@ -39,34 +39,34 @@ m4_case([$1],
 
 enable, [
 AC_ARG_ENABLE([$2], [AS_HELP_STRING([--]m4_if($3, -, disable, enable)[-$2]m4_if($3, -, , $3), [$4])], [
-  case [$]enableval in
-    yes)
-      m4_default([$5], :)
-      ;;
-    no)
-      m4_default([$6], :)
-      ;;
-    *)
-      $7
-      ;;
-  esac
+	case [$]enableval in
+		yes)
+			m4_default([$5], :)
+			;;
+		no)
+			m4_default([$6], :)
+			;;
+		*)
+			$7
+			;;
+	esac
 ],
 [$8])[]dnl AC_ARG_ENABLE
 ],
 
 with, [
 AC_ARG_WITH([$2], [AS_HELP_STRING([--]m4_if($3, -, without, with)[-$2]m4_if($3, -, , $3), [$4])], [
-  case [$]withval in
-    yes)
-      m4_default([$5], :)
-      ;;
-    no)
-      m4_default([$6], :)
-      ;;
-    *)
-      $7
-      ;;
-  esac
+	case [$]withval in
+		yes)
+			m4_default([$5], :)
+			;;
+		no)
+			m4_default([$6], :)
+			;;
+		*)
+			$7
+			;;
+	esac
 ],
 [$8])[]dnl AC_ARG_WITH
 ],
@@ -93,13 +93,13 @@ dnl that by making the help string look the same, which is why we need to
 dnl save the default that was passed in previously.
 m4_define([_pgac_helpdefault], m4_ifdef([pgac_defined_$1_$2_bool], [m4_defn([pgac_defined_$1_$2_bool])], [$3]))dnl
 PGAC_ARG([$1], [$2], [m4_if(_pgac_helpdefault, yes, -)], [$4], [$5], [$6],
-          [AC_MSG_ERROR([no argument expected for --$1-$2 option])],
-          [m4_case([$3],
-                   yes, [pgac_arg_to_variable([$1], [$2])=yes
+					[AC_MSG_ERROR([no argument expected for --$1-$2 option])],
+					[m4_case([$3],
+									yes, [pgac_arg_to_variable([$1], [$2])=yes
 $5],
-                   no,  [pgac_arg_to_variable([$1], [$2])=no
+									no,  [pgac_arg_to_variable([$1], [$2])=no
 $6],
-                   [m4_fatal([third argument of $0 must be 'yes' or 'no', not '$3'])])])[]dnl
+									[m4_fatal([third argument of $0 must be 'yes' or 'no', not '$3'])])])[]dnl
 m4_define([pgac_defined_$1_$2_bool], [$3])dnl
 ])# PGAC_ARG_BOOL
 
@@ -112,10 +112,10 @@ m4_define([pgac_defined_$1_$2_bool], [$3])dnl
 
 AC_DEFUN([PGAC_ARG_REQ],
 [PGAC_ARG([$1], [$2], [=$3], [$4],
-          [AC_MSG_ERROR([argument required for --$1-$2 option])],
-          [AC_MSG_ERROR([argument required for --$1-$2 option])],
-          [$5],
-          [$6])])# PGAC_ARG_REQ
+					[AC_MSG_ERROR([argument required for --$1-$2 option])],
+					[AC_MSG_ERROR([argument required for --$1-$2 option])],
+					[$5],
+					[$6])])# PGAC_ARG_REQ
 
 
 # PGAC_ARG_OPTARG(TYPE, NAME, HELP-ARGNAME, HELP-STRING-RHS,
@@ -134,17 +134,17 @@ AC_DEFUN([PGAC_ARG_REQ],
 
 AC_DEFUN([PGAC_ARG_OPTARG],
 [PGAC_ARG([$1], [$2], [@<:@=$3@:>@], [$4], [$5], [],
-          [pgac_arg_to_variable([$1], [$2])=yes
+					[pgac_arg_to_variable([$1], [$2])=yes
 $6],
-          [pgac_arg_to_variable([$1], [$2])=no])
+					[pgac_arg_to_variable([$1], [$2])=no])
 dnl Add this code only if there's a ACTION-ENABLED or ACTION-DISABLED.
 m4_ifval([$7[]$8],
 [
 if test "[$]pgac_arg_to_variable([$1], [$2])" = yes; then
-  m4_default([$7], :)
+	m4_default([$7], :)
 m4_ifval([$8],
 [else
-  $8
+	$8
 ])[]dnl
 fi
 ])[]dnl

@@ -6,22 +6,22 @@ SET citus.coordinator_aggregation_strategy TO 'disabled';
 
 -- Create a new range partitioned lineitem table and load data into it
 CREATE TABLE lineitem_range (
-	l_orderkey bigint not null,
-	l_partkey integer not null,
-	l_suppkey integer not null,
-	l_linenumber integer not null,
-	l_quantity decimal(15, 2) not null,
-	l_extendedprice decimal(15, 2) not null,
-	l_discount decimal(15, 2) not null,
-	l_tax decimal(15, 2) not null,
-	l_returnflag char(1) not null,
-	l_linestatus char(1) not null,
-	l_shipdate date not null,
-	l_commitdate date not null,
-	l_receiptdate date not null,
-	l_shipinstruct char(25) not null,
-	l_shipmode char(10) not null,
-	l_comment varchar(44) not null );
+    l_orderkey bigint not null,
+    l_partkey integer not null,
+    l_suppkey integer not null,
+    l_linenumber integer not null,
+    l_quantity decimal(15, 2) not null,
+    l_extendedprice decimal(15, 2) not null,
+    l_discount decimal(15, 2) not null,
+    l_tax decimal(15, 2) not null,
+    l_returnflag char(1) not null,
+    l_linestatus char(1) not null,
+    l_shipdate date not null,
+    l_commitdate date not null,
+    l_receiptdate date not null,
+    l_shipinstruct char(25) not null,
+    l_shipmode char(10) not null,
+    l_comment varchar(44) not null );
 SELECT create_distributed_table('lineitem_range', 'l_orderkey', 'range');
 
 SELECT master_create_empty_shard('lineitem_range') AS new_shard_id
@@ -48,9 +48,9 @@ SELECT avg(distinct l_orderkey) FROM lineitem_range;
 
 
 SELECT p_partkey, count(distinct l_orderkey) FROM lineitem_range, part
-	WHERE l_partkey = p_partkey
-	GROUP BY p_partkey
-	ORDER BY p_partkey LIMIT 10;
+    WHERE l_partkey = p_partkey
+    GROUP BY p_partkey
+    ORDER BY p_partkey LIMIT 10;
 
 -- Check that we support more complex expressions.
 SELECT count(distinct (l_orderkey)) FROM lineitem_range;
@@ -74,22 +74,22 @@ SELECT count(distinct o_orderkey), count(distinct o_custkey) FROM orders;
 -- Hash partitioned tables:
 
 CREATE TABLE lineitem_hash (
-	l_orderkey bigint not null,
-	l_partkey integer not null,
-	l_suppkey integer not null,
-	l_linenumber integer not null,
-	l_quantity decimal(15, 2) not null,
-	l_extendedprice decimal(15, 2) not null,
-	l_discount decimal(15, 2) not null,
-	l_tax decimal(15, 2) not null,
-	l_returnflag char(1) not null,
-	l_linestatus char(1) not null,
-	l_shipdate date not null,
-	l_commitdate date not null,
-	l_receiptdate date not null,
-	l_shipinstruct char(25) not null,
-	l_shipmode char(10) not null,
-	l_comment varchar(44) not null );
+    l_orderkey bigint not null,
+    l_partkey integer not null,
+    l_suppkey integer not null,
+    l_linenumber integer not null,
+    l_quantity decimal(15, 2) not null,
+    l_extendedprice decimal(15, 2) not null,
+    l_discount decimal(15, 2) not null,
+    l_tax decimal(15, 2) not null,
+    l_returnflag char(1) not null,
+    l_linestatus char(1) not null,
+    l_shipdate date not null,
+    l_commitdate date not null,
+    l_receiptdate date not null,
+    l_shipinstruct char(25) not null,
+    l_shipmode char(10) not null,
+    l_comment varchar(44) not null );
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
 
