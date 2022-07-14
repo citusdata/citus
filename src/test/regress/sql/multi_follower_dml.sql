@@ -163,6 +163,20 @@ SELECT * FROM reference_table ORDER BY a;
 INSERT INTO citus_local_table (a, b, z) VALUES (1, 2, 3);
 SELECT * FROM citus_local_table ORDER BY a;
 
+\c "port=57636 dbname=regression options='-c\ citus.use_secondary_nodes=always\ -c\ citus.cluster_name=second-cluster'"
+
+-- when an existing read-replica is forked to become
+-- another primary node, we sometimes have to use citus.use_secondary_nodes=always
+-- even if the node is not in recovery mode. In those cases, allow LOCK
+-- command on local / metadata tables, and also certain UDFs
+SHOW citus.use_secondary_nodes;
+SELECT pg_is_in_recovery();
+SELECT citus_is_coordinator();
+BEGIN;
+	LOCK TABLE pg_dist_node IN SHARE ROW EXCLUSIVE MODE;
+	LOCK TABLE local IN SHARE ROW EXCLUSIVE MODE;
+COMMIT;
+
 \c -reuse-previous=off regression - - :master_port
 DROP TABLE the_table;
 DROP TABLE reference_table;
