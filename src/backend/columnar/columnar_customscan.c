@@ -1386,6 +1386,10 @@ CostColumnarScan(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
 {
 	Path *path = &cpath->path;
 
+	// If EnableColumnarQualPushdown is false, we don't want to send usefulClauses
+	if (!EnableColumnarQualPushdown) {
+		usefulClauses = NIL;
+	}
 	/*List *allClauses = lsecond(cpath->custom_private); */
 	Selectivity clauseSel = clauselist_selectivity(
 		root, usefulClauses, rel->relid, JOIN_INNER, NULL);
