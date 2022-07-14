@@ -354,6 +354,33 @@ ERROR:  writing to worker nodes is not currently allowed
 DETAIL:  citus.use_secondary_nodes is set to 'always'
 SELECT * FROM citus_local_table ORDER BY a;
 ERROR:  there is a shard placement in node group 0 but there are no nodes in that group
+\c "port=57636 dbname=regression options='-c\ citus.use_secondary_nodes=always\ -c\ citus.cluster_name=second-cluster'"
+-- when an existing read-replica is forked to become
+-- another primary node, we sometimes have to use citus.use_secondary_nodes=always
+-- even if the node is not in recovery mode. In those cases, allow LOCK
+-- command on local / metadata tables, and also certain UDFs
+SHOW citus.use_secondary_nodes;
+ citus.use_secondary_nodes
+---------------------------------------------------------------------
+ always
+(1 row)
+
+SELECT pg_is_in_recovery();
+ pg_is_in_recovery
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT citus_is_coordinator();
+ citus_is_coordinator
+---------------------------------------------------------------------
+ t
+(1 row)
+
+BEGIN;
+	LOCK TABLE pg_dist_node IN SHARE ROW EXCLUSIVE MODE;
+	LOCK TABLE local IN SHARE ROW EXCLUSIVE MODE;
+COMMIT;
 \c -reuse-previous=off regression - - :master_port
 DROP TABLE the_table;
 DROP TABLE reference_table;

@@ -2,8 +2,6 @@ setup
 {
     SET citus.shard_count TO 2;
 	SET citus.shard_replication_factor TO 1;
-	SELECT citus_internal.replace_isolation_tester_func();
-	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 
     CREATE TABLE ref_table_1(id int PRIMARY KEY, value int);
 	SELECT create_reference_table('ref_table_1');
@@ -24,7 +22,6 @@ setup
 teardown
 {
 	DROP TABLE ref_table_1, ref_table_2, dist_table, selected_shard_for_dist_table;
-	SELECT citus_internal.restore_isolation_tester_func();
 }
 
 session "s1"

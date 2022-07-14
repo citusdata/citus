@@ -141,6 +141,25 @@ ORDER BY
  localhost |      9072
 (2 rows)
 
+-- basic helper utilities should work fine
+SELECT citus_is_coordinator();
+ citus_is_coordinator
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*) FROM citus_lock_waits;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM citus_dist_stat_activity WHERE global_pid = citus_backend_gpid();
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
 -- okay, now let's play with nodecluster. If we change the cluster of our follower node
 -- queries should stat failing again, since there are no worker nodes in the new cluster
 \c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always\ -c\ citus.cluster_name=second-cluster'"

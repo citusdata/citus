@@ -38,8 +38,10 @@
 #endif
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
+#include "citus_version.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
+#include "commands/extension.h"
 #include "commands/tablecmds.h"
 #include "distributed/adaptive_executor.h"
 #include "distributed/backend_data.h"
@@ -74,8 +76,10 @@
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
+#include "nodes/makefuncs.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
@@ -195,6 +199,15 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	if (EnableVersionChecks && isCreateAlterExtensionUpdateCitusStmt)
 	{
 		ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
+	}
+
+	if (IsA(parsetree, CreateExtensionStmt))
+	{
+		/*
+		 * Postgres forbids creating/altering other extensions from within an extension script, so we use a utility hook instead
+		 * This preprocess check whether citus_columnar should be installed first before citus
+		 */
+		PreprocessCreateExtensionStmtForCitusColumnar(parsetree);
 	}
 
 	if (!CitusHasBeenLoaded())
@@ -662,10 +675,25 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		if (isAlterExtensionUpdateCitusStmt)
 		{
 			citusCanBeUpdatedToAvailableVersion = !InstalledAndAvailableVersionsSame();
+
+			/*
+			 * Check whether need to install/drop citus_columnar when upgrade/downgrade citus
+			 */
+			PreprocessAlterExtensionCitusStmtForCitusColumnar(parsetree);
 		}
 
 		PrevProcessUtility_compat(pstmt, queryString, false, context,
 								  params, queryEnv, dest, completionTag);
+
+		if (isAlterExtensionUpdateCitusStmt)
+		{
+			/*
+			 * Post process, upgrade citus_columnar from fake internal version to normal version if upgrade citus
+			 * or drop citus_columnar fake version when downgrade citus to older version that do not support
+			 * citus_columnar
+			 */
+			PostprocessAlterExtensionCitusStmtForCitusColumnar(parsetree);
+		}
 
 		/*
 		 * if we are running ALTER EXTENSION citus UPDATE (to "<version>") command, we may need
