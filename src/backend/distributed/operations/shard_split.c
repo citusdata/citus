@@ -72,8 +72,7 @@ static void CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 										List *workersForPlacementList);
 static void TryDropSplitShardsOnFailure(List *shardGroupSplitIntervalListList,
 										List *workersForPlacementList);
-static Task * CreateTaskForDDLCommandList(uint64 jobId, List *ddlCommandList,
-										  WorkerNode *workerNode);
+static Task * CreateTaskForDDLCommandList(List *ddlCommandList, WorkerNode *workerNode);
 
 /* Customize error message strings based on operation type */
 static const char *const SplitOperationName[] =
@@ -517,10 +516,9 @@ CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 
 /* Create a DDL task with corresponding task list on given worker node */
 static Task *
-CreateTaskForDDLCommandList(uint64 jobId, List *ddlCommandList, WorkerNode *workerNode)
+CreateTaskForDDLCommandList(List *ddlCommandList, WorkerNode *workerNode)
 {
 	Task *ddlTask = CitusMakeNode(Task);
-	ddlTask->jobId = jobId;
 	ddlTask->taskType = DDL_TASK;
 	ddlTask->replicationModel = REPLICATION_MODEL_INVALID;
 	SetTaskQueryStringList(ddlTask, ddlCommandList);
@@ -572,8 +570,7 @@ CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
 			 */
 			if (ddlCommandList != NULL)
 			{
-				uint64 jobId = shardInterval->shardId;
-				Task *ddlTask = CreateTaskForDDLCommandList(jobId, ddlCommandList,
+				Task *ddlTask = CreateTaskForDDLCommandList(ddlCommandList,
 															workerPlacementNode);
 
 				ddlTaskExecList = lappend(ddlTaskExecList, ddlTask);
