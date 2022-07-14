@@ -63,7 +63,7 @@ typedef struct DistributeObjectOps
 	void (*qualify)(Node *);
 	List * (*preprocess)(Node *, const char *, ProcessUtilityContext);
 	List * (*postprocess)(Node *, const char *);
-	ObjectAddress (*address)(Node *, bool);
+	List * (*address)(Node *, bool);
 	bool markDistributed;
 
 	/* fields used by common implementations, omitted for specialized implementations */
@@ -159,24 +159,24 @@ extern bool CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *d
 /* collation.c - forward declarations */
 extern char * CreateCollationDDL(Oid collationId);
 extern List * CreateCollationDDLsIdempotent(Oid collationId);
-extern ObjectAddress AlterCollationOwnerObjectAddress(Node *stmt, bool missing_ok);
-extern ObjectAddress RenameCollationStmtObjectAddress(Node *stmt, bool missing_ok);
-extern ObjectAddress AlterCollationSchemaStmtObjectAddress(Node *stmt,
-														   bool missing_ok);
+extern List * AlterCollationOwnerObjectAddress(Node *stmt, bool missing_ok);
+extern List * RenameCollationStmtObjectAddress(Node *stmt, bool missing_ok);
+extern List * AlterCollationSchemaStmtObjectAddress(Node *stmt,
+													bool missing_ok);
 extern char * GenerateBackupNameForCollationCollision(const ObjectAddress *address);
-extern ObjectAddress DefineCollationStmtObjectAddress(Node *stmt, bool missing_ok);
+extern List * DefineCollationStmtObjectAddress(Node *stmt, bool missing_ok);
 
 /* database.c - forward declarations */
-extern ObjectAddress AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok);
+extern List * AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok);
 extern List * DatabaseOwnerDDLCommands(const ObjectAddress *address);
 
 /* domain.c - forward declarations */
-extern ObjectAddress CreateDomainStmtObjectAddress(Node *node, bool missing_ok);
-extern ObjectAddress AlterDomainStmtObjectAddress(Node *node, bool missing_ok);
-extern ObjectAddress DomainRenameConstraintStmtObjectAddress(Node *node,
-															 bool missing_ok);
-extern ObjectAddress AlterDomainOwnerStmtObjectAddress(Node *node, bool missing_ok);
-extern ObjectAddress RenameDomainStmtObjectAddress(Node *node, bool missing_ok);
+extern List * CreateDomainStmtObjectAddress(Node *node, bool missing_ok);
+extern List * AlterDomainStmtObjectAddress(Node *node, bool missing_ok);
+extern List * DomainRenameConstraintStmtObjectAddress(Node *node,
+													  bool missing_ok);
+extern List * AlterDomainOwnerStmtObjectAddress(Node *node, bool missing_ok);
+extern List * RenameDomainStmtObjectAddress(Node *node, bool missing_ok);
 extern CreateDomainStmt * RecreateDomainStmt(Oid domainOid);
 extern Oid get_constraint_typid(Oid conoid);
 
@@ -208,10 +208,10 @@ extern List * PreprocessAlterExtensionContentsStmt(Node *node,
 												   ProcessUtilityContext
 												   processUtilityContext);
 extern List * CreateExtensionDDLCommand(const ObjectAddress *extensionAddress);
-extern ObjectAddress AlterExtensionSchemaStmtObjectAddress(Node *stmt,
-														   bool missing_ok);
-extern ObjectAddress AlterExtensionUpdateStmtObjectAddress(Node *stmt,
-														   bool missing_ok);
+extern List * AlterExtensionSchemaStmtObjectAddress(Node *stmt,
+													bool missing_ok);
+extern List * AlterExtensionUpdateStmtObjectAddress(Node *stmt,
+													bool missing_ok);
 extern void CreateExtensionWithVersion(char *extname, char *extVersion);
 extern void AlterExtensionUpdateStmt(char *extname, char *extVersion);
 extern int GetExtensionVersionNumber(char *extVersion);
@@ -263,11 +263,11 @@ extern Acl * GetPrivilegesForFDW(Oid FDWOid);
 extern List * PreprocessGrantOnForeignServerStmt(Node *node, const char *queryString,
 												 ProcessUtilityContext
 												 processUtilityContext);
-extern ObjectAddress CreateForeignServerStmtObjectAddress(Node *node, bool missing_ok);
-extern ObjectAddress AlterForeignServerStmtObjectAddress(Node *node, bool missing_ok);
-extern ObjectAddress RenameForeignServerStmtObjectAddress(Node *node, bool missing_ok);
-extern ObjectAddress AlterForeignServerOwnerStmtObjectAddress(Node *node, bool
-															  missing_ok);
+extern List * CreateForeignServerStmtObjectAddress(Node *node, bool missing_ok);
+extern List * AlterForeignServerStmtObjectAddress(Node *node, bool missing_ok);
+extern List * RenameForeignServerStmtObjectAddress(Node *node, bool missing_ok);
+extern List * AlterForeignServerOwnerStmtObjectAddress(Node *node, bool
+													   missing_ok);
 extern List * GetForeignServerCreateDDLCommand(Oid serverId);
 
 
@@ -282,26 +282,26 @@ extern List * PreprocessCreateFunctionStmt(Node *stmt, const char *queryString,
 										   ProcessUtilityContext processUtilityContext);
 extern List * PostprocessCreateFunctionStmt(Node *stmt,
 											const char *queryString);
-extern ObjectAddress CreateFunctionStmtObjectAddress(Node *stmt,
-													 bool missing_ok);
-extern ObjectAddress DefineAggregateStmtObjectAddress(Node *stmt,
-													  bool missing_ok);
+extern List * CreateFunctionStmtObjectAddress(Node *stmt,
+											  bool missing_ok);
+extern List * DefineAggregateStmtObjectAddress(Node *stmt,
+											   bool missing_ok);
 extern List * PreprocessAlterFunctionStmt(Node *stmt, const char *queryString,
 										  ProcessUtilityContext processUtilityContext);
-extern ObjectAddress AlterFunctionStmtObjectAddress(Node *stmt,
-													bool missing_ok);
-extern ObjectAddress RenameFunctionStmtObjectAddress(Node *stmt,
-													 bool missing_ok);
-extern ObjectAddress AlterFunctionOwnerObjectAddress(Node *stmt,
-													 bool missing_ok);
-extern ObjectAddress AlterFunctionSchemaStmtObjectAddress(Node *stmt,
-														  bool missing_ok);
+extern List * AlterFunctionStmtObjectAddress(Node *stmt,
+											 bool missing_ok);
+extern List * RenameFunctionStmtObjectAddress(Node *stmt,
+											  bool missing_ok);
+extern List * AlterFunctionOwnerObjectAddress(Node *stmt,
+											  bool missing_ok);
+extern List * AlterFunctionSchemaStmtObjectAddress(Node *stmt,
+												   bool missing_ok);
 extern List * PreprocessAlterFunctionDependsStmt(Node *stmt,
 												 const char *queryString,
 												 ProcessUtilityContext
 												 processUtilityContext);
-extern ObjectAddress AlterFunctionDependsStmtObjectAddress(Node *stmt,
-														   bool missing_ok);
+extern List * AlterFunctionDependsStmtObjectAddress(Node *stmt,
+													bool missing_ok);
 extern List * PreprocessGrantOnFunctionStmt(Node *node, const char *queryString,
 											ProcessUtilityContext processUtilityContext);
 extern List * PostprocessGrantOnFunctionStmt(Node *node, const char *queryString);
@@ -340,7 +340,7 @@ extern List * ExecuteFunctionOnEachTableIndex(Oid relationId, PGIndexProcessor
 extern bool IsReindexWithParam_compat(ReindexStmt *stmt, char *paramName);
 
 /* objectaddress.c - forward declarations */
-extern ObjectAddress CreateExtensionStmtObjectAddress(Node *stmt, bool missing_ok);
+extern List * CreateExtensionStmtObjectAddress(Node *stmt, bool missing_ok);
 
 
 /* policy.c -  forward declarations */
@@ -376,10 +376,10 @@ extern List * PostprocessAlterRoleStmt(Node *stmt, const char *queryString);
 extern List * PreprocessAlterRoleSetStmt(Node *stmt, const char *queryString,
 										 ProcessUtilityContext processUtilityContext);
 extern List * GenerateAlterRoleSetCommandForRole(Oid roleid);
-extern ObjectAddress AlterRoleStmtObjectAddress(Node *node,
-												bool missing_ok);
-extern ObjectAddress AlterRoleSetStmtObjectAddress(Node *node,
-												   bool missing_ok);
+extern List * AlterRoleStmtObjectAddress(Node *node,
+										 bool missing_ok);
+extern List * AlterRoleSetStmtObjectAddress(Node *node,
+											bool missing_ok);
 extern List * PreprocessCreateRoleStmt(Node *stmt, const char *queryString,
 									   ProcessUtilityContext processUtilityContext);
 extern List * PreprocessDropRoleStmt(Node *stmt, const char *queryString,
@@ -388,7 +388,7 @@ extern List * PreprocessGrantRoleStmt(Node *stmt, const char *queryString,
 									  ProcessUtilityContext processUtilityContext);
 extern List * PostprocessGrantRoleStmt(Node *stmt, const char *queryString);
 extern List * GenerateCreateOrAlterRoleCommand(Oid roleOid);
-ObjectAddress CreateRoleStmtObjectAddress(Node *stmt, bool missing_ok);
+extern List * CreateRoleStmtObjectAddress(Node *stmt, bool missing_ok);
 extern void UnmarkRolesDistributed(List *roles);
 extern List * FilterDistributedRoles(List *roles);
 
@@ -402,8 +402,8 @@ extern List * PreprocessAlterObjectSchemaStmt(Node *alterObjectSchemaStmt,
 											  const char *alterObjectSchemaCommand);
 extern List * PreprocessGrantOnSchemaStmt(Node *node, const char *queryString,
 										  ProcessUtilityContext processUtilityContext);
-extern ObjectAddress CreateSchemaStmtObjectAddress(Node *node, bool missing_ok);
-extern ObjectAddress AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok);
+extern List * CreateSchemaStmtObjectAddress(Node *node, bool missing_ok);
+extern List * AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok);
 
 /* sequence.c - forward declarations */
 extern List * PreprocessAlterSequenceStmt(Node *node, const char *queryString,
@@ -422,10 +422,10 @@ extern List * PreprocessRenameSequenceStmt(Node *node, const char *queryString,
 extern List * PreprocessGrantOnSequenceStmt(Node *node, const char *queryString,
 											ProcessUtilityContext processUtilityContext);
 extern List * PostprocessGrantOnSequenceStmt(Node *node, const char *queryString);
-extern ObjectAddress AlterSequenceStmtObjectAddress(Node *node, bool missing_ok);
-extern ObjectAddress AlterSequenceSchemaStmtObjectAddress(Node *node, bool missing_ok);
-extern ObjectAddress AlterSequenceOwnerStmtObjectAddress(Node *node, bool missing_ok);
-extern ObjectAddress RenameSequenceStmtObjectAddress(Node *node, bool missing_ok);
+extern List * AlterSequenceStmtObjectAddress(Node *node, bool missing_ok);
+extern List * AlterSequenceSchemaStmtObjectAddress(Node *node, bool missing_ok);
+extern List * AlterSequenceOwnerStmtObjectAddress(Node *node, bool missing_ok);
+extern List * RenameSequenceStmtObjectAddress(Node *node, bool missing_ok);
 extern void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 extern void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
 extern char * GenerateBackupNameForSequenceCollision(const ObjectAddress *address);
@@ -436,7 +436,7 @@ extern void RenameExistingSequenceWithDifferentTypeIfExists(RangeVar *sequence,
 extern List * PreprocessCreateStatisticsStmt(Node *node, const char *queryString,
 											 ProcessUtilityContext processUtilityContext);
 extern List * PostprocessCreateStatisticsStmt(Node *node, const char *queryString);
-extern ObjectAddress CreateStatisticsStmtObjectAddress(Node *node, bool missingOk);
+extern List * CreateStatisticsStmtObjectAddress(Node *node, bool missingOk);
 extern List * PreprocessDropStatisticsStmt(Node *node, const char *queryString,
 										   ProcessUtilityContext processUtilityContext);
 extern List * PreprocessAlterStatisticsRenameStmt(Node *node, const char *queryString,
@@ -446,7 +446,7 @@ extern List * PreprocessAlterStatisticsSchemaStmt(Node *node, const char *queryS
 												  ProcessUtilityContext
 												  processUtilityContext);
 extern List * PostprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString);
-extern ObjectAddress AlterStatisticsSchemaStmtObjectAddress(Node *node, bool missingOk);
+extern List * AlterStatisticsSchemaStmtObjectAddress(Node *node, bool missingOk);
 extern List * PreprocessAlterStatisticsStmt(Node *node, const char *queryString,
 											ProcessUtilityContext processUtilityContext);
 extern List * PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString,
@@ -487,8 +487,8 @@ extern void ErrorUnsupportedAlterTableAddColumn(Oid relationId, AlterTableCmd *c
 extern void ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 										 char referencingReplicationModel,
 										 Var *distributionColumn, uint32 colocationId);
-extern ObjectAddress AlterTableSchemaStmtObjectAddress(Node *stmt,
-													   bool missing_ok);
+extern List * AlterTableSchemaStmtObjectAddress(Node *stmt,
+												bool missing_ok);
 extern List * MakeNameListFromRangeVar(const RangeVar *rel);
 extern Oid GetSequenceOid(Oid relationId, AttrNumber attnum);
 extern bool ConstrTypeUsesIndex(ConstrType constrType);
@@ -499,30 +499,30 @@ extern List * GetCreateTextSearchConfigStatements(const ObjectAddress *address);
 extern List * GetCreateTextSearchDictionaryStatements(const ObjectAddress *address);
 extern List * CreateTextSearchConfigDDLCommandsIdempotent(const ObjectAddress *address);
 extern List * CreateTextSearchDictDDLCommandsIdempotent(const ObjectAddress *address);
-extern ObjectAddress CreateTextSearchConfigurationObjectAddress(Node *node,
-																bool missing_ok);
-extern ObjectAddress CreateTextSearchDictObjectAddress(Node *node,
-													   bool missing_ok);
-extern ObjectAddress RenameTextSearchConfigurationStmtObjectAddress(Node *node,
-																	bool missing_ok);
-extern ObjectAddress RenameTextSearchDictionaryStmtObjectAddress(Node *node,
-																 bool missing_ok);
-extern ObjectAddress AlterTextSearchConfigurationStmtObjectAddress(Node *node,
-																   bool missing_ok);
-extern ObjectAddress AlterTextSearchDictionaryStmtObjectAddress(Node *node,
-																bool missing_ok);
-extern ObjectAddress AlterTextSearchConfigurationSchemaStmtObjectAddress(Node *node,
-																		 bool missing_ok);
-extern ObjectAddress AlterTextSearchDictionarySchemaStmtObjectAddress(Node *node,
-																	  bool missing_ok);
-extern ObjectAddress TextSearchConfigurationCommentObjectAddress(Node *node,
-																 bool missing_ok);
-extern ObjectAddress TextSearchDictCommentObjectAddress(Node *node,
-														bool missing_ok);
-extern ObjectAddress AlterTextSearchConfigurationOwnerObjectAddress(Node *node,
-																	bool missing_ok);
-extern ObjectAddress AlterTextSearchDictOwnerObjectAddress(Node *node,
-														   bool missing_ok);
+extern List * CreateTextSearchConfigurationObjectAddress(Node *node,
+														 bool missing_ok);
+extern List * CreateTextSearchDictObjectAddress(Node *node,
+												bool missing_ok);
+extern List * RenameTextSearchConfigurationStmtObjectAddress(Node *node,
+															 bool missing_ok);
+extern List * RenameTextSearchDictionaryStmtObjectAddress(Node *node,
+														  bool missing_ok);
+extern List * AlterTextSearchConfigurationStmtObjectAddress(Node *node,
+															bool missing_ok);
+extern List * AlterTextSearchDictionaryStmtObjectAddress(Node *node,
+														 bool missing_ok);
+extern List * AlterTextSearchConfigurationSchemaStmtObjectAddress(Node *node,
+																  bool missing_ok);
+extern List * AlterTextSearchDictionarySchemaStmtObjectAddress(Node *node,
+															   bool missing_ok);
+extern List * TextSearchConfigurationCommentObjectAddress(Node *node,
+														  bool missing_ok);
+extern List * TextSearchDictCommentObjectAddress(Node *node,
+												 bool missing_ok);
+extern List * AlterTextSearchConfigurationOwnerObjectAddress(Node *node,
+															 bool missing_ok);
+extern List * AlterTextSearchDictOwnerObjectAddress(Node *node,
+													bool missing_ok);
 extern char * GenerateBackupNameForTextSearchConfiguration(const ObjectAddress *address);
 extern char * GenerateBackupNameForTextSearchDict(const ObjectAddress *address);
 extern List * get_ts_config_namelist(Oid tsconfigOid);
@@ -535,16 +535,16 @@ extern List * PreprocessRenameTypeAttributeStmt(Node *stmt, const char *queryStr
 												ProcessUtilityContext
 												processUtilityContext);
 extern Node * CreateTypeStmtByObjectAddress(const ObjectAddress *address);
-extern ObjectAddress CompositeTypeStmtObjectAddress(Node *stmt, bool missing_ok);
-extern ObjectAddress CreateEnumStmtObjectAddress(Node *stmt, bool missing_ok);
-extern ObjectAddress AlterTypeStmtObjectAddress(Node *stmt, bool missing_ok);
-extern ObjectAddress AlterEnumStmtObjectAddress(Node *stmt, bool missing_ok);
-extern ObjectAddress RenameTypeStmtObjectAddress(Node *stmt, bool missing_ok);
-extern ObjectAddress AlterTypeSchemaStmtObjectAddress(Node *stmt,
-													  bool missing_ok);
-extern ObjectAddress RenameTypeAttributeStmtObjectAddress(Node *stmt,
-														  bool missing_ok);
-extern ObjectAddress AlterTypeOwnerObjectAddress(Node *stmt, bool missing_ok);
+extern List * CompositeTypeStmtObjectAddress(Node *stmt, bool missing_ok);
+extern List * CreateEnumStmtObjectAddress(Node *stmt, bool missing_ok);
+extern List * AlterTypeStmtObjectAddress(Node *stmt, bool missing_ok);
+extern List * AlterEnumStmtObjectAddress(Node *stmt, bool missing_ok);
+extern List * RenameTypeStmtObjectAddress(Node *stmt, bool missing_ok);
+extern List * AlterTypeSchemaStmtObjectAddress(Node *stmt,
+											   bool missing_ok);
+extern List * RenameTypeAttributeStmtObjectAddress(Node *stmt,
+												   bool missing_ok);
+extern List * AlterTypeOwnerObjectAddress(Node *stmt, bool missing_ok);
 extern List * CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress);
 extern char * GenerateBackupNameForTypeCollision(const ObjectAddress *address);
 
@@ -565,8 +565,8 @@ extern List * PostprocessVacuumStmt(Node *node, const char *vacuumCommand);
 extern List * PreprocessViewStmt(Node *node, const char *queryString,
 								 ProcessUtilityContext processUtilityContext);
 extern List * PostprocessViewStmt(Node *node, const char *queryString);
-extern ObjectAddress ViewStmtObjectAddress(Node *node, bool missing_ok);
-extern ObjectAddress AlterViewStmtObjectAddress(Node *node, bool missing_ok);
+extern List * ViewStmtObjectAddress(Node *node, bool missing_ok);
+extern List * AlterViewStmtObjectAddress(Node *node, bool missing_ok);
 extern List * PreprocessDropViewStmt(Node *node, const char *queryString,
 									 ProcessUtilityContext processUtilityContext);
 extern char * CreateViewDDLCommand(Oid viewOid);
@@ -582,11 +582,11 @@ extern List * PreprocessAlterViewStmt(Node *node, const char *queryString,
 extern List * PostprocessAlterViewStmt(Node *node, const char *queryString);
 extern List * PreprocessRenameViewStmt(Node *node, const char *queryString,
 									   ProcessUtilityContext processUtilityContext);
-extern ObjectAddress RenameViewStmtObjectAddress(Node *node, bool missing_ok);
+extern List * RenameViewStmtObjectAddress(Node *node, bool missing_ok);
 extern List * PreprocessAlterViewSchemaStmt(Node *node, const char *queryString,
 											ProcessUtilityContext processUtilityContext);
 extern List * PostprocessAlterViewSchemaStmt(Node *node, const char *queryString);
-extern ObjectAddress AlterViewSchemaStmtObjectAddress(Node *node, bool missing_ok);
+extern List * AlterViewSchemaStmtObjectAddress(Node *node, bool missing_ok);
 extern bool IsViewRenameStmt(RenameStmt *renameStmt);
 
 /* trigger.c - forward declarations */
@@ -594,7 +594,7 @@ extern List * GetExplicitTriggerCommandList(Oid relationId);
 extern HeapTuple GetTriggerTupleById(Oid triggerId, bool missingOk);
 extern List * GetExplicitTriggerIdList(Oid relationId);
 extern List * PostprocessCreateTriggerStmt(Node *node, const char *queryString);
-extern ObjectAddress CreateTriggerStmtObjectAddress(Node *node, bool missingOk);
+extern List * CreateTriggerStmtObjectAddress(Node *node, bool missingOk);
 extern void CreateTriggerEventExtendNames(CreateTrigStmt *createTriggerStmt,
 										  char *schemaName, uint64 shardId);
 extern List * PostprocessAlterTriggerRenameStmt(Node *node, const char *queryString);

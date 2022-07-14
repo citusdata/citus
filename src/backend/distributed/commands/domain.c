@@ -37,7 +37,7 @@
 
 
 static CollateClause * MakeCollateClauseFromOid(Oid collationOid);
-static ObjectAddress GetDomainAddressByName(TypeName *domainName, bool missing_ok);
+static List * GetDomainAddressByName(TypeName *domainName, bool missing_ok);
 
 /*
  * GetDomainAddressByName returns the ObjectAddress of the domain identified by
@@ -45,13 +45,13 @@ static ObjectAddress GetDomainAddressByName(TypeName *domainName, bool missing_o
  * InvalidOid. When missing_ok is false this function will raise an error instead when the
  * domain can't be found.
  */
-static ObjectAddress
+static List *
 GetDomainAddressByName(TypeName *domainName, bool missing_ok)
 {
-	ObjectAddress address = { 0 };
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	Oid domainOid = LookupTypeNameOid(NULL, domainName, missing_ok);
-	ObjectAddressSet(address, TypeRelationId, domainOid);
-	return address;
+	ObjectAddressSet(*address, TypeRelationId, domainOid);
+	return list_make1(address);
 }
 
 
@@ -229,17 +229,17 @@ MakeCollateClauseFromOid(Oid collationOid)
  * created by the statement. When missing_ok is false the function will raise an error if
  * the domain cannot be found in the local catalog.
  */
-ObjectAddress
+List *
 CreateDomainStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CreateDomainStmt *stmt = castNode(CreateDomainStmt, node);
 
 	TypeName *typeName = makeTypeNameFromNameList(stmt->domainname);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TypeRelationId, typeOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -248,7 +248,7 @@ CreateDomainStmtObjectAddress(Node *node, bool missing_ok)
  * When missing_ok is false this function will raise an error when the domain is not
  * found.
  */
-ObjectAddress
+List *
 AlterDomainStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterDomainStmt *stmt = castNode(AlterDomainStmt, node);
@@ -263,7 +263,7 @@ AlterDomainStmtObjectAddress(Node *node, bool missing_ok)
  * which the constraint is being renamed. When missing_ok this function will raise an
  * error if the domain cannot be found.
  */
-ObjectAddress
+List *
 DomainRenameConstraintStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -278,7 +278,7 @@ DomainRenameConstraintStmtObjectAddress(Node *node, bool missing_ok)
  * being changed. When missing_ok is false this function will raise an error if the domain
  * cannot be found.
  */
-ObjectAddress
+List *
 AlterDomainOwnerStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
@@ -294,7 +294,7 @@ AlterDomainOwnerStmtObjectAddress(Node *node, bool missing_ok)
  * When missing_ok is false this function will raise an error when the domain cannot be
  * found.
  */
-ObjectAddress
+List *
 RenameDomainStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);

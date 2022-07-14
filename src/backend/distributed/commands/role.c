@@ -74,7 +74,7 @@ static Node * makeFloatConst(char *str, int location);
 static const char * WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec *role);
 static VariableSetStmt * MakeVariableSetStmt(const char *config);
 static int ConfigGenericNameCompare(const void *lhs, const void *rhs);
-static ObjectAddress RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok);
+static List * RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok);
 
 /* controlled via GUC */
 bool EnableCreateRolePropagation = true;
@@ -87,7 +87,7 @@ bool EnableAlterRoleSetPropagation = true;
  * AlterRoleStmt. If missing_ok is set to false an error will be raised if postgres
  * was unable to find the role that was the target of the statement.
  */
-ObjectAddress
+List *
 AlterRoleStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
@@ -100,7 +100,7 @@ AlterRoleStmtObjectAddress(Node *node, bool missing_ok)
  * AlterRoleSetStmt. If missing_ok is set to false an error will be raised if postgres
  * was unable to find the role that was the target of the statement.
  */
-ObjectAddress
+List *
 AlterRoleSetStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterRoleSetStmt *stmt = castNode(AlterRoleSetStmt, node);
@@ -113,19 +113,19 @@ AlterRoleSetStmtObjectAddress(Node *node, bool missing_ok)
  * RoleSpec. If missing_ok is set to false an error will be raised by postgres
  * explaining the Role could not be found.
  */
-static ObjectAddress
+static List *
 RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok)
 {
-	ObjectAddress address = { 0 };
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 
 	if (role != NULL)
 	{
 		/* roles can be NULL for statements on ALL roles eg. ALTER ROLE ALL SET ... */
 		Oid roleOid = get_rolespec_oid(role, missing_ok);
-		ObjectAddressSet(address, AuthIdRelationId, roleOid);
+		ObjectAddressSet(*address, AuthIdRelationId, roleOid);
 	}
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -1179,15 +1179,15 @@ ConfigGenericNameCompare(const void *a, const void *b)
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-ObjectAddress
+List *
 CreateRoleStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CreateRoleStmt *stmt = castNode(CreateRoleStmt, node);
 	Oid roleOid = get_role_oid(stmt->role, missing_ok);
-	ObjectAddress roleAddress = { 0 };
-	ObjectAddressSet(roleAddress, AuthIdRelationId, roleOid);
+	ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*roleAddress, AuthIdRelationId, roleOid);
 
-	return roleAddress;
+	return list_make1(roleAddress);
 }
 
 

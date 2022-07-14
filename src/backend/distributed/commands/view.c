@@ -152,17 +152,17 @@ PostprocessViewStmt(Node *node, const char *queryString)
  * ViewStmtObjectAddress returns the ObjectAddress for the subject of the
  * CREATE [OR REPLACE] VIEW statement.
  */
-ObjectAddress
+List *
 ViewStmtObjectAddress(Node *node, bool missing_ok)
 {
 	ViewStmt *stmt = castNode(ViewStmt, node);
 
 	Oid viewOid = RangeVarGetRelid(stmt->view, NoLock, missing_ok);
 
-	ObjectAddress viewAddress = { 0 };
-	ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
+	ObjectAddress *viewAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*viewAddress, RelationRelationId, viewOid);
 
-	return viewAddress;
+	return list_make1(viewAddress);
 }
 
 
@@ -520,16 +520,16 @@ PostprocessAlterViewStmt(Node *node, const char *queryString)
  * AlterViewStmtObjectAddress returns the ObjectAddress for the subject of the
  * ALTER VIEW statement.
  */
-ObjectAddress
+List *
 AlterViewStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
 	Oid viewOid = RangeVarGetRelid(stmt->relation, NoLock, missing_ok);
 
-	ObjectAddress viewAddress = { 0 };
-	ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
+	ObjectAddress *viewAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*viewAddress, RelationRelationId, viewOid);
 
-	return viewAddress;
+	return list_make1(viewAddress);
 }
 
 
@@ -572,17 +572,17 @@ PreprocessRenameViewStmt(Node *node, const char *queryString,
  * RenameViewStmtObjectAddress returns the ObjectAddress of the view that is the object
  * of the RenameStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+List *
 RenameViewStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 
 	Oid viewOid = RangeVarGetRelid(stmt->relation, NoLock, missing_ok);
 
-	ObjectAddress viewAddress = { 0 };
-	ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
+	ObjectAddress *viewAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*viewAddress, RelationRelationId, viewOid);
 
-	return viewAddress;
+	return list_make1(viewAddress);
 }
 
 
@@ -648,7 +648,7 @@ PostprocessAlterViewSchemaStmt(Node *node, const char *queryString)
  * AlterViewSchemaStmtObjectAddress returns the ObjectAddress of the view that is the object
  * of the alter schema statement.
  */
-ObjectAddress
+List *
 AlterViewSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -676,10 +676,10 @@ AlterViewSchemaStmtObjectAddress(Node *node, bool missing_ok)
 		}
 	}
 
-	ObjectAddress viewAddress = { 0 };
-	ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
+	ObjectAddress *viewAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*viewAddress, RelationRelationId, viewOid);
 
-	return viewAddress;
+	return list_make1(viewAddress);
 }
 
 

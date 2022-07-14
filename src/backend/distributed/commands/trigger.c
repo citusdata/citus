@@ -241,7 +241,7 @@ PostprocessCreateTriggerStmt(Node *node, const char *queryString)
  * Never returns NULL, but the objid in the address can be invalid if missingOk
  * was set to true.
  */
-ObjectAddress
+List *
 CreateTriggerStmtObjectAddress(Node *node, bool missingOk)
 {
 	CreateTrigStmt *createTriggerStmt = castNode(CreateTrigStmt, node);
@@ -260,9 +260,9 @@ CreateTriggerStmtObjectAddress(Node *node, bool missingOk)
 							   triggerName, relationName)));
 	}
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TriggerRelationId, triggerId);
-	return address;
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TriggerRelationId, triggerId);
+	return list_make1(address);
 }
 
 

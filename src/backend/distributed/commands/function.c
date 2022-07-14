@@ -88,9 +88,9 @@ static void EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
 static bool ShouldAddFunctionSignature(FunctionParameterMode mode);
-static ObjectAddress FunctionToObjectAddress(ObjectType objectType,
-											 ObjectWithArgs *objectWithArgs,
-											 bool missing_ok);
+static List * FunctionToObjectAddress(ObjectType objectType,
+									  ObjectWithArgs *objectWithArgs,
+									  bool missing_ok);
 static void ErrorIfUnsupportedAlterFunctionStmt(AlterFunctionStmt *stmt);
 static char * quote_qualified_func_name(Oid funcOid);
 static void DistributeFunctionWithDistributionArgument(RegProcedure funcOid,
@@ -1405,7 +1405,7 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
  * CREATE [OR REPLACE] FUNCTION statement. If missing_ok is false it will error with the
  * normal postgres error for unfound functions.
  */
-ObjectAddress
+List *
 CreateFunctionStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CreateFunctionStmt *stmt = castNode(CreateFunctionStmt, node);
@@ -1440,7 +1440,7 @@ CreateFunctionStmtObjectAddress(Node *node, bool missing_ok)
  *
  * objectId in the address can be invalid if missing_ok was set to true.
  */
-ObjectAddress
+List *
 DefineAggregateStmtObjectAddress(Node *node, bool missing_ok)
 {
 	DefineStmt *stmt = castNode(DefineStmt, node);
@@ -1576,7 +1576,7 @@ PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString,
  * is the subject of an ALTER FUNCTION ... DEPENS ON EXTENSION ... statement. If
  * missing_ok is set to false the lookup will raise an error.
  */
-ObjectAddress
+List *
 AlterFunctionDependsStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectDependsStmt *stmt = castNode(AlterObjectDependsStmt, node);
@@ -1592,7 +1592,7 @@ AlterFunctionDependsStmtObjectAddress(Node *node, bool missing_ok)
  * AlterFunctionStmt. If missing_ok is set to false an error will be raised if postgres
  * was unable to find the function/procedure that was the target of the statement.
  */
-ObjectAddress
+List *
 AlterFunctionStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterFunctionStmt *stmt = castNode(AlterFunctionStmt, node);
@@ -1604,7 +1604,7 @@ AlterFunctionStmtObjectAddress(Node *node, bool missing_ok)
  * RenameFunctionStmtObjectAddress returns the ObjectAddress of the function that is the
  * subject of the RenameStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+List *
 RenameFunctionStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -1617,7 +1617,7 @@ RenameFunctionStmtObjectAddress(Node *node, bool missing_ok)
  * AlterFunctionOwnerObjectAddress returns the ObjectAddress of the function that is the
  * subject of the AlterOwnerStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+List *
 AlterFunctionOwnerObjectAddress(Node *node, bool missing_ok)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
@@ -1635,7 +1635,7 @@ AlterFunctionOwnerObjectAddress(Node *node, bool missing_ok)
  * the new schema. Errors if missing_ok is false and the type cannot be found in either of
  * the schemas.
  */
-ObjectAddress
+List *
 AlterFunctionSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -1680,10 +1680,10 @@ AlterFunctionSchemaStmtObjectAddress(Node *node, bool missing_ok)
 		}
 	}
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, ProcedureRelationId, funcOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -1827,17 +1827,17 @@ ShouldAddFunctionSignature(FunctionParameterMode mode)
  * Function/Procedure/Aggregate. If missing_ok is set to false an error will be
  * raised by postgres explaining the Function/Procedure could not be found.
  */
-static ObjectAddress
+static List *
 FunctionToObjectAddress(ObjectType objectType, ObjectWithArgs *objectWithArgs,
 						bool missing_ok)
 {
 	AssertObjectTypeIsFunctional(objectType);
 
 	Oid funcOid = LookupFuncWithArgs(objectType, objectWithArgs, missing_ok);
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, ProcedureRelationId, funcOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
 
-	return address;
+	return list_make1(address);
 }
 
 

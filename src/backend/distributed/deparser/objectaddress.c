@@ -33,11 +33,23 @@ GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
 		ereport(ERROR, (errmsg("unsupported statement to get object address for")));
 	}
 
-	return ops->address(parseTree, missing_ok);
+	List *objectAddresses = ops->address(parseTree, missing_ok);
+
+	if (list_length(objectAddresses) > 1)
+	{
+		ereport(ERROR, (errmsg(
+							"citus does not support multiple object addresses in GetObjectAddressFromParseTree")));
+	}
+
+	Assert(list_length(objectAddresses) == 1);
+
+	ObjectAddress *objectAddress = linitial(objectAddresses);
+
+	return *objectAddress;
 }
 
 
-ObjectAddress
+List *
 RenameAttributeStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -67,11 +79,11 @@ RenameAttributeStmtObjectAddress(Node *node, bool missing_ok)
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-ObjectAddress
+List *
 CreateExtensionStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CreateExtensionStmt *stmt = castNode(CreateExtensionStmt, node);
-	ObjectAddress address = { 0 };
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 
 	const char *extensionName = stmt->extname;
 
@@ -85,7 +97,7 @@ CreateExtensionStmtObjectAddress(Node *node, bool missing_ok)
 							   extensionName)));
 	}
 
-	ObjectAddressSet(address, ExtensionRelationId, extensionoid);
+	ObjectAddressSet(*address, ExtensionRelationId, extensionoid);
 
-	return address;
+	return list_make1(address);
 }

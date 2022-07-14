@@ -1128,7 +1128,7 @@ GetDependentFDWsToExtension(Oid extensionId)
  * AlterExtensionSchemaStmtObjectAddress returns the ObjectAddress of the extension that is
  * the subject of the AlterObjectSchemaStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+List *
 AlterExtensionSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -1145,10 +1145,10 @@ AlterExtensionSchemaStmtObjectAddress(Node *node, bool missing_ok)
 							   extensionName)));
 	}
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, ExtensionRelationId, extensionOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, ExtensionRelationId, extensionOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -1156,7 +1156,7 @@ AlterExtensionSchemaStmtObjectAddress(Node *node, bool missing_ok)
  * AlterExtensionUpdateStmtObjectAddress returns the ObjectAddress of the extension that is
  * the subject of the AlterExtensionStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+List *
 AlterExtensionUpdateStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterExtensionStmt *stmt = castNode(AlterExtensionStmt, node);
@@ -1171,10 +1171,10 @@ AlterExtensionUpdateStmtObjectAddress(Node *node, bool missing_ok)
 							   extensionName)));
 	}
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, ExtensionRelationId, extensionOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, ExtensionRelationId, extensionOid);
 
-	return address;
+	return list_make1(address);
 }
 
 

@@ -138,16 +138,16 @@ PostprocessCreateStatisticsStmt(Node *node, const char *queryString)
  * Never returns NULL, but the objid in the address can be invalid if missingOk
  * was set to true.
  */
-ObjectAddress
+List *
 CreateStatisticsStmtObjectAddress(Node *node, bool missingOk)
 {
 	CreateStatsStmt *stmt = castNode(CreateStatsStmt, node);
 
-	ObjectAddress address = { 0 };
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	Oid statsOid = get_statistics_object_oid(stmt->defnames, missingOk);
-	ObjectAddressSet(address, StatisticExtRelationId, statsOid);
+	ObjectAddressSet(*address, StatisticExtRelationId, statsOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -322,18 +322,18 @@ PostprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString)
  * Never returns NULL, but the objid in the address can be invalid if missingOk
  * was set to true.
  */
-ObjectAddress
+List *
 AlterStatisticsSchemaStmtObjectAddress(Node *node, bool missingOk)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 
-	ObjectAddress address = { 0 };
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	String *statName = llast((List *) stmt->object);
 	Oid statsOid = get_statistics_object_oid(list_make2(makeString(stmt->newschema),
 														statName), missingOk);
-	ObjectAddressSet(address, StatisticExtRelationId, statsOid);
+	ObjectAddressSet(*address, StatisticExtRelationId, statsOid);
 
-	return address;
+	return list_make1(address);
 }
 
 

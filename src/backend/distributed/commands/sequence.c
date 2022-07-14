@@ -358,7 +358,7 @@ PreprocessRenameSequenceStmt(Node *node, const char *queryString, ProcessUtility
  * RenameSequenceStmtObjectAddress returns the ObjectAddress of the sequence that is the
  * subject of the RenameStmt.
  */
-ObjectAddress
+List *
 RenameSequenceStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -366,10 +366,10 @@ RenameSequenceStmtObjectAddress(Node *node, bool missing_ok)
 
 	RangeVar *sequence = stmt->relation;
 	Oid seqOid = RangeVarGetRelid(sequence, NoLock, missing_ok);
-	ObjectAddress sequenceAddress = { 0 };
-	ObjectAddressSet(sequenceAddress, RelationRelationId, seqOid);
+	ObjectAddress *sequenceAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*sequenceAddress, RelationRelationId, seqOid);
 
-	return sequenceAddress;
+	return list_make1(sequenceAddress);
 }
 
 
@@ -471,17 +471,17 @@ SequenceUsedInDistributedTable(const ObjectAddress *sequenceAddress)
  * AlterSequenceStmtObjectAddress returns the ObjectAddress of the sequence that is the
  * subject of the AlterSeqStmt.
  */
-ObjectAddress
+List *
 AlterSequenceStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterSeqStmt *stmt = castNode(AlterSeqStmt, node);
 
 	RangeVar *sequence = stmt->sequence;
 	Oid seqOid = RangeVarGetRelid(sequence, NoLock, stmt->missing_ok);
-	ObjectAddress sequenceAddress = { 0 };
-	ObjectAddressSet(sequenceAddress, RelationRelationId, seqOid);
+	ObjectAddress *sequenceAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*sequenceAddress, RelationRelationId, seqOid);
 
-	return sequenceAddress;
+	return list_make1(sequenceAddress);
 }
 
 
@@ -521,7 +521,7 @@ PreprocessAlterSequenceSchemaStmt(Node *node, const char *queryString,
  * AlterSequenceSchemaStmtObjectAddress returns the ObjectAddress of the sequence that is
  * the subject of the AlterObjectSchemaStmt.
  */
-ObjectAddress
+List *
 AlterSequenceSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -555,10 +555,10 @@ AlterSequenceSchemaStmtObjectAddress(Node *node, bool missing_ok)
 		}
 	}
 
-	ObjectAddress sequenceAddress = { 0 };
-	ObjectAddressSet(sequenceAddress, RelationRelationId, seqOid);
+	ObjectAddress *sequenceAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*sequenceAddress, RelationRelationId, seqOid);
 
-	return sequenceAddress;
+	return list_make1(sequenceAddress);
 }
 
 
@@ -623,7 +623,7 @@ PreprocessAlterSequenceOwnerStmt(Node *node, const char *queryString,
  * AlterSequenceOwnerStmtObjectAddress returns the ObjectAddress of the sequence that is the
  * subject of the AlterOwnerStmt.
  */
-ObjectAddress
+List *
 AlterSequenceOwnerStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
@@ -631,10 +631,10 @@ AlterSequenceOwnerStmtObjectAddress(Node *node, bool missing_ok)
 
 	RangeVar *sequence = stmt->relation;
 	Oid seqOid = RangeVarGetRelid(sequence, NoLock, missing_ok);
-	ObjectAddress sequenceAddress = { 0 };
-	ObjectAddressSet(sequenceAddress, RelationRelationId, seqOid);
+	ObjectAddress *sequenceAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*sequenceAddress, RelationRelationId, seqOid);
 
-	return sequenceAddress;
+	return list_make1(sequenceAddress);
 }
 
 

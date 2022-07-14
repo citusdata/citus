@@ -3353,7 +3353,7 @@ ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableStatement)
  * will look in the new schema. Errors if missing_ok is false and the table cannot
  * be found in either of the schemas.
  */
-ObjectAddress
+List *
 AlterTableSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -3389,10 +3389,10 @@ AlterTableSchemaStmtObjectAddress(Node *node, bool missing_ok)
 		}
 	}
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, RelationRelationId, tableOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, RelationRelationId, tableOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
