@@ -184,6 +184,9 @@ extern Oid get_constraint_typid(Oid conoid);
 extern bool IsDropCitusExtensionStmt(Node *parsetree);
 extern List * GetDependentFDWsToExtension(Oid extensionId);
 extern bool IsCreateAlterExtensionUpdateCitusStmt(Node *parsetree);
+extern void PreprocessCreateExtensionStmtForCitusColumnar(Node *parsetree);
+extern void PreprocessAlterExtensionCitusStmtForCitusColumnar(Node *parsetree);
+extern void PostprocessAlterExtensionCitusStmtForCitusColumnar(Node *parsetree);
 extern bool ShouldMarkRelationDistributed(Oid relationId);
 extern void ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree);
 extern List * PostprocessCreateExtensionStmt(Node *stmt, const char *queryString);
@@ -209,7 +212,9 @@ extern ObjectAddress AlterExtensionSchemaStmtObjectAddress(Node *stmt,
 														   bool missing_ok);
 extern ObjectAddress AlterExtensionUpdateStmtObjectAddress(Node *stmt,
 														   bool missing_ok);
-
+extern void CreateExtensionWithVersion(char *extname, char *extVersion);
+extern void AlterExtensionUpdateStmt(char *extname, char *extVersion);
+extern int GetExtensionVersionNumber(char *extVersion);
 
 /* foreign_constraint.c - forward declarations */
 extern bool ConstraintIsAForeignKeyToReferenceTable(char *constraintName,

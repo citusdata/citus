@@ -11,10 +11,12 @@
 #include "postgres.h"
 
 #include "access/genam.h"
+#include "access/xact.h"
 #include "citus_version.h"
 #include "catalog/dependency.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_extension_d.h"
+#include "columnar/columnar.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
@@ -746,6 +748,60 @@ IsCreateAlterExtensionUpdateCitusStmt(Node *parseTree)
 
 
 /*
+ * PreProcessCreateExtensionCitusStmtForColumnar determines whether need to
+ * install citus_columnar first or citus_columnar is supported on current
+ * citus version, when a given utility is a CREATE statement
+ */
+void
+PreprocessCreateExtensionStmtForCitusColumnar(Node *parsetree)
+{
+	/*CREATE EXTENSION CITUS (version Z) */
+	CreateExtensionStmt *createExtensionStmt = castNode(CreateExtensionStmt,
+														parsetree);
+
+	if (strcmp(createExtensionStmt->extname, "citus") == 0)
+	{
+		int versionNumber = (int) (100 * strtod(CITUS_MAJORVERSION, NULL));
+		DefElem *newVersionValue = GetExtensionOption(createExtensionStmt->options,
+													  "new_version");
+
+		/*create extension citus version xxx*/
+		if (newVersionValue)
+		{
+			char *newVersion = strdup(defGetString(newVersionValue));
+			versionNumber = GetExtensionVersionNumber(newVersion);
+		}
+
+		/*citus version >= 11.1 requires install citus_columnar first*/
+		if (versionNumber >= 1110)
+		{
+			if (get_extension_oid("citus_columnar", true) == InvalidOid)
+			{
+				CreateExtensionWithVersion("citus_columnar", NULL);
+			}
+		}
+	}
+
+	/*Edge case check: citus_columnar are supported on citus version >= 11.1*/
+	if (strcmp(createExtensionStmt->extname, "citus_columnar") == 0)
+	{
+		Oid citusOid = get_extension_oid("citus", true);
+		if (citusOid != InvalidOid)
+		{
+			char *curCitusVersion = strdup(get_extension_version(citusOid));
+			int curCitusVersionNum = GetExtensionVersionNumber(curCitusVersion);
+			if (curCitusVersionNum < 1110)
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg(
+									"must upgrade citus to version 11.1-1 first before install citus_columnar")));
+			}
+		}
+	}
+}
+
+
+/*
  * IsDropCitusExtensionStmt iterates the objects to be dropped in a drop statement
  * and try to find citus extension there.
  */
@@ -809,6 +865,101 @@ IsAlterExtensionSetSchemaCitus(Node *parseTree)
 	}
 
 	return false;
+}
+
+
+/*
+ * PreprocessAlterExtensionCitusStmtForCitusColumnar pre-process the case when upgrade citus
+ * to version that support citus_columnar, or downgrade citus to lower version that
+ * include columnar inside citus extension
+ */
+void
+PreprocessAlterExtensionCitusStmtForCitusColumnar(Node *parseTree)
+{
+	/*upgrade citus: alter extension citus update to 'xxx' */
+	DefElem *newVersionValue = GetExtensionOption(
+		((AlterExtensionStmt *) parseTree)->options, "new_version");
+	Oid citusColumnarOid = get_extension_oid("citus_columnar", true);
+	if (newVersionValue)
+	{
+		char *newVersion = defGetString(newVersionValue);
+		double newVersionNumber = GetExtensionVersionNumber(strdup(newVersion));
+
+		/*alter extension citus update to version >= 11.1-1, and no citus_columnar installed */
+		if (newVersionNumber >= 1110 && citusColumnarOid == InvalidOid)
+		{
+			/*it's upgrade citus to 11.1-1 or further version */
+			CreateExtensionWithVersion("citus_columnar", CITUS_COLUMNAR_INTERNAL_VERSION);
+		}
+		else if (newVersionNumber < 1110 && citusColumnarOid != InvalidOid)
+		{
+			/*downgrade citus, need downgrade citus_columnar to Y */
+			AlterExtensionUpdateStmt("citus_columnar", CITUS_COLUMNAR_INTERNAL_VERSION);
+		}
+	}
+	else
+	{
+		/*alter extension citus update without specifying the version*/
+		int versionNumber = (int) (100 * strtod(CITUS_MAJORVERSION, NULL));
+		if (versionNumber >= 1110)
+		{
+			if (citusColumnarOid == InvalidOid)
+			{
+				CreateExtensionWithVersion("citus_columnar",
+										   CITUS_COLUMNAR_INTERNAL_VERSION);
+			}
+		}
+	}
+}
+
+
+/*
+ * PostprocessAlterExtensionCitusStmtForCitusColumnar process the case when upgrade citus
+ * to version that support citus_columnar, or downgrade citus to lower version that
+ * include columnar inside citus extension
+ */
+void
+PostprocessAlterExtensionCitusStmtForCitusColumnar(Node *parseTree)
+{
+	DefElem *newVersionValue = GetExtensionOption(
+		((AlterExtensionStmt *) parseTree)->options, "new_version");
+	Oid citusColumnarOid = get_extension_oid("citus_columnar", true);
+	if (newVersionValue)
+	{
+		char *newVersion = defGetString(newVersionValue);
+		double newVersionNumber = GetExtensionVersionNumber(strdup(newVersion));
+		if (newVersionNumber >= 1110 && citusColumnarOid != InvalidOid)
+		{
+			/*upgrade citus, after "ALTER EXTENSION citus update to xxx" updates citus_columnar Y to version Z. */
+			char *curColumnarVersion = get_extension_version(citusColumnarOid);
+			if (strcmp(curColumnarVersion, CITUS_COLUMNAR_INTERNAL_VERSION) == 0)
+			{
+				AlterExtensionUpdateStmt("citus_columnar", "11.1-1");
+			}
+		}
+		else if (newVersionNumber < 1110 && citusColumnarOid != InvalidOid)
+		{
+			/*downgrade citus, after "ALTER EXTENSION citus update to xxx" drops citus_columnar extension */
+			char *curColumnarVersion = get_extension_version(citusColumnarOid);
+			if (strcmp(curColumnarVersion, CITUS_COLUMNAR_INTERNAL_VERSION) == 0)
+			{
+				RemoveExtensionById(citusColumnarOid);
+			}
+		}
+	}
+	else
+	{
+		/*alter extension citus update, need upgrade citus_columnar from Y to Z*/
+		int versionNumber = (int) (100 * strtod(CITUS_MAJORVERSION, NULL));
+		if (versionNumber >= 1110)
+		{
+			char *curColumnarVersion = get_extension_version(citusColumnarOid);
+			if (strcmp(curColumnarVersion, CITUS_COLUMNAR_INTERNAL_VERSION) == 0)
+			{
+				AlterExtensionUpdateStmt("citus_columnar", "11.1-1");
+			}
+		}
+	}
 }
 
 
@@ -1024,4 +1175,81 @@ AlterExtensionUpdateStmtObjectAddress(Node *node, bool missing_ok)
 	ObjectAddressSet(address, ExtensionRelationId, extensionOid);
 
 	return address;
+}
+
+
+/*
+ * CreateExtensionWithVersion builds and execute create extension statements
+ * per given extension name and extension verision
+ */
+void
+CreateExtensionWithVersion(char *extname, char *extVersion)
+{
+	CreateExtensionStmt *createExtensionStmt = makeNode(CreateExtensionStmt);
+
+	/* set location to -1 as it is unknown */
+	int location = -1;
+
+	/* set extension name and if_not_exists fields */
+	createExtensionStmt->extname = extname;
+	createExtensionStmt->if_not_exists = true;
+
+	if (extVersion == NULL)
+	{
+		createExtensionStmt->options = NIL;
+	}
+	else
+	{
+		Node *extensionVersionArg = (Node *) makeString(extVersion);
+		DefElem *extensionVersionElement = makeDefElem("new_version", extensionVersionArg,
+													   location);
+		createExtensionStmt->options = lappend(createExtensionStmt->options,
+											   extensionVersionElement);
+	}
+
+	CreateExtension(NULL, createExtensionStmt);
+	CommandCounterIncrement();
+}
+
+
+/*
+ * GetExtensionVersionNumber convert extension version to real value
+ */
+int
+GetExtensionVersionNumber(char *extVersion)
+{
+	char *strtokPosition = NULL;
+	char *versionVal = strtok_r(extVersion, "-", &strtokPosition);
+	double versionNumber = strtod(versionVal, NULL);
+	return (int) (versionNumber * 100);
+}
+
+
+/*
+ * AlterExtensionUpdateStmt builds and execute Alter extension statements
+ * per given extension name and updates extension verision
+ */
+void
+AlterExtensionUpdateStmt(char *extname, char *extVersion)
+{
+	AlterExtensionStmt *alterExtensionStmt = makeNode(AlterExtensionStmt);
+
+	/* set location to -1 as it is unknown */
+	int location = -1;
+	alterExtensionStmt->extname = extname;
+
+	if (extVersion == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT),
+						errmsg("alter extension \"%s\" should not be empty",
+							   extVersion)));
+	}
+
+	Node *extensionVersionArg = (Node *) makeString(extVersion);
+	DefElem *extensionVersionElement = makeDefElem("new_version", extensionVersionArg,
+												   location);
+	alterExtensionStmt->options = lappend(alterExtensionStmt->options,
+										  extensionVersionElement);
+	ExecAlterExtensionStmt(NULL, alterExtensionStmt);
+	CommandCounterIncrement();
 }

@@ -2,4 +2,4 @@
 
 #include "udfs/columnar_ensure_am_depends_catalog/10.2-4.sql"
 
-SELECT citus_internal.columnar_ensure_am_depends_catalog();
+PERFORM citus_internal.columnar_ensure_am_depends_catalog();
