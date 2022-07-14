@@ -3,9 +3,6 @@
 
 setup
 {
-  SELECT citus_internal.replace_isolation_tester_func();
-  SELECT citus_internal.refresh_isolation_tester_prepared_statement();
-
   SET citus.shard_count TO 8;
 	SET citus.shard_replication_factor TO 1;
 	CREATE TABLE logical_replicate_placement (x int PRIMARY KEY, y int);
@@ -17,8 +14,6 @@ setup
 
 teardown
 {
-  SELECT citus_internal.restore_isolation_tester_func();
-
   DROP TABLE selected_shard;
 	DROP TABLE logical_replicate_placement;
 }
