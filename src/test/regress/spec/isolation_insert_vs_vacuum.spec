@@ -44,4 +44,3 @@ permutation "s1-begin" "s1-insert" "s2-vacuum-analyze" "s1-commit"
 
 // INSERT and VACUUM FULL should block each other.
 permutation "s1-begin" "s1-insert" "s2-vacuum-full" "s1-commit"
-

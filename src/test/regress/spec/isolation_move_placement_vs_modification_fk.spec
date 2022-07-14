@@ -2,11 +2,11 @@ setup
 {
   SET citus.shard_count to 2;
   SET citus.shard_replication_factor to 1;
-	SELECT setval('pg_dist_shardid_seq',
-		CASE WHEN nextval('pg_dist_shardid_seq') > 1699999 OR nextval('pg_dist_shardid_seq') < 1600000
-			THEN 1600000
-			ELSE nextval('pg_dist_shardid_seq')-2
-		END);
+    SELECT setval('pg_dist_shardid_seq',
+        CASE WHEN nextval('pg_dist_shardid_seq') > 1699999 OR nextval('pg_dist_shardid_seq') < 1600000
+            THEN 1600000
+            ELSE nextval('pg_dist_shardid_seq')-2
+        END);
 
   CREATE TABLE referenced_table (id int PRIMARY KEY, value int);
   SELECT create_reference_table('referenced_table');
@@ -129,4 +129,3 @@ permutation "s2-add-fkey" "s3-acquire-advisory-lock" "s1-insert-referenced" "s1-
 permutation "s2-add-fkey" "s3-acquire-advisory-lock" "s1-insert-referenced" "s1-insert-referencing" "s2-begin" "s2-move-placement-nonblocking" "s1-update" "s3-release-advisory-lock" "s2-commit" "s2-print-cluster"
 permutation "s2-add-fkey" "s3-acquire-advisory-lock" "s1-insert-referenced" "s1-insert-referencing" "s2-begin" "s2-move-placement-nonblocking" "s1-ddl" "s3-release-advisory-lock" "s2-commit" "s2-print-cluster"
 permutation "s2-add-fkey" "s3-acquire-advisory-lock" "s1-insert-referenced" "s2-begin" "s2-move-placement-nonblocking" "s1-insert-referencing" "s3-release-advisory-lock" "s2-commit" "s2-print-cluster"
-

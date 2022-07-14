@@ -1,7 +1,7 @@
 setup
 {
-	SELECT 1;
-	CREATE OR REPLACE FUNCTION public.wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
+    SELECT 1;
+    CREATE OR REPLACE FUNCTION public.wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
     RETURNS void
     LANGUAGE C STRICT
     AS 'citus';
@@ -9,93 +9,93 @@ setup
 
 teardown
 {
-	SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
+    SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
 }
 
 session "s1"
 
 step "s1-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s1-add-node-1"
 {
-	SELECT 1 FROM master_add_node('localhost', 57637);
+    SELECT 1 FROM master_add_node('localhost', 57637);
 }
 
 step "s1-add-node-2"
 {
-	SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 }
 
 step "s1-add-inactive-1"
 {
-	SELECT 1 FROM master_add_inactive_node('localhost', 57637);
+    SELECT 1 FROM master_add_inactive_node('localhost', 57637);
 }
 
 step "s1-activate-node-1"
 {
-	SELECT 1 FROM master_activate_node('localhost', 57637);
+    SELECT 1 FROM master_activate_node('localhost', 57637);
 }
 
 step "s1-disable-node-1"
 {
-	SELECT 1 FROM master_disable_node('localhost', 57637);
-	SELECT public.wait_until_metadata_sync();
+    SELECT 1 FROM master_disable_node('localhost', 57637);
+    SELECT public.wait_until_metadata_sync();
 }
 
 step "s1-remove-node-1"
 {
-	SELECT * FROM master_remove_node('localhost', 57637);
+    SELECT * FROM master_remove_node('localhost', 57637);
 }
 
 step "s1-abort"
 {
-	ABORT;
+    ABORT;
 }
 
 step "s1-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 step "s1-show-nodes"
 {
-	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+    SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 }
 
 session "s2"
 
 step "s2-add-node-1"
 {
-	SELECT 1 FROM master_add_node('localhost', 57637);
+    SELECT 1 FROM master_add_node('localhost', 57637);
 }
 
 step "s2-add-node-2"
 {
-	SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 }
 
 step "s2-activate-node-1"
 {
-	SELECT 1 FROM master_activate_node('localhost', 57637);
+    SELECT 1 FROM master_activate_node('localhost', 57637);
 }
 
 step "s2-disable-node-1"
 {
-	SELECT 1 FROM master_disable_node('localhost', 57637);
-	SELECT public.wait_until_metadata_sync();
+    SELECT 1 FROM master_disable_node('localhost', 57637);
+    SELECT public.wait_until_metadata_sync();
 }
 
 step "s2-remove-node-1"
 {
-	SELECT * FROM master_remove_node('localhost', 57637);
+    SELECT * FROM master_remove_node('localhost', 57637);
 }
 
 step "s2-remove-node-2"
 {
-	SELECT * FROM master_remove_node('localhost', 57638);
+    SELECT * FROM master_remove_node('localhost', 57638);
 }
 
 // session 1 adds a node, session 2 removes it, should be ok

@@ -5,17 +5,17 @@
 // create range distributed table to test behavior of SELECT in concurrent operations
 setup
 {
-	SET citus.shard_replication_factor TO 1;
-	SET citus.next_shard_id TO 6780300;
-	CREATE TABLE select_append(id integer, data text, int_data int);
-	SELECT create_distributed_table('select_append', 'id', 'append');
-	SELECT master_create_empty_shard('select_append');
+    SET citus.shard_replication_factor TO 1;
+    SET citus.next_shard_id TO 6780300;
+    CREATE TABLE select_append(id integer, data text, int_data int);
+    SELECT create_distributed_table('select_append', 'id', 'append');
+    SELECT master_create_empty_shard('select_append');
 }
 
 // drop distributed table
 teardown
 {
-	DROP TABLE IF EXISTS select_append CASCADE;
+    DROP TABLE IF EXISTS select_append CASCADE;
 }
 
 // session 1
@@ -24,15 +24,15 @@ step "s1-initialize" { COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, 
 step "s1-begin" { BEGIN; }
 
 step "s1-disable-binary-protocol" {
-	-- Workaround router-select blocking blocking create-index-concurrently
-	SET citus.enable_binary_protocol TO false;
+    -- Workaround router-select blocking blocking create-index-concurrently
+    SET citus.enable_binary_protocol TO false;
 }
 step "s1-router-select" { SELECT * FROM select_append WHERE id = 1; }
 step "s1-real-time-select" { SELECT * FROM select_append ORDER BY 1, 2; }
 step "s1-adaptive-select"
 {
-		SET citus.enable_repartition_joins TO ON;
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
+        SET citus.enable_repartition_joins TO ON;
+    SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 }
 step "s1-insert" { INSERT INTO select_append VALUES(0, 'k', 0); }
 step "s1-insert-select" { INSERT INTO select_append SELECT * FROM select_append; }
@@ -61,8 +61,8 @@ step "s2-router-select" { SELECT * FROM select_append WHERE id = 1; }
 step "s2-real-time-select" { SELECT * FROM select_append ORDER BY 1, 2; }
 step "s2-adaptive-select"
 {
-		SET citus.enable_repartition_joins TO ON;
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
+        SET citus.enable_repartition_joins TO ON;
+    SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 }
 step "s2-insert" { INSERT INTO select_append VALUES(0, 'k', 0); }
 step "s2-insert-select" { INSERT INTO select_append SELECT * FROM select_append; }

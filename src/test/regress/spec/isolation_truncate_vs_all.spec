@@ -5,17 +5,17 @@
 // create range distributed table to test behavior of TRUNCATE in concurrent operations
 setup
 {
-	SET citus.shard_replication_factor TO 1;
-	SET citus.next_shard_id TO 5990340;
-	CREATE TABLE truncate_append(id integer, data text);
-	SELECT create_distributed_table('truncate_append', 'id', 'append');
-	SELECT master_create_empty_shard('truncate_append');
+    SET citus.shard_replication_factor TO 1;
+    SET citus.next_shard_id TO 5990340;
+    CREATE TABLE truncate_append(id integer, data text);
+    SELECT create_distributed_table('truncate_append', 'id', 'append');
+    SELECT master_create_empty_shard('truncate_append');
 }
 
 // drop distributed table
 teardown
 {
-	DROP TABLE IF EXISTS truncate_append CASCADE;
+    DROP TABLE IF EXISTS truncate_append CASCADE;
 }
 
 // session 1

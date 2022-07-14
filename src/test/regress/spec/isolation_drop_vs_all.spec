@@ -5,21 +5,21 @@
 // create distributed table to test behavior of DROP in concurrent operations
 setup
 {
-	SET citus.shard_replication_factor TO 1;
-	CREATE SCHEMA drop_tests;
-	CREATE TABLE drop_tests.drop_hash(id integer, data text);
-	SELECT create_distributed_table('drop_tests.drop_hash', 'id');
+    SET citus.shard_replication_factor TO 1;
+    CREATE SCHEMA drop_tests;
+    CREATE TABLE drop_tests.drop_hash(id integer, data text);
+    SELECT create_distributed_table('drop_tests.drop_hash', 'id');
 
-	CREATE SCHEMA drop_tests_2;
-	CREATE TABLE drop_tests_2.drop_hash_2(id integer, data text);
-	SELECT create_distributed_table('drop_tests_2.drop_hash_2', 'id');
+    CREATE SCHEMA drop_tests_2;
+    CREATE TABLE drop_tests_2.drop_hash_2(id integer, data text);
+    SELECT create_distributed_table('drop_tests_2.drop_hash_2', 'id');
 }
 
 // drop distributed table
 teardown
 {
-	DROP TABLE IF EXISTS drop_tests.drop_hash, drop_tests_2.drop_hash_2 CASCADE;
-	DROP SCHEMA IF EXISTS drop_tests, drop_tests_2 CASCADE;
+    DROP TABLE IF EXISTS drop_tests.drop_hash, drop_tests_2.drop_hash_2 CASCADE;
+    DROP SCHEMA IF EXISTS drop_tests, drop_tests_2 CASCADE;
 }
 
 // session 1

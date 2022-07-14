@@ -5,28 +5,28 @@
 // create range distributed table to test behavior of INSERT/SELECT in concurrent operations
 setup
 {
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE insert_of_insert_select_hash(id integer, data text);
-	SELECT create_distributed_table('insert_of_insert_select_hash', 'id');
-	CREATE TABLE select_of_insert_select_hash(id integer, data text);
-	SELECT create_distributed_table('select_of_insert_select_hash', 'id');
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE insert_of_insert_select_hash(id integer, data text);
+    SELECT create_distributed_table('insert_of_insert_select_hash', 'id');
+    CREATE TABLE select_of_insert_select_hash(id integer, data text);
+    SELECT create_distributed_table('select_of_insert_select_hash', 'id');
 }
 
 // drop distributed table
 teardown
 {
-	DROP TABLE IF EXISTS insert_of_insert_select_hash CASCADE;
-	DROP TABLE IF EXISTS select_of_insert_select_hash CASCADE;
+    DROP TABLE IF EXISTS insert_of_insert_select_hash CASCADE;
+    DROP TABLE IF EXISTS select_of_insert_select_hash CASCADE;
 }
 
 // session 1
 session "s1"
 step "s1-initialize"
 {
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+    COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+    COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+    COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+    COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 }
 step "s1-begin" { BEGIN; }
 step "s1-insert-select" { INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;; }

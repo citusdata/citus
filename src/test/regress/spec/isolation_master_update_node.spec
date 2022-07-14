@@ -31,16 +31,16 @@ step "s2-begin" { BEGIN; }
 step "s2-update-node-1" {
     -- update a specific node by address
     SELECT master_update_node(nodeid, 'localhost', nodeport + 10)
-      FROM pg_dist_node
-     WHERE nodename = 'localhost'
-       AND nodeport = 57637;
+    FROM pg_dist_node
+    WHERE nodename = 'localhost'
+        AND nodeport = 57637;
 }
 step "s2-update-node-1-force" {
     -- update a specific node by address (force)
     SELECT master_update_node(nodeid, 'localhost', nodeport + 10, force => true, lock_cooldown => 100)
-      FROM pg_dist_node
-     WHERE nodename = 'localhost'
-       AND nodeport = 57637;
+    FROM pg_dist_node
+    WHERE nodename = 'localhost'
+        AND nodeport = 57637;
 }
 step "s2-abort" { ABORT; }
 

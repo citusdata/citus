@@ -65,7 +65,7 @@ step "s1-insert-local-10"
 
 step "s1-set-2pc"
 {
-	set citus.multi_shard_commit_protocol TO '2pc';
+    set citus.multi_shard_commit_protocol TO '2pc';
 }
 
 step "s1-update-1-rep-2"
@@ -127,12 +127,12 @@ step "s2-update-4"
 
 step "s2-upsert-select-all"
 {
-	INSERT INTO deadlock_detection_test SELECT * FROM deadlock_detection_test ON CONFLICT(user_id) DO UPDATE SET some_val = deadlock_detection_test.some_val + 5 RETURNING *;
+    INSERT INTO deadlock_detection_test SELECT * FROM deadlock_detection_test ON CONFLICT(user_id) DO UPDATE SET some_val = deadlock_detection_test.some_val + 5 RETURNING *;
 }
 
 step "s2-ddl"
 {
-	ALTER TABLE deadlock_detection_test ADD COLUMN test_col INT;
+    ALTER TABLE deadlock_detection_test ADD COLUMN test_col INT;
 }
 
 step "s2-insert-dist-10"
@@ -147,7 +147,7 @@ step "s2-insert-local-10"
 
 step "s2-set-2pc"
 {
-	set citus.multi_shard_commit_protocol TO '2pc';
+    set citus.multi_shard_commit_protocol TO '2pc';
 }
 
 step "s2-update-1-rep-2"

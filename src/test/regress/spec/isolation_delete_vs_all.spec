@@ -5,15 +5,15 @@
 // create range distributed table to test behavior of DELETE in concurrent operations
 setup
 {
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE delete_hash(id integer, data text);
-	SELECT create_distributed_table('delete_hash', 'id');
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE delete_hash(id integer, data text);
+    SELECT create_distributed_table('delete_hash', 'id');
 }
 
 // drop distributed table
 teardown
 {
-	DROP TABLE IF EXISTS delete_hash CASCADE;
+    DROP TABLE IF EXISTS delete_hash CASCADE;
 }
 
 // session 1

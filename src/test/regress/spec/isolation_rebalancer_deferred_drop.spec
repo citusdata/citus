@@ -31,12 +31,12 @@ COMMENT ON PROCEDURE isolation_cleanup_orphaned_shards()
     RESET citus.enable_metadata_sync;
 
     SET citus.next_shard_id to 120000;
-	SET citus.shard_count TO 8;
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE t1 (x int PRIMARY KEY, y int);
-	SELECT create_distributed_table('t1', 'x');
+    SET citus.shard_count TO 8;
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE t1 (x int PRIMARY KEY, y int);
+    SELECT create_distributed_table('t1', 'x');
 
-	SELECT get_shard_id_for_distribution_column('t1', 15) INTO selected_shard;
+    SELECT get_shard_id_for_distribution_column('t1', 15) INTO selected_shard;
 }
 
 teardown
@@ -103,7 +103,7 @@ step "s2-start-session-level-connection"
 
 step "s2-stop-connection"
 {
-	SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 }
 
 step "s2-lock-table-on-worker"

@@ -2,8 +2,8 @@
 
 setup
 {
-	CREATE TABLE ref_table(id integer, value integer);
-	SELECT create_reference_table('ref_table');
+    CREATE TABLE ref_table(id integer, value integer);
+    SELECT create_reference_table('ref_table');
 }
 
 // Create and use UDF to close the connection opened in the setup step. Also return the cluster
@@ -29,17 +29,17 @@ step "s1-begin-on-worker"
 
 step "s1-select-for-update"
 {
-	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM ref_table WHERE id=1 OR id=2 FOR UPDATE');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM ref_table WHERE id=1 OR id=2 FOR UPDATE');
 }
 
 step "s1-commit-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 }
 
 step "s1-stop-connection"
 {
-	SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 }
 
 
@@ -59,42 +59,42 @@ step "s2-begin-on-worker"
 
 step "s2-insert"
 {
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES (1, 10), (2, 20)');
+    SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES (1, 10), (2, 20)');
 }
 
 step "s2-select"
 {
-	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM ref_table WHERE id=1 OR id=2');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM ref_table WHERE id=1 OR id=2');
 }
 
 step "s2-insert-select-ref-table"
 {
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table SELECT * FROM ref_table');
+    SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table SELECT * FROM ref_table');
 }
 
 step "s2-copy"
 {
-	SELECT run_commands_on_session_level_connection_to_node('COPY ref_table FROM PROGRAM ''echo 1, 10 && echo 2, 20''WITH CSV');
+    SELECT run_commands_on_session_level_connection_to_node('COPY ref_table FROM PROGRAM ''echo 1, 10 && echo 2, 20''WITH CSV');
 }
 
 step "s2-alter"
 {
-	ALTER TABLE ref_table DROP value;
+    ALTER TABLE ref_table DROP value;
 }
 
 step "s2-truncate"
 {
-	SELECT run_commands_on_session_level_connection_to_node('TRUNCATE ref_table');
+    SELECT run_commands_on_session_level_connection_to_node('TRUNCATE ref_table');
 }
 
 step "s2-select-for-update"
 {
-	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM ref_table WHERE id=1 OR id=2 FOR UPDATE');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM ref_table WHERE id=1 OR id=2 FOR UPDATE');
 }
 
 step "s2-coordinator-create-index-concurrently"
 {
-	CREATE INDEX CONCURRENTLY ref_table_index ON ref_table(id);
+    CREATE INDEX CONCURRENTLY ref_table_index ON ref_table(id);
 }
 
 step "s2-commit-worker"
@@ -112,7 +112,7 @@ session "s3"
 
 step "s3-select-count"
 {
-	SELECT COUNT(*) FROM ref_table;
+    SELECT COUNT(*) FROM ref_table;
 }
 
 

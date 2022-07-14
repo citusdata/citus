@@ -39,11 +39,11 @@ step "s1-update-ref-table"
 step "s1-lock-ref-table-placement-on-coordinator"
 {
     DO $$
-      DECLARE refshardid int;
-      BEGIN
+    DECLARE refshardid int;
+    BEGIN
         SELECT shardid INTO refshardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass;
         EXECUTE format('SELECT * from ref_table_%s FOR UPDATE', refshardid::text);
-      END
+    END
     $$;
 }
 
@@ -67,11 +67,11 @@ step "s2-update-dist-table"
 step "s2-lock-ref-table-placement-on-coordinator"
 {
     DO $$
-      DECLARE refshardid int;
-      BEGIN
+    DECLARE refshardid int;
+    BEGIN
         SELECT shardid INTO refshardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass;
         EXECUTE format('SELECT * from ref_table_%s FOR UPDATE', refshardid::text);
-      END
+    END
     $$;
 }
 
@@ -82,17 +82,17 @@ step "s2-view-dist"
 
 step "s2-view-worker"
 {
-	SELECT query, state, wait_event_type, wait_event, usename, datname
+    SELECT query, state, wait_event_type, wait_event, usename, datname
     FROM citus_stat_activity
     WHERE query NOT ILIKE ALL(VALUES
-      ('%application_name%'),
-      ('%pg_prepared_xacts%'),
-      ('%COMMIT%'),
-      ('%dump_local_%'),
-      ('%citus_internal_local_blocked_processes%'),
-      ('%add_node%'),
-      ('%csa_from_one_node%'),
-      ('%pg_locks%'))
+    ('%application_name%'),
+    ('%pg_prepared_xacts%'),
+    ('%COMMIT%'),
+    ('%dump_local_%'),
+    ('%citus_internal_local_blocked_processes%'),
+    ('%add_node%'),
+    ('%csa_from_one_node%'),
+    ('%pg_locks%'))
     AND is_worker_query = true
     AND backend_type = 'client backend'
     AND query != ''
@@ -102,14 +102,14 @@ step "s2-view-worker"
 
 step "s2-sleep"
 {
-	SELECT pg_sleep(0.5);
+    SELECT pg_sleep(0.5);
 }
 
 step "s2-active-transactions"
 {
-	-- Admin should be able to see all transactions
-	SELECT count(*) FROM get_all_active_transactions() WHERE transaction_number != 0;
-	SELECT count(*) FROM get_global_active_transactions() WHERE transaction_number != 0;
+    -- Admin should be able to see all transactions
+    SELECT count(*) FROM get_all_active_transactions() WHERE transaction_number != 0;
+    SELECT count(*) FROM get_global_active_transactions() WHERE transaction_number != 0;
 }
 
 // we disable the daemon during the regression tests in order to get consistent results

@@ -1,7 +1,7 @@
 setup
 {
     CREATE TABLE test_dml_vs_repair (test_id integer NOT NULL, data int);
-	SET citus.shard_replication_factor TO 2;
+    SET citus.shard_replication_factor TO 2;
     SELECT create_distributed_table('test_dml_vs_repair', 'test_id', 'hash', shard_count:=1);
 }
 

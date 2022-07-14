@@ -4,17 +4,17 @@
 // so setting the corresponding shard here is useful
 setup
 {
-	SET citus.shard_count TO 8;
-	CREATE TABLE logical_replicate_placement (x int PRIMARY KEY, y int);
-	SELECT create_distributed_table('logical_replicate_placement', 'x');
+    SET citus.shard_count TO 8;
+    CREATE TABLE logical_replicate_placement (x int PRIMARY KEY, y int);
+    SELECT create_distributed_table('logical_replicate_placement', 'x');
 
-	SELECT get_shard_id_for_distribution_column('logical_replicate_placement', 15) INTO selected_shard;
+    SELECT get_shard_id_for_distribution_column('logical_replicate_placement', 15) INTO selected_shard;
 }
 
 teardown
 {
-	DROP TABLE selected_shard;
-	DROP TABLE logical_replicate_placement;
+    DROP TABLE selected_shard;
+    DROP TABLE logical_replicate_placement;
 }
 
 
@@ -27,12 +27,12 @@ step "s1-begin"
 
 step "s1-move-placement"
 {
-   SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
 }
 
 step "s1-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 step "s1-select"
@@ -132,4 +132,3 @@ permutation "s1-insert" "s1-begin" "s2-start-session-level-connection" "s2-begin
 permutation "s1-insert" "s1-begin" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-delete" "s1-move-placement" "s2-commit-worker" "s1-commit" "s1-select" "s1-get-shard-distribution" "s2-stop-connection"
 permutation "s1-insert" "s1-begin" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-select" "s1-move-placement" "s2-commit-worker" "s1-commit" "s1-get-shard-distribution" "s2-stop-connection"
 permutation "s1-insert" "s1-begin" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-select-for-update" "s1-move-placement" "s2-commit-worker" "s1-commit" "s1-get-shard-distribution" "s2-stop-connection"
-

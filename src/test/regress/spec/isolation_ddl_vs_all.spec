@@ -5,15 +5,15 @@
 // create range distributed table to test behavior of DDL in concurrent operations
 setup
 {
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE ddl_hash(id integer, data text);
-	SELECT create_distributed_table('ddl_hash', 'id');
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE ddl_hash(id integer, data text);
+    SELECT create_distributed_table('ddl_hash', 'id');
 }
 
 // drop distributed table
 teardown
 {
-	DROP TABLE IF EXISTS ddl_hash CASCADE;
+    DROP TABLE IF EXISTS ddl_hash CASCADE;
 }
 
 // session 1

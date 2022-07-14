@@ -2,8 +2,8 @@
 
 setup
 {
-	CREATE TABLE ref_table(id integer, value integer);
-	SELECT create_reference_table('ref_table');
+    CREATE TABLE ref_table(id integer, value integer);
+    SELECT create_reference_table('ref_table');
 }
 
 // Create and use UDF to close the connection opened in the setup step. Also return the cluster
@@ -17,7 +17,7 @@ session "s1"
 
 step "s1-add-primary-key"
 {
-	ALTER TABLE ref_table ADD CONSTRAINT pri_key PRIMARY KEY (id);
+    ALTER TABLE ref_table ADD CONSTRAINT pri_key PRIMARY KEY (id);
 }
 
 // We do not need to begin a transaction on coordinator, since it will be open on workers.
@@ -34,22 +34,22 @@ step "s1-begin-on-worker"
 
 step "s1-delete"
 {
-	SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE id=1 OR id=2');
+    SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE id=1 OR id=2');
 }
 
 step "s1-upsert"
 {
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES (1, 3), (2, 3) ON CONFLICT (id) DO UPDATE SET value=3');
+    SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES (1, 3), (2, 3) ON CONFLICT (id) DO UPDATE SET value=3');
 }
 
 step "s1-commit-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 }
 
 step "s1-stop-connection"
 {
-	SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 }
 
 
@@ -69,22 +69,22 @@ step "s2-begin-on-worker"
 
 step "s2-select"
 {
-	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM ref_table WHERE id=1 OR id=2');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM ref_table WHERE id=1 OR id=2');
 }
 
 step "s2-insert-select-ref-table"
 {
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table SELECT * FROM ref_table');
+    SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table SELECT * FROM ref_table');
 }
 
 step "s2-drop"
 {
-	DROP TABLE ref_table;
+    DROP TABLE ref_table;
 }
 
 step "s2-truncate"
 {
-	SELECT run_commands_on_session_level_connection_to_node('TRUNCATE ref_table');
+    SELECT run_commands_on_session_level_connection_to_node('TRUNCATE ref_table');
 }
 
 step "s2-commit-worker"
@@ -102,7 +102,7 @@ session "s3"
 
 step "s3-select-count"
 {
-	SELECT COUNT(*) FROM ref_table;
+    SELECT COUNT(*) FROM ref_table;
 }
 
 

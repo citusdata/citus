@@ -4,45 +4,45 @@ setup
 {
   SET citus.enable_ddl_propagation TO OFF;
   CREATE OR REPLACE FUNCTION start_session_level_connection_to_node(text, integer)
-      RETURNS void
-      LANGUAGE C STRICT VOLATILE
-      AS 'citus', $$start_session_level_connection_to_node$$;
+    RETURNS void
+    LANGUAGE C STRICT VOLATILE
+    AS 'citus', $$start_session_level_connection_to_node$$;
 
   CREATE OR REPLACE FUNCTION run_commands_on_session_level_connection_to_node(text)
-      RETURNS void
-      LANGUAGE C STRICT VOLATILE
-      AS 'citus', $$run_commands_on_session_level_connection_to_node$$;
+    RETURNS void
+    LANGUAGE C STRICT VOLATILE
+    AS 'citus', $$run_commands_on_session_level_connection_to_node$$;
 
   CREATE OR REPLACE FUNCTION stop_session_level_connection_to_node()
-      RETURNS void
-      LANGUAGE C STRICT VOLATILE
-      AS 'citus', $$stop_session_level_connection_to_node$$;
+    RETURNS void
+    LANGUAGE C STRICT VOLATILE
+    AS 'citus', $$stop_session_level_connection_to_node$$;
   RESET citus.enable_ddl_propagation;
 
   -- start_metadata_sync_to_node can not be run inside a transaction block
   -- following is a workaround to overcome that
   -- port numbers are hard coded at the moment
   SELECT master_run_on_worker(
-          ARRAY['localhost']::text[],
-          ARRAY[57636]::int[],
-          ARRAY[format('SELECT start_metadata_sync_to_node(''%s'', %s)', nodename, nodeport)]::text[],
-          false)
+        ARRAY['localhost']::text[],
+        ARRAY[57636]::int[],
+        ARRAY[format('SELECT start_metadata_sync_to_node(''%s'', %s)', nodename, nodeport)]::text[],
+        false)
   FROM pg_dist_node;
 
-	SET citus.shard_replication_factor TO 1;
+    SET citus.shard_replication_factor TO 1;
 
 
-	SET citus.shard_count TO 8;
-	CREATE TABLE logical_replicate_placement (x int PRIMARY KEY, y int);
-	SELECT create_distributed_table('logical_replicate_placement', 'x');
+    SET citus.shard_count TO 8;
+    CREATE TABLE logical_replicate_placement (x int PRIMARY KEY, y int);
+    SELECT create_distributed_table('logical_replicate_placement', 'x');
 
-	SELECT get_shard_id_for_distribution_column('logical_replicate_placement', 15) INTO selected_shard;
+    SELECT get_shard_id_for_distribution_column('logical_replicate_placement', 15) INTO selected_shard;
 }
 
 teardown
 {
-	DROP TABLE selected_shard;
-	DROP TABLE logical_replicate_placement;
+    DROP TABLE selected_shard;
+    DROP TABLE logical_replicate_placement;
 }
 
 
@@ -55,12 +55,12 @@ step "s1-begin"
 
 step "s1-move-placement"
 {
-   SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
 }
 
 step "s1-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 step "s1-select"
@@ -130,4 +130,3 @@ permutation "s1-insert" "s1-begin" "s2-start-session-level-connection" "s2-begin
 permutation "s1-insert" "s1-begin" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-delete" "s1-move-placement" "s2-commit-worker" "s1-commit" "s1-select" "s1-get-shard-distribution" "s2-stop-connection"
 permutation "s1-insert" "s1-begin" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-select" "s1-move-placement" "s2-commit-worker" "s1-commit" "s1-get-shard-distribution" "s2-stop-connection"
 permutation "s1-insert" "s1-begin" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-select-for-update" "s1-move-placement" "s2-commit-worker" "s1-commit" "s1-get-shard-distribution" "s2-stop-connection"
-

@@ -2,19 +2,19 @@
 // so setting the corresponding shard here is useful
 setup
 {
-	SET citus.shard_count TO 8;
-	SET citus.shard_replication_factor TO 1;
+    SET citus.shard_count TO 8;
+    SET citus.shard_replication_factor TO 1;
 
-	CREATE TABLE logical_replicate_placement (x int PRIMARY KEY, y int);
-	SELECT create_distributed_table('logical_replicate_placement', 'x');
+    CREATE TABLE logical_replicate_placement (x int PRIMARY KEY, y int);
+    SELECT create_distributed_table('logical_replicate_placement', 'x');
 
-	SELECT get_shard_id_for_distribution_column('logical_replicate_placement', 15) INTO selected_shard;
+    SELECT get_shard_id_for_distribution_column('logical_replicate_placement', 15) INTO selected_shard;
 }
 
 teardown
 {
   DROP TABLE selected_shard;
-	DROP TABLE logical_replicate_placement;
+    DROP TABLE logical_replicate_placement;
 }
 
 
@@ -22,7 +22,7 @@ session "s1"
 
 step "s1-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s1-move-placement"
@@ -32,7 +32,7 @@ step "s1-move-placement"
 
 step "s1-end"
 {
-	COMMIT;
+    COMMIT;
 }
 
 step "s1-select"
@@ -91,7 +91,7 @@ step "s2-upsert"
 
 step "s2-end"
 {
-	  COMMIT;
+    COMMIT;
 }
 
 permutation "s1-begin" "s2-begin" "s2-insert" "s1-move-placement" "s2-end" "s1-end" "s1-select" "s1-get-shard-distribution"
@@ -100,4 +100,3 @@ permutation "s1-insert" "s1-begin" "s2-begin" "s2-update" "s1-move-placement" "s
 permutation "s1-insert" "s1-begin" "s2-begin" "s2-delete" "s1-move-placement" "s2-end" "s1-end" "s1-select" "s1-get-shard-distribution"
 permutation "s1-insert" "s1-begin" "s2-begin" "s2-select" "s1-move-placement" "s2-end" "s1-end" "s1-get-shard-distribution"
 permutation "s1-insert" "s1-begin" "s2-begin" "s2-select-for-update" "s1-move-placement" "s2-end" "s1-end" "s1-get-shard-distribution"
-

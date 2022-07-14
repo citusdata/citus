@@ -1,20 +1,20 @@
 setup
 {
-	SET citus.shard_replication_factor TO 1;
+    SET citus.shard_replication_factor TO 1;
     SET citus.shard_count TO 4;
-	CREATE TABLE source_table(a int, b int);
-	SELECT create_distributed_table('source_table', 'a');
+    CREATE TABLE source_table(a int, b int);
+    SELECT create_distributed_table('source_table', 'a');
     SET citus.shard_count TO 3;
-	CREATE TABLE target_table(a int, b int);
-	SELECT create_distributed_table('target_table', 'a');
+    CREATE TABLE target_table(a int, b int);
+    SELECT create_distributed_table('target_table', 'a');
 
     INSERT INTO source_table SELECT i, i * i FROM generate_series(1, 10) i;
 }
 
 teardown
 {
-	DROP TABLE IF EXISTS source_table;
-	DROP TABLE IF EXISTS target_table;
+    DROP TABLE IF EXISTS source_table;
+    DROP TABLE IF EXISTS target_table;
 }
 
 session "s1"

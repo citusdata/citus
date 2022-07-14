@@ -2,9 +2,9 @@
 
 setup
 {
-	CREATE TABLE dist_table(id integer, value integer);
-	SELECT create_distributed_table('dist_table', 'id');
-	COPY dist_table FROM PROGRAM 'echo 1, 10 && echo 2, 20 && echo 3, 30 && echo 4, 40 && echo 5, 50' WITH CSV;
+    CREATE TABLE dist_table(id integer, value integer);
+    SELECT create_distributed_table('dist_table', 'id');
+    COPY dist_table FROM PROGRAM 'echo 1, 10 && echo 2, 20 && echo 3, 30 && echo 4, 40 && echo 5, 50' WITH CSV;
 }
 
 // Create and use UDF to close the connection opened in the setup step. Also return the cluster
@@ -18,7 +18,7 @@ session "s1"
 
 step "s1-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 // We do not need to begin a transaction on coordinator, since it will be open on workers.
@@ -40,27 +40,27 @@ step "s1-insert"
 
 step "s1-index"
 {
-	CREATE INDEX dist_table_index ON dist_table (id);
+    CREATE INDEX dist_table_index ON dist_table (id);
 }
 
 step "s1-select-for-update"
 {
-	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
 }
 
 step "s1-commit-worker"
 {
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 }
 
 step "s1-stop-connection"
 {
-	SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 }
 
 step "s1-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 
@@ -80,17 +80,17 @@ step "s2-begin-on-worker"
 
 step "s2-alter"
 {
-	ALTER TABLE dist_table DROP value;
+    ALTER TABLE dist_table DROP value;
 }
 
 step "s2-select-for-update"
 {
-	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
 }
 
 step "s2-flaky-coordinator-create-index-concurrently"
 {
-	CREATE INDEX CONCURRENTLY flaky_dist_table_index_conc ON dist_table(id);
+    CREATE INDEX CONCURRENTLY flaky_dist_table_index_conc ON dist_table(id);
 }
 
 step "s2-commit-worker"
@@ -108,7 +108,7 @@ session "s3"
 
 step "s3-select-count"
 {
-	SELECT COUNT(*) FROM dist_table;
+    SELECT COUNT(*) FROM dist_table;
 }
 
 

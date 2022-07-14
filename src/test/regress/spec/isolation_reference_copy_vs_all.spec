@@ -5,15 +5,15 @@
 // create append distributed table to test behavior of COPY in concurrent operations
 setup
 {
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE reference_copy(id integer, data text, int_data int);
-	SELECT create_reference_table('reference_copy');
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE reference_copy(id integer, data text, int_data int);
+    SELECT create_reference_table('reference_copy');
 }
 
 // drop distributed table
 teardown
 {
-	DROP TABLE IF EXISTS reference_copy CASCADE;
+    DROP TABLE IF EXISTS reference_copy CASCADE;
 }
 
 // session 1
@@ -26,7 +26,7 @@ step "s1-router-select" { SELECT * FROM reference_copy WHERE id = 1; }
 step "s1-real-time-select" { SELECT * FROM reference_copy ORDER BY 1, 2; }
 step "s1-adaptive-select"
 {
-		SELECT * FROM reference_copy AS t1 JOIN reference_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
+        SELECT * FROM reference_copy AS t1 JOIN reference_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 }
 step "s1-insert" { INSERT INTO reference_copy VALUES(0, 'k', 0); }
 step "s1-insert-select" { INSERT INTO reference_copy SELECT * FROM reference_copy; }
@@ -55,7 +55,7 @@ step "s2-router-select" { SELECT * FROM reference_copy WHERE id = 1; }
 step "s2-real-time-select" { SELECT * FROM reference_copy ORDER BY 1, 2; }
 step "s2-adaptive-select"
 {
-		SELECT * FROM reference_copy AS t1 JOIN reference_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
+        SELECT * FROM reference_copy AS t1 JOIN reference_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 }
 step "s2-insert" { INSERT INTO reference_copy VALUES(0, 'k', 0); }
 step "s2-insert-select" { INSERT INTO reference_copy SELECT * FROM reference_copy; }

@@ -5,15 +5,15 @@
 // create range distributed table to test behavior of UPSERT in concurrent operations
 setup
 {
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE upsert_hash(id integer PRIMARY KEY, data text);
-	SELECT create_distributed_table('upsert_hash', 'id');
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE upsert_hash(id integer PRIMARY KEY, data text);
+    SELECT create_distributed_table('upsert_hash', 'id');
 }
 
 // drop distributed table
 teardown
 {
-	DROP TABLE IF EXISTS upsert_hash CASCADE;
+    DROP TABLE IF EXISTS upsert_hash CASCADE;
 }
 
 // session 1

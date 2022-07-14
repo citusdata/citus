@@ -8,25 +8,25 @@
 // so setting the corresponding shard here is useful
 setup
 {
-	SET citus.shard_count TO 8;
-	SET citus.shard_replication_factor TO 1;
+    SET citus.shard_count TO 8;
+    SET citus.shard_replication_factor TO 1;
 
-	CREATE TABLE logical_replicate_partitioned(x int, y int, PRIMARY KEY (x,y) ) PARTITION BY RANGE(y);
-	SELECT create_distributed_table('logical_replicate_partitioned', 'x');
-	CREATE TABLE logical_replicate_partitioned_1 PARTITION OF logical_replicate_partitioned
-		FOR VALUES FROM (0) TO (100);
-	CREATE TABLE logical_replicate_partitioned_2 PARTITION OF logical_replicate_partitioned
-		FOR VALUES FROM (100) TO (200);
+    CREATE TABLE logical_replicate_partitioned(x int, y int, PRIMARY KEY (x,y) ) PARTITION BY RANGE(y);
+    SELECT create_distributed_table('logical_replicate_partitioned', 'x');
+    CREATE TABLE logical_replicate_partitioned_1 PARTITION OF logical_replicate_partitioned
+        FOR VALUES FROM (0) TO (100);
+    CREATE TABLE logical_replicate_partitioned_2 PARTITION OF logical_replicate_partitioned
+        FOR VALUES FROM (100) TO (200);
 
-	SELECT get_shard_id_for_distribution_column('logical_replicate_partitioned', 5) INTO selected_partitioned_shard;
-	SELECT get_shard_id_for_distribution_column('logical_replicate_partitioned_1', 5) INTO selected_single_partition_shard;
+    SELECT get_shard_id_for_distribution_column('logical_replicate_partitioned', 5) INTO selected_partitioned_shard;
+    SELECT get_shard_id_for_distribution_column('logical_replicate_partitioned_1', 5) INTO selected_single_partition_shard;
 }
 
 teardown
 {
-	DROP TABLE selected_partitioned_shard;
-	DROP TABLE selected_single_partition_shard;
-	DROP TABLE logical_replicate_partitioned;
+    DROP TABLE selected_partitioned_shard;
+    DROP TABLE selected_single_partition_shard;
+    DROP TABLE logical_replicate_partitioned;
 }
 
 
@@ -34,22 +34,22 @@ session "s1"
 
 step "s1-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s1-move-placement-partitioned"
 {
-    	SELECT master_move_shard_placement((SELECT * FROM selected_partitioned_shard), 'localhost', 57638, 'localhost', 57637);
+        SELECT master_move_shard_placement((SELECT * FROM selected_partitioned_shard), 'localhost', 57638, 'localhost', 57637);
 }
 
 step "s1-move-placement-single-partition"
 {
-    	SELECT master_move_shard_placement((SELECT * FROM selected_single_partition_shard), 'localhost', 57638, 'localhost', 57637);
+        SELECT master_move_shard_placement((SELECT * FROM selected_single_partition_shard), 'localhost', 57638, 'localhost', 57637);
 }
 
 step "s1-end"
 {
-	COMMIT;
+    COMMIT;
 }
 
 session "s2"
@@ -78,17 +78,17 @@ step "s2-upsert-partitioned"
 
 step "s2-copy-partitioned"
 {
-	COPY logical_replicate_partitioned FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+    COPY logical_replicate_partitioned FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
 }
 
 step "s2-truncate-partitioned"
 {
-	TRUNCATE logical_replicate_partitioned;
+    TRUNCATE logical_replicate_partitioned;
 }
 
 step "s2-alter-table-partitioned"
 {
-	ALTER TABLE logical_replicate_partitioned ADD COLUMN z INT;
+    ALTER TABLE logical_replicate_partitioned ADD COLUMN z INT;
 }
 
 
@@ -136,5 +136,3 @@ permutation "s1-begin" "s1-move-placement-single-partition" "s2-truncate-partiti
 permutation "s1-begin" "s1-move-placement-single-partition" "s2-alter-table-partitioned" "s1-end"
 permutation "s1-begin" "s2-truncate-partitioned" "s1-move-placement-single-partition"  "s1-end"
 permutation "s1-begin" "s2-alter-table-partitioned" "s1-move-placement-single-partition"  "s1-end"
-
-

@@ -44,17 +44,17 @@ step "s1-alter-table"
 
 step "s1-select"
 {
-   SELECT count(*) FROM test_table;
+    SELECT count(*) FROM test_table;
 }
 
 step "s1-select-router"
 {
-   SELECT count(*) FROM test_table WHERE column1 = 55;
+    SELECT count(*) FROM test_table WHERE column1 = 55;
 }
 
 step "s1-insert"
 {
- 	INSERT INTO test_table VALUES (100, 100);
+    INSERT INTO test_table VALUES (100, 100);
 }
 
 step "s1-commit"
@@ -66,39 +66,39 @@ session "s2"
 
 step "s2-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s2-rollback"
 {
-	ROLLBACK;
+    ROLLBACK;
 }
 
 step "s2-sleep"
 {
-	SELECT pg_sleep(0.5);
+    SELECT pg_sleep(0.5);
 }
 
 step "s2-view-dist"
 {
-	SELECT query, citus_nodename_for_nodeid(citus_nodeid_for_gpid(global_pid)), citus_nodeport_for_nodeid(citus_nodeid_for_gpid(global_pid)), state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%BEGIN%'), ('%pg_catalog.pg_isolation_test_session_is_blocked%'), ('%citus_add_node%')) AND backend_type = 'client backend' ORDER BY query DESC;
+    SELECT query, citus_nodename_for_nodeid(citus_nodeid_for_gpid(global_pid)), citus_nodeport_for_nodeid(citus_nodeid_for_gpid(global_pid)), state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%BEGIN%'), ('%pg_catalog.pg_isolation_test_session_is_blocked%'), ('%citus_add_node%')) AND backend_type = 'client backend' ORDER BY query DESC;
 }
 
 session "s3"
 
 step "s3-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s3-rollback"
 {
-	ROLLBACK;
+    ROLLBACK;
 }
 
 step "s3-view-worker"
 {
-	SELECT query, citus_nodename_for_nodeid(citus_nodeid_for_gpid(global_pid)), citus_nodeport_for_nodeid(citus_nodeid_for_gpid(global_pid)), state, wait_event_type, wait_event, usename, datname FROM citus_stat_activity WHERE query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%csa_from_one_node%')) AND is_worker_query = true AND backend_type = 'client backend' ORDER BY query DESC;
+    SELECT query, citus_nodename_for_nodeid(citus_nodeid_for_gpid(global_pid)), citus_nodeport_for_nodeid(citus_nodeid_for_gpid(global_pid)), state, wait_event_type, wait_event, usename, datname FROM citus_stat_activity WHERE query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%csa_from_one_node%')) AND is_worker_query = true AND backend_type = 'client backend' ORDER BY query DESC;
 }
 
 session "s4"

@@ -5,15 +5,15 @@
 // create range distributed table to test behavior of INSERT in concurrent operations
 setup
 {
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE insert_hash(id integer, data text);
-	SELECT create_distributed_table('insert_hash', 'id');
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE insert_hash(id integer, data text);
+    SELECT create_distributed_table('insert_hash', 'id');
 }
 
 // drop distributed table
 teardown
 {
-	DROP TABLE IF EXISTS insert_hash CASCADE;
+    DROP TABLE IF EXISTS insert_hash CASCADE;
 }
 
 // session 1
