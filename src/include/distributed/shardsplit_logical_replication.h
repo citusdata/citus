@@ -12,16 +12,16 @@
 
 typedef struct ReplicationSlotInfo
 {
-    uint32 targetNodeId;
-    char * tableOwnerName;
-    char * slotName;
+	uint32 targetNodeId;
+	char *tableOwnerName;
+	char *slotName;
 } ReplicationSlotInfo;
 
 typedef struct ShardSplitPubSubMetadata
 {
-	List * shardIntervalListForSubscription;
+	List *shardIntervalListForSubscription;
 	Oid tableOwnerId;
-    ReplicationSlotInfo *slotInfo;
+	ReplicationSlotInfo *slotInfo;
 } ShardSplitPubSubMetadata;
 
 /* key for NodeShardMappingEntry */
@@ -42,19 +42,21 @@ extern uint32 NodeShardMappingHash(const void *key, Size keysize);
 extern int NodeShardMappingHashCompare(const void *left, const void *right, Size keysize);
 HTAB * SetupHashMapForShardInfo(void);
 
-List * ParseReplicationSlotInfoFromResult(PGresult * result);
+List * ParseReplicationSlotInfoFromResult(PGresult *result);
 
-extern StringInfo CreateSplitShardReplicationSetupUDF(List *sourceColocatedShardIntervalList,
-									   List *shardGroupSplitIntervalListList,
-									   List *destinationWorkerNodesList);
+extern StringInfo CreateSplitShardReplicationSetupUDF(
+	List *sourceColocatedShardIntervalList,
+	List *
+	shardGroupSplitIntervalListList,
+	List *destinationWorkerNodesList);
 
 extern List *  CreateShardSplitPubSubMetadataList(List *sourceColocatedShardIntervalList,
-									   List *shardGroupSplitIntervalListList,
-									   List *destinationWorkerNodesList,
-									   List *replicationSlotInfoList);
+												  List *shardGroupSplitIntervalListList,
+												  List *destinationWorkerNodesList,
+												  List *replicationSlotInfoList);
 
 extern void LogicallyReplicateSplitShards(WorkerNode *sourceWorkerNode,
-										  List* shardSplitPubSubMetadataList,
+										  List *shardSplitPubSubMetadataList,
 										  List *sourceColocatedShardIntervalList,
 										  List *shardGroupSplitIntervalListList,
 										  List *destinationWorkerNodesList);

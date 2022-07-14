@@ -18,7 +18,7 @@ SELECT create_distributed_table('table_second', 'id', colocate_with => 'table_to
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
 SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 
-SELECT * FROM citus_shards; 
+SELECT * FROM citus_shards;
 SELECT * FROM pg_dist_shard;
 
 SET client_min_messages TO LOG;
@@ -49,14 +49,12 @@ SELECT citus_split_shard_by_split_points(
 	1,
 	ARRAY['-1073741826'],
 	ARRAY[:worker_2_node, :worker_2_node],
-	'non_blocking');
--- On worker2, we want child shard 2 and dummy shard 1  -- 
+	'force_logical');
+-- On worker2, we want child shard 2 and dummy shard 1  --
 -- on worker1, we want child shard 3 and 1 and dummy shard 2  --
 
 \c - - - :worker_2_port
 SET search_path TO citus_split_shard_by_split_points_negative;
-SELECT * FROM pg_stat_subscription;
-SELECT * FROM pg_subscription_rel;
 SELECT * FROM show_catalog;
 
 \c - - - :worker_1_port

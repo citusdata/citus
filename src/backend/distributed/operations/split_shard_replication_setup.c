@@ -47,12 +47,13 @@ static ShardSplitInfo * CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 static void AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo);
 static void PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader,
 									   HTAB *shardInfoHashMap);
-									   
-static void ReturnReplicationSlotInfo(HTAB *shardInfoHashMap, Tuplestorestate *tupleStore, TupleDesc tupleDescriptor);
+
+static void ReturnReplicationSlotInfo(HTAB *shardInfoHashMap, Tuplestorestate *tupleStore,
+									  TupleDesc tupleDescriptor);
 
 static void CreatePublishersForSplitChildren(HTAB *shardInfoHashMap);
-StringInfo GetSoureAndDestinationShardNames(List* shardSplitInfoList);
-char *  ConstructFullyQualifiedSplitChildShardName(ShardSplitInfo* shardSplitInfo);
+StringInfo GetSoureAndDestinationShardNames(List *shardSplitInfoList);
+char *  ConstructFullyQualifiedSplitChildShardName(ShardSplitInfo *shardSplitInfo);
 
 /*
  * worker_split_shard_replication_setup UDF creates in-memory data structures
@@ -170,7 +171,7 @@ SetupHashMapForShardInfo()
 
 	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION | HASH_COMPARE);
 
-	HTAB * shardInfoMap = hash_create("ShardInfoMap", 128, &info, hashFlags);
+	HTAB *shardInfoMap = hash_create("ShardInfoMap", 128, &info, hashFlags);
 	return shardInfoMap;
 }
 
@@ -420,9 +421,10 @@ ParseShardSplitInfoFromDatum(Datum shardSplitInfoDatum,
 	*nodeId = DatumGetInt32(nodeIdDatum);
 }
 
-static void CreatePublishersForSplitChildren(HTAB *shardInfoHashMap)
+
+static void
+CreatePublishersForSplitChildren(HTAB *shardInfoHashMap)
 {
-		
 	HASH_SEQ_STATUS status;
 	hash_seq_init(&status, shardInfoHashMap);
 
@@ -436,21 +438,25 @@ static void CreatePublishersForSplitChildren(HTAB *shardInfoHashMap)
 		int connectionFlags = FORCE_NEW_CONNECTION;
 		printf("Sameer getting new connection \n");
 		MultiConnection *sourceConnection = GetNodeUserDatabaseConnection(connectionFlags,
-																	 "localhost",
-																	 PostPortNumber,
-																	  CitusExtensionOwnerName(),
-																	  get_database_name(
-																		  MyDatabaseId));
-		StringInfo shardNamesForPublication = GetSoureAndDestinationShardNames(entry->shardSplitInfoList);
+																		  "localhost",
+																		  PostPortNumber,
+																		  CitusExtensionOwnerName(),
+																		  get_database_name(
+																			  MyDatabaseId));
+		StringInfo shardNamesForPublication = GetSoureAndDestinationShardNames(
+			entry->shardSplitInfoList);
 
 		StringInfo command = makeStringInfo();
-		appendStringInfo(command, "CREATE PUBLICATION sameerpub_%u_%u FOR TABLE %s", nodeId, tableOwnerId,shardNamesForPublication->data);
+		appendStringInfo(command, "CREATE PUBLICATION sameerpub_%u_%u FOR TABLE %s",
+						 nodeId, tableOwnerId, shardNamesForPublication->data);
 		ExecuteCriticalRemoteCommand(sourceConnection, command->data);
 		printf("Sameer UserName: %s \n", GetUserNameFromId(tableOwnerId, false));
 	}
 }
 
-StringInfo GetSoureAndDestinationShardNames(List* shardSplitInfoList)
+
+StringInfo
+GetSoureAndDestinationShardNames(List *shardSplitInfoList)
 {
 	HASHCTL info;
 	int flags = HASH_ELEM | HASH_CONTEXT;
@@ -462,7 +468,7 @@ StringInfo GetSoureAndDestinationShardNames(List* shardSplitInfoList)
 	info.hcxt = CurrentMemoryContext;
 
 	HTAB *sourceShardIdSet = hash_create("Source ShardId Set", 128, &info, flags);
-	
+
 	/* Get child shard names */
 	StringInfo allShardNames = makeStringInfo();
 	bool addComma = false;
@@ -475,7 +481,7 @@ StringInfo GetSoureAndDestinationShardNames(List* shardSplitInfoList)
 		uint64 sourceShardId = shardSplitInfo->sourceShardId;
 		hash_search(sourceShardIdSet, &sourceShardId, HASH_ENTER, &found);
 
-		if(addComma)
+		if (addComma)
 		{
 			appendStringInfo(allShardNames, ",");
 		}
@@ -493,9 +499,9 @@ StringInfo GetSoureAndDestinationShardNames(List* shardSplitInfoList)
 	while ((sourceShardIdEntry = hash_seq_search(&status)) != NULL)
 	{
 		ShardInterval *sourceShardInterval = LoadShardInterval(*sourceShardIdEntry);
-		char* sourceShardName = ConstructQualifiedShardName(sourceShardInterval);
+		char *sourceShardName = ConstructQualifiedShardName(sourceShardInterval);
 
-		if(addComma)
+		if (addComma)
 		{
 			appendStringInfo(allShardNames, ",");
 		}
@@ -507,8 +513,9 @@ StringInfo GetSoureAndDestinationShardNames(List* shardSplitInfoList)
 	return allShardNames;
 }
 
+
 char *
-ConstructFullyQualifiedSplitChildShardName(ShardSplitInfo* shardSplitInfo)
+ConstructFullyQualifiedSplitChildShardName(ShardSplitInfo *shardSplitInfo)
 {
 	Oid schemaId = get_rel_namespace(shardSplitInfo->distributedTableOid);
 	char *schemaName = get_namespace_name(schemaId);
@@ -521,7 +528,10 @@ ConstructFullyQualifiedSplitChildShardName(ShardSplitInfo* shardSplitInfo)
 	return shardName;
 }
 
-static void ReturnReplicationSlotInfo(HTAB *shardInfoHashMap, Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
+
+static void
+ReturnReplicationSlotInfo(HTAB *shardInfoHashMap, Tuplestorestate *tupleStore, TupleDesc
+						  tupleDescriptor)
 {
 	HASH_SEQ_STATUS status;
 	hash_seq_init(&status, shardInfoHashMap);
@@ -536,11 +546,12 @@ static void ReturnReplicationSlotInfo(HTAB *shardInfoHashMap, Tuplestorestate *t
 		memset(nulls, false, sizeof(nulls));
 
 		values[0] = Int32GetDatum(entry->key.nodeId);
-		
-		char * tableOwnerName = GetUserNameFromId(entry->key.tableOwnerId, false);
+
+		char *tableOwnerName = GetUserNameFromId(entry->key.tableOwnerId, false);
 		values[1] = CStringGetTextDatum(tableOwnerName);
 
-		char * slotName = encode_replication_slot(entry->key.nodeId, entry->key.tableOwnerId);
+		char *slotName = encode_replication_slot(entry->key.nodeId,
+												 entry->key.tableOwnerId);
 		values[2] = CStringGetTextDatum(slotName);
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, nulls);

@@ -50,9 +50,9 @@ static void CreateAndCopySplitShardsForShardGroup(WorkerNode *sourceShardNode,
 static void CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 										   List *workersForPlacementList);
 static void CreateSplitShardsForShardGroupTwo(WorkerNode *sourceShardNode,
-										   List *sourceColocatedShardIntervalList,
-										   List *shardGroupSplitIntervalListList,
-										   List *workersForPlacementList);
+											  List *sourceColocatedShardIntervalList,
+											  List *shardGroupSplitIntervalListList,
+											  List *workersForPlacementList);
 static void CreateDummyShardsForShardGroup(List *sourceColocatedShardIntervalList,
 										   List *shardGroupSplitIntervalListList,
 										   WorkerNode *sourceWorkerNode,
@@ -74,9 +74,9 @@ static void BlockingShardSplit(SplitOperation splitOperation,
 							   List *shardSplitPointsList,
 							   List *workersForPlacementList);
 static void NonBlockingShardSplit(SplitOperation splitOperation,
-							   ShardInterval *shardIntervalToSplit,
-							   List *shardSplitPointsList,
-							   List *workersForPlacementList);
+								  ShardInterval *shardIntervalToSplit,
+								  List *shardSplitPointsList,
+								  List *workersForPlacementList);
 
 static void DoSplitCopy(WorkerNode *sourceShardNode,
 						List *sourceColocatedShardIntervalList,
@@ -94,6 +94,10 @@ static void TryDropSplitShardsOnFailure(List *shardGroupSplitIntervalListList,
 static Task * CreateTaskForDDLCommandList(uint64 jobId, List *ddlCommandList,
 										  WorkerNode *workerNode);
 
+static void AddDummyShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval);
+static void DropDummyShards(void);
+void TryDropShard(MultiConnection *connection, ShardInterval *shardInterval);
+
 /* Customize error message strings based on operation type */
 static const char *const SplitOperationName[] =
 {
@@ -105,6 +109,9 @@ static const char *const SplitTargetName[] =
 	[SHARD_SPLIT_API] = "shard",
 	[ISOLATE_TENANT_TO_NEW_SHARD] = "tenant",
 };
+
+/* Map containing list of dummy shards created on target nodes */
+static HTAB *DummyShardInfoHashMap = NULL;
 
 /* Function definitions */
 
@@ -1039,7 +1046,7 @@ TryDropSplitShardsOnFailure(List *shardGroupSplitIntervalListList,
 
 			int connectionFlags = FOR_DDL;
 			connectionFlags |= OUTSIDE_TRANSACTION;
-			MultiConnection *connnection = GetNodeUserDatabaseConnection(
+			MultiConnection *connection = GetNodeUserDatabaseConnection(
 				connectionFlags,
 				workerPlacementNode->workerName,
 				workerPlacementNode->workerPort,
@@ -1051,12 +1058,13 @@ TryDropSplitShardsOnFailure(List *shardGroupSplitIntervalListList,
 			 * The shard may or may not exist and the connection could have died.
 			 */
 			ExecuteOptionalRemoteCommand(
-				connnection,
+				connection,
 				dropShardQuery->data,
 				NULL /* pgResult */);
 		}
 	}
 }
+
 
 /*
  * SplitShard API to split a given shard (or shard group) in blocking fashion
@@ -1068,9 +1076,9 @@ TryDropSplitShardsOnFailure(List *shardGroupSplitIntervalListList,
  */
 static void
 NonBlockingShardSplit(SplitOperation splitOperation,
-				   ShardInterval *shardIntervalToSplit,
-				   List *shardSplitPointsList,
-				   List *workersForPlacementList)
+					  ShardInterval *shardIntervalToSplit,
+					  List *shardSplitPointsList,
+					  List *workersForPlacementList)
 {
 	List *sourceColocatedShardIntervalList = ColocatedShardIntervalList(
 		shardIntervalToSplit);
@@ -1106,13 +1114,34 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 			shardGroupSplitIntervalListList,
 			sourceShardToCopyNode,
 			workersForPlacementList);
-		
+
+		/*TODO: Refactor this method. BlockWrites is within this as of now, take it out */
 		SplitShardReplicationSetup(
 			sourceColocatedShardIntervalList,
 			shardGroupSplitIntervalListList,
 			sourceShardToCopyNode,
 			workersForPlacementList);
-		
+
+		/*
+		 * Drop old shards and delete related metadata. Have to do that before
+		 * creating the new shard metadata, because there's cross-checks
+		 * preventing inconsistent metadata (like overlapping shards).
+		 */
+		DropShardList(sourceColocatedShardIntervalList);
+
+		/* Insert new shard and placement metdata */
+		InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
+										 workersForPlacementList);
+
+		/*
+		 * Create foreign keys if exists after the metadata changes happening in
+		 * DropShardList() and InsertSplitChildrenShardMetadata() because the foreign
+		 * key creation depends on the new metadata.
+		 */
+		CreateForeignKeyConstraints(shardGroupSplitIntervalListList,
+									workersForPlacementList);
+
+		DropDummyShards();
 	}
 	PG_CATCH();
 	{
@@ -1120,17 +1149,20 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		TryDropSplitShardsOnFailure(shardGroupSplitIntervalListList,
 									workersForPlacementList);
 
+		DropDummyShards();
+
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
 }
 
+
 /* Create ShardGroup split children on a list of corresponding workers. */
 static void
 CreateSplitShardsForShardGroupTwo(WorkerNode *sourceShardNode,
-							   List *sourceColocatedShardIntervalList,
-							   List *shardGroupSplitIntervalListList,
-							   List *workersForPlacementList)
+								  List *sourceColocatedShardIntervalList,
+								  List *shardGroupSplitIntervalListList,
+								  List *workersForPlacementList)
 {
 	/* Iterate on shard interval list for shard group */
 	List *shardIntervalList = NULL;
@@ -1151,11 +1183,12 @@ CreateSplitShardsForShardGroupTwo(WorkerNode *sourceShardNode,
 				splitShardCreationCommandList,
 				shardInterval->shardId);
 
-			/* Create new split child shard on the specified placement list */
+			/* Create new split child shard on the specified worker node */
 			CreateObjectOnPlacement(splitShardCreationCommandList, workerPlacementNode);
 		}
 	}
 }
+
 
 static void
 CreateDummyShardsForShardGroup(List *sourceColocatedShardIntervalList,
@@ -1163,6 +1196,12 @@ CreateDummyShardsForShardGroup(List *sourceColocatedShardIntervalList,
 							   WorkerNode *sourceWorkerNode,
 							   List *workersForPlacementList)
 {
+	/*
+	 * Setup a hash map to store list of dummy shards created on nodes.
+	 * This will facilitate easy cleanup.
+	 */
+	DummyShardInfoHashMap = SetupHashMapForShardInfo();
+
 	/*
 	 * Statisfy Constraint 1: Create dummy source shard(s) on all destination nodes.
 	 * If source node is also in desintation, skip dummy shard creation(see Note 1 from function description).
@@ -1185,7 +1224,7 @@ CreateDummyShardsForShardGroup(List *sourceColocatedShardIntervalList,
 		ShardInterval *shardInterval = NULL;
 		foreach_ptr(shardInterval, sourceColocatedShardIntervalList)
 		{
-						/* Populate list of commands necessary to create shard interval on destination */
+			/* Populate list of commands necessary to create shard interval on destination */
 			List *splitShardCreationCommandList = GetPreLoadTableCreationCommands(
 				shardInterval->relationId,
 				false, /* includeSequenceDefaults */
@@ -1194,8 +1233,11 @@ CreateDummyShardsForShardGroup(List *sourceColocatedShardIntervalList,
 				splitShardCreationCommandList,
 				shardInterval->shardId);
 
-			/* Create new split child shard on the specified placement list */
+			/* Create dummy source shard on the specified placement list */
 			CreateObjectOnPlacement(splitShardCreationCommandList, workerPlacementNode);
+
+			/* Add dummy source shard entry created for placement node in map */
+			AddDummyShardEntryInMap(workerPlacementNode->nodeId, shardInterval);
 		}
 	}
 
@@ -1224,11 +1266,15 @@ CreateDummyShardsForShardGroup(List *sourceColocatedShardIntervalList,
 				splitShardCreationCommandList,
 				shardInterval->shardId);
 
-			/* Create new split child shard on the specified placement list */
+			/* Create dummy split child shard on source worker node */
 			CreateObjectOnPlacement(splitShardCreationCommandList, sourceWorkerNode);
+
+			/* Add dummy split child shard entry created on source node */
+			AddDummyShardEntryInMap(sourceWorkerNode->nodeId, shardInterval);
 		}
 	}
 }
+
 
 static HTAB *
 CreateWorkerForPlacementSet(List *workersForPlacementList)
@@ -1257,15 +1303,16 @@ CreateWorkerForPlacementSet(List *workersForPlacementList)
 }
 
 
-static void SplitShardReplicationSetup(List *sourceColocatedShardIntervalList,
-									   List *shardGroupSplitIntervalListList,
-									   WorkerNode *sourceWorkerNode,
-									   List *destinationWorkerNodesList)
+static void
+SplitShardReplicationSetup(List *sourceColocatedShardIntervalList,
+						   List *shardGroupSplitIntervalListList,
+						   WorkerNode *sourceWorkerNode,
+						   List *destinationWorkerNodesList)
 {
-
-	StringInfo splitShardReplicationUDF = CreateSplitShardReplicationSetupUDF(sourceColocatedShardIntervalList,
-										shardGroupSplitIntervalListList,
-										destinationWorkerNodesList);
+	StringInfo splitShardReplicationUDF = CreateSplitShardReplicationSetupUDF(
+		sourceColocatedShardIntervalList,
+		shardGroupSplitIntervalListList,
+		destinationWorkerNodesList);
 
 	int connectionFlags = FORCE_NEW_CONNECTION;
 	MultiConnection *sourceConnection = GetNodeUserDatabaseConnection(connectionFlags,
@@ -1279,25 +1326,104 @@ static void SplitShardReplicationSetup(List *sourceColocatedShardIntervalList,
 	ClaimConnectionExclusively(sourceConnection);
 
 	PGresult *result = NULL;
-	int queryResult = ExecuteOptionalRemoteCommand(sourceConnection, splitShardReplicationUDF->data, &result);
+	int queryResult = ExecuteOptionalRemoteCommand(sourceConnection,
+												   splitShardReplicationUDF->data,
+												   &result);
 	if (queryResult != RESPONSE_OKAY || !IsResponseOK(result))
 	{
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						  errmsg("Failed to run worker_split_shard_replication_setup")));
+						errmsg("Failed to run worker_split_shard_replication_setup")));
 
 		PQclear(result);
 		ForgetResults(sourceConnection);
 	}
 
 	/* Get replication slot information */
-	List * replicationSlotInfoList = ParseReplicationSlotInfoFromResult(result);
+	List *replicationSlotInfoList = ParseReplicationSlotInfoFromResult(result);
 
-	List * shardSplitPubSubMetadata = CreateShardSplitPubSubMetadataList(sourceColocatedShardIntervalList,
-	 								shardGroupSplitIntervalListList,
-	 								destinationWorkerNodesList,
-									replicationSlotInfoList);
+	List *shardSplitPubSubMetadata = CreateShardSplitPubSubMetadataList(
+		sourceColocatedShardIntervalList,
+		shardGroupSplitIntervalListList,
+		destinationWorkerNodesList,
+		replicationSlotInfoList);
 
 
-	LogicallyReplicateSplitShards(sourceWorkerNode, shardSplitPubSubMetadata, sourceColocatedShardIntervalList, shardGroupSplitIntervalListList, destinationWorkerNodesList);
+	LogicallyReplicateSplitShards(sourceWorkerNode, shardSplitPubSubMetadata,
+								  sourceColocatedShardIntervalList,
+								  shardGroupSplitIntervalListList,
+								  destinationWorkerNodesList);
 }
 
+
+static void
+AddDummyShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval)
+{
+	NodeShardMappingKey key;
+	key.nodeId = targetNodeId;
+	key.tableOwnerId = TableOwnerOid(shardInterval->relationId);
+
+	bool found = false;
+	NodeShardMappingEntry *nodeMappingEntry =
+		(NodeShardMappingEntry *) hash_search(DummyShardInfoHashMap, &key, HASH_ENTER,
+											  &found);
+	if (!found)
+	{
+		nodeMappingEntry->shardSplitInfoList = NIL;
+	}
+
+	nodeMappingEntry->shardSplitInfoList =
+		lappend(nodeMappingEntry->shardSplitInfoList, (ShardInterval *) shardInterval);
+}
+
+
+static void
+DropDummyShards()
+{
+	HASH_SEQ_STATUS status;
+	hash_seq_init(&status, DummyShardInfoHashMap);
+
+	NodeShardMappingEntry *entry = NULL;
+	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
+	{
+		uint32 nodeId = entry->key.nodeId;
+		WorkerNode *shardToBeDroppedNode = FindNodeWithNodeId(nodeId,
+															  false /* missingOk */);
+
+		int connectionFlags = FOR_DDL;
+		connectionFlags |= OUTSIDE_TRANSACTION;
+		MultiConnection *connection = GetNodeUserDatabaseConnection(
+			connectionFlags,
+			shardToBeDroppedNode->workerName,
+			shardToBeDroppedNode->workerPort,
+			CurrentUserName(),
+			NULL /* databaseName */);
+
+		List *dummyShardIntervalList = entry->shardSplitInfoList;
+		ShardInterval *shardInterval = NULL;
+		foreach_ptr(shardInterval, dummyShardIntervalList)
+		{
+			TryDropShard(connection, shardInterval);
+		}
+	}
+}
+
+
+void
+TryDropShard(MultiConnection *connection, ShardInterval *shardInterval)
+{
+	char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
+	StringInfo dropShardQuery = makeStringInfo();
+
+	/* Caller enforces that foreign tables cannot be split (use DROP_REGULAR_TABLE_COMMAND) */
+	appendStringInfo(dropShardQuery, DROP_REGULAR_TABLE_COMMAND,
+					 qualifiedShardName);
+
+	/*
+	 * Perform a drop in best effort manner.
+	 * The shard may or may not exist and the connection could have died.
+	 */
+	ExecuteOptionalRemoteCommand(
+		connection,
+		dropShardQuery->data,
+		NULL /* pgResult */);
+}

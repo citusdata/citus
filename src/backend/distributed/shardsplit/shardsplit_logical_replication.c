@@ -26,34 +26,43 @@
 static HTAB *ShardInfoHashMapForPublications = NULL;
 
 /* function declarations */
-static void AddShardEntryInMap(Oid tableOwner, uint32 nodeId, ShardInterval * shardInterval, bool isChildShardInterval);
-ShardSplitPubSubMetadata * CreateShardSplitPubSubMetadata(Oid tableOwnerId, uint32 nodeId, List * shardIdList, List * replicationSlotInfoList);
+static void AddPublishableShardEntryInMap(uint32 targetNodeId,
+										  ShardInterval *shardInterval, bool
+										  isChildShardInterval);
+ShardSplitPubSubMetadata * CreateShardSplitPubSubMetadata(Oid tableOwnerId, uint32 nodeId,
+														  List *shardIdList,
+														  List *replicationSlotInfoList);
 
-static void
-CreateShardSplitPublicationForNode(MultiConnection *connection, List *shardList,
-							uint32_t publicationForTargetNodeId, Oid tableOwner);
-static void
-CreateShardSplitPublications(MultiConnection *sourceConnection, List * shardSplitPubSubMetadataList);
-static void
-CreateShardSplitSubscriptions(List * targetNodeConnectionList, List * shardSplitPubSubMetadataList, WorkerNode * sourceWorkerNode, char * superUser, char * databaseName);
-static void
-WaitForShardSplitRelationSubscriptionsBecomeReady(List * targetNodeConnectionList, List * shardSplitPubSubMetadataList);
+static void CreateShardSplitPublicationForNode(MultiConnection *connection,
+											   List *shardList,
+											   uint32_t publicationForTargetNodeId, Oid
+											   tableOwner);
+static void CreateShardSplitPublications(MultiConnection *sourceConnection,
+										 List *shardSplitPubSubMetadataList);
+static void CreateShardSplitSubscriptions(List *targetNodeConnectionList,
+										  List *shardSplitPubSubMetadataList,
+										  WorkerNode *sourceWorkerNode, char *superUser,
+										  char *databaseName);
+static void WaitForShardSplitRelationSubscriptionsBecomeReady(
+	List *targetNodeConnectionList, List *shardSplitPubSubMetadataList);
 
-static void
-WaitForShardSplitRelationSubscriptionsToBeCaughtUp(XLogRecPtr sourcePosition, List * targetNodeConnectionList, List * shardSplitPubSubMetadataList);
+static void WaitForShardSplitRelationSubscriptionsToBeCaughtUp(XLogRecPtr sourcePosition,
+															   List *
+															   targetNodeConnectionList,
+															   List *
+															   shardSplitPubSubMetadataList);
 
-
-static char *
-ShardSplitPublicationName(uint32_t nodeId, Oid ownerId);
+static char * ShardSplitPublicationName(uint32_t nodeId, Oid ownerId);
 
 /*used for debuggin. Remove later*/
-void PrintShardSplitPubSubMetadata(ShardSplitPubSubMetadata * shardSplitMetadata);
+void PrintShardSplitPubSubMetadata(ShardSplitPubSubMetadata *shardSplitMetadata);
 
-StringInfo CreateSplitShardReplicationSetupUDF(List *sourceColocatedShardIntervalList,
-									   List *shardGroupSplitIntervalListList,
-									   List *destinationWorkerNodesList)
+StringInfo
+CreateSplitShardReplicationSetupUDF(List *sourceColocatedShardIntervalList,
+									List *shardGroupSplitIntervalListList,
+									List *destinationWorkerNodesList)
 {
-    StringInfo splitChildrenRows = makeStringInfo();
+	StringInfo splitChildrenRows = makeStringInfo();
 
 	ShardInterval *sourceShardIntervalToCopy = NULL;
 	List *splitChildShardIntervalList = NULL;
@@ -66,7 +75,7 @@ StringInfo CreateSplitShardReplicationSetupUDF(List *sourceColocatedShardInterva
 		ShardInterval *splitChildShardInterval = NULL;
 		WorkerNode *destinationWorkerNode = NULL;
 		forboth_ptr(splitChildShardInterval, splitChildShardIntervalList,
-				destinationWorkerNode, destinationWorkerNodesList)
+					destinationWorkerNode, destinationWorkerNodesList)
 		{
 			if (addComma)
 			{
@@ -74,62 +83,69 @@ StringInfo CreateSplitShardReplicationSetupUDF(List *sourceColocatedShardInterva
 			}
 
 			StringInfo minValueString = makeStringInfo();
-			appendStringInfo(minValueString, "%d", DatumGetInt32(splitChildShardInterval->minValue));
+			appendStringInfo(minValueString, "%d", DatumGetInt32(
+								 splitChildShardInterval->minValue));
 
 			StringInfo maxValueString = makeStringInfo();
-			appendStringInfo(maxValueString, "%d", DatumGetInt32(splitChildShardInterval->maxValue));
+			appendStringInfo(maxValueString, "%d", DatumGetInt32(
+								 splitChildShardInterval->maxValue));
 
 			appendStringInfo(splitChildrenRows,
-			"ROW(%lu, %lu, %s, %s, %u)::citus.split_shard_info",
-			 sourceShardId,
-			 splitChildShardInterval->shardId,
-			 quote_literal_cstr(minValueString->data),
-			 quote_literal_cstr(maxValueString->data),
-			 destinationWorkerNode->nodeId);
+							 "ROW(%lu, %lu, %s, %s, %u)::citus.split_shard_info",
+							 sourceShardId,
+							 splitChildShardInterval->shardId,
+							 quote_literal_cstr(minValueString->data),
+							 quote_literal_cstr(maxValueString->data),
+							 destinationWorkerNode->nodeId);
 
-			 addComma = true;
+			addComma = true;
 		}
 	}
 
 	StringInfo splitShardReplicationUDF = makeStringInfo();
-	appendStringInfo(splitShardReplicationUDF, 
-		"SELECT * FROM worker_split_shard_replication_setup(ARRAY[%s])", splitChildrenRows->data);
+	appendStringInfo(splitShardReplicationUDF,
+					 "SELECT * FROM worker_split_shard_replication_setup(ARRAY[%s])",
+					 splitChildrenRows->data);
 
-    return splitShardReplicationUDF;
+	return splitShardReplicationUDF;
 }
 
-List * ParseReplicationSlotInfoFromResult(PGresult * result)
+
+List *
+ParseReplicationSlotInfoFromResult(PGresult *result)
 {
-    int64 rowCount = PQntuples(result);
+	int64 rowCount = PQntuples(result);
 	int64 colCount = PQnfields(result);
 
-    List *replicationSlotInfoList = NIL;
-    for (int64 rowIndex = 0; rowIndex < rowCount; rowIndex++)
+	List *replicationSlotInfoList = NIL;
+	for (int64 rowIndex = 0; rowIndex < rowCount; rowIndex++)
 	{
-        ReplicationSlotInfo * replicationSlotInfo = (ReplicationSlotInfo *)palloc0(sizeof(ReplicationSlotInfo));
+		ReplicationSlotInfo *replicationSlotInfo = (ReplicationSlotInfo *) palloc0(
+			sizeof(ReplicationSlotInfo));
 
-        char * targeNodeIdString = PQgetvalue(result, rowIndex, 0);
-        replicationSlotInfo->targetNodeId = strtoul(targeNodeIdString, NULL, 10);
+		char *targeNodeIdString = PQgetvalue(result, rowIndex, 0);
+		replicationSlotInfo->targetNodeId = strtoul(targeNodeIdString, NULL, 10);
 
-        /* we're using the pstrdup to copy the data into the current memory context */
-        replicationSlotInfo->tableOwnerName = pstrdup(PQgetvalue(result, rowIndex, 1));
+		/* we're using the pstrdup to copy the data into the current memory context */
+		replicationSlotInfo->tableOwnerName = pstrdup(PQgetvalue(result, rowIndex, 1));
 
-        replicationSlotInfo->slotName = pstrdup(PQgetvalue(result, rowIndex, 2));
+		replicationSlotInfo->slotName = pstrdup(PQgetvalue(result, rowIndex, 2));
 
-        replicationSlotInfoList = lappend(replicationSlotInfoList, replicationSlotInfo);
+		replicationSlotInfoList = lappend(replicationSlotInfoList, replicationSlotInfo);
 	}
-    
-    /*TODO(saawasek): size of this should not be NULL */
-    return replicationSlotInfoList;
+
+	/*TODO(saawasek): size of this should not be NULL */
+	return replicationSlotInfoList;
 }
 
 
-List * CreateShardSplitPubSubMetadataList(List *sourceColocatedShardIntervalList,
-									   List *shardGroupSplitIntervalListList,
-									   List *destinationWorkerNodesList,
-                                       List *replicationSlotInfoList)
+List *
+CreateShardSplitPubSubMetadataList(List *sourceColocatedShardIntervalList,
+								   List *shardGroupSplitIntervalListList,
+								   List *destinationWorkerNodesList,
+								   List *replicationSlotInfoList)
 {
-    ShardInfoHashMapForPublications = SetupHashMapForShardInfo();
+	ShardInfoHashMapForPublications = SetupHashMapForShardInfo();
 	ShardInterval *sourceShardIntervalToCopy = NULL;
 	List *splitChildShardIntervalList = NULL;
 	forboth_ptr(sourceShardIntervalToCopy, sourceColocatedShardIntervalList,
@@ -138,247 +154,276 @@ List * CreateShardSplitPubSubMetadataList(List *sourceColocatedShardIntervalList
 		ShardInterval *splitChildShardInterval = NULL;
 		WorkerNode *destinationWorkerNode = NULL;
 		forboth_ptr(splitChildShardInterval, splitChildShardIntervalList,
-				destinationWorkerNode, destinationWorkerNodesList)
+					destinationWorkerNode, destinationWorkerNodesList)
 		{
-            /* Table owner is same for both parent and child shard */
-            Oid tableOwnerId = TableOwnerOid(sourceShardIntervalToCopy->relationId);
-            uint32 destinationWorkerNodeId = destinationWorkerNode->nodeId;
+			uint32 destinationWorkerNodeId = destinationWorkerNode->nodeId;
 
-            /* Add split child shard interval */
-            AddShardEntryInMap(tableOwnerId, destinationWorkerNodeId, splitChildShardInterval, true /*isChildShardInterval*/);
+			/* Add split child shard interval */
+			AddPublishableShardEntryInMap(destinationWorkerNodeId,
+										  splitChildShardInterval,
+										  true /*isChildShardInterval*/);
 
-            /* Add parent shard interval if not already added */
-            AddShardEntryInMap(tableOwnerId, destinationWorkerNodeId, sourceShardIntervalToCopy, false /*isChildShardInterval*/);
+			/* Add parent shard interval if not already added */
+			AddPublishableShardEntryInMap(destinationWorkerNodeId,
+										  sourceShardIntervalToCopy,
+										  false /*isChildShardInterval*/);
 		}
 	}
 
-    /* Populate pubsub meta data*/
-    HASH_SEQ_STATUS status;
+	/* Populate pubsub meta data*/
+	HASH_SEQ_STATUS status;
 	hash_seq_init(&status, ShardInfoHashMapForPublications);
-	
-    List * shardSplitPubSubMetadataList = NIL;
-    NodeShardMappingEntry *entry = NULL;
-    while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
-    {
-       	uint32_t nodeId = entry->key.nodeId;
+
+	List *shardSplitPubSubMetadataList = NIL;
+	NodeShardMappingEntry *entry = NULL;
+	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
+	{
+		uint32_t nodeId = entry->key.nodeId;
 		uint32_t tableOwnerId = entry->key.tableOwnerId;
-        ShardSplitPubSubMetadata * shardSplitPubSubMetadata = CreateShardSplitPubSubMetadata(tableOwnerId, nodeId, entry->shardSplitInfoList, replicationSlotInfoList);
+		ShardSplitPubSubMetadata *shardSplitPubSubMetadata =
+			CreateShardSplitPubSubMetadata(tableOwnerId, nodeId,
+										   entry->shardSplitInfoList,
+										   replicationSlotInfoList);
 
-        shardSplitPubSubMetadataList = lappend(shardSplitPubSubMetadataList, shardSplitPubSubMetadata);
-    }
+		shardSplitPubSubMetadataList = lappend(shardSplitPubSubMetadataList,
+											   shardSplitPubSubMetadata);
+	}
 
-    return shardSplitPubSubMetadataList;
+	return shardSplitPubSubMetadataList;
 }
 
-static void AddShardEntryInMap(Oid tableOwnerId, uint32 nodeId, ShardInterval * shardInterval, bool isChildShardInterval)
+
+static void
+AddPublishableShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval, bool
+							  isChildShardInterval)
 {
-    NodeShardMappingKey key;
-	key.nodeId = nodeId;
-	key.tableOwnerId = tableOwnerId;
+	NodeShardMappingKey key;
+	key.nodeId = targetNodeId;
+	key.tableOwnerId = TableOwnerOid(shardInterval->relationId);
 
 	bool found = false;
 	NodeShardMappingEntry *nodeMappingEntry =
-		(NodeShardMappingEntry *) hash_search(ShardInfoHashMapForPublications, &key, HASH_ENTER,
+		(NodeShardMappingEntry *) hash_search(ShardInfoHashMapForPublications, &key,
+											  HASH_ENTER,
 											  &found);
 	if (!found)
 	{
 		nodeMappingEntry->shardSplitInfoList = NIL;
 	}
-   
-    if(isChildShardInterval)
-    {
-        nodeMappingEntry->shardSplitInfoList =
-            lappend(nodeMappingEntry->shardSplitInfoList, (ShardInterval *) shardInterval);
-        return;
-    }
 
-    ShardInterval * existingShardInterval = NULL;
-    foreach_ptr(existingShardInterval, nodeMappingEntry->shardSplitInfoList)
-    {
-        if(existingShardInterval->shardId == shardInterval->shardId)
-        {
-            /* parent shard interval is already added hence return */
-            return;
-        }
-    }
+	if (isChildShardInterval)
+	{
+		nodeMappingEntry->shardSplitInfoList =
+			lappend(nodeMappingEntry->shardSplitInfoList,
+					(ShardInterval *) shardInterval);
+		return;
+	}
 
-    /* Add parent shard Interval */
-    nodeMappingEntry->shardSplitInfoList =
-        lappend(nodeMappingEntry->shardSplitInfoList, (ShardInterval *) shardInterval);
+	ShardInterval *existingShardInterval = NULL;
+	foreach_ptr(existingShardInterval, nodeMappingEntry->shardSplitInfoList)
+	{
+		if (existingShardInterval->shardId == shardInterval->shardId)
+		{
+			/* parent shard interval is already added hence return */
+			return;
+		}
+	}
 
+	/* Add parent shard Interval */
+	nodeMappingEntry->shardSplitInfoList =
+		lappend(nodeMappingEntry->shardSplitInfoList, (ShardInterval *) shardInterval);
 }
 
 
-ShardSplitPubSubMetadata * CreateShardSplitPubSubMetadata(Oid tableOwnerId, uint32 nodeId, List * shardIntervalList, List * replicationSlotInfoList)
+ShardSplitPubSubMetadata *
+CreateShardSplitPubSubMetadata(Oid tableOwnerId, uint32 nodeId, List *shardIntervalList,
+							   List *replicationSlotInfoList)
 {
+	ShardSplitPubSubMetadata *shardSplitPubSubMetadata = palloc0(
+		sizeof(ShardSplitPubSubMetadata));
+	shardSplitPubSubMetadata->shardIntervalListForSubscription = shardIntervalList;
+	shardSplitPubSubMetadata->tableOwnerId = tableOwnerId;
 
-    ShardSplitPubSubMetadata * shardSplitPubSubMetadata = palloc0(sizeof(ShardSplitPubSubMetadata));
-    shardSplitPubSubMetadata->shardIntervalListForSubscription = shardIntervalList;
-    shardSplitPubSubMetadata->tableOwnerId = tableOwnerId;
+	char *tableOwnerName = GetUserNameFromId(tableOwnerId, false);
+	ReplicationSlotInfo *replicationSlotInfo = NULL;
+	foreach_ptr(replicationSlotInfo, replicationSlotInfoList)
+	{
+		if (nodeId == replicationSlotInfo->targetNodeId &&
+			strcmp(tableOwnerName, replicationSlotInfo->tableOwnerName) == 0)
+		{
+			shardSplitPubSubMetadata->slotInfo = replicationSlotInfo;
+			break;
+		}
+	}
 
-    char * tableOwnerName = GetUserNameFromId(tableOwnerId, false);
-    ReplicationSlotInfo * replicationSlotInfo = NULL;
-    foreach_ptr(replicationSlotInfo, replicationSlotInfoList)
-    {
-        if(nodeId == replicationSlotInfo->targetNodeId && 
-          strcmp(tableOwnerName, replicationSlotInfo->tableOwnerName) == 0)
-          {
-              shardSplitPubSubMetadata->slotInfo = replicationSlotInfo;
-              break;
-          }
-    }
-
-    return shardSplitPubSubMetadata;
+	return shardSplitPubSubMetadata;
 }
 
 
-void LogicallyReplicateSplitShards(WorkerNode *sourceWorkerNode,
-        List* shardSplitPubSubMetadataList,
-        List *sourceColocatedShardIntervalList,
-        List *shardGroupSplitIntervalListList, 
-        List *destinationWorkerNodesList)
+void
+LogicallyReplicateSplitShards(WorkerNode *sourceWorkerNode,
+							  List *shardSplitPubSubMetadataList,
+							  List *sourceColocatedShardIntervalList,
+							  List *shardGroupSplitIntervalListList,
+							  List *destinationWorkerNodesList)
 {
-    char *superUser = CitusExtensionOwnerName();
+	char *superUser = CitusExtensionOwnerName();
 	char *databaseName = get_database_name(MyDatabaseId);
 	int connectionFlags = FORCE_NEW_CONNECTION;
 
-    /* Get source node connection */
-    MultiConnection *sourceConnection =
-        GetNodeUserDatabaseConnection(connectionFlags, sourceWorkerNode->workerName, sourceWorkerNode->workerPort,
-        superUser, databaseName);
-    
-    ClaimConnectionExclusively(sourceConnection);
+	/* Get source node connection */
+	MultiConnection *sourceConnection =
+		GetNodeUserDatabaseConnection(connectionFlags, sourceWorkerNode->workerName,
+									  sourceWorkerNode->workerPort,
+									  superUser, databaseName);
 
-    List * targetNodeConnectionList = NIL;
-    ShardSplitPubSubMetadata * shardSplitPubSubMetadata = NULL;
-    foreach_ptr(shardSplitPubSubMetadata, shardSplitPubSubMetadataList)
-    {
-        uint32 targetWorkerNodeId = shardSplitPubSubMetadata->slotInfo->targetNodeId;
-        WorkerNode * targetWorkerNode = FindNodeWithNodeId(targetWorkerNodeId, false);
-        
-        MultiConnection *targetConnection =
-        GetNodeUserDatabaseConnection(connectionFlags, targetWorkerNode->workerName, targetWorkerNode->workerPort,
-        superUser, databaseName);
-        ClaimConnectionExclusively(targetConnection);
+	ClaimConnectionExclusively(sourceConnection);
 
-        targetNodeConnectionList = lappend(targetNodeConnectionList, targetConnection);
-    }
+	List *targetNodeConnectionList = NIL;
+	ShardSplitPubSubMetadata *shardSplitPubSubMetadata = NULL;
+	foreach_ptr(shardSplitPubSubMetadata, shardSplitPubSubMetadataList)
+	{
+		uint32 targetWorkerNodeId = shardSplitPubSubMetadata->slotInfo->targetNodeId;
+		WorkerNode *targetWorkerNode = FindNodeWithNodeId(targetWorkerNodeId, false);
 
-    /* create publications */
-    CreateShardSplitPublications(sourceConnection, shardSplitPubSubMetadataList);
+		MultiConnection *targetConnection =
+			GetNodeUserDatabaseConnection(connectionFlags, targetWorkerNode->workerName,
+										  targetWorkerNode->workerPort,
+										  superUser, databaseName);
+		ClaimConnectionExclusively(targetConnection);
 
-    CreateShardSplitSubscriptions(targetNodeConnectionList,
-        shardSplitPubSubMetadataList,
-        sourceWorkerNode,
-        superUser,
-        databaseName);
+		targetNodeConnectionList = lappend(targetNodeConnectionList, targetConnection);
+	}
 
-   WaitForShardSplitRelationSubscriptionsBecomeReady(targetNodeConnectionList, shardSplitPubSubMetadataList);
-   
-   XLogRecPtr sourcePosition = GetRemoteLogPosition(sourceConnection);
-   WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition, targetNodeConnectionList, shardSplitPubSubMetadataList);
+	/* create publications */
+	CreateShardSplitPublications(sourceConnection, shardSplitPubSubMetadataList);
 
-   CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList, destinationWorkerNodesList);
+	CreateShardSplitSubscriptions(targetNodeConnectionList,
+								  shardSplitPubSubMetadataList,
+								  sourceWorkerNode,
+								  superUser,
+								  databaseName);
 
-   sourcePosition = GetRemoteLogPosition(sourceConnection);
-   WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition, targetNodeConnectionList, shardSplitPubSubMetadataList);
-   
-   BlockWritesToShardList(sourceColocatedShardIntervalList);
-   
-   sourcePosition = GetRemoteLogPosition(sourceConnection);
-   WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition, targetNodeConnectionList, shardSplitPubSubMetadataList);
-   
-   /*TOOD : Create foreign key constraints and handle partitioned tables*/
+	WaitForShardSplitRelationSubscriptionsBecomeReady(targetNodeConnectionList,
+													  shardSplitPubSubMetadataList);
+
+	XLogRecPtr sourcePosition = GetRemoteLogPosition(sourceConnection);
+	WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition,
+													   targetNodeConnectionList,
+													   shardSplitPubSubMetadataList);
+
+	CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
+										   destinationWorkerNodesList);
+
+	sourcePosition = GetRemoteLogPosition(sourceConnection);
+	WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition,
+													   targetNodeConnectionList,
+													   shardSplitPubSubMetadataList);
+
+	BlockWritesToShardList(sourceColocatedShardIntervalList);
+
+	sourcePosition = GetRemoteLogPosition(sourceConnection);
+	WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition,
+													   targetNodeConnectionList,
+													   shardSplitPubSubMetadataList);
+
+
+	/*TOOD : Create foreign key constraints and handle partitioned tables*/
 }
 
 
-void PrintShardSplitPubSubMetadata(ShardSplitPubSubMetadata * shardSplitMetadata)
+void
+PrintShardSplitPubSubMetadata(ShardSplitPubSubMetadata *shardSplitMetadata)
 {
-    printf("sameer: ShardSplitPubSbuMetadata\n");
-    ReplicationSlotInfo * replicationInfo = shardSplitMetadata->slotInfo;
+	printf("sameer: ShardSplitPubSbuMetadata\n");
+	ReplicationSlotInfo *replicationInfo = shardSplitMetadata->slotInfo;
 
-    List * shardIntervalList = shardSplitMetadata->shardIntervalListForSubscription;
-    printf("shardIds: ");
-    ShardInterval * shardInterval = NULL;
-    foreach_ptr(shardInterval, shardIntervalList)
-    {
-        printf("%ld ", shardInterval->shardId);
-    }
+	List *shardIntervalList = shardSplitMetadata->shardIntervalListForSubscription;
+	printf("shardIds: ");
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
+	{
+		printf("%ld ", shardInterval->shardId);
+	}
 
-    printf("\nManual Username from OID at source: %s \n", GetUserNameFromId(shardSplitMetadata->tableOwnerId, false));
-    printf("slotname:%s  targetNode:%u tableOwner:%s \n", replicationInfo->slotName, replicationInfo->targetNodeId, replicationInfo->tableOwnerName);
+	printf("\nManual Username from OID at source: %s \n", GetUserNameFromId(
+			   shardSplitMetadata->tableOwnerId, false));
+	printf("slotname:%s  targetNode:%u tableOwner:%s \n", replicationInfo->slotName,
+		   replicationInfo->targetNodeId, replicationInfo->tableOwnerName);
 }
 
 
 static void
-CreateShardSplitPublications(MultiConnection *sourceConnection, List *shardSplitPubSubMetadataList)
+CreateShardSplitPublications(MultiConnection *sourceConnection,
+							 List *shardSplitPubSubMetadataList)
 {
-    ShardSplitPubSubMetadata * shardSplitPubSubMetadata = NULL;
-    foreach_ptr(shardSplitPubSubMetadata, shardSplitPubSubMetadataList)
-    {
-        uint32 publicationForNodeId = shardSplitPubSubMetadata->slotInfo->targetNodeId;
-        Oid tableOwnerId = shardSplitPubSubMetadata->tableOwnerId;
+	ShardSplitPubSubMetadata *shardSplitPubSubMetadata = NULL;
+	foreach_ptr(shardSplitPubSubMetadata, shardSplitPubSubMetadataList)
+	{
+		uint32 publicationForNodeId = shardSplitPubSubMetadata->slotInfo->targetNodeId;
+		Oid tableOwnerId = shardSplitPubSubMetadata->tableOwnerId;
 
-        CreateShardSplitPublicationForNode(sourceConnection,
-                                     shardSplitPubSubMetadata->shardIntervalListForSubscription,
-                                     publicationForNodeId,
-                                     tableOwnerId);
-    }
+		CreateShardSplitPublicationForNode(sourceConnection,
+										   shardSplitPubSubMetadata->
+										   shardIntervalListForSubscription,
+										   publicationForNodeId,
+										   tableOwnerId);
+	}
 }
 
+
 static void
-CreateShardSplitSubscriptions(List * targetNodeConnectionList,
-    List * shardSplitPubSubMetadataList,
-    WorkerNode * sourceWorkerNode,
-    char * superUser,
-    char * databaseName)
+CreateShardSplitSubscriptions(List *targetNodeConnectionList,
+							  List *shardSplitPubSubMetadataList,
+							  WorkerNode *sourceWorkerNode,
+							  char *superUser,
+							  char *databaseName)
 {
-    MultiConnection * targetConnection = NULL;
-    ShardSplitPubSubMetadata * shardSplitPubSubMetadata = NULL;
-    forboth_ptr(targetConnection, targetNodeConnectionList,
-                shardSplitPubSubMetadata, shardSplitPubSubMetadataList)
-    {
-        uint32 publicationForNodeId = shardSplitPubSubMetadata->slotInfo->targetNodeId;
-        Oid ownerId = shardSplitPubSubMetadata->tableOwnerId;
-        CreateShardSubscription(targetConnection, 
-                sourceWorkerNode->workerName, 
-                sourceWorkerNode->workerPort, 
-                superUser, 
-                databaseName, 
-                ShardSplitPublicationName(publicationForNodeId, ownerId),
-                ownerId);
-    }
+	MultiConnection *targetConnection = NULL;
+	ShardSplitPubSubMetadata *shardSplitPubSubMetadata = NULL;
+	forboth_ptr(targetConnection, targetNodeConnectionList,
+				shardSplitPubSubMetadata, shardSplitPubSubMetadataList)
+	{
+		uint32 publicationForNodeId = shardSplitPubSubMetadata->slotInfo->targetNodeId;
+		Oid ownerId = shardSplitPubSubMetadata->tableOwnerId;
+		CreateShardSubscription(targetConnection,
+								sourceWorkerNode->workerName,
+								sourceWorkerNode->workerPort,
+								superUser,
+								databaseName,
+								ShardSplitPublicationName(publicationForNodeId, ownerId),
+								ownerId);
+	}
 }
 
 
 static void
 CreateShardSplitPublicationForNode(MultiConnection *connection, List *shardList,
-							uint32_t publicationForTargetNodeId, Oid ownerId)
+								   uint32_t publicationForTargetNodeId, Oid ownerId)
 {
+	StringInfo createPublicationCommand = makeStringInfo();
+	bool prefixWithComma = false;
 
-    StringInfo createPublicationCommand = makeStringInfo();
-    bool prefixWithComma = false;
+	appendStringInfo(createPublicationCommand, "CREATE PUBLICATION %s FOR TABLE ",
+					 ShardSplitPublicationName(publicationForTargetNodeId, ownerId));
 
-    appendStringInfo(createPublicationCommand, "CREATE PUBLICATION %s FOR TABLE ",
-                        ShardSplitPublicationName(publicationForTargetNodeId, ownerId));
+	ShardInterval *shard = NULL;
+	foreach_ptr(shard, shardList)
+	{
+		char *shardName = ConstructQualifiedShardName(shard);
 
-    ShardInterval *shard = NULL;
-    foreach_ptr(shard, shardList)
-    {
-        char *shardName = ConstructQualifiedShardName(shard);
+		if (prefixWithComma)
+		{
+			appendStringInfoString(createPublicationCommand, ",");
+		}
 
-        if (prefixWithComma)
-        {
-            appendStringInfoString(createPublicationCommand, ",");
-        }
+		appendStringInfoString(createPublicationCommand, shardName);
+		prefixWithComma = true;
+	}
 
-        appendStringInfoString(createPublicationCommand, shardName);
-        prefixWithComma = true;
-    }
-
-    ExecuteCriticalRemoteCommand(connection, createPublicationCommand->data);
-    pfree(createPublicationCommand->data);
-    pfree(createPublicationCommand);
+	ExecuteCriticalRemoteCommand(connection, createPublicationCommand->data);
+	pfree(createPublicationCommand->data);
+	pfree(createPublicationCommand);
 }
 
 
@@ -390,29 +435,37 @@ ShardSplitPublicationName(uint32_t nodeId, Oid ownerId)
 
 
 static void
-WaitForShardSplitRelationSubscriptionsBecomeReady(List * targetNodeConnectionList, List * shardSplitPubSubMetadataList)
+WaitForShardSplitRelationSubscriptionsBecomeReady(List *targetNodeConnectionList,
+												  List *shardSplitPubSubMetadataList)
 {
-    MultiConnection * targetConnection = NULL;
-    ShardSplitPubSubMetadata * shardSplitPubSubMetadata = NULL;
-    forboth_ptr(targetConnection, targetNodeConnectionList,
-        shardSplitPubSubMetadata, shardSplitPubSubMetadataList)
-    {
-        Bitmapset *tableOwnerIds = NULL;
-        tableOwnerIds = bms_add_member(tableOwnerIds, shardSplitPubSubMetadata->tableOwnerId);
-        WaitForRelationSubscriptionsBecomeReady(targetConnection, tableOwnerIds, SHARD_SPLIT_SUBSCRIPTION_PREFIX);
-    }
+	MultiConnection *targetConnection = NULL;
+	ShardSplitPubSubMetadata *shardSplitPubSubMetadata = NULL;
+	forboth_ptr(targetConnection, targetNodeConnectionList,
+				shardSplitPubSubMetadata, shardSplitPubSubMetadataList)
+	{
+		Bitmapset *tableOwnerIds = NULL;
+		tableOwnerIds = bms_add_member(tableOwnerIds,
+									   shardSplitPubSubMetadata->tableOwnerId);
+		WaitForRelationSubscriptionsBecomeReady(targetConnection, tableOwnerIds,
+												SHARD_SPLIT_SUBSCRIPTION_PREFIX);
+	}
 }
 
+
 static void
-WaitForShardSplitRelationSubscriptionsToBeCaughtUp(XLogRecPtr sourcePosition, List * targetNodeConnectionList, List * shardSplitPubSubMetadataList)
+WaitForShardSplitRelationSubscriptionsToBeCaughtUp(XLogRecPtr sourcePosition,
+												   List *targetNodeConnectionList,
+												   List *shardSplitPubSubMetadataList)
 {
-    MultiConnection * targetConnection = NULL;
-    ShardSplitPubSubMetadata * shardSplitPubSubMetadata = NULL;
-    forboth_ptr(targetConnection, targetNodeConnectionList,
-        shardSplitPubSubMetadata, shardSplitPubSubMetadataList)
-    {
-        Bitmapset *tableOwnerIds = NULL;
-        tableOwnerIds = bms_add_member(tableOwnerIds, shardSplitPubSubMetadata->tableOwnerId);
-        WaitForShardSubscriptionToCatchUp(targetConnection, sourcePosition, tableOwnerIds, SHARD_SPLIT_SUBSCRIPTION_PREFIX);
-    }
+	MultiConnection *targetConnection = NULL;
+	ShardSplitPubSubMetadata *shardSplitPubSubMetadata = NULL;
+	forboth_ptr(targetConnection, targetNodeConnectionList,
+				shardSplitPubSubMetadata, shardSplitPubSubMetadataList)
+	{
+		Bitmapset *tableOwnerIds = NULL;
+		tableOwnerIds = bms_add_member(tableOwnerIds,
+									   shardSplitPubSubMetadata->tableOwnerId);
+		WaitForShardSubscriptionToCatchUp(targetConnection, sourcePosition, tableOwnerIds,
+										  SHARD_SPLIT_SUBSCRIPTION_PREFIX);
+	}
 }

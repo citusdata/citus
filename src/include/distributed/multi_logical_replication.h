@@ -28,18 +28,19 @@ extern void LogicallyReplicateShards(List *shardList, char *sourceNodeName,
 
 extern XLogRecPtr GetRemoteLogPosition(MultiConnection *connection);
 
-extern void
-CreateShardSubscription(MultiConnection *connection, char *sourceNodeName,
-							 int sourceNodePort, char *userName, char *databaseName,
-                             char * publicationName,
-                             Oid ownerId);
+extern void CreateShardSubscription(MultiConnection *connection, char *sourceNodeName,
+									int sourceNodePort, char *userName,
+									char *databaseName,
+									char *publicationName,
+									Oid ownerId);
 
 extern void WaitForRelationSubscriptionsBecomeReady(MultiConnection *targetConnection,
-													Bitmapset *tableOwnerIds, char * operationPrefix);
+													Bitmapset *tableOwnerIds,
+													char *operationPrefix);
 extern void WaitForShardSubscriptionToCatchUp(MultiConnection *targetConnection,
-										 XLogRecPtr sourcePosition,
-										 Bitmapset *tableOwnerIds,
-										 char * operationPrefix);
+											  XLogRecPtr sourcePosition,
+											  Bitmapset *tableOwnerIds,
+											  char *operationPrefix);
 
 #define SHARD_MOVE_PUBLICATION_PREFIX "citus_shard_move_publication_"
 #define SHARD_MOVE_SUBSCRIPTION_PREFIX "citus_shard_move_subscription_"

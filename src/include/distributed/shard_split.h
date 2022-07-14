@@ -41,8 +41,8 @@ typedef struct ShardSplitInfo
 	int32 shardMinValue;         /* min hash value */
 	int32 shardMaxValue;         /* max hash value */
 	uint32_t nodeId;             /* node where child shard is to be placed */
-	uint64 sourceShardId;		 /* parent shardId */
-	uint64 splitChildShardId;		 /* child shardId*/
+	uint64 sourceShardId;        /* parent shardId */
+	uint64 splitChildShardId;        /* child shardId*/
 	char slotName[NAMEDATALEN];  /* replication slot name belonging to this node */
 } ShardSplitInfo;
 
