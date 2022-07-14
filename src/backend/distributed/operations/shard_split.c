@@ -17,6 +17,7 @@
 #include "lib/stringinfo.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+#include "distributed/shared_library_init.h"
 #include "distributed/adaptive_executor.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/metadata_cache.h"
@@ -35,6 +36,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "commands/dbcommands.h"
 #include "distributed/shardsplit_logical_replication.h"
+#include "distributed/deparse_shard_query.h"
 
 /* Function declarations */
 static void ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
@@ -89,6 +91,8 @@ static void CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 										List *workersForPlacementList);
 static void TryDropSplitShardsOnFailure(List *shardGroupSplitIntervalListList,
 										List *workersForPlacementList);
+static Task * CreateTaskForDDLCommandList(uint64 jobId, List *ddlCommandList,
+										  WorkerNode *workerNode);
 
 /* Customize error message strings based on operation type */
 static const char *const SplitOperationName[] =
@@ -239,7 +243,8 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 
 	int splitPointsCount = list_length(shardSplitPointsList);
 	int nodeIdsCount = list_length(nodeIdsForPlacementList);
-	if (nodeIdsCount != splitPointsCount + 1)
+	int shardsCount = splitPointsCount + 1;
+	if (nodeIdsCount != shardsCount)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
@@ -250,6 +255,12 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 					 splitPointsCount)));
 	}
 
+	if (shardsCount > MAX_SHARD_COUNT)
+	{
+		ereport(ERROR, (errmsg(
+							"Resulting shard count '%d' with split is greater than max shard count '%d' limit.",
+							shardsCount, MAX_SHARD_COUNT)));
+	}
 
 	Assert(shardIntervalToSplit->minValueExists);
 	Assert(shardIntervalToSplit->maxValueExists);
@@ -373,7 +384,7 @@ SplitShard(SplitMode splitMode,
 		shardSplitPointsList,
 		nodeIdsForPlacementList);
 
-	List *workersForPlacementList = NULL;
+	List *workersForPlacementList = NIL;
 	Datum nodeId;
 	foreach_int(nodeId, nodeIdsForPlacementList)
 	{
@@ -494,13 +505,19 @@ static void
 CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 							   List *workersForPlacementList)
 {
-	/* Iterate on shard interval list for shard group */
-	List *shardIntervalList = NULL;
+	/*
+	 * Iterate over all the shards in the shard group.
+	 */
+	List *shardIntervalList = NIL;
 	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
-		/* Iterate on split shard interval list and corresponding placement worker */
 		ShardInterval *shardInterval = NULL;
 		WorkerNode *workerPlacementNode = NULL;
+
+		/*
+		 * Iterate on split shards DDL command list for a given shard
+		 * and create them on corresponding workerPlacementNode.
+		 */
 		forboth_ptr(shardInterval, shardIntervalList, workerPlacementNode,
 					workersForPlacementList)
 		{
@@ -520,6 +537,24 @@ CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 }
 
 
+/* Create a DDL task with corresponding task list on given worker node */
+static Task *
+CreateTaskForDDLCommandList(uint64 jobId, List *ddlCommandList, WorkerNode *workerNode)
+{
+	Task *ddlTask = CitusMakeNode(Task);
+	ddlTask->jobId = jobId;
+	ddlTask->taskType = DDL_TASK;
+	ddlTask->replicationModel = REPLICATION_MODEL_INVALID;
+	SetTaskQueryStringList(ddlTask, ddlCommandList);
+
+	ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
+	SetPlacementNodeMetadata(taskPlacement, workerNode);
+	ddlTask->taskPlacementList = list_make1(taskPlacement);
+
+	return ddlTask;
+}
+
+
 /* Create ShardGroup auxiliary structures (indexes, stats, replicaindentities, triggers)
  * on a list of corresponding workers.
  */
@@ -527,29 +562,52 @@ void
 CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
 									   List *workersForPlacementList)
 {
+	List *shardIntervalList = NIL;
+	List *ddlTaskExecList = NIL;
+
 	/*
-	 * Create auxiliary structures post copy.
+	 * Iterate over all the shards in the shard group.
 	 */
-	List *shardIntervalList = NULL;
 	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
-		/* Iterate on split shard interval list and corresponding placement worker */
 		ShardInterval *shardInterval = NULL;
 		WorkerNode *workerPlacementNode = NULL;
+
+		/*
+		 * Iterate on split shard interval list for given shard and create tasks
+		 * for every single split shard in a shard group.
+		 */
 		forboth_ptr(shardInterval, shardIntervalList, workerPlacementNode,
 					workersForPlacementList)
 		{
-			List *indexCommandList = GetPostLoadTableCreationCommands(
+			List *ddlCommandList = GetPostLoadTableCreationCommands(
 				shardInterval->relationId,
 				true /* includeIndexes */,
 				true /* includeReplicaIdentity */);
-			indexCommandList = WorkerApplyShardDDLCommandList(
-				indexCommandList,
+			ddlCommandList = WorkerApplyShardDDLCommandList(
+				ddlCommandList,
 				shardInterval->shardId);
 
-			CreateObjectOnPlacement(indexCommandList, workerPlacementNode);
+			/*
+			 * A task is expected to be instantiated with a non-null 'ddlCommandList'.
+			 * The list can be empty, if no auxiliary structures are present.
+			 */
+			if (ddlCommandList != NULL)
+			{
+				uint64 jobId = shardInterval->shardId;
+				Task *ddlTask = CreateTaskForDDLCommandList(jobId, ddlCommandList,
+															workerPlacementNode);
+
+				ddlTaskExecList = lappend(ddlTaskExecList, ddlTask);
+			}
 		}
 	}
+
+	ExecuteTaskListOutsideTransaction(
+		ROW_MODIFY_NONE,
+		ddlTaskExecList,
+		MaxAdaptiveExecutorPoolSize,
+		NULL /* jobIdList (ignored by API implementation) */);
 }
 
 
@@ -587,10 +645,10 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 			List *shardGroupSplitIntervalListList, List *destinationWorkerNodesList)
 {
 	ShardInterval *sourceShardIntervalToCopy = NULL;
-	List *splitShardIntervalList = NULL;
+	List *splitShardIntervalList = NIL;
 
 	int taskId = 0;
-	List *splitCopyTaskList = NULL;
+	List *splitCopyTaskList = NIL;
 	forboth_ptr(sourceShardIntervalToCopy, sourceColocatedShardIntervalList,
 				splitShardIntervalList, shardGroupSplitIntervalListList)
 	{
@@ -632,12 +690,12 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
  *      ROW(81060015, -- destination shard id
  *           -2147483648, -- split range begin
  *          1073741823, --split range end
- *          10 -- worker node id)::citus.split_copy_info,
+ *          10 -- worker node id)::pg_catalog.split_copy_info,
  *      -- split copy info for split children 2
  *      ROW(81060016,  --destination shard id
  *          1073741824, --split range begin
  *          2147483647, --split range end
- *          11 -- workef node id)::citus.split_copy_info
+ *          11 -- workef node id)::pg_catalog.split_copy_info
  *      ]
  *  );
  */
@@ -662,7 +720,7 @@ CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 
 		StringInfo splitCopyInfoRow = makeStringInfo();
 		appendStringInfo(splitCopyInfoRow,
-						 "ROW(%lu, %d, %d, %u)::citus.split_copy_info",
+						 "ROW(%lu, %d, %d, %u)::pg_catalog.split_copy_info",
 						 splitChildShardInterval->shardId,
 						 DatumGetInt32(splitChildShardInterval->minValue),
 						 DatumGetInt32(splitChildShardInterval->maxValue),
@@ -712,12 +770,12 @@ static List *
 CreateSplitIntervalsForShardGroup(List *sourceColocatedShardIntervalList,
 								  List *splitPointsForShard)
 {
-	List *shardGroupSplitIntervalListList = NULL;
+	List *shardGroupSplitIntervalListList = NIL;
 
 	ShardInterval *shardToSplitInterval = NULL;
 	foreach_ptr(shardToSplitInterval, sourceColocatedShardIntervalList)
 	{
-		List *shardSplitIntervalList = NULL;
+		List *shardSplitIntervalList = NIL;
 		CreateSplitIntervalsForShard(shardToSplitInterval, splitPointsForShard,
 									 &shardSplitIntervalList);
 
@@ -783,12 +841,17 @@ static void
 InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 								 List *workersForPlacementList)
 {
-	/* Iterate on shard intervals for shard group */
-	List *shardIntervalList = NULL;
-	List *syncedShardList = NULL;
+	List *shardIntervalList = NIL;
+	List *syncedShardList = NIL;
+
+	/*
+	 * Iterate over all the shards in the shard group.
+	 */
 	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
-		/* Iterate on split children shards along with the respective placement workers */
+		/*
+		 * Iterate on split shards list for a given shard and insert metadata.
+		 */
 		ShardInterval *shardInterval = NULL;
 		WorkerNode *workerPlacementNode = NULL;
 		forboth_ptr(shardInterval, shardIntervalList, workerPlacementNode,
@@ -833,12 +896,19 @@ CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 							List *workersForPlacementList)
 {
 	/* Create constraints between shards */
-	List *shardIntervalList = NULL;
+	List *shardIntervalList = NIL;
+
+	/*
+	 * Iterate over all the shards in the shard group.
+	 */
 	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
-		/* Iterate on split children shards along with the respective placement workers */
 		ShardInterval *shardInterval = NULL;
 		WorkerNode *workerPlacementNode = NULL;
+
+		/*
+		 * Iterate on split shards list for a given shard and create constraints.
+		 */
 		forboth_ptr(shardInterval, shardIntervalList, workerPlacementNode,
 					workersForPlacementList)
 		{
@@ -944,12 +1014,19 @@ static void
 TryDropSplitShardsOnFailure(List *shardGroupSplitIntervalListList,
 							List *workersForPlacementList)
 {
-	List *shardIntervalList = NULL;
+	List *shardIntervalList = NIL;
+
+	/*
+	 * Iterate over all the shards in the shard group.
+	 */
 	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
 	{
-		/* Iterate on split shard interval list and corresponding placement worker */
 		ShardInterval *shardInterval = NULL;
 		WorkerNode *workerPlacementNode = NULL;
+
+		/*
+		 * Iterate on split shards list for a given shard and perform drop.
+		 */
 		forboth_ptr(shardInterval, shardIntervalList, workerPlacementNode,
 					workersForPlacementList)
 		{

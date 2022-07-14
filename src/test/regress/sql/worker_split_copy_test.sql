@@ -35,6 +35,49 @@ SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \
 SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 -- END: Set worker_1_node and worker_2_node
 
+-- BEGIN: Test Negative scenario
+SELECT * from worker_split_copy(
+    101, -- Invalid source shard id.
+    ARRAY[
+         -- split copy info for split children 1
+        ROW(81070015, -- destination shard id
+             -2147483648, -- split range begin
+            -1073741824, --split range end
+            :worker_1_node)::pg_catalog.split_copy_info,
+        -- split copy info for split children 2
+        ROW(81070016,  --destination shard id
+            -1073741823, --split range begin
+            -1, --split range end
+            :worker_1_node)::pg_catalog.split_copy_info
+        ]
+    );
+
+SELECT * from worker_split_copy(
+    81070000, -- source shard id to copy
+    ARRAY[] -- empty array
+    );
+
+SELECT * from worker_split_copy(
+    81070000, -- source shard id to copy
+    ARRAY[NULL] -- empty array
+    );
+
+SELECT * from worker_split_copy(
+    81070000, -- source shard id to copy
+    ARRAY[NULL::pg_catalog.split_copy_info]-- empty array
+    );
+
+SELECT * from worker_split_copy(
+    81070000, -- source shard id to copy
+    ARRAY[ROW(NULL)]-- empty array
+    );
+
+SELECT * from worker_split_copy(
+    81070000, -- source shard id to copy
+    ARRAY[ROW(NULL, NULL, NULL, NULL)::pg_catalog.split_copy_info] -- empty array
+    );
+-- END: Test Negative scenario
+
 -- BEGIN: Trigger 2-way local shard split copy.
 -- Ensure we will perform text copy.
 SET citus.enable_binary_protocol = false;
@@ -45,12 +88,12 @@ SELECT * from worker_split_copy(
         ROW(81070015, -- destination shard id
              -2147483648, -- split range begin
             -1073741824, --split range end
-            :worker_1_node)::citus.split_copy_info,
+            :worker_1_node)::pg_catalog.split_copy_info,
         -- split copy info for split children 2
         ROW(81070016,  --destination shard id
             -1073741823, --split range begin
             -1, --split range end
-            :worker_1_node)::citus.split_copy_info
+            :worker_1_node)::pg_catalog.split_copy_info
         ]
     );
 -- END: Trigger 2-way local shard split copy.

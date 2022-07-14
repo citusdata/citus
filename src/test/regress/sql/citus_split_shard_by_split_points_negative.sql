@@ -23,6 +23,25 @@ SELECT create_distributed_table('table_to_split','id');
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
 SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 
+-- UDF fails for any other shard_transfer_mode other than block_writes.
+SELECT citus_split_shard_by_split_points(
+	49761302,
+	ARRAY['50'],
+	ARRAY[101, 201],
+    'auto');
+
+SELECT citus_split_shard_by_split_points(
+	49761302,
+	ARRAY['50'],
+	ARRAY[101, 201],
+    'force_logical');
+
+SELECT citus_split_shard_by_split_points(
+	49761302,
+	ARRAY['50'],
+	ARRAY[101, 201],
+    'gibberish');
+
 -- UDF fails for range partitioned tables.
 SELECT citus_split_shard_by_split_points(
 	60761300,
@@ -73,6 +92,15 @@ SELECT citus_split_shard_by_split_points(
 	49761300, -- Shard range is from (-2147483648, -1073741825)
 	ARRAY['-1073741825'], -- Split point equals shard's max value.
 	ARRAY[:worker_1_node, :worker_2_node]);
+
+-- UDF fails if resulting shard count from split greater than MAX_SHARD_COUNT (64000)
+-- 64000 split point definee 64000+1 way split (64001 worker nodes needed).
+WITH shard_ranges AS (SELECT ((-2147483648 + indx))::text as split_points, :worker_1_node as node_ids FROM generate_series(1,64000) indx )
+SELECT citus_split_shard_by_split_points(
+    49761300,
+    array_agg(split_points),
+    array_agg(node_ids) || :worker_1_node) --placement node list should exceed split points by one.
+FROM shard_ranges;
 
 -- UDF fails where source shard cannot be split further i.e min and max range is equal.
 -- Create a Shard where range cannot be split further

@@ -12,6 +12,7 @@
 #include "utils/lsyscache.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
+#include "distributed/utils/array_type.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_executor.h"
 #include "distributed/worker_shard_copy.h"
@@ -42,7 +43,7 @@ static void BuildMinMaxRangeArrays(List *splitCopyInfoList, ArrayType **minValue
 								   ArrayType **maxValueArray);
 
 /*
- * worker_split_copy(source_shard_id bigint, splitCopyInfo citus.split_copy_info[])
+ * worker_split_copy(source_shard_id bigint, splitCopyInfo pg_catalog.split_copy_info[])
  * UDF to split copy shard to list of destination shards.
  * 'source_shard_id' : Source ShardId to split copy.
  * 'splitCopyInfos'   : Array of Split Copy Info (destination_shard's id, min/max ranges and node_id)
@@ -54,10 +55,12 @@ worker_split_copy(PG_FUNCTION_ARGS)
 	ShardInterval *shardIntervalToSplitCopy = LoadShardInterval(shardIdToSplitCopy);
 
 	ArrayType *splitCopyInfoArrayObject = PG_GETARG_ARRAYTYPE_P(1);
-	if (array_contains_nulls(splitCopyInfoArrayObject))
+	bool arrayHasNull = ARR_HASNULL(splitCopyInfoArrayObject);
+	if (arrayHasNull)
 	{
-		ereport(ERROR,
-				(errmsg("Shard Copy Info cannot have null values.")));
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+						errmsg(
+							"pg_catalog.split_copy_info array cannot contain null values")));
 	}
 
 	const int slice_ndim = 0;
@@ -67,7 +70,7 @@ worker_split_copy(PG_FUNCTION_ARGS)
 															mState);
 	Datum copyInfoDatum = 0;
 	bool isnull = false;
-	List *splitCopyInfoList = NULL;
+	List *splitCopyInfoList = NIL;
 	while (array_iterate(copyInfo_iterator, &copyInfoDatum, &isnull))
 	{
 		SplitCopyInfo *splitCopyInfo = NULL;
@@ -118,7 +121,7 @@ ParseSplitCopyInfoDatum(Datum splitCopyInfoDatum, SplitCopyInfo **splitCopyInfo)
 	if (isnull)
 	{
 		ereport(ERROR, (errmsg(
-							"destination_shard_id for split_copy_info cannot be null.")));
+							"destination_shard_id for pg_catalog.split_copy_info cannot be null.")));
 	}
 	copyInfo->destinationShardId = DatumGetUInt64(destinationShardIdDatum);
 
@@ -127,7 +130,7 @@ ParseSplitCopyInfoDatum(Datum splitCopyInfoDatum, SplitCopyInfo **splitCopyInfo)
 	if (isnull)
 	{
 		ereport(ERROR, (errmsg(
-							"destination_shard_min_value for split_copy_info cannot be null.")));
+							"destination_shard_min_value for pg_catalog.split_copy_info cannot be null.")));
 	}
 	copyInfo->destinationShardMinHashValue = minValueDatum;
 
@@ -136,7 +139,7 @@ ParseSplitCopyInfoDatum(Datum splitCopyInfoDatum, SplitCopyInfo **splitCopyInfo)
 	if (isnull)
 	{
 		ereport(ERROR, (errmsg(
-							"destination_shard_max_value for split_copy_info cannot be null.")));
+							"destination_shard_max_value for pg_catalog.split_copy_info cannot be null.")));
 	}
 	copyInfo->destinationShardMaxHashValue = maxValueDatum;
 
@@ -145,7 +148,7 @@ ParseSplitCopyInfoDatum(Datum splitCopyInfoDatum, SplitCopyInfo **splitCopyInfo)
 	if (isnull)
 	{
 		ereport(ERROR, (errmsg(
-							"destination_shard_node_id for split_copy_info cannot be null.")));
+							"destination_shard_node_id for pg_catalog.split_copy_info cannot be null.")));
 	}
 	copyInfo->destinationShardNodeId = DatumGetInt32(nodeIdDatum);
 

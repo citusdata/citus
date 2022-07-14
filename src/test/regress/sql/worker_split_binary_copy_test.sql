@@ -4,6 +4,14 @@ SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 81060000;
 
+-- Remove extra nodes added, otherwise GetLocalNodeId() does not bahave correctly.
+SELECT citus_remove_node('localhost', 8887);
+SELECT citus_remove_node('localhost', 9995);
+SELECT citus_remove_node('localhost', 9992);
+SELECT citus_remove_node('localhost', 9998);
+SELECT citus_remove_node('localhost', 9997);
+SELECT citus_remove_node('localhost', 8888);
+
 -- BEGIN: Create distributed table and insert data.
 CREATE TABLE worker_split_binary_copy_test.shard_to_split_copy (
 	l_orderkey bigint not null,
@@ -157,12 +165,12 @@ SELECT * from worker_split_copy(
         ROW(81060015, -- destination shard id
              -2147483648, -- split range begin
             1073741823, --split range end
-            :worker_1_node)::citus.split_copy_info,
+            :worker_1_node)::pg_catalog.split_copy_info,
         -- split copy info for split children 2
         ROW(81060016,  --destination shard id
             1073741824, --split range begin
             2147483647, --split range end
-            :worker_1_node)::citus.split_copy_info
+            :worker_1_node)::pg_catalog.split_copy_info
         ]
     );
 -- END: Trigger 2-way local shard split copy.
@@ -175,12 +183,12 @@ SELECT * from worker_split_copy(
         ROW(81060015, -- destination shard id
              -2147483648, -- split range begin
             1073741823, --split range end
-            :worker_2_node)::citus.split_copy_info,
+            :worker_2_node)::pg_catalog.split_copy_info,
         -- split copy info for split children 2
         ROW(81060016,  --destination shard id
             1073741824, --split range begin
             2147483647, --split range end
-            :worker_2_node)::citus.split_copy_info
+            :worker_2_node)::pg_catalog.split_copy_info
         ]
     );
 -- END: Trigger 2-way remote shard split copy.

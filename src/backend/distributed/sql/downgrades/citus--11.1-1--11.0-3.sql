@@ -50,12 +50,11 @@ DROP FUNCTION pg_catalog.citus_split_shard_by_split_points(
     shard_id bigint,
     split_points text[],
     node_ids integer[],
-    split_mode citus.split_mode);
+    shard_transfer_mode citus.shard_transfer_mode);
 DROP FUNCTION pg_catalog.worker_split_copy(
     source_shard_id bigint,
-    splitCopyInfos citus.split_copy_info[]);
-DROP TYPE citus.split_mode;
-DROP TYPE citus.split_copy_info;
+    splitCopyInfos pg_catalog.split_copy_info[]);
+DROP TYPE pg_catalog.split_copy_info;
 
 #include "../../../columnar/sql/downgrades/columnar--11.1-1--11.0-3.sql"
 

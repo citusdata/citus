@@ -12,6 +12,11 @@ Here is a high level overview of test plan:
 */
 
 CREATE SCHEMA "citus_split_test_schema";
+
+CREATE ROLE test_split_role WITH LOGIN;
+GRANT USAGE, CREATE ON SCHEMA "citus_split_test_schema" TO test_split_role;
+SET ROLE test_split_role;
+
 SET search_path TO "citus_split_test_schema";
 SET citus.next_shard_id TO 8981000;
 SET citus.next_placement_id TO 8610000;
@@ -67,7 +72,6 @@ SELECT COUNT(*) FROM colocated_dist_table;
 -- END: Load data into tables.
 
 -- BEGIN : Display current state.
--- TODO(niupre): Can we refactor this to be a function?
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
@@ -115,6 +119,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 
 -- BEGIN : Move one shard before we split it.
 \c - postgres - :master_port
+SET ROLE test_split_role;
 SET search_path TO "citus_split_test_schema";
 SET citus.next_shard_id TO 8981007;
 SET citus.defer_drop_after_shard_move TO OFF;
@@ -133,14 +138,14 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     8981000,
     ARRAY['-1073741824'],
     ARRAY[:worker_1_node, :worker_2_node],
-    'blocking');
+    'block_writes');
 
 -- Perform 3 way split
 SELECT pg_catalog.citus_split_shard_by_split_points(
     8981001,
     ARRAY['536870911', '1610612735'],
     ARRAY[:worker_1_node, :worker_1_node, :worker_2_node],
-    'blocking');
+    'block_writes');
 -- END : Split two shards : One with move and One without move.
 
 -- BEGIN : Move a shard post split.
@@ -148,7 +153,6 @@ SELECT citus_move_shard_placement(8981007, 'localhost', :worker_1_port, 'localho
 -- END : Move a shard post split.
 
 -- BEGIN : Display current state.
--- TODO(niupre): Can we refactor this to be a function?
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
@@ -196,6 +200,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 
 -- BEGIN: Should be able to change/drop constraints
 \c - postgres - :master_port
+SET ROLE test_split_role;
 SET search_path TO "citus_split_test_schema";
 ALTER INDEX index_on_sensors RENAME TO index_on_sensors_renamed;
 ALTER INDEX index_on_sensors_renamed ALTER COLUMN 1 SET STATISTICS 200;
@@ -211,7 +216,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     8981007,
     ARRAY['-2100000000'],
     ARRAY[:worker_1_node, :worker_2_node],
-    'blocking');
+    'block_writes');
 
 SET search_path TO "citus_split_test_schema";
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport

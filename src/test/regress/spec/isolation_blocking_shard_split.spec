@@ -70,7 +70,7 @@ step "s1-blocking-shard-split"
 		1500001,
 		ARRAY['-1073741824'],
 		ARRAY[1, 2],
-		'blocking');
+		'block_writes');
 }
 
 step "s1-commit"
@@ -91,7 +91,7 @@ step "s2-blocking-shard-split"
 		1500002,
 		ARRAY['1073741824'],
 		ARRAY[1, 2],
-		'blocking');
+		'block_writes');
 }
 
 step "s2-commit"

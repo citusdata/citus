@@ -42,7 +42,7 @@ step s2-blocking-shard-split:
   1500002,
   ARRAY['1073741824'],
   ARRAY[1, 2],
-  'blocking');
+  'block_writes');
 
 citus_split_shard_by_split_points
 ---------------------------------------------------------------------
@@ -126,7 +126,7 @@ step s2-blocking-shard-split:
   1500002,
   ARRAY['1073741824'],
   ARRAY[1, 2],
-  'blocking');
+  'block_writes');
 
 citus_split_shard_by_split_points
 ---------------------------------------------------------------------
@@ -200,7 +200,7 @@ step s2-blocking-shard-split:
   1500002,
   ARRAY['1073741824'],
   ARRAY[1, 2],
-  'blocking');
+  'block_writes');
 
 citus_split_shard_by_split_points
 ---------------------------------------------------------------------
@@ -280,7 +280,7 @@ step s2-blocking-shard-split:
   1500002,
   ARRAY['1073741824'],
   ARRAY[1, 2],
-  'blocking');
+  'block_writes');
 
 citus_split_shard_by_split_points
 ---------------------------------------------------------------------
@@ -359,7 +359,7 @@ step s2-blocking-shard-split:
   1500002,
   ARRAY['1073741824'],
   ARRAY[1, 2],
-  'blocking');
+  'block_writes');
 
 citus_split_shard_by_split_points
 ---------------------------------------------------------------------
@@ -439,7 +439,7 @@ step s2-blocking-shard-split:
   1500002,
   ARRAY['1073741824'],
   ARRAY[1, 2],
-  'blocking');
+  'block_writes');
 
 citus_split_shard_by_split_points
 ---------------------------------------------------------------------
@@ -509,7 +509,7 @@ step s2-blocking-shard-split:
   1500002,
   ARRAY['1073741824'],
   ARRAY[1, 2],
-  'blocking');
+  'block_writes');
 
 citus_split_shard_by_split_points
 ---------------------------------------------------------------------
@@ -585,7 +585,7 @@ step s2-blocking-shard-split:
   1500002,
   ARRAY['1073741824'],
   ARRAY[1, 2],
-  'blocking');
+  'block_writes');
 
 citus_split_shard_by_split_points
 ---------------------------------------------------------------------
@@ -657,7 +657,7 @@ step s1-blocking-shard-split:
   1500001,
   ARRAY['-1073741824'],
   ARRAY[1, 2],
-  'blocking');
+  'block_writes');
 
 citus_split_shard_by_split_points
 ---------------------------------------------------------------------
@@ -669,7 +669,7 @@ step s2-blocking-shard-split:
   1500002,
   ARRAY['1073741824'],
   ARRAY[1, 2],
-  'blocking');
+  'block_writes');
  <waiting ...>
 step s1-commit: 
  COMMIT;
@@ -732,7 +732,7 @@ step s1-blocking-shard-split:
   1500001,
   ARRAY['-1073741824'],
   ARRAY[1, 2],
-  'blocking');
+  'block_writes');
 
 citus_split_shard_by_split_points
 ---------------------------------------------------------------------
@@ -744,7 +744,7 @@ step s2-blocking-shard-split:
   1500002,
   ARRAY['1073741824'],
   ARRAY[1, 2],
-  'blocking');
+  'block_writes');
  <waiting ...>
 step s1-commit: 
  COMMIT;
@@ -812,7 +812,7 @@ step s2-blocking-shard-split:
   1500002,
   ARRAY['1073741824'],
   ARRAY[1, 2],
-  'blocking');
+  'block_writes');
 
 citus_split_shard_by_split_points
 ---------------------------------------------------------------------
@@ -895,7 +895,7 @@ step s2-blocking-shard-split:
   1500002,
   ARRAY['1073741824'],
   ARRAY[1, 2],
-  'blocking');
+  'block_writes');
 
 citus_split_shard_by_split_points
 ---------------------------------------------------------------------

@@ -27,15 +27,15 @@
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_split_shard_by_split_points);
 
-static SplitMode LookupSplitMode(Oid shardSplitModeOid);
+static SplitMode LookupSplitMode(Oid shardTransferModeOid);
 
 /*
- * citus_split_shard_by_split_points(shard_id bigint, split_points text[], node_ids integer[], split_mode citus.split_mode)
+ * citus_split_shard_by_split_points(shard_id bigint, split_points text[], node_ids integer[], shard_transfer_mode citus.shard_transfer_mode)
  * Split source shard into multiple shards using the given split points.
  * 'shard_id' is the id of source shard to split.
  * 'split_points' is an array that represents the split points.
  * 'node_ids' is an array that represents the placement node ids of the new shards.
- * 'split_mode citus.split_mode' is the mode of split.
+ * 'shard_transfer_mode citus.shard_transfer_mode' is the transfer mode for split.
  */
 Datum
 citus_split_shard_by_split_points(PG_FUNCTION_ARGS)
@@ -51,8 +51,8 @@ citus_split_shard_by_split_points(PG_FUNCTION_ARGS)
 	ArrayType *nodeIdsArrayObject = PG_GETARG_ARRAYTYPE_P(2);
 	List *nodeIdsForPlacementList = IntegerArrayTypeToList(nodeIdsArrayObject);
 
-	Oid shardSplitModeOid = PG_GETARG_OID(3);
-	SplitMode shardSplitMode = LookupSplitMode(shardSplitModeOid);
+	Oid shardTransferModeOid = PG_GETARG_OID(3);
+	SplitMode shardSplitMode = LookupSplitMode(shardTransferModeOid);
 
 	SplitShard(
 		shardSplitMode,
@@ -66,31 +66,33 @@ citus_split_shard_by_split_points(PG_FUNCTION_ARGS)
 
 
 /*
- * LookupSplitMode maps the oids of citus.shard_split_mode enum
- * values to an enum.
+ * LookupSplitMode maps the oids of citus.shard_transfer_mode to SplitMode enum.
  */
 SplitMode
-LookupSplitMode(Oid shardSplitModeOid)
+LookupSplitMode(Oid shardTransferModeOid)
 {
 	SplitMode shardSplitMode = BLOCKING_SPLIT;
 
-	Datum enumLabelDatum = DirectFunctionCall1(enum_out, shardSplitModeOid);
+	Datum enumLabelDatum = DirectFunctionCall1(enum_out, shardTransferModeOid);
 	char *enumLabel = DatumGetCString(enumLabelDatum);
 
 	/* Extend with other modes as we support them */
-	if (strncmp(enumLabel, "blocking", NAMEDATALEN) == 0)
+	if (strncmp(enumLabel, "block_writes", NAMEDATALEN) == 0)
 	{
 		shardSplitMode = BLOCKING_SPLIT;
 	}
-	else if (strncmp(enumLabel, "non_blocking", NAMEDATALEN) == 0)
+	/* Extend with other modes as we support them */
+	else if (strncmp(enumLabel, "auto", NAMEDATALEN) == 0 ||
+			 strncmp(enumLabel, "force_logical", NAMEDATALEN) == 0)
 	{
 		shardSplitMode = NON_BLOCKING_SPLIT;
 	}
-	/* Extend with other modes as we support them */
 	else
 	{
-		ereport(ERROR, (errmsg("Invalid split mode: %s. Expected split mode is blocking.",
-							   enumLabel)));
+		/* We will not get here as postgres will validate the enum value. */
+		ereport(ERROR, (errmsg(
+							"Invalid shard tranfer mode: '%s'. Expected split mode is 'block_writes/auto/force_logical'.",
+							enumLabel)));
 	}
 
 	return shardSplitMode;
