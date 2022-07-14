@@ -94,22 +94,27 @@ PostprocessViewStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	ObjectAddress viewAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	List *viewAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false);
 
-	if (IsObjectAddressOwnedByExtension(&viewAddress, NULL))
+	/*  the code-path only supports a single object */
+	Assert(list_length(viewAddresses) == 1);
+
+	if (IsAnyObjectAddressOwnedByExtension(viewAddresses, NULL))
 	{
 		return NIL;
 	}
 
 	/* If the view has any unsupported dependency, create it locally */
-	if (ErrorOrWarnIfObjectHasUnsupportedDependency(&viewAddress))
+	if (ErrorOrWarnIfAnyObjectHasUnsupportedDependency(viewAddresses))
 	{
 		return NIL;
 	}
 
-	EnsureDependenciesExistOnAllNodes(&viewAddress);
+	EnsureAllObjectDependenciesExistOnAllNodes(viewAddresses);
 
-	char *command = CreateViewDDLCommand(viewAddress.objectId);
+	/* We have already asserted that we have exactly 1 address in the addresses. */
+	ObjectAddress *viewAddress = linitial(viewAddresses);
+	char *command = CreateViewDDLCommand(viewAddress->objectId);
 
 	/*
 	 * We'd typically use NodeDDLTaskList() for generating node-level DDL commands,
@@ -140,7 +145,7 @@ PostprocessViewStmt(Node *node, const char *queryString)
 	 *
 	 */
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
-	ddlJob->targetObjectAddress = viewAddress;
+	ddlJob->targetObjectAddress = *viewAddress;
 	ddlJob->metadataSyncCommand = command;
 	ddlJob->taskList = NIL;
 
@@ -442,10 +447,9 @@ IsViewDistributed(Oid viewOid)
 	Assert(get_rel_relkind(viewOid) == RELKIND_VIEW ||
 		   get_rel_relkind(viewOid) == RELKIND_MATVIEW);
 
-	ObjectAddress viewAddress = { 0 };
-	ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
-
-	return IsObjectDistributed(&viewAddress);
+	ObjectAddress *viewAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*viewAddress, RelationRelationId, viewOid);
+	return IsAnyObjectDistributed(list_make1(viewAddress));
 }
 
 
@@ -458,8 +462,12 @@ PreprocessAlterViewStmt(Node *node, const char *queryString, ProcessUtilityConte
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
 
-	ObjectAddress viewAddress = GetObjectAddressFromParseTree((Node *) stmt, true);
-	if (!ShouldPropagateObject(&viewAddress))
+	List *viewAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(viewAddresses) == 1);
+
+	if (!ShouldPropagateAnyObject(viewAddresses))
 	{
 		return NIL;
 	}
@@ -471,12 +479,15 @@ PreprocessAlterViewStmt(Node *node, const char *queryString, ProcessUtilityConte
 	/* reconstruct alter statement in a portable fashion */
 	const char *alterViewStmtSql = DeparseTreeNode((Node *) stmt);
 
+	/* We have already asserted that we have exactly 1 address in the addresses. */
+	ObjectAddress *viewAddress = linitial(viewAddresses);
+
 	/*
 	 * To avoid sequential mode, we are using metadata connection. For the
 	 * detailed explanation, please check the comment on PostprocessViewStmt.
 	 */
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
-	ddlJob->targetObjectAddress = viewAddress;
+	ddlJob->targetObjectAddress = *viewAddress;
 	ddlJob->metadataSyncCommand = alterViewStmtSql;
 	ddlJob->taskList = NIL;
 
@@ -493,24 +504,28 @@ PostprocessAlterViewStmt(Node *node, const char *queryString)
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
 	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_VIEW);
 
-	ObjectAddress viewAddress = GetObjectAddressFromParseTree((Node *) stmt, true);
-	if (!ShouldPropagateObject(&viewAddress))
+	List *viewAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(viewAddresses) == 1);
+
+	if (!ShouldPropagateAnyObject(viewAddresses))
 	{
 		return NIL;
 	}
 
-	if (IsObjectAddressOwnedByExtension(&viewAddress, NULL))
+	if (IsAnyObjectAddressOwnedByExtension(viewAddresses, NULL))
 	{
 		return NIL;
 	}
 
 	/* If the view has any unsupported dependency, create it locally */
-	if (ErrorOrWarnIfObjectHasUnsupportedDependency(&viewAddress))
+	if (ErrorOrWarnIfAnyObjectHasUnsupportedDependency(viewAddresses))
 	{
 		return NIL;
 	}
 
-	EnsureDependenciesExistOnAllNodes(&viewAddress);
+	EnsureAllObjectDependenciesExistOnAllNodes(viewAddresses);
 
 	return NIL;
 }
@@ -541,8 +556,12 @@ List *
 PreprocessRenameViewStmt(Node *node, const char *queryString,
 						 ProcessUtilityContext processUtilityContext)
 {
-	ObjectAddress viewAddress = GetObjectAddressFromParseTree(node, true);
-	if (!ShouldPropagateObject(&viewAddress))
+	List *viewAddresses = GetObjectAddressListFromParseTree(node, true);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(viewAddresses) == 1);
+
+	if (!ShouldPropagateAnyObject(viewAddresses))
 	{
 		return NIL;
 	}
@@ -555,12 +574,15 @@ PreprocessRenameViewStmt(Node *node, const char *queryString,
 	/* deparse sql*/
 	const char *renameStmtSql = DeparseTreeNode(node);
 
+	/* We have already asserted that we have exactly 1 address in the addresses. */
+	ObjectAddress *viewAddress = linitial(viewAddresses);
+
 	/*
 	 * To avoid sequential mode, we are using metadata connection. For the
 	 * detailed explanation, please check the comment on PostprocessViewStmt.
 	 */
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
-	ddlJob->targetObjectAddress = viewAddress;
+	ddlJob->targetObjectAddress = *viewAddress;
 	ddlJob->metadataSyncCommand = renameStmtSql;
 	ddlJob->taskList = NIL;
 
@@ -596,8 +618,12 @@ PreprocessAlterViewSchemaStmt(Node *node, const char *queryString,
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 
-	ObjectAddress viewAddress = GetObjectAddressFromParseTree((Node *) stmt, true);
-	if (!ShouldPropagateObject(&viewAddress))
+	List *viewAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(viewAddresses) == 1);
+
+	if (!ShouldPropagateAnyObject(viewAddresses))
 	{
 		return NIL;
 	}
@@ -608,12 +634,15 @@ PreprocessAlterViewSchemaStmt(Node *node, const char *queryString,
 
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
+	/* We have already asserted that we have exactly 1 address in the addresses. */
+	ObjectAddress *viewAddress = linitial(viewAddresses);
+
 	/*
 	 * To avoid sequential mode, we are using metadata connection. For the
 	 * detailed explanation, please check the comment on PostprocessViewStmt.
 	 */
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
-	ddlJob->targetObjectAddress = viewAddress;
+	ddlJob->targetObjectAddress = *viewAddress;
 	ddlJob->metadataSyncCommand = sql;
 	ddlJob->taskList = NIL;
 
@@ -631,14 +660,18 @@ PostprocessAlterViewSchemaStmt(Node *node, const char *queryString)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 
-	ObjectAddress viewAddress = GetObjectAddressFromParseTree((Node *) stmt, true);
-	if (!ShouldPropagateObject(&viewAddress))
+	List *viewAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(viewAddresses) == 1);
+
+	if (!ShouldPropagateAnyObject(viewAddresses))
 	{
 		return NIL;
 	}
 
 	/* dependencies have changed (schema) let's ensure they exist */
-	EnsureDependenciesExistOnAllNodes(&viewAddress);
+	EnsureAllObjectDependenciesExistOnAllNodes(viewAddresses);
 
 	return NIL;
 }

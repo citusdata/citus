@@ -853,8 +853,12 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 */
 		if (ops && ops->markDistributed)
 		{
-			ObjectAddress address = GetObjectAddressFromParseTree(parsetree, false);
-			MarkObjectDistributed(&address);
+			List *addresses = GetObjectAddressListFromParseTree(parsetree, false);
+			ObjectAddress *address = NULL;
+			foreach_ptr(address, addresses)
+			{
+				MarkObjectDistributed(address);
+			}
 		}
 	}
 

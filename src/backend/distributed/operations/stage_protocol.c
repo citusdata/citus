@@ -96,7 +96,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	text *relationNameText = PG_GETARG_TEXT_P(0);
 	char *relationName = text_to_cstring(relationNameText);
 	uint32 attemptableNodeCount = 0;
-	ObjectAddress tableAddress = { 0 };
+	ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
 
 	uint32 candidateNodeIndex = 0;
 	List *candidateNodeList = NIL;
@@ -115,8 +115,8 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	 * via their own connection and committed immediately so they become visible to all
 	 * sessions creating shards.
 	 */
-	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-	EnsureDependenciesExistOnAllNodes(&tableAddress);
+	ObjectAddressSet(*tableAddress, RelationRelationId, relationId);
+	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(tableAddress));
 	EnsureReferenceTablesExistOnAllNodes();
 
 	/* don't allow the table to be dropped */

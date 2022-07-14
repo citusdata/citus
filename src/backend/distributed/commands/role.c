@@ -137,8 +137,12 @@ RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok)
 List *
 PostprocessAlterRoleStmt(Node *node, const char *queryString)
 {
-	ObjectAddress address = GetObjectAddressFromParseTree(node, false);
-	if (!ShouldPropagateObject(&address))
+	List *addresses = GetObjectAddressListFromParseTree(node, false);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(addresses) == 1);
+
+	if (!ShouldPropagateAnyObject(addresses))
 	{
 		return NIL;
 	}
@@ -208,14 +212,17 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	ObjectAddress address = GetObjectAddressFromParseTree(node, false);
+	List *addresses = GetObjectAddressListFromParseTree(node, false);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(addresses) == 1);
 
 	/*
 	 * stmt->role could be NULL when the statement is on 'ALL' roles, we do propagate for
 	 * ALL roles. If it is not NULL the role is for a specific role. If that role is not
 	 * distributed we will not propagate the statement
 	 */
-	if (stmt->role != NULL && !IsObjectDistributed(&address))
+	if (stmt->role != NULL && !IsAnyObjectDistributed(addresses))
 	{
 		return NIL;
 	}
@@ -1056,7 +1063,6 @@ FilterDistributedRoles(List *roles)
 	foreach_ptr(roleNode, roles)
 	{
 		RoleSpec *role = castNode(RoleSpec, roleNode);
-		ObjectAddress roleAddress = { 0 };
 		Oid roleOid = get_rolespec_oid(role, true);
 		if (roleOid == InvalidOid)
 		{
@@ -1066,8 +1072,9 @@ FilterDistributedRoles(List *roles)
 			 */
 			continue;
 		}
-		ObjectAddressSet(roleAddress, AuthIdRelationId, roleOid);
-		if (IsObjectDistributed(&roleAddress))
+		ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*roleAddress, AuthIdRelationId, roleOid);
+		if (IsAnyObjectDistributed(list_make1(roleAddress)))
 		{
 			distributedRoles = lappend(distributedRoles, role);
 		}
@@ -1137,12 +1144,13 @@ PostprocessGrantRoleStmt(Node *node, const char *queryString)
 	RoleSpec *role = NULL;
 	foreach_ptr(role, stmt->grantee_roles)
 	{
-		ObjectAddress roleAddress = { 0 };
 		Oid roleOid = get_rolespec_oid(role, false);
-		ObjectAddressSet(roleAddress, AuthIdRelationId, roleOid);
-		if (IsObjectDistributed(&roleAddress))
+		ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*roleAddress, AuthIdRelationId, roleOid);
+
+		if (IsAnyObjectDistributed(list_make1(roleAddress)))
 		{
-			EnsureDependenciesExistOnAllNodes(&roleAddress);
+			EnsureAllObjectDependenciesExistOnAllNodes(list_make1(roleAddress));
 		}
 	}
 	return NIL;

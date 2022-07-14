@@ -137,6 +137,8 @@ static DependencyDefinition * CreateObjectAddressDependencyDef(Oid classId, Oid 
 static List * GetTypeConstraintDependencyDefinition(Oid typeId);
 static List * CreateObjectAddressDependencyDefList(Oid classId, List *objectIdList);
 static ObjectAddress DependencyDefinitionObjectAddress(DependencyDefinition *definition);
+static DeferredErrorMessage * DeferErrorIfHasUnsupportedDependency(const ObjectAddress *
+																   objectAddress);
 
 /* forward declarations for functions to interact with the ObjectAddressCollector */
 static void InitObjectAddressCollector(ObjectAddressCollector *collector);
@@ -176,7 +178,10 @@ static List * ExpandCitusSupportedTypes(ObjectAddressCollector *collector,
 static List * GetDependentRoleIdsFDW(Oid FDWOid);
 static List * ExpandRolesToGroups(Oid roleid);
 static ViewDependencyNode * BuildViewDependencyGraph(Oid relationId, HTAB *nodeMap);
-
+static bool IsObjectAddressOwnedByExtension(const ObjectAddress *target,
+											ObjectAddress *extensionAddress);
+static bool ErrorOrWarnIfObjectHasUnsupportedDependency(const
+														ObjectAddress *objectAddress);
 
 /*
  * GetUniqueDependenciesList takes a list of object addresses and returns a new list
@@ -774,8 +779,8 @@ SupportedDependencyByCitus(const ObjectAddress *address)
  * object doesn't have any unsupported dependency, else throws a message with proper level
  * (except the cluster doesn't have any node) and return true.
  */
-bool
-ErrorOrWarnIfObjectHasUnsupportedDependency(ObjectAddress *objectAddress)
+static bool
+ErrorOrWarnIfObjectHasUnsupportedDependency(const ObjectAddress *objectAddress)
 {
 	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(objectAddress);
 	if (errMsg != NULL)
@@ -805,7 +810,7 @@ ErrorOrWarnIfObjectHasUnsupportedDependency(ObjectAddress *objectAddress)
 		 * is not distributed yet, we can create it locally to not affect user's local
 		 * usage experience.
 		 */
-		else if (IsObjectDistributed(objectAddress))
+		else if (IsAnyObjectDistributed(list_make1((ObjectAddress *) objectAddress)))
 		{
 			RaiseDeferredError(errMsg, ERROR);
 		}
@@ -822,10 +827,30 @@ ErrorOrWarnIfObjectHasUnsupportedDependency(ObjectAddress *objectAddress)
 
 
 /*
+ * ErrorOrWarnIfAnyObjectHasUnsupportedDependency iteratively calls
+ * ErrorOrWarnIfObjectHasUnsupportedDependency for given addresses.
+ */
+bool
+ErrorOrWarnIfAnyObjectHasUnsupportedDependency(List *objectAddresses)
+{
+	ObjectAddress *objectAddress = NULL;
+	foreach_ptr(objectAddress, objectAddresses)
+	{
+		if (ErrorOrWarnIfObjectHasUnsupportedDependency(objectAddress))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
  * DeferErrorIfHasUnsupportedDependency returns deferred error message if the given
  * object has any undistributable dependency.
  */
-DeferredErrorMessage *
+static DeferredErrorMessage *
 DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 {
 	ObjectAddress *undistributableDependency = GetUndistributableDependency(
@@ -858,7 +883,7 @@ DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 	 * Otherwise, callers are expected to throw the error returned from this
 	 * function as a hard one by ignoring the detail part.
 	 */
-	if (!IsObjectDistributed(objectAddress))
+	if (!IsAnyObjectDistributed(list_make1((ObjectAddress *) objectAddress)))
 	{
 		appendStringInfo(detailInfo, "\"%s\" will be created only locally",
 						 objectDescription);
@@ -873,7 +898,7 @@ DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 						 objectDescription,
 						 dependencyDescription);
 
-		if (IsObjectDistributed(objectAddress))
+		if (IsAnyObjectDistributed(list_make1((ObjectAddress *) objectAddress)))
 		{
 			appendStringInfo(hintInfo,
 							 "Distribute \"%s\" first to modify \"%s\" on worker nodes",
@@ -897,6 +922,28 @@ DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
 
 	return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 						 errorInfo->data, detailInfo->data, NULL);
+}
+
+
+/*
+ * DeferErrorIfAnyObjectHasUnsupportedDependency iteratively calls
+ * DeferErrorIfHasUnsupportedDependency for given addresses.
+ */
+DeferredErrorMessage *
+DeferErrorIfAnyObjectHasUnsupportedDependency(const List *objectAddresses)
+{
+	DeferredErrorMessage *deferredErrorMessage = NULL;
+	ObjectAddress *objectAddress = NULL;
+	foreach_ptr(objectAddress, objectAddresses)
+	{
+		deferredErrorMessage = DeferErrorIfHasUnsupportedDependency(objectAddress);
+		if (deferredErrorMessage)
+		{
+			return deferredErrorMessage;
+		}
+	}
+
+	return NULL;
 }
 
 
@@ -936,7 +983,7 @@ GetUndistributableDependency(const ObjectAddress *objectAddress)
 		/*
 		 * If object is distributed already, ignore it.
 		 */
-		if (IsObjectDistributed(dependency))
+		if (IsAnyObjectDistributed(list_make1(dependency)))
 		{
 			continue;
 		}
@@ -1015,7 +1062,7 @@ IsTableOwnedByExtension(Oid relationId)
  * If extensionAddress is not set to a NULL pointer the function will write the extension
  * address this function depends on into this location.
  */
-bool
+static bool
 IsObjectAddressOwnedByExtension(const ObjectAddress *target,
 								ObjectAddress *extensionAddress)
 {
@@ -1052,6 +1099,27 @@ IsObjectAddressOwnedByExtension(const ObjectAddress *target,
 	table_close(depRel, AccessShareLock);
 
 	return result;
+}
+
+
+/*
+ * IsAnyObjectAddressOwnedByExtension iteratively calls IsObjectAddressOwnedByExtension
+ * for given addresses to determine if any address is owned by an extension.
+ */
+bool
+IsAnyObjectAddressOwnedByExtension(const List *targets,
+								   ObjectAddress *extensionAddress)
+{
+	ObjectAddress *target = NULL;
+	foreach_ptr(target, targets)
+	{
+		if (IsObjectAddressOwnedByExtension(target, extensionAddress))
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 
@@ -1097,7 +1165,9 @@ FollowNewSupportedDependencies(ObjectAddressCollector *collector,
 	 * If the object is already distributed it is not a `new` object that needs to be
 	 * distributed before we create a dependent object
 	 */
-	if (IsObjectDistributed(&address))
+	ObjectAddress *copyAddress = palloc0(sizeof(ObjectAddress));
+	*copyAddress = address;
+	if (IsAnyObjectDistributed(list_make1(copyAddress)))
 	{
 		return false;
 	}

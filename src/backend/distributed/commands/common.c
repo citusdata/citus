@@ -61,22 +61,26 @@ PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryS
 		return NIL;
 	}
 
-	ObjectAddress address = GetObjectAddressFromParseTree(stmt, false);
+	List *addresses = GetObjectAddressListFromParseTree(stmt, false);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(addresses) == 1);
 
 	EnsureCoordinator();
 	EnsureSequentialMode(ops->objectType);
 
 	/* If the object has any unsupported dependency warn, and only create locally */
-	DeferredErrorMessage *depError = DeferErrorIfHasUnsupportedDependency(&address);
+	DeferredErrorMessage *depError = DeferErrorIfAnyObjectHasUnsupportedDependency(
+		addresses);
 	if (depError != NULL)
 	{
 		RaiseDeferredError(depError, WARNING);
 		return NIL;
 	}
 
-	EnsureDependenciesExistOnAllNodes(&address);
+	EnsureAllObjectDependenciesExistOnAllNodes(addresses);
 
-	List *commands = GetDependencyCreateDDLCommands(&address);
+	List *commands = GetAllDependencyCreateDDLCommands(addresses);
 
 	commands = lcons(DISABLE_DDL_PROPAGATION, commands);
 	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
@@ -111,8 +115,12 @@ PreprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString,
 	const DistributeObjectOps *ops = GetDistributeObjectOps(stmt);
 	Assert(ops != NULL);
 
-	ObjectAddress address = GetObjectAddressFromParseTree(stmt, false);
-	if (!ShouldPropagateObject(&address))
+	List *addresses = GetObjectAddressListFromParseTree(stmt, false);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(addresses) == 1);
+
+	if (!ShouldPropagateAnyObject(addresses))
 	{
 		return NIL;
 	}
@@ -156,8 +164,12 @@ PostprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString)
 	const DistributeObjectOps *ops = GetDistributeObjectOps(stmt);
 	Assert(ops != NULL);
 
-	ObjectAddress address = GetObjectAddressFromParseTree(stmt, false);
-	if (!ShouldPropagateObject(&address))
+	List *addresses = GetObjectAddressListFromParseTree(stmt, false);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(addresses) == 1);
+
+	if (!ShouldPropagateAnyObject(addresses))
 	{
 		return NIL;
 	}
@@ -168,7 +180,7 @@ PostprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString)
 		return NIL;
 	}
 
-	EnsureDependenciesExistOnAllNodes(&address);
+	EnsureAllObjectDependenciesExistOnAllNodes(addresses);
 
 	return NIL;
 }
@@ -223,11 +235,10 @@ PreprocessDropDistributedObjectStmt(Node *node, const char *queryString,
 		Relation rel = NULL; /* not used, but required to pass to get_object_address */
 		ObjectAddress address = get_object_address(stmt->removeType, object, &rel,
 												   AccessShareLock, stmt->missing_ok);
-		if (IsObjectDistributed(&address))
+		ObjectAddress *addressPtr = palloc0(sizeof(ObjectAddress));
+		*addressPtr = address;
+		if (IsAnyObjectDistributed(list_make1(addressPtr)))
 		{
-			ObjectAddress *addressPtr = palloc0(sizeof(ObjectAddress));
-			*addressPtr = address;
-
 			distributedObjects = lappend(distributedObjects, object);
 			distributedObjectAddresses = lappend(distributedObjectAddresses, addressPtr);
 		}

@@ -224,8 +224,12 @@ PostprocessCreateTriggerStmt(Node *node, const char *queryString)
 	EnsureCoordinator();
 	ErrorOutForTriggerIfNotSupported(relationId);
 
-	ObjectAddress objectAddress = GetObjectAddressFromParseTree(node, missingOk);
-	EnsureDependenciesExistOnAllNodes(&objectAddress);
+	List *objectAddresses = GetObjectAddressListFromParseTree(node, missingOk);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(objectAddresses) == 1);
+
+	EnsureAllObjectDependenciesExistOnAllNodes(objectAddresses);
 
 	char *triggerName = createTriggerStmt->trigname;
 	return CitusCreateTriggerCommandDDLJob(relationId, triggerName,

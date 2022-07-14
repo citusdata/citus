@@ -102,6 +102,7 @@ PreprocessGrantOnForeignServerStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 
+	/*  the code-path only supports a single object */
 	Assert(list_length(stmt->objects) == 1);
 
 	char *sql = DeparseTreeNode((Node *) stmt);
@@ -247,15 +248,14 @@ NameListHasDistributedServer(List *serverNames)
 	foreach_ptr(serverValue, serverNames)
 	{
 		List *addresses = GetObjectAddressByServerName(strVal(serverValue), false);
-		if (list_length(addresses) > 1)
-		{
-			ereport(ERROR, errmsg(
-						"citus does not support multiple object addresses in NameListHasDistributedServer"));
-		}
 
+		/*  the code-path only supports a single object */
+		Assert(list_length(addresses) == 1);
+
+		/* We have already asserted that we have exactly 1 address in the addresses. */
 		ObjectAddress *address = linitial(addresses);
 
-		if (IsObjectDistributed(address))
+		if (IsAnyObjectDistributed(list_make1(address)))
 		{
 			return true;
 		}

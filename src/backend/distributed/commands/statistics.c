@@ -122,9 +122,12 @@ PostprocessCreateStatisticsStmt(Node *node, const char *queryString)
 	}
 
 	bool missingOk = false;
-	ObjectAddress objectAddress = GetObjectAddressFromParseTree((Node *) stmt, missingOk);
+	List *objectAddresses = GetObjectAddressListFromParseTree((Node *) stmt, missingOk);
 
-	EnsureDependenciesExistOnAllNodes(&objectAddress);
+	/*  the code-path only supports a single object */
+	Assert(list_length(objectAddresses) == 1);
+
+	EnsureAllObjectDependenciesExistOnAllNodes(objectAddresses);
 
 	return NIL;
 }
@@ -306,9 +309,12 @@ PostprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString)
 	}
 
 	bool missingOk = false;
-	ObjectAddress objectAddress = GetObjectAddressFromParseTree((Node *) stmt, missingOk);
+	List *objectAddresses = GetObjectAddressListFromParseTree((Node *) stmt, missingOk);
 
-	EnsureDependenciesExistOnAllNodes(&objectAddress);
+	/*  the code-path only supports a single object */
+	Assert(list_length(objectAddresses) == 1);
+
+	EnsureAllObjectDependenciesExistOnAllNodes(objectAddresses);
 
 	return NIL;
 }
@@ -449,10 +455,9 @@ PostprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	ObjectAddress statisticsAddress = { 0 };
-	ObjectAddressSet(statisticsAddress, StatisticExtRelationId, statsOid);
-
-	EnsureDependenciesExistOnAllNodes(&statisticsAddress);
+	ObjectAddress *statisticsAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*statisticsAddress, StatisticExtRelationId, statsOid);
+	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(statisticsAddress));
 
 	return NIL;
 }

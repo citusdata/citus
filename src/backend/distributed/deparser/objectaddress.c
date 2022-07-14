@@ -20,11 +20,11 @@
 
 
 /*
- * GetObjectAddressFromParseTree returns the ObjectAddress of the main target of the parse
+ * GetObjectAddressListFromParseTree returns the list of ObjectAddress of the main target of the parse
  * tree.
  */
-ObjectAddress
-GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
+List *
+GetObjectAddressListFromParseTree(Node *parseTree, bool missing_ok)
 {
 	const DistributeObjectOps *ops = GetDistributeObjectOps(parseTree);
 
@@ -33,19 +33,7 @@ GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
 		ereport(ERROR, (errmsg("unsupported statement to get object address for")));
 	}
 
-	List *objectAddresses = ops->address(parseTree, missing_ok);
-
-	if (list_length(objectAddresses) > 1)
-	{
-		ereport(ERROR, (errmsg(
-							"citus does not support multiple object addresses in GetObjectAddressFromParseTree")));
-	}
-
-	Assert(list_length(objectAddresses) == 1);
-
-	ObjectAddress *objectAddress = linitial(objectAddresses);
-
-	return *objectAddress;
+	return ops->address(parseTree, missing_ok);
 }
 
 

@@ -268,18 +268,16 @@ PreprocessDropSequenceStmt(Node *node, const char *queryString,
 
 		Oid seqOid = RangeVarGetRelid(seq, NoLock, stmt->missing_ok);
 
-		ObjectAddress sequenceAddress = { 0 };
-		ObjectAddressSet(sequenceAddress, RelationRelationId, seqOid);
-
-		if (!IsObjectDistributed(&sequenceAddress))
+		ObjectAddress *sequenceAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*sequenceAddress, RelationRelationId, seqOid);
+		if (!IsAnyObjectDistributed(list_make1(sequenceAddress)))
 		{
 			continue;
 		}
 
 		/* collect information for all distributed sequences */
-		ObjectAddress *addressp = palloc(sizeof(ObjectAddress));
-		*addressp = sequenceAddress;
-		distributedSequenceAddresses = lappend(distributedSequenceAddresses, addressp);
+		distributedSequenceAddresses = lappend(distributedSequenceAddresses,
+											   sequenceAddress);
 		distributedSequencesList = lappend(distributedSequencesList, objectNameList);
 	}
 
@@ -334,10 +332,13 @@ PreprocessRenameSequenceStmt(Node *node, const char *queryString, ProcessUtility
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_SEQUENCE);
 
-	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
-														  stmt->missing_ok);
+	List *addresses = GetObjectAddressListFromParseTree((Node *) stmt,
+														stmt->missing_ok);
 
-	if (!ShouldPropagateObject(&address))
+	/*  the code-path only supports a single object */
+	Assert(list_length(addresses) == 1);
+
+	if (!ShouldPropagateAnyObject(addresses))
 	{
 		return NIL;
 	}
@@ -395,21 +396,27 @@ PreprocessAlterSequenceStmt(Node *node, const char *queryString,
 {
 	AlterSeqStmt *stmt = castNode(AlterSeqStmt, node);
 
-	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
-														  stmt->missing_ok);
+	List *addresses = GetObjectAddressListFromParseTree((Node *) stmt,
+														stmt->missing_ok);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(addresses) == 1);
 
 	/* error out if the sequence is distributed */
-	if (IsObjectDistributed(&address))
+	if (IsAnyObjectDistributed(addresses))
 	{
 		ereport(ERROR, (errmsg(
 							"Altering a distributed sequence is currently not supported.")));
 	}
 
+	/* We have already asserted that we have exactly 1 address in the addresses. */
+	ObjectAddress *address = linitial(addresses);
+
 	/*
 	 * error out if the sequence is used in a distributed table
 	 * and this is an ALTER SEQUENCE .. AS .. statement
 	 */
-	Oid citusTableId = SequenceUsedInDistributedTable(&address);
+	Oid citusTableId = SequenceUsedInDistributedTable(address);
 	if (citusTableId != InvalidOid)
 	{
 		List *options = stmt->options;
@@ -463,6 +470,7 @@ SequenceUsedInDistributedTable(const ObjectAddress *sequenceAddress)
 			}
 		}
 	}
+
 	return InvalidOid;
 }
 
@@ -498,9 +506,13 @@ PreprocessAlterSequenceSchemaStmt(Node *node, const char *queryString,
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_SEQUENCE);
 
-	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
-														  stmt->missing_ok);
-	if (!ShouldPropagateObject(&address))
+	List *addresses = GetObjectAddressListFromParseTree((Node *) stmt,
+														stmt->missing_ok);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(addresses) == 1);
+
+	if (!ShouldPropagateAnyObject(addresses))
 	{
 		return NIL;
 	}
@@ -572,16 +584,19 @@ PostprocessAlterSequenceSchemaStmt(Node *node, const char *queryString)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_SEQUENCE);
-	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
-														  stmt->missing_ok);
+	List *addresses = GetObjectAddressListFromParseTree((Node *) stmt,
+														stmt->missing_ok);
 
-	if (!ShouldPropagateObject(&address))
+	/*  the code-path only supports a single object */
+	Assert(list_length(addresses) == 1);
+
+	if (!ShouldPropagateAnyObject(addresses))
 	{
 		return NIL;
 	}
 
 	/* dependencies have changed (schema) let's ensure they exist */
-	EnsureDependenciesExistOnAllNodes(&address);
+	EnsureAllObjectDependenciesExistOnAllNodes(addresses);
 
 	return NIL;
 }
@@ -601,8 +616,12 @@ PreprocessAlterSequenceOwnerStmt(Node *node, const char *queryString,
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
 	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
 
-	ObjectAddress sequenceAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateObject(&sequenceAddress))
+	List *sequenceAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(sequenceAddresses) == 1);
+
+	if (!ShouldPropagateAnyObject(sequenceAddresses))
 	{
 		return NIL;
 	}
@@ -649,14 +668,18 @@ PostprocessAlterSequenceOwnerStmt(Node *node, const char *queryString)
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
 	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
 
-	ObjectAddress sequenceAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateObject(&sequenceAddress))
+	List *sequenceAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(sequenceAddresses) == 1);
+
+	if (!ShouldPropagateAnyObject(sequenceAddresses))
 	{
 		return NIL;
 	}
 
 	/* dependencies have changed (owner) let's ensure they exist */
-	EnsureDependenciesExistOnAllNodes(&sequenceAddress);
+	EnsureAllObjectDependenciesExistOnAllNodes(sequenceAddresses);
 
 	return NIL;
 }
@@ -744,10 +767,10 @@ PostprocessGrantOnSequenceStmt(Node *node, const char *queryString)
 	RangeVar *sequence = NULL;
 	foreach_ptr(sequence, distributedSequences)
 	{
-		ObjectAddress sequenceAddress = { 0 };
+		ObjectAddress *sequenceAddress = palloc0(sizeof(ObjectAddress));
 		Oid sequenceOid = RangeVarGetRelid(sequence, NoLock, false);
-		ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
-		EnsureDependenciesExistOnAllNodes(&sequenceAddress);
+		ObjectAddressSet(*sequenceAddress, RelationRelationId, sequenceOid);
+		EnsureAllObjectDependenciesExistOnAllNodes(list_make1(sequenceAddress));
 	}
 	return NIL;
 }
@@ -866,15 +889,15 @@ FilterDistributedSequences(GrantStmt *stmt)
 		RangeVar *sequenceRangeVar = NULL;
 		foreach_ptr(sequenceRangeVar, stmt->objects)
 		{
-			ObjectAddress sequenceAddress = { 0 };
 			Oid sequenceOid = RangeVarGetRelid(sequenceRangeVar, NoLock, missing_ok);
-			ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+			ObjectAddress *sequenceAddress = palloc0(sizeof(ObjectAddress));
+			ObjectAddressSet(*sequenceAddress, RelationRelationId, sequenceOid);
 
 			/*
 			 * if this sequence from GRANT .. ON SEQUENCE .. is a distributed
 			 * sequence, add it to the list
 			 */
-			if (IsObjectDistributed(&sequenceAddress))
+			if (IsAnyObjectDistributed(list_make1(sequenceAddress)))
 			{
 				grantSequenceList = lappend(grantSequenceList, sequenceRangeVar);
 			}

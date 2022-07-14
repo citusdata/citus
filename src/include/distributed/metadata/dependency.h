@@ -23,10 +23,9 @@ extern List * GetUniqueDependenciesList(List *objectAddressesList);
 extern List * GetDependenciesForObject(const ObjectAddress *target);
 extern List * GetAllSupportedDependenciesForObject(const ObjectAddress *target);
 extern List * GetAllDependenciesForObject(const ObjectAddress *target);
-extern bool ErrorOrWarnIfObjectHasUnsupportedDependency(ObjectAddress *objectAddress);
-extern DeferredErrorMessage * DeferErrorIfHasUnsupportedDependency(const
-																   ObjectAddress *
-																   objectAddress);
+extern bool ErrorOrWarnIfAnyObjectHasUnsupportedDependency(List *objectAddresses);
+extern DeferredErrorMessage * DeferErrorIfAnyObjectHasUnsupportedDependency(const List *
+																			objectAddresses);
 extern List * OrderObjectAddressListInDependencyOrder(List *objectAddressList);
 extern bool SupportedDependencyByCitus(const ObjectAddress *address);
 extern List * GetPgDependTuplesForDependingObjects(Oid targetObjectClassId,

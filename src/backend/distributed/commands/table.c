@@ -649,13 +649,19 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 	/*
 	 * We will let Postgres deal with missing_ok
 	 */
-	ObjectAddress tableAddress = GetObjectAddressFromParseTree((Node *) stmt, true);
+	List *tableAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(tableAddress) == 1);
+
+	/* We have already asserted that we have exactly 1 address in the addresses. */
+	ObjectAddress *tableAddress = linitial(tableAddresses);
 
 	/*
 	 * Check whether we are dealing with a sequence or view here and route queries
 	 * accordingly to the right processor function.
 	 */
-	char relKind = get_rel_relkind(tableAddress.objectId);
+	char relKind = get_rel_relkind(tableAddress->objectId);
 	if (relKind == RELKIND_SEQUENCE)
 	{
 		stmt->objectType = OBJECT_SEQUENCE;
@@ -667,12 +673,12 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 		return PostprocessAlterViewSchemaStmt((Node *) stmt, queryString);
 	}
 
-	if (!ShouldPropagate() || !IsCitusTable(tableAddress.objectId))
+	if (!ShouldPropagate() || !IsCitusTable(tableAddress->objectId))
 	{
 		return NIL;
 	}
 
-	EnsureDependenciesExistOnAllNodes(&tableAddress);
+	EnsureAllObjectDependenciesExistOnAllNodes(tableAddresses);
 
 	return NIL;
 }
@@ -1776,9 +1782,15 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
-														  stmt->missing_ok);
-	Oid relationId = address.objectId;
+	List *addresses = GetObjectAddressListFromParseTree((Node *) stmt,
+														stmt->missing_ok);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(addresses) == 1);
+
+	/* We have already asserted that we have exactly 1 address in the addresses. */
+	ObjectAddress *address = linitial(addresses);
+	Oid relationId = address->objectId;
 
 	/*
 	 * Check whether we are dealing with a sequence or view here and route queries
@@ -1990,9 +2002,9 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		EnsureRelationHasCompatibleSequenceTypes(relationId);
 
 		/* changing a relation could introduce new dependencies */
-		ObjectAddress tableAddress = { 0 };
-		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-		EnsureDependenciesExistOnAllNodes(&tableAddress);
+		ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*tableAddress, RelationRelationId, relationId);
+		EnsureAllObjectDependenciesExistOnAllNodes(list_make1(tableAddress));
 	}
 
 	/* for the new sequences coming with this ALTER TABLE statement */

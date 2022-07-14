@@ -442,10 +442,9 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 	 * via their own connection and committed immediately so they become visible to all
 	 * sessions creating shards.
 	 */
-	ObjectAddress tableAddress = { 0 };
-	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-
-	EnsureDependenciesExistOnAllNodes(&tableAddress);
+	ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*tableAddress, RelationRelationId, relationId);
+	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(tableAddress));
 
 	char replicationModel = DecideReplicationModel(distributionMethod,
 												   colocateWithTableName,

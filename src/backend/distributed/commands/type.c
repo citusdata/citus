@@ -117,8 +117,12 @@ PreprocessRenameTypeAttributeStmt(Node *node, const char *queryString,
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
 	Assert(stmt->relationType == OBJECT_TYPE);
 
-	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateObject(&typeAddress))
+	List *typeAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(objectAddresses) == 1);
+
+	if (!ShouldPropagateAnyObject(typeAddresses))
 	{
 		return NIL;
 	}

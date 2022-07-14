@@ -259,10 +259,9 @@ FilterDistributedSchemas(List *schemas)
 			continue;
 		}
 
-		ObjectAddress address = { 0 };
-		ObjectAddressSet(address, NamespaceRelationId, schemaOid);
-
-		if (!IsObjectDistributed(&address))
+		ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*address, NamespaceRelationId, schemaOid);
+		if (!IsAnyObjectDistributed(list_make1(address)))
 		{
 			continue;
 		}
