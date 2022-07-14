@@ -203,6 +203,10 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	if (IsA(parsetree, CreateExtensionStmt))
 	{
+		/*
+		 * Postgres forbids creating/altering other extensions from within an extension script, so we use a utility hook instead
+		 * This preprocess check whether citus_columnar should be installed first before citus
+		 */
 		PreprocessCreateExtensionStmtForCitusColumnar(parsetree);
 	}
 
