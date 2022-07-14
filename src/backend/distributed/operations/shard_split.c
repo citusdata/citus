@@ -60,8 +60,6 @@ static void SplitShardReplicationSetup(List *sourceColocatedShardIntervalList,
 									   WorkerNode *sourceWorkerNode,
 									   List *workersForPlacementList);
 static HTAB * CreateWorkerForPlacementSet(List *workersForPlacementList);
-static void CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
-												   List *workersForPlacementList);
 static void CreateObjectOnPlacement(List *objectCreationCommandList,
 									WorkerNode *workerNode);
 static List *    CreateSplitIntervalsForShardGroup(List *sourceColocatedShardList,
@@ -525,7 +523,7 @@ CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 /* Create ShardGroup auxiliary structures (indexes, stats, replicaindentities, triggers)
  * on a list of corresponding workers.
  */
-static void
+void
 CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
 									   List *workersForPlacementList)
 {
@@ -1222,6 +1220,7 @@ static void SplitShardReplicationSetup(List *sourceColocatedShardIntervalList,
 	 								destinationWorkerNodesList,
 									replicationSlotInfoList);
 
-	LogicallReplicateSplitShards(sourceWorkerNode, shardSplitPubSubMetadata);
+
+	LogicallyReplicateSplitShards(sourceWorkerNode, shardSplitPubSubMetadata, sourceColocatedShardIntervalList, shardGroupSplitIntervalListList, destinationWorkerNodesList);
 }
 

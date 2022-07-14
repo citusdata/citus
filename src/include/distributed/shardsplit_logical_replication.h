@@ -53,5 +53,9 @@ extern List *  CreateShardSplitPubSubMetadataList(List *sourceColocatedShardInte
 									   List *destinationWorkerNodesList,
 									   List *replicationSlotInfoList);
 
-extern void LogicallReplicateSplitShards(WorkerNode *sourceWorkerNode, List* shardSplitPubSubMetadataList);
+extern void LogicallyReplicateSplitShards(WorkerNode *sourceWorkerNode,
+										  List* shardSplitPubSubMetadataList,
+										  List *sourceColocatedShardIntervalList,
+										  List *shardGroupSplitIntervalListList,
+										  List *destinationWorkerNodesList);
 #endif /* SHARDSPLIT_LOGICAL_REPLICATION_H */

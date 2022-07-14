@@ -55,6 +55,8 @@ SELECT citus_split_shard_by_split_points(
 
 \c - - - :worker_2_port
 SET search_path TO citus_split_shard_by_split_points_negative;
+SELECT * FROM pg_stat_subscription;
+SELECT * FROM pg_subscription_rel;
 SELECT * FROM show_catalog;
 
 \c - - - :worker_1_port

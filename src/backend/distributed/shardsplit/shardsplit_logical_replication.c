@@ -19,6 +19,7 @@
 #include "distributed/listutils.h"
 #include "distributed/shardsplit_logical_replication.h"
 #include "distributed/multi_logical_replication.h"
+#include "distributed/resource_lock.h"
 #include "utils/builtins.h"
 #include "commands/dbcommands.h"
 
@@ -37,6 +38,10 @@ static void
 CreateShardSplitSubscriptions(List * targetNodeConnectionList, List * shardSplitPubSubMetadataList, WorkerNode * sourceWorkerNode, char * superUser, char * databaseName);
 static void
 WaitForShardSplitRelationSubscriptionsBecomeReady(List * targetNodeConnectionList, List * shardSplitPubSubMetadataList);
+
+static void
+WaitForShardSplitRelationSubscriptionsToBeCaughtUp(XLogRecPtr sourcePosition, List * targetNodeConnectionList, List * shardSplitPubSubMetadataList);
+
 
 static char *
 ShardSplitPublicationName(uint32_t nodeId, Oid ownerId);
@@ -227,7 +232,11 @@ ShardSplitPubSubMetadata * CreateShardSplitPubSubMetadata(Oid tableOwnerId, uint
 }
 
 
-void LogicallReplicateSplitShards(WorkerNode *sourceWorkerNode, List* shardSplitPubSubMetadataList)
+void LogicallyReplicateSplitShards(WorkerNode *sourceWorkerNode,
+        List* shardSplitPubSubMetadataList,
+        List *sourceColocatedShardIntervalList,
+        List *shardGroupSplitIntervalListList, 
+        List *destinationWorkerNodesList)
 {
     char *superUser = CitusExtensionOwnerName();
 	char *databaseName = get_database_name(MyDatabaseId);
@@ -265,6 +274,21 @@ void LogicallReplicateSplitShards(WorkerNode *sourceWorkerNode, List* shardSplit
         databaseName);
 
    WaitForShardSplitRelationSubscriptionsBecomeReady(targetNodeConnectionList, shardSplitPubSubMetadataList);
+   
+   XLogRecPtr sourcePosition = GetRemoteLogPosition(sourceConnection);
+   WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition, targetNodeConnectionList, shardSplitPubSubMetadataList);
+
+   CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList, destinationWorkerNodesList);
+
+   sourcePosition = GetRemoteLogPosition(sourceConnection);
+   WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition, targetNodeConnectionList, shardSplitPubSubMetadataList);
+   
+   BlockWritesToShardList(sourceColocatedShardIntervalList);
+   
+   sourcePosition = GetRemoteLogPosition(sourceConnection);
+   WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition, targetNodeConnectionList, shardSplitPubSubMetadataList);
+   
+   /*TOOD : Create foreign key constraints and handle partitioned tables*/
 }
 
 
@@ -375,6 +399,20 @@ WaitForShardSplitRelationSubscriptionsBecomeReady(List * targetNodeConnectionLis
     {
         Bitmapset *tableOwnerIds = NULL;
         tableOwnerIds = bms_add_member(tableOwnerIds, shardSplitPubSubMetadata->tableOwnerId);
-        WaitForRelationSubscriptionsBecomeReady(targetConnection, tableOwnerIds);
+        WaitForRelationSubscriptionsBecomeReady(targetConnection, tableOwnerIds, SHARD_SPLIT_SUBSCRIPTION_PREFIX);
+    }
+}
+
+static void
+WaitForShardSplitRelationSubscriptionsToBeCaughtUp(XLogRecPtr sourcePosition, List * targetNodeConnectionList, List * shardSplitPubSubMetadataList)
+{
+    MultiConnection * targetConnection = NULL;
+    ShardSplitPubSubMetadata * shardSplitPubSubMetadata = NULL;
+    forboth_ptr(targetConnection, targetNodeConnectionList,
+        shardSplitPubSubMetadata, shardSplitPubSubMetadataList)
+    {
+        Bitmapset *tableOwnerIds = NULL;
+        tableOwnerIds = bms_add_member(tableOwnerIds, shardSplitPubSubMetadata->tableOwnerId);
+        WaitForShardSubscriptionToCatchUp(targetConnection, sourcePosition, tableOwnerIds, SHARD_SPLIT_SUBSCRIPTION_PREFIX);
     }
 }

@@ -59,6 +59,8 @@ extern void SplitShard(SplitMode splitMode,
 /* TODO(niupre): Make all these APIs private when all consumers (Example : ISOLATE_TENANT_TO_NEW_SHARD) directly call 'SplitShard' API. */
 extern void ErrorIfCannotSplitShard(SplitOperation splitOperation,
 									ShardInterval *sourceShard);
+extern void CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
+												   List *workersForPlacementList);
 extern void DropShardList(List *shardIntervalList);
 
 #endif /* SHARDSPLIT_H_ */

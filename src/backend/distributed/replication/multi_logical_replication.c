@@ -131,19 +131,15 @@ static void CreateShardMoveSubscriptions(MultiConnection *connection,
 										 char *databaseName,
 										 Bitmapset *tableOwnerIds);
 static char * escape_param_str(const char *str);
-static XLogRecPtr GetRemoteLogPosition(MultiConnection *connection);
 static XLogRecPtr GetRemoteLSN(MultiConnection *connection, char *command);
 
 static uint64 TotalRelationSizeForSubscription(MultiConnection *connection,
 											   char *command);
 static bool RelationSubscriptionsAreReady(MultiConnection *targetConnection,
-										  Bitmapset *tableOwnerIds);
-static void WaitForShardMoveSubscription(MultiConnection *targetConnection,
-										 XLogRecPtr sourcePosition,
-										 Bitmapset *tableOwnerIds);
+										  Bitmapset *tableOwnerIds, char * operationPrefix);
 static void WaitForMiliseconds(long timeout);
 static XLogRecPtr GetSubscriptionPosition(MultiConnection *connection,
-										  Bitmapset *tableOwnerIds);
+										  Bitmapset *tableOwnerIds, char * operationPrefix);
 static char * ShardMovePublicationName(Oid ownerId);
 static char * ShardSubscriptionName(Oid ownerId, char * operationPrefix);
 static void AcquireLogicalReplicationLock(void);
@@ -152,7 +148,7 @@ static void DropAllShardMoveSubscriptions(MultiConnection *connection);
 static void DropAllShardMoveReplicationSlots(MultiConnection *connection);
 static void DropAllShardMovePublications(MultiConnection *connection);
 static void DropAllShardMoveUsers(MultiConnection *connection);
-static char * ShardMoveSubscriptionNamesValueList(Bitmapset *tableOwnerIds);
+static char * ShardSubscriptionNamesValueList(Bitmapset *tableOwnerIds, char * operationPrefix);
 static void DropShardMoveSubscription(MultiConnection *connection,
 									  char *subscriptionName);
 static void DropShardMoveReplicationSlot(MultiConnection *connection,
@@ -231,14 +227,14 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 * subscription is not ready. There is no point of locking the shards before the
 		 * subscriptions for each relation becomes ready, so wait for it.
 		 */
-		WaitForRelationSubscriptionsBecomeReady(targetConnection, tableOwnerIds);
+		WaitForRelationSubscriptionsBecomeReady(targetConnection, tableOwnerIds, SHARD_MOVE_SUBSCRIPTION_PREFIX);
 
 		/*
 		 * Wait until the subscription is caught up to changes that has happened
 		 * after the initial COPY on the shards.
 		 */
 		XLogRecPtr sourcePosition = GetRemoteLogPosition(sourceConnection);
-		WaitForShardMoveSubscription(targetConnection, sourcePosition, tableOwnerIds);
+		WaitForShardSubscriptionToCatchUp(targetConnection, sourcePosition, tableOwnerIds, SHARD_MOVE_SUBSCRIPTION_PREFIX);
 
 		/*
 		 * Now lets create the post-load objects, such as the indexes, constraints
@@ -248,7 +244,7 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		CreatePostLogicalReplicationDataLoadObjects(shardList, targetNodeName,
 													targetNodePort);
 		sourcePosition = GetRemoteLogPosition(sourceConnection);
-		WaitForShardMoveSubscription(targetConnection, sourcePosition, tableOwnerIds);
+		WaitForShardSubscriptionToCatchUp(targetConnection, sourcePosition, tableOwnerIds, SHARD_MOVE_SUBSCRIPTION_PREFIX);
 
 		/*
 		 * We're almost done, we'll block the writes to the shards that we're
@@ -261,7 +257,7 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		BlockWritesToShardList(shardList);
 
 		sourcePosition = GetRemoteLogPosition(sourceConnection);
-		WaitForShardMoveSubscription(targetConnection, sourcePosition, tableOwnerIds);
+		WaitForShardSubscriptionToCatchUp(targetConnection, sourcePosition, tableOwnerIds, SHARD_MOVE_SUBSCRIPTION_PREFIX);
 
 		/*
 		 * We're creating the foreign constraints to reference tables after the
@@ -1560,7 +1556,7 @@ escape_param_str(const char *str)
 /*
  * GetRemoteLogPosition gets the current WAL log position over the given connection.
  */
-static XLogRecPtr
+XLogRecPtr
 GetRemoteLogPosition(MultiConnection *connection)
 {
 	return GetRemoteLSN(connection, CURRENT_LOG_POSITION_COMMAND);
@@ -1631,7 +1627,7 @@ GetRemoteLSN(MultiConnection *connection, char *command)
  */
 void
 WaitForRelationSubscriptionsBecomeReady(MultiConnection *targetConnection,
-										Bitmapset *tableOwnerIds)
+										Bitmapset *tableOwnerIds, char * operationPrefix)
 {
 	uint64 previousTotalRelationSizeForSubscription = 0;
 	TimestampTz previousSizeChangeTime = GetCurrentTimestamp();
@@ -1659,7 +1655,7 @@ WaitForRelationSubscriptionsBecomeReady(MultiConnection *targetConnection,
 	while (true)
 	{
 		/* we're done, all relations are ready */
-		if (RelationSubscriptionsAreReady(targetConnection, tableOwnerIds))
+		if (RelationSubscriptionsAreReady(targetConnection, tableOwnerIds, operationPrefix))
 		{
 			ereport(LOG, (errmsg("The states of the relations belonging to the "
 								 "subscriptions became READY on the "
@@ -1669,7 +1665,7 @@ WaitForRelationSubscriptionsBecomeReady(MultiConnection *targetConnection,
 
 			break;
 		}
-		char *subscriptionValueList = ShardMoveSubscriptionNamesValueList(tableOwnerIds);
+		char *subscriptionValueList = ShardSubscriptionNamesValueList(tableOwnerIds, operationPrefix);
 
 		/* Get the current total size of tables belonging to the subscriber */
 		uint64 currentTotalRelationSize =
@@ -1823,12 +1819,12 @@ TotalRelationSizeForSubscription(MultiConnection *connection, char *command)
 
 
 /*
- * ShardMoveSubscriptionNamesValueList returns a SQL value list containing the
+ * ShardSubscriptionNamesValueList returns a SQL value list containing the
  * subscription names for all of the given table owner ids. This value list can
  * be used in a query by using the IN operator.
  */
 static char *
-ShardMoveSubscriptionNamesValueList(Bitmapset *tableOwnerIds)
+ShardSubscriptionNamesValueList(Bitmapset *tableOwnerIds, char * operationPrefix)
 {
 	StringInfo subscriptionValueList = makeStringInfo();
 	appendStringInfoString(subscriptionValueList, "(");
@@ -1846,7 +1842,7 @@ ShardMoveSubscriptionNamesValueList(Bitmapset *tableOwnerIds)
 			first = false;
 		}
 		appendStringInfoString(subscriptionValueList,
-							   quote_literal_cstr(ShardSubscriptionName(ownerId, SHARD_MOVE_SUBSCRIPTION_PREFIX)));
+							   quote_literal_cstr(ShardSubscriptionName(ownerId, operationPrefix)));
 	}
 	appendStringInfoString(subscriptionValueList, ")");
 	return subscriptionValueList->data;
@@ -1859,11 +1855,11 @@ ShardMoveSubscriptionNamesValueList(Bitmapset *tableOwnerIds)
  */
 static bool
 RelationSubscriptionsAreReady(MultiConnection *targetConnection,
-							  Bitmapset *tableOwnerIds)
+							  Bitmapset *tableOwnerIds, char * operationPrefix)
 {
 	bool raiseInterrupts = false;
 
-	char *subscriptionValueList = ShardMoveSubscriptionNamesValueList(tableOwnerIds);
+	char *subscriptionValueList = ShardSubscriptionNamesValueList(tableOwnerIds, operationPrefix);
 	char *query = psprintf(
 		"SELECT count(*) FROM pg_subscription_rel, pg_stat_subscription "
 		"WHERE srsubid = subid AND srsubstate != 'r' AND subname IN %s",
@@ -1908,14 +1904,14 @@ RelationSubscriptionsAreReady(MultiConnection *targetConnection,
 
 
 /*
- * WaitForShardMoveSubscription waits until the last LSN reported by the subscription.
+ * WaitForShardSubscriptionToCatchUp waits until the last LSN reported by the subscription.
  *
  * The function errors if the target LSN doesn't increase within LogicalReplicationErrorTimeout.
  * The function also reports its progress in every logicalReplicationProgressReportTimeout.
  */
-static void
-WaitForShardMoveSubscription(MultiConnection *targetConnection, XLogRecPtr sourcePosition,
-							 Bitmapset *tableOwnerIds)
+void
+WaitForShardSubscriptionToCatchUp(MultiConnection *targetConnection, XLogRecPtr sourcePosition,
+							 Bitmapset *tableOwnerIds, char * operationPrefix)
 {
 	XLogRecPtr previousTargetPosition = 0;
 	TimestampTz previousLSNIncrementTime = GetCurrentTimestamp();
@@ -1931,7 +1927,7 @@ WaitForShardMoveSubscription(MultiConnection *targetConnection, XLogRecPtr sourc
 	 * a lot of memory.
 	 */
 	MemoryContext loopContext = AllocSetContextCreateExtended(CurrentMemoryContext,
-															  "WaitForShardMoveSubscription",
+															  "WaitForShardSubscriptionToCatchUp",
 															  ALLOCSET_DEFAULT_MINSIZE,
 															  ALLOCSET_DEFAULT_INITSIZE,
 															  ALLOCSET_DEFAULT_MAXSIZE);
@@ -1941,7 +1937,8 @@ WaitForShardMoveSubscription(MultiConnection *targetConnection, XLogRecPtr sourc
 	while (true)
 	{
 		XLogRecPtr targetPosition = GetSubscriptionPosition(targetConnection,
-															tableOwnerIds);
+															tableOwnerIds,
+															operationPrefix);
 		if (targetPosition >= sourcePosition)
 		{
 			ereport(LOG, (errmsg(
@@ -2053,9 +2050,9 @@ WaitForMiliseconds(long timeout)
  * replication.
  */
 static XLogRecPtr
-GetSubscriptionPosition(MultiConnection *connection, Bitmapset *tableOwnerIds)
+GetSubscriptionPosition(MultiConnection *connection, Bitmapset *tableOwnerIds, char * operationPrefix)
 {
-	char *subscriptionValueList = ShardMoveSubscriptionNamesValueList(tableOwnerIds);
+	char *subscriptionValueList = ShardSubscriptionNamesValueList(tableOwnerIds, operationPrefix);
 	return GetRemoteLSN(connection, psprintf(
 							"SELECT min(latest_end_lsn) FROM pg_stat_subscription "
 							"WHERE subname IN %s", subscriptionValueList));
