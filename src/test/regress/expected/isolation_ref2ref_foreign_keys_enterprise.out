@@ -63,11 +63,6 @@ id|value
 11|   11
 (5 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-insert-table-1 s3-acquire-advisory-lock s2-begin s2-move-shards s1-update-table-1 s3-release-advisory-lock s2-commit s1-select-table-1 s1-select-dist-table
 step s1-insert-table-1:
@@ -134,11 +129,6 @@ id|value
 11|   11
 (6 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s3-acquire-advisory-lock s2-begin s2-move-shards s1-insert-table-1 s3-release-advisory-lock s2-commit s1-select-table-1 s1-select-dist-table
 step s3-acquire-advisory-lock:
@@ -202,11 +192,6 @@ id|value
 11|   11
 (6 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s1-insert-table-1 s3-acquire-advisory-lock s2-begin s2-move-shards s1-select-table-1 s3-release-advisory-lock s2-commit
 step s1-insert-table-1:
@@ -256,11 +241,6 @@ master_move_shard_placement
 
 step s2-commit:
     COMMIT;
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-insert-table-1 s2-begin s1-begin s1-delete-table-1 s2-move-shards s1-commit s2-commit s1-select-table-1 s1-select-dist-table
@@ -315,11 +295,6 @@ id|value
  9|    9
 11|   11
 (5 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
 
 starting permutation: s1-insert-table-1 s2-begin s1-begin s1-update-table-1 s2-move-shards s1-commit s2-commit s1-select-table-1 s1-select-dist-table
@@ -377,11 +352,6 @@ id|value
 11|   11
 (6 rows)
 
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
-
 
 starting permutation: s2-begin s1-begin s1-insert-table-1 s2-move-shards s1-commit s2-commit s1-select-table-1 s1-select-dist-table
 step s2-begin:
@@ -434,9 +404,4 @@ id|value
  9|    9
 11|   11
 (6 rows)
-
-restore_isolation_tester_func
----------------------------------------------------------------------
-
-(1 row)
 
