@@ -5,10 +5,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-create_distributed_table:
- SELECT create_distributed_table('table_to_distribute', 'id');
+    SELECT create_distributed_table('table_to_distribute', 'id');
 
 create_distributed_table
 ---------------------------------------------------------------------
@@ -16,7 +16,7 @@ create_distributed_table
 (1 row)
 
 step s2-create_distributed_table:
- SELECT create_distributed_table('table_to_distribute', 'id');
+    SELECT create_distributed_table('table_to_distribute', 'id');
  <waiting ...>
 step s1-commit: 
     COMMIT;
@@ -24,7 +24,7 @@ step s1-commit:
 step s2-create_distributed_table: <... completed>
 ERROR:  table "table_to_distribute" is already distributed
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 
 starting permutation: s1-begin s2-begin s1-create_distributed_table s2-copy_to_local_table s1-commit s2-commit
@@ -32,10 +32,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-create_distributed_table:
- SELECT create_distributed_table('table_to_distribute', 'id');
+    SELECT create_distributed_table('table_to_distribute', 'id');
 
 create_distributed_table
 ---------------------------------------------------------------------
@@ -43,14 +43,14 @@ create_distributed_table
 (1 row)
 
 step s2-copy_to_local_table:
- COPY table_to_distribute FROM PROGRAM 'echo 0 && echo 1 && echo 2 && echo 3 && echo 4 && echo 5 && echo 6 && echo 7 && echo 8';
+    COPY table_to_distribute FROM PROGRAM 'echo 0 && echo 1 && echo 2 && echo 3 && echo 4 && echo 5 && echo 6 && echo 7 && echo 8';
  <waiting ...>
 step s1-commit: 
     COMMIT;
 
 step s2-copy_to_local_table: <... completed>
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 
 starting permutation: s1-begin s2-begin s2-copy_to_local_table s1-create_distributed_table s2-commit s1-commit
@@ -58,16 +58,16 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-copy_to_local_table:
- COPY table_to_distribute FROM PROGRAM 'echo 0 && echo 1 && echo 2 && echo 3 && echo 4 && echo 5 && echo 6 && echo 7 && echo 8';
+    COPY table_to_distribute FROM PROGRAM 'echo 0 && echo 1 && echo 2 && echo 3 && echo 4 && echo 5 && echo 6 && echo 7 && echo 8';
 
 step s1-create_distributed_table:
- SELECT create_distributed_table('table_to_distribute', 'id');
+    SELECT create_distributed_table('table_to_distribute', 'id');
  <waiting ...>
 step s2-commit: 
- COMMIT;
+    COMMIT;
 
 step s1-create_distributed_table: <... completed>
 create_distributed_table
@@ -81,16 +81,16 @@ step s1-commit:
 
 starting permutation: s1-copy_to_local_table s1-begin s2-begin s1-create_distributed_table s2-create_distributed_table s1-commit s2-commit
 step s1-copy_to_local_table:
- COPY table_to_distribute FROM PROGRAM 'echo 0 && echo 1 && echo 2 && echo 3 && echo 4 && echo 5 && echo 6 && echo 7 && echo 8';
+    COPY table_to_distribute FROM PROGRAM 'echo 0 && echo 1 && echo 2 && echo 3 && echo 4 && echo 5 && echo 6 && echo 7 && echo 8';
 
 step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-create_distributed_table:
- SELECT create_distributed_table('table_to_distribute', 'id');
+    SELECT create_distributed_table('table_to_distribute', 'id');
 
 create_distributed_table
 ---------------------------------------------------------------------
@@ -98,7 +98,7 @@ create_distributed_table
 (1 row)
 
 step s2-create_distributed_table:
- SELECT create_distributed_table('table_to_distribute', 'id');
+    SELECT create_distributed_table('table_to_distribute', 'id');
  <waiting ...>
 step s1-commit: 
     COMMIT;
@@ -106,5 +106,5 @@ step s1-commit:
 step s2-create_distributed_table: <... completed>
 ERROR:  table "table_to_distribute" is already distributed
 step s2-commit:
- COMMIT;
+    COMMIT;
 

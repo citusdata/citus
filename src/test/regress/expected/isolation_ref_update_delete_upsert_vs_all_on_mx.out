@@ -7,7 +7,7 @@ create_reference_table
 (1 row)
 
 step s1-add-primary-key:
- ALTER TABLE ref_table ADD CONSTRAINT pri_key PRIMARY KEY (id);
+    ALTER TABLE ref_table ADD CONSTRAINT pri_key PRIMARY KEY (id);
 
 step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
@@ -26,7 +26,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-upsert:
- SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES (1, 3), (2, 3) ON CONFLICT (id) DO UPDATE SET value=3');
+    SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES (1, 3), (2, 3) ON CONFLICT (id) DO UPDATE SET value=3');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -50,7 +50,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-select:
- SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM ref_table WHERE id=1 OR id=2');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM ref_table WHERE id=1 OR id=2');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -58,7 +58,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-commit-worker:
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -74,7 +74,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -90,7 +90,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-select-count:
- SELECT COUNT(*) FROM ref_table;
+    SELECT COUNT(*) FROM ref_table;
 
 count
 ---------------------------------------------------------------------
@@ -121,7 +121,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-delete:
- SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE id=1 OR id=2');
+    SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE id=1 OR id=2');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -145,10 +145,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-insert-select-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table SELECT * FROM ref_table');
+    SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table SELECT * FROM ref_table');
  <waiting ...>
 step s1-commit-worker: 
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -170,7 +170,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -186,7 +186,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-select-count:
- SELECT COUNT(*) FROM ref_table;
+    SELECT COUNT(*) FROM ref_table;
 
 count
 ---------------------------------------------------------------------
@@ -201,7 +201,7 @@ create_reference_table
 (1 row)
 
 step s1-add-primary-key:
- ALTER TABLE ref_table ADD CONSTRAINT pri_key PRIMARY KEY (id);
+    ALTER TABLE ref_table ADD CONSTRAINT pri_key PRIMARY KEY (id);
 
 step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
@@ -220,7 +220,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-upsert:
- SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES (1, 3), (2, 3) ON CONFLICT (id) DO UPDATE SET value=3');
+    SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES (1, 3), (2, 3) ON CONFLICT (id) DO UPDATE SET value=3');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -244,10 +244,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-drop:
- DROP TABLE ref_table;
+    DROP TABLE ref_table;
  <waiting ...>
 step s1-commit-worker: 
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -264,7 +264,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -280,7 +280,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-select-count:
- SELECT COUNT(*) FROM ref_table;
+    SELECT COUNT(*) FROM ref_table;
 
 ERROR:  relation "ref_table" does not exist
 
@@ -307,7 +307,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-delete:
- SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE id=1 OR id=2');
+    SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE id=1 OR id=2');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -331,10 +331,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-truncate:
- SELECT run_commands_on_session_level_connection_to_node('TRUNCATE ref_table');
+    SELECT run_commands_on_session_level_connection_to_node('TRUNCATE ref_table');
  <waiting ...>
 step s1-commit-worker: 
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -356,7 +356,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -372,7 +372,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-select-count:
- SELECT COUNT(*) FROM ref_table;
+    SELECT COUNT(*) FROM ref_table;
 
 count
 ---------------------------------------------------------------------

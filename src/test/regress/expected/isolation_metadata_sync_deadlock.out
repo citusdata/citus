@@ -18,7 +18,7 @@ t
 (1 row)
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+    SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -32,7 +32,7 @@ step s1-update-1:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -110,7 +110,7 @@ t
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------

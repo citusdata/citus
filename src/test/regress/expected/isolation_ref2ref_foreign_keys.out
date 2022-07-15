@@ -2,13 +2,13 @@ Parsed test spec with 2 sessions
 
 starting permutation: s2-begin s2-update-table-1 s1-begin s1-view-locks s1-rollback s2-rollback s1-view-locks
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-update-table-1:
     UPDATE ref_table_1 SET id = 2 WHERE id = 1;
 
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s1-view-locks:
     SELECT mode, count(*)
@@ -41,7 +41,7 @@ mode|count
 
 starting permutation: s2-begin s2-delete-table-1 s1-view-locks s2-rollback s1-view-locks
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-delete-table-1:
     DELETE FROM ref_table_1 WHERE id = 1;
@@ -74,7 +74,7 @@ mode|count
 
 starting permutation: s2-begin s2-update-table-2 s1-view-locks s2-rollback s1-view-locks
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-update-table-2:
     UPDATE ref_table_2 SET id = 2 WHERE id = 1;
@@ -107,7 +107,7 @@ mode|count
 
 starting permutation: s2-begin s2-delete-table-2 s1-view-locks s2-rollback s1-view-locks
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-delete-table-2:
     DELETE FROM ref_table_2 WHERE id = 1;
@@ -140,13 +140,13 @@ mode|count
 
 starting permutation: s2-begin s2-update-table-3 s1-begin s1-view-locks s1-rollback s2-rollback s1-view-locks
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-update-table-3:
     UPDATE ref_table_3 SET id = 2 WHERE id = 1;
 
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s1-view-locks:
     SELECT mode, count(*)
@@ -179,13 +179,13 @@ mode|count
 
 starting permutation: s2-begin s2-delete-table-3 s1-begin s1-view-locks s1-rollback s2-rollback s1-view-locks
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-delete-table-3:
     DELETE FROM ref_table_3 WHERE id = 1;
 
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s1-view-locks:
     SELECT mode, count(*)
@@ -218,7 +218,7 @@ mode|count
 
 starting permutation: s2-begin s2-insert-table-1 s1-view-locks s2-rollback s1-view-locks
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-insert-table-1:
     INSERT INTO ref_table_1 VALUES (7, 7);
@@ -251,7 +251,7 @@ mode|count
 
 starting permutation: s2-begin s2-insert-table-2 s1-view-locks s2-rollback s1-view-locks
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-insert-table-2:
     INSERT INTO ref_table_2 VALUES (7, 5);
@@ -284,7 +284,7 @@ mode|count
 
 starting permutation: s2-begin s2-insert-table-3 s1-view-locks s2-rollback s1-view-locks
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-insert-table-3:
     INSERT INTO ref_table_3 VALUES (7, 5);
@@ -317,10 +317,10 @@ mode|count
 
 starting permutation: s1-begin s2-begin s2-update-table-1 s1-delete-table-2 s2-commit s1-commit s1-select-table-2
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-update-table-1:
     UPDATE ref_table_1 SET id = 2 WHERE id = 1;
@@ -347,10 +347,10 @@ id|value
 
 starting permutation: s1-begin s2-begin s2-update-table-1 s1-insert-table-2 s2-commit s1-commit s1-select-table-2
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-update-table-1:
     UPDATE ref_table_1 SET id = 2 WHERE id = 1;
@@ -379,10 +379,10 @@ id|value
 
 starting permutation: s1-begin s2-begin s2-update-table-1 s1-update-table-2 s2-commit s1-commit s1-select-table-2
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-update-table-1:
     UPDATE ref_table_1 SET id = 2 WHERE id = 1;
@@ -410,10 +410,10 @@ id|value
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-delete-table-2 s2-commit s1-commit s1-select-table-2
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-delete-table-1:
     DELETE FROM ref_table_1 WHERE id = 1;
@@ -440,10 +440,10 @@ id|value
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-insert-table-2 s2-commit s1-commit s1-select-table-2
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-delete-table-1:
     DELETE FROM ref_table_1 WHERE id = 1;
@@ -471,10 +471,10 @@ id|value
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-update-table-2 s2-commit s1-commit s1-select-table-2
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-delete-table-1:
     DELETE FROM ref_table_1 WHERE id = 1;
@@ -501,10 +501,10 @@ id|value
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-delete-table-3 s2-commit s1-commit s1-select-table-3
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-delete-table-1:
     DELETE FROM ref_table_1 WHERE id = 1;
@@ -535,10 +535,10 @@ id|value
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-insert-table-3 s2-commit s1-commit s1-select-table-3
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-delete-table-1:
     DELETE FROM ref_table_1 WHERE id = 1;
@@ -566,10 +566,10 @@ id|value
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-update-table-3 s2-commit s1-commit s1-select-table-3
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-delete-table-1:
     DELETE FROM ref_table_1 WHERE id = 1;
@@ -600,10 +600,10 @@ id|value
 
 starting permutation: s1-begin s2-begin s2-insert-table-1 s1-update-table-3 s2-commit s1-commit s1-select-table-3
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-insert-table-1:
     INSERT INTO ref_table_1 VALUES (7, 7);
@@ -636,10 +636,10 @@ id|value
 
 starting permutation: s1-begin s2-begin s1-update-table-3 s2-insert-table-1 s1-commit s2-commit s1-select-table-3
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-update-table-3:
     UPDATE ref_table_3 SET id = 2 WHERE value = 1 RETURNING id;
@@ -672,10 +672,10 @@ id|value
 
 starting permutation: s1-begin s2-begin s2-insert-table-1 s1-update-table-2 s2-commit s1-commit s1-select-table-3
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-insert-table-1:
     INSERT INTO ref_table_1 VALUES (7, 7);
@@ -703,10 +703,10 @@ id|value
 
 starting permutation: s1-begin s2-begin s1-update-table-2 s2-insert-table-1 s1-commit s2-commit s1-select-table-3
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-update-table-2:
     UPDATE ref_table_2 SET id = 0 WHERE value = 2;
@@ -734,10 +734,10 @@ id|value
 
 starting permutation: s1-begin s2-begin s2-insert-table-2 s1-update-table-3 s2-commit s1-commit s1-select-table-3
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-insert-table-2:
     INSERT INTO ref_table_2 VALUES (7, 5);
@@ -770,10 +770,10 @@ id|value
 
 starting permutation: s1-begin s2-begin s1-update-table-3 s2-insert-table-2 s1-commit s2-commit s1-select-table-3
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-update-table-3:
     UPDATE ref_table_3 SET id = 2 WHERE value = 1 RETURNING id;
@@ -806,10 +806,10 @@ id|value
 
 starting permutation: s1-begin s2-begin s2-insert-table-1 s1-select-table-1 s2-commit s1-commit
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-insert-table-1:
     INSERT INTO ref_table_1 VALUES (7, 7);
@@ -833,10 +833,10 @@ step s1-commit:
 
 starting permutation: s1-begin s2-begin s2-insert-table-1 s1-select-table-2 s2-commit s1-commit
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-insert-table-1:
     INSERT INTO ref_table_1 VALUES (7, 7);
@@ -860,10 +860,10 @@ step s1-commit:
 
 starting permutation: s1-begin s2-begin s2-insert-table-1 s1-select-table-3 s2-commit s1-commit
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-insert-table-1:
     INSERT INTO ref_table_1 VALUES (7, 7);
@@ -887,10 +887,10 @@ step s1-commit:
 
 starting permutation: s1-begin s2-begin s2-delete-table-2 s1-select-table-1 s2-commit s1-commit
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-delete-table-2:
     DELETE FROM ref_table_2 WHERE id = 1;
@@ -914,10 +914,10 @@ step s1-commit:
 
 starting permutation: s1-begin s2-begin s2-delete-table-2 s1-select-table-2 s2-commit s1-commit
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-delete-table-2:
     DELETE FROM ref_table_2 WHERE id = 1;
@@ -941,10 +941,10 @@ step s1-commit:
 
 starting permutation: s1-begin s2-begin s2-delete-table-2 s1-select-table-3 s2-commit s1-commit
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-delete-table-2:
     DELETE FROM ref_table_2 WHERE id = 1;
@@ -968,10 +968,10 @@ step s1-commit:
 
 starting permutation: s1-begin s2-begin s2-update-table-3 s1-select-table-1 s2-commit s1-commit
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-update-table-3:
     UPDATE ref_table_3 SET id = 2 WHERE id = 1;
@@ -995,10 +995,10 @@ step s1-commit:
 
 starting permutation: s1-begin s2-begin s2-update-table-3 s1-select-table-2 s2-commit s1-commit
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-update-table-3:
     UPDATE ref_table_3 SET id = 2 WHERE id = 1;
@@ -1022,10 +1022,10 @@ step s1-commit:
 
 starting permutation: s1-begin s2-begin s2-update-table-3 s1-select-table-3 s2-commit s1-commit
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-update-table-3:
     UPDATE ref_table_3 SET id = 2 WHERE id = 1;

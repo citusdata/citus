@@ -2,7 +2,7 @@ Parsed test spec with 3 sessions
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-delete s2-start-session-level-connection s2-begin-on-worker s2-insert s1-rollback-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-display
 step s1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+    SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -10,7 +10,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s1-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -18,7 +18,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-delete:
- SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE id=1');
+    SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE id=1');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -26,7 +26,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+    SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -34,7 +34,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -45,7 +45,7 @@ step s2-insert:
         SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table VALUES (1, 1)');
  <waiting ...>
 step s1-rollback-worker: 
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -59,7 +59,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-commit-worker:
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -67,7 +67,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -75,7 +75,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -83,8 +83,8 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-display:
- SELECT * FROM ref_table ORDER BY id, value;
- SELECT * FROM dist_table ORDER BY id, value;
+    SELECT * FROM ref_table ORDER BY id, value;
+    SELECT * FROM dist_table ORDER BY id, value;
 
 id|value
 ---------------------------------------------------------------------
@@ -102,7 +102,7 @@ id|value
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-delete s2-start-session-level-connection s2-begin-on-worker s2-select s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-display
 step s1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+    SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -110,7 +110,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s1-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -118,7 +118,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-delete:
- SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE id=1');
+    SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE id=1');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -126,7 +126,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+    SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -134,7 +134,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -150,7 +150,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-commit-worker:
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -158,7 +158,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-commit-worker:
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -166,7 +166,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -174,7 +174,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -182,8 +182,8 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-display:
- SELECT * FROM ref_table ORDER BY id, value;
- SELECT * FROM dist_table ORDER BY id, value;
+    SELECT * FROM ref_table ORDER BY id, value;
+    SELECT * FROM dist_table ORDER BY id, value;
 
 id|value
 ---------------------------------------------------------------------
@@ -198,7 +198,7 @@ id|value
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-delete s2-start-session-level-connection s2-begin-on-worker s2-insert-select s1-rollback-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-display
 step s1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+    SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -206,7 +206,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s1-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -214,7 +214,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-delete:
- SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE id=1');
+    SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE id=1');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -222,7 +222,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+    SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -230,7 +230,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -241,7 +241,7 @@ step s2-insert-select:
         SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
  <waiting ...>
 step s1-rollback-worker: 
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -255,7 +255,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-commit-worker:
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -263,7 +263,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -271,7 +271,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -279,8 +279,8 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-display:
- SELECT * FROM ref_table ORDER BY id, value;
- SELECT * FROM dist_table ORDER BY id, value;
+    SELECT * FROM ref_table ORDER BY id, value;
+    SELECT * FROM dist_table ORDER BY id, value;
 
 id|value
 ---------------------------------------------------------------------
@@ -299,7 +299,7 @@ id|value
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-update s2-start-session-level-connection s2-begin-on-worker s2-update s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-display
 step s1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+    SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -307,7 +307,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s1-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -315,7 +315,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-update:
- SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET id=id+2 WHERE id=1');
+    SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET id=id+2 WHERE id=1');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -323,7 +323,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+    SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -331,7 +331,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -342,7 +342,7 @@ step s2-update:
         SELECT run_commands_on_session_level_connection_to_node('UPDATE dist_table SET value=2 WHERE id=1');
  <waiting ...>
 step s1-commit-worker: 
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -356,7 +356,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-commit-worker:
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -364,7 +364,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -372,7 +372,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -380,8 +380,8 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-display:
- SELECT * FROM ref_table ORDER BY id, value;
- SELECT * FROM dist_table ORDER BY id, value;
+    SELECT * FROM ref_table ORDER BY id, value;
+    SELECT * FROM dist_table ORDER BY id, value;
 
 id|value
 ---------------------------------------------------------------------
@@ -398,7 +398,7 @@ id|value
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-update s2-start-session-level-connection s2-begin-on-worker s2-copy s1-rollback-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-display
 step s1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+    SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -406,7 +406,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s1-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -414,7 +414,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-update:
- SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET id=id+2 WHERE id=1');
+    SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET id=id+2 WHERE id=1');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -422,7 +422,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+    SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -430,7 +430,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -441,7 +441,7 @@ step s2-copy:
         SELECT run_commands_on_session_level_connection_to_node('COPY dist_table FROM PROGRAM ''echo 1, 1''WITH CSV');
  <waiting ...>
 step s1-rollback-worker: 
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -455,7 +455,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-commit-worker:
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -463,7 +463,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -471,7 +471,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -479,8 +479,8 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-display:
- SELECT * FROM ref_table ORDER BY id, value;
- SELECT * FROM dist_table ORDER BY id, value;
+    SELECT * FROM ref_table ORDER BY id, value;
+    SELECT * FROM dist_table ORDER BY id, value;
 
 id|value
 ---------------------------------------------------------------------
@@ -498,7 +498,7 @@ id|value
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-update s2-start-session-level-connection s2-begin-on-worker s2-truncate s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-display
 step s1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+    SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -506,7 +506,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s1-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -514,7 +514,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-update:
- SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET id=id+2 WHERE id=1');
+    SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET id=id+2 WHERE id=1');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -522,7 +522,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+    SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -530,7 +530,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -541,7 +541,7 @@ step s2-truncate:
         SELECT run_commands_on_session_level_connection_to_node('TRUNCATE dist_table');
  <waiting ...>
 step s1-commit-worker: 
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -555,7 +555,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-commit-worker:
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -563,7 +563,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -571,7 +571,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -579,8 +579,8 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-display:
- SELECT * FROM ref_table ORDER BY id, value;
- SELECT * FROM dist_table ORDER BY id, value;
+    SELECT * FROM ref_table ORDER BY id, value;
+    SELECT * FROM dist_table ORDER BY id, value;
 
 id|value
 ---------------------------------------------------------------------
@@ -595,7 +595,7 @@ id|value
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-delete s2-start-session-level-connection s2-begin-on-worker s2-select-for-udpate s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-display
 step s1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+    SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -603,7 +603,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s1-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -611,7 +611,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-delete:
- SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE id=1');
+    SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE id=1');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -619,7 +619,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+    SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -627,7 +627,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -638,7 +638,7 @@ step s2-select-for-udpate:
         SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id=1 FOR UPDATE');
  <waiting ...>
 step s1-commit-worker: 
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -652,7 +652,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-commit-worker:
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -660,7 +660,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -668,7 +668,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -676,8 +676,8 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-display:
- SELECT * FROM ref_table ORDER BY id, value;
- SELECT * FROM dist_table ORDER BY id, value;
+    SELECT * FROM ref_table ORDER BY id, value;
+    SELECT * FROM dist_table ORDER BY id, value;
 
 id|value
 ---------------------------------------------------------------------

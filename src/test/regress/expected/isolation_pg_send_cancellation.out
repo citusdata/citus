@@ -2,19 +2,19 @@ Parsed test spec with 2 sessions
 
 starting permutation: s1-register s2-lock s1-lock s2-wrong-cancel-1 s2-wrong-cancel-2 s2-cancel
 step s1-register:
- INSERT INTO cancel_table VALUES (pg_backend_pid(), get_cancellation_key());
+    INSERT INTO cancel_table VALUES (pg_backend_pid(), get_cancellation_key());
 
 step s2-lock:
-	BEGIN;
-	LOCK TABLE cancel_table IN ACCESS EXCLUSIVE MODE;
+    BEGIN;
+    LOCK TABLE cancel_table IN ACCESS EXCLUSIVE MODE;
 
 step s1-lock:
- BEGIN;
-	LOCK TABLE cancel_table IN ACCESS EXCLUSIVE MODE;
- END;
+    BEGIN;
+    LOCK TABLE cancel_table IN ACCESS EXCLUSIVE MODE;
+    END;
  <waiting ...>
 step s2-wrong-cancel-1: 
-	SELECT run_pg_send_cancellation(pid + 1, cancel_key) FROM cancel_table;
+    SELECT run_pg_send_cancellation(pid + 1, cancel_key) FROM cancel_table;
 
 run_pg_send_cancellation
 ---------------------------------------------------------------------
@@ -22,7 +22,7 @@ run_pg_send_cancellation
 (1 row)
 
 step s2-wrong-cancel-2:
-	SELECT run_pg_send_cancellation(pid, cancel_key + 1) FROM cancel_table;
+    SELECT run_pg_send_cancellation(pid, cancel_key + 1) FROM cancel_table;
 
 run_pg_send_cancellation
 ---------------------------------------------------------------------
@@ -30,8 +30,8 @@ run_pg_send_cancellation
 (1 row)
 
 step s2-cancel:
-	SELECT run_pg_send_cancellation(pid, cancel_key) FROM cancel_table;
- END;
+    SELECT run_pg_send_cancellation(pid, cancel_key) FROM cancel_table;
+    END;
 
 run_pg_send_cancellation
 ---------------------------------------------------------------------

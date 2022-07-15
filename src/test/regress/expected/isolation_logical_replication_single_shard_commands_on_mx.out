@@ -13,7 +13,7 @@ step s1-begin:
   BEGIN;
 
 step s1-move-placement:
-   SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-start-session-level-connection: 
   SELECT start_session_level_connection_to_node('localhost', 57638);
@@ -62,7 +62,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
@@ -105,7 +105,7 @@ step s1-begin:
   BEGIN;
 
 step s1-move-placement:
-   SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-start-session-level-connection: 
   SELECT start_session_level_connection_to_node('localhost', 57638);
@@ -154,7 +154,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
@@ -197,7 +197,7 @@ step s1-begin:
   BEGIN;
 
 step s1-move-placement:
-   SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-start-session-level-connection: 
   SELECT start_session_level_connection_to_node('localhost', 57638);
@@ -246,7 +246,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
@@ -288,7 +288,7 @@ step s1-begin:
   BEGIN;
 
 step s1-move-placement:
-   SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-start-session-level-connection: 
   SELECT start_session_level_connection_to_node('localhost', 57638);
@@ -337,7 +337,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s1-get-shard-distribution:
   select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 AND shardid in (SELECT * FROM selected_shard) order by nodeport;
@@ -372,7 +372,7 @@ step s1-begin:
   BEGIN;
 
 step s1-move-placement:
-   SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-start-session-level-connection: 
   SELECT start_session_level_connection_to_node('localhost', 57638);
@@ -421,7 +421,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s1-get-shard-distribution:
   select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 AND shardid in (SELECT * FROM selected_shard) order by nodeport;
@@ -469,7 +469,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-move-placement:
-   SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-commit-worker: 
   SELECT run_commands_on_session_level_connection_to_node('COMMIT');
@@ -486,7 +486,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
@@ -545,7 +545,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-move-placement:
-   SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-commit-worker: 
   SELECT run_commands_on_session_level_connection_to_node('COMMIT');
@@ -562,7 +562,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
@@ -621,7 +621,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-move-placement:
-   SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-commit-worker: 
   SELECT run_commands_on_session_level_connection_to_node('COMMIT');
@@ -638,7 +638,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
@@ -696,7 +696,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-move-placement:
-   SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
 
 master_move_shard_placement
 ---------------------------------------------------------------------
@@ -712,7 +712,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s1-get-shard-distribution:
   select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 AND shardid in (SELECT * FROM selected_shard) order by nodeport;
@@ -763,7 +763,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-move-placement:
-   SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-commit-worker: 
   SELECT run_commands_on_session_level_connection_to_node('COMMIT');
@@ -780,7 +780,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s1-get-shard-distribution:
   select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 AND shardid in (SELECT * FROM selected_shard) order by nodeport;

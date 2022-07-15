@@ -3,23 +3,23 @@ Parsed test spec with 3 sessions
 
 starting permutation: s3-compare-snapshot
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -32,10 +32,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -43,7 +43,7 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-start-metadata-sync-to-same-node:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
  <waiting ...>
 step s1-commit: 
     COMMIT;
@@ -55,26 +55,26 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -87,10 +87,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -98,7 +98,7 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-start-metadata-sync-to-another-node:
- SELECT start_metadata_sync_to_node('localhost', 57637);
+    SELECT start_metadata_sync_to_node('localhost', 57637);
  <waiting ...>
 step s1-commit: 
     COMMIT;
@@ -110,26 +110,26 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -142,10 +142,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -153,33 +153,33 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-alter-table:
- ALTER TABLE dist_table ADD COLUMN z int;
+    ALTER TABLE dist_table ADD COLUMN z int;
  <waiting ...>
 step s1-commit: 
     COMMIT;
 
 step s2-alter-table: <... completed>
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -192,10 +192,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -203,33 +203,33 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-drop-table:
- DROP TABLE dist_table;
+    DROP TABLE dist_table;
  <waiting ...>
 step s1-commit: 
     COMMIT;
 
 step s2-drop-table: <... completed>
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -242,10 +242,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -253,9 +253,9 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-create-schema:
- CREATE SCHEMA dist_schema;
- CREATE TABLE dist_schema.dist_table_in_schema(id int, data int);
- SELECT create_distributed_table('dist_schema.dist_table_in_schema', 'id');
+    CREATE SCHEMA dist_schema;
+    CREATE TABLE dist_schema.dist_table_in_schema(id int, data int);
+    SELECT create_distributed_table('dist_schema.dist_table_in_schema', 'id');
  <waiting ...>
 step s1-commit: 
     COMMIT;
@@ -267,26 +267,26 @@ create_distributed_table
 (1 row)
 
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -294,14 +294,14 @@ t
 (1 row)
 
 step s2-drop-schema:
- DROP SCHEMA dist_schema CASCADE;
+    DROP SCHEMA dist_schema CASCADE;
 
 
 starting permutation: s2-create-schema s1-begin s2-begin s1-start-metadata-sync s2-drop-schema s1-commit s2-commit s3-compare-snapshot
 step s2-create-schema:
- CREATE SCHEMA dist_schema;
- CREATE TABLE dist_schema.dist_table_in_schema(id int, data int);
- SELECT create_distributed_table('dist_schema.dist_table_in_schema', 'id');
+    CREATE SCHEMA dist_schema;
+    CREATE TABLE dist_schema.dist_table_in_schema(id int, data int);
+    SELECT create_distributed_table('dist_schema.dist_table_in_schema', 'id');
 
 create_distributed_table
 ---------------------------------------------------------------------
@@ -312,10 +312,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -323,33 +323,33 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-drop-schema:
- DROP SCHEMA dist_schema CASCADE;
+    DROP SCHEMA dist_schema CASCADE;
  <waiting ...>
 step s1-commit: 
     COMMIT;
 
 step s2-drop-schema: <... completed>
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -362,10 +362,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -373,8 +373,8 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-create-dist-table:
- CREATE TABLE new_dist_table(id int, data int);
- SELECT create_distributed_table('new_dist_table', 'id');
+    CREATE TABLE new_dist_table(id int, data int);
+    SELECT create_distributed_table('new_dist_table', 'id');
  <waiting ...>
 step s1-commit: 
     COMMIT;
@@ -386,26 +386,26 @@ create_distributed_table
 (1 row)
 
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -418,10 +418,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -429,8 +429,8 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-create-ref-table:
- CREATE TABLE new_ref_table(id int, data int);
- SELECT create_reference_table('new_ref_table');
+    CREATE TABLE new_ref_table(id int, data int);
+    SELECT create_reference_table('new_ref_table');
  <waiting ...>
 step s1-commit: 
     COMMIT;
@@ -442,26 +442,26 @@ create_reference_table
 (1 row)
 
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -474,10 +474,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -485,33 +485,33 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-attach-partition:
- ALTER TABLE dist_partitioned_table ATTACH PARTITION dist_partitioned_table_p1 FOR VALUES FROM (1) TO (9);
+    ALTER TABLE dist_partitioned_table ATTACH PARTITION dist_partitioned_table_p1 FOR VALUES FROM (1) TO (9);
  <waiting ...>
 step s1-commit: 
     COMMIT;
 
 step s2-attach-partition: <... completed>
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -521,16 +521,16 @@ t
 
 starting permutation: s2-attach-partition s1-begin s2-begin s1-start-metadata-sync s2-detach-partition s1-commit s2-commit s3-compare-snapshot
 step s2-attach-partition:
- ALTER TABLE dist_partitioned_table ATTACH PARTITION dist_partitioned_table_p1 FOR VALUES FROM (1) TO (9);
+    ALTER TABLE dist_partitioned_table ATTACH PARTITION dist_partitioned_table_p1 FOR VALUES FROM (1) TO (9);
 
 step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -538,33 +538,33 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-detach-partition:
- ALTER TABLE dist_partitioned_table DETACH PARTITION dist_partitioned_table_p1;
+    ALTER TABLE dist_partitioned_table DETACH PARTITION dist_partitioned_table_p1;
  <waiting ...>
 step s1-commit: 
     COMMIT;
 
 step s2-detach-partition: <... completed>
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -574,16 +574,16 @@ t
 
 starting permutation: s2-attach-partition s1-begin s2-begin s1-start-metadata-sync s2-create-partition-of s1-commit s2-commit s3-compare-snapshot
 step s2-attach-partition:
- ALTER TABLE dist_partitioned_table ATTACH PARTITION dist_partitioned_table_p1 FOR VALUES FROM (1) TO (9);
+    ALTER TABLE dist_partitioned_table ATTACH PARTITION dist_partitioned_table_p1 FOR VALUES FROM (1) TO (9);
 
 step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -591,33 +591,33 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-create-partition-of:
- CREATE TABLE dist_partitioned_table_p2 PARTITION OF dist_partitioned_table FOR VALUES FROM (10) TO (20);
+    CREATE TABLE dist_partitioned_table_p2 PARTITION OF dist_partitioned_table FOR VALUES FROM (10) TO (20);
  <waiting ...>
 step s1-commit: 
     COMMIT;
 
 step s2-create-partition-of: <... completed>
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -630,10 +630,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -641,33 +641,33 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-add-fk:
- ALTER TABLE dist_table ADD CONSTRAINT y_fk FOREIGN KEY (y) REFERENCES ref_table(y);
+    ALTER TABLE dist_table ADD CONSTRAINT y_fk FOREIGN KEY (y) REFERENCES ref_table(y);
  <waiting ...>
 step s1-commit: 
     COMMIT;
 
 step s2-add-fk: <... completed>
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -677,16 +677,16 @@ t
 
 starting permutation: s2-add-fk s1-begin s2-begin s1-start-metadata-sync s2-drop-fk s1-commit s2-commit s3-compare-snapshot
 step s2-add-fk:
- ALTER TABLE dist_table ADD CONSTRAINT y_fk FOREIGN KEY (y) REFERENCES ref_table(y);
+    ALTER TABLE dist_table ADD CONSTRAINT y_fk FOREIGN KEY (y) REFERENCES ref_table(y);
 
 step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -694,33 +694,33 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-drop-fk:
- ALTER TABLE dist_table DROP CONSTRAINT y_fk;
+    ALTER TABLE dist_table DROP CONSTRAINT y_fk;
  <waiting ...>
 step s1-commit: 
     COMMIT;
 
 step s2-drop-fk: <... completed>
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -730,16 +730,16 @@ t
 
 starting permutation: s2-create-type s1-begin s2-begin s1-start-metadata-sync s2-drop-type s1-commit s2-commit s3-compare-snapshot
 step s2-create-type:
- CREATE TYPE my_type AS (a int, b int);
+    CREATE TYPE my_type AS (a int, b int);
 
 step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -747,33 +747,33 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-drop-type:
- DROP TYPE my_type;
+    DROP TYPE my_type;
  <waiting ...>
 step s1-commit: 
     COMMIT;
 
 step s2-drop-type: <... completed>
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -783,10 +783,10 @@ t
 
 starting permutation: s2-create-dist-func s1-begin s2-begin s1-start-metadata-sync s2-drop-dist-func s1-commit s2-commit s3-compare-snapshot
 step s2-create-dist-func:
- CREATE FUNCTION squares(int) RETURNS SETOF RECORD
+    CREATE FUNCTION squares(int) RETURNS SETOF RECORD
     AS $$ SELECT i, i * i FROM generate_series(1, $1) i $$
     LANGUAGE SQL;
- SELECT create_distributed_function('squares(int)');
+    SELECT create_distributed_function('squares(int)');
 
 create_distributed_function
 ---------------------------------------------------------------------
@@ -797,10 +797,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -808,33 +808,33 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-drop-dist-func:
- DROP FUNCTION squares(int);
+    DROP FUNCTION squares(int);
  <waiting ...>
 step s1-commit: 
     COMMIT;
 
 step s2-drop-dist-func: <... completed>
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -844,13 +844,13 @@ t
 
 starting permutation: s2-create-type s1-begin s1-start-metadata-sync s2-alter-type s1-commit s3-compare-snapshot s3-compare-type-definition
 step s2-create-type:
- CREATE TYPE my_type AS (a int, b int);
+    CREATE TYPE my_type AS (a int, b int);
 
 step s1-begin:
     BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -858,30 +858,30 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-alter-type:
- ALTER TYPE my_type ADD ATTRIBUTE x int;
+    ALTER TYPE my_type ADD ATTRIBUTE x int;
  <waiting ...>
 step s1-commit: 
     COMMIT;
 
 step s2-alter-type: <... completed>
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -889,7 +889,7 @@ t
 (1 row)
 
 step s3-compare-type-definition:
- SELECT run_command_on_workers($$SELECT '(1,1,1)'::my_type$$);
+    SELECT run_command_on_workers($$SELECT '(1,1,1)'::my_type$$);
 
 run_command_on_workers
 ---------------------------------------------------------------------
@@ -903,11 +903,11 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-create-dist-table:
- CREATE TABLE new_dist_table(id int, data int);
- SELECT create_distributed_table('new_dist_table', 'id');
+    CREATE TABLE new_dist_table(id int, data int);
+    SELECT create_distributed_table('new_dist_table', 'id');
 
 create_distributed_table
 ---------------------------------------------------------------------
@@ -915,10 +915,10 @@ create_distributed_table
 (1 row)
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
- COMMIT;
+    COMMIT;
 
 step s1-start-metadata-sync: <... completed>
 start_metadata_sync_to_node
@@ -930,23 +930,23 @@ step s1-commit:
     COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -956,10 +956,10 @@ t
 
 starting permutation: s2-create-dist-func s1-begin s2-begin s2-drop-dist-func s1-start-metadata-sync s2-commit s1-commit s3-compare-snapshot
 step s2-create-dist-func:
- CREATE FUNCTION squares(int) RETURNS SETOF RECORD
+    CREATE FUNCTION squares(int) RETURNS SETOF RECORD
     AS $$ SELECT i, i * i FROM generate_series(1, $1) i $$
     LANGUAGE SQL;
- SELECT create_distributed_function('squares(int)');
+    SELECT create_distributed_function('squares(int)');
 
 create_distributed_function
 ---------------------------------------------------------------------
@@ -970,16 +970,16 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-drop-dist-func:
- DROP FUNCTION squares(int);
+    DROP FUNCTION squares(int);
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
- COMMIT;
+    COMMIT;
 
 step s1-start-metadata-sync: <... completed>
 start_metadata_sync_to_node
@@ -991,23 +991,23 @@ step s1-commit:
     COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -1017,9 +1017,9 @@ t
 
 starting permutation: s2-create-schema s1-begin s2-begin s2-drop-schema s1-start-metadata-sync s2-commit s1-commit s3-compare-snapshot
 step s2-create-schema:
- CREATE SCHEMA dist_schema;
- CREATE TABLE dist_schema.dist_table_in_schema(id int, data int);
- SELECT create_distributed_table('dist_schema.dist_table_in_schema', 'id');
+    CREATE SCHEMA dist_schema;
+    CREATE TABLE dist_schema.dist_table_in_schema(id int, data int);
+    SELECT create_distributed_table('dist_schema.dist_table_in_schema', 'id');
 
 create_distributed_table
 ---------------------------------------------------------------------
@@ -1030,16 +1030,16 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-drop-schema:
- DROP SCHEMA dist_schema CASCADE;
+    DROP SCHEMA dist_schema CASCADE;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
- COMMIT;
+    COMMIT;
 
 step s1-start-metadata-sync: <... completed>
 start_metadata_sync_to_node
@@ -1051,23 +1051,23 @@ step s1-commit:
     COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -1077,22 +1077,22 @@ t
 
 starting permutation: s2-create-type s1-begin s2-begin s2-alter-type s1-start-metadata-sync s2-commit s1-commit s3-compare-snapshot s3-compare-type-definition
 step s2-create-type:
- CREATE TYPE my_type AS (a int, b int);
+    CREATE TYPE my_type AS (a int, b int);
 
 step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-alter-type:
- ALTER TYPE my_type ADD ATTRIBUTE x int;
+    ALTER TYPE my_type ADD ATTRIBUTE x int;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
- COMMIT;
+    COMMIT;
 
 step s1-start-metadata-sync: <... completed>
 start_metadata_sync_to_node
@@ -1104,23 +1104,23 @@ step s1-commit:
     COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -1128,7 +1128,7 @@ t
 (1 row)
 
 step s3-compare-type-definition:
- SELECT run_command_on_workers($$SELECT '(1,1,1)'::my_type$$);
+    SELECT run_command_on_workers($$SELECT '(1,1,1)'::my_type$$);
 
 run_command_on_workers
 ---------------------------------------------------------------------
@@ -1142,10 +1142,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -1153,33 +1153,33 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-create-type:
- CREATE TYPE my_type AS (a int, b int);
+    CREATE TYPE my_type AS (a int, b int);
  <waiting ...>
 step s1-commit: 
     COMMIT;
 
 step s2-create-type: <... completed>
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
@@ -1192,10 +1192,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s1-start-metadata-sync:
- SELECT start_metadata_sync_to_node('localhost', 57638);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
 
 start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -1203,10 +1203,10 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-create-dist-func:
- CREATE FUNCTION squares(int) RETURNS SETOF RECORD
+    CREATE FUNCTION squares(int) RETURNS SETOF RECORD
     AS $$ SELECT i, i * i FROM generate_series(1, $1) i $$
     LANGUAGE SQL;
- SELECT create_distributed_function('squares(int)');
+    SELECT create_distributed_function('squares(int)');
  <waiting ...>
 step s1-commit: 
     COMMIT;
@@ -1218,26 +1218,26 @@ create_distributed_function
 (1 row)
 
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
+    SELECT count(*) = 0 AS same_metadata_in_workers
+    FROM
+    (
+        (
+            SELECT unnest(activate_node_snapshot())
+                EXCEPT
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        )
+    UNION
+        (
+            SELECT unnest(result::text[]) AS unnested_result
+            FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+                EXCEPT
+            SELECT unnest(activate_node_snapshot())
+        )
+    ) AS foo;
 
 same_metadata_in_workers
 ---------------------------------------------------------------------

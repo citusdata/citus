@@ -2,10 +2,10 @@ Parsed test spec with 2 sessions
 
 starting permutation: s1-load-cache s1-insert s1-begin s1-select s2-begin s2-move-placement s1-update s2-commit s1-commit s2-print-content s2-print-placements
 step s1-load-cache:
- TRUNCATE test_move_placement;
+    TRUNCATE test_move_placement;
 
 step s1-insert:
- INSERT INTO test_move_placement VALUES (5, 10);
+    INSERT INTO test_move_placement VALUES (5, 10);
 
 step s1-begin:
     BEGIN;
@@ -14,7 +14,7 @@ step s1-begin:
     SET citus.select_opens_transaction_block TO false;
 
 step s1-select:
- SELECT count(*) FROM test_move_placement WHERE x = 5;
+    SELECT count(*) FROM test_move_placement WHERE x = 5;
 
 count
 ---------------------------------------------------------------------
@@ -22,10 +22,10 @@ count
 (1 row)
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-move-placement:
- SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
 
 master_move_shard_placement
 ---------------------------------------------------------------------
@@ -33,24 +33,24 @@ master_move_shard_placement
 (1 row)
 
 step s1-update:
- UPDATE test_move_placement SET y = 5 WHERE x = 5;
+    UPDATE test_move_placement SET y = 5 WHERE x = 5;
  <waiting ...>
 step s2-commit: 
- COMMIT;
+    COMMIT;
 
 step s1-update: <... completed>
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s2-print-content:
- SELECT
-  nodeport, success, result
- FROM
-  run_command_on_placements('test_move_placement', 'select y from %s WHERE x = 5')
- WHERE
-  shardid IN (SELECT * FROM selected_shard)
- ORDER BY
-  nodeport;
+    SELECT
+        nodeport, success, result
+    FROM
+        run_command_on_placements('test_move_placement', 'select y from %s WHERE x = 5')
+    WHERE
+        shardid IN (SELECT * FROM selected_shard)
+    ORDER BY
+        nodeport;
 
 nodeport|success|result
 ---------------------------------------------------------------------
@@ -58,16 +58,16 @@ nodeport|success|result
 (1 row)
 
 step s2-print-placements:
- SELECT
-  nodename, nodeport, count(*)
- FROM
-  pg_dist_shard_placement
- WHERE
-  shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
- AND
-  shardstate = 1
- GROUP BY
-  nodename, nodeport;
+    SELECT
+        nodename, nodeport, count(*)
+    FROM
+        pg_dist_shard_placement
+    WHERE
+        shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
+    AND
+        shardstate = 1
+    GROUP BY
+        nodename, nodeport;
 
 nodename |nodeport|count
 ---------------------------------------------------------------------
@@ -78,10 +78,10 @@ localhost|   57638|    3
 
 starting permutation: s1-load-cache s1-insert s1-begin s1-select s2-begin s2-move-placement s1-delete s2-commit s1-commit s2-print-content s2-print-placements
 step s1-load-cache:
- TRUNCATE test_move_placement;
+    TRUNCATE test_move_placement;
 
 step s1-insert:
- INSERT INTO test_move_placement VALUES (5, 10);
+    INSERT INTO test_move_placement VALUES (5, 10);
 
 step s1-begin:
     BEGIN;
@@ -90,7 +90,7 @@ step s1-begin:
     SET citus.select_opens_transaction_block TO false;
 
 step s1-select:
- SELECT count(*) FROM test_move_placement WHERE x = 5;
+    SELECT count(*) FROM test_move_placement WHERE x = 5;
 
 count
 ---------------------------------------------------------------------
@@ -98,10 +98,10 @@ count
 (1 row)
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-move-placement:
- SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
 
 master_move_shard_placement
 ---------------------------------------------------------------------
@@ -109,24 +109,24 @@ master_move_shard_placement
 (1 row)
 
 step s1-delete:
- DELETE FROM test_move_placement WHERE x = 5;
+    DELETE FROM test_move_placement WHERE x = 5;
  <waiting ...>
 step s2-commit: 
- COMMIT;
+    COMMIT;
 
 step s1-delete: <... completed>
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s2-print-content:
- SELECT
-  nodeport, success, result
- FROM
-  run_command_on_placements('test_move_placement', 'select y from %s WHERE x = 5')
- WHERE
-  shardid IN (SELECT * FROM selected_shard)
- ORDER BY
-  nodeport;
+    SELECT
+        nodeport, success, result
+    FROM
+        run_command_on_placements('test_move_placement', 'select y from %s WHERE x = 5')
+    WHERE
+        shardid IN (SELECT * FROM selected_shard)
+    ORDER BY
+        nodeport;
 
 nodeport|success|result
 ---------------------------------------------------------------------
@@ -134,16 +134,16 @@ nodeport|success|result
 (1 row)
 
 step s2-print-placements:
- SELECT
-  nodename, nodeport, count(*)
- FROM
-  pg_dist_shard_placement
- WHERE
-  shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
- AND
-  shardstate = 1
- GROUP BY
-  nodename, nodeport;
+    SELECT
+        nodename, nodeport, count(*)
+    FROM
+        pg_dist_shard_placement
+    WHERE
+        shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
+    AND
+        shardstate = 1
+    GROUP BY
+        nodename, nodeport;
 
 nodename |nodeport|count
 ---------------------------------------------------------------------
@@ -154,7 +154,7 @@ localhost|   57638|    3
 
 starting permutation: s1-load-cache s1-begin s1-select s2-begin s2-move-placement s1-insert s2-commit s1-commit s2-print-content s2-print-placements
 step s1-load-cache:
- TRUNCATE test_move_placement;
+    TRUNCATE test_move_placement;
 
 step s1-begin:
     BEGIN;
@@ -163,7 +163,7 @@ step s1-begin:
     SET citus.select_opens_transaction_block TO false;
 
 step s1-select:
- SELECT count(*) FROM test_move_placement WHERE x = 5;
+    SELECT count(*) FROM test_move_placement WHERE x = 5;
 
 count
 ---------------------------------------------------------------------
@@ -171,10 +171,10 @@ count
 (1 row)
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-move-placement:
- SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
 
 master_move_shard_placement
 ---------------------------------------------------------------------
@@ -182,24 +182,24 @@ master_move_shard_placement
 (1 row)
 
 step s1-insert:
- INSERT INTO test_move_placement VALUES (5, 10);
+    INSERT INTO test_move_placement VALUES (5, 10);
  <waiting ...>
 step s2-commit: 
- COMMIT;
+    COMMIT;
 
 step s1-insert: <... completed>
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s2-print-content:
- SELECT
-  nodeport, success, result
- FROM
-  run_command_on_placements('test_move_placement', 'select y from %s WHERE x = 5')
- WHERE
-  shardid IN (SELECT * FROM selected_shard)
- ORDER BY
-  nodeport;
+    SELECT
+        nodeport, success, result
+    FROM
+        run_command_on_placements('test_move_placement', 'select y from %s WHERE x = 5')
+    WHERE
+        shardid IN (SELECT * FROM selected_shard)
+    ORDER BY
+        nodeport;
 
 nodeport|success|result
 ---------------------------------------------------------------------
@@ -207,16 +207,16 @@ nodeport|success|result
 (1 row)
 
 step s2-print-placements:
- SELECT
-  nodename, nodeport, count(*)
- FROM
-  pg_dist_shard_placement
- WHERE
-  shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
- AND
-  shardstate = 1
- GROUP BY
-  nodename, nodeport;
+    SELECT
+        nodename, nodeport, count(*)
+    FROM
+        pg_dist_shard_placement
+    WHERE
+        shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
+    AND
+        shardstate = 1
+    GROUP BY
+        nodename, nodeport;
 
 nodename |nodeport|count
 ---------------------------------------------------------------------
@@ -227,7 +227,7 @@ localhost|   57638|    3
 
 starting permutation: s1-load-cache s1-begin s1-select s2-begin s2-move-placement s1-copy s2-commit s1-commit s2-print-content s2-print-placements
 step s1-load-cache:
- TRUNCATE test_move_placement;
+    TRUNCATE test_move_placement;
 
 step s1-begin:
     BEGIN;
@@ -236,7 +236,7 @@ step s1-begin:
     SET citus.select_opens_transaction_block TO false;
 
 step s1-select:
- SELECT count(*) FROM test_move_placement WHERE x = 5;
+    SELECT count(*) FROM test_move_placement WHERE x = 5;
 
 count
 ---------------------------------------------------------------------
@@ -244,10 +244,10 @@ count
 (1 row)
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-move-placement:
- SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
 
 master_move_shard_placement
 ---------------------------------------------------------------------
@@ -255,24 +255,24 @@ master_move_shard_placement
 (1 row)
 
 step s1-copy:
- COPY test_move_placement FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+    COPY test_move_placement FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
  <waiting ...>
 step s2-commit: 
- COMMIT;
+    COMMIT;
 
 step s1-copy: <... completed>
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s2-print-content:
- SELECT
-  nodeport, success, result
- FROM
-  run_command_on_placements('test_move_placement', 'select y from %s WHERE x = 5')
- WHERE
-  shardid IN (SELECT * FROM selected_shard)
- ORDER BY
-  nodeport;
+    SELECT
+        nodeport, success, result
+    FROM
+        run_command_on_placements('test_move_placement', 'select y from %s WHERE x = 5')
+    WHERE
+        shardid IN (SELECT * FROM selected_shard)
+    ORDER BY
+        nodeport;
 
 nodeport|success|result
 ---------------------------------------------------------------------
@@ -280,16 +280,16 @@ nodeport|success|result
 (1 row)
 
 step s2-print-placements:
- SELECT
-  nodename, nodeport, count(*)
- FROM
-  pg_dist_shard_placement
- WHERE
-  shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
- AND
-  shardstate = 1
- GROUP BY
-  nodename, nodeport;
+    SELECT
+        nodename, nodeport, count(*)
+    FROM
+        pg_dist_shard_placement
+    WHERE
+        shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
+    AND
+        shardstate = 1
+    GROUP BY
+        nodename, nodeport;
 
 nodename |nodeport|count
 ---------------------------------------------------------------------
@@ -300,7 +300,7 @@ localhost|   57638|    3
 
 starting permutation: s1-load-cache s1-begin s1-select s2-begin s2-move-placement s1-ddl s2-commit s1-commit s2-print-index-count s2-print-placements
 step s1-load-cache:
- TRUNCATE test_move_placement;
+    TRUNCATE test_move_placement;
 
 step s1-begin:
     BEGIN;
@@ -309,7 +309,7 @@ step s1-begin:
     SET citus.select_opens_transaction_block TO false;
 
 step s1-select:
- SELECT count(*) FROM test_move_placement WHERE x = 5;
+    SELECT count(*) FROM test_move_placement WHERE x = 5;
 
 count
 ---------------------------------------------------------------------
@@ -317,10 +317,10 @@ count
 (1 row)
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-move-placement:
- SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
 
 master_move_shard_placement
 ---------------------------------------------------------------------
@@ -328,22 +328,22 @@ master_move_shard_placement
 (1 row)
 
 step s1-ddl:
- CREATE INDEX test_move_placement_index ON test_move_placement(x);
+    CREATE INDEX test_move_placement_index ON test_move_placement(x);
  <waiting ...>
 step s2-commit: 
- COMMIT;
+    COMMIT;
 
 step s1-ddl: <... completed>
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s2-print-index-count:
- SELECT
-  nodeport, success, result
- FROM
-  run_command_on_placements('test_move_placement', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
- ORDER BY
-  nodeport;
+    SELECT
+        nodeport, success, result
+    FROM
+        run_command_on_placements('test_move_placement', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
+    ORDER BY
+        nodeport;
 
 nodeport|success|result
 ---------------------------------------------------------------------
@@ -358,16 +358,16 @@ nodeport|success|result
 (8 rows)
 
 step s2-print-placements:
- SELECT
-  nodename, nodeport, count(*)
- FROM
-  pg_dist_shard_placement
- WHERE
-  shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
- AND
-  shardstate = 1
- GROUP BY
-  nodename, nodeport;
+    SELECT
+        nodename, nodeport, count(*)
+    FROM
+        pg_dist_shard_placement
+    WHERE
+        shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
+    AND
+        shardstate = 1
+    GROUP BY
+        nodename, nodeport;
 
 nodename |nodeport|count
 ---------------------------------------------------------------------
@@ -378,7 +378,7 @@ localhost|   57638|    3
 
 starting permutation: s1-insert s1-begin s1-select s2-begin s2-move-placement s1-update s2-commit s1-commit s2-print-content s2-print-placements
 step s1-insert:
- INSERT INTO test_move_placement VALUES (5, 10);
+    INSERT INTO test_move_placement VALUES (5, 10);
 
 step s1-begin:
     BEGIN;
@@ -387,7 +387,7 @@ step s1-begin:
     SET citus.select_opens_transaction_block TO false;
 
 step s1-select:
- SELECT count(*) FROM test_move_placement WHERE x = 5;
+    SELECT count(*) FROM test_move_placement WHERE x = 5;
 
 count
 ---------------------------------------------------------------------
@@ -395,10 +395,10 @@ count
 (1 row)
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-move-placement:
- SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
 
 master_move_shard_placement
 ---------------------------------------------------------------------
@@ -406,24 +406,24 @@ master_move_shard_placement
 (1 row)
 
 step s1-update:
- UPDATE test_move_placement SET y = 5 WHERE x = 5;
+    UPDATE test_move_placement SET y = 5 WHERE x = 5;
  <waiting ...>
 step s2-commit: 
- COMMIT;
+    COMMIT;
 
 step s1-update: <... completed>
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s2-print-content:
- SELECT
-  nodeport, success, result
- FROM
-  run_command_on_placements('test_move_placement', 'select y from %s WHERE x = 5')
- WHERE
-  shardid IN (SELECT * FROM selected_shard)
- ORDER BY
-  nodeport;
+    SELECT
+        nodeport, success, result
+    FROM
+        run_command_on_placements('test_move_placement', 'select y from %s WHERE x = 5')
+    WHERE
+        shardid IN (SELECT * FROM selected_shard)
+    ORDER BY
+        nodeport;
 
 nodeport|success|result
 ---------------------------------------------------------------------
@@ -431,16 +431,16 @@ nodeport|success|result
 (1 row)
 
 step s2-print-placements:
- SELECT
-  nodename, nodeport, count(*)
- FROM
-  pg_dist_shard_placement
- WHERE
-  shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
- AND
-  shardstate = 1
- GROUP BY
-  nodename, nodeport;
+    SELECT
+        nodename, nodeport, count(*)
+    FROM
+        pg_dist_shard_placement
+    WHERE
+        shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
+    AND
+        shardstate = 1
+    GROUP BY
+        nodename, nodeport;
 
 nodename |nodeport|count
 ---------------------------------------------------------------------
@@ -451,7 +451,7 @@ localhost|   57638|    3
 
 starting permutation: s1-insert s1-begin s1-select s2-begin s2-move-placement s1-delete s2-commit s1-commit s2-print-content s2-print-placements
 step s1-insert:
- INSERT INTO test_move_placement VALUES (5, 10);
+    INSERT INTO test_move_placement VALUES (5, 10);
 
 step s1-begin:
     BEGIN;
@@ -460,7 +460,7 @@ step s1-begin:
     SET citus.select_opens_transaction_block TO false;
 
 step s1-select:
- SELECT count(*) FROM test_move_placement WHERE x = 5;
+    SELECT count(*) FROM test_move_placement WHERE x = 5;
 
 count
 ---------------------------------------------------------------------
@@ -468,10 +468,10 @@ count
 (1 row)
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-move-placement:
- SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
 
 master_move_shard_placement
 ---------------------------------------------------------------------
@@ -479,24 +479,24 @@ master_move_shard_placement
 (1 row)
 
 step s1-delete:
- DELETE FROM test_move_placement WHERE x = 5;
+    DELETE FROM test_move_placement WHERE x = 5;
  <waiting ...>
 step s2-commit: 
- COMMIT;
+    COMMIT;
 
 step s1-delete: <... completed>
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s2-print-content:
- SELECT
-  nodeport, success, result
- FROM
-  run_command_on_placements('test_move_placement', 'select y from %s WHERE x = 5')
- WHERE
-  shardid IN (SELECT * FROM selected_shard)
- ORDER BY
-  nodeport;
+    SELECT
+        nodeport, success, result
+    FROM
+        run_command_on_placements('test_move_placement', 'select y from %s WHERE x = 5')
+    WHERE
+        shardid IN (SELECT * FROM selected_shard)
+    ORDER BY
+        nodeport;
 
 nodeport|success|result
 ---------------------------------------------------------------------
@@ -504,16 +504,16 @@ nodeport|success|result
 (1 row)
 
 step s2-print-placements:
- SELECT
-  nodename, nodeport, count(*)
- FROM
-  pg_dist_shard_placement
- WHERE
-  shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
- AND
-  shardstate = 1
- GROUP BY
-  nodename, nodeport;
+    SELECT
+        nodename, nodeport, count(*)
+    FROM
+        pg_dist_shard_placement
+    WHERE
+        shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
+    AND
+        shardstate = 1
+    GROUP BY
+        nodename, nodeport;
 
 nodename |nodeport|count
 ---------------------------------------------------------------------
@@ -530,7 +530,7 @@ step s1-begin:
     SET citus.select_opens_transaction_block TO false;
 
 step s1-select:
- SELECT count(*) FROM test_move_placement WHERE x = 5;
+    SELECT count(*) FROM test_move_placement WHERE x = 5;
 
 count
 ---------------------------------------------------------------------
@@ -538,10 +538,10 @@ count
 (1 row)
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-move-placement:
- SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
 
 master_move_shard_placement
 ---------------------------------------------------------------------
@@ -549,24 +549,24 @@ master_move_shard_placement
 (1 row)
 
 step s1-insert:
- INSERT INTO test_move_placement VALUES (5, 10);
+    INSERT INTO test_move_placement VALUES (5, 10);
  <waiting ...>
 step s2-commit: 
- COMMIT;
+    COMMIT;
 
 step s1-insert: <... completed>
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s2-print-content:
- SELECT
-  nodeport, success, result
- FROM
-  run_command_on_placements('test_move_placement', 'select y from %s WHERE x = 5')
- WHERE
-  shardid IN (SELECT * FROM selected_shard)
- ORDER BY
-  nodeport;
+    SELECT
+        nodeport, success, result
+    FROM
+        run_command_on_placements('test_move_placement', 'select y from %s WHERE x = 5')
+    WHERE
+        shardid IN (SELECT * FROM selected_shard)
+    ORDER BY
+        nodeport;
 
 nodeport|success|result
 ---------------------------------------------------------------------
@@ -574,16 +574,16 @@ nodeport|success|result
 (1 row)
 
 step s2-print-placements:
- SELECT
-  nodename, nodeport, count(*)
- FROM
-  pg_dist_shard_placement
- WHERE
-  shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
- AND
-  shardstate = 1
- GROUP BY
-  nodename, nodeport;
+    SELECT
+        nodename, nodeport, count(*)
+    FROM
+        pg_dist_shard_placement
+    WHERE
+        shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
+    AND
+        shardstate = 1
+    GROUP BY
+        nodename, nodeport;
 
 nodename |nodeport|count
 ---------------------------------------------------------------------
@@ -600,7 +600,7 @@ step s1-begin:
     SET citus.select_opens_transaction_block TO false;
 
 step s1-select:
- SELECT count(*) FROM test_move_placement WHERE x = 5;
+    SELECT count(*) FROM test_move_placement WHERE x = 5;
 
 count
 ---------------------------------------------------------------------
@@ -608,10 +608,10 @@ count
 (1 row)
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-move-placement:
- SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
 
 master_move_shard_placement
 ---------------------------------------------------------------------
@@ -619,24 +619,24 @@ master_move_shard_placement
 (1 row)
 
 step s1-copy:
- COPY test_move_placement FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+    COPY test_move_placement FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
  <waiting ...>
 step s2-commit: 
- COMMIT;
+    COMMIT;
 
 step s1-copy: <... completed>
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s2-print-content:
- SELECT
-  nodeport, success, result
- FROM
-  run_command_on_placements('test_move_placement', 'select y from %s WHERE x = 5')
- WHERE
-  shardid IN (SELECT * FROM selected_shard)
- ORDER BY
-  nodeport;
+    SELECT
+        nodeport, success, result
+    FROM
+        run_command_on_placements('test_move_placement', 'select y from %s WHERE x = 5')
+    WHERE
+        shardid IN (SELECT * FROM selected_shard)
+    ORDER BY
+        nodeport;
 
 nodeport|success|result
 ---------------------------------------------------------------------
@@ -644,16 +644,16 @@ nodeport|success|result
 (1 row)
 
 step s2-print-placements:
- SELECT
-  nodename, nodeport, count(*)
- FROM
-  pg_dist_shard_placement
- WHERE
-  shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
- AND
-  shardstate = 1
- GROUP BY
-  nodename, nodeport;
+    SELECT
+        nodename, nodeport, count(*)
+    FROM
+        pg_dist_shard_placement
+    WHERE
+        shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
+    AND
+        shardstate = 1
+    GROUP BY
+        nodename, nodeport;
 
 nodename |nodeport|count
 ---------------------------------------------------------------------
@@ -670,7 +670,7 @@ step s1-begin:
     SET citus.select_opens_transaction_block TO false;
 
 step s1-select:
- SELECT count(*) FROM test_move_placement WHERE x = 5;
+    SELECT count(*) FROM test_move_placement WHERE x = 5;
 
 count
 ---------------------------------------------------------------------
@@ -678,10 +678,10 @@ count
 (1 row)
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-move-placement:
- SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637, 'force_logical');
 
 master_move_shard_placement
 ---------------------------------------------------------------------
@@ -689,22 +689,22 @@ master_move_shard_placement
 (1 row)
 
 step s1-ddl:
- CREATE INDEX test_move_placement_index ON test_move_placement(x);
+    CREATE INDEX test_move_placement_index ON test_move_placement(x);
  <waiting ...>
 step s2-commit: 
- COMMIT;
+    COMMIT;
 
 step s1-ddl: <... completed>
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s2-print-index-count:
- SELECT
-  nodeport, success, result
- FROM
-  run_command_on_placements('test_move_placement', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
- ORDER BY
-  nodeport;
+    SELECT
+        nodeport, success, result
+    FROM
+        run_command_on_placements('test_move_placement', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
+    ORDER BY
+        nodeport;
 
 nodeport|success|result
 ---------------------------------------------------------------------
@@ -719,16 +719,16 @@ nodeport|success|result
 (8 rows)
 
 step s2-print-placements:
- SELECT
-  nodename, nodeport, count(*)
- FROM
-  pg_dist_shard_placement
- WHERE
-  shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
- AND
-  shardstate = 1
- GROUP BY
-  nodename, nodeport;
+    SELECT
+        nodename, nodeport, count(*)
+    FROM
+        pg_dist_shard_placement
+    WHERE
+        shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_placement'::regclass)
+    AND
+        shardstate = 1
+    GROUP BY
+        nodename, nodeport;
 
 nodename |nodeport|count
 ---------------------------------------------------------------------

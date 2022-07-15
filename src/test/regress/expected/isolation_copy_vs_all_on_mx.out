@@ -18,7 +18,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-copy:
- SELECT run_commands_on_session_level_connection_to_node('COPY copy_table FROM PROGRAM ''echo 5, 50 && echo 6, 60 && echo 7, 70''WITH CSV');
+    SELECT run_commands_on_session_level_connection_to_node('COPY copy_table FROM PROGRAM ''echo 5, 50 && echo 6, 60 && echo 7, 70''WITH CSV');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -42,7 +42,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-copy:
- SELECT run_commands_on_session_level_connection_to_node('COPY copy_table FROM PROGRAM ''echo 5, 50 && echo 8, 80 && echo 9, 90''WITH CSV');
+    SELECT run_commands_on_session_level_connection_to_node('COPY copy_table FROM PROGRAM ''echo 5, 50 && echo 8, 80 && echo 9, 90''WITH CSV');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -50,7 +50,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-commit-worker:
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -66,7 +66,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -82,7 +82,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-select-count:
- SELECT COUNT(*) FROM copy_table;
+    SELECT COUNT(*) FROM copy_table;
 
 count
 ---------------------------------------------------------------------
@@ -108,7 +108,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-copy:
- SELECT run_commands_on_session_level_connection_to_node('COPY copy_table FROM PROGRAM ''echo 5, 50 && echo 6, 60 && echo 7, 70''WITH CSV');
+    SELECT run_commands_on_session_level_connection_to_node('COPY copy_table FROM PROGRAM ''echo 5, 50 && echo 6, 60 && echo 7, 70''WITH CSV');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -116,13 +116,13 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-coordinator-drop:
- DROP TABLE copy_table;
+    DROP TABLE copy_table;
  <waiting ...>
 step s1-commit-worker: 
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -131,10 +131,10 @@ run_commands_on_session_level_connection_to_node
 
 step s2-coordinator-drop: <... completed>
 step s2-commit:
- COMMIT;
+    COMMIT;
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -142,7 +142,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-select-count:
- SELECT COUNT(*) FROM copy_table;
+    SELECT COUNT(*) FROM copy_table;
 
 ERROR:  relation "copy_table" does not exist
 
@@ -164,7 +164,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-copy:
- SELECT run_commands_on_session_level_connection_to_node('COPY copy_table FROM PROGRAM ''echo 5, 50 && echo 6, 60 && echo 7, 70''WITH CSV');
+    SELECT run_commands_on_session_level_connection_to_node('COPY copy_table FROM PROGRAM ''echo 5, 50 && echo 6, 60 && echo 7, 70''WITH CSV');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -188,7 +188,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-select-for-update:
- SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM copy_table WHERE id=5 FOR UPDATE');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM copy_table WHERE id=5 FOR UPDATE');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -196,7 +196,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-commit-worker:
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -212,7 +212,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -228,7 +228,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-select-count:
- SELECT COUNT(*) FROM copy_table;
+    SELECT COUNT(*) FROM copy_table;
 
 count
 ---------------------------------------------------------------------

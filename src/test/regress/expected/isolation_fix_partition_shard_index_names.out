@@ -48,7 +48,7 @@ fix_partition_shard_index_names
 step s1-drop-table:
     DROP TABLE dist_partitioned_table;
  <waiting ...>
-step s2-commit:
+step s2-commit: 
     COMMIT;
 
 step s1-drop-table: <... completed>
@@ -91,7 +91,7 @@ step s2-create-index:
 step s1-insert-into-table:
     INSERT INTO dist_partitioned_table VALUES (0, '2019-01-01');
  <waiting ...>
-step s2-commit:
+step s2-commit: 
     COMMIT;
 
 step s1-insert-into-table: <... completed>
@@ -178,7 +178,7 @@ step s1-insert-into-table:
 step s2-create-index:
     CREATE INDEX ON dist_partitioned_table USING btree(a);
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-create-index: <... completed>

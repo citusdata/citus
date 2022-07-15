@@ -96,7 +96,7 @@ step s1-commit:
     COMMIT;
 
 step s2-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -160,7 +160,7 @@ step s1-commit:
     COMMIT;
 
 step s2-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------

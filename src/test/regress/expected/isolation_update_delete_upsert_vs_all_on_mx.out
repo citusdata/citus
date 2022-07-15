@@ -23,7 +23,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-update:
- SELECT run_commands_on_session_level_connection_to_node('UPDATE dist_table SET value=15 WHERE id=5');
+    SELECT run_commands_on_session_level_connection_to_node('UPDATE dist_table SET value=15 WHERE id=5');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -47,7 +47,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-delete:
- SELECT run_commands_on_session_level_connection_to_node('DELETE FROM dist_table WHERE id=5');
+    SELECT run_commands_on_session_level_connection_to_node('DELETE FROM dist_table WHERE id=5');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -55,7 +55,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-commit-worker:
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -71,7 +71,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -87,7 +87,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-select-count:
- SELECT COUNT(*) FROM dist_table;
+    SELECT COUNT(*) FROM dist_table;
 
 count
 ---------------------------------------------------------------------
@@ -118,7 +118,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-delete:
- SELECT run_commands_on_session_level_connection_to_node('DELETE FROM dist_table WHERE id=5');
+    SELECT run_commands_on_session_level_connection_to_node('DELETE FROM dist_table WHERE id=5');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -142,7 +142,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-copy:
- SELECT run_commands_on_session_level_connection_to_node('COPY dist_table FROM PROGRAM ''echo 5, 50 && echo 9, 90 && echo 10, 100''WITH CSV');
+    SELECT run_commands_on_session_level_connection_to_node('COPY dist_table FROM PROGRAM ''echo 5, 50 && echo 9, 90 && echo 10, 100''WITH CSV');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -150,7 +150,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-commit-worker:
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -166,7 +166,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -182,7 +182,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-select-count:
- SELECT COUNT(*) FROM dist_table;
+    SELECT COUNT(*) FROM dist_table;
 
 count
 ---------------------------------------------------------------------
@@ -213,7 +213,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-update:
- SELECT run_commands_on_session_level_connection_to_node('UPDATE dist_table SET value=15 WHERE id=5');
+    SELECT run_commands_on_session_level_connection_to_node('UPDATE dist_table SET value=15 WHERE id=5');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -237,10 +237,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-alter-table:
- ALTER TABLE dist_table DROP value;
+    ALTER TABLE dist_table DROP value;
  <waiting ...>
 step s1-commit-worker: 
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -257,7 +257,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -273,7 +273,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-select-count:
- SELECT COUNT(*) FROM dist_table;
+    SELECT COUNT(*) FROM dist_table;
 
 count
 ---------------------------------------------------------------------
@@ -304,7 +304,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-update:
- SELECT run_commands_on_session_level_connection_to_node('UPDATE dist_table SET value=15 WHERE id=5');
+    SELECT run_commands_on_session_level_connection_to_node('UPDATE dist_table SET value=15 WHERE id=5');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -328,7 +328,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-select-for-update:
- SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id=5 FOR UPDATE');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id=5 FOR UPDATE');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -336,7 +336,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-commit-worker:
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -352,7 +352,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------

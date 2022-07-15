@@ -7,8 +7,8 @@ create_distributed_table
 (1 row)
 
 step s1-rebalance-nc:
- BEGIN;
- select rebalance_table_shards('non_colocated');
+    BEGIN;
+    select rebalance_table_shards('non_colocated');
 
 rebalance_table_shards
 ---------------------------------------------------------------------
@@ -16,11 +16,11 @@ rebalance_table_shards
 (1 row)
 
 step s2-rebalance-nc:
- select rebalance_table_shards('non_colocated');
+    select rebalance_table_shards('non_colocated');
 
 ERROR:  could not acquire the lock required to rebalance public.non_colocated
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -35,8 +35,8 @@ create_distributed_table
 (1 row)
 
 step s1-rebalance-nc:
- BEGIN;
- select rebalance_table_shards('non_colocated');
+    BEGIN;
+    select rebalance_table_shards('non_colocated');
 
 rebalance_table_shards
 ---------------------------------------------------------------------
@@ -44,11 +44,11 @@ rebalance_table_shards
 (1 row)
 
 step s2-replicate-nc:
- select replicate_table_shards('non_colocated');
+    select replicate_table_shards('non_colocated');
 
 ERROR:  could not acquire the lock required to replicate public.non_colocated
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -63,8 +63,8 @@ create_distributed_table
 (1 row)
 
 step s1-replicate-nc:
- BEGIN;
- select replicate_table_shards('non_colocated');
+    BEGIN;
+    select replicate_table_shards('non_colocated');
 
 replicate_table_shards
 ---------------------------------------------------------------------
@@ -72,11 +72,11 @@ replicate_table_shards
 (1 row)
 
 step s2-rebalance-nc:
- select rebalance_table_shards('non_colocated');
+    select rebalance_table_shards('non_colocated');
 
 ERROR:  could not acquire the lock required to rebalance public.non_colocated
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -91,8 +91,8 @@ create_distributed_table
 (1 row)
 
 step s1-replicate-nc:
- BEGIN;
- select replicate_table_shards('non_colocated');
+    BEGIN;
+    select replicate_table_shards('non_colocated');
 
 replicate_table_shards
 ---------------------------------------------------------------------
@@ -100,11 +100,11 @@ replicate_table_shards
 (1 row)
 
 step s2-replicate-nc:
- select replicate_table_shards('non_colocated');
+    select replicate_table_shards('non_colocated');
 
 ERROR:  could not acquire the lock required to replicate public.non_colocated
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -119,8 +119,8 @@ create_distributed_table
 (1 row)
 
 step s1-rebalance-c1:
- BEGIN;
- select rebalance_table_shards('colocated1');
+    BEGIN;
+    select rebalance_table_shards('colocated1');
 
 rebalance_table_shards
 ---------------------------------------------------------------------
@@ -128,11 +128,11 @@ rebalance_table_shards
 (1 row)
 
 step s2-rebalance-c2:
- select rebalance_table_shards('colocated2');
+    select rebalance_table_shards('colocated2');
 
 ERROR:  could not acquire the lock required to rebalance public.colocated2
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -147,8 +147,8 @@ create_distributed_table
 (1 row)
 
 step s1-rebalance-c1:
- BEGIN;
- select rebalance_table_shards('colocated1');
+    BEGIN;
+    select rebalance_table_shards('colocated1');
 
 rebalance_table_shards
 ---------------------------------------------------------------------
@@ -156,11 +156,11 @@ rebalance_table_shards
 (1 row)
 
 step s2-replicate-c2:
- select replicate_table_shards('colocated2');
+    select replicate_table_shards('colocated2');
 
 ERROR:  could not acquire the lock required to replicate public.colocated2
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -175,8 +175,8 @@ create_distributed_table
 (1 row)
 
 step s1-replicate-c1:
- BEGIN;
- select replicate_table_shards('colocated1');
+    BEGIN;
+    select replicate_table_shards('colocated1');
 
 replicate_table_shards
 ---------------------------------------------------------------------
@@ -184,11 +184,11 @@ replicate_table_shards
 (1 row)
 
 step s2-rebalance-c2:
- select rebalance_table_shards('colocated2');
+    select rebalance_table_shards('colocated2');
 
 ERROR:  could not acquire the lock required to rebalance public.colocated2
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -203,8 +203,8 @@ create_distributed_table
 (1 row)
 
 step s1-replicate-c1:
- BEGIN;
- select replicate_table_shards('colocated1');
+    BEGIN;
+    select replicate_table_shards('colocated1');
 
 replicate_table_shards
 ---------------------------------------------------------------------
@@ -212,11 +212,11 @@ replicate_table_shards
 (1 row)
 
 step s2-replicate-c2:
- select replicate_table_shards('colocated2');
+    select replicate_table_shards('colocated2');
 
 ERROR:  could not acquire the lock required to replicate public.colocated2
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -231,8 +231,8 @@ create_distributed_table
 (1 row)
 
 step s1-rebalance-c1:
- BEGIN;
- select rebalance_table_shards('colocated1');
+    BEGIN;
+    select rebalance_table_shards('colocated1');
 
 rebalance_table_shards
 ---------------------------------------------------------------------
@@ -240,7 +240,7 @@ rebalance_table_shards
 (1 row)
 
 step s2-rebalance-nc:
- select rebalance_table_shards('non_colocated');
+    select rebalance_table_shards('non_colocated');
 
 rebalance_table_shards
 ---------------------------------------------------------------------
@@ -248,7 +248,7 @@ rebalance_table_shards
 (1 row)
 
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -263,8 +263,8 @@ create_distributed_table
 (1 row)
 
 step s1-rebalance-c1:
- BEGIN;
- select rebalance_table_shards('colocated1');
+    BEGIN;
+    select rebalance_table_shards('colocated1');
 
 rebalance_table_shards
 ---------------------------------------------------------------------
@@ -272,7 +272,7 @@ rebalance_table_shards
 (1 row)
 
 step s2-replicate-nc:
- select replicate_table_shards('non_colocated');
+    select replicate_table_shards('non_colocated');
 
 replicate_table_shards
 ---------------------------------------------------------------------
@@ -280,7 +280,7 @@ replicate_table_shards
 (1 row)
 
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -295,8 +295,8 @@ create_distributed_table
 (1 row)
 
 step s1-replicate-c1:
- BEGIN;
- select replicate_table_shards('colocated1');
+    BEGIN;
+    select replicate_table_shards('colocated1');
 
 replicate_table_shards
 ---------------------------------------------------------------------
@@ -304,7 +304,7 @@ replicate_table_shards
 (1 row)
 
 step s2-rebalance-nc:
- select rebalance_table_shards('non_colocated');
+    select rebalance_table_shards('non_colocated');
 
 rebalance_table_shards
 ---------------------------------------------------------------------
@@ -312,7 +312,7 @@ rebalance_table_shards
 (1 row)
 
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -327,8 +327,8 @@ create_distributed_table
 (1 row)
 
 step s1-replicate-c1:
- BEGIN;
- select replicate_table_shards('colocated1');
+    BEGIN;
+    select replicate_table_shards('colocated1');
 
 replicate_table_shards
 ---------------------------------------------------------------------
@@ -336,7 +336,7 @@ replicate_table_shards
 (1 row)
 
 step s2-replicate-nc:
- select replicate_table_shards('non_colocated');
+    select replicate_table_shards('non_colocated');
 
 replicate_table_shards
 ---------------------------------------------------------------------
@@ -344,7 +344,7 @@ replicate_table_shards
 (1 row)
 
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -359,8 +359,8 @@ create_distributed_table
 (1 row)
 
 step s1-rebalance-c1:
- BEGIN;
- select rebalance_table_shards('colocated1');
+    BEGIN;
+    select rebalance_table_shards('colocated1');
 
 rebalance_table_shards
 ---------------------------------------------------------------------
@@ -368,11 +368,11 @@ rebalance_table_shards
 (1 row)
 
 step s2-rebalance-all:
- select rebalance_table_shards();
+    select rebalance_table_shards();
 
 ERROR:  could not acquire the lock required to rebalance public.colocated1
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -387,8 +387,8 @@ create_distributed_table
 (1 row)
 
 step s1-replicate-c1:
- BEGIN;
- select replicate_table_shards('colocated1');
+    BEGIN;
+    select replicate_table_shards('colocated1');
 
 replicate_table_shards
 ---------------------------------------------------------------------
@@ -396,11 +396,11 @@ replicate_table_shards
 (1 row)
 
 step s2-rebalance-all:
- select rebalance_table_shards();
+    select rebalance_table_shards();
 
 ERROR:  could not acquire the lock required to rebalance public.colocated1
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -415,8 +415,8 @@ create_distributed_table
 (1 row)
 
 step s1-rebalance-nc:
- BEGIN;
- select rebalance_table_shards('non_colocated');
+    BEGIN;
+    select rebalance_table_shards('non_colocated');
 
 rebalance_table_shards
 ---------------------------------------------------------------------
@@ -424,11 +424,11 @@ rebalance_table_shards
 (1 row)
 
 step s2-rebalance-all:
- select rebalance_table_shards();
+    select rebalance_table_shards();
 
 ERROR:  could not acquire the lock required to rebalance public.non_colocated
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -443,8 +443,8 @@ create_distributed_table
 (1 row)
 
 step s1-replicate-nc:
- BEGIN;
- select replicate_table_shards('non_colocated');
+    BEGIN;
+    select replicate_table_shards('non_colocated');
 
 replicate_table_shards
 ---------------------------------------------------------------------
@@ -452,11 +452,11 @@ replicate_table_shards
 (1 row)
 
 step s2-rebalance-all:
- select rebalance_table_shards();
+    select rebalance_table_shards();
 
 ERROR:  could not acquire the lock required to rebalance public.non_colocated
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -471,8 +471,8 @@ create_distributed_table
 (1 row)
 
 step s1-rebalance-c1:
- BEGIN;
- select rebalance_table_shards('colocated1');
+    BEGIN;
+    select rebalance_table_shards('colocated1');
 
 rebalance_table_shards
 ---------------------------------------------------------------------
@@ -480,11 +480,11 @@ rebalance_table_shards
 (1 row)
 
 step s2-drain:
- select master_drain_node('localhost', 57638);
+    select master_drain_node('localhost', 57638);
 
 ERROR:  could not acquire the lock required to move public.colocated1
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -499,8 +499,8 @@ create_distributed_table
 (1 row)
 
 step s1-replicate-c1:
- BEGIN;
- select replicate_table_shards('colocated1');
+    BEGIN;
+    select replicate_table_shards('colocated1');
 
 replicate_table_shards
 ---------------------------------------------------------------------
@@ -508,11 +508,11 @@ replicate_table_shards
 (1 row)
 
 step s2-drain:
- select master_drain_node('localhost', 57638);
+    select master_drain_node('localhost', 57638);
 
 ERROR:  could not acquire the lock required to move public.colocated1
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -527,8 +527,8 @@ create_distributed_table
 (1 row)
 
 step s1-rebalance-nc:
- BEGIN;
- select rebalance_table_shards('non_colocated');
+    BEGIN;
+    select rebalance_table_shards('non_colocated');
 
 rebalance_table_shards
 ---------------------------------------------------------------------
@@ -536,11 +536,11 @@ rebalance_table_shards
 (1 row)
 
 step s2-drain:
- select master_drain_node('localhost', 57638);
+    select master_drain_node('localhost', 57638);
 
 ERROR:  could not acquire the lock required to move public.non_colocated
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------
@@ -555,8 +555,8 @@ create_distributed_table
 (1 row)
 
 step s1-replicate-nc:
- BEGIN;
- select replicate_table_shards('non_colocated');
+    BEGIN;
+    select replicate_table_shards('non_colocated');
 
 replicate_table_shards
 ---------------------------------------------------------------------
@@ -564,11 +564,11 @@ replicate_table_shards
 (1 row)
 
 step s2-drain:
- select master_drain_node('localhost', 57638);
+    select master_drain_node('localhost', 57638);
 
 ERROR:  could not acquire the lock required to move public.non_colocated
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 master_set_node_property
 ---------------------------------------------------------------------

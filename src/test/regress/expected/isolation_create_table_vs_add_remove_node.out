@@ -7,10 +7,10 @@ localhost|    57637
 (1 row)
 
 step s1-begin:
-	BEGIN;
+    BEGIN;
 
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -18,13 +18,13 @@ step s1-add-node-2:
 (1 row)
 
 step s2-create-table-1:
-	SET citus.shard_count TO 4;
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE dist_table (x int, y int);
-	SELECT create_distributed_table('dist_table', 'x');
+    SET citus.shard_count TO 4;
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE dist_table (x int, y int);
+    SELECT create_distributed_table('dist_table', 'x');
  <waiting ...>
 step s1-commit: 
-	COMMIT;
+    COMMIT;
 
 step s2-create-table-1: <... completed>
 create_distributed_table
@@ -33,14 +33,14 @@ create_distributed_table
 (1 row)
 
 step s1-show-placements:
-	SELECT
-		nodename, nodeport
-	FROM
-		pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
-	WHERE
-		logicalrelid = 'dist_table'::regclass
-	ORDER BY
-		nodename, nodeport;
+    SELECT
+        nodename, nodeport
+    FROM
+        pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+    WHERE
+        logicalrelid = 'dist_table'::regclass
+    ORDER BY
+        nodename, nodeport;
 
 nodename |nodeport
 ---------------------------------------------------------------------
@@ -51,7 +51,7 @@ localhost|   57638
 (4 rows)
 
 step s2-select:
-	SELECT * FROM dist_table;
+    SELECT * FROM dist_table;
 
 x|y
 ---------------------------------------------------------------------
@@ -71,10 +71,10 @@ localhost|    57637
 (1 row)
 
 step s1-begin:
-	BEGIN;
+    BEGIN;
 
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -82,13 +82,13 @@ step s1-add-node-2:
 (1 row)
 
 step s2-create-table-1:
-	SET citus.shard_count TO 4;
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE dist_table (x int, y int);
-	SELECT create_distributed_table('dist_table', 'x');
+    SET citus.shard_count TO 4;
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE dist_table (x int, y int);
+    SELECT create_distributed_table('dist_table', 'x');
  <waiting ...>
 step s1-abort: 
-	ABORT;
+    ABORT;
 
 step s2-create-table-1: <... completed>
 create_distributed_table
@@ -97,14 +97,14 @@ create_distributed_table
 (1 row)
 
 step s1-show-placements:
-	SELECT
-		nodename, nodeport
-	FROM
-		pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
-	WHERE
-		logicalrelid = 'dist_table'::regclass
-	ORDER BY
-		nodename, nodeport;
+    SELECT
+        nodename, nodeport
+    FROM
+        pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+    WHERE
+        logicalrelid = 'dist_table'::regclass
+    ORDER BY
+        nodename, nodeport;
 
 nodename |nodeport
 ---------------------------------------------------------------------
@@ -115,7 +115,7 @@ localhost|   57637
 (4 rows)
 
 step s2-select:
-	SELECT * FROM dist_table;
+    SELECT * FROM dist_table;
 
 x|y
 ---------------------------------------------------------------------
@@ -134,13 +134,13 @@ localhost|    57637
 (1 row)
 
 step s2-begin:
-	BEGIN;
+    BEGIN;
 
 step s2-create-table-1:
-	SET citus.shard_count TO 4;
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE dist_table (x int, y int);
-	SELECT create_distributed_table('dist_table', 'x');
+    SET citus.shard_count TO 4;
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE dist_table (x int, y int);
+    SELECT create_distributed_table('dist_table', 'x');
 
 create_distributed_table
 ---------------------------------------------------------------------
@@ -148,10 +148,10 @@ create_distributed_table
 (1 row)
 
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
-	COMMIT;
+    COMMIT;
 
 step s1-add-node-2: <... completed>
 ?column?
@@ -160,14 +160,14 @@ step s1-add-node-2: <... completed>
 (1 row)
 
 step s1-show-placements:
-	SELECT
-		nodename, nodeport
-	FROM
-		pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
-	WHERE
-		logicalrelid = 'dist_table'::regclass
-	ORDER BY
-		nodename, nodeport;
+    SELECT
+        nodename, nodeport
+    FROM
+        pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+    WHERE
+        logicalrelid = 'dist_table'::regclass
+    ORDER BY
+        nodename, nodeport;
 
 nodename |nodeport
 ---------------------------------------------------------------------
@@ -178,7 +178,7 @@ localhost|   57637
 (4 rows)
 
 step s2-select:
-	SELECT * FROM dist_table;
+    SELECT * FROM dist_table;
 
 x|y
 ---------------------------------------------------------------------
@@ -198,7 +198,7 @@ localhost|    57637
 (1 row)
 
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -206,10 +206,10 @@ step s1-add-node-2:
 (1 row)
 
 step s1-begin:
-	BEGIN;
+    BEGIN;
 
 step s1-remove-node-2:
-	SELECT * FROM master_remove_node('localhost', 57638);
+    SELECT * FROM master_remove_node('localhost', 57638);
 
 master_remove_node
 ---------------------------------------------------------------------
@@ -217,13 +217,13 @@ master_remove_node
 (1 row)
 
 step s2-create-table-1:
-	SET citus.shard_count TO 4;
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE dist_table (x int, y int);
-	SELECT create_distributed_table('dist_table', 'x');
+    SET citus.shard_count TO 4;
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE dist_table (x int, y int);
+    SELECT create_distributed_table('dist_table', 'x');
  <waiting ...>
 step s1-commit: 
-	COMMIT;
+    COMMIT;
 
 step s2-create-table-1: <... completed>
 create_distributed_table
@@ -232,14 +232,14 @@ create_distributed_table
 (1 row)
 
 step s1-show-placements:
-	SELECT
-		nodename, nodeport
-	FROM
-		pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
-	WHERE
-		logicalrelid = 'dist_table'::regclass
-	ORDER BY
-		nodename, nodeport;
+    SELECT
+        nodename, nodeport
+    FROM
+        pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+    WHERE
+        logicalrelid = 'dist_table'::regclass
+    ORDER BY
+        nodename, nodeport;
 
 nodename |nodeport
 ---------------------------------------------------------------------
@@ -250,7 +250,7 @@ localhost|   57637
 (4 rows)
 
 step s2-select:
-	SELECT * FROM dist_table;
+    SELECT * FROM dist_table;
 
 x|y
 ---------------------------------------------------------------------
@@ -269,7 +269,7 @@ localhost|    57637
 (1 row)
 
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -277,10 +277,10 @@ step s1-add-node-2:
 (1 row)
 
 step s1-begin:
-	BEGIN;
+    BEGIN;
 
 step s1-remove-node-2:
-	SELECT * FROM master_remove_node('localhost', 57638);
+    SELECT * FROM master_remove_node('localhost', 57638);
 
 master_remove_node
 ---------------------------------------------------------------------
@@ -288,13 +288,13 @@ master_remove_node
 (1 row)
 
 step s2-create-table-1:
-	SET citus.shard_count TO 4;
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE dist_table (x int, y int);
-	SELECT create_distributed_table('dist_table', 'x');
+    SET citus.shard_count TO 4;
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE dist_table (x int, y int);
+    SELECT create_distributed_table('dist_table', 'x');
  <waiting ...>
 step s1-abort: 
-	ABORT;
+    ABORT;
 
 step s2-create-table-1: <... completed>
 create_distributed_table
@@ -303,14 +303,14 @@ create_distributed_table
 (1 row)
 
 step s1-show-placements:
-	SELECT
-		nodename, nodeport
-	FROM
-		pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
-	WHERE
-		logicalrelid = 'dist_table'::regclass
-	ORDER BY
-		nodename, nodeport;
+    SELECT
+        nodename, nodeport
+    FROM
+        pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+    WHERE
+        logicalrelid = 'dist_table'::regclass
+    ORDER BY
+        nodename, nodeport;
 
 nodename |nodeport
 ---------------------------------------------------------------------
@@ -321,7 +321,7 @@ localhost|   57638
 (4 rows)
 
 step s2-select:
-	SELECT * FROM dist_table;
+    SELECT * FROM dist_table;
 
 x|y
 ---------------------------------------------------------------------
@@ -341,7 +341,7 @@ localhost|    57637
 (1 row)
 
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -349,13 +349,13 @@ step s1-add-node-2:
 (1 row)
 
 step s2-begin:
-	BEGIN;
+    BEGIN;
 
 step s2-create-table-1:
-	SET citus.shard_count TO 4;
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE dist_table (x int, y int);
-	SELECT create_distributed_table('dist_table', 'x');
+    SET citus.shard_count TO 4;
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE dist_table (x int, y int);
+    SELECT create_distributed_table('dist_table', 'x');
 
 create_distributed_table
 ---------------------------------------------------------------------
@@ -363,22 +363,22 @@ create_distributed_table
 (1 row)
 
 step s1-remove-node-2:
-	SELECT * FROM master_remove_node('localhost', 57638);
+    SELECT * FROM master_remove_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
-	COMMIT;
+    COMMIT;
 
 step s1-remove-node-2: <... completed>
 ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
 step s1-show-placements:
-	SELECT
-		nodename, nodeport
-	FROM
-		pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
-	WHERE
-		logicalrelid = 'dist_table'::regclass
-	ORDER BY
-		nodename, nodeport;
+    SELECT
+        nodename, nodeport
+    FROM
+        pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+    WHERE
+        logicalrelid = 'dist_table'::regclass
+    ORDER BY
+        nodename, nodeport;
 
 nodename |nodeport
 ---------------------------------------------------------------------
@@ -389,7 +389,7 @@ localhost|   57638
 (4 rows)
 
 step s2-select:
-	SELECT * FROM dist_table;
+    SELECT * FROM dist_table;
 
 x|y
 ---------------------------------------------------------------------
@@ -409,7 +409,7 @@ localhost|    57637
 (1 row)
 
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -417,10 +417,10 @@ step s1-add-node-2:
 (1 row)
 
 step s1-begin:
-	BEGIN;
+    BEGIN;
 
 step s1-remove-node-2:
-	SELECT * FROM master_remove_node('localhost', 57638);
+    SELECT * FROM master_remove_node('localhost', 57638);
 
 master_remove_node
 ---------------------------------------------------------------------
@@ -428,13 +428,13 @@ master_remove_node
 (1 row)
 
 step s2-create-table-2:
-	SET citus.shard_count TO 4;
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE dist_table (x int, y int);
-	SELECT create_distributed_table('dist_table', 'x');
+    SET citus.shard_count TO 4;
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE dist_table (x int, y int);
+    SELECT create_distributed_table('dist_table', 'x');
  <waiting ...>
 step s1-commit: 
-	COMMIT;
+    COMMIT;
 
 step s2-create-table-2: <... completed>
 create_distributed_table
@@ -443,7 +443,7 @@ create_distributed_table
 (1 row)
 
 step s2-select:
-	SELECT * FROM dist_table;
+    SELECT * FROM dist_table;
 
 x|y
 ---------------------------------------------------------------------
@@ -462,7 +462,7 @@ localhost|    57637
 (1 row)
 
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -470,13 +470,13 @@ step s1-add-node-2:
 (1 row)
 
 step s2-begin:
-	BEGIN;
+    BEGIN;
 
 step s2-create-table-2:
-	SET citus.shard_count TO 4;
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE dist_table (x int, y int);
-	SELECT create_distributed_table('dist_table', 'x');
+    SET citus.shard_count TO 4;
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE dist_table (x int, y int);
+    SELECT create_distributed_table('dist_table', 'x');
 
 create_distributed_table
 ---------------------------------------------------------------------
@@ -484,15 +484,15 @@ create_distributed_table
 (1 row)
 
 step s1-remove-node-2:
-	SELECT * FROM master_remove_node('localhost', 57638);
+    SELECT * FROM master_remove_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
-	COMMIT;
+    COMMIT;
 
 step s1-remove-node-2: <... completed>
 ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
 step s2-select:
-	SELECT * FROM dist_table;
+    SELECT * FROM dist_table;
 
 x|y
 ---------------------------------------------------------------------
@@ -512,7 +512,7 @@ localhost|    57637
 (1 row)
 
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -520,10 +520,10 @@ step s1-add-node-2:
 (1 row)
 
 step s1-begin:
-	BEGIN;
+    BEGIN;
 
 step s1-remove-node-2:
-	SELECT * FROM master_remove_node('localhost', 57638);
+    SELECT * FROM master_remove_node('localhost', 57638);
 
 master_remove_node
 ---------------------------------------------------------------------
@@ -531,13 +531,13 @@ master_remove_node
 (1 row)
 
 step s2-create-append-table:
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE dist_table (x int, y int);
-	SELECT create_distributed_table('dist_table', 'x', 'append');
-	SELECT 1 FROM master_create_empty_shard('dist_table');
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE dist_table (x int, y int);
+    SELECT create_distributed_table('dist_table', 'x', 'append');
+    SELECT 1 FROM master_create_empty_shard('dist_table');
  <waiting ...>
 step s1-commit: 
-	COMMIT;
+    COMMIT;
 
 step s2-create-append-table: <... completed>
 create_distributed_table
@@ -551,7 +551,7 @@ create_distributed_table
 (1 row)
 
 step s2-select:
-	SELECT * FROM dist_table;
+    SELECT * FROM dist_table;
 
 x|y
 ---------------------------------------------------------------------
@@ -570,7 +570,7 @@ localhost|    57637
 (1 row)
 
 step s1-add-node-2:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -578,13 +578,13 @@ step s1-add-node-2:
 (1 row)
 
 step s2-begin:
-	BEGIN;
+    BEGIN;
 
 step s2-create-append-table:
-	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE dist_table (x int, y int);
-	SELECT create_distributed_table('dist_table', 'x', 'append');
-	SELECT 1 FROM master_create_empty_shard('dist_table');
+    SET citus.shard_replication_factor TO 1;
+    CREATE TABLE dist_table (x int, y int);
+    SELECT create_distributed_table('dist_table', 'x', 'append');
+    SELECT 1 FROM master_create_empty_shard('dist_table');
 
 create_distributed_table
 ---------------------------------------------------------------------
@@ -597,15 +597,15 @@ create_distributed_table
 (1 row)
 
 step s1-remove-node-2:
-	SELECT * FROM master_remove_node('localhost', 57638);
+    SELECT * FROM master_remove_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
-	COMMIT;
+    COMMIT;
 
 step s1-remove-node-2: <... completed>
 ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
 step s2-select:
-	SELECT * FROM dist_table;
+    SELECT * FROM dist_table;
 
 x|y
 ---------------------------------------------------------------------

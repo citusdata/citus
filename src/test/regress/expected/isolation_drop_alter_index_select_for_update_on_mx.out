@@ -42,10 +42,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-alter:
- ALTER TABLE dist_table DROP value;
+    ALTER TABLE dist_table DROP value;
  <waiting ...>
 step s1-commit-worker: 
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -62,7 +62,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -78,7 +78,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s3-select-count:
- SELECT COUNT(*) FROM dist_table;
+    SELECT COUNT(*) FROM dist_table;
 
 count
 ---------------------------------------------------------------------
@@ -88,10 +88,10 @@ count
 
 starting permutation: s1-begin s1-index s2-start-session-level-connection s2-begin-on-worker s2-select-for-update s1-commit s2-commit-worker s2-stop-connection
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s1-index:
- CREATE INDEX dist_table_index ON dist_table (id);
+    CREATE INDEX dist_table_index ON dist_table (id);
 
 step s2-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57638);
@@ -110,7 +110,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-select-for-update:
- SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -118,7 +118,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s2-commit-worker:
         SELECT run_commands_on_session_level_connection_to_node('COMMIT');
@@ -155,7 +155,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-select-for-update:
- SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -179,10 +179,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-select-for-update:
- SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
  <waiting ...>
 step s1-commit-worker: 
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -204,7 +204,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -238,7 +238,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-select-for-update:
- SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -246,10 +246,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-flaky-coordinator-create-index-concurrently:
- CREATE INDEX CONCURRENTLY flaky_dist_table_index_conc ON dist_table(id);
+    CREATE INDEX CONCURRENTLY flaky_dist_table_index_conc ON dist_table(id);
 
 step s1-commit-worker:
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+    SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -257,7 +257,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------

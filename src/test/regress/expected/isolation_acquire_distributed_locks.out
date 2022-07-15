@@ -2,10 +2,10 @@ Parsed test spec with 3 sessions
 
 starting permutation: coor-begin coor-acquire-aggresive-lock-on-dist-table w1-start-session-level-connection w1-begin w1-read-dist-table coor-rollback w1-rollback w1-stop-connection
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-acquire-aggresive-lock-on-dist-table:
- LOCK dist_table IN ACCESS EXCLUSIVE MODE;
+    LOCK dist_table IN ACCESS EXCLUSIVE MODE;
 
 step w1-start-session-level-connection:
     SELECT start_session_level_connection_to_node('localhost', 57637);
@@ -16,7 +16,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -24,10 +24,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-read-dist-table:
- SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM dist_table');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM dist_table');
  <waiting ...>
 step coor-rollback: 
- ROLLBACK;
+    ROLLBACK;
 
 step w1-read-dist-table: <... completed>
 run_commands_on_session_level_connection_to_node
@@ -36,7 +36,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-rollback:
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -44,7 +44,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -59,10 +59,10 @@ citus_remove_node
 
 starting permutation: coor-begin coor-acquire-aggresive-lock-on-dist-table w1-start-session-level-connection w1-begin w1-acquire-aggressive-lock-dist-table coor-rollback coor-read-dist-table w1-rollback w1-stop-connection
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-acquire-aggresive-lock-on-dist-table:
- LOCK dist_table IN ACCESS EXCLUSIVE MODE;
+    LOCK dist_table IN ACCESS EXCLUSIVE MODE;
 
 step w1-start-session-level-connection:
     SELECT start_session_level_connection_to_node('localhost', 57637);
@@ -73,7 +73,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -81,10 +81,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-acquire-aggressive-lock-dist-table:
- SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
+    SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
  <waiting ...>
 step coor-rollback: 
- ROLLBACK;
+    ROLLBACK;
 
 step w1-acquire-aggressive-lock-dist-table: <... completed>
 run_commands_on_session_level_connection_to_node
@@ -93,10 +93,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step coor-read-dist-table:
- SELECT COUNT(*) FROM dist_table;
+    SELECT COUNT(*) FROM dist_table;
  <waiting ...>
 step w1-rollback: 
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -110,7 +110,7 @@ count
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -133,7 +133,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -141,7 +141,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-acquire-aggressive-lock-dist-table:
- SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
+    SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -149,17 +149,17 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-acquire-aggresive-lock-on-dist-table-nowait:
- LOCK dist_table IN ACCESS EXCLUSIVE MODE NOWAIT;
+    LOCK dist_table IN ACCESS EXCLUSIVE MODE NOWAIT;
 
 ERROR:  could not obtain lock on relation "public.dist_table"
 step coor-rollback:
- ROLLBACK;
+    ROLLBACK;
 
 step w1-rollback:
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -167,7 +167,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -190,7 +190,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -206,7 +206,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w2-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -214,7 +214,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-acquire-aggressive-lock-dist-table:
- SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
+    SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -222,10 +222,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w2-acquire-aggressive-lock-dist-table:
- SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
+    SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
  <waiting ...>
 step w1-rollback: 
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -239,10 +239,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-read-dist-table:
- SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM dist_table');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM dist_table');
  <waiting ...>
 step w2-rollback: 
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -256,7 +256,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -264,7 +264,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step w2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -279,10 +279,10 @@ citus_remove_node
 
 starting permutation: coor-begin coor-acquire-weak-lock-on-dist-table w1-start-session-level-connection w1-begin w1-read-dist-table w1-acquire-aggressive-lock-dist-table coor-rollback w1-rollback w1-stop-connection
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-acquire-weak-lock-on-dist-table:
- LOCK dist_table IN ACCESS SHARE MODE;
+    LOCK dist_table IN ACCESS SHARE MODE;
 
 step w1-start-session-level-connection:
     SELECT start_session_level_connection_to_node('localhost', 57637);
@@ -293,7 +293,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -301,7 +301,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-read-dist-table:
- SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM dist_table');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -309,10 +309,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-acquire-aggressive-lock-dist-table:
- SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
+    SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
  <waiting ...>
 step coor-rollback: 
- ROLLBACK;
+    ROLLBACK;
 
 step w1-acquire-aggressive-lock-dist-table: <... completed>
 run_commands_on_session_level_connection_to_node
@@ -321,7 +321,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-rollback:
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -329,7 +329,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -352,7 +352,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -360,7 +360,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-lock-reference-table:
- SELECT run_commands_on_session_level_connection_to_node('LOCK ref_table IN ACCESS EXCLUSIVE MODE');
+    SELECT run_commands_on_session_level_connection_to_node('LOCK ref_table IN ACCESS EXCLUSIVE MODE');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -368,13 +368,13 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-read-ref-table:
- SELECT COUNT(*) FROM ref_table;
+    SELECT COUNT(*) FROM ref_table;
  <waiting ...>
 step w1-rollback: 
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -388,10 +388,10 @@ count
 (1 row)
 
 step coor-rollback:
- ROLLBACK;
+    ROLLBACK;
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -406,10 +406,10 @@ citus_remove_node
 
 starting permutation: coor-begin coor-acquire-aggresive-lock-on-view w1-start-session-level-connection w1-begin w1-read-dist-table coor-rollback w1-rollback w1-stop-connection
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-acquire-aggresive-lock-on-view:
- LOCK main_view IN ACCESS EXCLUSIVE MODE;
+    LOCK main_view IN ACCESS EXCLUSIVE MODE;
 
 step w1-start-session-level-connection:
     SELECT start_session_level_connection_to_node('localhost', 57637);
@@ -420,7 +420,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -428,10 +428,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-read-dist-table:
- SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM dist_table');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM dist_table');
  <waiting ...>
 step coor-rollback: 
- ROLLBACK;
+    ROLLBACK;
 
 step w1-read-dist-table: <... completed>
 run_commands_on_session_level_connection_to_node
@@ -440,7 +440,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-rollback:
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -448,7 +448,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -463,10 +463,10 @@ citus_remove_node
 
 starting permutation: coor-begin coor-acquire-aggresive-lock-on-view w1-start-session-level-connection w1-begin w1-acquire-aggressive-lock-dist-table coor-rollback w1-rollback w1-stop-connection
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-acquire-aggresive-lock-on-view:
- LOCK main_view IN ACCESS EXCLUSIVE MODE;
+    LOCK main_view IN ACCESS EXCLUSIVE MODE;
 
 step w1-start-session-level-connection:
     SELECT start_session_level_connection_to_node('localhost', 57637);
@@ -477,7 +477,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -485,10 +485,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-acquire-aggressive-lock-dist-table:
- SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
+    SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
  <waiting ...>
 step coor-rollback: 
- ROLLBACK;
+    ROLLBACK;
 
 step w1-acquire-aggressive-lock-dist-table: <... completed>
 run_commands_on_session_level_connection_to_node
@@ -497,7 +497,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-rollback:
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -505,7 +505,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -520,10 +520,10 @@ citus_remove_node
 
 starting permutation: coor-begin coor-acquire-aggresive-lock-on-view w1-start-session-level-connection w1-begin w1-read-ref-table coor-rollback w1-rollback w1-stop-connection
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-acquire-aggresive-lock-on-view:
- LOCK main_view IN ACCESS EXCLUSIVE MODE;
+    LOCK main_view IN ACCESS EXCLUSIVE MODE;
 
 step w1-start-session-level-connection:
     SELECT start_session_level_connection_to_node('localhost', 57637);
@@ -534,7 +534,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -542,10 +542,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-read-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM ref_table');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM ref_table');
  <waiting ...>
 step coor-rollback: 
- ROLLBACK;
+    ROLLBACK;
 
 step w1-read-ref-table: <... completed>
 run_commands_on_session_level_connection_to_node
@@ -554,7 +554,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-rollback:
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -562,7 +562,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -577,10 +577,10 @@ citus_remove_node
 
 starting permutation: coor-begin coor-acquire-aggresive-lock-on-only-view w1-start-session-level-connection w1-begin w1-read-ref-table coor-rollback w1-rollback w1-stop-connection
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-acquire-aggresive-lock-on-only-view:
- LOCK ONLY main_view IN ACCESS EXCLUSIVE MODE;
+    LOCK ONLY main_view IN ACCESS EXCLUSIVE MODE;
 
 step w1-start-session-level-connection:
     SELECT start_session_level_connection_to_node('localhost', 57637);
@@ -591,7 +591,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -599,10 +599,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-read-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM ref_table');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM ref_table');
  <waiting ...>
 step coor-rollback: 
- ROLLBACK;
+    ROLLBACK;
 
 step w1-read-ref-table: <... completed>
 run_commands_on_session_level_connection_to_node
@@ -611,7 +611,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-rollback:
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -619,7 +619,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -642,7 +642,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -650,7 +650,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-acquire-aggressive-lock-dist-table:
- SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
+    SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -658,17 +658,17 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-acquire-aggresive-lock-on-view-nowait:
- LOCK main_view IN ACCESS EXCLUSIVE MODE NOWAIT;
+    LOCK main_view IN ACCESS EXCLUSIVE MODE NOWAIT;
 
 ERROR:  could not obtain lock on relation "dist_table"
 step coor-rollback:
- ROLLBACK;
+    ROLLBACK;
 
 step w1-rollback:
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -676,7 +676,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -691,10 +691,10 @@ citus_remove_node
 
 starting permutation: coor-begin coor-lock-all w1-start-session-level-connection w1-begin w1-read-citus-local-table coor-rollback w1-rollback w1-stop-connection
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-lock-all:
- LOCK dist_table, citus_local_table, ref_table, main_view, sub_view, local_table IN ACCESS EXCLUSIVE MODE;
+    LOCK dist_table, citus_local_table, ref_table, main_view, sub_view, local_table IN ACCESS EXCLUSIVE MODE;
 
 step w1-start-session-level-connection:
     SELECT start_session_level_connection_to_node('localhost', 57637);
@@ -705,7 +705,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -713,10 +713,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-read-citus-local-table:
- SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM citus_local_table');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM citus_local_table');
  <waiting ...>
 step coor-rollback: 
- ROLLBACK;
+    ROLLBACK;
 
 step w1-read-citus-local-table: <... completed>
 run_commands_on_session_level_connection_to_node
@@ -725,7 +725,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-rollback:
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -733,7 +733,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -748,10 +748,10 @@ citus_remove_node
 
 starting permutation: coor-begin coor-acquire-aggresive-lock-on-partitioned-table w1-start-session-level-connection w1-begin w1-read-partitioned-table coor-rollback w1-rollback w1-stop-connection
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-acquire-aggresive-lock-on-partitioned-table:
- LOCK partitioned_table IN ACCESS EXCLUSIVE MODE;
+    LOCK partitioned_table IN ACCESS EXCLUSIVE MODE;
 
 step w1-start-session-level-connection:
     SELECT start_session_level_connection_to_node('localhost', 57637);
@@ -762,7 +762,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -770,10 +770,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-read-partitioned-table:
- SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM partitioned_table');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM partitioned_table');
  <waiting ...>
 step coor-rollback: 
- ROLLBACK;
+    ROLLBACK;
 
 step w1-read-partitioned-table: <... completed>
 run_commands_on_session_level_connection_to_node
@@ -782,7 +782,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-rollback:
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -790,7 +790,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -805,10 +805,10 @@ citus_remove_node
 
 starting permutation: coor-begin coor-acquire-aggresive-lock-on-partitioned-table w1-start-session-level-connection w1-begin w1-read-partition-of-partitioned-table coor-rollback w1-rollback w1-stop-connection
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-acquire-aggresive-lock-on-partitioned-table:
- LOCK partitioned_table IN ACCESS EXCLUSIVE MODE;
+    LOCK partitioned_table IN ACCESS EXCLUSIVE MODE;
 
 step w1-start-session-level-connection:
     SELECT start_session_level_connection_to_node('localhost', 57637);
@@ -819,7 +819,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -827,10 +827,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-read-partition-of-partitioned-table:
- SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM partition_1');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM partition_1');
  <waiting ...>
 step coor-rollback: 
- ROLLBACK;
+    ROLLBACK;
 
 step w1-read-partition-of-partitioned-table: <... completed>
 run_commands_on_session_level_connection_to_node
@@ -839,7 +839,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-rollback:
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -847,7 +847,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -862,10 +862,10 @@ citus_remove_node
 
 starting permutation: coor-begin coor-acquire-aggresive-lock-on-partitioned-table-with-*-syntax w1-start-session-level-connection w1-begin w1-read-partition-of-partitioned-table coor-rollback w1-rollback w1-stop-connection
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-acquire-aggresive-lock-on-partitioned-table-with-*-syntax:
- LOCK partitioned_table * IN ACCESS EXCLUSIVE MODE;
+    LOCK partitioned_table * IN ACCESS EXCLUSIVE MODE;
 
 step w1-start-session-level-connection:
     SELECT start_session_level_connection_to_node('localhost', 57637);
@@ -876,7 +876,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -884,10 +884,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-read-partition-of-partitioned-table:
- SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM partition_1');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM partition_1');
  <waiting ...>
 step coor-rollback: 
- ROLLBACK;
+    ROLLBACK;
 
 step w1-read-partition-of-partitioned-table: <... completed>
 run_commands_on_session_level_connection_to_node
@@ -896,7 +896,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-rollback:
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -904,7 +904,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -919,10 +919,10 @@ citus_remove_node
 
 starting permutation: coor-begin coor-acquire-aggresive-lock-on-only-partitioned-table w1-start-session-level-connection w1-begin w1-read-partitioned-table coor-rollback w1-rollback w1-stop-connection
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-acquire-aggresive-lock-on-only-partitioned-table:
- LOCK ONLY partitioned_table IN ACCESS EXCLUSIVE MODE;
+    LOCK ONLY partitioned_table IN ACCESS EXCLUSIVE MODE;
 
 step w1-start-session-level-connection:
     SELECT start_session_level_connection_to_node('localhost', 57637);
@@ -933,7 +933,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -941,10 +941,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-read-partitioned-table:
- SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM partitioned_table');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM partitioned_table');
  <waiting ...>
 step coor-rollback: 
- ROLLBACK;
+    ROLLBACK;
 
 step w1-read-partitioned-table: <... completed>
 run_commands_on_session_level_connection_to_node
@@ -953,7 +953,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-rollback:
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -961,7 +961,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -976,10 +976,10 @@ citus_remove_node
 
 starting permutation: coor-begin coor-acquire-aggresive-lock-on-only-partitioned-table w1-start-session-level-connection w1-begin w1-read-partition-of-partitioned-table coor-rollback w1-rollback w1-stop-connection
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-acquire-aggresive-lock-on-only-partitioned-table:
- LOCK ONLY partitioned_table IN ACCESS EXCLUSIVE MODE;
+    LOCK ONLY partitioned_table IN ACCESS EXCLUSIVE MODE;
 
 step w1-start-session-level-connection:
     SELECT start_session_level_connection_to_node('localhost', 57637);
@@ -990,7 +990,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -998,7 +998,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-read-partition-of-partitioned-table:
- SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM partition_1');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM partition_1');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -1006,10 +1006,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step coor-rollback:
- ROLLBACK;
+    ROLLBACK;
 
 step w1-rollback:
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -1017,7 +1017,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -1032,10 +1032,10 @@ citus_remove_node
 
 starting permutation: coor-begin coor-acquire-aggresive-lock-on-ref-table w1-start-session-level-connection w1-begin w1-read-main-view coor-rollback w1-rollback w1-stop-connection
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-acquire-aggresive-lock-on-ref-table:
- LOCK ref_table IN ACCESS EXCLUSIVE MODE;
+    LOCK ref_table IN ACCESS EXCLUSIVE MODE;
 
 step w1-start-session-level-connection:
     SELECT start_session_level_connection_to_node('localhost', 57637);
@@ -1046,7 +1046,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -1054,10 +1054,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-read-main-view:
- SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM main_view');
+    SELECT run_commands_on_session_level_connection_to_node('SELECT COUNT(*) FROM main_view');
  <waiting ...>
 step coor-rollback: 
- ROLLBACK;
+    ROLLBACK;
 
 step w1-read-main-view: <... completed>
 run_commands_on_session_level_connection_to_node
@@ -1066,7 +1066,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-rollback:
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -1074,7 +1074,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -1089,10 +1089,10 @@ citus_remove_node
 
 starting permutation: coor-begin coor-read-dist-table w2-start-session-level-connection w2-begin w1-start-session-level-connection w1-begin w2-acquire-aggressive-lock-dist-table w1-acquire-aggressive-lock-dist-table coor-rollback w2-rollback w1-rollback w1-stop-connection w2-stop-connection
 step coor-begin:
- BEGIN;
+    BEGIN;
 
 step coor-read-dist-table:
- SELECT COUNT(*) FROM dist_table;
+    SELECT COUNT(*) FROM dist_table;
 
 count
 ---------------------------------------------------------------------
@@ -1108,7 +1108,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w2-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -1124,7 +1124,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step w1-begin:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -1132,13 +1132,13 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w2-acquire-aggressive-lock-dist-table:
- SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
+    SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
  <waiting ...>
 step w1-acquire-aggressive-lock-dist-table: 
- SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
+    SELECT run_commands_on_session_level_connection_to_node('LOCK dist_table IN ACCESS EXCLUSIVE MODE');
  <waiting ...>
 step coor-rollback: 
- ROLLBACK;
+    ROLLBACK;
 
 step w2-acquire-aggressive-lock-dist-table: <... completed>
 run_commands_on_session_level_connection_to_node
@@ -1147,7 +1147,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w2-rollback:
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -1161,7 +1161,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-rollback:
- SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
+    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -1169,7 +1169,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step w1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -1177,7 +1177,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step w2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+    SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------

@@ -7,10 +7,10 @@ starting permutation: s1-begin s1-drop-all-shards s2-truncate s1-commit
 (1 row)
 
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s1-drop-all-shards:
- SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
+    SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
 
 citus_drop_all_shards
 ---------------------------------------------------------------------
@@ -18,10 +18,10 @@ citus_drop_all_shards
 (1 row)
 
 step s2-truncate:
- TRUNCATE append_table;
+    TRUNCATE append_table;
  <waiting ...>
 step s1-commit: 
- COMMIT;
+    COMMIT;
 
 step s2-truncate: <... completed>
 
@@ -32,10 +32,10 @@ starting permutation: s1-begin s1-drop-all-shards s2-drop-all-shards s1-commit
 (1 row)
 
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s1-drop-all-shards:
- SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
+    SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
 
 citus_drop_all_shards
 ---------------------------------------------------------------------
@@ -43,10 +43,10 @@ citus_drop_all_shards
 (1 row)
 
 step s2-drop-all-shards:
- SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
+    SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
  <waiting ...>
 step s1-commit: 
- COMMIT;
+    COMMIT;
 
 step s2-drop-all-shards: <... completed>
 citus_drop_all_shards
@@ -62,10 +62,10 @@ starting permutation: s1-begin s1-drop-all-shards s2-select s1-commit
 (1 row)
 
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s1-drop-all-shards:
- SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
+    SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
 
 citus_drop_all_shards
 ---------------------------------------------------------------------
@@ -73,10 +73,10 @@ citus_drop_all_shards
 (1 row)
 
 step s2-select:
- SELECT * FROM append_table;
+    SELECT * FROM append_table;
  <waiting ...>
 step s1-commit: 
- COMMIT;
+    COMMIT;
 
 step s2-select: <... completed>
 test_id|data
@@ -91,16 +91,16 @@ starting permutation: s1-begin s1-truncate s2-truncate s1-commit
 (1 row)
 
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s1-truncate:
- TRUNCATE append_table;
+    TRUNCATE append_table;
 
 step s2-truncate:
- TRUNCATE append_table;
+    TRUNCATE append_table;
  <waiting ...>
 step s1-commit: 
- COMMIT;
+    COMMIT;
 
 step s2-truncate: <... completed>
 
@@ -111,16 +111,16 @@ starting permutation: s1-begin s1-truncate s2-drop-all-shards s1-commit
 (1 row)
 
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s1-truncate:
- TRUNCATE append_table;
+    TRUNCATE append_table;
 
 step s2-drop-all-shards:
- SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
+    SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
  <waiting ...>
 step s1-commit: 
- COMMIT;
+    COMMIT;
 
 step s2-drop-all-shards: <... completed>
 citus_drop_all_shards
@@ -136,16 +136,16 @@ starting permutation: s1-begin s1-truncate s2-select s1-commit
 (1 row)
 
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s1-truncate:
- TRUNCATE append_table;
+    TRUNCATE append_table;
 
 step s2-select:
- SELECT * FROM append_table;
+    SELECT * FROM append_table;
  <waiting ...>
 step s1-commit: 
- COMMIT;
+    COMMIT;
 
 step s2-select: <... completed>
 test_id|data

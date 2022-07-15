@@ -7,7 +7,7 @@ master_set_node_property
 (1 row)
 
 step s2-lock-1:
- SELECT pg_advisory_lock(29279, 1);
+    SELECT pg_advisory_lock(29279, 1);
 
 pg_advisory_lock
 ---------------------------------------------------------------------
@@ -15,7 +15,7 @@ pg_advisory_lock
 (1 row)
 
 step s2-lock-2:
- SELECT pg_advisory_lock(29279, 2);
+    SELECT pg_advisory_lock(29279, 2);
 
 pg_advisory_lock
 ---------------------------------------------------------------------
@@ -23,24 +23,24 @@ pg_advisory_lock
 (1 row)
 
 step s1-rebalance-c1:
- BEGIN;
- SELECT * FROM get_rebalance_table_shards_plan('colocated1');
- SELECT rebalance_table_shards('colocated1', shard_transfer_mode:='block_writes');
+    BEGIN;
+    SELECT * FROM get_rebalance_table_shards_plan('colocated1');
+    SELECT rebalance_table_shards('colocated1', shard_transfer_mode:='block_writes');
  <waiting ...>
 step s3-progress: 
- set client_min_messages=NOTICE;
- SELECT
-  table_name,
-  shardid,
-  shard_size,
-  sourcename,
-  sourceport,
-  source_shard_size,
-  targetname,
-  targetport,
-  target_shard_size,
-  progress
- FROM get_rebalance_progress();
+    set client_min_messages=NOTICE;
+    SELECT
+        table_name,
+        shardid,
+        shard_size,
+        sourcename,
+        sourceport,
+        source_shard_size,
+        targetname,
+        targetport,
+        target_shard_size,
+        progress
+    FROM get_rebalance_progress();
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
 ---------------------------------------------------------------------
@@ -51,7 +51,7 @@ colocated2|1500006|      8192|localhost |     57637|             8192|localhost 
 (4 rows)
 
 step s2-unlock-1:
- SELECT pg_advisory_unlock(29279, 1);
+    SELECT pg_advisory_unlock(29279, 1);
 
 pg_advisory_unlock
 ---------------------------------------------------------------------
@@ -59,19 +59,19 @@ t
 (1 row)
 
 step s3-progress:
- set client_min_messages=NOTICE;
- SELECT
-  table_name,
-  shardid,
-  shard_size,
-  sourcename,
-  sourceport,
-  source_shard_size,
-  targetname,
-  targetport,
-  target_shard_size,
-  progress
- FROM get_rebalance_progress();
+    set client_min_messages=NOTICE;
+    SELECT
+        table_name,
+        shardid,
+        shard_size,
+        sourcename,
+        sourceport,
+        source_shard_size,
+        targetname,
+        targetport,
+        target_shard_size,
+        progress
+    FROM get_rebalance_progress();
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
 ---------------------------------------------------------------------
@@ -82,7 +82,7 @@ colocated2|1500006|      8192|localhost |     57637|             8192|localhost 
 (4 rows)
 
 step s2-unlock-2:
- SELECT pg_advisory_unlock(29279, 2);
+    SELECT pg_advisory_unlock(29279, 2);
 
 pg_advisory_unlock
 ---------------------------------------------------------------------
@@ -104,41 +104,41 @@ rebalance_table_shards
 (1 row)
 
 step s3-progress:
- set client_min_messages=NOTICE;
- SELECT
-  table_name,
-  shardid,
-  shard_size,
-  sourcename,
-  sourceport,
-  source_shard_size,
-  targetname,
-  targetport,
-  target_shard_size,
-  progress
- FROM get_rebalance_progress();
+    set client_min_messages=NOTICE;
+    SELECT
+        table_name,
+        shardid,
+        shard_size,
+        sourcename,
+        sourceport,
+        source_shard_size,
+        targetname,
+        targetport,
+        target_shard_size,
+        progress
+    FROM get_rebalance_progress();
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
 ---------------------------------------------------------------------
 (0 rows)
 
 step s1-commit:
- COMMIT;
+    COMMIT;
 
 step s3-progress:
- set client_min_messages=NOTICE;
- SELECT
-  table_name,
-  shardid,
-  shard_size,
-  sourcename,
-  sourceport,
-  source_shard_size,
-  targetname,
-  targetport,
-  target_shard_size,
-  progress
- FROM get_rebalance_progress();
+    set client_min_messages=NOTICE;
+    SELECT
+        table_name,
+        shardid,
+        shard_size,
+        sourcename,
+        sourceport,
+        source_shard_size,
+        targetname,
+        targetport,
+        target_shard_size,
+        progress
+    FROM get_rebalance_progress();
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
 ---------------------------------------------------------------------

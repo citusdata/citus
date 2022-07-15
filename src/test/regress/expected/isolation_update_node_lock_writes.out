@@ -7,7 +7,7 @@ create_distributed_table
 (1 row)
 
 step s1-begin:
- BEGIN;
+    BEGIN;
 
 step s1-update-node-1:
     SELECT 1 FROM master_update_node(
@@ -21,20 +21,20 @@ step s1-update-node-1:
 (1 row)
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-insert:
     INSERT INTO update_node(id, f1)
-         SELECT id, md5(id::text)
-           FROM generate_series(1, 10) as t(id);
+        SELECT id, md5(id::text)
+            FROM generate_series(1, 10) as t(id);
  <waiting ...>
 step s1-commit: 
- COMMIT;
+    COMMIT;
 
 step s2-insert: <... completed>
 ERROR:  relation "public.update_node_102012" does not exist
 step s2-abort:
- ABORT;
+    ABORT;
 
 nodeid|nodename|nodeport
 ---------------------------------------------------------------------
@@ -48,12 +48,12 @@ create_distributed_table
 (1 row)
 
 step s2-begin:
- BEGIN;
+    BEGIN;
 
 step s2-insert:
     INSERT INTO update_node(id, f1)
-         SELECT id, md5(id::text)
-           FROM generate_series(1, 10) as t(id);
+        SELECT id, md5(id::text)
+            FROM generate_series(1, 10) as t(id);
 
 step s1-update-node-1:
     SELECT 1 FROM master_update_node(
@@ -62,7 +62,7 @@ step s1-update-node-1:
         57638);
  <waiting ...>
 step s2-commit: 
- COMMIT;
+    COMMIT;
 
 step s1-update-node-1: <... completed>
 ?column?
