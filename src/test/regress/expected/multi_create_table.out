@@ -371,7 +371,7 @@ ERROR:  -100 is outside the valid range for parameter "shard_count" (1 .. 64000)
 SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=64001);
 ERROR:  64001 is outside the valid range for parameter "shard_count" (1 .. 64000)
 -- shard count with colocate with table should error
-SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=12, colocate_with:='shard_count');
+SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=12, colocate_with:='shard_count_table');
 ERROR:  Cannot use colocate_with with a table and shard_count at the same time
 -- none should not error
 SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=12, colocate_with:='none');

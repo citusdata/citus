@@ -322,7 +322,6 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	Oid distributedTableId = shardInterval->relationId;
 
 	List *colocatedTableList = ColocatedTableList(distributedTableId);
-	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 
 	foreach(colocatedTableCell, colocatedTableList)
 	{
@@ -351,6 +350,7 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	}
 
 	/* we sort colocatedShardList so that lock operations will not cause any deadlocks */
+	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 	colocatedShardList = SortList(colocatedShardList, CompareShardIntervalsById);
 	foreach(colocatedShardCell, colocatedShardList)
 	{

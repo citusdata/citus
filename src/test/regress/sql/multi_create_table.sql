@@ -245,7 +245,7 @@ SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=-100);
 SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=64001);
 
 -- shard count with colocate with table should error
-SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=12, colocate_with:='shard_count');
+SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=12, colocate_with:='shard_count_table');
 
 -- none should not error
 SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=12, colocate_with:='none');

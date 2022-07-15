@@ -193,13 +193,20 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	Oid distributionMethodOid = PG_GETARG_OID(2);
 	text *colocateWithTableNameText = PG_GETARG_TEXT_P(3);
 	char *colocateWithTableName = text_to_cstring(colocateWithTableNameText);
+	Oid colocatedRelationId = InvalidOid;
+
+	/* resolve the colocated table name, if user specified */
+	if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) != 0 &&
+		!IsColocateWithNone(colocateWithTableName))
+	{
+		colocatedRelationId = ResolveRelationId(colocateWithTableNameText, false);
+	}
 
 	bool shardCountIsStrict = false;
 	int shardCount = ShardCount;
 	if (!PG_ARGISNULL(4))
 	{
-		if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) != 0 &&
-			pg_strncasecmp(colocateWithTableName, "none", NAMEDATALEN) != 0)
+		if (OidIsValid(colocatedRelationId))
 		{
 			ereport(ERROR, (errmsg("Cannot use colocate_with with a table "
 								   "and shard_count at the same time")));
@@ -230,8 +237,28 @@ create_distributed_table(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("could not create distributed table: "
 							   "relation does not exist")));
 	}
-
 	relation_close(relation, NoLock);
+
+	/*
+	 * If user specified a colocated relation, we should acquire a lock
+	 * such that no shard moves happens concurrently. However, we should
+	 * allow creating concurrent distributed tables that are colocated
+	 * with with the same table. citus_move_shard_placement acquires
+	 * ShareUpdateExclusiveLock on all colocated relations, hence we use
+	 * ShareLock here.
+	 */
+	if (OidIsValid(colocatedRelationId))
+	{
+		Relation colocatedRelation =
+			try_relation_open(colocatedRelationId, ShareLock);
+		if (colocatedRelation == NULL)
+		{
+			ereport(ERROR, (errmsg("colocated relation %s does not exist",
+								   colocateWithTableName)));
+		}
+
+		relation_close(colocatedRelation, NoLock);
+	}
 
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	Assert(distributionColumnName != NULL);
