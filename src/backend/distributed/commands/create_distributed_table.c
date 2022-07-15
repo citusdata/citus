@@ -239,27 +239,6 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	}
 	relation_close(relation, NoLock);
 
-	/*
-	 * If user specified a colocated relation, we should acquire a lock
-	 * such that no shard moves happens concurrently. However, we should
-	 * allow creating concurrent distributed tables that are colocated
-	 * with with the same table. citus_move_shard_placement acquires
-	 * ShareUpdateExclusiveLock on all colocated relations, hence we use
-	 * ShareLock here.
-	 */
-	if (OidIsValid(colocatedRelationId))
-	{
-		Relation colocatedRelation =
-			try_relation_open(colocatedRelationId, ShareLock);
-		if (colocatedRelation == NULL)
-		{
-			ereport(ERROR, (errmsg("colocated relation %s does not exist",
-								   colocateWithTableName)));
-		}
-
-		relation_close(colocatedRelation, NoLock);
-	}
-
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	Assert(distributionColumnName != NULL);
 
@@ -491,6 +470,33 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 												  shardCount, shardCountIsStrict,
 												  colocateWithTableName,
 												  viaDeprecatedAPI);
+
+	/*
+	 * If user specified a colocated relation, we should acquire a lock
+	 * such that no shard moves happens concurrently. However, we should
+	 * allow creating concurrent distributed tables that are colocated
+	 * with with the same table. citus_move_shard_placement acquires
+	 * ShareUpdateExclusiveLock on all colocated relations, hence we use
+	 * ShareLock here.
+	 */
+	List *colocatedTableList = ColocationGroupTableList(colocationId, 0);
+	Oid colocatedTableId = InvalidOid;
+
+	foreach_oid(colocatedTableId, colocatedTableList)
+	{
+		/* check that user has owner rights in all co-located tables */
+		EnsureTableOwner(colocatedTableId);
+
+		/*
+		 * Block concurrent DDL / TRUNCATE commands on the relation. Similarly,
+		 * block concurrent citus_move_shard_placement() on any shard of
+		 * the same relation. This is OK for now since we're executing shard
+		 * moves sequentially anyway.
+		 */
+		LockRelationOid(colocatedTableId, ShareUpdateExclusiveLock);
+	}
+
+
 
 	EnsureRelationCanBeDistributed(relationId, distributionColumn, distributionMethod,
 								   colocationId, replicationModel, viaDeprecatedAPI);
