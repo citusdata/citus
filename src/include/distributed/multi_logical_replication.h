@@ -27,6 +27,14 @@ extern void LogicallyReplicateShards(List *shardList, char *sourceNodeName,
 									 int targetNodePort);
 
 extern XLogRecPtr GetRemoteLogPosition(MultiConnection *connection);
+extern List *
+GetQueryResultStringList(MultiConnection *connection, char *query);
+
+extern void DropShardSubscription(MultiConnection *connection,
+									  char *subscriptionName);
+extern void DropShardPublication(MultiConnection *connection, char *publicationName);
+
+extern void DropShardUser(MultiConnection *connection, char *username);
 
 extern void CreateShardSubscription(MultiConnection *connection, char *sourceNodeName,
 									int sourceNodePort, char *userName,
@@ -47,4 +55,5 @@ extern void WaitForShardSubscriptionToCatchUp(MultiConnection *targetConnection,
 #define SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX "citus_shard_move_subscription_role_"
 #define SHARD_SPLIT_PUBLICATION_PREFIX "citus_shard_split_publication_"
 #define SHARD_SPLIT_SUBSCRIPTION_PREFIX "citus_shard_split_subscription_"
+#define SHARD_SPLIT_SUBSCRIPTION_ROLE_PREFIX "citus_shard_split_subscription_role_"
 #endif /* MULTI_LOGICAL_REPLICATION_H_ */

@@ -152,12 +152,8 @@ static void DropAllShardMovePublications(MultiConnection *connection);
 static void DropAllShardMoveUsers(MultiConnection *connection);
 static char * ShardSubscriptionNamesValueList(Bitmapset *tableOwnerIds,
 											  char *operationPrefix);
-static void DropShardMoveSubscription(MultiConnection *connection,
-									  char *subscriptionName);
 static void DropShardMoveReplicationSlot(MultiConnection *connection,
 										 char *publicationName);
-static void DropShardMovePublication(MultiConnection *connection, char *publicationName);
-static void DropShardMoveUser(MultiConnection *connection, char *username);
 
 /*
  * LogicallyReplicateShards replicates a list of shards from one node to another
@@ -1094,7 +1090,7 @@ DropShardMovePublications(MultiConnection *connection, Bitmapset *tableOwnerIds)
 		 */
 		DropShardMoveReplicationSlot(connection, ShardSubscriptionName(ownerId,
 																	   SHARD_MOVE_SUBSCRIPTION_PREFIX));
-		DropShardMovePublication(connection, ShardMovePublicationName(ownerId));
+		DropShardPublication(connection, ShardMovePublicationName(ownerId));
 	}
 }
 
@@ -1117,11 +1113,11 @@ DropShardMoveReplicationSlot(MultiConnection *connection, char *replicationSlotN
 
 
 /*
- * DropShardMovePublication drops the publication with the given name if it
+ * DropShardPublication drops the publication with the given name if it
  * exists.
  */
-static void
-DropShardMovePublication(MultiConnection *connection, char *publicationName)
+void
+DropShardPublication(MultiConnection *connection, char *publicationName)
 {
 	ExecuteCriticalRemoteCommand(connection, psprintf(
 									 "DROP PUBLICATION IF EXISTS %s",
@@ -1166,13 +1162,13 @@ ShardSubscriptionName(Oid ownerId, char *operationPrefix)
 
 
 /*
- * ShardMoveSubscriptionRole returns the name of the role used by the
+ * ShardSubscriptionRole returns the name of the role used by the
  * subscription that subscribes to the tables of the given owner.
  */
 static char *
-ShardMoveSubscriptionRole(Oid ownerId)
+ShardSubscriptionRole(Oid ownerId, char * operationPrefix)
 {
-	return psprintf("%s%i", SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX, ownerId);
+	return psprintf("%s%i", operationPrefix, ownerId);
 }
 
 
@@ -1181,7 +1177,7 @@ ShardMoveSubscriptionRole(Oid ownerId)
  * strings. This query is executed on the connection and the function then
  * returns the results of the query in a List.
  */
-static List *
+List *
 GetQueryResultStringList(MultiConnection *connection, char *query)
 {
 	bool raiseInterrupts = true;
@@ -1242,7 +1238,7 @@ DropAllShardMoveSubscriptions(MultiConnection *connection)
 	char *subscriptionName;
 	foreach_ptr(subscriptionName, subscriptionNameList)
 	{
-		DropShardMoveSubscription(connection, subscriptionName);
+		DropShardSubscription(connection, subscriptionName);
 	}
 }
 
@@ -1263,7 +1259,7 @@ DropAllShardMoveUsers(MultiConnection *connection)
 	char *username;
 	foreach_ptr(username, usernameList)
 	{
-		DropShardMoveUser(connection, username);
+		DropShardUser(connection, username);
 	}
 }
 
@@ -1305,7 +1301,7 @@ DropAllShardMovePublications(MultiConnection *connection)
 	char *publicationName;
 	foreach_ptr(publicationName, publicationNameList)
 	{
-		DropShardMovePublication(connection, publicationName);
+		DropShardPublication(connection, publicationName);
 	}
 }
 
@@ -1325,22 +1321,22 @@ DropShardMoveSubscriptions(MultiConnection *connection, Bitmapset *tableOwnerIds
 	int ownerId = -1;
 	while ((ownerId = bms_next_member(tableOwnerIds, ownerId)) >= 0)
 	{
-		DropShardMoveSubscription(connection, ShardSubscriptionName(ownerId,
+		DropShardSubscription(connection, ShardSubscriptionName(ownerId,
 																	SHARD_MOVE_SUBSCRIPTION_PREFIX));
-		DropShardMoveUser(connection, ShardMoveSubscriptionRole(ownerId));
+		DropShardUser(connection, ShardSubscriptionRole(ownerId, SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX));
 	}
 }
 
 
 /*
- * DropShardMoveSubscription drops subscription with the given name on the
+ * DropShardSubscription drops subscription with the given name on the
  * subscriber node. Note that, it also drops the replication slot on the
  * publisher node if it can drop the slot as well with the DROP SUBSCRIPTION
  * command. Otherwise, only the subscription will be deleted with DROP
  * SUBSCRIPTION via the connection.
  */
-static void
-DropShardMoveSubscription(MultiConnection *connection, char *subscriptionName)
+void
+DropShardSubscription(MultiConnection *connection, char *subscriptionName)
 {
 	PGresult *result = NULL;
 
@@ -1393,10 +1389,10 @@ DropShardMoveSubscription(MultiConnection *connection, char *subscriptionName)
 
 
 /*
- * DropShardMoveUser drops the user with the given name if it exists.
+ * DropShardUser drops the user with the given name if it exists.
  */
-static void
-DropShardMoveUser(MultiConnection *connection, char *username)
+void
+DropShardUser(MultiConnection *connection, char *username)
 {
 	/*
 	 * The DROP USER command should not propagate, so we temporarily disable
@@ -1488,7 +1484,7 @@ CreateShardMoveSubscriptions(MultiConnection *connection, char *sourceNodeName,
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
 					"CREATE USER %s SUPERUSER IN ROLE %s",
-					ShardMoveSubscriptionRole(ownerId),
+					ShardSubscriptionRole(ownerId, SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX),
 					GetUserNameFromId(ownerId, false)
 					)));
 
@@ -1512,7 +1508,7 @@ CreateShardMoveSubscriptions(MultiConnection *connection, char *sourceNodeName,
 										 "ALTER SUBSCRIPTION %s OWNER TO %s",
 										 ShardSubscriptionName(ownerId,
 															   SHARD_MOVE_SUBSCRIPTION_PREFIX),
-										 ShardMoveSubscriptionRole(ownerId)
+										 ShardSubscriptionRole(ownerId, SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX)
 										 ));
 
 		/*
@@ -1525,7 +1521,7 @@ CreateShardMoveSubscriptions(MultiConnection *connection, char *sourceNodeName,
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
 					"ALTER ROLE %s NOSUPERUSER",
-					ShardMoveSubscriptionRole(ownerId)
+					ShardSubscriptionRole(ownerId, SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX)
 					)));
 
 		ExecuteCriticalRemoteCommand(connection, psprintf(
@@ -2098,7 +2094,7 @@ CreateShardSubscription(MultiConnection *connection, char *sourceNodeName,
 			"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 			psprintf(
 				"CREATE USER %s SUPERUSER IN ROLE %s",
-				ShardMoveSubscriptionRole(ownerId),
+				ShardSubscriptionRole(ownerId, SHARD_SPLIT_SUBSCRIPTION_ROLE_PREFIX),
 				GetUserNameFromId(ownerId, false)
 				)));
 
@@ -2122,7 +2118,7 @@ CreateShardSubscription(MultiConnection *connection, char *sourceNodeName,
 									 "ALTER SUBSCRIPTION %s OWNER TO %s",
 									 ShardSubscriptionName(ownerId,
 														   SHARD_SPLIT_SUBSCRIPTION_PREFIX),
-									 ShardMoveSubscriptionRole(ownerId)
+									 ShardSubscriptionRole(ownerId, SHARD_SPLIT_SUBSCRIPTION_ROLE_PREFIX)
 									 ));
 
 	/*
@@ -2135,7 +2131,7 @@ CreateShardSubscription(MultiConnection *connection, char *sourceNodeName,
 			"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 			psprintf(
 				"ALTER ROLE %s NOSUPERUSER",
-				ShardMoveSubscriptionRole(ownerId)
+				ShardSubscriptionRole(ownerId, SHARD_SPLIT_SUBSCRIPTION_ROLE_PREFIX)
 				)));
 
 	ExecuteCriticalRemoteCommand(connection, psprintf(

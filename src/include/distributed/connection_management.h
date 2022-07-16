@@ -97,7 +97,12 @@ enum MultiConnectionMode
 	 * establishments may be suspended until a connection slot is available to
 	 * the remote host.
 	 */
-	WAIT_FOR_CONNECTION = 1 << 7
+	WAIT_FOR_CONNECTION = 1 << 7,
+
+	/*
+	 * Force Replication flags
+	 */
+	EXCLUSIVE_AND_REPLICATION = 1 << 8
 };
 
 
@@ -187,6 +192,9 @@ typedef struct MultiConnection
 	/* number of bytes sent to PQputCopyData() since last flush */
 	uint64 copyBytesWrittenSinceLastFlush;
 
+	/* replication option */
+	bool replication;
+
 	MultiConnectionStructInitializationState initilizationState;
 } MultiConnection;
 
@@ -207,6 +215,7 @@ typedef struct ConnectionHashKey
 	int32 port;
 	char user[NAMEDATALEN];
 	char database[NAMEDATALEN];
+	bool replication;
 } ConnectionHashKey;
 
 /* hash entry */

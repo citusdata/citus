@@ -57,7 +57,8 @@ static void CreateDummyShardsForShardGroup(List *sourceColocatedShardIntervalLis
 										   List *shardGroupSplitIntervalListList,
 										   WorkerNode *sourceWorkerNode,
 										   List *workersForPlacementList);
-static void SplitShardReplicationSetup(List *sourceColocatedShardIntervalList,
+static void SplitShardReplicationSetup(ShardInterval *shardIntervalToSplit,
+									   List *sourceColocatedShardIntervalList,
 									   List *shardGroupSplitIntervalListList,
 									   WorkerNode *sourceWorkerNode,
 									   List *workersForPlacementList);
@@ -81,10 +82,12 @@ static void NonBlockingShardSplit(SplitOperation splitOperation,
 static void DoSplitCopy(WorkerNode *sourceShardNode,
 						List *sourceColocatedShardIntervalList,
 						List *shardGroupSplitIntervalListList,
-						List *workersForPlacementList);
+						List *workersForPlacementList,
+						char *snapShotName);
 static StringInfo CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 										 List *splitChildrenShardIntervalList,
-										 List *workersForPlacementList);
+										 List *workersForPlacementList,
+										 char *snapShotName);
 static void InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 											 List *workersForPlacementList);
 static void CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
@@ -94,9 +97,14 @@ static void TryDropSplitShardsOnFailure(List *shardGroupSplitIntervalListList,
 static Task * CreateTaskForDDLCommandList(uint64 jobId, List *ddlCommandList,
 										  WorkerNode *workerNode);
 
+static StringInfo CreateSplitShardReplicationSetupUDF(
+	List *sourceColocatedShardIntervalList, List *shardGroupSplitIntervalListList,
+	List *destinationWorkerNodesList);
 static void AddDummyShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval);
 static void DropDummyShards(void);
 void TryDropShard(MultiConnection *connection, ShardInterval *shardInterval);
+char * CreateTemplateReplicationSlotAndReturnSnapshot(ShardInterval *shardInterval,
+													  WorkerNode *sourceWorkerNode);
 
 /* Customize error message strings based on operation type */
 static const char *const SplitOperationName[] =
@@ -632,7 +640,7 @@ CreateAndCopySplitShardsForShardGroup(WorkerNode *sourceShardNode,
 								   workersForPlacementList);
 
 	DoSplitCopy(sourceShardNode, sourceColocatedShardIntervalList,
-				shardGroupSplitIntervalListList, workersForPlacementList);
+				shardGroupSplitIntervalListList, workersForPlacementList, NULL);
 
 	/* Create auxiliary structures (indexes, stats, replicaindentities, triggers) */
 	CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
@@ -649,7 +657,8 @@ CreateAndCopySplitShardsForShardGroup(WorkerNode *sourceShardNode,
  */
 static void
 DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
-			List *shardGroupSplitIntervalListList, List *destinationWorkerNodesList)
+			List *shardGroupSplitIntervalListList, List *destinationWorkerNodesList,
+			char *snapShotName)
 {
 	ShardInterval *sourceShardIntervalToCopy = NULL;
 	List *splitShardIntervalList = NIL;
@@ -661,7 +670,8 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 	{
 		StringInfo splitCopyUdfCommand = CreateSplitCopyCommand(sourceShardIntervalToCopy,
 																splitShardIntervalList,
-																destinationWorkerNodesList);
+																destinationWorkerNodesList,
+																snapShotName);
 
 		Task *splitCopyTask = CreateBasicTask(
 			sourceShardIntervalToCopy->shardId, /* jobId */
@@ -709,7 +719,8 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 static StringInfo
 CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 					   List *splitChildrenShardIntervalList,
-					   List *destinationWorkerNodesList)
+					   List *destinationWorkerNodesList,
+					   char *snapShotName)
 {
 	StringInfo splitCopyInfoArray = makeStringInfo();
 	appendStringInfo(splitCopyInfoArray, "ARRAY[");
@@ -743,7 +754,31 @@ CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 					 sourceShardSplitInterval->shardId,
 					 splitCopyInfoArray->data);
 
-	return splitCopyUdf;
+	if (snapShotName == NULL)
+	{
+		return splitCopyUdf;
+	}
+
+
+	StringInfo beginTransaction = makeStringInfo();
+	appendStringInfo(beginTransaction,
+					 "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;");
+
+	StringInfo commitTransaction = makeStringInfo();
+	appendStringInfo(commitTransaction, "COMMIT;");
+
+	StringInfo snapShotString = makeStringInfo();
+	appendStringInfo(snapShotString, "SET TRANSACTION SNAPSHOT %s;", quote_literal_cstr(
+						 snapShotName));
+
+	StringInfo snapShottedCopyUDF = makeStringInfo();
+	appendStringInfo(snapShottedCopyUDF, "%s%s%s%s", beginTransaction->data,
+					 snapShotString->data, splitCopyUdf->data, commitTransaction->data);
+
+	printf("sameer value:%s\n", snapShottedCopyUDF->data);
+	printf("sameer actual value :%s \n", splitCopyUdf->data);
+
+	return snapShottedCopyUDF;
 }
 
 
@@ -1109,6 +1144,12 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 			shardGroupSplitIntervalListList,
 			workersForPlacementList);
 
+		/* char *templateSnapShotName = CreateTemplateReplicationSlotAndReturnSnapshot( */
+		/*  shardIntervalToSplit, sourceShardToCopyNode); */
+
+		// DoSplitCopy(sourceShardToCopyNode, sourceColocatedShardIntervalList,
+		// 			shardGroupSplitIntervalListList, workersForPlacementList, NULL);
+
 		CreateDummyShardsForShardGroup(
 			sourceColocatedShardIntervalList,
 			shardGroupSplitIntervalListList,
@@ -1116,32 +1157,32 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 			workersForPlacementList);
 
 		/*TODO: Refactor this method. BlockWrites is within this as of now, take it out */
-		SplitShardReplicationSetup(
-			sourceColocatedShardIntervalList,
-			shardGroupSplitIntervalListList,
-			sourceShardToCopyNode,
-			workersForPlacementList);
+		SplitShardReplicationSetup(shardIntervalToSplit,
+								   sourceColocatedShardIntervalList,
+								   shardGroupSplitIntervalListList,
+								   sourceShardToCopyNode,
+								   workersForPlacementList);
 
-		/*
-		 * Drop old shards and delete related metadata. Have to do that before
-		 * creating the new shard metadata, because there's cross-checks
-		 * preventing inconsistent metadata (like overlapping shards).
-		 */
-		DropShardList(sourceColocatedShardIntervalList);
+		// /*
+		//  * Drop old shards and delete related metadata. Have to do that before
+		//  * creating the new shard metadata, because there's cross-checks
+		//  * preventing inconsistent metadata (like overlapping shards).
+		//  */
+		// DropShardList(sourceColocatedShardIntervalList);
 
-		/* Insert new shard and placement metdata */
-		InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
-										 workersForPlacementList);
+		// /* Insert new shard and placement metdata */
+		// InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
+		// 								 workersForPlacementList);
 
-		/*
-		 * Create foreign keys if exists after the metadata changes happening in
-		 * DropShardList() and InsertSplitChildrenShardMetadata() because the foreign
-		 * key creation depends on the new metadata.
-		 */
-		CreateForeignKeyConstraints(shardGroupSplitIntervalListList,
-									workersForPlacementList);
+		// /*
+		//  * Create foreign keys if exists after the metadata changes happening in
+		//  * DropShardList() and InsertSplitChildrenShardMetadata() because the foreign
+		//  * key creation depends on the new metadata.
+		//  */
+		// CreateForeignKeyConstraints(shardGroupSplitIntervalListList,
+		// 							workersForPlacementList);
 
-		DropDummyShards();
+		// DropDummyShards();
 	}
 	PG_CATCH();
 	{
@@ -1304,7 +1345,8 @@ CreateWorkerForPlacementSet(List *workersForPlacementList)
 
 
 static void
-SplitShardReplicationSetup(List *sourceColocatedShardIntervalList,
+SplitShardReplicationSetup(ShardInterval *shardIntervalToSplit,
+						   List *sourceColocatedShardIntervalList,
 						   List *shardGroupSplitIntervalListList,
 						   WorkerNode *sourceWorkerNode,
 						   List *destinationWorkerNodesList)
@@ -1341,17 +1383,37 @@ SplitShardReplicationSetup(List *sourceColocatedShardIntervalList,
 	/* Get replication slot information */
 	List *replicationSlotInfoList = ParseReplicationSlotInfoFromResult(result);
 
-	List *shardSplitPubSubMetadata = CreateShardSplitPubSubMetadataList(
+	PQclear(result);
+	ForgetResults(sourceConnection);
+
+
+	// /* // / *Create Template replication slot * / */
+	// /* char *templateSnapShotName = CreateTemplateReplicationSlotAndReturnSnapshot( */
+	// /*  shardIntervalToSplit, sourceWorkerNode); */
+	// List *shardSplitPubSubMetadata = CreateShardSplitInfoMapForPublication(
+	// 	sourceColocatedShardIntervalList,
+	// 	shardGroupSplitIntervalListList,
+	// 	destinationWorkerNodesList,
+	// 	replicationSlotInfoList);
+	// earlier the above method used to take replication slot info as information
+
+
+
+	// LogicallyReplicateSplitShards(sourceWorkerNode, shardSplitPubSubMetadata,
+	// 							  sourceColocatedShardIntervalList,
+	// 							  shardGroupSplitIntervalListList,
+	// 							  destinationWorkerNodesList);
+
+	HTAB * shardSplitHashMapForPublication =  CreateShardSplitInfoMapForPublication(
 		sourceColocatedShardIntervalList,
 		shardGroupSplitIntervalListList,
-		destinationWorkerNodesList,
-		replicationSlotInfoList);
+		destinationWorkerNodesList);
 
+	DropAllShardSplitLeftOvers(sourceWorkerNode, shardSplitHashMapForPublication);
 
-	LogicallyReplicateSplitShards(sourceWorkerNode, shardSplitPubSubMetadata,
-								  sourceColocatedShardIntervalList,
-								  shardGroupSplitIntervalListList,
-								  destinationWorkerNodesList);
+	CreateShardSplitPublicationsTwo(sourceConnection, shardSplitHashMapForPublication);
+
+	//DropAllShardSplitLeftOvers(sourceWorkerNode, shardSplitHashMapForPublication);
 }
 
 
@@ -1379,6 +1441,12 @@ AddDummyShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval)
 static void
 DropDummyShards()
 {
+	/* Return if no dummy shards are created */
+	if (DummyShardInfoHashMap == NULL)
+	{
+		return;
+	}
+
 	HASH_SEQ_STATUS status;
 	hash_seq_init(&status, DummyShardInfoHashMap);
 
@@ -1426,4 +1494,82 @@ TryDropShard(MultiConnection *connection, ShardInterval *shardInterval)
 		connection,
 		dropShardQuery->data,
 		NULL /* pgResult */);
+}
+
+
+StringInfo
+CreateSplitShardReplicationSetupUDF(List *sourceColocatedShardIntervalList,
+									List *shardGroupSplitIntervalListList,
+									List *destinationWorkerNodesList)
+{
+	StringInfo splitChildrenRows = makeStringInfo();
+
+	ShardInterval *sourceShardIntervalToCopy = NULL;
+	List *splitChildShardIntervalList = NULL;
+	bool addComma = false;
+	forboth_ptr(sourceShardIntervalToCopy, sourceColocatedShardIntervalList,
+				splitChildShardIntervalList, shardGroupSplitIntervalListList)
+	{
+		int64 sourceShardId = sourceShardIntervalToCopy->shardId;
+
+		ShardInterval *splitChildShardInterval = NULL;
+		WorkerNode *destinationWorkerNode = NULL;
+		forboth_ptr(splitChildShardInterval, splitChildShardIntervalList,
+					destinationWorkerNode, destinationWorkerNodesList)
+		{
+			if (addComma)
+			{
+				appendStringInfo(splitChildrenRows, ",");
+			}
+
+			StringInfo minValueString = makeStringInfo();
+			appendStringInfo(minValueString, "%d", DatumGetInt32(
+								 splitChildShardInterval->minValue));
+
+			StringInfo maxValueString = makeStringInfo();
+			appendStringInfo(maxValueString, "%d", DatumGetInt32(
+								 splitChildShardInterval->maxValue));
+
+			appendStringInfo(splitChildrenRows,
+							 "ROW(%lu, %lu, %s, %s, %u)::citus.split_shard_info",
+							 sourceShardId,
+							 splitChildShardInterval->shardId,
+							 quote_literal_cstr(minValueString->data),
+							 quote_literal_cstr(maxValueString->data),
+							 destinationWorkerNode->nodeId);
+
+			addComma = true;
+		}
+	}
+
+	StringInfo splitShardReplicationUDF = makeStringInfo();
+	appendStringInfo(splitShardReplicationUDF,
+					 "SELECT * FROM worker_split_shard_replication_setup(ARRAY[%s]);",
+					 splitChildrenRows->data);
+
+	return splitShardReplicationUDF;
+}
+
+
+char *
+CreateTemplateReplicationSlotAndReturnSnapshot(ShardInterval *shardInterval,
+											   WorkerNode *sourceWorkerNode)
+{
+	/*Create Template replication slot */
+	int connectionFlags = FORCE_NEW_CONNECTION;
+	connectionFlags |= EXCLUSIVE_AND_REPLICATION;
+
+	MultiConnection *sourceConnection = GetNodeUserDatabaseConnection(connectionFlags,
+																	  sourceWorkerNode->
+																	  workerName,
+																	  sourceWorkerNode->
+																	  workerPort,
+																	  CitusExtensionOwnerName(),
+																	  get_database_name(
+																		  MyDatabaseId));
+
+	char *snapShotName = DropExistingIfAnyAndCreateTemplateReplicationSlot(shardInterval,
+																		   sourceConnection);
+
+	return snapShotName;
 }

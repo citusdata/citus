@@ -16,39 +16,26 @@ SELECT create_distributed_table('table_to_split','id');
 
 (1 row)
 
-SELECT create_distributed_table('table_second', 'id', colocate_with => 'table_to_split');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
+--SELECT create_distributed_table('table_second', 'id', colocate_with => 'table_to_split');
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
 SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 SELECT * FROM citus_shards;
    table_name   | shardid |                         shard_name                          | citus_table_type | colocation_id | nodename  | nodeport | shard_size
 ---------------------------------------------------------------------
- table_second   |       2 | citus_split_shard_by_split_points_negative.table_second_2   | distributed      |       1390006 | localhost |     9997 |          0
- table_second   |       2 | citus_split_shard_by_split_points_negative.table_second_2   | distributed      |       1390006 | localhost |     8888 |          0
- table_second   |       2 | citus_split_shard_by_split_points_negative.table_second_2   | distributed      |       1390006 | localhost |     8887 |          0
- table_second   |       2 | citus_split_shard_by_split_points_negative.table_second_2   | distributed      |       1390006 | localhost |     9995 |          0
- table_second   |       2 | citus_split_shard_by_split_points_negative.table_second_2   | distributed      |       1390006 | localhost |     9992 |          0
- table_second   |       2 | citus_split_shard_by_split_points_negative.table_second_2   | distributed      |       1390006 | localhost |    57637 |          0
- table_second   |       2 | citus_split_shard_by_split_points_negative.table_second_2   | distributed      |       1390006 | localhost |     9998 |          0
  table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390006 | localhost |     8888 |          0
- table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390006 | localhost |    57637 |          0
  table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390006 | localhost |     8887 |          0
- table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390006 | localhost |     9997 |          0
  table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390006 | localhost |     9995 |          0
- table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390006 | localhost |     9998 |          0
  table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390006 | localhost |     9992 |          0
-(14 rows)
+ table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390006 | localhost |    57637 |          0
+ table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390006 | localhost |     9998 |          0
+ table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390006 | localhost |     9997 |          0
+(7 rows)
 
 SELECT * FROM pg_dist_shard;
   logicalrelid  | shardid | shardstorage | shardminvalue | shardmaxvalue
 ---------------------------------------------------------------------
  table_to_split |       1 | t            | -2147483648   | 2147483647
- table_second   |       2 | t            | -2147483648   | 2147483647
-(2 rows)
+(1 row)
 
 SET client_min_messages TO LOG;
 SET citus.log_remote_commands TO on;
@@ -112,8 +99,8 @@ SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \
 SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 SELECT citus_split_shard_by_split_points(
 	1,
-	ARRAY['-1073741826'],
-	ARRAY[:worker_2_node, :worker_2_node],
+	ARRAY['0'],
+	ARRAY[:worker_1_node, :worker_2_node],
 	'force_logical');
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -133,41 +120,9 @@ NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102, 'CREATE TABLE citus_split_shard_by_split_points_negative.table_second (id bigint NOT NULL, value character(1)) ')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102, 'ALTER TABLE citus_split_shard_by_split_points_negative.table_second OWNER TO postgres')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (103, 'CREATE TABLE citus_split_shard_by_split_points_negative.table_second (id bigint NOT NULL, value character(1)) ')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (103, 'ALTER TABLE citus_split_shard_by_split_points_negative.table_second OWNER TO postgres')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_apply_shard_ddl_command (1, 'CREATE TABLE citus_split_shard_by_split_points_negative.table_to_split (id bigint NOT NULL, value character(1)) ')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_apply_shard_ddl_command (1, 'ALTER TABLE citus_split_shard_by_split_points_negative.table_to_split OWNER TO postgres')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (2, 'CREATE TABLE citus_split_shard_by_split_points_negative.table_second (id bigint NOT NULL, value character(1)) ')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (2, 'ALTER TABLE citus_split_shard_by_split_points_negative.table_second OWNER TO postgres')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (100, 'CREATE TABLE citus_split_shard_by_split_points_negative.table_to_split (id bigint NOT NULL, value character(1)) ')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (100, 'ALTER TABLE citus_split_shard_by_split_points_negative.table_to_split OWNER TO postgres')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -179,124 +134,22 @@ NOTICE:  issuing SELECT worker_apply_shard_ddl_command (101, 'ALTER TABLE citus_
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+NOTICE:  issuing SELECT * FROM worker_split_shard_replication_setup(ARRAY[ROW(1, 100, '-2147483648', '0', 16)::citus.split_shard_info,ROW(1, 101, '1', '2147483647', 18)::citus.split_shard_info]);
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102, 'CREATE TABLE citus_split_shard_by_split_points_negative.table_second (id bigint NOT NULL, value character(1)) ')
+NOTICE:  issuing SELECT subname FROM pg_subscription WHERE subname LIKE 'citus_shard_split_subscription_' || '%'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102, 'ALTER TABLE citus_split_shard_by_split_points_negative.table_second OWNER TO postgres')
+NOTICE:  issuing SELECT rolname FROM pg_roles WHERE rolname LIKE 'citus_shard_split_subscription_role_' || '%'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
+NOTICE:  issuing SELECT subname FROM pg_subscription WHERE subname LIKE 'citus_shard_split_subscription_' || '%'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+NOTICE:  issuing SELECT rolname FROM pg_roles WHERE rolname LIKE 'citus_shard_split_subscription_role_' || '%'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (103, 'CREATE TABLE citus_split_shard_by_split_points_negative.table_second (id bigint NOT NULL, value character(1)) ')
+NOTICE:  issuing SELECT pubname FROM pg_publication WHERE pubname LIKE 'citus_shard_split_publication_' || '%'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (103, 'ALTER TABLE citus_split_shard_by_split_points_negative.table_second OWNER TO postgres')
+NOTICE:  issuing CREATE PUBLICATION citus_shard_split_publication_16_10 FOR TABLE citus_split_shard_by_split_points_negative.table_to_split_100,citus_split_shard_by_split_points_negative.table_to_split_1
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
+NOTICE:  issuing CREATE PUBLICATION citus_shard_split_publication_18_10 FOR TABLE citus_split_shard_by_split_points_negative.table_to_split_101,citus_split_shard_by_split_points_negative.table_to_split_1
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT * FROM worker_split_shard_replication_setup(ARRAY[ROW(1, 100, '-2147483648', '-1073741826', 18)::citus.split_shard_info,ROW(1, 101, '-1073741825', '2147483647', 18)::citus.split_shard_info,ROW(2, 102, '-2147483648', '-1073741826', 18)::citus.split_shard_info,ROW(2, 103, '-1073741825', '2147483647', 18)::citus.split_shard_info])
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing CREATE PUBLICATION citus_shard_split_publication_18_10 FOR TABLE citus_split_shard_by_split_points_negative.table_to_split_100,citus_split_shard_by_split_points_negative.table_to_split_1,citus_split_shard_by_split_points_negative.table_to_split_101,citus_split_shard_by_split_points_negative.table_second_102,citus_split_shard_by_split_points_negative.table_second_2,citus_split_shard_by_split_points_negative.table_second_103
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET LOCAL citus.enable_ddl_propagation TO OFF;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing CREATE USER citus_shard_move_subscription_role_10 SUPERUSER IN ROLE postgres
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing CREATE SUBSCRIPTION citus_shard_split_subscription_10 CONNECTION 'host=''localhost'' port=xxxxx user=''postgres'' dbname=''regression'' connect_timeout=20' PUBLICATION citus_shard_split_publication_18_10 WITH (citus_use_authinfo=true, enabled=false)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER SUBSCRIPTION citus_shard_split_subscription_10 OWNER TO citus_shard_move_subscription_role_10
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET LOCAL citus.enable_ddl_propagation TO OFF;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER ROLE citus_shard_move_subscription_role_10 NOSUPERUSER
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing ALTER SUBSCRIPTION citus_shard_split_subscription_10 ENABLE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT count(*) FROM pg_subscription_rel, pg_stat_subscription WHERE srsubid = subid AND srsubstate != 'r' AND subname IN ('citus_shard_split_subscription_10')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT sum(pg_total_relation_size(srrelid)) FROM pg_subscription_rel, pg_stat_subscription WHERE srsubid = subid AND subname IN ('citus_shard_split_subscription_10')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT count(*) FROM pg_subscription_rel, pg_stat_subscription WHERE srsubid = subid AND srsubstate != 'r' AND subname IN ('citus_shard_split_subscription_10')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT pg_current_wal_lsn()
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT min(latest_end_lsn) FROM pg_stat_subscription WHERE subname IN ('citus_shard_split_subscription_10')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (100, 'ALTER TABLE citus_split_shard_by_split_points_negative.table_to_split ADD CONSTRAINT table_to_split_pkey PRIMARY KEY (id)')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (101, 'ALTER TABLE citus_split_shard_by_split_points_negative.table_to_split ADD CONSTRAINT table_to_split_pkey PRIMARY KEY (id)')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (102, 'ALTER TABLE citus_split_shard_by_split_points_negative.table_second ADD CONSTRAINT table_second_pkey PRIMARY KEY (id)')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (103, 'ALTER TABLE citus_split_shard_by_split_points_negative.table_second ADD CONSTRAINT table_second_pkey PRIMARY KEY (id)')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT pg_current_wal_lsn()
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT min(latest_end_lsn) FROM pg_stat_subscription WHERE subname IN ('citus_shard_split_subscription_10')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT lock_shard_metadata(7, ARRAY[1, 2])
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT lock_shard_metadata(7, ARRAY[1, 2])
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT pg_current_wal_lsn()
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT min(latest_end_lsn) FROM pg_stat_subscription WHERE subname IN ('citus_shard_split_subscription_10')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_internal_delete_shard_metadata(1);
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_internal_delete_shard_metadata(1);
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP TABLE IF EXISTS citus_split_shard_by_split_points_negative.table_to_split_1 CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_internal_delete_shard_metadata(2);
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_internal_delete_shard_metadata(2);
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP TABLE IF EXISTS citus_split_shard_by_split_points_negative.table_second_2 CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('citus_split_shard_by_split_points_negative.table_to_split'::regclass, 100, 't'::"char", '-2147483648', '-1073741826'), ('citus_split_shard_by_split_points_negative.table_to_split'::regclass, 101, 't'::"char", '-1073741825', '2147483647'), ('citus_split_shard_by_split_points_negative.table_second'::regclass, 102, 't'::"char", '-2147483648', '-1073741826'), ('citus_split_shard_by_split_points_negative.table_second'::regclass, 103, 't'::"char", '-1073741825', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('citus_split_shard_by_split_points_negative.table_to_split'::regclass, 100, 't'::"char", '-2147483648', '-1073741826'), ('citus_split_shard_by_split_points_negative.table_to_split'::regclass, 101, 't'::"char", '-1073741825', '2147483647'), ('citus_split_shard_by_split_points_negative.table_second'::regclass, 102, 't'::"char", '-2147483648', '-1073741826'), ('citus_split_shard_by_split_points_negative.table_second'::regclass, 103, 't'::"char", '-1073741825', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (100, 1, 0, 16, 85), (101, 1, 0, 16, 86), (102, 1, 0, 16, 87), (103, 1, 0, 16, 88)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (100, 1, 0, 16, 85), (101, 1, 0, 16, 86), (102, 1, 0, 16, 87), (103, 1, 0, 16, 88)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP TABLE IF EXISTS citus_split_shard_by_split_points_negative.table_to_split_100 CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP TABLE IF EXISTS citus_split_shard_by_split_points_negative.table_to_split_101 CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP TABLE IF EXISTS citus_split_shard_by_split_points_negative.table_second_102 CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP TABLE IF EXISTS citus_split_shard_by_split_points_negative.table_second_103 CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP TABLE IF EXISTS citus_split_shard_by_split_points_negative.table_to_split_1 CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing DROP TABLE IF EXISTS citus_split_shard_by_split_points_negative.table_second_2 CASCADE
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-WARNING:  connection claimed exclusively at transaction commit
-WARNING:  connection claimed exclusively at transaction commit
 WARNING:  connection claimed exclusively at transaction commit
  citus_split_shard_by_split_points
 ---------------------------------------------------------------------
@@ -310,25 +163,26 @@ SET search_path TO citus_split_shard_by_split_points_negative;
 SELECT * FROM show_catalog;
                    Schema                   |        Name        |  Owner
 ---------------------------------------------------------------------
- citus_split_shard_by_split_points_negative | table_second       | postgres
- citus_split_shard_by_split_points_negative | table_second_102   | postgres
- citus_split_shard_by_split_points_negative | table_second_103   | postgres
  citus_split_shard_by_split_points_negative | table_to_split     | postgres
- citus_split_shard_by_split_points_negative | table_to_split_100 | postgres
+ citus_split_shard_by_split_points_negative | table_to_split_1   | postgres
  citus_split_shard_by_split_points_negative | table_to_split_101 | postgres
-(6 rows)
+(3 rows)
 
 \c - - - :worker_1_port
 SET search_path TO citus_split_shard_by_split_points_negative;
 SELECT * FROM show_catalog;
-                   Schema                   |      Name      |  Owner
+                   Schema                   |        Name        |  Owner
 ---------------------------------------------------------------------
- citus_split_shard_by_split_points_negative | table_second   | postgres
- citus_split_shard_by_split_points_negative | table_to_split | postgres
-(2 rows)
+ citus_split_shard_by_split_points_negative | table_to_split     | postgres
+ citus_split_shard_by_split_points_negative | table_to_split_1   | postgres
+ citus_split_shard_by_split_points_negative | table_to_split_100 | postgres
+ citus_split_shard_by_split_points_negative | table_to_split_101 | postgres
+(4 rows)
 
-SELECT * FROM pg_publication_tables;
- pubname | schemaname | tablename
+SELECT * FROM pg_publication;
+  oid  |               pubname               | pubowner | puballtables | pubinsert | pubupdate | pubdelete | pubtruncate | pubviaroot
 ---------------------------------------------------------------------
-(0 rows)
+ 17381 | citus_shard_split_publication_16_10 |       10 | f            | t         | t         | t         | t           | f
+ 17384 | citus_shard_split_publication_18_10 |       10 | f            | t         | t         | t         | t           | f
+(2 rows)
 
