@@ -48,7 +48,7 @@ SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \
 SELECT citus_split_shard_by_split_points(
 	1,
 	ARRAY['0'],
-	ARRAY[:worker_1_node, :worker_2_node],
+	ARRAY[:worker_2_node, :worker_2_node],
 	'force_logical');
 -- On worker2, we want child shard 2 and dummy shard 1  --
 -- on worker1, we want child shard 3 and 1 and dummy shard 2  --
@@ -56,8 +56,11 @@ SELECT citus_split_shard_by_split_points(
 \c - - - :worker_2_port
 SET search_path TO citus_split_shard_by_split_points_negative;
 SELECT * FROM show_catalog;
+SELECT * FROM pg_subscription;
 
 \c - - - :worker_1_port
 SET search_path TO citus_split_shard_by_split_points_negative;
 SELECT * FROM show_catalog;
 SELECT * FROM pg_publication;
+SELECT * FROM pg_subscription;
+SELECT slot_name FROM pg_replication_slots;

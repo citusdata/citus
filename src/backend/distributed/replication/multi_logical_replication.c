@@ -1166,7 +1166,7 @@ ShardSubscriptionName(Oid ownerId, char *operationPrefix)
  * subscription that subscribes to the tables of the given owner.
  */
 static char *
-ShardSubscriptionRole(Oid ownerId, char * operationPrefix)
+ShardSubscriptionRole(Oid ownerId, char *operationPrefix)
 {
 	return psprintf("%s%i", operationPrefix, ownerId);
 }
@@ -1322,8 +1322,9 @@ DropShardMoveSubscriptions(MultiConnection *connection, Bitmapset *tableOwnerIds
 	while ((ownerId = bms_next_member(tableOwnerIds, ownerId)) >= 0)
 	{
 		DropShardSubscription(connection, ShardSubscriptionName(ownerId,
-																	SHARD_MOVE_SUBSCRIPTION_PREFIX));
-		DropShardUser(connection, ShardSubscriptionRole(ownerId, SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX));
+																SHARD_MOVE_SUBSCRIPTION_PREFIX));
+		DropShardUser(connection, ShardSubscriptionRole(ownerId,
+														SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX));
 	}
 }
 
@@ -1508,7 +1509,8 @@ CreateShardMoveSubscriptions(MultiConnection *connection, char *sourceNodeName,
 										 "ALTER SUBSCRIPTION %s OWNER TO %s",
 										 ShardSubscriptionName(ownerId,
 															   SHARD_MOVE_SUBSCRIPTION_PREFIX),
-										 ShardSubscriptionRole(ownerId, SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX)
+										 ShardSubscriptionRole(ownerId,
+															   SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX)
 										 ));
 
 		/*
@@ -2118,7 +2120,8 @@ CreateShardSubscription(MultiConnection *connection, char *sourceNodeName,
 									 "ALTER SUBSCRIPTION %s OWNER TO %s",
 									 ShardSubscriptionName(ownerId,
 														   SHARD_SPLIT_SUBSCRIPTION_PREFIX),
-									 ShardSubscriptionRole(ownerId, SHARD_SPLIT_SUBSCRIPTION_ROLE_PREFIX)
+									 ShardSubscriptionRole(ownerId,
+														   SHARD_SPLIT_SUBSCRIPTION_ROLE_PREFIX)
 									 ));
 
 	/*

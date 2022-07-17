@@ -10,6 +10,8 @@
 #ifndef SHARDSPLIT_LOGICAL_REPLICATION_H
 #define SHARDSPLIT_LOGICAL_REPLICATION_H
 
+#include "distributed/multi_logical_replication.h"
+
 typedef struct ReplicationSlotInfo
 {
 	uint32 targetNodeId;
@@ -17,19 +19,17 @@ typedef struct ReplicationSlotInfo
 	char *slotName;
 } ReplicationSlotInfo;
 
-typedef struct ShardSplitPubSubMetadata
+typedef struct ShardSplitSubscriberMetadata
 {
-	List *shardIntervalListForSubscription;
 	Oid tableOwnerId;
 	ReplicationSlotInfo *slotInfo;
 
 	/*
-	 * Exclusively claimed connection for subscription.
-	 * The target node of subscription
+	 * Exclusively claimed connection for subscription.The target node of subscription
 	 * is pointed by ReplicationSlotInfo.
 	 */
 	MultiConnection *targetNodeConnection;
-} ShardSplitPubSubMetadata;
+} ShardSplitSubscriberMetadata;
 
 /* key for NodeShardMappingEntry */
 typedef struct NodeShardMappingKey
@@ -49,26 +49,48 @@ extern uint32 NodeShardMappingHash(const void *key, Size keysize);
 extern int NodeShardMappingHashCompare(const void *left, const void *right, Size keysize);
 HTAB * SetupHashMapForShardInfo(void);
 
-List * ParseReplicationSlotInfoFromResult(PGresult *result);
+extern List * ParseReplicationSlotInfoFromResult(PGresult *result);
 
 
-extern HTAB *  CreateShardSplitInfoMapForPublication(List *sourceColocatedShardIntervalList,
-												  List *shardGroupSplitIntervalListList,
-												  List *destinationWorkerNodesList);
+extern HTAB *  CreateShardSplitInfoMapForPublication(
+	List *sourceColocatedShardIntervalList,
+	List *shardGroupSplitIntervalListList,
+	List *destinationWorkerNodesList);
 
 extern void LogicallyReplicateSplitShards(WorkerNode *sourceWorkerNode,
 										  List *shardSplitPubSubMetadataList,
 										  List *sourceColocatedShardIntervalList,
 										  List *shardGroupSplitIntervalListList,
 										  List *destinationWorkerNodesList);
+extern void CreateShardSplitPublications(MultiConnection *sourceConnection,
+										 HTAB *shardInfoHashMapForPublication);
+extern void DropAllShardSplitLeftOvers(WorkerNode *sourceNode,
+									   HTAB *shardSplitMapOfPublications);
 
-extern void CreateShardSplitPublicationsTwo(MultiConnection *sourceConnection,
-										 HTAB * shardInfoHashMapForPublication);
-
-extern void DropAllShardSplitLeftOvers(WorkerNode* sourceNode, HTAB * shardSplitMapOfPublications);
+extern List * PopulateShardSplitSubscriptionsMetadataList(HTAB *shardSplitInfoHashMap,
+														  List *replicationSlotInfoList);
 
 extern char *  DropExistingIfAnyAndCreateTemplateReplicationSlot(
 	ShardInterval *shardIntervalToSplit,
 	MultiConnection *
 	sourceConnection);
+
+extern void CreateShardSplitSubscriptions(List *targetNodeConnectionList,
+										  List *shardSplitPubSubMetadataList,
+										  WorkerNode *sourceWorkerNode, char *superUser,
+										  char *databaseName);
+extern void WaitForShardSplitRelationSubscriptionsBecomeReady(
+	List *shardSplitPubSubMetadataList);
+extern void WaitForShardSplitRelationSubscriptionsToBeCaughtUp(XLogRecPtr sourcePosition,
+															   List *
+															   shardSplitPubSubMetadataList);
+
+List * CreateTargetNodeConnectionsForShardSplit(List *shardSplitSubscribersMetadataList,
+												int
+												connectionFlags, char *user,
+												char *databaseName);
+
+/*used for debuggin. Remove later*/
+extern void PrintShardSplitPubSubMetadata(
+	ShardSplitSubscriberMetadata *shardSplitMetadata);
 #endif /* SHARDSPLIT_LOGICAL_REPLICATION_H */

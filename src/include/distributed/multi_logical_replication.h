@@ -27,11 +27,10 @@ extern void LogicallyReplicateShards(List *shardList, char *sourceNodeName,
 									 int targetNodePort);
 
 extern XLogRecPtr GetRemoteLogPosition(MultiConnection *connection);
-extern List *
-GetQueryResultStringList(MultiConnection *connection, char *query);
+extern List * GetQueryResultStringList(MultiConnection *connection, char *query);
 
 extern void DropShardSubscription(MultiConnection *connection,
-									  char *subscriptionName);
+								  char *subscriptionName);
 extern void DropShardPublication(MultiConnection *connection, char *publicationName);
 
 extern void DropShardUser(MultiConnection *connection, char *username);
