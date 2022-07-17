@@ -665,37 +665,6 @@ LockTransactionRecovery(LOCKMODE lockmode)
 
 
 /*
- * LockJobResource acquires a lock for creating resources associated with the
- * given jobId. This resource is typically a job schema (namespace), and less
- * commonly a partition task directory.
- */
-void
-LockJobResource(uint64 jobId, LOCKMODE lockmode)
-{
-	LOCKTAG tag;
-	const bool sessionLock = false;
-	const bool dontWait = false;
-
-	SET_LOCKTAG_JOB_RESOURCE(tag, MyDatabaseId, jobId);
-
-	(void) LockAcquire(&tag, lockmode, sessionLock, dontWait);
-}
-
-
-/* Releases the lock for resources associated with the given job id. */
-void
-UnlockJobResource(uint64 jobId, LOCKMODE lockmode)
-{
-	LOCKTAG tag;
-	const bool sessionLock = false;
-
-	SET_LOCKTAG_JOB_RESOURCE(tag, MyDatabaseId, jobId);
-
-	LockRelease(&tag, lockmode, sessionLock);
-}
-
-
-/*
  * LockShardListMetadata takes shared locks on the metadata of all shards in
  * shardIntervalList to prevents concurrent placement changes.
  */
