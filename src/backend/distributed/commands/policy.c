@@ -612,8 +612,8 @@ RenamePolicyEventExtendNames(RenameStmt *stmt, const char *schemaName, uint64 sh
 void
 DropPolicyEventExtendNames(DropStmt *dropStmt, const char *schemaName, uint64 shardId)
 {
-	Value *relationSchemaNameValue = NULL;
-	Value *relationNameValue = NULL;
+	String *relationSchemaNameValue = NULL;
+	String *relationNameValue = NULL;
 
 	uint32 dropCount = list_length(dropStmt->objects);
 	if (dropCount > 1)
@@ -652,10 +652,10 @@ DropPolicyEventExtendNames(DropStmt *dropStmt, const char *schemaName, uint64 sh
 	/* prefix with schema name if it is not added already */
 	if (relationSchemaNameValue == NULL)
 	{
-		Value *schemaNameValue = makeString(pstrdup(schemaName));
+		String *schemaNameValue = makeString(pstrdup(schemaName));
 		relationNameList = lcons(schemaNameValue, relationNameList);
 	}
 
-	char **relationName = &(relationNameValue->val.str);
+	char **relationName = &(strVal(relationNameValue));
 	AppendShardIdToName(relationName, shardId);
 }

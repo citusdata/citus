@@ -825,7 +825,7 @@ FilterDistributedSequences(GrantStmt *stmt)
 	{
 		/* iterate over all namespace names provided to get their oid's */
 		List *namespaceOidList = NIL;
-		Value *namespaceValue = NULL;
+		String *namespaceValue = NULL;
 		foreach_ptr(namespaceValue, stmt->objects)
 		{
 			char *nspname = strVal(namespaceValue);

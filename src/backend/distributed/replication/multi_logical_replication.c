@@ -33,6 +33,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_constraint.h"
 #include "distributed/adaptive_executor.h"
+#include "distributed/citus_safe_lib.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
@@ -1808,7 +1809,7 @@ TotalRelationSizeForSubscription(MultiConnection *connection, char *command)
 	{
 		char *resultString = PQgetvalue(result, 0, 0);
 
-		remoteTotalSize = pg_strtouint64(resultString, NULL, 10);
+		remoteTotalSize = SafeStringToUint64(resultString);
 	}
 	else
 	{

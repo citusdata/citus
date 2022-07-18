@@ -12,6 +12,9 @@
 
 #include "distributed/multi_server_executor.h"
 
+#define STATS_SHARED_MEM_NAME "citus_query_stats"
+
+extern Size CitusQueryStatsSharedMemSize(void);
 extern void InitializeCitusQueryStats(void);
 extern void CitusQueryStatsExecutorsEntry(uint64 queryId, MultiExecutorType executorType,
 										  char *partitionKey);
