@@ -957,7 +957,6 @@ CreatePartitioningHierarchy(List *shardGroupSplitIntervalListList,
 	{
 		ShardInterval *shardInterval = NULL;
 		WorkerNode *workerPlacementNode = NULL;
-		List *attachPartitionCommandList = NIL;
 
 		/*
 		 * Iterate on split shards list for a given shard and create constraints.
@@ -970,17 +969,10 @@ CreatePartitioningHierarchy(List *shardGroupSplitIntervalListList,
 				char *attachPartitionCommand =
 					GenerateAttachShardPartitionCommand(shardInterval);
 
-				attachPartitionCommandList = lappend(attachPartitionCommandList,
-													 attachPartitionCommand);
-			}
-
-			char *attachCommand = NULL;
-			foreach_ptr(attachCommand, attachPartitionCommandList)
-			{
 				SendCommandToWorker(
 					workerPlacementNode->workerName,
 					workerPlacementNode->workerPort,
-					attachCommand);
+					attachPartitionCommand);
 			}
 		}
 	}

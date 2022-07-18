@@ -1,5 +1,5 @@
-CREATE SCHEMA "blocking shard Move Fkeys Indexes ";
-SET search_path TO "blocking shard Move Fkeys Indexes ";
+CREATE SCHEMA "blocking shard Move Fkeys Indexes";
+SET search_path TO "blocking shard Move Fkeys Indexes";
 SET citus.next_shard_id TO 8970000;
 SET citus.next_placement_id TO 8770000;
 SET citus.shard_count TO 4;
@@ -7,11 +7,11 @@ SET citus.shard_replication_factor TO 1;
 
 -- create a non-superuser role
 CREATE ROLE mx_rebalancer_blocking_role_ent WITH LOGIN;
-GRANT ALL ON SCHEMA "blocking shard Move Fkeys Indexes " TO mx_rebalancer_blocking_role_ent;
+GRANT ALL ON SCHEMA "blocking shard Move Fkeys Indexes" TO mx_rebalancer_blocking_role_ent;
 
 -- connect with this new role
 \c - mx_rebalancer_blocking_role_ent - :master_port
-SET search_path TO "blocking shard Move Fkeys Indexes ";
+SET search_path TO "blocking shard Move Fkeys Indexes";
 SET citus.next_shard_id TO 8970000;
 SET citus.next_placement_id TO 8770000;
 SET citus.shard_count TO 4;
@@ -44,14 +44,14 @@ SELECT create_distributed_table('sensors', 'measureid', colocate_with:='none');
 
 -- due to https://github.com/citusdata/citus/issues/5121
 \c - postgres - :master_port
-SET search_path TO "blocking shard Move Fkeys Indexes ";
+SET search_path TO "blocking shard Move Fkeys Indexes";
 
 SELECT update_distributed_table_colocation('sensors_old', 'sensors');
 SELECT update_distributed_table_colocation('sensors_2020_01_01', 'sensors');
 SELECT update_distributed_table_colocation('sensors_news', 'sensors');
 
 \c - mx_rebalancer_blocking_role_ent - :master_port
-SET search_path TO "blocking shard Move Fkeys Indexes ";
+SET search_path TO "blocking shard Move Fkeys Indexes";
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 8970016;
@@ -118,7 +118,7 @@ INSERT INTO colocated_partitioned_table SELECT i, '2020-01-05' FROM generate_ser
 INSERT INTO sensors SELECT i, '2020-01-05', '{}' FROM generate_series(0,1000)i;
 
 \c - postgres - :worker_1_port
-SET search_path TO "blocking shard Move Fkeys Indexes ", public, pg_catalog;
+SET search_path TO "blocking shard Move Fkeys Indexes", public, pg_catalog;
 
 -- show the current state of the constraints
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_8970000'::regclass ORDER BY 1,2;
@@ -132,7 +132,7 @@ SELECT stxname FROM pg_statistic_ext
 WHERE stxnamespace IN (
 	SELECT oid
 	FROM pg_namespace
-	WHERE nspname IN ('blocking shard Move Fkeys Indexes ')
+	WHERE nspname IN ('blocking shard Move Fkeys Indexes')
 )
 ORDER BY stxname ASC;
 
@@ -148,7 +148,7 @@ CALL citus_cleanup_orphaned_shards();
 
 
 \c - postgres - :worker_2_port
-SET search_path TO "blocking shard Move Fkeys Indexes ", public, pg_catalog;
+SET search_path TO "blocking shard Move Fkeys Indexes", public, pg_catalog;
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_8970000'::regclass ORDER BY 1,2;
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_2020_01_01_8970008'::regclass ORDER BY 1,2;
 SELECT tablename, indexdef FROM pg_indexes WHERE tablename ='sensors_8970000' ORDER BY 1,2;
@@ -160,7 +160,7 @@ SELECT stxname FROM pg_statistic_ext
 WHERE stxnamespace IN (
 	SELECT oid
 	FROM pg_namespace
-	WHERE nspname IN ('blocking shard Move Fkeys Indexes ')
+	WHERE nspname IN ('blocking shard Move Fkeys Indexes')
 )
 ORDER BY stxname ASC;
 
@@ -172,7 +172,7 @@ indrelid IN
 
 \c - mx_rebalancer_blocking_role_ent - :master_port
 -- verify that the data is consistent
-SET search_path TO "blocking shard Move Fkeys Indexes ";
+SET search_path TO "blocking shard Move Fkeys Indexes";
 SELECT count(*) FROM reference_table;
 SELECT count(*) FROM colocated_partitioned_table;
 SELECT count(*) FROM colocated_dist_table;
@@ -197,4 +197,5 @@ ALTER TABLE sensors_2020_01_01 DROP CONSTRAINT fkey_from_child_to_parent;
 ALTER TABLE sensors_2020_01_01 DROP CONSTRAINT fkey_from_child_to_child;
 
 -- cleanup
-DROP SCHEMA "shard Move Fkeys Indexes" CASCADE;
+\c - postgres - :master_port
+DROP SCHEMA "blocking shard Move Fkeys Indexes" CASCADE;
