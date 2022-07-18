@@ -95,18 +95,6 @@ typedef struct PartitionedResultDestReceiver
 } PartitionedResultDestReceiver;
 
 static Portal StartPortalForQueryExecution(const char *queryString);
-static CitusTableCacheEntry * QueryTupleShardSearchInfo(ArrayType *minValuesArray,
-														ArrayType *maxValuesArray,
-														char partitionMethod,
-														Var *partitionColumn);
-static DestReceiver * CreatePartitionedResultDestReceiver(int partitionColumnIndex,
-														  int partitionCount,
-														  CitusTableCacheEntry *
-														  shardSearchInfo,
-														  DestReceiver **
-														  partitionedDestReceivers,
-														  bool lazyStartup,
-														  bool allowNullPartitionValues);
 static void PartitionedResultDestReceiverStartup(DestReceiver *dest, int operation,
 												 TupleDesc inputTupleDescriptor);
 static bool PartitionedResultDestReceiverReceive(TupleTableSlot *slot,
@@ -319,7 +307,7 @@ StartPortalForQueryExecution(const char *queryString)
  * information so that FindShardInterval() can find the shard corresponding
  * to a tuple.
  */
-static CitusTableCacheEntry *
+CitusTableCacheEntry *
 QueryTupleShardSearchInfo(ArrayType *minValuesArray, ArrayType *maxValuesArray,
 						  char partitionMethod, Var *partitionColumn)
 {
@@ -408,7 +396,7 @@ QueryTupleShardSearchInfo(ArrayType *minValuesArray, ArrayType *maxValuesArray,
 /*
  * CreatePartitionedResultDestReceiver sets up a partitioned dest receiver.
  */
-static DestReceiver *
+DestReceiver *
 CreatePartitionedResultDestReceiver(int partitionColumnIndex,
 									int partitionCount,
 									CitusTableCacheEntry *shardSearchInfo,

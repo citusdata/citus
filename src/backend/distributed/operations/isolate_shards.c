@@ -32,6 +32,7 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "distributed/version_compat.h"
+#include "distributed/shard_split.h"
 #include "nodes/pg_list.h"
 #include "storage/lock.h"
 #include "utils/builtins.h"
@@ -48,7 +49,6 @@ PG_FUNCTION_INFO_V1(worker_hash);
 
 /* local function forward declarations */
 static uint64 SplitShardByValue(ShardInterval *sourceShard, Datum distributionValueDatum);
-static void ErrorIfCannotSplitShard(ShardInterval *sourceShard);
 static void CreateSplitOffShards(ShardInterval *sourceShard, int hashedValue,
 								 List **splitOffShardList, int *isolatedShardId);
 static List * ShardTemplateList(ShardInterval *sourceShard, int hashedValue,
@@ -62,7 +62,6 @@ static void InsertSplitOffShardMetadata(List *splitOffShardList,
 										List *sourcePlacementList);
 static void CreateForeignConstraints(List *splitOffShardList, List *sourcePlacementList);
 static void ExecuteCommandListOnWorker(char *nodeName, int nodePort, List *commandList);
-static void DropShardList(List *shardIntervalList);
 
 
 /*
@@ -245,7 +244,7 @@ SplitShardByValue(ShardInterval *sourceShard, Datum distributionValueDatum)
 	/* get locks */
 	BlockWritesToShardList(colocatedShardList);
 
-	ErrorIfCannotSplitShard(sourceShard);
+	ErrorIfCannotSplitShard(ISOLATE_TENANT_TO_NEW_SHARD, sourceShard);
 
 	/* get hash function name */
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
@@ -368,65 +367,6 @@ ExecuteCommandListOnWorker(char *nodeName, int nodePort, List *commandList)
 		char *command = (char *) lfirst(commandCell);
 
 		SendCommandToWorker(nodeName, nodePort, command);
-	}
-}
-
-
-/*
- * ErrorIfCannotSplitShard checks relation kind and invalid shards. It errors
- * out if we are not able to split the given shard.
- */
-static void
-ErrorIfCannotSplitShard(ShardInterval *sourceShard)
-{
-	Oid relationId = sourceShard->relationId;
-	ListCell *colocatedTableCell = NULL;
-	ListCell *colocatedShardCell = NULL;
-
-	/* checks for table ownership and foreign tables */
-	List *colocatedTableList = ColocatedTableList(relationId);
-	foreach(colocatedTableCell, colocatedTableList)
-	{
-		Oid colocatedTableId = lfirst_oid(colocatedTableCell);
-
-		/* check that user has owner rights in all co-located tables */
-		EnsureTableOwner(colocatedTableId);
-
-		char relationKind = get_rel_relkind(colocatedTableId);
-		if (relationKind == RELKIND_FOREIGN_TABLE)
-		{
-			char *relationName = get_rel_name(colocatedTableId);
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot isolate tenant because \"%s\" is a "
-								   "foreign table", relationName),
-							errdetail("Isolating shards backed by foreign tables "
-									  "is not supported.")));
-		}
-	}
-
-	/* check shards with inactive placements */
-	List *colocatedShardList = ColocatedShardIntervalList(sourceShard);
-	foreach(colocatedShardCell, colocatedShardList)
-	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(colocatedShardCell);
-		uint64 shardId = shardInterval->shardId;
-		ListCell *shardPlacementCell = NULL;
-
-		List *shardPlacementList = ShardPlacementListWithoutOrphanedPlacements(shardId);
-		foreach(shardPlacementCell, shardPlacementList)
-		{
-			ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
-			if (placement->shardState != SHARD_STATE_ACTIVE)
-			{
-				char *relationName = get_rel_name(shardInterval->relationId);
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("cannot isolate tenant because relation "
-									   "\"%s\" has an inactive shard placement "
-									   "for the shard %lu", relationName, shardId),
-								errhint("Use master_copy_shard_placement UDF to "
-										"repair the inactive shard placement.")));
-			}
-		}
 	}
 }
 
@@ -752,71 +692,5 @@ InsertSplitOffShardMetadata(List *splitOffShardList, List *sourcePlacementList)
 	{
 		char *command = (char *) lfirst(commandCell);
 		SendCommandToWorkersWithMetadata(command);
-	}
-}
-
-
-/*
- * DropShardList drops shards and their metadata from both the coordinator and
- * mx nodes.
- */
-static void
-DropShardList(List *shardIntervalList)
-{
-	ListCell *shardIntervalCell = NULL;
-
-	foreach(shardIntervalCell, shardIntervalList)
-	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
-		ListCell *shardPlacementCell = NULL;
-		Oid relationId = shardInterval->relationId;
-		uint64 oldShardId = shardInterval->shardId;
-
-		/* delete metadata from synced nodes */
-		if (ShouldSyncTableMetadata(relationId))
-		{
-			ListCell *commandCell = NULL;
-
-			/* send the commands one by one */
-			List *shardMetadataDeleteCommandList = ShardDeleteCommandList(shardInterval);
-			foreach(commandCell, shardMetadataDeleteCommandList)
-			{
-				char *command = (char *) lfirst(commandCell);
-				SendCommandToWorkersWithMetadata(command);
-			}
-		}
-
-		/* delete shard placements and drop shards */
-		List *shardPlacementList = ActiveShardPlacementList(oldShardId);
-		foreach(shardPlacementCell, shardPlacementList)
-		{
-			ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
-			char *workerName = placement->nodeName;
-			uint32 workerPort = placement->nodePort;
-			StringInfo dropQuery = makeStringInfo();
-
-			DeleteShardPlacementRow(placement->placementId);
-
-			/* get shard name */
-			char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
-
-			char storageType = shardInterval->storageType;
-			if (storageType == SHARD_STORAGE_TABLE)
-			{
-				appendStringInfo(dropQuery, DROP_REGULAR_TABLE_COMMAND,
-								 qualifiedShardName);
-			}
-			else if (storageType == SHARD_STORAGE_FOREIGN)
-			{
-				appendStringInfo(dropQuery, DROP_FOREIGN_TABLE_COMMAND,
-								 qualifiedShardName);
-			}
-
-			/* drop old shard */
-			SendCommandToWorker(workerName, workerPort, dropQuery->data);
-		}
-
-		/* delete shard row */
-		DeleteShardRow(oldShardId);
 	}
 }
