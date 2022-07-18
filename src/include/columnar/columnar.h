@@ -53,6 +53,9 @@
 #define COLUMNAR_POSTSCRIPT_SIZE_MAX 256
 #define COLUMNAR_BYTES_PER_PAGE (BLCKSZ - SizeOfPageHeaderData)
 
+/*global variables for citus_columnar fake version Y */
+#define CITUS_COLUMNAR_INTERNAL_VERSION "11.1-0"
+
 /*
  * ColumnarOptions holds the option values to be used when reading or writing
  * a columnar table. To resolve these values, we first check foreign table's options,
