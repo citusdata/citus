@@ -1553,18 +1553,6 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 		return;
 	}
 
-	Oid relationId = InvalidOid;
-	char *operationName = "rebalance";
-	if (options->drainOnly)
-	{
-		operationName = "move";
-	}
-
-	foreach_oid(relationId, options->relationIdList)
-	{
-		AcquireColocationLock(relationId, ExclusiveLock, operationName);
-	}
-
 	List *placementUpdateList = GetRebalanceSteps(options);
 
 	if (list_length(placementUpdateList) == 0)
