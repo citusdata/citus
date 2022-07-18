@@ -77,11 +77,12 @@ DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_
 DROP FUNCTION pg_catalog.isolate_tenant_to_new_shard(table_name regclass, tenant_id "any", cascade_option text);
 #include "udfs/isolate_tenant_to_new_shard/11.1-1.sql"
 
-CREATE TYPE citus.citus_job_status AS ENUM ('scheduled', 'done', 'error');
+CREATE TYPE citus.citus_job_status AS ENUM ('scheduled', 'running', 'done', 'error');
 ALTER TYPE citus.citus_job_status SET SCHEMA pg_catalog;
 
 CREATE TABLE citus.pg_dist_rebalance_jobs(
     jobid bigserial NOT NULL,
+    pid integer,
     status pg_catalog.citus_job_status default 'scheduled' NOT NULL,
     command text NOT NULL,
     retry_count integer,

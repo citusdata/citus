@@ -9,6 +9,7 @@
 typedef struct FormData_pg_dist_rebalance_job
 {
 	int64 jobid;
+	int32 pid;
 	Oid status;
 #ifdef CATALOG_VARLEN    /* variable-length fields start here */
 	text command;
@@ -28,12 +29,13 @@ typedef FormData_pg_dist_rebalance_job *Form_pg_dist_rebalance_job;
  *      compiler constants for pg_dist_rebalance_jobs
  * ----------------
  */
-#define Natts_pg_dist_rebalance_jobs 5
+#define Natts_pg_dist_rebalance_jobs 6
 #define Anum_pg_dist_rebalance_jobs_jobid 1
-#define Anum_pg_dist_rebalance_jobs_status 2
-#define Anum_pg_dist_rebalance_jobs_command 3
-#define Anum_pg_dist_rebalance_jobs_retry_count 4
-#define Anum_pg_dist_rebalance_jobs_message 5
+#define Anum_pg_dist_rebalance_jobs_pid 2
+#define Anum_pg_dist_rebalance_jobs_status 3
+#define Anum_pg_dist_rebalance_jobs_command 4
+#define Anum_pg_dist_rebalance_jobs_retry_count 5
+#define Anum_pg_dist_rebalance_jobs_message 6
 
 #define REBALANCE_JOB_JOBID_SEQUENCE_NAME "pg_catalog.pg_dist_rebalance_jobs_jobid_seq"
 

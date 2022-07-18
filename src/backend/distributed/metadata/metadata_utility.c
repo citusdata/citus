@@ -2230,23 +2230,35 @@ HasScheduledRebalanceJobs()
 	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
 											  AccessShareLock);
 
-	/* pg_dist_rebalance_jobs.status == 'scheduled' */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_status,
-				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(JobStatusScheduledId()));
-
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
-													DistRebalanceJobsStatusJobsIdIndexId(),
-													indexOK, NULL, scanKeyCount, scanKey);
-
-	HeapTuple jobTuple = systable_getnext(scanDescriptor);
+	/* find any job in states listed here */
+	RebalanceJobStatus jobs[] = {
+		REBALANCE_JOB_STATUS_RUNNING,
+		REBALANCE_JOB_STATUS_SCHEDULED
+	};
 
 	bool hasScheduledJob = false;
-	if (HeapTupleIsValid(jobTuple))
+	for (int i = 0; !hasScheduledJob && i < sizeof(jobs) / sizeof(jobs[0]); i++)
 	{
-		hasScheduledJob = true;
+		/* pg_dist_rebalance_jobs.status == jobs[i] */
+		ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_status,
+					BTEqualStrategyNumber, F_OIDEQ,
+					ObjectIdGetDatum(RebalanceJobStatusOid(jobs[i])));
+
+		SysScanDesc scanDescriptor = systable_beginscan(
+			pgDistRebalanceJobs,
+			DistRebalanceJobsStatusJobsIdIndexId(),
+			indexOK, NULL, scanKeyCount,
+			scanKey);
+
+		HeapTuple jobTuple = systable_getnext(scanDescriptor);
+		if (HeapTupleIsValid(jobTuple))
+		{
+			hasScheduledJob = true;
+		}
+
+		systable_endscan(scanDescriptor);
 	}
 
-	systable_endscan(scanDescriptor);
 	table_close(pgDistRebalanceJobs, AccessShareLock);
 
 	return hasScheduledJob;
@@ -2263,6 +2275,10 @@ RebalanceJobStatusByOid(Oid enumOid)
 	else if (enumOid == JobStatusScheduledId())
 	{
 		return REBALANCE_JOB_STATUS_SCHEDULED;
+	}
+	else if (enumOid == JobStatusRunningId())
+	{
+		return REBALANCE_JOB_STATUS_RUNNING;
 	}
 	else if (enumOid == JobStatusErrorId())
 	{
@@ -2292,7 +2308,7 @@ IsRebalanceJobStatusTerminal(RebalanceJobStatus status)
 }
 
 
-static Oid
+Oid
 RebalanceJobStatusOid(RebalanceJobStatus status)
 {
 	switch (status)
@@ -2300,6 +2316,11 @@ RebalanceJobStatusOid(RebalanceJobStatus status)
 		case REBALANCE_JOB_STATUS_SCHEDULED:
 		{
 			return JobStatusScheduledId();
+		}
+
+		case REBALANCE_JOB_STATUS_RUNNING:
+		{
+			return JobStatusRunningId();
 		}
 
 		case REBALANCE_JOB_STATUS_DONE:
@@ -2385,36 +2406,47 @@ GetScheduledRebalanceJob(void)
 	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
 											  AccessShareLock);
 
-	/* pg_dist_rebalance_jobs.status == 'scheduled' */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_status,
-				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(JobStatusScheduledId()));
+	RebalanceJobStatus jobStatus[] = {
+		REBALANCE_JOB_STATUS_RUNNING,
+		REBALANCE_JOB_STATUS_SCHEDULED
+	};
 
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
-													DistRebalanceJobsStatusJobsIdIndexId(),
-													indexOK, NULL, scanKeyCount, scanKey);
-
-	HeapTuple jobTuple = systable_getnext(scanDescriptor);
 	RebalanceJob *job = NULL;
-	if (HeapTupleIsValid(jobTuple))
+	for (int i = 0; !job && i < sizeof(jobStatus) / sizeof(jobStatus[0]); i++)
 	{
-		Form_pg_dist_rebalance_job jobData = NULL;
-		jobData = (Form_pg_dist_rebalance_job) GETSTRUCT(jobTuple);
+		/* pg_dist_rebalance_jobs.status == jobStatus[i] */
+		ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_status,
+					BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(
+						RebalanceJobStatusOid(jobStatus[i])));
 
-		job = palloc0(sizeof(RebalanceJob));
-		job->jobid = jobData->jobid;
-		job->status = RebalanceJobStatusByOid(jobData->status);
+		SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
+														DistRebalanceJobsStatusJobsIdIndexId(),
+														indexOK, NULL, scanKeyCount,
+														scanKey);
 
-		/* TODO parse the actual job */
-		Datum datumArray[Natts_pg_dist_rebalance_jobs];
-		bool isNullArray[Natts_pg_dist_rebalance_jobs];
-		TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
-		heap_deform_tuple(jobTuple, tupleDescriptor, datumArray, isNullArray);
+		HeapTuple jobTuple = systable_getnext(scanDescriptor);
+		if (HeapTupleIsValid(jobTuple))
+		{
+			Form_pg_dist_rebalance_job jobData = NULL;
+			jobData = (Form_pg_dist_rebalance_job) GETSTRUCT(jobTuple);
 
-		job->command = text_to_cstring(
-			DatumGetTextP(datumArray[Anum_pg_dist_rebalance_jobs_command - 1]));
+			job = palloc0(sizeof(RebalanceJob));
+			job->jobid = jobData->jobid;
+			job->status = RebalanceJobStatusByOid(jobData->status);
+
+			/* TODO parse the actual job */
+			Datum datumArray[Natts_pg_dist_rebalance_jobs];
+			bool isNullArray[Natts_pg_dist_rebalance_jobs];
+			TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
+			heap_deform_tuple(jobTuple, tupleDescriptor, datumArray, isNullArray);
+
+			job->command = text_to_cstring(
+				DatumGetTextP(datumArray[Anum_pg_dist_rebalance_jobs_command - 1]));
+		}
+
+		systable_endscan(scanDescriptor);
 	}
 
-	systable_endscan(scanDescriptor);
 	table_close(pgDistRebalanceJobs, AccessShareLock);
 
 	return job;
@@ -2422,7 +2454,7 @@ GetScheduledRebalanceJob(void)
 
 
 RebalanceJob *
-GetScheduledRebalanceJobyJobID(int64 jobId)
+GetScheduledRebalanceJobByJobID(int64 jobId)
 {
 	const int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
@@ -2502,6 +2534,21 @@ UpdateJobStatus(RebalanceJob *job, RebalanceJobStatus newStatus)
 		ObjectIdGetDatum(RebalanceJobStatusOid(newStatus));
 	isnull[Anum_pg_dist_rebalance_jobs_status - 1] = false;
 	replace[Anum_pg_dist_rebalance_jobs_status - 1] = true;
+
+	/* TODO figure out a nice way on how to update a tuple selectively */
+	if (newStatus == REBALANCE_JOB_STATUS_RUNNING)
+	{
+		/* update pid for running status */
+		values[Anum_pg_dist_rebalance_jobs_pid - 1] = Int32GetDatum((int32) MyProcPid);
+		isnull[Anum_pg_dist_rebalance_jobs_pid - 1] = false;
+		replace[Anum_pg_dist_rebalance_jobs_pid - 1] = true;
+	}
+	else
+	{
+		values[Anum_pg_dist_rebalance_jobs_pid - 1] = 0;
+		isnull[Anum_pg_dist_rebalance_jobs_pid - 1] = true;
+		replace[Anum_pg_dist_rebalance_jobs_pid - 1] = true;
+	}
 
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
 

@@ -145,6 +145,7 @@ typedef struct MetadataCacheData
 	Oid distRebalanceJobsJobsIndexId;
 	Oid distRebalanceJobsStatusJobsIndexId;
 	Oid jobStatusScheduledId;
+	Oid jobStatusRunningId;
 	Oid jobStatusDoneId;
 	Oid jobStatusErrorId;
 	Oid distRebalanceStrategyRelationId;
@@ -3132,6 +3133,19 @@ JobStatusScheduledId(void)
 	}
 
 	return MetadataCache.jobStatusScheduledId;
+}
+
+
+Oid
+JobStatusRunningId(void)
+{
+	if (!MetadataCache.jobStatusRunningId)
+	{
+		MetadataCache.jobStatusRunningId =
+			LookupStringEnumValueId("citus_job_status", "running");
+	}
+
+	return MetadataCache.jobStatusRunningId;
 }
 
 

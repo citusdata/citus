@@ -25,7 +25,7 @@ citus_wait_for_rebalance_job(PG_FUNCTION_ARGS)
 	{
 		CHECK_FOR_INTERRUPTS();
 
-		RebalanceJob *job = GetScheduledRebalanceJobyJobID(jobid);
+		RebalanceJob *job = GetScheduledRebalanceJobByJobID(jobid);
 		if (!job)
 		{
 			ereport(ERROR, (errmsg("unkown job with jobid: %ld", jobid)));

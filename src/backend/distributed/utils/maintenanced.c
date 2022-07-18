@@ -858,9 +858,18 @@ RebalanceJobsBackgroundWorkerMain(Datum arg)
 
 /*	pg_usleep(30 * 1000 * 1000); */
 
+	MemoryContext perJobContext = AllocSetContextCreateExtended(CurrentMemoryContext,
+																"PerJobContext",
+																ALLOCSET_DEFAULT_MINSIZE,
+																ALLOCSET_DEFAULT_INITSIZE,
+																ALLOCSET_DEFAULT_MAXSIZE);
+
+	MemoryContext oldContextPerJob = MemoryContextSwitchTo(perJobContext);
 	bool hasJobs = true;
 	while (hasJobs)
 	{
+		MemoryContextReset(perJobContext);
+
 		CHECK_FOR_INTERRUPTS();
 
 		InvalidateMetadataSystemCache();
@@ -875,11 +884,26 @@ RebalanceJobsBackgroundWorkerMain(Datum arg)
 		}
 		else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
 		{
+			/*
+			 * We need to load the job into the perJobContext as we will switch contexts
+			 * later due to the committing and starting of new transactions
+			 */
+			MemoryContext oldContext = MemoryContextSwitchTo(perJobContext);
 			RebalanceJob *job = GetScheduledRebalanceJob();
+			MemoryContextSwitchTo(oldContext);
+
 			if (job)
 			{
 				ereport(LOG, (errmsg("found job with jobid: %ld", job->jobid)));
 				MemoryContext savedContext = CurrentMemoryContext;
+
+				UpdateJobStatus(job, REBALANCE_JOB_STATUS_RUNNING);
+				PopActiveSnapshot();
+				CommitTransactionCommand();
+
+				StartTransactionCommand();
+				PushActiveSnapshot(GetTransactionSnapshot());
+
 				BeginInternalSubTransaction(NULL);
 
 				PG_TRY();
@@ -919,6 +943,8 @@ RebalanceJobsBackgroundWorkerMain(Datum arg)
 		CommitTransactionCommand();
 		ProcessCompletedNotifies();
 	}
+	MemoryContextSwitchTo(oldContextPerJob);
+	MemoryContextDelete(perJobContext);
 }
 
 
