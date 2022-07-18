@@ -701,9 +701,10 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 		 */
 		if (!PartitionedTable(sourceShardIntervalToCopy->relationId))
 		{
-			StringInfo splitCopyUdfCommand = CreateSplitCopyCommand(sourceShardIntervalToCopy,
-																	splitShardIntervalList,
-																	destinationWorkerNodesList);
+			StringInfo splitCopyUdfCommand = CreateSplitCopyCommand(
+				sourceShardIntervalToCopy,
+				splitShardIntervalList,
+				destinationWorkerNodesList);
 
 			Task *splitCopyTask = CreateBasicTask(
 				sourceShardIntervalToCopy->shardId, /* jobId */
@@ -943,7 +944,8 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
  * hierarchy between the shardList, if any,
  */
 static void
-CreatePartitioningHierarchy(List *shardGroupSplitIntervalListList, List *workersForPlacementList)
+CreatePartitioningHierarchy(List *shardGroupSplitIntervalListList,
+							List *workersForPlacementList)
 {
 	/* Create partition heirarchy between shards */
 	List *shardIntervalList = NIL;
@@ -968,7 +970,8 @@ CreatePartitioningHierarchy(List *shardGroupSplitIntervalListList, List *workers
 				char *attachPartitionCommand =
 					GenerateAttachShardPartitionCommand(shardInterval);
 
-				attachPartitionCommandList = lappend(attachPartitionCommandList, attachPartitionCommand);
+				attachPartitionCommandList = lappend(attachPartitionCommandList,
+													 attachPartitionCommand);
 			}
 
 			char *attachCommand = NULL;

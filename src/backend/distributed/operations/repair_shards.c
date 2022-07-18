@@ -1192,24 +1192,23 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 	 */
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		List *commandList = NIL;
 		if (PartitionTable(shardInterval->relationId))
 		{
 			char *attachPartitionCommand =
 				GenerateAttachShardPartitionCommand(shardInterval);
 
-			commandList = lappend(commandList, attachPartitionCommand);
-		}
+			List *commandList = lappend(commandList, attachPartitionCommand);
 
-		char *tableOwner = TableOwner(shardInterval->relationId);
-		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
-												  tableOwner, commandList);
+			char *tableOwner = TableOwner(shardInterval->relationId);
+			SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
+													  tableOwner, commandList);
+		}
 
 		MemoryContextReset(localContext);
 	}
 
 	/*
-     * Iterate through the colocated shards and create the foreign constraints.
+	 * Iterate through the colocated shards and create the foreign constraints.
 	 */
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
@@ -1223,14 +1222,6 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		List *commandList = NIL;
 		commandList = list_concat(commandList, shardForeignConstraintCommandList);
 		commandList = list_concat(commandList, referenceTableForeignConstraintList);
-
-		if (PartitionTable(shardInterval->relationId))
-		{
-			char *attachPartitionCommand =
-				GenerateAttachShardPartitionCommand(shardInterval);
-
-			commandList = lappend(commandList, attachPartitionCommand);
-		}
 
 		char *tableOwner = TableOwner(shardInterval->relationId);
 		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
