@@ -46,7 +46,6 @@ CREATE FUNCTION pg_catalog.worker_repartition_cleanup(bigint)
  STRICT
 AS 'MODULE_PATHNAME', $function$worker_repartition_cleanup$function$;
 
-#include "../../../columnar/sql/downgrades/columnar--11.1-1--11.0-3.sql"
 -- add relations to citus
 ALTER EXTENSION citus ADD SCHEMA columnar;
 ALTER EXTENSION citus ADD SEQUENCE columnar.storageid_seq;
