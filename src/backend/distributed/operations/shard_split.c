@@ -82,6 +82,8 @@ static StringInfo CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval
 										 List *workersForPlacementList);
 static void InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 											 List *workersForPlacementList);
+static void CreatePartitioningHierarchy(List *shardGroupSplitIntervalListList,
+										List *workersForPlacementList);
 static void CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 										List *workersForPlacementList);
 static void TryDropSplitShardsOnFailure(HTAB *mapOfShardToPlacementCreatedByWorkflow);
@@ -135,28 +137,6 @@ ErrorIfCannotSplitShard(SplitOperation splitOperation, ShardInterval *sourceShar
 							errdetail("Splitting shards backed by foreign tables "
 									  "is not supported.")));
 		}
-
-		/*
-		 * At the moment, we do not support copying a shard if that shard's
-		 * relation is in a colocation group with a partitioned table or partition.
-		 */
-		if (PartitionedTable(colocatedTableId))
-		{
-			char *sourceRelationName = get_rel_name(relationId);
-			char *colocatedRelationName = get_rel_name(colocatedTableId);
-
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot %s of '%s', because it "
-								   "is a partitioned table",
-								   SplitOperationName[splitOperation],
-								   colocatedRelationName),
-							errdetail("In colocation group of '%s', a partitioned "
-									  "relation exists: '%s'. Citus does not support "
-									  "%s of partitioned tables.",
-									  sourceRelationName,
-									  colocatedRelationName,
-									  SplitOperationName[splitOperation])));
-		}
 	}
 
 	/* check shards with inactive placements */
@@ -209,15 +189,6 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("Cannot %s %s as operation "
 							   "is only supported for hash distributed tables.",
-							   SplitOperationName[splitOperation],
-							   SplitTargetName[splitOperation])));
-	}
-
-	if (extern_IsColumnarTableAmTable(shardIntervalToSplit->relationId))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("Cannot %s %s as operation "
-							   "is not supported for Columnar tables.",
 							   SplitOperationName[splitOperation],
 							   SplitTargetName[splitOperation])));
 	}
@@ -537,6 +508,10 @@ BlockingShardSplit(SplitOperation splitOperation,
 		InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
 										 workersForPlacementList);
 
+		/* create partitioning hierarchy, if any */
+		CreatePartitioningHierarchy(shardGroupSplitIntervalListList,
+									workersForPlacementList);
+
 		/*
 		 * Create foreign keys if exists after the metadata changes happening in
 		 * DropShardList() and InsertSplitChildrenShardMetadata() because the foreign
@@ -719,23 +694,31 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 	forboth_ptr(sourceShardIntervalToCopy, sourceColocatedShardIntervalList,
 				splitShardIntervalList, shardGroupSplitIntervalListList)
 	{
-		StringInfo splitCopyUdfCommand = CreateSplitCopyCommand(sourceShardIntervalToCopy,
-																splitShardIntervalList,
-																destinationWorkerNodesList);
+		/*
+		 * Skip copying data for partitioned tables, because they contain no
+		 * data themselves. Their partitions do contain data, but those are
+		 * different colocated shards that will be copied seperately.
+		 */
+		if (!PartitionedTable(sourceShardIntervalToCopy->relationId))
+		{
+			StringInfo splitCopyUdfCommand = CreateSplitCopyCommand(sourceShardIntervalToCopy,
+																	splitShardIntervalList,
+																	destinationWorkerNodesList);
 
-		Task *splitCopyTask = CreateBasicTask(
-			sourceShardIntervalToCopy->shardId, /* jobId */
-			taskId,
-			READ_TASK,
-			splitCopyUdfCommand->data);
+			Task *splitCopyTask = CreateBasicTask(
+				sourceShardIntervalToCopy->shardId, /* jobId */
+				taskId,
+				READ_TASK,
+				splitCopyUdfCommand->data);
 
-		ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
-		SetPlacementNodeMetadata(taskPlacement, sourceShardNode);
+			ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
+			SetPlacementNodeMetadata(taskPlacement, sourceShardNode);
 
-		splitCopyTask->taskPlacementList = list_make1(taskPlacement);
+			splitCopyTask->taskPlacementList = list_make1(taskPlacement);
 
-		splitCopyTaskList = lappend(splitCopyTaskList, splitCopyTask);
-		taskId++;
+			splitCopyTaskList = lappend(splitCopyTaskList, splitCopyTask);
+			taskId++;
+		}
 	}
 
 	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, splitCopyTaskList,
@@ -951,6 +934,52 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 	foreach_ptr(command, splitOffShardMetadataCommandList)
 	{
 		SendCommandToWorkersWithMetadata(command);
+	}
+}
+
+
+/*
+ * CreatePartitioningHierarchy creates the partitioning
+ * hierarchy between the shardList, if any,
+ */
+static void
+CreatePartitioningHierarchy(List *shardGroupSplitIntervalListList, List *workersForPlacementList)
+{
+	/* Create partition heirarchy between shards */
+	List *shardIntervalList = NIL;
+
+	/*
+	 * Iterate over all the shards in the shard group.
+	 */
+	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
+	{
+		ShardInterval *shardInterval = NULL;
+		WorkerNode *workerPlacementNode = NULL;
+		List *attachPartitionCommandList = NIL;
+
+		/*
+		 * Iterate on split shards list for a given shard and create constraints.
+		 */
+		forboth_ptr(shardInterval, shardIntervalList, workerPlacementNode,
+					workersForPlacementList)
+		{
+			if (PartitionTable(shardInterval->relationId))
+			{
+				char *attachPartitionCommand =
+					GenerateAttachShardPartitionCommand(shardInterval);
+
+				attachPartitionCommandList = lappend(attachPartitionCommandList, attachPartitionCommand);
+			}
+
+			char *attachCommand = NULL;
+			foreach_ptr(attachCommand, attachPartitionCommandList)
+			{
+				SendCommandToWorker(
+					workerPlacementNode->workerName,
+					workerPlacementNode->workerPort,
+					attachCommand);
+			}
+		}
 	}
 }
 

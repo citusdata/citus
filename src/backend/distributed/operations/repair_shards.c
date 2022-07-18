@@ -1188,9 +1188,28 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 
 	/*
 	 * Once all shards are created, we can recreate relationships between shards.
-	 *
-	 * Iterate through the colocated shards and create the foreign constraints and
-	 * attach child tables to their parents in a partitioning hierarchy.
+	 * Attach child tables to their parents in a partitioning hierarchy.
+	 */
+	foreach_ptr(shardInterval, shardIntervalList)
+	{
+		List *commandList = NIL;
+		if (PartitionTable(shardInterval->relationId))
+		{
+			char *attachPartitionCommand =
+				GenerateAttachShardPartitionCommand(shardInterval);
+
+			commandList = lappend(commandList, attachPartitionCommand);
+		}
+
+		char *tableOwner = TableOwner(shardInterval->relationId);
+		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
+												  tableOwner, commandList);
+
+		MemoryContextReset(localContext);
+	}
+
+	/*
+     * Iterate through the colocated shards and create the foreign constraints.
 	 */
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
