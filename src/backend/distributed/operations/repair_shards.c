@@ -37,6 +37,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shard_rebalancer.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
@@ -318,11 +319,12 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	ErrorIfMoveUnsupportedTableType(relationId);
 	ErrorIfTargetNodeIsNotSafeToMove(targetNodeName, targetNodePort);
 
+	AcquireColocationLock(relationId, ExclusiveLock, "move placement");
+
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid distributedTableId = shardInterval->relationId;
 
 	List *colocatedTableList = ColocatedTableList(distributedTableId);
-	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 
 	foreach(colocatedTableCell, colocatedTableList)
 	{
@@ -351,6 +353,7 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	}
 
 	/* we sort colocatedShardList so that lock operations will not cause any deadlocks */
+	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 	colocatedShardList = SortList(colocatedShardList, CompareShardIntervalsById);
 	foreach(colocatedShardCell, colocatedShardList)
 	{

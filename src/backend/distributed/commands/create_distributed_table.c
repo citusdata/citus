@@ -60,6 +60,7 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shared_library_init.h"
+#include "distributed/shard_rebalancer.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
@@ -851,6 +852,13 @@ CreateHashDistributedTableShards(Oid relationId, int shardCount,
 
 	if (colocatedTableId != InvalidOid)
 	{
+		/*
+		 * If there is a concurrent shard move on this
+		 * colocation group fail this backend. But, allow
+		 * concurrent colocated table creation.
+		 */
+		AcquireColocationLock(colocatedTableId, ShareLock, "colocate distributed table");
+
 		CreateColocatedShards(relationId, colocatedTableId, useExclusiveConnection);
 	}
 	else

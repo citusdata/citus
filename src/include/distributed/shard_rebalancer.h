@@ -194,6 +194,8 @@ extern List * RebalancePlacementUpdates(List *workerNodeList,
 extern List * ReplicationPlacementUpdates(List *workerNodeList, List *shardPlacementList,
 										  int shardReplicationFactor);
 extern void ExecuteRebalancerCommandInSeparateTransaction(char *command);
+extern void AcquireColocationLock(Oid relationId, int lockmode,
+								  const char *operationName);
 
 
 #endif   /* SHARD_REBALANCER_H */

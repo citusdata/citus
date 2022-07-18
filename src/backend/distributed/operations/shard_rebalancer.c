@@ -230,7 +230,6 @@ static float4 NodeCapacity(WorkerNode *workerNode, void *context);
 static ShardCost GetShardCost(uint64 shardId, void *context);
 static List * NonColocatedDistRelationIdList(void);
 static void RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid);
-static void AcquireColocationLock(Oid relationId, const char *operationName);
 static void ExecutePlacementUpdates(List *placementUpdateList, Oid
 									shardReplicationModeOid, char *noticeOperation);
 static float4 CalculateUtilization(float4 totalCost, float4 capacity);
@@ -621,11 +620,11 @@ GetColocatedRebalanceSteps(List *placementUpdateList)
 /*
  * AcquireColocationLock tries to acquire a lock for rebalance/replication. If
  * this is it not possible it fails instantly because this means another
- * rebalance/replication is currently happening. This would really mess up
- * planning.
+ * rebalance/replication/colocated table creation is currently happening.
+ * This would really mess up planning, could even cause lost placements.
  */
-static void
-AcquireColocationLock(Oid relationId, const char *operationName)
+void
+AcquireColocationLock(Oid relationId, int lockmode, const char *operationName)
 {
 	uint32 lockId = relationId;
 	LOCKTAG tag;
@@ -638,12 +637,17 @@ AcquireColocationLock(Oid relationId, const char *operationName)
 
 	SET_LOCKTAG_REBALANCE_COLOCATION(tag, (int64) lockId);
 
-	LockAcquireResult lockAcquired = LockAcquire(&tag, ExclusiveLock, false, true);
+	LockAcquireResult lockAcquired = LockAcquire(&tag, lockmode, false, true);
 	if (!lockAcquired)
 	{
 		ereport(ERROR, (errmsg("could not acquire the lock required to %s %s",
 							   operationName, generate_qualified_relation_name(
-								   relationId))));
+								   relationId)),
+						errdetail("It means that either a concurrent shard move "
+								  "or colocated distributed table creation is "
+								  "happening."),
+						errhint("Make sure that the concurrent operation has "
+								"finished and re-run the command")));
 	}
 }
 
@@ -945,7 +949,7 @@ replicate_table_shards(PG_FUNCTION_ARGS)
 	char transferMode = LookupShardTransferMode(shardReplicationModeOid);
 	EnsureReferenceTablesExistOnAllNodesExtended(transferMode);
 
-	AcquireColocationLock(relationId, "replicate");
+	AcquireColocationLock(relationId, ExclusiveLock, "replicate");
 
 	List *activeWorkerList = SortedActiveWorkers();
 	List *shardPlacementList = FullShardPlacementList(relationId, excludedShardArray);
@@ -1558,7 +1562,7 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 
 	foreach_oid(relationId, options->relationIdList)
 	{
-		AcquireColocationLock(relationId, operationName);
+		AcquireColocationLock(relationId, ExclusiveLock, operationName);
 	}
 
 	List *placementUpdateList = GetRebalanceSteps(options);
