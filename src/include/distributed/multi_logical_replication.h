@@ -38,7 +38,7 @@ extern void DropShardUser(MultiConnection *connection, char *username);
 extern void CreateShardSubscription(MultiConnection *connection, char *sourceNodeName,
 									int sourceNodePort, char *userName,
 									char *databaseName,
-									char *publicationName,
+									char *publicationName, char *slotName,
 									Oid ownerId);
 
 extern void WaitForRelationSubscriptionsBecomeReady(MultiConnection *targetConnection,

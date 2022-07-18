@@ -32,6 +32,7 @@ ShardSplitSubscriberMetadata * CreateShardSplitSubscriberMetadata(Oid tableOwner
 																  nodeId,
 																  List *
 																  replicationSlotInfoList);
+
 static void CreateShardSplitPublicationForNode(MultiConnection *connection,
 											   List *shardList,
 											   uint32_t publicationForTargetNodeId, Oid
@@ -149,30 +150,6 @@ AddPublishableShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval,
 }
 
 
-ShardSplitSubscriberMetadata *
-CreateShardSplitSubscriberMetadata(Oid tableOwnerId, uint32 nodeId,
-								   List *replicationSlotInfoList)
-{
-	ShardSplitSubscriberMetadata *shardSplitSubscriberMetadata = palloc0(
-		sizeof(ShardSplitSubscriberMetadata));
-	shardSplitSubscriberMetadata->tableOwnerId = tableOwnerId;
-
-	char *tableOwnerName = GetUserNameFromId(tableOwnerId, false);
-	ReplicationSlotInfo *replicationSlotInfo = NULL;
-	foreach_ptr(replicationSlotInfo, replicationSlotInfoList)
-	{
-		if (nodeId == replicationSlotInfo->targetNodeId &&
-			strcmp(tableOwnerName, replicationSlotInfo->tableOwnerName) == 0)
-		{
-			shardSplitSubscriberMetadata->slotInfo = replicationSlotInfo;
-			break;
-		}
-	}
-
-	return shardSplitSubscriberMetadata;
-}
-
-
 void
 LogicallyReplicateSplitShards(WorkerNode *sourceWorkerNode,
 							  List *shardSplitPubSubMetadataList,
@@ -281,6 +258,7 @@ CreateShardSplitSubscriptions(List *targetNodeConnectionList,
 								superUser,
 								databaseName,
 								ShardSplitPublicationName(publicationForNodeId, ownerId),
+								shardSplitPubSubMetadata->slotInfo->slotName,
 								ownerId);
 	}
 }
@@ -576,9 +554,67 @@ PopulateShardSplitSubscriptionsMetadataList(HTAB *shardSplitInfoHashMap,
 
 		shardSplitSubscriptionMetadataList = lappend(shardSplitSubscriptionMetadataList,
 													 shardSplitSubscriberMetadata);
-
-		/*replicationSlotInfoList = lappend(replicationSlotInfoList, replicationSlotInfo); */
 	}
 
 	return shardSplitSubscriptionMetadataList;
+}
+
+
+ShardSplitSubscriberMetadata *
+CreateShardSplitSubscriberMetadata(Oid tableOwnerId, uint32 nodeId,
+								   List *replicationSlotInfoList)
+{
+	ShardSplitSubscriberMetadata *shardSplitSubscriberMetadata = palloc0(
+		sizeof(ShardSplitSubscriberMetadata));
+	shardSplitSubscriberMetadata->tableOwnerId = tableOwnerId;
+
+	char *tableOwnerName = GetUserNameFromId(tableOwnerId, false);
+	ReplicationSlotInfo *replicationSlotInfo = NULL;
+	foreach_ptr(replicationSlotInfo, replicationSlotInfoList)
+	{
+		if (nodeId == replicationSlotInfo->targetNodeId &&
+			strcmp(tableOwnerName, replicationSlotInfo->tableOwnerName) == 0)
+		{
+			shardSplitSubscriberMetadata->slotInfo = replicationSlotInfo;
+			break;
+		}
+	}
+
+	PrintShardSplitPubSubMetadata(shardSplitSubscriberMetadata);
+
+	return shardSplitSubscriberMetadata;
+}
+
+
+/*TODO(saawasek): Remove existing slots before creating newer ones */
+
+/* extern void CreateReplicationSlots(MultiConnection *sourceNodeConnection, List * shardSplitSubscriberMetadataList); */
+void
+CreateReplicationSlots(MultiConnection *sourceNodeConnection,
+					   List *shardSplitSubscriberMetadataList)
+{
+	ShardSplitSubscriberMetadata *subscriberMetadata = NULL;
+	foreach_ptr(subscriberMetadata, shardSplitSubscriberMetadataList)
+	{
+		char *slotName = subscriberMetadata->slotInfo->slotName;
+
+		StringInfo createReplicationSlotCommand = makeStringInfo();
+
+		/* TODO(niupre): Replace pgoutput with an appropriate name (to e introduced in by saawasek's PR) */
+		appendStringInfo(createReplicationSlotCommand,
+						 "SELECT * FROM  pg_create_logical_replication_slot('%s','citus', false)",
+						 slotName);
+
+		PGresult *result = NULL;
+		int response = ExecuteOptionalRemoteCommand(sourceNodeConnection,
+													createReplicationSlotCommand->data,
+													&result);
+		if (response != RESPONSE_OKAY || !IsResponseOK(result) || PQntuples(result) != 1)
+		{
+			ReportResultError(sourceNodeConnection, result, ERROR);
+		}
+
+		PQclear(result);
+		ForgetResults(sourceNodeConnection);
+	}
 }

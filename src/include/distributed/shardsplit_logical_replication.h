@@ -89,6 +89,8 @@ List * CreateTargetNodeConnectionsForShardSplit(List *shardSplitSubscribersMetad
 												int
 												connectionFlags, char *user,
 												char *databaseName);
+extern void CreateReplicationSlots(MultiConnection *sourceNodeConnection,
+								   List *shardSplitSubscriberMetadataList);
 
 /*used for debuggin. Remove later*/
 extern void PrintShardSplitPubSubMetadata(

@@ -2080,7 +2080,7 @@ GetSubscriptionPosition(MultiConnection *connection, Bitmapset *tableOwnerIds,
 void
 CreateShardSubscription(MultiConnection *connection, char *sourceNodeName,
 						int sourceNodePort, char *userName, char *databaseName,
-						char *publicationName,
+						char *publicationName, char *slotName,
 						Oid ownerId)
 {
 	StringInfo createSubscriptionCommand = makeStringInfo();
@@ -2107,11 +2107,12 @@ CreateShardSubscription(MultiConnection *connection, char *sourceNodeName,
 
 	appendStringInfo(createSubscriptionCommand,
 					 "CREATE SUBSCRIPTION %s CONNECTION %s PUBLICATION %s "
-					 "WITH (citus_use_authinfo=true, enabled=false)",
+					 "WITH (citus_use_authinfo=true, enabled=false, create_slot=false, copy_data=false, slot_name='%s')",
 					 quote_identifier(ShardSubscriptionName(ownerId,
 															SHARD_SPLIT_SUBSCRIPTION_PREFIX)),
 					 quote_literal_cstr(conninfo->data),
-					 quote_identifier(publicationName));
+					 quote_identifier(publicationName),
+					 slotName);
 
 	ExecuteCriticalRemoteCommand(connection, createSubscriptionCommand->data);
 	pfree(createSubscriptionCommand->data);

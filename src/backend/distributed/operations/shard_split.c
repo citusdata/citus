@@ -1120,6 +1120,10 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 					  List *shardSplitPointsList,
 					  List *workersForPlacementList)
 {
+	char *superUser = CitusExtensionOwnerName();
+	char *databaseName = get_database_name(MyDatabaseId);
+	int connectionFlags = FORCE_NEW_CONNECTION;
+
 	List *sourceColocatedShardIntervalList = ColocatedShardIntervalList(
 		shardIntervalToSplit);
 
@@ -1136,6 +1140,24 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 	WorkerNode *sourceShardToCopyNode = FindNodeWithNodeId(sourceShardPlacement->nodeId,
 														   false /* missingOk */);
 
+	HTAB *shardSplitHashMapForPublication = CreateShardSplitInfoMapForPublication(
+		sourceColocatedShardIntervalList,
+		shardGroupSplitIntervalListList,
+		workersForPlacementList);
+
+	DropAllShardSplitLeftOvers(sourceShardToCopyNode, shardSplitHashMapForPublication);
+
+	MultiConnection *sourceConnection = GetNodeUserDatabaseConnection(connectionFlags,
+																	  sourceShardToCopyNode
+																	  ->
+																	  workerName,
+																	  sourceShardToCopyNode
+																	  ->
+																	  workerPort,
+																	  superUser,
+																	  databaseName);
+	ClaimConnectionExclusively(sourceConnection);
+
 	PG_TRY();
 	{
 		/*
@@ -1149,11 +1171,6 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 			shardGroupSplitIntervalListList,
 			workersForPlacementList);
 
-		/* char *templateSnapShotName = CreateTemplateReplicationSlotAndReturnSnapshot( */
-		/*  shardIntervalToSplit, sourceShardToCopyNode); */
-
-		/* DoSplitCopy(sourceShardToCopyNode, sourceColocatedShardIntervalList, */
-		/*          shardGroupSplitIntervalListList, workersForPlacementList, NULL); */
 
 		CreateDummyShardsForShardGroup(
 			sourceColocatedShardIntervalList,
@@ -1161,12 +1178,58 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 			sourceShardToCopyNode,
 			workersForPlacementList);
 
-		/*TODO: Refactor this method. BlockWrites is within this as of now, take it out */
-		SplitShardReplicationSetup(shardIntervalToSplit,
-								   sourceColocatedShardIntervalList,
-								   shardGroupSplitIntervalListList,
-								   sourceShardToCopyNode,
-								   workersForPlacementList);
+		CreateShardSplitPublications(sourceConnection, shardSplitHashMapForPublication);
+
+		/*Create Template Replication Slot */
+
+		/* DoSplitCopy */
+
+		/*worker_split_replication_setup_udf*/
+		List *replicationSlotInfoList = ExecuteSplitShardReplicationSetupUDF(
+			sourceShardToCopyNode,
+			sourceColocatedShardIntervalList,
+			shardGroupSplitIntervalListList,
+			workersForPlacementList);
+
+		/* Subscriber flow starts from here */
+		List *shardSplitSubscribersMetadataList =
+			PopulateShardSplitSubscriptionsMetadataList(
+				shardSplitHashMapForPublication, replicationSlotInfoList);
+
+		List *targetNodeConnectionList = CreateTargetNodeConnectionsForShardSplit(
+			shardSplitSubscribersMetadataList,
+			connectionFlags,
+			superUser, databaseName);
+
+		/* Create copies of template replication slot */
+		CreateReplicationSlots(sourceConnection, shardSplitSubscribersMetadataList);
+
+		CreateShardSplitSubscriptions(targetNodeConnectionList,
+									  shardSplitSubscribersMetadataList,
+									  sourceShardToCopyNode,
+									  superUser,
+									  databaseName);
+
+		WaitForShardSplitRelationSubscriptionsBecomeReady(
+			shardSplitSubscribersMetadataList);
+
+		XLogRecPtr sourcePosition = GetRemoteLogPosition(sourceConnection);
+		WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition,
+														   shardSplitSubscribersMetadataList);
+
+		CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
+											   workersForPlacementList);
+
+		sourcePosition = GetRemoteLogPosition(sourceConnection);
+		WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition,
+														   shardSplitSubscribersMetadataList);
+
+		BlockWritesToShardList(sourceColocatedShardIntervalList);
+
+		sourcePosition = GetRemoteLogPosition(sourceConnection);
+		WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition,
+														   shardSplitSubscribersMetadataList);
+
 		/*
 		 * Drop old shards and delete related metadata. Have to do that before
 		 * creating the new shard metadata, because there's cross-checks
@@ -1355,22 +1418,6 @@ SplitShardReplicationSetup(ShardInterval *shardIntervalToSplit,
 						   WorkerNode *sourceWorkerNode,
 						   List *destinationWorkerNodesList)
 {
-	/* / * // / *Create Template replication slot * / * / */
-	/* / * char *templateSnapShotName = CreateTemplateReplicationSlotAndReturnSnapshot( * / */
-	/* / *  shardIntervalToSplit, sourceWorkerNode); * / */
-	/* List *shardSplitPubSubMetadata = CreateShardSplitInfoMapForPublication( */
-	/*  sourceColocatedShardIntervalList, */
-	/*  shardGroupSplitIntervalListList, */
-	/*  destinationWorkerNodesList, */
-	/*  replicationSlotInfoList); */
-	/* earlier the above method used to take replication slot info as information */
-
-
-	/* LogicallyReplicateSplitShards(sourceWorkerNode, shardSplitPubSubMetadata, */
-	/*                            sourceColocatedShardIntervalList, */
-	/*                            shardGroupSplitIntervalListList, */
-	/*                            destinationWorkerNodesList); */
-
 	char *superUser = CitusExtensionOwnerName();
 	char *databaseName = get_database_name(MyDatabaseId);
 	int connectionFlags = FORCE_NEW_CONNECTION;
@@ -1424,7 +1471,7 @@ SplitShardReplicationSetup(ShardInterval *shardIntervalToSplit,
 	XLogRecPtr sourcePosition = GetRemoteLogPosition(sourceConnection);
 	WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition,
 													   shardSplitSubscribersMetadataList);
-	
+
 	CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
 										   destinationWorkerNodesList);
 
