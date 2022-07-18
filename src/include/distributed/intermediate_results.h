@@ -69,12 +69,26 @@ typedef struct NodeToNodeFragmentsTransfer
 	List *fragmentList;
 } NodeToNodeFragmentsTransfer;
 
+/* Forward Declarations */
+struct CitusTableCacheEntry;
 
 /* intermediate_results.c */
 extern DestReceiver * CreateRemoteFileDestReceiver(const char *resultId,
 												   EState *executorState,
 												   List *initialNodeList, bool
 												   writeLocalFile);
+extern DestReceiver * CreatePartitionedResultDestReceiver(int partitionColumnIndex,
+														  int partitionCount,
+														  CitusTableCacheEntry *
+														  shardSearchInfo,
+														  DestReceiver **
+														  partitionedDestReceivers,
+														  bool lazyStartup,
+														  bool allowNullPartitionValues);
+extern CitusTableCacheEntry * QueryTupleShardSearchInfo(ArrayType *minValuesArray,
+														ArrayType *maxValuesArray,
+														char partitionMethod,
+														Var *partitionColumn);
 extern void WriteToLocalFile(StringInfo copyData, FileCompat *fileCompat);
 extern uint64 RemoteFileDestReceiverBytesSent(DestReceiver *destReceiver);
 extern void SendQueryResultViaCopy(const char *resultId);
@@ -83,6 +97,9 @@ extern void RemoveIntermediateResultsDirectories(void);
 extern int64 IntermediateResultSize(const char *resultId);
 extern char * QueryResultFileName(const char *resultId);
 extern char * CreateIntermediateResultsDirectory(void);
+extern ArrayType * CreateArrayFromDatums(Datum *datumArray, bool *nullsArray, int
+										 datumCount, Oid typeId);
+
 
 /* distributed_intermediate_results.c */
 extern List ** RedistributeTaskListResults(const char *resultIdPrefix,

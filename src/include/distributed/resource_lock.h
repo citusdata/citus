@@ -74,14 +74,6 @@ typedef enum CitusOperations
 						 (uint32) (shardid), \
 						 ADV_LOCKTAG_CLASS_CITUS_SHARD)
 
-/* reuse advisory lock, but with different, unused field 4 (6) */
-#define SET_LOCKTAG_JOB_RESOURCE(tag, db, jobid) \
-	SET_LOCKTAG_ADVISORY(tag, \
-						 db, \
-						 (uint32) ((jobid) >> 32), \
-						 (uint32) (jobid), \
-						 ADV_LOCKTAG_CLASS_CITUS_JOB)
-
 /* reuse advisory lock, but with different, unused field 4 (7)
  * Also it has the database hardcoded to MyDatabaseId, to ensure the locks
  * are local to each database */
@@ -156,10 +148,6 @@ extern void LockReferencedReferenceShardDistributionMetadata(uint64 shardId,
 
 /* Lock shard data, for DML commands or remote fetches */
 extern void LockShardResource(uint64 shardId, LOCKMODE lockmode);
-
-/* Lock a job schema or partition task directory */
-extern void LockJobResource(uint64 jobId, LOCKMODE lockmode);
-extern void UnlockJobResource(uint64 jobId, LOCKMODE lockmode);
 
 /* Lock a co-location group */
 extern void LockColocationId(int colocationId, LOCKMODE lockMode);

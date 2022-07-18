@@ -1,0 +1,951 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-load-cache s1-insert s1-begin s1-select s2-begin s2-blocking-shard-split s1-update s2-commit s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+ -- Indirect way to load cache.
+ TRUNCATE to_split_table;
+
+step s1-insert:
+ -- Id '123456789' maps to shard xxxxx.
+ SELECT get_shard_id_for_distribution_column('to_split_table', 123456789);
+ INSERT INTO to_split_table VALUES (123456789, 1);
+
+get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                             1500002
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+ SELECT count(*) FROM to_split_table WHERE id = 123456789;
+
+count
+---------------------------------------------------------------------
+    1
+(1 row)
+
+step s2-begin:
+ BEGIN;
+
+step s2-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-update:
+ UPDATE to_split_table SET value = 111 WHERE id = 123456789;
+ <waiting ...>
+step s2-commit: 
+ COMMIT;
+
+step s1-update: <... completed>
+ERROR:  could not find valid entry for shard xxxxx
+step s1-commit:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     0
+   57637|1500003|t      |     1
+   57638|1500004|t      |     0
+(3 rows)
+
+       id|value
+---------------------------------------------------------------------
+123456789|    1
+(1 row)
+
+
+starting permutation: s1-load-cache s1-insert s1-begin s1-select s2-begin s2-blocking-shard-split s1-delete s2-commit s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+ -- Indirect way to load cache.
+ TRUNCATE to_split_table;
+
+step s1-insert:
+ -- Id '123456789' maps to shard xxxxx.
+ SELECT get_shard_id_for_distribution_column('to_split_table', 123456789);
+ INSERT INTO to_split_table VALUES (123456789, 1);
+
+get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                             1500002
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+ SELECT count(*) FROM to_split_table WHERE id = 123456789;
+
+count
+---------------------------------------------------------------------
+    1
+(1 row)
+
+step s2-begin:
+ BEGIN;
+
+step s2-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-delete:
+ DELETE FROM to_split_table WHERE id = 123456789;
+ <waiting ...>
+step s2-commit: 
+ COMMIT;
+
+step s1-delete: <... completed>
+ERROR:  could not find valid entry for shard xxxxx
+step s1-commit:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     0
+   57637|1500003|t      |     1
+   57638|1500004|t      |     0
+(3 rows)
+
+       id|value
+---------------------------------------------------------------------
+123456789|    1
+(1 row)
+
+
+starting permutation: s1-load-cache s1-begin s1-select s2-begin s2-blocking-shard-split s1-insert s2-commit s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+ -- Indirect way to load cache.
+ TRUNCATE to_split_table;
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+ SELECT count(*) FROM to_split_table WHERE id = 123456789;
+
+count
+---------------------------------------------------------------------
+    0
+(1 row)
+
+step s2-begin:
+ BEGIN;
+
+step s2-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-insert:
+ -- Id '123456789' maps to shard xxxxx.
+ SELECT get_shard_id_for_distribution_column('to_split_table', 123456789);
+ INSERT INTO to_split_table VALUES (123456789, 1);
+ <waiting ...>
+step s2-commit: 
+ COMMIT;
+
+step s1-insert: <... completed>
+get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                             1500002
+(1 row)
+
+ERROR:  could not find valid entry for shard xxxxx
+step s1-commit:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     0
+   57637|1500003|t      |     0
+   57638|1500004|t      |     0
+(3 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+
+starting permutation: s1-load-cache s1-begin s1-select s2-begin s2-blocking-shard-split s1-copy s2-commit s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+ -- Indirect way to load cache.
+ TRUNCATE to_split_table;
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+ SELECT count(*) FROM to_split_table WHERE id = 123456789;
+
+count
+---------------------------------------------------------------------
+    0
+(1 row)
+
+step s2-begin:
+ BEGIN;
+
+step s2-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-copy:
+ COPY to_split_table FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+ <waiting ...>
+step s2-commit: 
+ COMMIT;
+
+step s1-copy: <... completed>
+ERROR:  could not find valid entry for shard xxxxx
+step s1-commit:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     0
+   57637|1500003|t      |     0
+   57638|1500004|t      |     0
+(3 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+
+starting permutation: s1-insert s1-begin s1-select s2-begin s2-blocking-shard-split s1-update s2-commit s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-insert:
+ -- Id '123456789' maps to shard xxxxx.
+ SELECT get_shard_id_for_distribution_column('to_split_table', 123456789);
+ INSERT INTO to_split_table VALUES (123456789, 1);
+
+get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                             1500002
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+ SELECT count(*) FROM to_split_table WHERE id = 123456789;
+
+count
+---------------------------------------------------------------------
+    1
+(1 row)
+
+step s2-begin:
+ BEGIN;
+
+step s2-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-update:
+ UPDATE to_split_table SET value = 111 WHERE id = 123456789;
+ <waiting ...>
+step s2-commit: 
+ COMMIT;
+
+step s1-update: <... completed>
+ERROR:  could not find valid entry for shard xxxxx
+step s1-commit:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     0
+   57637|1500003|t      |     1
+   57638|1500004|t      |     0
+(3 rows)
+
+       id|value
+---------------------------------------------------------------------
+123456789|    1
+(1 row)
+
+
+starting permutation: s1-insert s1-begin s1-select s2-begin s2-blocking-shard-split s1-delete s2-commit s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-insert:
+ -- Id '123456789' maps to shard xxxxx.
+ SELECT get_shard_id_for_distribution_column('to_split_table', 123456789);
+ INSERT INTO to_split_table VALUES (123456789, 1);
+
+get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                             1500002
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+ SELECT count(*) FROM to_split_table WHERE id = 123456789;
+
+count
+---------------------------------------------------------------------
+    1
+(1 row)
+
+step s2-begin:
+ BEGIN;
+
+step s2-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-delete:
+ DELETE FROM to_split_table WHERE id = 123456789;
+ <waiting ...>
+step s2-commit: 
+ COMMIT;
+
+step s1-delete: <... completed>
+ERROR:  could not find valid entry for shard xxxxx
+step s1-commit:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     0
+   57637|1500003|t      |     1
+   57638|1500004|t      |     0
+(3 rows)
+
+       id|value
+---------------------------------------------------------------------
+123456789|    1
+(1 row)
+
+
+starting permutation: s1-begin s1-select s2-begin s2-blocking-shard-split s1-insert s2-commit s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+ SELECT count(*) FROM to_split_table WHERE id = 123456789;
+
+count
+---------------------------------------------------------------------
+    0
+(1 row)
+
+step s2-begin:
+ BEGIN;
+
+step s2-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-insert:
+ -- Id '123456789' maps to shard xxxxx.
+ SELECT get_shard_id_for_distribution_column('to_split_table', 123456789);
+ INSERT INTO to_split_table VALUES (123456789, 1);
+ <waiting ...>
+step s2-commit: 
+ COMMIT;
+
+step s1-insert: <... completed>
+get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                             1500002
+(1 row)
+
+ERROR:  could not find valid entry for shard xxxxx
+step s1-commit:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     0
+   57637|1500003|t      |     0
+   57638|1500004|t      |     0
+(3 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+
+starting permutation: s1-begin s1-select s2-begin s2-blocking-shard-split s1-copy s2-commit s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+ SELECT count(*) FROM to_split_table WHERE id = 123456789;
+
+count
+---------------------------------------------------------------------
+    0
+(1 row)
+
+step s2-begin:
+ BEGIN;
+
+step s2-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-copy:
+ COPY to_split_table FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+ <waiting ...>
+step s2-commit: 
+ COMMIT;
+
+step s1-copy: <... completed>
+ERROR:  could not find valid entry for shard xxxxx
+step s1-commit:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     0
+   57637|1500003|t      |     0
+   57638|1500004|t      |     0
+(3 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+
+starting permutation: s1-load-cache s1-insert s1-begin s1-blocking-shard-split s2-blocking-shard-split s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+ -- Indirect way to load cache.
+ TRUNCATE to_split_table;
+
+step s1-insert:
+ -- Id '123456789' maps to shard xxxxx.
+ SELECT get_shard_id_for_distribution_column('to_split_table', 123456789);
+ INSERT INTO to_split_table VALUES (123456789, 1);
+
+get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                             1500002
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500001,
+  ARRAY['-1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+ <waiting ...>
+step s1-commit: 
+ COMMIT;
+
+step s2-blocking-shard-split: <... completed>
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500003|t      |     0
+   57637|1500005|t      |     1
+   57638|1500004|t      |     0
+   57638|1500006|t      |     0
+(4 rows)
+
+       id|value
+---------------------------------------------------------------------
+123456789|    1
+(1 row)
+
+
+starting permutation: s1-insert s1-begin s1-blocking-shard-split s2-blocking-shard-split s1-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-insert:
+ -- Id '123456789' maps to shard xxxxx.
+ SELECT get_shard_id_for_distribution_column('to_split_table', 123456789);
+ INSERT INTO to_split_table VALUES (123456789, 1);
+
+get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                             1500002
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500001,
+  ARRAY['-1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+ <waiting ...>
+step s1-commit: 
+ COMMIT;
+
+step s2-blocking-shard-split: <... completed>
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500003|t      |     0
+   57637|1500005|t      |     1
+   57638|1500004|t      |     0
+   57638|1500006|t      |     0
+(4 rows)
+
+       id|value
+---------------------------------------------------------------------
+123456789|    1
+(1 row)
+
+
+starting permutation: s1-load-cache s1-begin s1-select s2-begin s2-blocking-shard-split s1-ddl s2-commit s1-commit s2-print-cluster s2-print-index-count
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+ -- Indirect way to load cache.
+ TRUNCATE to_split_table;
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+ SELECT count(*) FROM to_split_table WHERE id = 123456789;
+
+count
+---------------------------------------------------------------------
+    0
+(1 row)
+
+step s2-begin:
+ BEGIN;
+
+step s2-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-ddl:
+ CREATE INDEX test_table_index ON to_split_table(id);
+ <waiting ...>
+step s2-commit: 
+ COMMIT;
+
+step s1-ddl: <... completed>
+step s1-commit:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     0
+   57637|1500003|t      |     0
+   57638|1500004|t      |     0
+(3 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+step s2-print-index-count:
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
+ ORDER BY
+  nodeport;
+
+nodeport|success|result
+---------------------------------------------------------------------
+   57637|t      |     1
+   57637|t      |     1
+   57638|t      |     1
+(3 rows)
+
+
+starting permutation: s1-begin s1-select s2-begin s2-blocking-shard-split s1-ddl s2-commit s1-commit s2-print-cluster s2-print-index-count
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+ SELECT count(*) FROM to_split_table WHERE id = 123456789;
+
+count
+---------------------------------------------------------------------
+    0
+(1 row)
+
+step s2-begin:
+ BEGIN;
+
+step s2-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-ddl:
+ CREATE INDEX test_table_index ON to_split_table(id);
+ <waiting ...>
+step s2-commit: 
+ COMMIT;
+
+step s1-ddl: <... completed>
+step s1-commit:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     0
+   57637|1500003|t      |     0
+   57638|1500004|t      |     0
+(3 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+step s2-print-index-count:
+ SELECT
+  nodeport, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
+ ORDER BY
+  nodeport;
+
+nodeport|success|result
+---------------------------------------------------------------------
+   57637|t      |     1
+   57637|t      |     1
+   57638|t      |     1
+(3 rows)
+
