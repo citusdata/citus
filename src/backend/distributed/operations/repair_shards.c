@@ -1197,11 +1197,10 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 			char *attachPartitionCommand =
 				GenerateAttachShardPartitionCommand(shardInterval);
 
-			List *commandList = lappend(commandList, attachPartitionCommand);
-
 			char *tableOwner = TableOwner(shardInterval->relationId);
 			SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
-													  tableOwner, commandList);
+													  tableOwner,
+													  list_make1(attachPartitionCommand));
 		}
 
 		MemoryContextReset(localContext);
