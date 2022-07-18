@@ -329,6 +329,8 @@ extern void EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid
 extern void AlterSequenceType(Oid seqOid, Oid typeOid);
 extern void EnsureRelationHasCompatibleSequenceTypes(Oid relationId);
 extern bool HasScheduledRebalanceJobs(void);
+extern int64 GetNextRebalanceJobId(void);
+extern RebalanceJob * ScheduleBackgrounRebalanceJob(char *command);
 extern RebalanceJob * GetScheduledRebalanceJob(void);
 extern RebalanceJob * GetScheduledRebalanceJobyJobID(int64 jobId);
 extern void UpdateJobStatus(RebalanceJob *job, RebalanceJobStatus newStatus);

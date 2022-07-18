@@ -35,4 +35,6 @@ typedef FormData_pg_dist_rebalance_job *Form_pg_dist_rebalance_job;
 #define Anum_pg_dist_rebalance_jobs_retry_count 4
 #define Anum_pg_dist_rebalance_jobs_message 5
 
+#define REBALANCE_JOB_JOBID_SEQUENCE_NAME "pg_catalog.pg_dist_rebalance_jobs_jobid_seq"
+
 #endif /* CITUS_PG_DIST_REBALANCE_JOBS_H */

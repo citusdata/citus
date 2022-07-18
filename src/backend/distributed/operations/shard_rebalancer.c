@@ -1555,12 +1555,38 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 		return;
 	}
 
+	/* find the name of the shard transfer mode to interpolate in the scheduled command */
+	Datum shardTranferModeLabelDatum =
+		DirectFunctionCall1(enum_out, shardReplicationModeOid);
+	char *shardTranferModeLabel = DatumGetCString(shardTranferModeLabelDatum);
+
+	/* schedule planned moves */
+	PlacementUpdateEvent *move = NULL;
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+	foreach_ptr(move, placementUpdateList)
+	{
+		resetStringInfo(&buf);
+
+		appendStringInfo(&buf,
+						 "SELECT citus_move_shard_placement(%ld,%s,%u,%s,%u,%s)",
+						 move->shardId,
+						 quote_literal_cstr(move->sourceNode->workerName),
+						 move->sourceNode->workerPort,
+						 quote_literal_cstr(move->targetNode->workerName),
+						 move->targetNode->workerPort,
+						 quote_literal_cstr(shardTranferModeLabel));
+
+		ScheduleBackgrounRebalanceJob(buf.data);
+	}
+
 	/*
 	 * This uses the first relationId from the list, it's only used for display
 	 * purposes so it does not really matter which to show
 	 */
-	ExecutePlacementUpdates(placementUpdateList, shardReplicationModeOid, "Moving");
-	FinalizeCurrentProgressMonitor();
+
+	/* ExecutePlacementUpdates(placementUpdateList, shardReplicationModeOid, "Moving"); */
+	/* FinalizeCurrentProgressMonitor(); */
 }
 
 
