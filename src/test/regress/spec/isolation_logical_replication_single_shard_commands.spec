@@ -139,5 +139,5 @@ permutation "s1-insert" "s1-begin" "s2-begin" "s2-select" "s1-move-placement" "s
 permutation "s1-insert" "s1-begin" "s2-begin" "s2-select-for-update" "s1-move-placement" "s2-end" "s1-end" "s1-get-shard-distribution"
 
 
-// This test actually blocks because we don't want two non blocking shard moves at the same time
+// This test fails because we don't want two non blocking shard moves at the same time
 permutation "s1-begin" "s2-begin" "s1-move-placement" "s2-move-placement" "s1-end" "s2-end"
