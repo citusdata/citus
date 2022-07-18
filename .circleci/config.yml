@@ -643,7 +643,19 @@ workflows:
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-enterprise-failure
           requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-split'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-split
+          requires: [build-13]
 
+      - test-citus:
+          name: 'test-14_check-split'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-split
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-enterprise'
           pg_major: 14

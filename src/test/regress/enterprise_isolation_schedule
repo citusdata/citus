@@ -13,3 +13,5 @@ test: isolation_ref2ref_foreign_keys_enterprise
 test: isolation_pg_send_cancellation
 test: isolation_shard_move_vs_start_metadata_sync
 test: isolation_tenant_isolation
+test: isolation_blocking_shard_split
+test: isolation_blocking_shard_split_with_fkey_to_reference

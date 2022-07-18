@@ -74,8 +74,6 @@ static void PartitioningTupleDestPutTuple(TupleDestination *self, Task *task,
 										  HeapTuple heapTuple, uint64 tupleLibpqSize);
 static TupleDesc PartitioningTupleDestTupleDescForQuery(TupleDestination *self, int
 														queryNumber);
-static ArrayType * CreateArrayFromDatums(Datum *datumArray, bool *nullsArray, int
-										 datumCount, Oid typeId);
 static char * SourceShardPrefix(const char *resultPrefix, uint64 shardId);
 static DistributedResultFragment * TupleToDistributedResultFragment(HeapTuple heapTuple,
 																	TupleDesc tupleDesc,
@@ -372,7 +370,7 @@ ShardMinMaxValueArrays(ShardInterval **shardIntervalArray, int shardCount,
 /*
  * CreateArrayFromDatums creates an array consisting of given values and nulls.
  */
-static ArrayType *
+ArrayType *
 CreateArrayFromDatums(Datum *datumArray, bool *nullsArray, int datumCount, Oid typeId)
 {
 	bool typeByValue = false;
