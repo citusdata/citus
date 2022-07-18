@@ -385,8 +385,8 @@ SplitShard(SplitMode splitMode,
 
 
 /*
- * ShardIntervalHashCode computes the hash code for a shard from the
- * placement's shard id.
+ * ShardIntervalHashCode computes the hash code for a Shardinterval using
+ * shardId.
  */
 static uint32
 ShardIntervalHashCode(const void *key, Size keySize)
@@ -941,7 +941,7 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 
 /*
  * CreatePartitioningHierarchy creates the partitioning
- * hierarchy between the shardList, if any,
+ * hierarchy between the shardList, if any.
  */
 static void
 CreatePartitioningHierarchy(List *shardGroupSplitIntervalListList,
@@ -1098,7 +1098,7 @@ DropShardList(List *shardIntervalList)
 
 
 /*
- * In case of failure, DropShardPlacementList drops shard placements and their metadata from both the
+ * In case of failure, TryDropSplitShardsOnFailure drops in-progress shard placements from both the
  * coordinator and mx nodes.
  */
 static void
