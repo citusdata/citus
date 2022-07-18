@@ -36,10 +36,10 @@ SET citus.shard_replication_factor TO 1;
     CREATE INDEX hash_index ON sensors USING HASH((measure_data->'IsFailed'));
     CREATE INDEX index_with_include ON sensors ((measure_data->'IsFailed')) INCLUDE (measure_data, eventdatetime);
 
-    CREATE INDEX index_on_parent_columnar ON sensors(lower(measureid::text));
-    CREATE INDEX index_on_child_columnar ON sensors_2020_01_01(lower(measure_data::text));
-    CREATE INDEX hash_index_columnar ON sensors USING HASH((measure_data->'IsFailed'));
-    CREATE INDEX index_with_include_columnar ON sensors ((measure_data->'IsFailed')) INCLUDE (measure_data, eventdatetime);
+    CREATE INDEX index_on_parent_columnar ON sensorscolumnar(lower(measureid::text));
+    CREATE INDEX index_on_child_columnar ON sensorscolumnar_2020_01_01(lower(measure_data::text));
+    CREATE INDEX hash_index_columnar ON sensorscolumnar USING HASH((measure_data->'IsFailed'));
+    CREATE INDEX index_with_include_columnar ON sensorscolumnar ((measure_data->'IsFailed')) INCLUDE (measure_data, eventdatetime);
 
     ALTER INDEX index_on_parent ALTER COLUMN 1 SET STATISTICS 1000;
     ALTER INDEX index_on_child ALTER COLUMN 1 SET STATISTICS 1000;
@@ -60,7 +60,7 @@ SET citus.shard_replication_factor TO 1;
 
     -- create colocated distributed tables
     CREATE TABLE colocated_dist_table (measureid integer PRIMARY KEY);
-    SELECT create_distributed_table('colocated_dist_table', 'measureid', colocate_with:='sensors');
+    SELECT create_distributed_table('colocated_dist_table', 'measureid');
     CLUSTER colocated_dist_table USING colocated_dist_table_pkey;
 
     CREATE TABLE colocated_partitioned_table(
@@ -69,21 +69,12 @@ SET citus.shard_replication_factor TO 1;
         PRIMARY KEY (measureid, eventdatetime))
     PARTITION BY RANGE(eventdatetime);
     CREATE TABLE colocated_partitioned_table_2020_01_01 PARTITION OF colocated_partitioned_table FOR VALUES FROM ('2020-01-01') TO ('2020-02-01');
-    SELECT create_distributed_table('colocated_partitioned_table', 'measureid', colocate_with:='sensors');
+    SELECT create_distributed_table('colocated_partitioned_table', 'measureid');
     CLUSTER colocated_partitioned_table_2020_01_01 USING colocated_partitioned_table_2020_01_01_pkey;
 
     -- create reference tables
     CREATE TABLE reference_table (measureid integer PRIMARY KEY);
     SELECT create_reference_table('reference_table');
-
-    -- this table is used to make sure that index backed
-    -- replica identites can have clustered indexes
-    -- and no index statistics
-    CREATE TABLE table_with_index_backed_rep_identity(key int NOT NULL);
-    CREATE UNIQUE INDEX uqx ON table_with_index_backed_rep_identity(key);
-    ALTER TABLE table_with_index_backed_rep_identity REPLICA IDENTITY USING INDEX uqx;
-    CLUSTER table_with_index_backed_rep_identity USING uqx;
-    SELECT create_distributed_table('table_with_index_backed_rep_identity', 'key', colocate_with:='sensors');
 
     SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
     FROM pg_dist_shard AS shard
@@ -138,11 +129,10 @@ SET citus.shard_replication_factor TO 1;
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
-            WHERE tbl.relname like 'sensors_%' OR tbl.relname like 'colocated_dist_table_%' OR tbl.relname like 'table_with_index_backed_rep_identity_%'
+            WHERE tbl.relname like 'sensors_%' OR tbl.relname like 'colocated_dist_table_%'
             ORDER BY 1, 2;
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%' ORDER BY 1,2;
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'table_with_index_backed_rep_identity_%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
         SELECT oid
@@ -158,11 +148,10 @@ SET citus.shard_replication_factor TO 1;
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
-            WHERE tbl.relname like 'sensors_%' OR tbl.relname like 'colocated_dist_table_%' OR tbl.relname like 'table_with_index_backed_rep_identity_%'
+            WHERE tbl.relname like 'sensors_%' OR tbl.relname like 'colocated_dist_table_%'
             ORDER BY 1, 2;
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%' ORDER BY 1,2;
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'table_with_index_backed_rep_identity_%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
         SELECT oid
@@ -178,9 +167,6 @@ SET citus.shard_replication_factor TO 1;
     SET citus.next_shard_id TO 8999000;
     SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
     SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
-
-    --SET client_min_messages TO LOG;
-    --SET citus.log_remote_commands TO on;
 
     SELECT pg_catalog.citus_split_shard_by_split_points(
         8970000,
@@ -212,11 +198,10 @@ SET citus.shard_replication_factor TO 1;
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
-            WHERE tbl.relname like 'sensors_%' OR tbl.relname like 'colocated_dist_table_%' OR tbl.relname like 'table_with_index_backed_rep_identity_%'
+            WHERE tbl.relname like 'sensors_%' OR tbl.relname like 'colocated_dist_table_%'
             ORDER BY 1, 2;
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%' ORDER BY 1,2;
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'table_with_index_backed_rep_identity_%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
         SELECT oid
@@ -231,11 +216,10 @@ SET citus.shard_replication_factor TO 1;
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
-            WHERE tbl.relname like 'sensors_%' OR tbl.relname like 'colocated_dist_table_%' OR tbl.relname like 'table_with_index_backed_rep_identity_%'
+            WHERE tbl.relname like 'sensors_%' OR tbl.relname like 'colocated_dist_table_%'
             ORDER BY 1, 2;
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%' ORDER BY 1,2;
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'table_with_index_backed_rep_identity_%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
         SELECT oid
