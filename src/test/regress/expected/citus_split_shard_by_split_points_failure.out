@@ -26,9 +26,8 @@ SELECT create_distributed_table('sensors_colocated', 'measureid', colocate_with:
 -- BEGIN : Switch to worker and create split shards already so workflow fails.
 \c - - - :worker_1_port
 SET search_path TO "citus_split_failure_test_schema";
-CREATE TABLE sensors_8981001(
-    measureid               integer,
-    eventdatetime           date);
+-- Don't create sensors_8981001, workflow will create and clean it.
+-- Create rest of the shards so that the workflow fails, but will not clean them.
 CREATE TABLE sensors_8981002(
     measureid               integer,
     eventdatetime           date);
@@ -53,14 +52,13 @@ SELECT tbl.relname
 ---------------------------------------------------------------------
  sensors
  sensors_890000
- sensors_8981001
  sensors_8981002
  sensors_colocated
  sensors_colocated_890001
  sensors_colocated_8981003
  sensors_colocated_8981004
  sensors_nodelete
-(9 rows)
+(8 rows)
 
 -- END : Switch to worker and create split shards already so workflow fails.
 -- BEGIN : Set node id variables
@@ -74,7 +72,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     ARRAY['-1073741824'],
     ARRAY[:worker_1_node, :worker_1_node],
     'block_writes');
-ERROR:  relation "sensors_8981001" already exists
+ERROR:  relation "sensors_8981002" already exists
 CONTEXT:  while executing command on localhost:xxxxx
 -- BEGIN : Split Shard, which is expected to fail.
 -- BEGIN : Ensure tables were cleaned from worker
@@ -85,14 +83,17 @@ SELECT tbl.relname
     FROM pg_catalog.pg_class tbl
     WHERE tbl.relname like 'sensors%'
     ORDER BY 1;
-         relname
+          relname
 ---------------------------------------------------------------------
  sensors
  sensors_890000
+ sensors_8981002
  sensors_colocated
  sensors_colocated_890001
+ sensors_colocated_8981003
+ sensors_colocated_8981004
  sensors_nodelete
-(5 rows)
+(8 rows)
 
 -- END : Ensure tables were cleaned from worker
 --BEGIN : Cleanup

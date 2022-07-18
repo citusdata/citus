@@ -21,9 +21,9 @@ SELECT create_distributed_table('sensors_colocated', 'measureid', colocate_with:
 -- BEGIN : Switch to worker and create split shards already so workflow fails.
 \c - - - :worker_1_port
 SET search_path TO "citus_split_failure_test_schema";
-CREATE TABLE sensors_8981001(
-    measureid               integer,
-    eventdatetime           date);
+
+-- Don't create sensors_8981001, workflow will create and clean it.
+-- Create rest of the shards so that the workflow fails, but will not clean them.
 
 CREATE TABLE sensors_8981002(
     measureid               integer,
