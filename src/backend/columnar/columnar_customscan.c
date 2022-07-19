@@ -766,7 +766,7 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 			 *   WHERE id NOT IN (SELECT id FROM something).
 			 */
 			ereport(ColumnarPlannerDebugLevel,
-					(errmsg("columnar planner: cannot push down clause: "
+					(errmsg("columnar planner: cannot consider clause: "
 							"must not contain a subplan")));
 			return NULL;
 		}
@@ -785,9 +785,9 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 			else if (boolExpr->boolop == OR_EXPR)
 			{
 				ereport(ColumnarPlannerDebugLevel,
-						(errmsg("columnar planner: cannot push down clause: "
+						(errmsg("columnar planner: cannot consider clause: "
 								"all arguments of an OR expression must be "
-								"pushdownable but one of them was not, due "
+								"able to be considered but one of them was not, due "
 								"to the reason given above")));
 				return NULL;
 			}
@@ -799,8 +799,8 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 		if (npushdownableArgs == 0)
 		{
 			ereport(ColumnarPlannerDebugLevel,
-					(errmsg("columnar planner: cannot push down clause: "
-							"none of the arguments were pushdownable, "
+					(errmsg("columnar planner: cannot consider clause: "
+							"none of the arguments were able to be considered, "
 							"due to the reason(s) given above ")));
 			return NULL;
 		}
@@ -827,7 +827,7 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 	if (!IsA(node, OpExpr) || list_length(((OpExpr *) node)->args) != 2)
 	{
 		ereport(ColumnarPlannerDebugLevel,
-				(errmsg("columnar planner: cannot push down clause: "
+				(errmsg("columnar planner: cannot consider clause: "
 						"must be binary operator expression")));
 		return NULL;
 	}
@@ -854,7 +854,7 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 	else
 	{
 		ereport(ColumnarPlannerDebugLevel,
-				(errmsg("columnar planner: cannot push down clause: "
+				(errmsg("columnar planner: cannot consider clause: "
 						"must match 'Var <op> Expr' or 'Expr <op> Var'"),
 				 errhint("Var must only reference this rel, "
 						 "and Expr must not reference this rel")));
@@ -864,7 +864,7 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 	if (varSide->varattno <= 0)
 	{
 		ereport(ColumnarPlannerDebugLevel,
-				(errmsg("columnar planner: cannot push down clause: "
+				(errmsg("columnar planner: cannot consider clause: "
 						"var is whole-row reference or system column")));
 		return NULL;
 	}
@@ -872,7 +872,7 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 	if (contain_volatile_functions((Node *) exprSide))
 	{
 		ereport(ColumnarPlannerDebugLevel,
-				(errmsg("columnar planner: cannot push down clause: "
+				(errmsg("columnar planner: cannot consider clause: "
 						"expr contains volatile functions")));
 		return NULL;
 	}
@@ -887,7 +887,7 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 											 &varOpcInType))
 	{
 		ereport(ColumnarPlannerDebugLevel,
-				(errmsg("columnar planner: cannot push down clause: "
+				(errmsg("columnar planner: cannot consider clause: "
 						"cannot find default btree opclass and opfamily for type: %s",
 						format_type_be(varSide->vartype))));
 		return NULL;
@@ -896,7 +896,7 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 	if (!op_in_opfamily(opExpr->opno, varOpFamily))
 	{
 		ereport(ColumnarPlannerDebugLevel,
-				(errmsg("columnar planner: cannot push down clause: "
+				(errmsg("columnar planner: cannot consider clause: "
 						"operator %d not a member of opfamily %d",
 						opExpr->opno, varOpFamily)));
 		return NULL;
@@ -914,7 +914,7 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 	if (!CheckVarStats(root, varSide, sortop, &absVarCorrelation))
 	{
 		ereport(ColumnarPlannerDebugLevel,
-				(errmsg("columnar planner: cannot push down clause: "
+				(errmsg("columnar planner: cannot consider clause: "
 						"absolute correlation (%.3f) of var attribute %d is "
 						"smaller than the value configured in "
 						"\"columnar.qual_pushdown_correlation_threshold\" "
