@@ -33,13 +33,9 @@ SET citus.shard_replication_factor TO 1;
     -- Create index on parent and child partitions.
     CREATE INDEX index_on_parent ON sensors(lower(measureid::text));
     CREATE INDEX index_on_child ON sensors_2020_01_01(lower(measure_data::text));
-    CREATE INDEX hash_index ON sensors USING HASH((measure_data->'IsFailed'));
-    CREATE INDEX index_with_include ON sensors ((measure_data->'IsFailed')) INCLUDE (measure_data, eventdatetime);
 
     CREATE INDEX index_on_parent_columnar ON sensorscolumnar(lower(measureid::text));
     CREATE INDEX index_on_child_columnar ON sensorscolumnar_2020_01_01(lower(measure_data::text));
-    CREATE INDEX hash_index_columnar ON sensorscolumnar USING HASH((measure_data->'IsFailed'));
-    CREATE INDEX index_with_include_columnar ON sensorscolumnar ((measure_data->'IsFailed')) INCLUDE (measure_data, eventdatetime);
 
     ALTER INDEX index_on_parent ALTER COLUMN 1 SET STATISTICS 1000;
     ALTER INDEX index_on_child ALTER COLUMN 1 SET STATISTICS 1000;
@@ -129,10 +125,10 @@ SET citus.shard_replication_factor TO 1;
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
-            WHERE tbl.relname like 'sensors_%' OR tbl.relname like 'colocated_dist_table_%'
+            WHERE tbl.relname like 'sensors_%_8%' OR tbl.relname like 'colocated_dist_table_%_8%'
             ORDER BY 1, 2;
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%' ORDER BY 1,2;
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%_8%' ORDER BY 1,2;
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%_8%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
         SELECT oid
@@ -148,10 +144,10 @@ SET citus.shard_replication_factor TO 1;
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
-            WHERE tbl.relname like 'sensors_%' OR tbl.relname like 'colocated_dist_table_%'
+            WHERE tbl.relname like 'sensors_%_8%' OR tbl.relname like 'colocated_dist_table_%_8%'
             ORDER BY 1, 2;
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%' ORDER BY 1,2;
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%_8%' ORDER BY 1,2;
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%_8%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
         SELECT oid
@@ -171,7 +167,7 @@ SET citus.shard_replication_factor TO 1;
     SELECT pg_catalog.citus_split_shard_by_split_points(
         8970000,
         ARRAY['-2120000000'],
-        ARRAY[:worker_1_node, :worker_1_node],
+        ARRAY[:worker_1_node, :worker_2_node],
         'block_writes');
 -- END: Split a shard along its co-located shards
 
@@ -198,10 +194,10 @@ SET citus.shard_replication_factor TO 1;
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
-            WHERE tbl.relname like 'sensors_%' OR tbl.relname like 'colocated_dist_table_%'
+            WHERE tbl.relname like 'sensors_%_8%' OR tbl.relname like 'colocated_dist_table_%_8%'
             ORDER BY 1, 2;
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%' ORDER BY 1,2;
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%_8%' ORDER BY 1,2;
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%_8%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
         SELECT oid
@@ -216,10 +212,10 @@ SET citus.shard_replication_factor TO 1;
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
-            WHERE tbl.relname like 'sensors_%' OR tbl.relname like 'colocated_dist_table_%'
+            WHERE tbl.relname like 'sensors_%_8%' OR tbl.relname like 'colocated_dist_table_%_8%'
             ORDER BY 1, 2;
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%' ORDER BY 1,2;
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%_8%' ORDER BY 1,2;
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%_8%' ORDER BY 1,2;
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
         SELECT oid

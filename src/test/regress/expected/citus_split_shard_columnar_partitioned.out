@@ -28,12 +28,8 @@ SET citus.shard_replication_factor TO 1;
     -- Create index on parent and child partitions.
     CREATE INDEX index_on_parent ON sensors(lower(measureid::text));
     CREATE INDEX index_on_child ON sensors_2020_01_01(lower(measure_data::text));
-    CREATE INDEX hash_index ON sensors USING HASH((measure_data->'IsFailed'));
-    CREATE INDEX index_with_include ON sensors ((measure_data->'IsFailed')) INCLUDE (measure_data, eventdatetime);
     CREATE INDEX index_on_parent_columnar ON sensorscolumnar(lower(measureid::text));
     CREATE INDEX index_on_child_columnar ON sensorscolumnar_2020_01_01(lower(measure_data::text));
-    CREATE INDEX hash_index_columnar ON sensorscolumnar USING HASH((measure_data->'IsFailed'));
-    CREATE INDEX index_with_include_columnar ON sensorscolumnar ((measure_data->'IsFailed')) INCLUDE (measure_data, eventdatetime);
     ALTER INDEX index_on_parent ALTER COLUMN 1 SET STATISTICS 1000;
     ALTER INDEX index_on_child ALTER COLUMN 1 SET STATISTICS 1000;
     ALTER INDEX index_on_parent_columnar ALTER COLUMN 1 SET STATISTICS 1000;
@@ -144,19 +140,10 @@ SET citus.shard_replication_factor TO 1;
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
-            WHERE tbl.relname like 'sensors_%' OR tbl.relname like 'colocated_dist_table_%'
+            WHERE tbl.relname like 'sensors_%_8%' OR tbl.relname like 'colocated_dist_table_%_8%'
             ORDER BY 1, 2;
           relname           |                       Constraint                        |                                                         Definition
 ---------------------------------------------------------------------
- sensors_2020_01_01         | fkey_from_child_to_child                                | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_2020_01_01         | fkey_from_child_to_dist                                 | FOREIGN KEY (measureid) REFERENCES colocated_dist_table(measureid)
- sensors_2020_01_01         | fkey_from_child_to_parent                               | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table(eventdatetime, measureid)
- sensors_2020_01_01         | fkey_from_child_to_ref                                  | FOREIGN KEY (measureid) REFERENCES reference_table(measureid)
- sensors_2020_01_01         | fkey_from_parent_to_child                               | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_2020_01_01         | fkey_from_parent_to_dist                                | FOREIGN KEY (measureid) REFERENCES colocated_dist_table(measureid)
- sensors_2020_01_01         | fkey_from_parent_to_parent                              | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table(eventdatetime, measureid)
- sensors_2020_01_01         | fkey_from_parent_to_ref                                 | FOREIGN KEY (measureid) REFERENCES reference_table(measureid)
- sensors_2020_01_01         | sensors_2020_01_01_measureid_eventdatetime_fkey         | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
  sensors_2020_01_01_8970002 | fkey_from_child_to_child_8970002                        | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
  sensors_2020_01_01_8970002 | fkey_from_child_to_dist_8970002                         | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
  sensors_2020_01_01_8970002 | fkey_from_child_to_parent_8970002                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
@@ -166,99 +153,38 @@ SET citus.shard_replication_factor TO 1;
  sensors_2020_01_01_8970002 | fkey_from_parent_to_parent_8970000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
  sensors_2020_01_01_8970002 | fkey_from_parent_to_ref_8970000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
  sensors_2020_01_01_8970002 | sensors_2020_01_01_8970002_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
- sensors_8970000            | fkey_from_parent_to_child_8970000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
- sensors_8970000            | fkey_from_parent_to_dist_8970000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
- sensors_8970000            | fkey_from_parent_to_parent_8970000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
- sensors_8970000            | fkey_from_parent_to_ref_8970000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_8970000            | sensors_8970000_measureid_eventdatetime_fkey            | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
- sensors_news               | fkey_from_parent_to_child                               | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_news               | fkey_from_parent_to_dist                                | FOREIGN KEY (measureid) REFERENCES colocated_dist_table(measureid)
- sensors_news               | fkey_from_parent_to_parent                              | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table(eventdatetime, measureid)
- sensors_news               | fkey_from_parent_to_ref                                 | FOREIGN KEY (measureid) REFERENCES reference_table(measureid)
  sensors_news_8970003       | fkey_from_parent_to_child_8970000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
  sensors_news_8970003       | fkey_from_parent_to_dist_8970000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
  sensors_news_8970003       | fkey_from_parent_to_parent_8970000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
  sensors_news_8970003       | fkey_from_parent_to_ref_8970000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_old                | fkey_from_parent_to_child                               | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_old                | fkey_from_parent_to_dist                                | FOREIGN KEY (measureid) REFERENCES colocated_dist_table(measureid)
- sensors_old                | fkey_from_parent_to_parent                              | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table(eventdatetime, measureid)
- sensors_old                | fkey_from_parent_to_ref                                 | FOREIGN KEY (measureid) REFERENCES reference_table(measureid)
  sensors_old_8970001        | fkey_from_parent_to_child_8970000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
  sensors_old_8970001        | fkey_from_parent_to_dist_8970000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
  sensors_old_8970001        | fkey_from_parent_to_parent_8970000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
  sensors_old_8970001        | fkey_from_parent_to_ref_8970000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
-(39 rows)
+(17 rows)
 
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
-             tablename              |                                                                                                                         indexdef
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%_8%' ORDER BY 1,2;
+             tablename              |                                                                                              indexdef
 ---------------------------------------------------------------------
- sensors_2020_01_01                 | CREATE INDEX index_on_child ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING btree (lower((measure_data)::text))
- sensors_2020_01_01                 | CREATE INDEX sensors_2020_01_01_expr_idx ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_2020_01_01                 | CREATE INDEX sensors_2020_01_01_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_2020_01_01                 | CREATE INDEX sensors_2020_01_01_lower_idx ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING btree (lower((measureid)::text))
- sensors_2020_01_01                 | CREATE UNIQUE INDEX sensors_2020_01_01_pkey ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING btree (measureid, eventdatetime, measure_data)
  sensors_2020_01_01_8970002         | CREATE INDEX index_on_child_8970002 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8970002 USING btree (lower((measure_data)::text))
- sensors_2020_01_01_8970002         | CREATE INDEX sensors_2020_01_01_expr_idx_8970002 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8970002 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_2020_01_01_8970002         | CREATE INDEX sensors_2020_01_01_expr_measure_data_eventdatetime_idx_8970002 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8970002 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensors_2020_01_01_8970002         | CREATE INDEX sensors_2020_01_01_lower_idx_8970002 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8970002 USING btree (lower((measureid)::text))
  sensors_2020_01_01_8970002         | CREATE UNIQUE INDEX sensors_2020_01_01_pkey_8970002 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8970002 USING btree (measureid, eventdatetime, measure_data)
- sensors_8970000                    | CREATE INDEX hash_index_8970000 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8970000 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_8970000                    | CREATE INDEX index_on_parent_8970000 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8970000 USING btree (lower((measureid)::text))
- sensors_8970000                    | CREATE INDEX index_with_include_8970000 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8970000 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_8970000                    | CREATE UNIQUE INDEX sensors_pkey_8970000 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8970000 USING btree (measureid, eventdatetime, measure_data)
- sensors_news                       | CREATE INDEX sensors_news_expr_idx ON citus_split_test_schema_columnar_partitioned.sensors_news USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_news                       | CREATE INDEX sensors_news_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensors_news USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_news                       | CREATE INDEX sensors_news_lower_idx ON citus_split_test_schema_columnar_partitioned.sensors_news USING btree (lower((measureid)::text))
- sensors_news                       | CREATE UNIQUE INDEX sensors_news_pkey ON citus_split_test_schema_columnar_partitioned.sensors_news USING btree (measureid, eventdatetime, measure_data)
- sensors_news_8970003               | CREATE INDEX sensors_news_expr_idx_8970003 ON citus_split_test_schema_columnar_partitioned.sensors_news_8970003 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_news_8970003               | CREATE INDEX sensors_news_expr_measure_data_eventdatetime_idx_8970003 ON citus_split_test_schema_columnar_partitioned.sensors_news_8970003 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensors_news_8970003               | CREATE INDEX sensors_news_lower_idx_8970003 ON citus_split_test_schema_columnar_partitioned.sensors_news_8970003 USING btree (lower((measureid)::text))
  sensors_news_8970003               | CREATE UNIQUE INDEX sensors_news_pkey_8970003 ON citus_split_test_schema_columnar_partitioned.sensors_news_8970003 USING btree (measureid, eventdatetime, measure_data)
- sensors_old                        | CREATE INDEX sensors_old_expr_idx ON citus_split_test_schema_columnar_partitioned.sensors_old USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_old                        | CREATE INDEX sensors_old_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensors_old USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_old                        | CREATE INDEX sensors_old_lower_idx ON citus_split_test_schema_columnar_partitioned.sensors_old USING btree (lower((measureid)::text))
- sensors_old                        | CREATE UNIQUE INDEX sensors_old_pkey ON citus_split_test_schema_columnar_partitioned.sensors_old USING btree (measureid, eventdatetime, measure_data)
- sensors_old_8970001                | CREATE INDEX sensors_old_expr_idx_8970001 ON citus_split_test_schema_columnar_partitioned.sensors_old_8970001 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_old_8970001                | CREATE INDEX sensors_old_expr_measure_data_eventdatetime_idx_8970001 ON citus_split_test_schema_columnar_partitioned.sensors_old_8970001 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensors_old_8970001                | CREATE INDEX sensors_old_lower_idx_8970001 ON citus_split_test_schema_columnar_partitioned.sensors_old_8970001 USING btree (lower((measureid)::text))
  sensors_old_8970001                | CREATE UNIQUE INDEX sensors_old_pkey_8970001 ON citus_split_test_schema_columnar_partitioned.sensors_old_8970001 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar                    | CREATE INDEX hash_index_columnar ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar                    | CREATE INDEX index_on_parent_columnar ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar USING btree (lower((measureid)::text))
- sensorscolumnar                    | CREATE INDEX index_with_include_columnar ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar                    | CREATE UNIQUE INDEX sensorscolumnar_pkey ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_2020_01_01         | CREATE INDEX index_on_child_columnar ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING btree (lower((measure_data)::text))
- sensorscolumnar_2020_01_01         | CREATE INDEX sensorscolumnar_2020_01_01_expr_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_2020_01_01         | CREATE INDEX sensorscolumnar_2020_01_01_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar_2020_01_01         | CREATE INDEX sensorscolumnar_2020_01_01_lower_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING btree (lower((measureid)::text))
- sensorscolumnar_2020_01_01         | CREATE UNIQUE INDEX sensorscolumnar_2020_01_01_pkey ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING btree (measureid, eventdatetime, measure_data)
  sensorscolumnar_2020_01_01_8970006 | CREATE INDEX index_on_child_columnar_8970006 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8970006 USING btree (lower((measure_data)::text))
- sensorscolumnar_2020_01_01_8970006 | CREATE INDEX sensorscolumnar_2020_01_01_expr_idx_8970006 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8970006 USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_2020_01_01_8970006 | CREATE INDEX sensorscolumnar_2020_01_01_expr_measure_data_e_877ec62c_8970006 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8970006 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensorscolumnar_2020_01_01_8970006 | CREATE INDEX sensorscolumnar_2020_01_01_lower_idx_8970006 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8970006 USING btree (lower((measureid)::text))
  sensorscolumnar_2020_01_01_8970006 | CREATE UNIQUE INDEX sensorscolumnar_2020_01_01_pkey_8970006 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8970006 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_8970004            | CREATE INDEX hash_index_columnar_8970004 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8970004 USING hash (((measure_data -> 'IsFailed'::text)))
  sensorscolumnar_8970004            | CREATE INDEX index_on_parent_columnar_8970004 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8970004 USING btree (lower((measureid)::text))
- sensorscolumnar_8970004            | CREATE INDEX index_with_include_columnar_8970004 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8970004 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensorscolumnar_8970004            | CREATE UNIQUE INDEX sensorscolumnar_pkey_8970004 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8970004 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_news               | CREATE INDEX sensorscolumnar_news_expr_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_news               | CREATE INDEX sensorscolumnar_news_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar_news               | CREATE INDEX sensorscolumnar_news_lower_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news USING btree (lower((measureid)::text))
- sensorscolumnar_news               | CREATE UNIQUE INDEX sensorscolumnar_news_pkey ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_news_8970007       | CREATE INDEX sensorscolumnar_news_expr_idx_8970007 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8970007 USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_news_8970007       | CREATE INDEX sensorscolumnar_news_expr_measure_data_eventda_efaa49a9_8970007 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8970007 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensorscolumnar_news_8970007       | CREATE INDEX sensorscolumnar_news_lower_idx_8970007 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8970007 USING btree (lower((measureid)::text))
  sensorscolumnar_news_8970007       | CREATE UNIQUE INDEX sensorscolumnar_news_pkey_8970007 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8970007 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_old                | CREATE INDEX sensorscolumnar_old_expr_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_old                | CREATE INDEX sensorscolumnar_old_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar_old                | CREATE INDEX sensorscolumnar_old_lower_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old USING btree (lower((measureid)::text))
- sensorscolumnar_old                | CREATE UNIQUE INDEX sensorscolumnar_old_pkey ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_old_8970005        | CREATE INDEX sensorscolumnar_old_expr_idx_8970005 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8970005 USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_old_8970005        | CREATE INDEX sensorscolumnar_old_expr_measure_data_eventdatetime_idx_8970005 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8970005 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensorscolumnar_old_8970005        | CREATE INDEX sensorscolumnar_old_lower_idx_8970005 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8970005 USING btree (lower((measureid)::text))
  sensorscolumnar_old_8970005        | CREATE UNIQUE INDEX sensorscolumnar_old_pkey_8970005 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8970005 USING btree (measureid, eventdatetime, measure_data)
-(64 rows)
+(16 rows)
 
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%' ORDER BY 1,2;
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%_8%' ORDER BY 1,2;
           tablename           |                                                                          indexdef
 ---------------------------------------------------------------------
  colocated_dist_table_8970008 | CREATE UNIQUE INDEX colocated_dist_table_pkey_8970008 ON citus_split_test_schema_columnar_partitioned.colocated_dist_table_8970008 USING btree (measureid)
@@ -289,65 +215,18 @@ SET citus.shard_replication_factor TO 1;
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
-            WHERE tbl.relname like 'sensors_%' OR tbl.relname like 'colocated_dist_table_%'
+            WHERE tbl.relname like 'sensors_%_8%' OR tbl.relname like 'colocated_dist_table_%_8%'
             ORDER BY 1, 2;
-      relname       |                   Constraint                    |                                                     Definition
+ relname | Constraint | Definition
 ---------------------------------------------------------------------
- sensors_2020_01_01 | fkey_from_child_to_child                        | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_2020_01_01 | fkey_from_child_to_dist                         | FOREIGN KEY (measureid) REFERENCES colocated_dist_table(measureid)
- sensors_2020_01_01 | fkey_from_child_to_parent                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table(eventdatetime, measureid)
- sensors_2020_01_01 | fkey_from_child_to_ref                          | FOREIGN KEY (measureid) REFERENCES reference_table(measureid)
- sensors_2020_01_01 | fkey_from_parent_to_child                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_2020_01_01 | fkey_from_parent_to_dist                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table(measureid)
- sensors_2020_01_01 | fkey_from_parent_to_parent                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table(eventdatetime, measureid)
- sensors_2020_01_01 | fkey_from_parent_to_ref                         | FOREIGN KEY (measureid) REFERENCES reference_table(measureid)
- sensors_2020_01_01 | sensors_2020_01_01_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_news       | fkey_from_parent_to_child                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_news       | fkey_from_parent_to_dist                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table(measureid)
- sensors_news       | fkey_from_parent_to_parent                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table(eventdatetime, measureid)
- sensors_news       | fkey_from_parent_to_ref                         | FOREIGN KEY (measureid) REFERENCES reference_table(measureid)
- sensors_old        | fkey_from_parent_to_child                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_old        | fkey_from_parent_to_dist                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table(measureid)
- sensors_old        | fkey_from_parent_to_parent                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table(eventdatetime, measureid)
- sensors_old        | fkey_from_parent_to_ref                         | FOREIGN KEY (measureid) REFERENCES reference_table(measureid)
-(17 rows)
+(0 rows)
 
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
-         tablename          |                                                                                                                    indexdef
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%_8%' ORDER BY 1,2;
+ tablename | indexdef
 ---------------------------------------------------------------------
- sensors_2020_01_01         | CREATE INDEX index_on_child ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING btree (lower((measure_data)::text))
- sensors_2020_01_01         | CREATE INDEX sensors_2020_01_01_expr_idx ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_2020_01_01         | CREATE INDEX sensors_2020_01_01_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_2020_01_01         | CREATE INDEX sensors_2020_01_01_lower_idx ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING btree (lower((measureid)::text))
- sensors_2020_01_01         | CREATE UNIQUE INDEX sensors_2020_01_01_pkey ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING btree (measureid, eventdatetime, measure_data)
- sensors_news               | CREATE INDEX sensors_news_expr_idx ON citus_split_test_schema_columnar_partitioned.sensors_news USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_news               | CREATE INDEX sensors_news_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensors_news USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_news               | CREATE INDEX sensors_news_lower_idx ON citus_split_test_schema_columnar_partitioned.sensors_news USING btree (lower((measureid)::text))
- sensors_news               | CREATE UNIQUE INDEX sensors_news_pkey ON citus_split_test_schema_columnar_partitioned.sensors_news USING btree (measureid, eventdatetime, measure_data)
- sensors_old                | CREATE INDEX sensors_old_expr_idx ON citus_split_test_schema_columnar_partitioned.sensors_old USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_old                | CREATE INDEX sensors_old_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensors_old USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_old                | CREATE INDEX sensors_old_lower_idx ON citus_split_test_schema_columnar_partitioned.sensors_old USING btree (lower((measureid)::text))
- sensors_old                | CREATE UNIQUE INDEX sensors_old_pkey ON citus_split_test_schema_columnar_partitioned.sensors_old USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar            | CREATE INDEX hash_index_columnar ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar            | CREATE INDEX index_on_parent_columnar ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar USING btree (lower((measureid)::text))
- sensorscolumnar            | CREATE INDEX index_with_include_columnar ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar            | CREATE UNIQUE INDEX sensorscolumnar_pkey ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_2020_01_01 | CREATE INDEX index_on_child_columnar ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING btree (lower((measure_data)::text))
- sensorscolumnar_2020_01_01 | CREATE INDEX sensorscolumnar_2020_01_01_expr_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_2020_01_01 | CREATE INDEX sensorscolumnar_2020_01_01_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar_2020_01_01 | CREATE INDEX sensorscolumnar_2020_01_01_lower_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING btree (lower((measureid)::text))
- sensorscolumnar_2020_01_01 | CREATE UNIQUE INDEX sensorscolumnar_2020_01_01_pkey ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_news       | CREATE INDEX sensorscolumnar_news_expr_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_news       | CREATE INDEX sensorscolumnar_news_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar_news       | CREATE INDEX sensorscolumnar_news_lower_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news USING btree (lower((measureid)::text))
- sensorscolumnar_news       | CREATE UNIQUE INDEX sensorscolumnar_news_pkey ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_old        | CREATE INDEX sensorscolumnar_old_expr_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_old        | CREATE INDEX sensorscolumnar_old_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar_old        | CREATE INDEX sensorscolumnar_old_lower_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old USING btree (lower((measureid)::text))
- sensorscolumnar_old        | CREATE UNIQUE INDEX sensorscolumnar_old_pkey ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old USING btree (measureid, eventdatetime, measure_data)
-(30 rows)
+(0 rows)
 
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%' ORDER BY 1,2;
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%_8%' ORDER BY 1,2;
  tablename | indexdef
 ---------------------------------------------------------------------
 (0 rows)
@@ -377,7 +256,7 @@ SET citus.shard_replication_factor TO 1;
     SELECT pg_catalog.citus_split_shard_by_split_points(
         8970000,
         ARRAY['-2120000000'],
-        ARRAY[:worker_1_node, :worker_1_node],
+        ARRAY[:worker_1_node, :worker_2_node],
         'block_writes');
  citus_split_shard_by_split_points
 ---------------------------------------------------------------------
@@ -397,27 +276,27 @@ SET citus.shard_replication_factor TO 1;
  shardid |              logicalrelid              | shardminvalue | shardmaxvalue | nodename  | nodeport
 ---------------------------------------------------------------------
  8999000 | sensors                                | -2147483648   | -2120000000   | localhost |    57637
- 8999001 | sensors                                | -2119999999   | 2147483647    | localhost |    57637
+ 8999001 | sensors                                | -2119999999   | 2147483647    | localhost |    57638
  8999008 | sensorscolumnar                        | -2147483648   | -2120000000   | localhost |    57637
- 8999009 | sensorscolumnar                        | -2119999999   | 2147483647    | localhost |    57637
+ 8999009 | sensorscolumnar                        | -2119999999   | 2147483647    | localhost |    57638
  8999002 | sensors_old                            | -2147483648   | -2120000000   | localhost |    57637
- 8999003 | sensors_old                            | -2119999999   | 2147483647    | localhost |    57637
+ 8999003 | sensors_old                            | -2119999999   | 2147483647    | localhost |    57638
  8999004 | sensors_2020_01_01                     | -2147483648   | -2120000000   | localhost |    57637
- 8999005 | sensors_2020_01_01                     | -2119999999   | 2147483647    | localhost |    57637
+ 8999005 | sensors_2020_01_01                     | -2119999999   | 2147483647    | localhost |    57638
  8999006 | sensors_news                           | -2147483648   | -2120000000   | localhost |    57637
- 8999007 | sensors_news                           | -2119999999   | 2147483647    | localhost |    57637
+ 8999007 | sensors_news                           | -2119999999   | 2147483647    | localhost |    57638
  8999010 | sensorscolumnar_old                    | -2147483648   | -2120000000   | localhost |    57637
- 8999011 | sensorscolumnar_old                    | -2119999999   | 2147483647    | localhost |    57637
+ 8999011 | sensorscolumnar_old                    | -2119999999   | 2147483647    | localhost |    57638
  8999012 | sensorscolumnar_2020_01_01             | -2147483648   | -2120000000   | localhost |    57637
- 8999013 | sensorscolumnar_2020_01_01             | -2119999999   | 2147483647    | localhost |    57637
+ 8999013 | sensorscolumnar_2020_01_01             | -2119999999   | 2147483647    | localhost |    57638
  8999014 | sensorscolumnar_news                   | -2147483648   | -2120000000   | localhost |    57637
- 8999015 | sensorscolumnar_news                   | -2119999999   | 2147483647    | localhost |    57637
+ 8999015 | sensorscolumnar_news                   | -2119999999   | 2147483647    | localhost |    57638
  8999016 | colocated_dist_table                   | -2147483648   | -2120000000   | localhost |    57637
- 8999017 | colocated_dist_table                   | -2119999999   | 2147483647    | localhost |    57637
+ 8999017 | colocated_dist_table                   | -2119999999   | 2147483647    | localhost |    57638
  8999018 | colocated_partitioned_table            | -2147483648   | -2120000000   | localhost |    57637
- 8999019 | colocated_partitioned_table            | -2119999999   | 2147483647    | localhost |    57637
+ 8999019 | colocated_partitioned_table            | -2119999999   | 2147483647    | localhost |    57638
  8999020 | colocated_partitioned_table_2020_01_01 | -2147483648   | -2120000000   | localhost |    57637
- 8999021 | colocated_partitioned_table_2020_01_01 | -2119999999   | 2147483647    | localhost |    57637
+ 8999021 | colocated_partitioned_table_2020_01_01 | -2119999999   | 2147483647    | localhost |    57638
  8970011 | reference_table                        |               |               | localhost |    57637
  8970011 | reference_table                        |               |               | localhost |    57638
 (24 rows)
@@ -454,19 +333,10 @@ SET citus.shard_replication_factor TO 1;
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
-            WHERE tbl.relname like 'sensors_%' OR tbl.relname like 'colocated_dist_table_%'
+            WHERE tbl.relname like 'sensors_%_8%' OR tbl.relname like 'colocated_dist_table_%_8%'
             ORDER BY 1, 2;
           relname           |                       Constraint                        |                                                         Definition
 ---------------------------------------------------------------------
- sensors_2020_01_01         | fkey_from_child_to_child                                | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_2020_01_01         | fkey_from_child_to_dist                                 | FOREIGN KEY (measureid) REFERENCES colocated_dist_table(measureid)
- sensors_2020_01_01         | fkey_from_child_to_parent                               | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table(eventdatetime, measureid)
- sensors_2020_01_01         | fkey_from_child_to_ref                                  | FOREIGN KEY (measureid) REFERENCES reference_table(measureid)
- sensors_2020_01_01         | fkey_from_parent_to_child                               | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_2020_01_01         | fkey_from_parent_to_dist                                | FOREIGN KEY (measureid) REFERENCES colocated_dist_table(measureid)
- sensors_2020_01_01         | fkey_from_parent_to_parent                              | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table(eventdatetime, measureid)
- sensors_2020_01_01         | fkey_from_parent_to_ref                                 | FOREIGN KEY (measureid) REFERENCES reference_table(measureid)
- sensors_2020_01_01         | sensors_2020_01_01_measureid_eventdatetime_fkey         | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
  sensors_2020_01_01_8999004 | fkey_from_child_to_child_8999004                        | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
  sensors_2020_01_01_8999004 | fkey_from_child_to_dist_8999004                         | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999016(measureid)
  sensors_2020_01_01_8999004 | fkey_from_child_to_parent_8999004                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
@@ -476,160 +346,41 @@ SET citus.shard_replication_factor TO 1;
  sensors_2020_01_01_8999004 | fkey_from_parent_to_parent_8999000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
  sensors_2020_01_01_8999004 | fkey_from_parent_to_ref_8999000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
  sensors_2020_01_01_8999004 | sensors_2020_01_01_8999004_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
- sensors_2020_01_01_8999005 | fkey_from_child_to_child_8999005                        | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_2020_01_01_8999005 | fkey_from_child_to_dist_8999005                         | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
- sensors_2020_01_01_8999005 | fkey_from_child_to_parent_8999005                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
- sensors_2020_01_01_8999005 | fkey_from_child_to_ref_8999005                          | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_2020_01_01_8999005 | fkey_from_parent_to_child_8999001                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_2020_01_01_8999005 | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
- sensors_2020_01_01_8999005 | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
- sensors_2020_01_01_8999005 | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_2020_01_01_8999005 | sensors_2020_01_01_8999005_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_8999000            | fkey_from_parent_to_child_8999000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
- sensors_8999000            | fkey_from_parent_to_dist_8999000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999016(measureid)
- sensors_8999000            | fkey_from_parent_to_parent_8999000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
- sensors_8999000            | fkey_from_parent_to_ref_8999000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_8999000            | sensors_8999000_measureid_eventdatetime_fkey            | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
- sensors_8999001            | fkey_from_parent_to_child_8999001                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_8999001            | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
- sensors_8999001            | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
- sensors_8999001            | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_8999001            | sensors_8999001_measureid_eventdatetime_fkey            | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_news               | fkey_from_parent_to_child                               | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_news               | fkey_from_parent_to_dist                                | FOREIGN KEY (measureid) REFERENCES colocated_dist_table(measureid)
- sensors_news               | fkey_from_parent_to_parent                              | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table(eventdatetime, measureid)
- sensors_news               | fkey_from_parent_to_ref                                 | FOREIGN KEY (measureid) REFERENCES reference_table(measureid)
  sensors_news_8999006       | fkey_from_parent_to_child_8999000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
  sensors_news_8999006       | fkey_from_parent_to_dist_8999000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999016(measureid)
  sensors_news_8999006       | fkey_from_parent_to_parent_8999000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
  sensors_news_8999006       | fkey_from_parent_to_ref_8999000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_news_8999007       | fkey_from_parent_to_child_8999001                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_news_8999007       | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
- sensors_news_8999007       | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
- sensors_news_8999007       | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_old                | fkey_from_parent_to_child                               | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_old                | fkey_from_parent_to_dist                                | FOREIGN KEY (measureid) REFERENCES colocated_dist_table(measureid)
- sensors_old                | fkey_from_parent_to_parent                              | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table(eventdatetime, measureid)
- sensors_old                | fkey_from_parent_to_ref                                 | FOREIGN KEY (measureid) REFERENCES reference_table(measureid)
  sensors_old_8999002        | fkey_from_parent_to_child_8999000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
  sensors_old_8999002        | fkey_from_parent_to_dist_8999000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999016(measureid)
  sensors_old_8999002        | fkey_from_parent_to_parent_8999000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
  sensors_old_8999002        | fkey_from_parent_to_ref_8999000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
- sensors_old_8999003        | fkey_from_parent_to_child_8999001                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
- sensors_old_8999003        | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
- sensors_old_8999003        | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
- sensors_old_8999003        | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
-(61 rows)
+(17 rows)
 
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
-             tablename              |                                                                                                                         indexdef
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%_8%' ORDER BY 1,2;
+             tablename              |                                                                                              indexdef
 ---------------------------------------------------------------------
- sensors_2020_01_01                 | CREATE INDEX index_on_child ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING btree (lower((measure_data)::text))
- sensors_2020_01_01                 | CREATE INDEX sensors_2020_01_01_expr_idx ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_2020_01_01                 | CREATE INDEX sensors_2020_01_01_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_2020_01_01                 | CREATE INDEX sensors_2020_01_01_lower_idx ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING btree (lower((measureid)::text))
- sensors_2020_01_01                 | CREATE UNIQUE INDEX sensors_2020_01_01_pkey ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING btree (measureid, eventdatetime, measure_data)
  sensors_2020_01_01_8999004         | CREATE INDEX index_on_child_8999004 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999004 USING btree (lower((measure_data)::text))
- sensors_2020_01_01_8999004         | CREATE INDEX sensors_2020_01_01_expr_idx_8999004 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999004 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_2020_01_01_8999004         | CREATE INDEX sensors_2020_01_01_expr_measure_data_eventdatetime_idx_8999004 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999004 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensors_2020_01_01_8999004         | CREATE INDEX sensors_2020_01_01_lower_idx_8999004 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999004 USING btree (lower((measureid)::text))
  sensors_2020_01_01_8999004         | CREATE UNIQUE INDEX sensors_2020_01_01_pkey_8999004 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999004 USING btree (measureid, eventdatetime, measure_data)
- sensors_2020_01_01_8999005         | CREATE INDEX index_on_child_8999005 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999005 USING btree (lower((measure_data)::text))
- sensors_2020_01_01_8999005         | CREATE INDEX sensors_2020_01_01_expr_idx_8999005 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999005 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_2020_01_01_8999005         | CREATE INDEX sensors_2020_01_01_expr_measure_data_eventdatetime_idx_8999005 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999005 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_2020_01_01_8999005         | CREATE INDEX sensors_2020_01_01_lower_idx_8999005 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999005 USING btree (lower((measureid)::text))
- sensors_2020_01_01_8999005         | CREATE UNIQUE INDEX sensors_2020_01_01_pkey_8999005 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999005 USING btree (measureid, eventdatetime, measure_data)
- sensors_8999000                    | CREATE INDEX hash_index_8999000 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8999000 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_8999000                    | CREATE INDEX index_on_parent_8999000 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8999000 USING btree (lower((measureid)::text))
- sensors_8999000                    | CREATE INDEX index_with_include_8999000 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8999000 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_8999000                    | CREATE UNIQUE INDEX sensors_pkey_8999000 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8999000 USING btree (measureid, eventdatetime, measure_data)
- sensors_8999001                    | CREATE INDEX hash_index_8999001 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8999001 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_8999001                    | CREATE INDEX index_on_parent_8999001 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8999001 USING btree (lower((measureid)::text))
- sensors_8999001                    | CREATE INDEX index_with_include_8999001 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8999001 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_8999001                    | CREATE UNIQUE INDEX sensors_pkey_8999001 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8999001 USING btree (measureid, eventdatetime, measure_data)
- sensors_news                       | CREATE INDEX sensors_news_expr_idx ON citus_split_test_schema_columnar_partitioned.sensors_news USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_news                       | CREATE INDEX sensors_news_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensors_news USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_news                       | CREATE INDEX sensors_news_lower_idx ON citus_split_test_schema_columnar_partitioned.sensors_news USING btree (lower((measureid)::text))
- sensors_news                       | CREATE UNIQUE INDEX sensors_news_pkey ON citus_split_test_schema_columnar_partitioned.sensors_news USING btree (measureid, eventdatetime, measure_data)
- sensors_news_8999006               | CREATE INDEX sensors_news_expr_idx_8999006 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999006 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_news_8999006               | CREATE INDEX sensors_news_expr_measure_data_eventdatetime_idx_8999006 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999006 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensors_news_8999006               | CREATE INDEX sensors_news_lower_idx_8999006 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999006 USING btree (lower((measureid)::text))
  sensors_news_8999006               | CREATE UNIQUE INDEX sensors_news_pkey_8999006 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999006 USING btree (measureid, eventdatetime, measure_data)
- sensors_news_8999007               | CREATE INDEX sensors_news_expr_idx_8999007 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999007 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_news_8999007               | CREATE INDEX sensors_news_expr_measure_data_eventdatetime_idx_8999007 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999007 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_news_8999007               | CREATE INDEX sensors_news_lower_idx_8999007 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999007 USING btree (lower((measureid)::text))
- sensors_news_8999007               | CREATE UNIQUE INDEX sensors_news_pkey_8999007 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999007 USING btree (measureid, eventdatetime, measure_data)
- sensors_old                        | CREATE INDEX sensors_old_expr_idx ON citus_split_test_schema_columnar_partitioned.sensors_old USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_old                        | CREATE INDEX sensors_old_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensors_old USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_old                        | CREATE INDEX sensors_old_lower_idx ON citus_split_test_schema_columnar_partitioned.sensors_old USING btree (lower((measureid)::text))
- sensors_old                        | CREATE UNIQUE INDEX sensors_old_pkey ON citus_split_test_schema_columnar_partitioned.sensors_old USING btree (measureid, eventdatetime, measure_data)
- sensors_old_8999002                | CREATE INDEX sensors_old_expr_idx_8999002 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999002 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_old_8999002                | CREATE INDEX sensors_old_expr_measure_data_eventdatetime_idx_8999002 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999002 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensors_old_8999002                | CREATE INDEX sensors_old_lower_idx_8999002 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999002 USING btree (lower((measureid)::text))
  sensors_old_8999002                | CREATE UNIQUE INDEX sensors_old_pkey_8999002 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999002 USING btree (measureid, eventdatetime, measure_data)
- sensors_old_8999003                | CREATE INDEX sensors_old_expr_idx_8999003 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999003 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_old_8999003                | CREATE INDEX sensors_old_expr_measure_data_eventdatetime_idx_8999003 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999003 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_old_8999003                | CREATE INDEX sensors_old_lower_idx_8999003 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999003 USING btree (lower((measureid)::text))
- sensors_old_8999003                | CREATE UNIQUE INDEX sensors_old_pkey_8999003 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999003 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar                    | CREATE INDEX hash_index_columnar ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar                    | CREATE INDEX index_on_parent_columnar ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar USING btree (lower((measureid)::text))
- sensorscolumnar                    | CREATE INDEX index_with_include_columnar ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar                    | CREATE UNIQUE INDEX sensorscolumnar_pkey ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_2020_01_01         | CREATE INDEX index_on_child_columnar ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING btree (lower((measure_data)::text))
- sensorscolumnar_2020_01_01         | CREATE INDEX sensorscolumnar_2020_01_01_expr_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_2020_01_01         | CREATE INDEX sensorscolumnar_2020_01_01_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar_2020_01_01         | CREATE INDEX sensorscolumnar_2020_01_01_lower_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING btree (lower((measureid)::text))
- sensorscolumnar_2020_01_01         | CREATE UNIQUE INDEX sensorscolumnar_2020_01_01_pkey ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING btree (measureid, eventdatetime, measure_data)
  sensorscolumnar_2020_01_01_8999012 | CREATE INDEX index_on_child_columnar_8999012 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999012 USING btree (lower((measure_data)::text))
- sensorscolumnar_2020_01_01_8999012 | CREATE INDEX sensorscolumnar_2020_01_01_expr_idx_8999012 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999012 USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_2020_01_01_8999012 | CREATE INDEX sensorscolumnar_2020_01_01_expr_measure_data_e_877ec62c_8999012 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999012 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensorscolumnar_2020_01_01_8999012 | CREATE INDEX sensorscolumnar_2020_01_01_lower_idx_8999012 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999012 USING btree (lower((measureid)::text))
  sensorscolumnar_2020_01_01_8999012 | CREATE UNIQUE INDEX sensorscolumnar_2020_01_01_pkey_8999012 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999012 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_2020_01_01_8999013 | CREATE INDEX index_on_child_columnar_8999013 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999013 USING btree (lower((measure_data)::text))
- sensorscolumnar_2020_01_01_8999013 | CREATE INDEX sensorscolumnar_2020_01_01_expr_idx_8999013 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999013 USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_2020_01_01_8999013 | CREATE INDEX sensorscolumnar_2020_01_01_expr_measure_data_e_877ec62c_8999013 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999013 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar_2020_01_01_8999013 | CREATE INDEX sensorscolumnar_2020_01_01_lower_idx_8999013 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999013 USING btree (lower((measureid)::text))
- sensorscolumnar_2020_01_01_8999013 | CREATE UNIQUE INDEX sensorscolumnar_2020_01_01_pkey_8999013 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999013 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_8999008            | CREATE INDEX hash_index_columnar_8999008 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999008 USING hash (((measure_data -> 'IsFailed'::text)))
  sensorscolumnar_8999008            | CREATE INDEX index_on_parent_columnar_8999008 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999008 USING btree (lower((measureid)::text))
- sensorscolumnar_8999008            | CREATE INDEX index_with_include_columnar_8999008 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999008 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensorscolumnar_8999008            | CREATE UNIQUE INDEX sensorscolumnar_pkey_8999008 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999008 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_8999009            | CREATE INDEX hash_index_columnar_8999009 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999009 USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_8999009            | CREATE INDEX index_on_parent_columnar_8999009 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999009 USING btree (lower((measureid)::text))
- sensorscolumnar_8999009            | CREATE INDEX index_with_include_columnar_8999009 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999009 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar_8999009            | CREATE UNIQUE INDEX sensorscolumnar_pkey_8999009 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999009 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_news               | CREATE INDEX sensorscolumnar_news_expr_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_news               | CREATE INDEX sensorscolumnar_news_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar_news               | CREATE INDEX sensorscolumnar_news_lower_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news USING btree (lower((measureid)::text))
- sensorscolumnar_news               | CREATE UNIQUE INDEX sensorscolumnar_news_pkey ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_news_8999014       | CREATE INDEX sensorscolumnar_news_expr_idx_8999014 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999014 USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_news_8999014       | CREATE INDEX sensorscolumnar_news_expr_measure_data_eventda_efaa49a9_8999014 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999014 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensorscolumnar_news_8999014       | CREATE INDEX sensorscolumnar_news_lower_idx_8999014 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999014 USING btree (lower((measureid)::text))
  sensorscolumnar_news_8999014       | CREATE UNIQUE INDEX sensorscolumnar_news_pkey_8999014 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999014 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_news_8999015       | CREATE INDEX sensorscolumnar_news_expr_idx_8999015 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999015 USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_news_8999015       | CREATE INDEX sensorscolumnar_news_expr_measure_data_eventda_efaa49a9_8999015 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999015 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar_news_8999015       | CREATE INDEX sensorscolumnar_news_lower_idx_8999015 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999015 USING btree (lower((measureid)::text))
- sensorscolumnar_news_8999015       | CREATE UNIQUE INDEX sensorscolumnar_news_pkey_8999015 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999015 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_old                | CREATE INDEX sensorscolumnar_old_expr_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_old                | CREATE INDEX sensorscolumnar_old_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar_old                | CREATE INDEX sensorscolumnar_old_lower_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old USING btree (lower((measureid)::text))
- sensorscolumnar_old                | CREATE UNIQUE INDEX sensorscolumnar_old_pkey ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_old_8999010        | CREATE INDEX sensorscolumnar_old_expr_idx_8999010 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999010 USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_old_8999010        | CREATE INDEX sensorscolumnar_old_expr_measure_data_eventdatetime_idx_8999010 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999010 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
  sensorscolumnar_old_8999010        | CREATE INDEX sensorscolumnar_old_lower_idx_8999010 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999010 USING btree (lower((measureid)::text))
  sensorscolumnar_old_8999010        | CREATE UNIQUE INDEX sensorscolumnar_old_pkey_8999010 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999010 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_old_8999011        | CREATE INDEX sensorscolumnar_old_expr_idx_8999011 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999011 USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_old_8999011        | CREATE INDEX sensorscolumnar_old_expr_measure_data_eventdatetime_idx_8999011 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999011 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar_old_8999011        | CREATE INDEX sensorscolumnar_old_lower_idx_8999011 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999011 USING btree (lower((measureid)::text))
- sensorscolumnar_old_8999011        | CREATE UNIQUE INDEX sensorscolumnar_old_pkey_8999011 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999011 USING btree (measureid, eventdatetime, measure_data)
-(98 rows)
+(16 rows)
 
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%' ORDER BY 1,2;
-          tablename           |                                                                          indexdef
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%_8%' ORDER BY 1,2;
+ tablename | indexdef
 ---------------------------------------------------------------------
- colocated_dist_table_8999016 | CREATE UNIQUE INDEX colocated_dist_table_pkey_8999016 ON citus_split_test_schema_columnar_partitioned.colocated_dist_table_8999016 USING btree (measureid)
- colocated_dist_table_8999017 | CREATE UNIQUE INDEX colocated_dist_table_pkey_8999017 ON citus_split_test_schema_columnar_partitioned.colocated_dist_table_8999017 USING btree (measureid)
-(2 rows)
+(0 rows)
 
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
@@ -642,17 +393,13 @@ SET citus.shard_replication_factor TO 1;
 ---------------------------------------------------------------------
  s1
  s1_8999000
- s1_8999001
  s1_c
  s1_c_8999008
- s1_c_8999009
  s2
  s2_8999004
- s2_8999005
  s2_c
  s2_c_8999012
- s2_c_8999013
-(12 rows)
+(8 rows)
 
     \c - - - :worker_2_port
     SET search_path TO "citus_split_test_schema_columnar_partitioned";
@@ -660,65 +407,51 @@ SET citus.shard_replication_factor TO 1;
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
-            WHERE tbl.relname like 'sensors_%' OR tbl.relname like 'colocated_dist_table_%'
+            WHERE tbl.relname like 'sensors_%_8%' OR tbl.relname like 'colocated_dist_table_%_8%'
             ORDER BY 1, 2;
-      relname       |                   Constraint                    |                                                     Definition
+          relname           |                       Constraint                        |                                                         Definition
 ---------------------------------------------------------------------
- sensors_2020_01_01 | fkey_from_child_to_child                        | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_2020_01_01 | fkey_from_child_to_dist                         | FOREIGN KEY (measureid) REFERENCES colocated_dist_table(measureid)
- sensors_2020_01_01 | fkey_from_child_to_parent                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table(eventdatetime, measureid)
- sensors_2020_01_01 | fkey_from_child_to_ref                          | FOREIGN KEY (measureid) REFERENCES reference_table(measureid)
- sensors_2020_01_01 | fkey_from_parent_to_child                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_2020_01_01 | fkey_from_parent_to_dist                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table(measureid)
- sensors_2020_01_01 | fkey_from_parent_to_parent                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table(eventdatetime, measureid)
- sensors_2020_01_01 | fkey_from_parent_to_ref                         | FOREIGN KEY (measureid) REFERENCES reference_table(measureid)
- sensors_2020_01_01 | sensors_2020_01_01_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_news       | fkey_from_parent_to_child                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_news       | fkey_from_parent_to_dist                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table(measureid)
- sensors_news       | fkey_from_parent_to_parent                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table(eventdatetime, measureid)
- sensors_news       | fkey_from_parent_to_ref                         | FOREIGN KEY (measureid) REFERENCES reference_table(measureid)
- sensors_old        | fkey_from_parent_to_child                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01(eventdatetime, measureid)
- sensors_old        | fkey_from_parent_to_dist                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table(measureid)
- sensors_old        | fkey_from_parent_to_parent                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table(eventdatetime, measureid)
- sensors_old        | fkey_from_parent_to_ref                         | FOREIGN KEY (measureid) REFERENCES reference_table(measureid)
+ sensors_2020_01_01_8999005 | fkey_from_child_to_child_8999005                        | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
+ sensors_2020_01_01_8999005 | fkey_from_child_to_dist_8999005                         | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
+ sensors_2020_01_01_8999005 | fkey_from_child_to_parent_8999005                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
+ sensors_2020_01_01_8999005 | fkey_from_child_to_ref_8999005                          | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_2020_01_01_8999005 | fkey_from_parent_to_child_8999001                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
+ sensors_2020_01_01_8999005 | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
+ sensors_2020_01_01_8999005 | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
+ sensors_2020_01_01_8999005 | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_2020_01_01_8999005 | sensors_2020_01_01_8999005_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
+ sensors_news_8999007       | fkey_from_parent_to_child_8999001                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
+ sensors_news_8999007       | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
+ sensors_news_8999007       | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
+ sensors_news_8999007       | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_old_8999003        | fkey_from_parent_to_child_8999001                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
+ sensors_old_8999003        | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
+ sensors_old_8999003        | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
+ sensors_old_8999003        | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
 (17 rows)
 
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
-         tablename          |                                                                                                                    indexdef
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%_8%' ORDER BY 1,2;
+             tablename              |                                                                                              indexdef
 ---------------------------------------------------------------------
- sensors_2020_01_01         | CREATE INDEX index_on_child ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING btree (lower((measure_data)::text))
- sensors_2020_01_01         | CREATE INDEX sensors_2020_01_01_expr_idx ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_2020_01_01         | CREATE INDEX sensors_2020_01_01_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_2020_01_01         | CREATE INDEX sensors_2020_01_01_lower_idx ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING btree (lower((measureid)::text))
- sensors_2020_01_01         | CREATE UNIQUE INDEX sensors_2020_01_01_pkey ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01 USING btree (measureid, eventdatetime, measure_data)
- sensors_news               | CREATE INDEX sensors_news_expr_idx ON citus_split_test_schema_columnar_partitioned.sensors_news USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_news               | CREATE INDEX sensors_news_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensors_news USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_news               | CREATE INDEX sensors_news_lower_idx ON citus_split_test_schema_columnar_partitioned.sensors_news USING btree (lower((measureid)::text))
- sensors_news               | CREATE UNIQUE INDEX sensors_news_pkey ON citus_split_test_schema_columnar_partitioned.sensors_news USING btree (measureid, eventdatetime, measure_data)
- sensors_old                | CREATE INDEX sensors_old_expr_idx ON citus_split_test_schema_columnar_partitioned.sensors_old USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_old                | CREATE INDEX sensors_old_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensors_old USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensors_old                | CREATE INDEX sensors_old_lower_idx ON citus_split_test_schema_columnar_partitioned.sensors_old USING btree (lower((measureid)::text))
- sensors_old                | CREATE UNIQUE INDEX sensors_old_pkey ON citus_split_test_schema_columnar_partitioned.sensors_old USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar            | CREATE INDEX hash_index_columnar ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar            | CREATE INDEX index_on_parent_columnar ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar USING btree (lower((measureid)::text))
- sensorscolumnar            | CREATE INDEX index_with_include_columnar ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar            | CREATE UNIQUE INDEX sensorscolumnar_pkey ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_2020_01_01 | CREATE INDEX index_on_child_columnar ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING btree (lower((measure_data)::text))
- sensorscolumnar_2020_01_01 | CREATE INDEX sensorscolumnar_2020_01_01_expr_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_2020_01_01 | CREATE INDEX sensorscolumnar_2020_01_01_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar_2020_01_01 | CREATE INDEX sensorscolumnar_2020_01_01_lower_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING btree (lower((measureid)::text))
- sensorscolumnar_2020_01_01 | CREATE UNIQUE INDEX sensorscolumnar_2020_01_01_pkey ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_news       | CREATE INDEX sensorscolumnar_news_expr_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_news       | CREATE INDEX sensorscolumnar_news_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar_news       | CREATE INDEX sensorscolumnar_news_lower_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news USING btree (lower((measureid)::text))
- sensorscolumnar_news       | CREATE UNIQUE INDEX sensorscolumnar_news_pkey ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_old        | CREATE INDEX sensorscolumnar_old_expr_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old USING hash (((measure_data -> 'IsFailed'::text)))
- sensorscolumnar_old        | CREATE INDEX sensorscolumnar_old_expr_measure_data_eventdatetime_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime)
- sensorscolumnar_old        | CREATE INDEX sensorscolumnar_old_lower_idx ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old USING btree (lower((measureid)::text))
- sensorscolumnar_old        | CREATE UNIQUE INDEX sensorscolumnar_old_pkey ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old USING btree (measureid, eventdatetime, measure_data)
-(30 rows)
+ sensors_2020_01_01_8999005         | CREATE INDEX index_on_child_8999005 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999005 USING btree (lower((measure_data)::text))
+ sensors_2020_01_01_8999005         | CREATE INDEX sensors_2020_01_01_lower_idx_8999005 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999005 USING btree (lower((measureid)::text))
+ sensors_2020_01_01_8999005         | CREATE UNIQUE INDEX sensors_2020_01_01_pkey_8999005 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999005 USING btree (measureid, eventdatetime, measure_data)
+ sensors_news_8999007               | CREATE INDEX sensors_news_lower_idx_8999007 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999007 USING btree (lower((measureid)::text))
+ sensors_news_8999007               | CREATE UNIQUE INDEX sensors_news_pkey_8999007 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999007 USING btree (measureid, eventdatetime, measure_data)
+ sensors_old_8999003                | CREATE INDEX sensors_old_lower_idx_8999003 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999003 USING btree (lower((measureid)::text))
+ sensors_old_8999003                | CREATE UNIQUE INDEX sensors_old_pkey_8999003 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999003 USING btree (measureid, eventdatetime, measure_data)
+ sensorscolumnar_2020_01_01_8999013 | CREATE INDEX index_on_child_columnar_8999013 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999013 USING btree (lower((measure_data)::text))
+ sensorscolumnar_2020_01_01_8999013 | CREATE INDEX sensorscolumnar_2020_01_01_lower_idx_8999013 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999013 USING btree (lower((measureid)::text))
+ sensorscolumnar_2020_01_01_8999013 | CREATE UNIQUE INDEX sensorscolumnar_2020_01_01_pkey_8999013 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999013 USING btree (measureid, eventdatetime, measure_data)
+ sensorscolumnar_8999009            | CREATE INDEX index_on_parent_columnar_8999009 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999009 USING btree (lower((measureid)::text))
+ sensorscolumnar_8999009            | CREATE UNIQUE INDEX sensorscolumnar_pkey_8999009 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999009 USING btree (measureid, eventdatetime, measure_data)
+ sensorscolumnar_news_8999015       | CREATE INDEX sensorscolumnar_news_lower_idx_8999015 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999015 USING btree (lower((measureid)::text))
+ sensorscolumnar_news_8999015       | CREATE UNIQUE INDEX sensorscolumnar_news_pkey_8999015 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999015 USING btree (measureid, eventdatetime, measure_data)
+ sensorscolumnar_old_8999011        | CREATE INDEX sensorscolumnar_old_lower_idx_8999011 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999011 USING btree (lower((measureid)::text))
+ sensorscolumnar_old_8999011        | CREATE UNIQUE INDEX sensorscolumnar_old_pkey_8999011 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999011 USING btree (measureid, eventdatetime, measure_data)
+(16 rows)
 
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%' ORDER BY 1,2;
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%_8%' ORDER BY 1,2;
  tablename | indexdef
 ---------------------------------------------------------------------
 (0 rows)
@@ -730,13 +463,17 @@ SET citus.shard_replication_factor TO 1;
         WHERE nspname IN ('citus_split_test_schema_columnar_partitioned')
     )
     ORDER BY stxname ASC;
- stxname
+   stxname
 ---------------------------------------------------------------------
  s1
+ s1_8999001
  s1_c
+ s1_c_8999009
  s2
+ s2_8999005
  s2_c
-(4 rows)
+ s2_c_8999013
+(8 rows)
 
 -- END: Show the updated state on workers
 --BEGIN : Cleanup
