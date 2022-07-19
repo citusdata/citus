@@ -238,9 +238,9 @@ CollectGrantTableIdList(GrantStmt *grantStmt)
 			}
 
 			/* check for distributed sequences included in GRANT ON TABLE statement */
-			ObjectAddress sequenceAddress = { 0 };
-			ObjectAddressSet(sequenceAddress, RelationRelationId, relationId);
-			if (IsObjectDistributed(&sequenceAddress))
+			ObjectAddress *sequenceAddress = palloc0(sizeof(ObjectAddress));
+			ObjectAddressSet(*sequenceAddress, RelationRelationId, relationId);
+			if (IsAnyObjectDistributed(list_make1(sequenceAddress)))
 			{
 				grantTableList = lappend_oid(grantTableList, relationId);
 			}

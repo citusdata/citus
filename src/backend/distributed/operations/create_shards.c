@@ -70,7 +70,6 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	text *tableNameText = PG_GETARG_TEXT_P(0);
 	int32 shardCount = PG_GETARG_INT32(1);
 	int32 replicationFactor = PG_GETARG_INT32(2);
-	ObjectAddress tableAddress = { 0 };
 
 	Oid distributedTableId = ResolveRelationId(tableNameText, false);
 
@@ -83,8 +82,9 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	 * via their own connection and committed immediately so they become visible to all
 	 * sessions creating shards.
 	 */
-	ObjectAddressSet(tableAddress, RelationRelationId, distributedTableId);
-	EnsureDependenciesExistOnAllNodes(&tableAddress);
+	ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*tableAddress, RelationRelationId, distributedTableId);
+	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(tableAddress));
 
 	EnsureReferenceTablesExistOnAllNodes();
 

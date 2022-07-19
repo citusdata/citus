@@ -16,6 +16,7 @@
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
+#include "distributed/log_utils.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
@@ -29,7 +30,7 @@
 static char * GetForeignServerAlterOwnerCommand(Oid serverId);
 static Node * RecreateForeignServerStmt(Oid serverId);
 static bool NameListHasDistributedServer(List *serverNames);
-static ObjectAddress GetObjectAddressByServerName(char *serverName, bool missing_ok);
+static List * GetObjectAddressByServerName(char *serverName, bool missing_ok);
 
 
 /*
@@ -40,7 +41,7 @@ static ObjectAddress GetObjectAddressByServerName(char *serverName, bool missing
  * Never returns NULL, but the objid in the address can be invalid if missingOk
  * was set to true.
  */
-ObjectAddress
+List *
 CreateForeignServerStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CreateForeignServerStmt *stmt = castNode(CreateForeignServerStmt, node);
@@ -57,7 +58,7 @@ CreateForeignServerStmtObjectAddress(Node *node, bool missing_ok)
  * Never returns NULL, but the objid in the address can be invalid if missingOk
  * was set to true.
  */
-ObjectAddress
+List *
 AlterForeignServerStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterForeignServerStmt *stmt = castNode(AlterForeignServerStmt, node);
@@ -101,6 +102,7 @@ PreprocessGrantOnForeignServerStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 
+	/*  the code-path only supports a single object */
 	Assert(list_length(stmt->objects) == 1);
 
 	char *sql = DeparseTreeNode((Node *) stmt);
@@ -121,7 +123,7 @@ PreprocessGrantOnForeignServerStmt(Node *node, const char *queryString,
  * Never returns NULL, but the objid in the address can be invalid if missingOk
  * was set to true.
  */
-ObjectAddress
+List *
 RenameForeignServerStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -139,7 +141,7 @@ RenameForeignServerStmtObjectAddress(Node *node, bool missing_ok)
  * Never returns NULL, but the objid in the address can be invalid if missingOk
  * was set to true.
  */
-ObjectAddress
+List *
 AlterForeignServerOwnerStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
@@ -245,9 +247,15 @@ NameListHasDistributedServer(List *serverNames)
 	String *serverValue = NULL;
 	foreach_ptr(serverValue, serverNames)
 	{
-		ObjectAddress address = GetObjectAddressByServerName(strVal(serverValue), false);
+		List *addresses = GetObjectAddressByServerName(strVal(serverValue), false);
 
-		if (IsObjectDistributed(&address))
+		/*  the code-path only supports a single object */
+		Assert(list_length(addresses) == 1);
+
+		/* We have already asserted that we have exactly 1 address in the addresses. */
+		ObjectAddress *address = linitial(addresses);
+
+		if (IsAnyObjectDistributed(list_make1(address)))
 		{
 			return true;
 		}
@@ -257,13 +265,13 @@ NameListHasDistributedServer(List *serverNames)
 }
 
 
-static ObjectAddress
+static List *
 GetObjectAddressByServerName(char *serverName, bool missing_ok)
 {
 	ForeignServer *server = GetForeignServerByName(serverName, missing_ok);
 	Oid serverOid = server->serverid;
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, ForeignServerRelationId, serverOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, ForeignServerRelationId, serverOid);
 
-	return address;
+	return list_make1(address);
 }
