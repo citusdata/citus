@@ -204,6 +204,10 @@ ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
  * DeferErrorIfCircularDependencyExists is a wrapper function around
  * DeferErrorIfCircularDependencyExistsOnObject, which calls that function for
  * each dependency of the given object.
+ * We do this to detect objects like A -> B -> C <-> D.
+ * For this example, A is passed to this function but we will catch the circular
+ * dependency relationship between C and D, by calling
+ * DeferErrorIfCircularDependencyExistsOnObject for C, or D.
  */
 DeferredErrorMessage *
 DeferErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
