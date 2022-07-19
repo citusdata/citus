@@ -569,7 +569,7 @@ get_ts_parser_namelist(Oid tsparserOid)
  * being created. If missing_pk is false the function will error, explaining to the user
  * the text search configuration described in the statement doesn't exist.
  */
-ObjectAddress
+List *
 CreateTextSearchConfigurationObjectAddress(Node *node, bool missing_ok)
 {
 	DefineStmt *stmt = castNode(DefineStmt, node);
@@ -577,9 +577,9 @@ CreateTextSearchConfigurationObjectAddress(Node *node, bool missing_ok)
 
 	Oid objid = get_ts_config_oid(stmt->defnames, missing_ok);
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TSConfigRelationId, objid);
-	return address;
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TSConfigRelationId, objid);
+	return list_make1(address);
 }
 
 
@@ -588,7 +588,7 @@ CreateTextSearchConfigurationObjectAddress(Node *node, bool missing_ok)
  * being created. If missing_pk is false the function will error, explaining to the user
  * the text search dictionary described in the statement doesn't exist.
  */
-ObjectAddress
+List *
 CreateTextSearchDictObjectAddress(Node *node, bool missing_ok)
 {
 	DefineStmt *stmt = castNode(DefineStmt, node);
@@ -596,9 +596,9 @@ CreateTextSearchDictObjectAddress(Node *node, bool missing_ok)
 
 	Oid objid = get_ts_dict_oid(stmt->defnames, missing_ok);
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TSDictionaryRelationId, objid);
-	return address;
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TSDictionaryRelationId, objid);
+	return list_make1(address);
 }
 
 
@@ -607,7 +607,7 @@ CreateTextSearchDictObjectAddress(Node *node, bool missing_ok)
  * SEARCH CONFIGURATION being renamed. Optionally errors if the configuration does not
  * exist based on the missing_ok flag passed in by the caller.
  */
-ObjectAddress
+List *
 RenameTextSearchConfigurationStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -615,9 +615,9 @@ RenameTextSearchConfigurationStmtObjectAddress(Node *node, bool missing_ok)
 
 	Oid objid = get_ts_config_oid(castNode(List, stmt->object), missing_ok);
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TSConfigRelationId, objid);
-	return address;
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TSConfigRelationId, objid);
+	return list_make1(address);
 }
 
 
@@ -626,7 +626,7 @@ RenameTextSearchConfigurationStmtObjectAddress(Node *node, bool missing_ok)
  * SEARCH DICTIONARY being renamed. Optionally errors if the dictionary does not
  * exist based on the missing_ok flag passed in by the caller.
  */
-ObjectAddress
+List *
 RenameTextSearchDictionaryStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -634,9 +634,9 @@ RenameTextSearchDictionaryStmtObjectAddress(Node *node, bool missing_ok)
 
 	Oid objid = get_ts_dict_oid(castNode(List, stmt->object), missing_ok);
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TSDictionaryRelationId, objid);
-	return address;
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TSDictionaryRelationId, objid);
+	return list_make1(address);
 }
 
 
@@ -645,16 +645,16 @@ RenameTextSearchDictionaryStmtObjectAddress(Node *node, bool missing_ok)
  * SEARCH CONFIGURATION being altered. Optionally errors if the configuration does not
  * exist based on the missing_ok flag passed in by the caller.
  */
-ObjectAddress
+List *
 AlterTextSearchConfigurationStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterTSConfigurationStmt *stmt = castNode(AlterTSConfigurationStmt, node);
 
 	Oid objid = get_ts_config_oid(stmt->cfgname, missing_ok);
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TSConfigRelationId, objid);
-	return address;
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TSConfigRelationId, objid);
+	return list_make1(address);
 }
 
 
@@ -663,16 +663,16 @@ AlterTextSearchConfigurationStmtObjectAddress(Node *node, bool missing_ok)
  * SEARCH CONFIGURATION being altered. Optionally errors if the configuration does not
  * exist based on the missing_ok flag passed in by the caller.
  */
-ObjectAddress
+List *
 AlterTextSearchDictionaryStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterTSDictionaryStmt *stmt = castNode(AlterTSDictionaryStmt, node);
 
 	Oid objid = get_ts_dict_oid(stmt->dictname, missing_ok);
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TSDictionaryRelationId, objid);
-	return address;
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TSDictionaryRelationId, objid);
+	return list_make1(address);
 }
 
 
@@ -685,7 +685,7 @@ AlterTextSearchDictionaryStmtObjectAddress(Node *node, bool missing_ok)
  * the triple checking before the error might be thrown. Errors for non-existing schema's
  * in edgecases will be raised by postgres while executing the move.
  */
-ObjectAddress
+List *
 AlterTextSearchConfigurationSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -723,9 +723,9 @@ AlterTextSearchConfigurationSchemaStmtObjectAddress(Node *node, bool missing_ok)
 		}
 	}
 
-	ObjectAddress sequenceAddress = { 0 };
-	ObjectAddressSet(sequenceAddress, TSConfigRelationId, objid);
-	return sequenceAddress;
+	ObjectAddress *sequenceAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*sequenceAddress, TSConfigRelationId, objid);
+	return list_make1(sequenceAddress);
 }
 
 
@@ -738,7 +738,7 @@ AlterTextSearchConfigurationSchemaStmtObjectAddress(Node *node, bool missing_ok)
  * the triple checking before the error might be thrown. Errors for non-existing schema's
  * in edgecases will be raised by postgres while executing the move.
  */
-ObjectAddress
+List *
 AlterTextSearchDictionarySchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -776,9 +776,9 @@ AlterTextSearchDictionarySchemaStmtObjectAddress(Node *node, bool missing_ok)
 		}
 	}
 
-	ObjectAddress sequenceAddress = { 0 };
-	ObjectAddressSet(sequenceAddress, TSDictionaryRelationId, objid);
-	return sequenceAddress;
+	ObjectAddress *sequenceAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*sequenceAddress, TSDictionaryRelationId, objid);
+	return list_make1(sequenceAddress);
 }
 
 
@@ -787,7 +787,7 @@ AlterTextSearchDictionarySchemaStmtObjectAddress(Node *node, bool missing_ok)
  * SEARCH CONFIGURATION on which the comment is placed. Optionally errors if the
  * configuration does not exist based on the missing_ok flag passed in by the caller.
  */
-ObjectAddress
+List *
 TextSearchConfigurationCommentObjectAddress(Node *node, bool missing_ok)
 {
 	CommentStmt *stmt = castNode(CommentStmt, node);
@@ -795,9 +795,9 @@ TextSearchConfigurationCommentObjectAddress(Node *node, bool missing_ok)
 
 	Oid objid = get_ts_config_oid(castNode(List, stmt->object), missing_ok);
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TSConfigRelationId, objid);
-	return address;
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TSConfigRelationId, objid);
+	return list_make1(address);
 }
 
 
@@ -806,7 +806,7 @@ TextSearchConfigurationCommentObjectAddress(Node *node, bool missing_ok)
  * DICTIONARY on which the comment is placed. Optionally errors if the dictionary does not
  * exist based on the missing_ok flag passed in by the caller.
  */
-ObjectAddress
+List *
 TextSearchDictCommentObjectAddress(Node *node, bool missing_ok)
 {
 	CommentStmt *stmt = castNode(CommentStmt, node);
@@ -814,9 +814,9 @@ TextSearchDictCommentObjectAddress(Node *node, bool missing_ok)
 
 	Oid objid = get_ts_dict_oid(castNode(List, stmt->object), missing_ok);
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TSDictionaryRelationId, objid);
-	return address;
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TSDictionaryRelationId, objid);
+	return list_make1(address);
 }
 
 
@@ -825,7 +825,7 @@ TextSearchDictCommentObjectAddress(Node *node, bool missing_ok)
  * SEARCH CONFIGURATION for which the owner is changed. Optionally errors if the
  * configuration does not exist based on the missing_ok flag passed in by the caller.
  */
-ObjectAddress
+List *
 AlterTextSearchConfigurationOwnerObjectAddress(Node *node, bool missing_ok)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
@@ -833,8 +833,14 @@ AlterTextSearchConfigurationOwnerObjectAddress(Node *node, bool missing_ok)
 
 	Assert(stmt->objectType == OBJECT_TSCONFIGURATION);
 
-	return get_object_address(stmt->objectType, stmt->object, &relation, AccessShareLock,
-							  missing_ok);
+	ObjectAddress objectAddress = get_object_address(stmt->objectType, stmt->object,
+													 &relation, AccessShareLock,
+													 missing_ok);
+
+	ObjectAddress *objectAddressCopy = palloc0(sizeof(ObjectAddress));
+	*objectAddressCopy = objectAddress;
+
+	return list_make1(objectAddressCopy);
 }
 
 
@@ -843,16 +849,20 @@ AlterTextSearchConfigurationOwnerObjectAddress(Node *node, bool missing_ok)
  * SEARCH DICTIONARY for which the owner is changed. Optionally errors if the
  * configuration does not exist based on the missing_ok flag passed in by the caller.
  */
-ObjectAddress
+List *
 AlterTextSearchDictOwnerObjectAddress(Node *node, bool missing_ok)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Relation relation = NULL;
 
 	Assert(stmt->objectType == OBJECT_TSDICTIONARY);
+	ObjectAddress objectAddress = get_object_address(stmt->objectType, stmt->object,
+													 &relation, AccessShareLock,
+													 missing_ok);
+	ObjectAddress *objectAddressCopy = palloc0(sizeof(ObjectAddress));
+	*objectAddressCopy = objectAddress;
 
-	return get_object_address(stmt->objectType, stmt->object, &relation, AccessShareLock,
-							  missing_ok);
+	return list_make1(objectAddressCopy);
 }
 
 

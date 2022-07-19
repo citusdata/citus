@@ -1302,7 +1302,7 @@ ErrorIfUnsupportedCascadeObjects(Oid relationId)
  *
  * Extension dependency is different than the rest. If an object depends on an extension
  * dropping the object would drop the extension too.
- * So we check with IsObjectAddressOwnedByExtension function.
+ * So we check with IsAnyObjectAddressOwnedByExtension function.
  */
 static bool
 DoesCascadeDropUnsupportedObject(Oid classId, Oid objectId, HTAB *nodeMap)
@@ -1315,10 +1315,9 @@ DoesCascadeDropUnsupportedObject(Oid classId, Oid objectId, HTAB *nodeMap)
 		return false;
 	}
 
-	ObjectAddress objectAddress = { 0 };
-	ObjectAddressSet(objectAddress, classId, objectId);
-
-	if (IsObjectAddressOwnedByExtension(&objectAddress, NULL))
+	ObjectAddress *objectAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*objectAddress, classId, objectId);
+	if (IsAnyObjectAddressOwnedByExtension(list_make1(objectAddress), NULL))
 	{
 		return true;
 	}

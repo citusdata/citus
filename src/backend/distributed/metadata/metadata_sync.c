@@ -356,10 +356,9 @@ CreateDependingViewsOnWorkers(Oid relationId)
 			continue;
 		}
 
-		ObjectAddress viewAddress = { 0 };
-		ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
-
-		EnsureDependenciesExistOnAllNodes(&viewAddress);
+		ObjectAddress *viewAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*viewAddress, RelationRelationId, viewOid);
+		EnsureAllObjectDependenciesExistOnAllNodes(list_make1(viewAddress));
 
 		char *createViewCommand = CreateViewDDLCommand(viewOid);
 		char *alterViewOwnerCommand = AlterViewOwnerCommand(viewOid);
@@ -367,7 +366,7 @@ CreateDependingViewsOnWorkers(Oid relationId)
 		SendCommandToWorkersWithMetadata(createViewCommand);
 		SendCommandToWorkersWithMetadata(alterViewOwnerCommand);
 
-		MarkObjectDistributed(&viewAddress);
+		MarkObjectDistributed(viewAddress);
 	}
 
 	SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
@@ -603,10 +602,10 @@ ShouldSyncSequenceMetadata(Oid relationId)
 		return false;
 	}
 
-	ObjectAddress sequenceAddress = { 0 };
-	ObjectAddressSet(sequenceAddress, RelationRelationId, relationId);
+	ObjectAddress *sequenceAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*sequenceAddress, RelationRelationId, relationId);
 
-	return IsObjectDistributed(&sequenceAddress);
+	return IsAnyObjectDistributed(list_make1(sequenceAddress));
 }
 
 

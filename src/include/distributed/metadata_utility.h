@@ -258,15 +258,15 @@ extern void CreateDistributedTable(Oid relationId, char *distributionColumnName,
 extern void CreateTruncateTrigger(Oid relationId);
 extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
 
-extern void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
+extern void EnsureAllObjectDependenciesExistOnAllNodes(const List *targets);
 extern DeferredErrorMessage * DeferErrorIfCircularDependencyExists(const
 																   ObjectAddress *
 																   objectAddress);
 extern List * GetDistributableDependenciesForObject(const ObjectAddress *target);
-extern List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
+extern List * GetAllDependencyCreateDDLCommands(const List *dependencies);
 extern bool ShouldPropagate(void);
 extern bool ShouldPropagateCreateInCoordinatedTransction(void);
-extern bool ShouldPropagateObject(const ObjectAddress *address);
+extern bool ShouldPropagateAnyObject(List *addresses);
 extern List * ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort);
 
 /* Remaining metadata utility functions  */

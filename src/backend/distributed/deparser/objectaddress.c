@@ -20,11 +20,11 @@
 
 
 /*
- * GetObjectAddressFromParseTree returns the ObjectAddress of the main target of the parse
+ * GetObjectAddressListFromParseTree returns the list of ObjectAddress of the main target of the parse
  * tree.
  */
-ObjectAddress
-GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
+List *
+GetObjectAddressListFromParseTree(Node *parseTree, bool missing_ok)
 {
 	const DistributeObjectOps *ops = GetDistributeObjectOps(parseTree);
 
@@ -37,7 +37,7 @@ GetObjectAddressFromParseTree(Node *parseTree, bool missing_ok)
 }
 
 
-ObjectAddress
+List *
 RenameAttributeStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -67,11 +67,11 @@ RenameAttributeStmtObjectAddress(Node *node, bool missing_ok)
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-ObjectAddress
+List *
 CreateExtensionStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CreateExtensionStmt *stmt = castNode(CreateExtensionStmt, node);
-	ObjectAddress address = { 0 };
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 
 	const char *extensionName = stmt->extname;
 
@@ -85,7 +85,7 @@ CreateExtensionStmtObjectAddress(Node *node, bool missing_ok)
 							   extensionName)));
 	}
 
-	ObjectAddressSet(address, ExtensionRelationId, extensionoid);
+	ObjectAddressSet(*address, ExtensionRelationId, extensionoid);
 
-	return address;
+	return list_make1(address);
 }

@@ -64,6 +64,7 @@ PreprocessGrantOnFDWStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 
+	/*  the code-path only supports a single object */
 	Assert(list_length(stmt->objects) == 1);
 
 	char *sql = DeparseTreeNode((Node *) stmt);
@@ -83,16 +84,19 @@ PreprocessGrantOnFDWStmt(Node *node, const char *queryString,
 static bool
 NameListHasFDWOwnedByDistributedExtension(List *FDWNames)
 {
-	Value *FDWValue = NULL;
+	String *FDWValue = NULL;
 	foreach_ptr(FDWValue, FDWNames)
 	{
 		/* captures the extension address during lookup */
-		ObjectAddress extensionAddress = { 0 };
+		ObjectAddress *extensionAddress = palloc0(sizeof(ObjectAddress));
 		ObjectAddress FDWAddress = GetObjectAddressByFDWName(strVal(FDWValue), false);
 
-		if (IsObjectAddressOwnedByExtension(&FDWAddress, &extensionAddress))
+		ObjectAddress *copyFDWAddress = palloc0(sizeof(ObjectAddress));
+		*copyFDWAddress = FDWAddress;
+		if (IsAnyObjectAddressOwnedByExtension(list_make1(copyFDWAddress),
+											   extensionAddress))
 		{
-			if (IsObjectDistributed(&extensionAddress))
+			if (IsAnyObjectDistributed(list_make1(extensionAddress)))
 			{
 				return true;
 			}

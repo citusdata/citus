@@ -63,6 +63,15 @@ ALTER EXTENSION citus ADD FUNCTION citus_internal.upgrade_columnar_storage;
 ALTER EXTENSION citus ADD FUNCTION citus_internal.downgrade_columnar_storage;
 ALTER EXTENSION citus ADD FUNCTION citus_internal.columnar_ensure_am_depends_catalog;
 
+DROP FUNCTION pg_catalog.citus_split_shard_by_split_points(
+    shard_id bigint,
+    split_points text[],
+    node_ids integer[],
+    shard_transfer_mode citus.shard_transfer_mode);
+DROP FUNCTION pg_catalog.worker_split_copy(
+    source_shard_id bigint,
+    splitCopyInfos pg_catalog.split_copy_info[]);
+DROP TYPE pg_catalog.split_copy_info;
 
 DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_id int, OUT initiator_node_identifier int4,
                                                      OUT worker_query BOOL, OUT transaction_number int8, OUT transaction_stamp timestamptz,

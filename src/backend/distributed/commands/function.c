@@ -88,9 +88,9 @@ static void EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
 static bool ShouldAddFunctionSignature(FunctionParameterMode mode);
-static ObjectAddress FunctionToObjectAddress(ObjectType objectType,
-											 ObjectWithArgs *objectWithArgs,
-											 bool missing_ok);
+static List * FunctionToObjectAddress(ObjectType objectType,
+									  ObjectWithArgs *objectWithArgs,
+									  bool missing_ok);
 static void ErrorIfUnsupportedAlterFunctionStmt(AlterFunctionStmt *stmt);
 static char * quote_qualified_func_name(Oid funcOid);
 static void DistributeFunctionWithDistributionArgument(RegProcedure funcOid,
@@ -128,7 +128,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	text *colocateWithText = NULL; /* optional */
 
 	StringInfoData ddlCommand = { 0 };
-	ObjectAddress functionAddress = { 0 };
+	ObjectAddress *functionAddress = palloc0(sizeof(ObjectAddress));
 
 	Oid distributionArgumentOid = InvalidOid;
 	bool colocatedWithReferenceTable = false;
@@ -203,9 +203,9 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	EnsureCoordinator();
 	EnsureFunctionOwner(funcOid);
 
-	ObjectAddressSet(functionAddress, ProcedureRelationId, funcOid);
+	ObjectAddressSet(*functionAddress, ProcedureRelationId, funcOid);
 
-	if (RecreateSameNonColocatedFunction(functionAddress,
+	if (RecreateSameNonColocatedFunction(*functionAddress,
 										 distributionArgumentName,
 										 colocateWithTableNameDefault,
 										 forceDelegationAddress))
@@ -224,9 +224,10 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	 * pg_dist_object, and not propagate the CREATE FUNCTION. Function
 	 * will be created by the virtue of the extension creation.
 	 */
-	if (IsObjectAddressOwnedByExtension(&functionAddress, &extensionAddress))
+	if (IsAnyObjectAddressOwnedByExtension(list_make1(functionAddress),
+										   &extensionAddress))
 	{
-		EnsureExtensionFunctionCanBeDistributed(functionAddress, extensionAddress,
+		EnsureExtensionFunctionCanBeDistributed(*functionAddress, extensionAddress,
 												distributionArgumentName);
 	}
 	else
@@ -237,7 +238,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 		 */
 		EnsureSequentialMode(OBJECT_FUNCTION);
 
-		EnsureDependenciesExistOnAllNodes(&functionAddress);
+		EnsureAllObjectDependenciesExistOnAllNodes(list_make1(functionAddress));
 
 		const char *createFunctionSQL = GetFunctionDDLCommand(funcOid, true);
 		const char *alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
@@ -257,7 +258,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 								   ddlCommand.data);
 	}
 
-	MarkObjectDistributed(&functionAddress);
+	MarkObjectDistributed(functionAddress);
 
 	if (distributionArgumentName != NULL)
 	{
@@ -272,12 +273,12 @@ create_distributed_function(PG_FUNCTION_ARGS)
 												   distributionArgumentOid,
 												   colocateWithTableName,
 												   forceDelegationAddress,
-												   &functionAddress);
+												   functionAddress);
 	}
 	else if (!colocatedWithReferenceTable)
 	{
 		DistributeFunctionColocatedWithDistributedTable(funcOid, colocateWithTableName,
-														&functionAddress);
+														functionAddress);
 	}
 	else if (colocatedWithReferenceTable)
 	{
@@ -288,7 +289,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 		 */
 		ErrorIfAnyNodeDoesNotHaveMetadata();
 
-		DistributeFunctionColocatedWithReferenceTable(&functionAddress);
+		DistributeFunctionColocatedWithReferenceTable(functionAddress);
 	}
 
 	PG_RETURN_VOID();
@@ -1308,7 +1309,7 @@ ShouldPropagateAlterFunction(const ObjectAddress *address)
 		return false;
 	}
 
-	if (!IsObjectDistributed(address))
+	if (!IsAnyObjectDistributed(list_make1((ObjectAddress *) address)))
 	{
 		/* do not propagate alter function for non-distributed functions */
 		return false;
@@ -1373,15 +1374,19 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	ObjectAddress functionAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	List *functionAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false);
 
-	if (IsObjectAddressOwnedByExtension(&functionAddress, NULL))
+	/*  the code-path only supports a single object */
+	Assert(list_length(functionAddresses) == 1);
+
+	if (IsAnyObjectAddressOwnedByExtension(functionAddresses, NULL))
 	{
 		return NIL;
 	}
 
 	/* If the function has any unsupported dependency, create it locally */
-	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(&functionAddress);
+	DeferredErrorMessage *errMsg = DeferErrorIfAnyObjectHasUnsupportedDependency(
+		functionAddresses);
 
 	if (errMsg != NULL)
 	{
@@ -1389,11 +1394,14 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	EnsureDependenciesExistOnAllNodes(&functionAddress);
+	EnsureAllObjectDependenciesExistOnAllNodes(functionAddresses);
+
+	/* We have already asserted that we have exactly 1 address in the addresses. */
+	ObjectAddress *functionAddress = linitial(functionAddresses);
 
 	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
 	commands = list_concat(commands, CreateFunctionDDLCommandsIdempotent(
-							   &functionAddress));
+							   functionAddress));
 	commands = list_concat(commands, list_make1(ENABLE_DDL_PROPAGATION));
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
@@ -1405,7 +1413,7 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
  * CREATE [OR REPLACE] FUNCTION statement. If missing_ok is false it will error with the
  * normal postgres error for unfound functions.
  */
-ObjectAddress
+List *
 CreateFunctionStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CreateFunctionStmt *stmt = castNode(CreateFunctionStmt, node);
@@ -1440,7 +1448,7 @@ CreateFunctionStmtObjectAddress(Node *node, bool missing_ok)
  *
  * objectId in the address can be invalid if missing_ok was set to true.
  */
-ObjectAddress
+List *
 DefineAggregateStmtObjectAddress(Node *node, bool missing_ok)
 {
 	DefineStmt *stmt = castNode(DefineStmt, node);
@@ -1494,8 +1502,15 @@ PreprocessAlterFunctionStmt(Node *node, const char *queryString,
 	AlterFunctionStmt *stmt = castNode(AlterFunctionStmt, node);
 	AssertObjectTypeIsFunctional(stmt->objtype);
 
-	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateAlterFunction(&address))
+	List *addresses = GetObjectAddressListFromParseTree((Node *) stmt, false);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(addresses) == 1);
+
+	/* We have already asserted that we have exactly 1 address in the addresses. */
+	ObjectAddress *address = linitial(addresses);
+
+	if (!ShouldPropagateAlterFunction(address))
 	{
 		return NIL;
 	}
@@ -1549,20 +1564,26 @@ PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, true);
-	if (!IsObjectDistributed(&address))
+	List *addresses = GetObjectAddressListFromParseTree((Node *) stmt, true);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(addresses) == 1);
+
+	if (!IsAnyObjectDistributed(addresses))
 	{
 		return NIL;
 	}
+
+	/* We have already asserted that we have exactly 1 address in the addresses. */
+	ObjectAddress *address = linitial(addresses);
 
 	/*
 	 * Distributed objects should not start depending on an extension, this will break
 	 * the dependency resolving mechanism we use to replicate distributed objects to new
 	 * workers
 	 */
-
 	const char *functionName =
-		getObjectIdentity_compat(&address, /* missingOk: */ false);
+		getObjectIdentity_compat(address, /* missingOk: */ false);
 	ereport(ERROR, (errmsg("distrtibuted functions are not allowed to depend on an "
 						   "extension"),
 					errdetail("Function \"%s\" is already distributed. Functions from "
@@ -1576,7 +1597,7 @@ PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString,
  * is the subject of an ALTER FUNCTION ... DEPENS ON EXTENSION ... statement. If
  * missing_ok is set to false the lookup will raise an error.
  */
-ObjectAddress
+List *
 AlterFunctionDependsStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectDependsStmt *stmt = castNode(AlterObjectDependsStmt, node);
@@ -1592,7 +1613,7 @@ AlterFunctionDependsStmtObjectAddress(Node *node, bool missing_ok)
  * AlterFunctionStmt. If missing_ok is set to false an error will be raised if postgres
  * was unable to find the function/procedure that was the target of the statement.
  */
-ObjectAddress
+List *
 AlterFunctionStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterFunctionStmt *stmt = castNode(AlterFunctionStmt, node);
@@ -1604,7 +1625,7 @@ AlterFunctionStmtObjectAddress(Node *node, bool missing_ok)
  * RenameFunctionStmtObjectAddress returns the ObjectAddress of the function that is the
  * subject of the RenameStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+List *
 RenameFunctionStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -1617,7 +1638,7 @@ RenameFunctionStmtObjectAddress(Node *node, bool missing_ok)
  * AlterFunctionOwnerObjectAddress returns the ObjectAddress of the function that is the
  * subject of the AlterOwnerStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+List *
 AlterFunctionOwnerObjectAddress(Node *node, bool missing_ok)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
@@ -1635,7 +1656,7 @@ AlterFunctionOwnerObjectAddress(Node *node, bool missing_ok)
  * the new schema. Errors if missing_ok is false and the type cannot be found in either of
  * the schemas.
  */
-ObjectAddress
+List *
 AlterFunctionSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -1680,10 +1701,10 @@ AlterFunctionSchemaStmtObjectAddress(Node *node, bool missing_ok)
 		}
 	}
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, ProcedureRelationId, funcOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -1827,17 +1848,17 @@ ShouldAddFunctionSignature(FunctionParameterMode mode)
  * Function/Procedure/Aggregate. If missing_ok is set to false an error will be
  * raised by postgres explaining the Function/Procedure could not be found.
  */
-static ObjectAddress
+static List *
 FunctionToObjectAddress(ObjectType objectType, ObjectWithArgs *objectWithArgs,
 						bool missing_ok)
 {
 	AssertObjectTypeIsFunctional(objectType);
 
 	Oid funcOid = LookupFuncWithArgs(objectType, objectWithArgs, missing_ok);
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, ProcedureRelationId, funcOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, ProcedureRelationId, funcOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -1920,7 +1941,7 @@ EnsureExtensionFunctionCanBeDistributed(const ObjectAddress functionAddress,
 	/*
 	 * Ensure corresponding extension is in pg_dist_object.
 	 * Functions owned by an extension are depending internally on that extension,
-	 * hence EnsureDependenciesExistOnAllNodes() creates the extension, which in
+	 * hence EnsureAllObjectDependenciesExistOnAllNodes() creates the extension, which in
 	 * turn creates the function, and thus we don't have to create it ourself like
 	 * we do for non-extension functions.
 	 */
@@ -1930,7 +1951,9 @@ EnsureExtensionFunctionCanBeDistributed(const ObjectAddress functionAddress,
 							get_extension_name(extensionAddress.objectId),
 							get_func_name(functionAddress.objectId))));
 
-	EnsureDependenciesExistOnAllNodes(&functionAddress);
+	ObjectAddress *copyFunctionAddress = palloc0(sizeof(ObjectAddress));
+	*copyFunctionAddress = functionAddress;
+	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(copyFunctionAddress));
 }
 
 
@@ -2004,7 +2027,7 @@ PostprocessGrantOnFunctionStmt(Node *node, const char *queryString)
 	ObjectAddress *functionAddress = NULL;
 	foreach_ptr(functionAddress, distributedFunctions)
 	{
-		EnsureDependenciesExistOnAllNodes(functionAddress);
+		EnsureAllObjectDependenciesExistOnAllNodes(list_make1(functionAddress));
 	}
 	return NIL;
 }
@@ -2038,7 +2061,7 @@ FilterDistributedFunctions(GrantStmt *grantStmt)
 		List *namespaceOidList = NIL;
 
 		/* iterate over all namespace names provided to get their oid's */
-		Value *namespaceValue = NULL;
+		String *namespaceValue = NULL;
 		foreach_ptr(namespaceValue, grantStmt->objects)
 		{
 			char *nspname = strVal(namespaceValue);
@@ -2083,7 +2106,7 @@ FilterDistributedFunctions(GrantStmt *grantStmt)
 			 * if this function from GRANT .. ON FUNCTION .. is a distributed
 			 * function, add it to the list
 			 */
-			if (IsObjectDistributed(functionAddress))
+			if (IsAnyObjectDistributed(list_make1(functionAddress)))
 			{
 				grantFunctionList = lappend(grantFunctionList, functionAddress);
 			}

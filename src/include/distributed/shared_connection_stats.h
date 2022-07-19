@@ -25,6 +25,8 @@ extern int MaxClientConnections;
 extern void InitializeSharedConnectionStats(void);
 extern void WaitForSharedConnection(void);
 extern void WakeupWaiterBackendsForSharedConnection(void);
+extern size_t SharedConnectionStatsShmemSize(void);
+extern void SharedConnectionStatsShmemInit(void);
 extern int GetMaxClientConnections(void);
 extern int GetMaxSharedPoolSize(void);
 extern int GetLocalSharedPoolSize(void);
