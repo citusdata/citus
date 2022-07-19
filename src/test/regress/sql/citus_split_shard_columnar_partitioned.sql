@@ -182,6 +182,7 @@ SET citus.shard_replication_factor TO 1;
     SELECT count(*) FROM colocated_partitioned_table;
     SELECT count(*) FROM colocated_dist_table;
     SELECT count(*) FROM sensors;
+    SELECT count(*) FROM sensorscolumnar;
 -- END: Validate Shard Info and Data
 
 -- BEGIN: Show the updated state on workers

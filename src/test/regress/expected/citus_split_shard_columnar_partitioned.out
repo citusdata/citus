@@ -326,6 +326,12 @@ SET citus.shard_replication_factor TO 1;
   1001
 (1 row)
 
+    SELECT count(*) FROM sensorscolumnar;
+ count
+---------------------------------------------------------------------
+  1001
+(1 row)
+
 -- END: Validate Shard Info and Data
 -- BEGIN: Show the updated state on workers
     \c - - - :worker_1_port
