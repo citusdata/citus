@@ -100,8 +100,7 @@ static void DoSplitCopy(WorkerNode *sourceShardNode,
 						char *snapShotName);
 static StringInfo CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 										 List *splitChildrenShardIntervalList,
-										 List *workersForPlacementList,
-										 char *snapShotName);
+										 List *workersForPlacementList);
 static void InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 											 List *workersForPlacementList);
 static void CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
@@ -446,6 +445,7 @@ SplitShard(SplitMode splitMode,
 	}
 	else
 	{
+		/*TODO(saawasek): Discussing about existing bug with the assumption of move shard*/
 		NonBlockingShardSplit(
 			splitOperation,
 			shardIntervalToSplit,
@@ -764,14 +764,37 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 	{
 		StringInfo splitCopyUdfCommand = CreateSplitCopyCommand(sourceShardIntervalToCopy,
 																splitShardIntervalList,
-																destinationWorkerNodesList,
-																snapShotName);
+																destinationWorkerNodesList);
 
-		Task *splitCopyTask = CreateBasicTask(
-			sourceShardIntervalToCopy->shardId, /* jobId */
-			taskId,
-			READ_TASK,
-			splitCopyUdfCommand->data);
+		List *ddlCommandList = NIL;
+		StringInfo beginTransaction = makeStringInfo();
+		appendStringInfo(beginTransaction,
+						 "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;");
+		ddlCommandList = lappend(ddlCommandList, beginTransaction->data);
+
+		/* Set snapshot */
+		if (snapShotName != NULL)
+		{
+			StringInfo snapShotString = makeStringInfo();
+			appendStringInfo(snapShotString, "SET TRANSACTION SNAPSHOT %s;",
+							 quote_literal_cstr(
+								 snapShotName));
+			ddlCommandList = lappend(ddlCommandList, snapShotString->data);
+			printf("Sameer final string snapshotted:%s\n", snapShotString->data);
+		}
+
+		ddlCommandList = lappend(ddlCommandList, splitCopyUdfCommand->data);
+
+		StringInfo commitCommand = makeStringInfo();
+		appendStringInfo(commitCommand, "COMMIT;");
+		ddlCommandList = lappend(ddlCommandList, commitCommand->data);
+
+		Task *splitCopyTask = CitusMakeNode(Task);
+		splitCopyTask->jobId = sourceShardIntervalToCopy->shardId;
+		splitCopyTask->taskId = taskId;
+		splitCopyTask->taskType = READ_TASK;
+		splitCopyTask->replicationModel = REPLICATION_MODEL_INVALID;
+		SetTaskQueryStringList(splitCopyTask, ddlCommandList);
 
 		ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
 		SetPlacementNodeMetadata(taskPlacement, sourceShardNode);
@@ -813,8 +836,7 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 static StringInfo
 CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 					   List *splitChildrenShardIntervalList,
-					   List *destinationWorkerNodesList,
-					   char *snapShotName)
+					   List *destinationWorkerNodesList)
 {
 	StringInfo splitCopyInfoArray = makeStringInfo();
 	appendStringInfo(splitCopyInfoArray, "ARRAY[");
@@ -848,31 +870,7 @@ CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 					 sourceShardSplitInterval->shardId,
 					 splitCopyInfoArray->data);
 
-	if (snapShotName == NULL)
-	{
-		return splitCopyUdf;
-	}
-
-
-	StringInfo beginTransaction = makeStringInfo();
-	appendStringInfo(beginTransaction,
-					 "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;");
-
-	StringInfo commitTransaction = makeStringInfo();
-	appendStringInfo(commitTransaction, "COMMIT;");
-
-	StringInfo snapShotString = makeStringInfo();
-	appendStringInfo(snapShotString, "SET TRANSACTION SNAPSHOT %s;", quote_literal_cstr(
-						 snapShotName));
-
-	StringInfo snapShottedCopyUDF = makeStringInfo();
-	appendStringInfo(snapShottedCopyUDF, "%s%s%s%s", beginTransaction->data,
-					 snapShotString->data, splitCopyUdf->data, commitTransaction->data);
-
-	printf("sameer value:%s\n", snapShottedCopyUDF->data);
-	printf("sameer actual value :%s \n", splitCopyUdf->data);
-
-	return snapShottedCopyUDF;
+	return splitCopyUdf;
 }
 
 
@@ -1237,7 +1235,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 																	  superUser,
 																	  databaseName);
 	ClaimConnectionExclusively(sourceConnection);
-	
+
 	HTAB *mapOfShardToPlacementCreatedByWorkflow =
 		CreateEmptyMapForShardsCreatedByWorkflow();
 	PG_TRY();
@@ -1263,8 +1261,13 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		CreateShardSplitPublications(sourceConnection, shardSplitHashMapForPublication);
 
 		/*Create Template Replication Slot */
+		char *snapShotName = NULL;
+		snapShotName = CreateTemplateReplicationSlotAndReturnSnapshot(shardIntervalToSplit, sourceShardToCopyNode);
 
 		/* DoSplitCopy */
+		DoSplitCopy(sourceShardToCopyNode, sourceColocatedShardIntervalList,
+					shardGroupSplitIntervalListList, workersForPlacementList,
+					snapShotName);
 
 		/*worker_split_replication_setup_udf*/
 		List *replicationSlotInfoList = ExecuteSplitShardReplicationSetupUDF(
@@ -1330,7 +1333,6 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		 */
 		CreateForeignKeyConstraints(shardGroupSplitIntervalListList,
 									workersForPlacementList);
-
 		DropDummyShards();
 	}
 	PG_CATCH();

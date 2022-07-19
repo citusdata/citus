@@ -21,8 +21,8 @@ SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \
 SELECT * FROM citus_shards;
 SELECT * FROM pg_dist_shard;
 
-SET client_min_messages TO LOG;
-SET citus.log_remote_commands TO on;
+--SET client_min_messages TO LOG;
+--SET citus.log_remote_commands TO on;
 
 CREATE OR REPLACE VIEW show_catalog AS SELECT n.nspname as "Schema",
   c.relname as "Name",
@@ -38,7 +38,7 @@ ORDER BY 1,2;
 
 -- UDF fails for range partitioned tables.
 \c - - - :master_port
-SET citus.log_remote_commands TO on;
+--SET citus.log_remote_commands TO on;
 SET citus.next_shard_id TO 100;
 SET search_path TO citus_split_shard_by_split_points_negative;
 

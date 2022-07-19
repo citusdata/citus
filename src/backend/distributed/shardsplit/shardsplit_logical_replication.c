@@ -416,7 +416,7 @@ DropExistingIfAnyAndCreateTemplateReplicationSlot(ShardInterval *shardIntervalTo
 	/*'snapshot_name' is second column where index starts from zero.
 	 * We're using the pstrdup to copy the data into the current memory context */
 	char *snapShotName = pstrdup(PQgetvalue(result, 0, 2 /* columIndex */));
-	printf("Sameer sanpshot name %s \n", snapShotName);
+
 	return snapShotName;
 }
 

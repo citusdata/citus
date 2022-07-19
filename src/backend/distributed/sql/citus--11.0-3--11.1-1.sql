@@ -67,4 +67,4 @@ DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_
 #include "udfs/get_all_active_transactions/11.1-1.sql"
 #include "udfs/citus_split_shard_by_split_points/11.1-1.sql"
 #include "udfs/worker_split_copy/11.1-1.sql"
-#include "udfs/worker_split_shard_replication_setup/11.0-2.sql"
+#include "udfs/worker_split_shard_replication_setup/11.1-1.sql"
