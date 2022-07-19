@@ -360,7 +360,16 @@ CreateDependingViewsOnWorkers(Oid relationId)
 		ObjectAddressSet(*viewAddress, RelationRelationId, viewOid);
 		EnsureAllObjectDependenciesExistOnAllNodes(list_make1(viewAddress));
 
-		char *createViewCommand = CreateViewDDLCommand(viewOid);
+		char *createViewCommand = NULL;
+		if (get_rel_relkind(viewOid) == RELKIND_MATVIEW)
+		{
+			createViewCommand = CreateMaterializedViewDDLCommand(viewOid);
+		}
+		else
+		{
+			createViewCommand = CreateViewDDLCommand(viewOid);
+		}
+
 		char *alterViewOwnerCommand = AlterViewOwnerCommand(viewOid);
 
 		SendCommandToWorkersWithMetadata(createViewCommand);
