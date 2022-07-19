@@ -140,7 +140,7 @@ SET citus.shard_replication_factor TO 1;
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
-            WHERE tbl.relname like 'sensors_%_8%' OR tbl.relname like 'colocated_dist_table_%_8%'
+            WHERE tbl.relname like '%_89%'
             ORDER BY 1, 2;
           relname           |                       Constraint                        |                                                         Definition
 ---------------------------------------------------------------------
@@ -153,6 +153,11 @@ SET citus.shard_replication_factor TO 1;
  sensors_2020_01_01_8970002 | fkey_from_parent_to_parent_8970000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
  sensors_2020_01_01_8970002 | fkey_from_parent_to_ref_8970000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
  sensors_2020_01_01_8970002 | sensors_2020_01_01_8970002_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
+ sensors_8970000            | fkey_from_parent_to_child_8970000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
+ sensors_8970000            | fkey_from_parent_to_dist_8970000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
+ sensors_8970000            | fkey_from_parent_to_parent_8970000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
+ sensors_8970000            | fkey_from_parent_to_ref_8970000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_8970000            | sensors_8970000_measureid_eventdatetime_fkey            | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
  sensors_news_8970003       | fkey_from_parent_to_child_8970000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8970010(eventdatetime, measureid)
  sensors_news_8970003       | fkey_from_parent_to_dist_8970000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
  sensors_news_8970003       | fkey_from_parent_to_parent_8970000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
@@ -161,34 +166,34 @@ SET citus.shard_replication_factor TO 1;
  sensors_old_8970001        | fkey_from_parent_to_dist_8970000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8970008(measureid)
  sensors_old_8970001        | fkey_from_parent_to_parent_8970000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8970009(eventdatetime, measureid)
  sensors_old_8970001        | fkey_from_parent_to_ref_8970000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
-(17 rows)
+(22 rows)
 
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%_8%' ORDER BY 1,2;
-             tablename              |                                                                                              indexdef
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
+                   tablename                    |                                                                                                   indexdef
 ---------------------------------------------------------------------
- sensors_2020_01_01_8970002         | CREATE INDEX index_on_child_8970002 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8970002 USING btree (lower((measure_data)::text))
- sensors_2020_01_01_8970002         | CREATE INDEX sensors_2020_01_01_lower_idx_8970002 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8970002 USING btree (lower((measureid)::text))
- sensors_2020_01_01_8970002         | CREATE UNIQUE INDEX sensors_2020_01_01_pkey_8970002 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8970002 USING btree (measureid, eventdatetime, measure_data)
- sensors_news_8970003               | CREATE INDEX sensors_news_lower_idx_8970003 ON citus_split_test_schema_columnar_partitioned.sensors_news_8970003 USING btree (lower((measureid)::text))
- sensors_news_8970003               | CREATE UNIQUE INDEX sensors_news_pkey_8970003 ON citus_split_test_schema_columnar_partitioned.sensors_news_8970003 USING btree (measureid, eventdatetime, measure_data)
- sensors_old_8970001                | CREATE INDEX sensors_old_lower_idx_8970001 ON citus_split_test_schema_columnar_partitioned.sensors_old_8970001 USING btree (lower((measureid)::text))
- sensors_old_8970001                | CREATE UNIQUE INDEX sensors_old_pkey_8970001 ON citus_split_test_schema_columnar_partitioned.sensors_old_8970001 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_2020_01_01_8970006 | CREATE INDEX index_on_child_columnar_8970006 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8970006 USING btree (lower((measure_data)::text))
- sensorscolumnar_2020_01_01_8970006 | CREATE INDEX sensorscolumnar_2020_01_01_lower_idx_8970006 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8970006 USING btree (lower((measureid)::text))
- sensorscolumnar_2020_01_01_8970006 | CREATE UNIQUE INDEX sensorscolumnar_2020_01_01_pkey_8970006 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8970006 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_8970004            | CREATE INDEX index_on_parent_columnar_8970004 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8970004 USING btree (lower((measureid)::text))
- sensorscolumnar_8970004            | CREATE UNIQUE INDEX sensorscolumnar_pkey_8970004 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8970004 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_news_8970007       | CREATE INDEX sensorscolumnar_news_lower_idx_8970007 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8970007 USING btree (lower((measureid)::text))
- sensorscolumnar_news_8970007       | CREATE UNIQUE INDEX sensorscolumnar_news_pkey_8970007 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8970007 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_old_8970005        | CREATE INDEX sensorscolumnar_old_lower_idx_8970005 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8970005 USING btree (lower((measureid)::text))
- sensorscolumnar_old_8970005        | CREATE UNIQUE INDEX sensorscolumnar_old_pkey_8970005 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8970005 USING btree (measureid, eventdatetime, measure_data)
-(16 rows)
-
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%_8%' ORDER BY 1,2;
-          tablename           |                                                                          indexdef
----------------------------------------------------------------------
- colocated_dist_table_8970008 | CREATE UNIQUE INDEX colocated_dist_table_pkey_8970008 ON citus_split_test_schema_columnar_partitioned.colocated_dist_table_8970008 USING btree (measureid)
-(1 row)
+ colocated_dist_table_8970008                   | CREATE UNIQUE INDEX colocated_dist_table_pkey_8970008 ON citus_split_test_schema_columnar_partitioned.colocated_dist_table_8970008 USING btree (measureid)
+ colocated_partitioned_table_2020_01_01_8970010 | CREATE UNIQUE INDEX colocated_partitioned_table_2020_01_01_pkey_8970010 ON citus_split_test_schema_columnar_partitioned.colocated_partitioned_table_2020_01_01_8970010 USING btree (measureid, eventdatetime)
+ colocated_partitioned_table_8970009            | CREATE UNIQUE INDEX colocated_partitioned_table_pkey_8970009 ON ONLY citus_split_test_schema_columnar_partitioned.colocated_partitioned_table_8970009 USING btree (measureid, eventdatetime)
+ reference_table_8970011                        | CREATE UNIQUE INDEX reference_table_pkey_8970011 ON citus_split_test_schema_columnar_partitioned.reference_table_8970011 USING btree (measureid)
+ sensors_2020_01_01_8970002                     | CREATE INDEX index_on_child_8970002 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8970002 USING btree (lower((measure_data)::text))
+ sensors_2020_01_01_8970002                     | CREATE INDEX sensors_2020_01_01_lower_idx_8970002 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8970002 USING btree (lower((measureid)::text))
+ sensors_2020_01_01_8970002                     | CREATE UNIQUE INDEX sensors_2020_01_01_pkey_8970002 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8970002 USING btree (measureid, eventdatetime, measure_data)
+ sensors_8970000                                | CREATE INDEX index_on_parent_8970000 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8970000 USING btree (lower((measureid)::text))
+ sensors_8970000                                | CREATE UNIQUE INDEX sensors_pkey_8970000 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8970000 USING btree (measureid, eventdatetime, measure_data)
+ sensors_news_8970003                           | CREATE INDEX sensors_news_lower_idx_8970003 ON citus_split_test_schema_columnar_partitioned.sensors_news_8970003 USING btree (lower((measureid)::text))
+ sensors_news_8970003                           | CREATE UNIQUE INDEX sensors_news_pkey_8970003 ON citus_split_test_schema_columnar_partitioned.sensors_news_8970003 USING btree (measureid, eventdatetime, measure_data)
+ sensors_old_8970001                            | CREATE INDEX sensors_old_lower_idx_8970001 ON citus_split_test_schema_columnar_partitioned.sensors_old_8970001 USING btree (lower((measureid)::text))
+ sensors_old_8970001                            | CREATE UNIQUE INDEX sensors_old_pkey_8970001 ON citus_split_test_schema_columnar_partitioned.sensors_old_8970001 USING btree (measureid, eventdatetime, measure_data)
+ sensorscolumnar_2020_01_01_8970006             | CREATE INDEX index_on_child_columnar_8970006 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8970006 USING btree (lower((measure_data)::text))
+ sensorscolumnar_2020_01_01_8970006             | CREATE INDEX sensorscolumnar_2020_01_01_lower_idx_8970006 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8970006 USING btree (lower((measureid)::text))
+ sensorscolumnar_2020_01_01_8970006             | CREATE UNIQUE INDEX sensorscolumnar_2020_01_01_pkey_8970006 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8970006 USING btree (measureid, eventdatetime, measure_data)
+ sensorscolumnar_8970004                        | CREATE INDEX index_on_parent_columnar_8970004 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8970004 USING btree (lower((measureid)::text))
+ sensorscolumnar_8970004                        | CREATE UNIQUE INDEX sensorscolumnar_pkey_8970004 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8970004 USING btree (measureid, eventdatetime, measure_data)
+ sensorscolumnar_news_8970007                   | CREATE INDEX sensorscolumnar_news_lower_idx_8970007 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8970007 USING btree (lower((measureid)::text))
+ sensorscolumnar_news_8970007                   | CREATE UNIQUE INDEX sensorscolumnar_news_pkey_8970007 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8970007 USING btree (measureid, eventdatetime, measure_data)
+ sensorscolumnar_old_8970005                    | CREATE INDEX sensorscolumnar_old_lower_idx_8970005 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8970005 USING btree (lower((measureid)::text))
+ sensorscolumnar_old_8970005                    | CREATE UNIQUE INDEX sensorscolumnar_old_pkey_8970005 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8970005 USING btree (measureid, eventdatetime, measure_data)
+(22 rows)
 
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
@@ -215,21 +220,17 @@ SET citus.shard_replication_factor TO 1;
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
-            WHERE tbl.relname like 'sensors_%_8%' OR tbl.relname like 'colocated_dist_table_%_8%'
+            WHERE tbl.relname like '%_89%'
             ORDER BY 1, 2;
  relname | Constraint | Definition
 ---------------------------------------------------------------------
 (0 rows)
 
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%_8%' ORDER BY 1,2;
- tablename | indexdef
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
+        tablename        |                                                                     indexdef
 ---------------------------------------------------------------------
-(0 rows)
-
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%_8%' ORDER BY 1,2;
- tablename | indexdef
----------------------------------------------------------------------
-(0 rows)
+ reference_table_8970011 | CREATE UNIQUE INDEX reference_table_pkey_8970011 ON citus_split_test_schema_columnar_partitioned.reference_table_8970011 USING btree (measureid)
+(1 row)
 
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
@@ -333,7 +334,7 @@ SET citus.shard_replication_factor TO 1;
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
-            WHERE tbl.relname like 'sensors_%_8%' OR tbl.relname like 'colocated_dist_table_%_8%'
+            WHERE tbl.relname like '%_89%'
             ORDER BY 1, 2;
           relname           |                       Constraint                        |                                                         Definition
 ---------------------------------------------------------------------
@@ -346,6 +347,11 @@ SET citus.shard_replication_factor TO 1;
  sensors_2020_01_01_8999004 | fkey_from_parent_to_parent_8999000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
  sensors_2020_01_01_8999004 | fkey_from_parent_to_ref_8999000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
  sensors_2020_01_01_8999004 | sensors_2020_01_01_8999004_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
+ sensors_8999000            | fkey_from_parent_to_child_8999000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
+ sensors_8999000            | fkey_from_parent_to_dist_8999000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999016(measureid)
+ sensors_8999000            | fkey_from_parent_to_parent_8999000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
+ sensors_8999000            | fkey_from_parent_to_ref_8999000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_8999000            | sensors_8999000_measureid_eventdatetime_fkey            | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
  sensors_news_8999006       | fkey_from_parent_to_child_8999000                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999020(eventdatetime, measureid)
  sensors_news_8999006       | fkey_from_parent_to_dist_8999000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999016(measureid)
  sensors_news_8999006       | fkey_from_parent_to_parent_8999000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
@@ -354,33 +360,34 @@ SET citus.shard_replication_factor TO 1;
  sensors_old_8999002        | fkey_from_parent_to_dist_8999000                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999016(measureid)
  sensors_old_8999002        | fkey_from_parent_to_parent_8999000                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999018(eventdatetime, measureid)
  sensors_old_8999002        | fkey_from_parent_to_ref_8999000                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
-(17 rows)
+(22 rows)
 
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%_8%' ORDER BY 1,2;
-             tablename              |                                                                                              indexdef
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
+                   tablename                    |                                                                                                   indexdef
 ---------------------------------------------------------------------
- sensors_2020_01_01_8999004         | CREATE INDEX index_on_child_8999004 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999004 USING btree (lower((measure_data)::text))
- sensors_2020_01_01_8999004         | CREATE INDEX sensors_2020_01_01_lower_idx_8999004 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999004 USING btree (lower((measureid)::text))
- sensors_2020_01_01_8999004         | CREATE UNIQUE INDEX sensors_2020_01_01_pkey_8999004 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999004 USING btree (measureid, eventdatetime, measure_data)
- sensors_news_8999006               | CREATE INDEX sensors_news_lower_idx_8999006 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999006 USING btree (lower((measureid)::text))
- sensors_news_8999006               | CREATE UNIQUE INDEX sensors_news_pkey_8999006 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999006 USING btree (measureid, eventdatetime, measure_data)
- sensors_old_8999002                | CREATE INDEX sensors_old_lower_idx_8999002 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999002 USING btree (lower((measureid)::text))
- sensors_old_8999002                | CREATE UNIQUE INDEX sensors_old_pkey_8999002 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999002 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_2020_01_01_8999012 | CREATE INDEX index_on_child_columnar_8999012 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999012 USING btree (lower((measure_data)::text))
- sensorscolumnar_2020_01_01_8999012 | CREATE INDEX sensorscolumnar_2020_01_01_lower_idx_8999012 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999012 USING btree (lower((measureid)::text))
- sensorscolumnar_2020_01_01_8999012 | CREATE UNIQUE INDEX sensorscolumnar_2020_01_01_pkey_8999012 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999012 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_8999008            | CREATE INDEX index_on_parent_columnar_8999008 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999008 USING btree (lower((measureid)::text))
- sensorscolumnar_8999008            | CREATE UNIQUE INDEX sensorscolumnar_pkey_8999008 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999008 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_news_8999014       | CREATE INDEX sensorscolumnar_news_lower_idx_8999014 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999014 USING btree (lower((measureid)::text))
- sensorscolumnar_news_8999014       | CREATE UNIQUE INDEX sensorscolumnar_news_pkey_8999014 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999014 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_old_8999010        | CREATE INDEX sensorscolumnar_old_lower_idx_8999010 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999010 USING btree (lower((measureid)::text))
- sensorscolumnar_old_8999010        | CREATE UNIQUE INDEX sensorscolumnar_old_pkey_8999010 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999010 USING btree (measureid, eventdatetime, measure_data)
-(16 rows)
-
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%_8%' ORDER BY 1,2;
- tablename | indexdef
----------------------------------------------------------------------
-(0 rows)
+ colocated_dist_table_8999016                   | CREATE UNIQUE INDEX colocated_dist_table_pkey_8999016 ON citus_split_test_schema_columnar_partitioned.colocated_dist_table_8999016 USING btree (measureid)
+ colocated_partitioned_table_2020_01_01_8999020 | CREATE UNIQUE INDEX colocated_partitioned_table_2020_01_01_pkey_8999020 ON citus_split_test_schema_columnar_partitioned.colocated_partitioned_table_2020_01_01_8999020 USING btree (measureid, eventdatetime)
+ colocated_partitioned_table_8999018            | CREATE UNIQUE INDEX colocated_partitioned_table_pkey_8999018 ON ONLY citus_split_test_schema_columnar_partitioned.colocated_partitioned_table_8999018 USING btree (measureid, eventdatetime)
+ reference_table_8970011                        | CREATE UNIQUE INDEX reference_table_pkey_8970011 ON citus_split_test_schema_columnar_partitioned.reference_table_8970011 USING btree (measureid)
+ sensors_2020_01_01_8999004                     | CREATE INDEX index_on_child_8999004 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999004 USING btree (lower((measure_data)::text))
+ sensors_2020_01_01_8999004                     | CREATE INDEX sensors_2020_01_01_lower_idx_8999004 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999004 USING btree (lower((measureid)::text))
+ sensors_2020_01_01_8999004                     | CREATE UNIQUE INDEX sensors_2020_01_01_pkey_8999004 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999004 USING btree (measureid, eventdatetime, measure_data)
+ sensors_8999000                                | CREATE INDEX index_on_parent_8999000 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8999000 USING btree (lower((measureid)::text))
+ sensors_8999000                                | CREATE UNIQUE INDEX sensors_pkey_8999000 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8999000 USING btree (measureid, eventdatetime, measure_data)
+ sensors_news_8999006                           | CREATE INDEX sensors_news_lower_idx_8999006 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999006 USING btree (lower((measureid)::text))
+ sensors_news_8999006                           | CREATE UNIQUE INDEX sensors_news_pkey_8999006 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999006 USING btree (measureid, eventdatetime, measure_data)
+ sensors_old_8999002                            | CREATE INDEX sensors_old_lower_idx_8999002 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999002 USING btree (lower((measureid)::text))
+ sensors_old_8999002                            | CREATE UNIQUE INDEX sensors_old_pkey_8999002 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999002 USING btree (measureid, eventdatetime, measure_data)
+ sensorscolumnar_2020_01_01_8999012             | CREATE INDEX index_on_child_columnar_8999012 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999012 USING btree (lower((measure_data)::text))
+ sensorscolumnar_2020_01_01_8999012             | CREATE INDEX sensorscolumnar_2020_01_01_lower_idx_8999012 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999012 USING btree (lower((measureid)::text))
+ sensorscolumnar_2020_01_01_8999012             | CREATE UNIQUE INDEX sensorscolumnar_2020_01_01_pkey_8999012 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999012 USING btree (measureid, eventdatetime, measure_data)
+ sensorscolumnar_8999008                        | CREATE INDEX index_on_parent_columnar_8999008 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999008 USING btree (lower((measureid)::text))
+ sensorscolumnar_8999008                        | CREATE UNIQUE INDEX sensorscolumnar_pkey_8999008 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999008 USING btree (measureid, eventdatetime, measure_data)
+ sensorscolumnar_news_8999014                   | CREATE INDEX sensorscolumnar_news_lower_idx_8999014 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999014 USING btree (lower((measureid)::text))
+ sensorscolumnar_news_8999014                   | CREATE UNIQUE INDEX sensorscolumnar_news_pkey_8999014 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999014 USING btree (measureid, eventdatetime, measure_data)
+ sensorscolumnar_old_8999010                    | CREATE INDEX sensorscolumnar_old_lower_idx_8999010 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999010 USING btree (lower((measureid)::text))
+ sensorscolumnar_old_8999010                    | CREATE UNIQUE INDEX sensorscolumnar_old_pkey_8999010 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999010 USING btree (measureid, eventdatetime, measure_data)
+(22 rows)
 
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
@@ -407,7 +414,7 @@ SET citus.shard_replication_factor TO 1;
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
             JOIN public.table_fkeys fk on tbl.oid = fk.relid
-            WHERE tbl.relname like 'sensors_%_8%' OR tbl.relname like 'colocated_dist_table_%_8%'
+            WHERE tbl.relname like '%_89%'
             ORDER BY 1, 2;
           relname           |                       Constraint                        |                                                         Definition
 ---------------------------------------------------------------------
@@ -420,6 +427,11 @@ SET citus.shard_replication_factor TO 1;
  sensors_2020_01_01_8999005 | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
  sensors_2020_01_01_8999005 | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
  sensors_2020_01_01_8999005 | sensors_2020_01_01_8999005_measureid_eventdatetime_fkey | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
+ sensors_8999001            | fkey_from_parent_to_child_8999001                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
+ sensors_8999001            | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
+ sensors_8999001            | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
+ sensors_8999001            | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
+ sensors_8999001            | sensors_8999001_measureid_eventdatetime_fkey            | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
  sensors_news_8999007       | fkey_from_parent_to_child_8999001                       | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_2020_01_01_8999021(eventdatetime, measureid)
  sensors_news_8999007       | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
  sensors_news_8999007       | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
@@ -428,33 +440,34 @@ SET citus.shard_replication_factor TO 1;
  sensors_old_8999003        | fkey_from_parent_to_dist_8999001                        | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8999017(measureid)
  sensors_old_8999003        | fkey_from_parent_to_parent_8999001                      | FOREIGN KEY (eventdatetime, measureid) REFERENCES colocated_partitioned_table_8999019(eventdatetime, measureid)
  sensors_old_8999003        | fkey_from_parent_to_ref_8999001                         | FOREIGN KEY (measureid) REFERENCES reference_table_8970011(measureid)
-(17 rows)
+(22 rows)
 
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%_8%' ORDER BY 1,2;
-             tablename              |                                                                                              indexdef
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
+                   tablename                    |                                                                                                   indexdef
 ---------------------------------------------------------------------
- sensors_2020_01_01_8999005         | CREATE INDEX index_on_child_8999005 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999005 USING btree (lower((measure_data)::text))
- sensors_2020_01_01_8999005         | CREATE INDEX sensors_2020_01_01_lower_idx_8999005 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999005 USING btree (lower((measureid)::text))
- sensors_2020_01_01_8999005         | CREATE UNIQUE INDEX sensors_2020_01_01_pkey_8999005 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999005 USING btree (measureid, eventdatetime, measure_data)
- sensors_news_8999007               | CREATE INDEX sensors_news_lower_idx_8999007 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999007 USING btree (lower((measureid)::text))
- sensors_news_8999007               | CREATE UNIQUE INDEX sensors_news_pkey_8999007 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999007 USING btree (measureid, eventdatetime, measure_data)
- sensors_old_8999003                | CREATE INDEX sensors_old_lower_idx_8999003 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999003 USING btree (lower((measureid)::text))
- sensors_old_8999003                | CREATE UNIQUE INDEX sensors_old_pkey_8999003 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999003 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_2020_01_01_8999013 | CREATE INDEX index_on_child_columnar_8999013 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999013 USING btree (lower((measure_data)::text))
- sensorscolumnar_2020_01_01_8999013 | CREATE INDEX sensorscolumnar_2020_01_01_lower_idx_8999013 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999013 USING btree (lower((measureid)::text))
- sensorscolumnar_2020_01_01_8999013 | CREATE UNIQUE INDEX sensorscolumnar_2020_01_01_pkey_8999013 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999013 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_8999009            | CREATE INDEX index_on_parent_columnar_8999009 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999009 USING btree (lower((measureid)::text))
- sensorscolumnar_8999009            | CREATE UNIQUE INDEX sensorscolumnar_pkey_8999009 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999009 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_news_8999015       | CREATE INDEX sensorscolumnar_news_lower_idx_8999015 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999015 USING btree (lower((measureid)::text))
- sensorscolumnar_news_8999015       | CREATE UNIQUE INDEX sensorscolumnar_news_pkey_8999015 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999015 USING btree (measureid, eventdatetime, measure_data)
- sensorscolumnar_old_8999011        | CREATE INDEX sensorscolumnar_old_lower_idx_8999011 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999011 USING btree (lower((measureid)::text))
- sensorscolumnar_old_8999011        | CREATE UNIQUE INDEX sensorscolumnar_old_pkey_8999011 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999011 USING btree (measureid, eventdatetime, measure_data)
-(16 rows)
-
-    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'colocated_dist_table_%_8%' ORDER BY 1,2;
- tablename | indexdef
----------------------------------------------------------------------
-(0 rows)
+ colocated_dist_table_8999017                   | CREATE UNIQUE INDEX colocated_dist_table_pkey_8999017 ON citus_split_test_schema_columnar_partitioned.colocated_dist_table_8999017 USING btree (measureid)
+ colocated_partitioned_table_2020_01_01_8999021 | CREATE UNIQUE INDEX colocated_partitioned_table_2020_01_01_pkey_8999021 ON citus_split_test_schema_columnar_partitioned.colocated_partitioned_table_2020_01_01_8999021 USING btree (measureid, eventdatetime)
+ colocated_partitioned_table_8999019            | CREATE UNIQUE INDEX colocated_partitioned_table_pkey_8999019 ON ONLY citus_split_test_schema_columnar_partitioned.colocated_partitioned_table_8999019 USING btree (measureid, eventdatetime)
+ reference_table_8970011                        | CREATE UNIQUE INDEX reference_table_pkey_8970011 ON citus_split_test_schema_columnar_partitioned.reference_table_8970011 USING btree (measureid)
+ sensors_2020_01_01_8999005                     | CREATE INDEX index_on_child_8999005 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999005 USING btree (lower((measure_data)::text))
+ sensors_2020_01_01_8999005                     | CREATE INDEX sensors_2020_01_01_lower_idx_8999005 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999005 USING btree (lower((measureid)::text))
+ sensors_2020_01_01_8999005                     | CREATE UNIQUE INDEX sensors_2020_01_01_pkey_8999005 ON citus_split_test_schema_columnar_partitioned.sensors_2020_01_01_8999005 USING btree (measureid, eventdatetime, measure_data)
+ sensors_8999001                                | CREATE INDEX index_on_parent_8999001 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8999001 USING btree (lower((measureid)::text))
+ sensors_8999001                                | CREATE UNIQUE INDEX sensors_pkey_8999001 ON ONLY citus_split_test_schema_columnar_partitioned.sensors_8999001 USING btree (measureid, eventdatetime, measure_data)
+ sensors_news_8999007                           | CREATE INDEX sensors_news_lower_idx_8999007 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999007 USING btree (lower((measureid)::text))
+ sensors_news_8999007                           | CREATE UNIQUE INDEX sensors_news_pkey_8999007 ON citus_split_test_schema_columnar_partitioned.sensors_news_8999007 USING btree (measureid, eventdatetime, measure_data)
+ sensors_old_8999003                            | CREATE INDEX sensors_old_lower_idx_8999003 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999003 USING btree (lower((measureid)::text))
+ sensors_old_8999003                            | CREATE UNIQUE INDEX sensors_old_pkey_8999003 ON citus_split_test_schema_columnar_partitioned.sensors_old_8999003 USING btree (measureid, eventdatetime, measure_data)
+ sensorscolumnar_2020_01_01_8999013             | CREATE INDEX index_on_child_columnar_8999013 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999013 USING btree (lower((measure_data)::text))
+ sensorscolumnar_2020_01_01_8999013             | CREATE INDEX sensorscolumnar_2020_01_01_lower_idx_8999013 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999013 USING btree (lower((measureid)::text))
+ sensorscolumnar_2020_01_01_8999013             | CREATE UNIQUE INDEX sensorscolumnar_2020_01_01_pkey_8999013 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_2020_01_01_8999013 USING btree (measureid, eventdatetime, measure_data)
+ sensorscolumnar_8999009                        | CREATE INDEX index_on_parent_columnar_8999009 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999009 USING btree (lower((measureid)::text))
+ sensorscolumnar_8999009                        | CREATE UNIQUE INDEX sensorscolumnar_pkey_8999009 ON ONLY citus_split_test_schema_columnar_partitioned.sensorscolumnar_8999009 USING btree (measureid, eventdatetime, measure_data)
+ sensorscolumnar_news_8999015                   | CREATE INDEX sensorscolumnar_news_lower_idx_8999015 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999015 USING btree (lower((measureid)::text))
+ sensorscolumnar_news_8999015                   | CREATE UNIQUE INDEX sensorscolumnar_news_pkey_8999015 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_news_8999015 USING btree (measureid, eventdatetime, measure_data)
+ sensorscolumnar_old_8999011                    | CREATE INDEX sensorscolumnar_old_lower_idx_8999011 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999011 USING btree (lower((measureid)::text))
+ sensorscolumnar_old_8999011                    | CREATE UNIQUE INDEX sensorscolumnar_old_pkey_8999011 ON citus_split_test_schema_columnar_partitioned.sensorscolumnar_old_8999011 USING btree (measureid, eventdatetime, measure_data)
+(22 rows)
 
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
