@@ -2427,18 +2427,15 @@ GetScheduledRebalanceJob(void)
 		HeapTuple jobTuple = systable_getnext(scanDescriptor);
 		if (HeapTupleIsValid(jobTuple))
 		{
-			Form_pg_dist_rebalance_job jobData = NULL;
-			jobData = (Form_pg_dist_rebalance_job) GETSTRUCT(jobTuple);
-
-			job = palloc0(sizeof(RebalanceJob));
-			job->jobid = jobData->jobid;
-			job->status = RebalanceJobStatusByOid(jobData->status);
-
-			/* TODO parse the actual job */
 			Datum datumArray[Natts_pg_dist_rebalance_jobs];
 			bool isNullArray[Natts_pg_dist_rebalance_jobs];
 			TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
 			heap_deform_tuple(jobTuple, tupleDescriptor, datumArray, isNullArray);
+
+			job = palloc0(sizeof(RebalanceJob));
+			job->jobid = DatumGetInt64(datumArray[Anum_pg_dist_rebalance_jobs_jobid - 1]);
+			job->status = RebalanceJobStatusByOid(
+				DatumGetObjectId(datumArray[Anum_pg_dist_rebalance_jobs_status - 1]));
 
 			job->command = text_to_cstring(
 				DatumGetTextP(datumArray[Anum_pg_dist_rebalance_jobs_command - 1]));
@@ -2475,19 +2472,15 @@ GetScheduledRebalanceJobByJobID(int64 jobId)
 	RebalanceJob *job = NULL;
 	if (HeapTupleIsValid(jobTuple))
 	{
-		Form_pg_dist_rebalance_job jobData = NULL;
-		jobData = (Form_pg_dist_rebalance_job) GETSTRUCT(jobTuple);
-
-		job = palloc0(sizeof(RebalanceJob));
-		job->jobid = jobData->jobid;
-		job->status = RebalanceJobStatusByOid(jobData->status);
-
-		/* TODO parse the actual job */
 		Datum datumArray[Natts_pg_dist_rebalance_jobs];
 		bool isNullArray[Natts_pg_dist_rebalance_jobs];
 		TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
 		heap_deform_tuple(jobTuple, tupleDescriptor, datumArray, isNullArray);
 
+		job = palloc0(sizeof(RebalanceJob));
+		job->jobid = DatumGetInt64(datumArray[Anum_pg_dist_rebalance_jobs_jobid - 1]);
+		job->status = RebalanceJobStatusByOid(
+			DatumGetObjectId(datumArray[Anum_pg_dist_rebalance_jobs_status - 1]));
 		job->command = text_to_cstring(
 			DatumGetTextP(datumArray[Anum_pg_dist_rebalance_jobs_command - 1]));
 	}
