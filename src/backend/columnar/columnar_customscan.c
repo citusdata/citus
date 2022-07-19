@@ -69,7 +69,7 @@ static void CostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relati
 static void CostColumnarSeqPath(RelOptInfo *rel, Oid relationId, Path *path);
 static void CostColumnarScan(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
 							 CustomPath *cpath, int numberOfColumnsRead,
-							 List *usefulClauses);
+							 int nClauses);
 
 /* functions to add new paths */
 static void AddColumnarScanPaths(PlannerInfo *root, RelOptInfo *rel,
@@ -766,7 +766,7 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 			 *   WHERE id NOT IN (SELECT id FROM something).
 			 */
 			ereport(ColumnarPlannerDebugLevel,
-					(errmsg("columnar planner: cannot consider clause: "
+					(errmsg("columnar planner: cannot push down clause: "
 							"must not contain a subplan")));
 			return NULL;
 		}
@@ -785,9 +785,9 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 			else if (boolExpr->boolop == OR_EXPR)
 			{
 				ereport(ColumnarPlannerDebugLevel,
-						(errmsg("columnar planner: cannot consider clause: "
+						(errmsg("columnar planner: cannot push down clause: "
 								"all arguments of an OR expression must be "
-								"able to be considered but one of them was not, due "
+								"pushdownable but one of them was not, due "
 								"to the reason given above")));
 				return NULL;
 			}
@@ -799,8 +799,8 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 		if (npushdownableArgs == 0)
 		{
 			ereport(ColumnarPlannerDebugLevel,
-					(errmsg("columnar planner: cannot consider clause: "
-							"none of the arguments were able to be considered, "
+					(errmsg("columnar planner: cannot push down clause: "
+							"none of the arguments were pushdownable, "
 							"due to the reason(s) given above ")));
 			return NULL;
 		}
@@ -824,10 +824,14 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 		}
 	}
 
+	if (IsA(node, ScalarArrayOpExpr)) {
+		return (Expr *) node;
+	}
+
 	if (!IsA(node, OpExpr) || list_length(((OpExpr *) node)->args) != 2)
 	{
 		ereport(ColumnarPlannerDebugLevel,
-				(errmsg("columnar planner: cannot consider clause: "
+				(errmsg("columnar planner: cannot push down clause: "
 						"must be binary operator expression")));
 		return NULL;
 	}
@@ -854,7 +858,7 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 	else
 	{
 		ereport(ColumnarPlannerDebugLevel,
-				(errmsg("columnar planner: cannot consider clause: "
+				(errmsg("columnar planner: cannot push down clause: "
 						"must match 'Var <op> Expr' or 'Expr <op> Var'"),
 				 errhint("Var must only reference this rel, "
 						 "and Expr must not reference this rel")));
@@ -864,7 +868,7 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 	if (varSide->varattno <= 0)
 	{
 		ereport(ColumnarPlannerDebugLevel,
-				(errmsg("columnar planner: cannot consider clause: "
+				(errmsg("columnar planner: cannot push down clause: "
 						"var is whole-row reference or system column")));
 		return NULL;
 	}
@@ -872,7 +876,7 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 	if (contain_volatile_functions((Node *) exprSide))
 	{
 		ereport(ColumnarPlannerDebugLevel,
-				(errmsg("columnar planner: cannot consider clause: "
+				(errmsg("columnar planner: cannot push down clause: "
 						"expr contains volatile functions")));
 		return NULL;
 	}
@@ -887,7 +891,7 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 											 &varOpcInType))
 	{
 		ereport(ColumnarPlannerDebugLevel,
-				(errmsg("columnar planner: cannot consider clause: "
+				(errmsg("columnar planner: cannot push down clause: "
 						"cannot find default btree opclass and opfamily for type: %s",
 						format_type_be(varSide->vartype))));
 		return NULL;
@@ -896,7 +900,7 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 	if (!op_in_opfamily(opExpr->opno, varOpFamily))
 	{
 		ereport(ColumnarPlannerDebugLevel,
-				(errmsg("columnar planner: cannot consider clause: "
+				(errmsg("columnar planner: cannot push down clause: "
 						"operator %d not a member of opfamily %d",
 						opExpr->opno, varOpFamily)));
 		return NULL;
@@ -914,7 +918,7 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 	if (!CheckVarStats(root, varSide, sortop, &absVarCorrelation))
 	{
 		ereport(ColumnarPlannerDebugLevel,
-				(errmsg("columnar planner: cannot consider clause: "
+				(errmsg("columnar planner: cannot push down clause: "
 						"absolute correlation (%.3f) of var attribute %d is "
 						"smaller than the value configured in "
 						"\"columnar.qual_pushdown_correlation_threshold\" "
@@ -1314,7 +1318,7 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 		allClauses = list_concat(allClauses, path->param_info->ppi_clauses);
 	}
 
-	List *usefulClauses = FilterPushdownClauses(root, rel, allClauses);
+	allClauses = FilterPushdownClauses(root, rel, allClauses);
 
 	/*
 	 * Plain clauses may contain extern params, but not exec params, and can
@@ -1354,12 +1358,10 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 	}
 
 	int numberOfColumnsRead = bms_num_members(rte->selectedCols);
-
-	/* not sure if we want usefulClauses or allClauses */
 	int numberOfClausesPushed = list_length(allClauses);
 
 	CostColumnarScan(root, rel, rte->relid, cpath, numberOfColumnsRead,
-					 usefulClauses);
+					 numberOfClausesPushed);
 
 
 	StringInfoData buf;
@@ -1382,17 +1384,13 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
  */
 static void
 CostColumnarScan(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
-				 CustomPath *cpath, int numberOfColumnsRead, List *usefulClauses)
+				 CustomPath *cpath, int numberOfColumnsRead, int nClauses)
 {
 	Path *path = &cpath->path;
 
-	// If EnableColumnarQualPushdown is false, we don't want to send usefulClauses
-	if (!EnableColumnarQualPushdown) {
-		usefulClauses = NIL;
-	}
-	/*List *allClauses = lsecond(cpath->custom_private); */
+	List *allClauses = lsecond(cpath->custom_private);
 	Selectivity clauseSel = clauselist_selectivity(
-		root, usefulClauses, rel->relid, JOIN_INNER, NULL);
+		root, allClauses, rel->relid, JOIN_INNER, NULL);
 
 	/*
 	 * We already filtered out clauses where the overall selectivity would be

@@ -1267,12 +1267,6 @@ GetClauseVars(List *whereClauseList, int natts)
 		Var *var = (Var *) node;
 		int idx = var->varattno - 1;
 
-		/* if the variable is a whole-row reference, varattno is 0
-		 * so idx will be out-of-bounds */
-		if (idx < 0) {
-			continue;
-		}
-
 		if (deduplicate[idx] != NULL)
 		{
 			/* if they have the same varattno, the rest should be identical */

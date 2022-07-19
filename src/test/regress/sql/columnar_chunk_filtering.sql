@@ -445,15 +445,3 @@ RESET columnar.max_custom_scan_paths;
 RESET columnar.qual_pushdown_correlation_threshold;
 RESET columnar.planner_debug_level;
 DROP TABLE pushdown_test;
-
---
--- https://github.com/citusdata/citus/issues/5803
---
-
-create table clause_check (id int, company_name text) using columnar;
-INSERT INTO clause_check VALUES(1, 'AAPL');
-INSERT INTO clause_check VALUES(2, 'IBM');
-INSERT INTO clause_check VALUES(3, 'TSLA');
-INSERT INTO clause_check VALUES (generate_series(4,100000), md5(random()::text));
-EXPLAIN ANALYZE SELECT * FROM clause_check WHERE company_name = 'AAPL' or company_name = 'IBM' or company_name = 'TSLA';
-EXPLAIN ANALYZE SELECT * FROM clause_check where company_name IN ('APPLE', 'IBM', 'TSLA');
