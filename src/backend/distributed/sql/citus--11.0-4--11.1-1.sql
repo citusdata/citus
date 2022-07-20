@@ -93,4 +93,15 @@ ALTER TABLE citus.pg_dist_rebalance_jobs SET SCHEMA pg_catalog;
 CREATE UNIQUE INDEX pg_dist_rebalance_jobs_jobid_index ON pg_catalog.pg_dist_rebalance_jobs using btree(jobid);
 CREATE INDEX pg_dist_rebalance_jobs_status_jobid_index ON pg_catalog.pg_dist_rebalance_jobs using btree(status, jobid);
 
+CREATE TABLE citus.pg_dist_rebalance_jobs_depend(
+    jobid bigint NOT NULL REFERENCES pg_catalog.pg_dist_rebalance_jobs(jobid) ON DELETE CASCADE,
+    depends_on bigint NOT NULL REFERENCES pg_catalog.pg_dist_rebalance_jobs(jobid) ON DELETE CASCADE,
+
+    UNIQUE(jobid, depends_on)
+);
+
+ALTER TABLE citus.pg_dist_rebalance_jobs_depend SET SCHEMA pg_catalog;
+CREATE INDEX pg_dist_rebalance_jobs_depend_jobid ON pg_catalog.pg_dist_rebalance_jobs_depend  USING btree(jobid);
+CREATE INDEX pg_dist_rebalance_jobs_depend_depends_on ON pg_catalog.pg_dist_rebalance_jobs_depend USING btree(depends_on);
+
 #include "udfs/citus_wait_for_rebalance_job/11.1-1.sql"

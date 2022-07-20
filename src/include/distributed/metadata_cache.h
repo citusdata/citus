@@ -239,6 +239,7 @@ extern Oid DistPartitionLogicalRelidIndexId(void);
 extern Oid DistPartitionColocationidIndexId(void);
 extern Oid DistRebalanceJobsJobsIdIndexId(void);
 extern Oid DistRebalanceJobsStatusJobsIdIndexId(void);
+extern Oid DistRebalanceJobsDependRelationId(void);
 extern Oid DistShardLogicalRelidIndexId(void);
 extern Oid DistShardShardidIndexId(void);
 extern Oid DistPlacementShardidIndexId(void);

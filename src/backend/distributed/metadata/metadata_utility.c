@@ -46,6 +46,7 @@
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_rebalance_jobs.h"
+#include "distributed/pg_dist_rebalance_jobs_depend.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/pg_dist_placement.h"
 #include "distributed/reference_table_utils.h"
@@ -2360,37 +2361,80 @@ GetNextRebalanceJobId(void)
 
 
 RebalanceJob *
-ScheduleBackgrounRebalanceJob(char *command)
+ScheduleBackgrounRebalanceJob(char *command, int dependingJobCount,
+							  int64 dependingJobIds[])
 {
-	Datum newValues[Natts_pg_dist_rebalance_jobs] = { 0 };
-	bool newNulls[Natts_pg_dist_rebalance_jobs] = { 0 };
-
-	memset(newNulls, true, sizeof(newNulls));
-
-	int64 jobid = GetNextRebalanceJobId();
-
-	newValues[Anum_pg_dist_rebalance_jobs_jobid - 1] = Int64GetDatum(
-		GetNextRebalanceJobId());
-	newNulls[Anum_pg_dist_rebalance_jobs_jobid - 1] = false;
-
-	newValues[Anum_pg_dist_rebalance_jobs_status - 1] = JobStatusScheduledId();
-	newNulls[Anum_pg_dist_rebalance_jobs_status - 1] = false;
-
-	newValues[Anum_pg_dist_rebalance_jobs_command - 1] = CStringGetTextDatum(command);
-	newNulls[Anum_pg_dist_rebalance_jobs_command - 1] = false;
+	RebalanceJob *job = NULL;
 
 	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
 											  RowExclusiveLock);
-	HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistRebalanceJobs), newValues,
-										 newNulls);
-	CatalogTupleInsert(pgDistRebalanceJobs, newTuple);
+	Relation pgDistRebalanceJobsDepend = NULL;
+	if (dependingJobCount > 0)
+	{
+		pgDistRebalanceJobsDepend = table_open(DistRebalanceJobsDependRelationId(),
+											   RowExclusiveLock);
+	}
+
+	/* 1. TODO verify depending jobs exist and lock them */
+
+	/* 2. insert new job */
+	{
+		Datum values[Natts_pg_dist_rebalance_jobs] = { 0 };
+		bool nulls[Natts_pg_dist_rebalance_jobs] = { 0 };
+
+		memset(nulls, true, sizeof(nulls));
+
+		int64 jobid = GetNextRebalanceJobId();
+
+		values[Anum_pg_dist_rebalance_jobs_jobid - 1] = Int64GetDatum(jobid);
+		nulls[Anum_pg_dist_rebalance_jobs_jobid - 1] = false;
+
+		values[Anum_pg_dist_rebalance_jobs_status - 1] = JobStatusScheduledId();
+		nulls[Anum_pg_dist_rebalance_jobs_status - 1] = false;
+
+		values[Anum_pg_dist_rebalance_jobs_command - 1] = CStringGetTextDatum(command);
+		nulls[Anum_pg_dist_rebalance_jobs_command - 1] = false;
+
+		HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistRebalanceJobs),
+											 values, nulls);
+		CatalogTupleInsert(pgDistRebalanceJobs, newTuple);
+
+		job = palloc0(sizeof(RebalanceJob));
+
+		job->jobid = jobid;
+		job->status = REBALANCE_JOB_STATUS_SCHEDULED;
+		job->command = pstrdup(command);
+	}
+
+	/* 3. insert dependencies into catalog */
+	{
+		for (int i = 0; i < dependingJobCount; i++)
+		{
+			Assert(pgDistRebalanceJobsDepend != NULL);
+
+			Datum values[Natts_pg_dist_rebalance_jobs_depend] = { 0 };
+			bool nulls[Natts_pg_dist_rebalance_jobs_depend] = { 0 };
+			memset(nulls, true, sizeof(nulls));
+
+			values[Anum_pg_dist_rebalance_jobs_depend_jobid - 1] =
+				Int64GetDatum(job->jobid);
+			nulls[Anum_pg_dist_rebalance_jobs_depend_jobid - 1] = false;
+
+			values[Anum_pg_dist_rebalance_jobs_depend_depends_on - 1] =
+				Int64GetDatum(dependingJobIds[i]);
+			nulls[Anum_pg_dist_rebalance_jobs_depend_depends_on - 1] = false;
+
+			HeapTuple newTuple = heap_form_tuple(
+				RelationGetDescr(pgDistRebalanceJobsDepend), values, nulls);
+			CatalogTupleInsert(pgDistRebalanceJobsDepend, newTuple);
+		}
+	}
+
+	if (pgDistRebalanceJobsDepend)
+	{
+		table_close(pgDistRebalanceJobsDepend, NoLock);
+	}
 	table_close(pgDistRebalanceJobs, NoLock);
-
-	RebalanceJob *job = palloc0(sizeof(RebalanceJob));
-
-	job->jobid = jobid;
-	job->status = REBALANCE_JOB_STATUS_SCHEDULED;
-	job->command = pstrdup(command);
 
 	return job;
 }
