@@ -53,6 +53,18 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
+/* local type declarations */
+
+/*
+ * ShardInterval along with to be executed
+ * DDL command list.
+ */
+typedef struct ShardCommandList
+{
+	ShardInterval *shardInterval;
+	List *ddlCommandList;
+} ShardCommandList;
+
 /* local function forward declarations */
 static void VerifyTablesHaveReplicaIdentity(List *colocatedTableList);
 static bool RelationCanPublishAllModifications(Oid relationId);
@@ -114,6 +126,8 @@ static List * CopyShardContentsCommandList(ShardInterval *shardInterval,
 static List * PostLoadShardCreationCommandList(ShardInterval *shardInterval,
 											   const char *sourceNodeName,
 											   int32 sourceNodePort);
+static ShardCommandList* CreateShardCommandList(ShardInterval *shardInterval,
+												List *ddlCommandList);
 
 
 /* declarations for dynamic loading */
@@ -126,15 +140,6 @@ bool DeferShardDeleteOnMove = true;
 
 double DesiredPercentFreeAfterMove = 10;
 bool CheckAvailableSpaceBeforeMove = true;
-
-/*
- * ShardInterval along with DDL command list to be executed.
- */
-typedef struct ShardIntervalWithCommandList
-{
-	ShardInterval *shardInterval;
-	List *ddlCommandList;
-}ShardIntervalWithCommandList;
 
 
 /*
@@ -1139,6 +1144,22 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
 
 
 /*
+ * CreateShardCommandList creates a struct for shard interval
+ * along with DDL commands to be executed.
+ */
+static ShardCommandList*
+CreateShardCommandList(ShardInterval *shardInterval, List *ddlCommandList)
+{
+	ShardCommandList *shardCommandList = palloc0(
+		sizeof(ShardCommandList));
+	shardCommandList->shardInterval = shardInterval;
+	shardCommandList->ddlCommandList = ddlCommandList;
+
+	return shardCommandList;
+}
+
+
+/*
  * CopyShardTablesViaBlockWrites copies a shard along with its co-located shards
  * from a source node to target node via COPY command. While the command is in
  * progress, the modifications on the source node is blocked.
@@ -1189,13 +1210,11 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 			PostLoadShardCreationCommandList(shardInterval, sourceNodeName,
 											 sourceNodePort));
 
-		ShardIntervalWithCommandList *intervalWithCommandList = palloc0(
-			sizeof(ShardIntervalWithCommandList));
-		intervalWithCommandList->shardInterval = shardInterval;
-		intervalWithCommandList->ddlCommandList = list_concat(shardCreateCommandList,
-															  copyAndPostCreationCommandList);
+		ShardCommandList *shardCommandList = CreateShardCommandList(
+									shardInterval,
+									list_concat(shardCreateCommandList, copyAndPostCreationCommandList));
 		shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList,
-												  intervalWithCommandList);
+												  shardCommandList);
 	}
 
 	/*
@@ -1209,12 +1228,11 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 			char *attachPartitionCommand =
 				GenerateAttachShardPartitionCommand(shardInterval);
 
-			ShardIntervalWithCommandList *intervalWithCommandList = palloc0(
-				sizeof(ShardIntervalWithCommandList));
-			intervalWithCommandList->shardInterval = shardInterval;
-			intervalWithCommandList->ddlCommandList = list_make1(attachPartitionCommand);
+			ShardCommandList *shardCommandList = CreateShardCommandList(
+										shardInterval,
+										list_make1(attachPartitionCommand));
 			shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList,
-													  intervalWithCommandList);
+												      shardCommandList);
 		}
 	}
 
@@ -1230,24 +1248,21 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 													 &shardForeignConstraintCommandList,
 													 &referenceTableForeignConstraintList);
 
-		ShardIntervalWithCommandList *intervalWithCommandList = palloc0(
-			sizeof(ShardIntervalWithCommandList));
-		intervalWithCommandList->shardInterval = shardInterval;
-		intervalWithCommandList->ddlCommandList = list_concat(
-			shardForeignConstraintCommandList,
-			referenceTableForeignConstraintList);
-		shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList,
-												  intervalWithCommandList);
+		ShardCommandList *shardCommandList = CreateShardCommandList(
+									shardInterval,
+									list_concat(shardForeignConstraintCommandList,
+										referenceTableForeignConstraintList));
+		shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList, shardCommandList);
 	}
 
 	/* Now execute all DDL Commads. */
-	ShardIntervalWithCommandList *intervalWithCommandList = NULL;
-	foreach_ptr(intervalWithCommandList, shardIntervalWithDDCommandsList)
+	ShardCommandList *shardCommandList = NULL;
+	foreach_ptr(shardCommandList, shardIntervalWithDDCommandsList)
 	{
-		char *tableOwner = TableOwner(intervalWithCommandList->shardInterval->relationId);
+		char *tableOwner = TableOwner(shardCommandList->shardInterval->relationId);
 		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
 												  tableOwner,
-												  intervalWithCommandList->ddlCommandList);
+												  shardCommandList->ddlCommandList);
 	}
 
 	MemoryContextReset(localContext);

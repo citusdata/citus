@@ -498,6 +498,12 @@ BlockingShardSplit(SplitOperation splitOperation,
 			workersForPlacementList);
 
 		/*
+		 * Up to this point, we performed various subtransactions that may
+		 * require additional clean-up in case of failure. The remaining operations
+		 * going forward are part of the same distributed transaction.
+		 */
+
+		/*
 		 * Drop old shards and delete related metadata. Have to do that before
 		 * creating the new shard metadata, because there's cross-checks
 		 * preventing inconsistent metadata (like overlapping shards).
