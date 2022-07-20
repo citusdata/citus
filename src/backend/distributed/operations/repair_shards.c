@@ -37,6 +37,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shard_rebalancer.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
@@ -178,6 +179,9 @@ citus_copy_shard_placement(PG_FUNCTION_ARGS)
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	ErrorIfTableCannotBeReplicated(shardInterval->relationId);
+
+	AcquirePlacementColocationLock(shardInterval->relationId, ExclusiveLock,
+								   doRepair ? "repair" : "copy");
 
 	if (doRepair)
 	{
@@ -331,6 +335,8 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	Oid relationId = RelationIdForShard(shardId);
 	ErrorIfMoveUnsupportedTableType(relationId);
 	ErrorIfTargetNodeIsNotSafeToMove(targetNodeName, targetNodePort);
+
+	AcquirePlacementColocationLock(relationId, ExclusiveLock, "move");
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid distributedTableId = shardInterval->relationId;
