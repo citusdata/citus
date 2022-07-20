@@ -207,7 +207,7 @@ ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
 DeferredErrorMessage *
 DeferErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
 {
-	List *dependencies = GetAllSupportedDependenciesForObject(objectAddress);
+	List *dependencies = GetAllDependenciesForObject(objectAddress);
 
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencies)

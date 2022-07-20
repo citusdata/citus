@@ -784,8 +784,7 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 				relKind == RELKIND_SEQUENCE ||
 				relKind == RELKIND_INDEX ||
 				relKind == RELKIND_PARTITIONED_INDEX ||
-				relKind == RELKIND_VIEW ||
-				relKind == RELKIND_MATVIEW)
+				relKind == RELKIND_VIEW)
 			{
 				return true;
 			}
