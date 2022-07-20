@@ -307,8 +307,8 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 		}
 	}
 
-	ObjectAddress tableAddress = { 0 };
-	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+	ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*tableAddress, RelationRelationId, relationId);
 
 	/*
 	 * Ensure that the sequences used in column defaults of the table
@@ -320,7 +320,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 * Ensure dependencies exist as we will create shell table on the other nodes
 	 * in the MX case.
 	 */
-	EnsureDependenciesExistOnAllNodes(&tableAddress);
+	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(tableAddress));
 
 	/*
 	 * Make sure that existing reference tables have been replicated to all

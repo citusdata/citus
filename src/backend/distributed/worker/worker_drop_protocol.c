@@ -127,7 +127,8 @@ WorkerDropDistributedTable(Oid relationId)
 	relation_close(distributedRelation, AccessShareLock);
 
 	/* prepare distributedTableObject for dropping the table */
-	ObjectAddress distributedTableObject = { RelationRelationId, relationId, 0 };
+	ObjectAddress *distributedTableObject = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*distributedTableObject, RelationRelationId, relationId);
 
 	/* Drop dependent sequences from pg_dist_object */
 	#if PG_VERSION_NUM >= PG_VERSION_13
@@ -144,7 +145,7 @@ WorkerDropDistributedTable(Oid relationId)
 		UnmarkObjectDistributed(&ownedSequenceAddress);
 	}
 
-	UnmarkObjectDistributed(&distributedTableObject);
+	UnmarkObjectDistributed(distributedTableObject);
 
 	/*
 	 * Remove metadata before object's itself to make functions no-op within
@@ -177,7 +178,7 @@ WorkerDropDistributedTable(Oid relationId)
 	 * until the user runs DROP EXTENSION. Therefore, we skip dropping the
 	 * table.
 	 */
-	if (!IsObjectAddressOwnedByExtension(&distributedTableObject, NULL))
+	if (!IsAnyObjectAddressOwnedByExtension(list_make1(distributedTableObject), NULL))
 	{
 		char *relName = get_rel_name(relationId);
 		Oid schemaId = get_rel_namespace(relationId);
@@ -238,12 +239,9 @@ worker_drop_shell_table(PG_FUNCTION_ARGS)
 	relation_close(distributedRelation, AccessShareLock);
 
 	/* prepare distributedTableObject for dropping the table */
-	ObjectAddress distributedTableObject = { InvalidOid, InvalidOid, 0 };
-	distributedTableObject.classId = RelationRelationId;
-	distributedTableObject.objectId = relationId;
-	distributedTableObject.objectSubId = 0;
-
-	if (IsObjectAddressOwnedByExtension(&distributedTableObject, NULL))
+	ObjectAddress *distributedTableObject = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*distributedTableObject, RelationRelationId, relationId);
+	if (IsAnyObjectAddressOwnedByExtension(list_make1(distributedTableObject), NULL))
 	{
 		PG_RETURN_VOID();
 	}
@@ -270,7 +268,7 @@ worker_drop_shell_table(PG_FUNCTION_ARGS)
 	 *
 	 * We drop the table with cascade since other tables may be referring to it.
 	 */
-	performDeletion(&distributedTableObject, DROP_CASCADE,
+	performDeletion(distributedTableObject, DROP_CASCADE,
 					PERFORM_DELETION_INTERNAL);
 
 	PG_RETURN_VOID();

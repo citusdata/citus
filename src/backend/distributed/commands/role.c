@@ -74,7 +74,7 @@ static Node * makeFloatConst(char *str, int location);
 static const char * WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec *role);
 static VariableSetStmt * MakeVariableSetStmt(const char *config);
 static int ConfigGenericNameCompare(const void *lhs, const void *rhs);
-static ObjectAddress RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok);
+static List * RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok);
 
 /* controlled via GUC */
 bool EnableCreateRolePropagation = true;
@@ -87,7 +87,7 @@ bool EnableAlterRoleSetPropagation = true;
  * AlterRoleStmt. If missing_ok is set to false an error will be raised if postgres
  * was unable to find the role that was the target of the statement.
  */
-ObjectAddress
+List *
 AlterRoleStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
@@ -100,7 +100,7 @@ AlterRoleStmtObjectAddress(Node *node, bool missing_ok)
  * AlterRoleSetStmt. If missing_ok is set to false an error will be raised if postgres
  * was unable to find the role that was the target of the statement.
  */
-ObjectAddress
+List *
 AlterRoleSetStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterRoleSetStmt *stmt = castNode(AlterRoleSetStmt, node);
@@ -113,19 +113,19 @@ AlterRoleSetStmtObjectAddress(Node *node, bool missing_ok)
  * RoleSpec. If missing_ok is set to false an error will be raised by postgres
  * explaining the Role could not be found.
  */
-static ObjectAddress
+static List *
 RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok)
 {
-	ObjectAddress address = { 0 };
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 
 	if (role != NULL)
 	{
 		/* roles can be NULL for statements on ALL roles eg. ALTER ROLE ALL SET ... */
 		Oid roleOid = get_rolespec_oid(role, missing_ok);
-		ObjectAddressSet(address, AuthIdRelationId, roleOid);
+		ObjectAddressSet(*address, AuthIdRelationId, roleOid);
 	}
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -137,8 +137,12 @@ RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok)
 List *
 PostprocessAlterRoleStmt(Node *node, const char *queryString)
 {
-	ObjectAddress address = GetObjectAddressFromParseTree(node, false);
-	if (!ShouldPropagateObject(&address))
+	List *addresses = GetObjectAddressListFromParseTree(node, false);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(addresses) == 1);
+
+	if (!ShouldPropagateAnyObject(addresses))
 	{
 		return NIL;
 	}
@@ -208,14 +212,17 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	ObjectAddress address = GetObjectAddressFromParseTree(node, false);
+	List *addresses = GetObjectAddressListFromParseTree(node, false);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(addresses) == 1);
 
 	/*
 	 * stmt->role could be NULL when the statement is on 'ALL' roles, we do propagate for
 	 * ALL roles. If it is not NULL the role is for a specific role. If that role is not
 	 * distributed we will not propagate the statement
 	 */
-	if (stmt->role != NULL && !IsObjectDistributed(&address))
+	if (stmt->role != NULL && !IsAnyObjectDistributed(addresses))
 	{
 		return NIL;
 	}
@@ -1056,7 +1063,6 @@ FilterDistributedRoles(List *roles)
 	foreach_ptr(roleNode, roles)
 	{
 		RoleSpec *role = castNode(RoleSpec, roleNode);
-		ObjectAddress roleAddress = { 0 };
 		Oid roleOid = get_rolespec_oid(role, true);
 		if (roleOid == InvalidOid)
 		{
@@ -1066,8 +1072,9 @@ FilterDistributedRoles(List *roles)
 			 */
 			continue;
 		}
-		ObjectAddressSet(roleAddress, AuthIdRelationId, roleOid);
-		if (IsObjectDistributed(&roleAddress))
+		ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*roleAddress, AuthIdRelationId, roleOid);
+		if (IsAnyObjectDistributed(list_make1(roleAddress)))
 		{
 			distributedRoles = lappend(distributedRoles, role);
 		}
@@ -1137,12 +1144,13 @@ PostprocessGrantRoleStmt(Node *node, const char *queryString)
 	RoleSpec *role = NULL;
 	foreach_ptr(role, stmt->grantee_roles)
 	{
-		ObjectAddress roleAddress = { 0 };
 		Oid roleOid = get_rolespec_oid(role, false);
-		ObjectAddressSet(roleAddress, AuthIdRelationId, roleOid);
-		if (IsObjectDistributed(&roleAddress))
+		ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*roleAddress, AuthIdRelationId, roleOid);
+
+		if (IsAnyObjectDistributed(list_make1(roleAddress)))
 		{
-			EnsureDependenciesExistOnAllNodes(&roleAddress);
+			EnsureAllObjectDependenciesExistOnAllNodes(list_make1(roleAddress));
 		}
 	}
 	return NIL;
@@ -1179,15 +1187,15 @@ ConfigGenericNameCompare(const void *a, const void *b)
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-ObjectAddress
+List *
 CreateRoleStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CreateRoleStmt *stmt = castNode(CreateRoleStmt, node);
 	Oid roleOid = get_role_oid(stmt->role, missing_ok);
-	ObjectAddress roleAddress = { 0 };
-	ObjectAddressSet(roleAddress, AuthIdRelationId, roleOid);
+	ObjectAddress *roleAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*roleAddress, AuthIdRelationId, roleOid);
 
-	return roleAddress;
+	return list_make1(roleAddress);
 }
 
 

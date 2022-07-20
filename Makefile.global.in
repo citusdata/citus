@@ -64,8 +64,8 @@ $(citus_top_builddir)/Makefile.global: $(citus_abs_top_srcdir)/configure $(citus
 $(citus_top_builddir)/config.status: $(citus_abs_top_srcdir)/configure $(citus_abs_top_srcdir)/src/backend/distributed/citus.control
 	cd @abs_top_builddir@ && ./config.status --recheck && ./config.status
 
-# Regenerate configure if configure.in changed
-$(citus_abs_top_srcdir)/configure: $(citus_abs_top_srcdir)/configure.in
+# Regenerate configure if configure.ac changed
+$(citus_abs_top_srcdir)/configure: $(citus_abs_top_srcdir)/configure.ac
 	cd ${citus_abs_top_srcdir} && ./autogen.sh
 
 # If specified via configure, replace the default compiler. Normally

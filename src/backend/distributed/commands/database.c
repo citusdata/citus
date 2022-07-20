@@ -40,17 +40,17 @@ bool EnableAlterDatabaseOwner = true;
  * AlterDatabaseOwnerObjectAddress returns the ObjectAddress of the database that is the
  * object of the AlterOwnerStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+List *
 AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Assert(stmt->objectType == OBJECT_DATABASE);
 
 	Oid databaseOid = get_database_oid(strVal((String *) stmt->object), missing_ok);
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, DatabaseRelationId, databaseOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, DatabaseRelationId, databaseOid);
 
-	return address;
+	return list_make1(address);
 }
 
 

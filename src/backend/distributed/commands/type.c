@@ -117,8 +117,12 @@ PreprocessRenameTypeAttributeStmt(Node *node, const char *queryString,
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
 	Assert(stmt->relationType == OBJECT_TYPE);
 
-	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateObject(&typeAddress))
+	List *typeAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(objectAddresses) == 1);
+
+	if (!ShouldPropagateAnyObject(typeAddresses))
 	{
 		return NIL;
 	}
@@ -300,16 +304,16 @@ EnumValsList(Oid typeOid)
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-ObjectAddress
+List *
 CompositeTypeStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CompositeTypeStmt *stmt = castNode(CompositeTypeStmt, node);
 	TypeName *typeName = MakeTypeNameFromRangeVar(stmt->typevar);
 	Oid typeOid = LookupNonAssociatedArrayTypeNameOid(NULL, typeName, missing_ok);
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TypeRelationId, typeOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -321,16 +325,16 @@ CompositeTypeStmtObjectAddress(Node *node, bool missing_ok)
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-ObjectAddress
+List *
 CreateEnumStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CreateEnumStmt *stmt = castNode(CreateEnumStmt, node);
 	TypeName *typeName = makeTypeNameFromNameList(stmt->typeName);
 	Oid typeOid = LookupNonAssociatedArrayTypeNameOid(NULL, typeName, missing_ok);
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TypeRelationId, typeOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -342,7 +346,7 @@ CreateEnumStmtObjectAddress(Node *node, bool missing_ok)
  * Never returns NULL, but the objid in the address could be invalid if missing_ok was set
  * to true.
  */
-ObjectAddress
+List *
 AlterTypeStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
@@ -350,10 +354,10 @@ AlterTypeStmtObjectAddress(Node *node, bool missing_ok)
 
 	TypeName *typeName = MakeTypeNameFromRangeVar(stmt->relation);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TypeRelationId, typeOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -361,16 +365,16 @@ AlterTypeStmtObjectAddress(Node *node, bool missing_ok)
  * AlterEnumStmtObjectAddress return the ObjectAddress of the enum type that is the
  * object of the AlterEnumStmt. Errors is missing_ok is false.
  */
-ObjectAddress
+List *
 AlterEnumStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterEnumStmt *stmt = castNode(AlterEnumStmt, node);
 	TypeName *typeName = makeTypeNameFromNameList(stmt->typeName);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TypeRelationId, typeOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -378,7 +382,7 @@ AlterEnumStmtObjectAddress(Node *node, bool missing_ok)
  * RenameTypeStmtObjectAddress returns the ObjectAddress of the type that is the object
  * of the RenameStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+List *
 RenameTypeStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -386,10 +390,10 @@ RenameTypeStmtObjectAddress(Node *node, bool missing_ok)
 
 	TypeName *typeName = makeTypeNameFromNameList((List *) stmt->object);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TypeRelationId, typeOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -402,7 +406,7 @@ RenameTypeStmtObjectAddress(Node *node, bool missing_ok)
  * new schema. Errors if missing_ok is false and the type cannot be found in either of the
  * schemas.
  */
-ObjectAddress
+List *
 AlterTypeSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -447,10 +451,10 @@ AlterTypeSchemaStmtObjectAddress(Node *node, bool missing_ok)
 		}
 	}
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TypeRelationId, typeOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -462,7 +466,7 @@ AlterTypeSchemaStmtObjectAddress(Node *node, bool missing_ok)
  * changed as Attributes are not distributed on their own but as a side effect of the
  * whole type distribution.
  */
-ObjectAddress
+List *
 RenameTypeAttributeStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -471,10 +475,10 @@ RenameTypeAttributeStmtObjectAddress(Node *node, bool missing_ok)
 
 	TypeName *typeName = MakeTypeNameFromRangeVar(stmt->relation);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TypeRelationId, typeOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -482,7 +486,7 @@ RenameTypeAttributeStmtObjectAddress(Node *node, bool missing_ok)
  * AlterTypeOwnerObjectAddress returns the ObjectAddress of the type that is the object
  * of the AlterOwnerStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+List *
 AlterTypeOwnerObjectAddress(Node *node, bool missing_ok)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
@@ -490,10 +494,10 @@ AlterTypeOwnerObjectAddress(Node *node, bool missing_ok)
 
 	TypeName *typeName = makeTypeNameFromNameList((List *) stmt->object);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, TypeRelationId, typeOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, TypeRelationId, typeOid);
 
-	return address;
+	return list_make1(address);
 }
 
 

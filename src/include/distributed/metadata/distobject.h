@@ -20,15 +20,15 @@
 
 extern bool ObjectExists(const ObjectAddress *address);
 extern bool CitusExtensionObject(const ObjectAddress *objectAddress);
-extern bool IsObjectDistributed(const ObjectAddress *address);
+extern bool IsAnyObjectDistributed(const List *addresses);
 extern bool ClusterHasDistributedFunctionWithDistArgument(void);
 extern void MarkObjectDistributed(const ObjectAddress *distAddress);
 extern void MarkObjectDistributedViaSuperUser(const ObjectAddress *distAddress);
 extern void MarkObjectDistributedLocally(const ObjectAddress *distAddress);
 extern void UnmarkObjectDistributed(const ObjectAddress *address);
 extern bool IsTableOwnedByExtension(Oid relationId);
-extern bool IsObjectAddressOwnedByExtension(const ObjectAddress *target,
-											ObjectAddress *extensionAddress);
+extern bool IsAnyObjectAddressOwnedByExtension(const List *targets,
+											   ObjectAddress *extensionAddress);
 extern ObjectAddress PgGetObjectAddress(char *ttype, ArrayType *namearr,
 										ArrayType *argsarr);
 extern List * GetDistributedObjectAddressList(void);

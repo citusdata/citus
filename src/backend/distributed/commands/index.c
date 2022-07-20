@@ -761,9 +761,9 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 	Oid indexRelationId = get_relname_relid(indexStmt->idxname, schemaId);
 
 	/* ensure dependencies of index exist on all nodes */
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, RelationRelationId, indexRelationId);
-	EnsureDependenciesExistOnAllNodes(&address);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, RelationRelationId, indexRelationId);
+	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(address));
 
 	/* furtheron we are only processing CONCURRENT index statements */
 	if (!indexStmt->concurrent)
@@ -772,7 +772,7 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 	}
 
 	/*
-	 * EnsureDependenciesExistOnAllNodes could have distributed objects that are required
+	 * EnsureAllObjectDependenciesExistOnAllNodes could have distributed objects that are required
 	 * by this index. During the propagation process an active snapshout might be left as
 	 * a side effect of inserting the local tuples via SPI. To not leak a snapshot like
 	 * that we will pop any snapshot if we have any right before we commit.

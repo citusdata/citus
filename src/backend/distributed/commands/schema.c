@@ -40,7 +40,7 @@
 #include "utils/relcache.h"
 
 
-static ObjectAddress GetObjectAddressBySchemaName(char *schemaName, bool missing_ok);
+static List * GetObjectAddressBySchemaName(char *schemaName, bool missing_ok);
 static List * FilterDistributedSchemas(List *schemas);
 static bool SchemaHasDistributedTableWithFKey(char *schemaName);
 static bool ShouldPropagateCreateSchemaStmt(void);
@@ -183,7 +183,7 @@ PreprocessGrantOnSchemaStmt(Node *node, const char *queryString,
  * CreateSchemaStmtObjectAddress returns the ObjectAddress of the schema that is
  * the object of the CreateSchemaStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+List *
 CreateSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CreateSchemaStmt *stmt = castNode(CreateSchemaStmt, node);
@@ -213,7 +213,7 @@ CreateSchemaStmtObjectAddress(Node *node, bool missing_ok)
  * AlterSchemaRenameStmtObjectAddress returns the ObjectAddress of the schema that is
  * the object of the RenameStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+List *
 AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
@@ -227,15 +227,15 @@ AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok)
  * GetObjectAddressBySchemaName returns the ObjectAddress of the schema with the
  * given name. Errors out if schema is not found and missing_ok is false.
  */
-ObjectAddress
+List *
 GetObjectAddressBySchemaName(char *schemaName, bool missing_ok)
 {
 	Oid schemaOid = get_namespace_oid(schemaName, missing_ok);
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, NamespaceRelationId, schemaOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, NamespaceRelationId, schemaOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -259,10 +259,9 @@ FilterDistributedSchemas(List *schemas)
 			continue;
 		}
 
-		ObjectAddress address = { 0 };
-		ObjectAddressSet(address, NamespaceRelationId, schemaOid);
-
-		if (!IsObjectDistributed(&address))
+		ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*address, NamespaceRelationId, schemaOid);
+		if (!IsAnyObjectDistributed(list_make1(address)))
 		{
 			continue;
 		}
