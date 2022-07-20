@@ -1,14 +1,6 @@
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 12 AS server_version_above_twelve
-\gset
-\if :server_version_above_twelve
-\else
-\q
-\endif
 --
 -- GRANT_ON_FOREIGN_SERVER_PROPAGATION
--- We can't execute this file for PG12, as 'password_required' option for USER MAPPING
--- is introduced in PG13.
+-- 'password_required' option for USER MAPPING is introduced in PG13.
 --
 CREATE SCHEMA "grant on server";
 SET search_path TO "grant on server";

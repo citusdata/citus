@@ -1,14 +1,6 @@
 --
 -- Test the TRUNCATE TABLE command for columnar tables.
 --
--- print whether we're using version > 10 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
- version_above_ten
----------------------------------------------------------------------
- t
-(1 row)
-
 -- CREATE a columnar table, fill with some data --
 CREATE TABLE columnar_truncate_test (a int, b int) USING columnar;
 CREATE TABLE columnar_truncate_test_second (a int, b int) USING columnar;

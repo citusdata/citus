@@ -131,9 +131,7 @@ static void WarnIfListHasForeignDistributedTable(List *rangeTableList);
 /* Distributed planner hook */
 PlannedStmt *
 distributed_planner(Query *parse,
-	#if PG_VERSION_NUM >= PG_VERSION_13
 					const char *query_string,
-	#endif
 					int cursorOptions,
 					ParamListInfo boundParams)
 {
@@ -1839,7 +1837,7 @@ TranslatedVars(PlannerInfo *root, int relationIndex)
 			FindTargetAppendRelInfo(root, relationIndex);
 		if (targetAppendRelInfo != NULL)
 		{
-			/* postgres deletes translated_vars after pg13, hence we deep copy them here */
+			/* postgres deletes translated_vars, hence we deep copy them here */
 			Node *targetNode = NULL;
 			foreach_ptr(targetNode, targetAppendRelInfo->translated_vars)
 			{

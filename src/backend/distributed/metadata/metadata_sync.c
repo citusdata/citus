@@ -3804,9 +3804,8 @@ RemoteTypeIdExpression(Oid typeId)
 
 /*
  * RemoteCollationIdExpression returns an expression in text form that can
- * be used to obtain the OID of a type on a different node when included
- * in a query string. Currently this is a sublink because regcollation type
- * is not available in PG12.
+ * be used to obtain the OID of a collation on a different node when included
+ * in a query string.
  */
 static char *
 RemoteCollationIdExpression(Oid colocationId)
@@ -3825,16 +3824,15 @@ RemoteCollationIdExpression(Oid colocationId)
 				(Form_pg_collation) GETSTRUCT(collationTuple);
 			char *collationName = NameStr(collationform->collname);
 			char *collationSchemaName = get_namespace_name(collationform->collnamespace);
+			char *qualifiedCollationName = quote_qualified_identifier(collationSchemaName,
+																	  collationName);
 
-			StringInfo colocationIdQuery = makeStringInfo();
-			appendStringInfo(colocationIdQuery,
-							 "(select oid from pg_collation"
-							 " where collname = %s"
-							 " and collnamespace = %s::regnamespace)",
-							 quote_literal_cstr(collationName),
-							 quote_literal_cstr(collationSchemaName));
+			StringInfo regcollationExpression = makeStringInfo();
+			appendStringInfo(regcollationExpression,
+							 "%s::regcollation",
+							 quote_literal_cstr(qualifiedCollationName));
 
-			expression = colocationIdQuery->data;
+			expression = regcollationExpression->data;
 		}
 
 		ReleaseSysCache(collationTuple);

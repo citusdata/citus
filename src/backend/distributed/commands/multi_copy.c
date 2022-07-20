@@ -106,9 +106,7 @@
 #include "nodes/nodeFuncs.h"
 #include "parser/parse_func.h"
 #include "parser/parse_type.h"
-#if PG_VERSION_NUM >= PG_VERSION_13
 #include "tcop/cmdtag.h"
-#endif
 #include "tsearch/ts_locale.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -764,12 +762,7 @@ FindJsonbInputColumns(TupleDesc tupleDescriptor, List *inputColumnNameList)
 static void
 CompleteCopyQueryTagCompat(QueryCompletionCompat *completionTag, uint64 processedRowCount)
 {
-	#if PG_VERSION_NUM >= PG_VERSION_13
 	SetQueryCompletion(completionTag, CMDTAG_COPY, processedRowCount);
-	#else
-	SafeSnprintf(completionTag, COMPLETION_TAG_BUFSIZE,
-				 "COPY " UINT64_FORMAT, processedRowCount);
-	#endif
 }
 
 
@@ -781,9 +774,6 @@ static List *
 RemoveOptionFromList(List *optionList, char *optionName)
 {
 	ListCell *optionCell = NULL;
-	#if PG_VERSION_NUM < PG_VERSION_13
-	ListCell *previousCell = NULL;
-	#endif
 	foreach(optionCell, optionList)
 	{
 		DefElem *option = (DefElem *) lfirst(optionCell);
@@ -792,9 +782,6 @@ RemoveOptionFromList(List *optionList, char *optionName)
 		{
 			return list_delete_cell_compat(optionList, optionCell, previousCell);
 		}
-		#if PG_VERSION_NUM < PG_VERSION_13
-		previousCell = optionCell;
-		#endif
 	}
 
 	return optionList;

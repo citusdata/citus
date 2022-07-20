@@ -230,9 +230,7 @@ static List * FetchEqualityAttrNumsForRTEOpExpr(OpExpr *opExpr);
 static List * FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr);
 static List * FetchEqualityAttrNumsForList(List *nodeList);
 static int PartitionColumnIndex(Var *targetVar, List *targetList);
-#if PG_VERSION_NUM >= PG_VERSION_13
 static List * GetColumnOriginalIndexes(Oid relationId);
-#endif
 
 
 /*
@@ -541,9 +539,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 	List *sortClauseList = NIL;
 	Node *limitCount = NULL;
 	Node *limitOffset = NULL;
-#if PG_VERSION_NUM >= PG_VERSION_13
 	LimitOption limitOption = LIMIT_OPTION_DEFAULT;
-#endif
 	Node *havingQual = NULL;
 	bool hasDistinctOn = false;
 	List *distinctClause = NIL;
@@ -625,9 +621,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 
 		limitCount = extendedOp->limitCount;
 		limitOffset = extendedOp->limitOffset;
-#if PG_VERSION_NUM >= PG_VERSION_13
 		limitOption = extendedOp->limitOption;
-#endif
 		sortClauseList = extendedOp->sortClauseList;
 		havingQual = extendedOp->havingQual;
 	}
@@ -683,9 +677,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 	jobQuery->groupClause = groupClauseList;
 	jobQuery->limitOffset = limitOffset;
 	jobQuery->limitCount = limitCount;
-#if PG_VERSION_NUM >= PG_VERSION_13
 	jobQuery->limitOption = limitOption;
-#endif
 	jobQuery->havingQual = havingQual;
 	jobQuery->hasAggs = contain_aggs_of_level((Node *) targetList, 0) ||
 						contain_aggs_of_level((Node *) havingQual, 0);
@@ -1338,8 +1330,6 @@ static void
 SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry, Oid leftRelId, Oid rightRelId,
 							List *leftColumnVars, List *rightColumnVars)
 {
-	#if PG_VERSION_NUM >= PG_VERSION_13
-
 	/* We don't have any merged columns so set it to 0 */
 	rangeTableEntry->joinmergedcols = 0;
 
@@ -1362,12 +1352,8 @@ SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry, Oid leftRelId, Oid r
 		int rightColsSize = list_length(rightColumnVars);
 		rangeTableEntry->joinrightcols = GeneratePositiveIntSequenceList(rightColsSize);
 	}
-
-	#endif
 }
 
-
-#if PG_VERSION_NUM >= PG_VERSION_13
 
 /*
  * GetColumnOriginalIndexes gets the original indexes of columns by taking column drops into account.
@@ -1391,8 +1377,6 @@ GetColumnOriginalIndexes(Oid relationId)
 	return originalIndexes;
 }
 
-
-#endif
 
 /*
  * ExtractRangeTableId gets the range table id from a node that could

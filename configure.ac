@@ -74,7 +74,13 @@ if test -z "$version_num"; then
   AC_MSG_ERROR([Could not detect PostgreSQL version from pg_config.])
 fi
 
-if test "$version_num" != '13' -a "$version_num" != '14'; then
+PGAC_ARG_BOOL(with, pg-version-check, yes,
+              [do not check postgres version during configure])
+AC_SUBST(with_pg_version_check)
+
+if test "$with_pg_version_check" = no; then
+    AC_MSG_NOTICE([building against PostgreSQL $version_num (skipped compatibility check)])
+elif test "$version_num" != '13' -a "$version_num" != '14'; then
    AC_MSG_ERROR([Citus is not compatible with the detected PostgreSQL version ${version_num}.])
 else
    AC_MSG_NOTICE([building against PostgreSQL $version_num])

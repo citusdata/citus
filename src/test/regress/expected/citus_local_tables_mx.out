@@ -769,8 +769,8 @@ SELECT logicalrelid, partmethod, partkey FROM pg_dist_partition
         ORDER BY logicalrelid;
      logicalrelid     | partmethod |                                                          partkey
 ---------------------------------------------------------------------
- parent_dropped_col   | h          | {VAR :varno 1 :varattno 1 :vartype 1082 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}
- parent_dropped_col_2 | h          | {VAR :varno 1 :varattno 5 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 5 :location -1}
+ parent_dropped_col   | h          | {VAR :varno 1 :varattno 1 :vartype 1082 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1}
+ parent_dropped_col_2 | h          | {VAR :varno 1 :varattno 5 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 5 :location -1}
 (2 rows)
 
 -- some tests for view propagation on citus local tables

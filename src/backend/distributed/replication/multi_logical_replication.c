@@ -17,13 +17,9 @@
 
 #include "distributed/pg_version_constants.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "access/genam.h"
-#endif
 
-#if PG_VERSION_NUM >= PG_VERSION_13
 #include "postmaster/interrupt.h"
-#endif
 
 #include "access/htup_details.h"
 #include "access/sysattr.h"
@@ -2039,13 +2035,11 @@ WaitForMiliseconds(long timeout)
 		CHECK_FOR_INTERRUPTS();
 	}
 
-	#if PG_VERSION_NUM >= PG_VERSION_13
 	if (ConfigReloadPending)
 	{
 		ConfigReloadPending = false;
 		ProcessConfigFile(PGC_SIGHUP);
 	}
-	#endif
 }
 
 

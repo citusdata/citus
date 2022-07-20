@@ -197,11 +197,7 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 		if (list_length(columnOwnedSequences) != 0)
 		{
 			/*
-			 * A column might only own one sequence. We intentionally use
-			 * GetSequencesOwnedByColumn macro and pick initial oid from the
-			 * list instead of using getOwnedSequence. This is both because
-			 * getOwnedSequence is removed in pg13 and is also because it
-			 * errors out if column does not have any sequences.
+			 * A column might only own one sequence.
 			 */
 			Assert(list_length(columnOwnedSequences) == 1);
 			ownedSequenceId = linitial_oid(columnOwnedSequences);

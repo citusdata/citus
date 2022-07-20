@@ -41,10 +41,7 @@ typedef struct CitusVacuumParams
 	int options;
 	VacOptValue truncate;
 	VacOptValue index_cleanup;
-
-	#if PG_VERSION_NUM >= PG_VERSION_13
 	int nworkers;
-	#endif
 } CitusVacuumParams;
 
 /* Local functions forward declarations for processing distributed table commands */
@@ -323,10 +320,8 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 	/* if no flags remain, exit early */
 	if (vacuumFlags == 0 &&
 		vacuumParams.truncate == VACOPTVALUE_UNSPECIFIED &&
-		vacuumParams.index_cleanup == VACOPTVALUE_UNSPECIFIED
-#if PG_VERSION_NUM >= PG_VERSION_13
-		&& vacuumParams.nworkers == VACUUM_PARALLEL_NOTSET
-#endif
+		vacuumParams.index_cleanup == VACOPTVALUE_UNSPECIFIED &&
+		vacuumParams.nworkers == VACUUM_PARALLEL_NOTSET
 		)
 	{
 		return vacuumPrefix->data;
@@ -409,12 +404,10 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 		}
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_13
 	if (vacuumParams.nworkers != VACUUM_PARALLEL_NOTSET)
 	{
 		appendStringInfo(vacuumPrefix, "PARALLEL %d,", vacuumParams.nworkers);
 	}
-#endif
 
 	vacuumPrefix->data[vacuumPrefix->len - 1] = ')';
 
@@ -515,9 +508,7 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 	/* Set default value */
 	params.index_cleanup = VACOPTVALUE_UNSPECIFIED;
 	params.truncate = VACOPTVALUE_UNSPECIFIED;
-	#if PG_VERSION_NUM >= PG_VERSION_13
 	params.nworkers = VACUUM_PARALLEL_NOTSET;
-	#endif
 
 	/* Parse options list */
 	DefElem *opt = NULL;
@@ -596,7 +587,6 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 			params.truncate = defGetBoolean(opt) ? VACOPTVALUE_ENABLED :
 							  VACOPTVALUE_DISABLED;
 		}
-		#if PG_VERSION_NUM >= PG_VERSION_13
 		else if (strcmp(opt->defname, "parallel") == 0)
 		{
 			if (opt->arg == NULL)
@@ -620,7 +610,6 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 				params.nworkers = nworkers;
 			}
 		}
-		#endif
 		else
 		{
 			ereport(ERROR,

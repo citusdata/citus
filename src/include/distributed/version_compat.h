@@ -24,13 +24,9 @@
 #include "parser/parse_func.h"
 #include "optimizer/optimizer.h"
 
-#if (PG_VERSION_NUM >= PG_VERSION_13)
 #include "tcop/tcopprot.h"
-#endif
 
 #include "pg_version_compat.h"
-
-#if PG_VERSION_NUM >= PG_VERSION_12
 
 typedef struct
 {
@@ -75,7 +71,5 @@ FileCompatFromFileStart(File fileDesc)
 	return fc;
 }
 
-
-#endif /* PG12 */
 
 #endif   /* VERSION_COMPAT_H */

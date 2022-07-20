@@ -14,12 +14,8 @@
 #include "access/multixact.h"
 #include "access/rewriteheap.h"
 #include "access/tsmapi.h"
-#if PG_VERSION_NUM >= 130000
 #include "access/heaptoast.h"
 #include "common/hashfn.h"
-#else
-#include "access/tuptoaster.h"
-#endif
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/index.h"

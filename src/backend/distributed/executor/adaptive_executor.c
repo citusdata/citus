@@ -1790,17 +1790,9 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 		/* Acquire additional locks for SELECT .. FOR UPDATE on reference tables */
 		AcquireExecutorShardLocksForRelationRowLockList(task->relationRowLockList);
 
-		/*
-		 * Due to PG commit 5ee190f8ec37c1bbfb3061e18304e155d600bc8e we copy the
-		 * second parameter in pre-13.
-		 */
 		relationRowLockList =
 			list_concat(relationRowLockList,
-#if (PG_VERSION_NUM >= PG_VERSION_12) && (PG_VERSION_NUM < PG_VERSION_13)
-						list_copy(task->relationRowLockList));
-#else
 						task->relationRowLockList);
-#endif
 
 		/*
 		 * If the task has a subselect, then we may need to lock the shards from which
@@ -1814,19 +1806,9 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 			 * and therefore prevents other modifications from running
 			 * concurrently.
 			 */
-
-			/*
-			 * Due to PG commit 5ee190f8ec37c1bbfb3061e18304e155d600bc8e we copy the
-			 * second parameter in pre-13.
-			 */
 			requiresConsistentSnapshotRelationShardList =
 				list_concat(requiresConsistentSnapshotRelationShardList,
-#if (PG_VERSION_NUM >= PG_VERSION_12) && (PG_VERSION_NUM < PG_VERSION_13)
-
-							list_copy(task->relationShardList));
-#else
 							task->relationShardList);
-#endif
 		}
 	}
 

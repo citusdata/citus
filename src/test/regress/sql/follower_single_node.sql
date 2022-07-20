@@ -1,7 +1,3 @@
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 12 AS have_table_am
-\gset
-
 \c - - - :master_port
 CREATE SCHEMA single_node;
 SET search_path TO single_node;
@@ -144,11 +140,7 @@ RESET citus.task_assignment_policy;
 -- Simple columnar follower test
 \c -reuse-previous=off regression - - :master_port
 
-\if :have_table_am
 CREATE TABLE columnar_test (a int, b int) USING columnar;
-\else
-CREATE TABLE columnar_test (a int, b int);
-\endif
 
 INSERT INTO columnar_test(a, b) VALUES (1, 1);
 INSERT INTO columnar_test(a, b) VALUES (1, 2);

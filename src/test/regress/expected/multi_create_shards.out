@@ -70,7 +70,7 @@ SELECT partmethod, partkey FROM pg_dist_partition
 	WHERE logicalrelid = 'table_to_distribute'::regclass;
  partmethod |                                                          partkey
 ---------------------------------------------------------------------
- h          | {VAR :varno 1 :varattno 1 :vartype 25 :vartypmod -1 :varcollid 100 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}
+ h          | {VAR :varno 1 :varattno 1 :vartype 25 :vartypmod -1 :varcollid 100 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1}
 (1 row)
 
 -- use a bad shard count
