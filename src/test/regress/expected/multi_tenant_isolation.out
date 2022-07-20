@@ -182,7 +182,7 @@ ERROR:  cannot isolate tenant because "lineitem_streaming" has colocated tables
 HINT:  Use CASCADE option to isolate tenants for the colocated tables too. Example usage: isolate_tenant_to_new_shard('lineitem_streaming', '100', 'CASCADE')
 -- check with an input not castable to bigint
 SELECT isolate_tenant_to_new_shard('lineitem_streaming', 'abc', 'CASCADE');
-ERROR:  invalid input syntax for integer: "abc"
+ERROR:  invalid input syntax for type bigint: "abc"
 SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------

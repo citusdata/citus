@@ -75,9 +75,6 @@ s/(job_[0-9]+\/task_[0-9]+\/p_[0-9]+\.)[0-9]+/\1xxxx/g
 # isolation_ref2ref_foreign_keys
 s/"(ref_table_[0-9]_|ref_table_[0-9]_value_fkey_)[0-9]+"/"\1xxxxxxx"/g
 
-# pg11/pg12 varies in isolation debug output
-s/s1: DEBUG:/DEBUG:/g
-
 # commands cascading to shard relations
 s/(NOTICE:  .*_)[0-9]{5,}( CASCADE)/\1xxxxx\2/g
 s/(NOTICE:  [a-z]+ cascades to table ".*)_[0-9]{5,}"/\1_xxxxx"/g
@@ -93,30 +90,15 @@ s/connectionId: [0-9]+/connectionId: xxxxxxx/g
 s/ *$//g
 
 # pg12 changes
-s/Partitioned table "/Table "/g
-s/\) TABLESPACE pg_default$/\)/g
-s/invalid input syntax for type bigint:/invalid input syntax for integer:/g
-s/invalid input syntax for type /invalid input syntax for /g
-s/_id_ref_id_fkey/_id_fkey/g
-s/_ref_id_id_fkey_/_ref_id_fkey_/g
-s/fk_test_2_col1_col2_fkey/fk_test_2_col1_fkey/g
-s/_id_other_column_ref_fkey/_id_fkey/g
 s/"(collections_list_|collection_users_|collection_users_fkey_)[0-9]+"/"\1xxxxxxx"/g
 
 # pg13 changes
 s/of relation ".*" violates not-null constraint/violates not-null constraint/g
-s/varnosyn/varnoold/g
-s/varattnosyn/varoattno/g
 /DEBUG:  index ".*" can safely use deduplication.*$/d
 /DEBUG:  index ".*" cannot use deduplication.*$/d
 /DEBUG:  building index ".*" on table ".*" serially.*$/d
 s/partition ".*" would be violated by some row/partition would be violated by some row/g
-/.*Peak Memory Usage:.*$/d
 s/of relation ".*" contains null values/contains null values/g
-s/of relation "t1" is violated by some row/is violated by some row/g
-
-# pg13.1 changes
-s/^ERROR:  insufficient columns in PRIMARY KEY constraint definition$/ERROR:  unique constraint on partitioned table must include all partitioning columns/g
 
 # intermediate_results
 s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\/xx_x_xxx\/\3.data/g
@@ -156,21 +138,6 @@ s/Citus.*currently supports/Citus currently supports/g
 # Warnings in multi_explain
 s/prepared transaction with identifier .* does not exist/prepared transaction with identifier "citus_x_yyyyyy_zzz_w" does not exist/g
 s/failed to roll back prepared transaction '.*'/failed to roll back prepared transaction 'citus_x_yyyyyy_zzz_w'/g
-
-# Table aliases for partitioned tables in explain outputs might change
-# regardless of postgres appended an _int suffix to alias, we always append _xxx suffix
-# Can be removed when we remove support for pg11 and pg12.
-# "->  <scanMethod> Scan on <tableName>_<partitionId>_<shardId> <tableName>_<aliasId>" and
-# "->  <scanMethod> Scan on <tableName>_<partitionId>_<shardId> <tableName>" becomes
-# "->  <scanMethod> Scan on <tableName>_<partitionId>_<shardId> <tableName>_xxx"
-s/(->.*Scan on\ +)(.*)(_[0-9]+)(_[0-9]+) \2(_[0-9]+|_xxx)?/\1\2\3\4 \2_xxx/g
-
-# Table aliases for partitioned tables in "Hash Cond:" lines of explain outputs might change
-# This is only for multi_partitioning.sql test file
-# regardless of postgres appended an _int suffix to alias, we always append _xxx suffix
-# Can be removed when we remove support for pg11 and pg12.
-s/(partitioning_hash_join_test)(_[0-9]|_xxx)?(\.[a-zA-Z]+)/\1_xxx\3/g
-s/(partitioning_hash_test)(_[0-9]|_xxx)?(\.[a-zA-Z]+)/\1_xxx\3/g
 
 # Errors with binary decoding where OIDs should be normalized
 s/wrong data type: [0-9]+, expected [0-9]+/wrong data type: XXXX, expected XXXX/g

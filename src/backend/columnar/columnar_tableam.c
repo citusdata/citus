@@ -12,11 +12,7 @@
 #include "access/rewriteheap.h"
 #include "access/tableam.h"
 #include "access/tsmapi.h"
-#if PG_VERSION_NUM >= 130000
 #include "access/detoast.h"
-#else
-#include "access/tuptoaster.h"
-#endif
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/index.h"
@@ -1676,15 +1672,8 @@ ColumnarReadRowsIntoIndex(TableScanDesc scan, Relation indexRelation,
 
 		/* currently, columnar tables can't have dead tuples */
 		bool tupleIsAlive = true;
-#if PG_VERSION_NUM >= PG_VERSION_13
 		indexCallback(indexRelation, &itemPointerData, indexValues, indexNulls,
 					  tupleIsAlive, indexCallbackState);
-#else
-		HeapTuple scanTuple = ExecCopySlotHeapTuple(slot);
-		scanTuple->t_self = itemPointerData;
-		indexCallback(indexRelation, scanTuple, indexValues, indexNulls,
-					  tupleIsAlive, indexCallbackState);
-#endif
 
 		reltuples++;
 	}

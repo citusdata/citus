@@ -920,11 +920,8 @@ GetFunctionAlterOwnerCommand(const RegProcedure funcOid)
 
 /*
  * GetAggregateDDLCommand returns a string for creating an aggregate.
- * CREATE OR REPLACE AGGREGATE was only introduced in pg12,
- * so a second parameter useCreateOrReplace signals whether to
- * to create a plain CREATE AGGREGATE or not. In pg11 we return a string
- * which is a call to worker_create_or_replace_object in lieu of
- * CREATE OR REPLACE AGGREGATE.
+ * A second parameter useCreateOrReplace signals whether to
+ * to create a plain CREATE AGGREGATE or not.
  */
 static char *
 GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)

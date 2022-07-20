@@ -303,7 +303,7 @@ SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 UPDATE referenced_table SET test_column = 10 WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_fkey_1350385" on table "referencing_table_xxxxxxx"
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_id_fkey_1350385" on table "referencing_table_xxxxxxx"
 DETAIL:  Key (id, test_column)=(1, 1) is still referenced from table "referencing_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 BEGIN;
@@ -343,7 +343,7 @@ INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 BEGIN;
 UPDATE referenced_table SET test_column = 20 WHERE id = 1;
-ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_fkey_1350449" on table "referencing_table_xxxxxxx"
+ERROR:  update or delete on table "referenced_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_id_fkey_1350449" on table "referencing_table_xxxxxxx"
 DETAIL:  Key (id, test_column)=(1, 1) is still referenced from table "referencing_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 UPDATE referencing_table SET id = 20 WHERE ref_id = 1;
@@ -404,7 +404,7 @@ SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 (1 row)
 
 INSERT INTO referencing_table VALUES(null, 2);
-ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_fkey_1350600"
+ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "referencing_table_ref_id_id_fkey_1350600"
 DETAIL:  MATCH FULL does not allow mixing of null and nonnull key values.
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT * FROM referencing_table;
@@ -787,7 +787,7 @@ SELECT create_distributed_table('self_referencing_table1', 'id', 'hash');
 INSERT INTO self_referencing_table1 VALUES(1, 1, 1);
 -- we expect this query to fail
 INSERT INTO self_referencing_table1 VALUES(1, 2, 3);
-ERROR:  insert or update on table "self_referencing_table1_1350640" violates foreign key constraint "self_referencing_table1_id_fkey_1350640"
+ERROR:  insert or update on table "self_referencing_table1_1350640" violates foreign key constraint "self_referencing_table1_id_other_column_ref_fkey_1350640"
 DETAIL:  Key (id, other_column_ref)=(1, 3) is not present in table "self_referencing_table1_1350640".
 CONTEXT:  while executing command on localhost:xxxxx
 -- verify that rows are actually inserted

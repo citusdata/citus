@@ -18,9 +18,6 @@
 #include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/pg_depend.h"
-#if PG_VERSION_NUM < PG_VERSION_13
-#include "catalog/pg_depend_d.h"
-#endif
 #include "catalog/pg_foreign_server.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/distribution_column.h"
@@ -43,10 +40,6 @@ PG_FUNCTION_INFO_V1(worker_drop_shell_table);
 PG_FUNCTION_INFO_V1(worker_drop_sequence_dependency);
 
 static void WorkerDropDistributedTable(Oid relationId);
-#if PG_VERSION_NUM < PG_VERSION_13
-static long deleteDependencyRecordsForSpecific(Oid classId, Oid objectId, char deptype,
-											   Oid refclassId, Oid refobjectId);
-#endif
 
 
 /*
@@ -131,11 +124,7 @@ WorkerDropDistributedTable(Oid relationId)
 	ObjectAddressSet(*distributedTableObject, RelationRelationId, relationId);
 
 	/* Drop dependent sequences from pg_dist_object */
-	#if PG_VERSION_NUM >= PG_VERSION_13
 	List *ownedSequences = getOwnedSequences(relationId);
-	#else
-	List *ownedSequences = getOwnedSequences(relationId, InvalidAttrNumber);
-	#endif
 
 	Oid ownedSequenceOid = InvalidOid;
 	foreach_oid(ownedSequenceOid, ownedSequences)
@@ -247,11 +236,7 @@ worker_drop_shell_table(PG_FUNCTION_ARGS)
 	}
 
 	/* Drop dependent sequences from pg_dist_object */
-	#if PG_VERSION_NUM >= PG_VERSION_13
 	List *ownedSequences = getOwnedSequences(relationId);
-	#else
-	List *ownedSequences = getOwnedSequences(relationId, InvalidAttrNumber);
-	#endif
 
 	Oid ownedSequenceOid = InvalidOid;
 	foreach_oid(ownedSequenceOid, ownedSequences)
@@ -299,11 +284,7 @@ worker_drop_sequence_dependency(PG_FUNCTION_ARGS)
 	EnsureTableOwner(relationId);
 
 	/* break the dependent sequences from the table */
-	#if PG_VERSION_NUM >= PG_VERSION_13
 	List *ownedSequences = getOwnedSequences(relationId);
-	#else
-	List *ownedSequences = getOwnedSequences(relationId, InvalidAttrNumber);
-	#endif
 
 	Oid ownedSequenceOid = InvalidOid;
 	foreach_oid(ownedSequenceOid, ownedSequences)
@@ -322,59 +303,3 @@ worker_drop_sequence_dependency(PG_FUNCTION_ARGS)
 
 	PG_RETURN_VOID();
 }
-
-
-/* *INDENT-OFF* */
-#if PG_VERSION_NUM < PG_VERSION_13
-
-/*
- * This function is already available on PG 13+.
- * deleteDependencyRecordsForSpecific -- delete all records with given depender
- * classId/objectId, dependee classId/objectId, of the given deptype.
- * Returns the number of records deleted.
- */
-static long
-deleteDependencyRecordsForSpecific(Oid classId, Oid objectId, char deptype,
-								   Oid refclassId, Oid refobjectId)
-{
-	long		count = 0;
-	Relation	depRel;
-	ScanKeyData key[2];
-	HeapTuple	tup;
-
-	depRel = table_open(DependRelationId, RowExclusiveLock);
-
-	ScanKeyInit(&key[0],
-				Anum_pg_depend_classid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(classId));
-	ScanKeyInit(&key[1],
-				Anum_pg_depend_objid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(objectId));
-
-	SysScanDesc scan =
-		systable_beginscan(depRel, DependDependerIndexId, true,
-						   NULL, 2, key);
-
-	while (HeapTupleIsValid(tup = systable_getnext(scan)))
-	{
-		Form_pg_depend depform = (Form_pg_depend) GETSTRUCT(tup);
-
-		if (depform->refclassid == refclassId &&
-			depform->refobjid == refobjectId &&
-			depform->deptype == deptype)
-		{
-			CatalogTupleDelete(depRel, &tup->t_self);
-			count++;
-		}
-	}
-
-	systable_endscan(scan);
-
-	table_close(depRel, RowExclusiveLock);
-
-	return count;
-}
-#endif
-/* *INDENT-ON* */

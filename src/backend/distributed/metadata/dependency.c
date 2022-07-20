@@ -34,9 +34,7 @@
 #include "catalog/pg_rewrite_d.h"
 #include "catalog/pg_shdepend.h"
 #include "catalog/pg_type.h"
-#if PG_VERSION_NUM >= PG_VERSION_13
 #include "common/hashfn.h"
-#endif
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/listutils.h"

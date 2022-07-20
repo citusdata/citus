@@ -499,9 +499,10 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 (1 row)
 
 ALTER TABLE t1 ADD CONSTRAINT t1_a_check CHECK(a > 2) NOT VALID;
--- will error out with "ERROR:  CHECK CONSTRAINT "t1_a_check" is violated by some row"
+-- will error out with
+-- "ERROR:  CHECK CONSTRAINT "t1_a_check" of relation "t1" is violated by some row"
 ALTER TABLE t1 VALIDATE CONSTRAINT t1_a_check;
-ERROR:  check constraint "t1_a_check" is violated by some row
+ERROR:  check constraint "t1_a_check" of relation "t1" is violated by some row
 -- remove violating row
 DELETE FROM t1 where a = 1;
 -- verify no rows in t1
@@ -512,7 +513,7 @@ SELECT * FROM t1;
 
 -- this will still error out
 ALTER TABLE t1 VALIDATE CONSTRAINT t1_a_check;
-ERROR:  check constraint "t1_a_check" is violated by some row
+ERROR:  check constraint "t1_a_check" of relation "t1" is violated by some row
 -- The check will pass when the local copies are truncated
 SELECT truncate_local_data_after_distributing_table('t1');
  truncate_local_data_after_distributing_table

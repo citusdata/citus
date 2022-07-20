@@ -123,7 +123,6 @@ RelationGetSmgr(Relation rel)
 #define ROLE_PG_READ_ALL_STATS DEFAULT_ROLE_READ_ALL_STATS
 #endif
 
-#if PG_VERSION_NUM >= PG_VERSION_13
 #define lnext_compat(l, r) lnext(l, r)
 #define list_delete_cell_compat(l, c, p) list_delete_cell(l, c)
 #define pg_plan_query_compat(p, q, c, b) pg_plan_query(p, q, c, b)
@@ -137,23 +136,6 @@ RelationGetSmgr(Relation rel)
 #define SetListCellPtr(a, b) ((a)->ptr_value = (b))
 #define RangeTableEntryFromNSItem(a) ((a)->p_rte)
 #define QueryCompletionCompat QueryCompletion
-#else /* pre PG13 */
-#define lnext_compat(l, r) lnext(r)
-#define list_delete_cell_compat(l, c, p) list_delete_cell(l, c, p)
-#define pg_plan_query_compat(p, q, c, b) pg_plan_query(p, c, b)
-#define planner_compat(p, c, b) planner(p, c, b)
-#define standard_planner_compat(a, c, d) standard_planner(a, c, d)
-#define CMDTAG_SELECT_COMPAT "SELECT"
-#define GetSequencesOwnedByRelation(a) getOwnedSequences(a, InvalidAttrNumber)
-#define GetSequencesOwnedByColumn(a, b) getOwnedSequences(a, b)
-#define ExplainOnePlanCompat(a, b, c, d, e, f, g, h) ExplainOnePlan(a, b, c, d, e, f, g)
-#define SetListCellPtr(a, b) ((a)->data.ptr_value = (b))
-#define RangeTableEntryFromNSItem(a) (a)
-#define QueryCompletionCompat char
-#define varattnosyn varoattno
-#define varnosyn varnoold
-#endif
-#if PG_VERSION_NUM >= PG_VERSION_12
 
 #define CreateTableSlotForRel(rel) table_slot_create(rel, NULL)
 #define MakeSingleTupleTableSlotCompat MakeSingleTupleTableSlot
@@ -171,8 +153,6 @@ RelationGetSmgr(Relation rel)
 #define fcGetArgNull(fc, n) ((fc)->args[n].isnull)
 #define fcSetArgExt(fc, n, val, is_null) \
 	(((fc)->args[n].isnull = (is_null)), ((fc)->args[n].value = (val)))
-
-#endif /* PG12 */
 
 #define fcSetArg(fc, n, value) fcSetArgExt(fc, n, value, false)
 #define fcSetArgNull(fc, n) fcSetArgExt(fc, n, (Datum) 0, true)

@@ -1,11 +1,3 @@
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 11 AS server_version_above_eleven
-\gset
-\if :server_version_above_eleven
-\else
-\q
-\endif
-
 SET citus.shard_replication_factor to 1;
 SET citus.next_shard_id TO 60000;
 SET citus.next_placement_id TO 60000;

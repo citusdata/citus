@@ -290,22 +290,10 @@ PostprocessCreatePolicyStmt(Node *node, const char *queryString)
 static void
 AddRangeTableEntryToQueryCompat(ParseState *parseState, Relation relation)
 {
-#if PG_VERSION_NUM >= PG_VERSION_13
-	ParseNamespaceItem *rte = NULL;
-#else
-	RangeTblEntry *rte = NULL;
-#endif
-
-	rte = addRangeTableEntryForRelation(parseState, relation,
-#if PG_VERSION_NUM >= PG_VERSION_12
-										AccessShareLock,
-#endif
-										NULL, false, false);
-#if PG_VERSION_NUM >= PG_VERSION_13
+	ParseNamespaceItem *rte = addRangeTableEntryForRelation(parseState, relation,
+															AccessShareLock, NULL,
+															false, false);
 	addNSItemToQuery(parseState, rte, false, true, true);
-#else
-	addRTEtoQuery(parseState, rte, false, true, true);
-#endif
 }
 
 

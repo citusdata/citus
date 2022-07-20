@@ -66,9 +66,6 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
-#if PG_VERSION_NUM < 120000
-#include "utils/tqual.h"
-#endif
 
 #define DISK_SPACE_FIELDS 2
 

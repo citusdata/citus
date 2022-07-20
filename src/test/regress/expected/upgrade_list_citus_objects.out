@@ -1,11 +1,3 @@
--- print version above 11 (eg. 12 and above)
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 11 AS version_above_eleven;
- version_above_eleven
----------------------------------------------------------------------
- t
-(1 row)
-
 -- list all postgres objects belonging to the citus extension
 SELECT pg_catalog.pg_describe_object(classid, objid, 0) AS description
 FROM pg_catalog.pg_depend, pg_catalog.pg_extension e
