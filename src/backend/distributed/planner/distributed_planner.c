@@ -1837,7 +1837,7 @@ TranslatedVars(PlannerInfo *root, int relationIndex)
 			FindTargetAppendRelInfo(root, relationIndex);
 		if (targetAppendRelInfo != NULL)
 		{
-			/* postgres deletes translated_vars after pg13, hence we deep copy them here */
+			/* postgres deletes translated_vars, hence we deep copy them here */
 			Node *targetNode = NULL;
 			foreach_ptr(targetNode, targetAppendRelInfo->translated_vars)
 			{

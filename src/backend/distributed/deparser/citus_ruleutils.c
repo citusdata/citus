@@ -526,7 +526,7 @@ pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
 	}
 
 	/*
-	 * Add table access methods for pg12 and higher when the table is configured with an
+	 * Add table access methods when the table is configured with an
 	 * access method
 	 */
 	if (accessMethod)
