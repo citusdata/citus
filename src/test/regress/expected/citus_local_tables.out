@@ -641,7 +641,7 @@ FROM pg_dist_partition WHERE logicalrelid = 'citus_local_table_4'::regclass;
 SELECT column_name_to_column('citus_local_table_4', 'a');
                                                   column_name_to_column
 ---------------------------------------------------------------------
- {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}
+ {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1}
 (1 row)
 
 SELECT master_update_shard_statistics(shardid)

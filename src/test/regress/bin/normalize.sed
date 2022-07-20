@@ -90,30 +90,15 @@ s/connectionId: [0-9]+/connectionId: xxxxxxx/g
 s/ *$//g
 
 # pg12 changes
-s/Partitioned table "/Table "/g
-s/\) TABLESPACE pg_default$/\)/g
-s/invalid input syntax for type bigint:/invalid input syntax for integer:/g
-s/invalid input syntax for type /invalid input syntax for /g
-s/_id_ref_id_fkey/_id_fkey/g
-s/_ref_id_id_fkey_/_ref_id_fkey_/g
-s/fk_test_2_col1_col2_fkey/fk_test_2_col1_fkey/g
-s/_id_other_column_ref_fkey/_id_fkey/g
 s/"(collections_list_|collection_users_|collection_users_fkey_)[0-9]+"/"\1xxxxxxx"/g
 
 # pg13 changes
 s/of relation ".*" violates not-null constraint/violates not-null constraint/g
-s/varnosyn/varnoold/g
-s/varattnosyn/varoattno/g
 /DEBUG:  index ".*" can safely use deduplication.*$/d
 /DEBUG:  index ".*" cannot use deduplication.*$/d
 /DEBUG:  building index ".*" on table ".*" serially.*$/d
 s/partition ".*" would be violated by some row/partition would be violated by some row/g
-/.*Peak Memory Usage:.*$/d
 s/of relation ".*" contains null values/contains null values/g
-s/of relation "t1" is violated by some row/is violated by some row/g
-
-# pg13.1 changes
-s/^ERROR:  insufficient columns in PRIMARY KEY constraint definition$/ERROR:  unique constraint on partitioned table must include all partitioning columns/g
 
 # intermediate_results
 s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\/xx_x_xxx\/\3.data/g

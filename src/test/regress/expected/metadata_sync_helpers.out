@@ -543,7 +543,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, 1420000::bigint, 't'::"char", 'non-int'::text, '-1610612737'::text))
 	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
-ERROR:  invalid input syntax for integer: "non-int"
+ERROR:  invalid input syntax for type integer: "non-int"
 ROLLBACK;
 -- shardMinValue should be smaller than shardMaxValue
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;

@@ -24,7 +24,7 @@ SELECT create_distributed_table('customer_copy_hash', 'c_custkey', shard_count:=
 COPY customer_copy_hash FROM STDIN;
 -- Test syntax error
 COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
-ERROR:  invalid input syntax for integer: "1,customer1"
+ERROR:  invalid input syntax for type integer: "1,customer1"
 CONTEXT:  COPY customer_copy_hash, line 1, column c_custkey: "1,customer1"
 -- Test invalid option
 COPY customer_copy_hash (c_custkey,c_name) FROM STDIN (append_to_shard xxxxx);
@@ -267,7 +267,7 @@ SET citus.shard_replication_factor TO 2;
 BEGIN;
 SELECT master_create_empty_shard('customer_copy_append') AS shardid \gset
 COPY customer_copy_append(c_custkey, c_name) FROM STDIN WITH (FORMAT 'csv', append_to_shard :shardid);
-ERROR:  invalid input syntax for integer: "notinteger"
+ERROR:  invalid input syntax for type integer: "notinteger"
 CONTEXT:  COPY customer_copy_append, line 3, column c_custkey: "notinteger"
 END;
 -- Test that no shard is created for failing copy
@@ -972,7 +972,7 @@ SELECT * FROM copy_jsonb ORDER BY key;
 
 -- JSONB parsing error without validation: no line number
 \COPY copy_jsonb (key, value) FROM STDIN
-ERROR:  invalid input syntax for json
+ERROR:  invalid input syntax for type json
 DETAIL:  The input string ended unexpectedly.
 TRUNCATE copy_jsonb;
 -- JSONB when there is a complex column should work. Complex columns force
@@ -1019,7 +1019,7 @@ SELECT * FROM copy_jsonb ORDER BY key;
 
 -- JSONB parsing error with validation: should see line number
 \COPY copy_jsonb (key, value) FROM STDIN
-ERROR:  invalid input syntax for json
+ERROR:  invalid input syntax for type json
 DETAIL:  The input string ended unexpectedly.
 CONTEXT:  JSON data, line 1: {"r":255,"g":0,"b":0
 COPY copy_jsonb, line 1, column value: "{"r":255,"g":0,"b":0"
