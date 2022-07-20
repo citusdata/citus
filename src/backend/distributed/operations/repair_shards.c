@@ -1188,34 +1188,31 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		 * wouldn't be visible in the session that get_rebalance_progress uses.
 		 * So get_rebalance_progress would always report its size as 0.
 		 */
-		List *shardCreateCommandList = RecreateShardDDLCommandList(shardInterval,
-																   sourceNodeName,
-																   sourceNodePort);
-
+		List *ddlCommandList = RecreateShardDDLCommandList(shardInterval, sourceNodeName,
+														   sourceNodePort);
 		char *tableOwner = TableOwner(shardInterval->relationId);
 		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
-												  tableOwner, shardCreateCommandList);
+												  tableOwner, ddlCommandList);
+
+		ddlCommandList = NIL;
 
 		/*
 		 * Skip copying data for partitioned tables, because they contain no
 		 * data themselves. Their partitions do contain data, but those are
 		 * different colocated shards that will be copied seperately.
 		 */
-		List *copyAndPostCreationCommandList = NIL;
 		if (!PartitionedTable(shardInterval->relationId))
 		{
-			copyAndPostCreationCommandList = CopyShardContentsCommandList(shardInterval,
-																		  sourceNodeName,
-																		  sourceNodePort);
+			ddlCommandList = CopyShardContentsCommandList(shardInterval, sourceNodeName,
+														  sourceNodePort);
 		}
-		copyAndPostCreationCommandList = list_concat(
-			copyAndPostCreationCommandList,
+		ddlCommandList = list_concat(
+			ddlCommandList,
 			PostLoadShardCreationCommandList(shardInterval, sourceNodeName,
 											 sourceNodePort));
-
 		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
-												  tableOwner,
-												  copyAndPostCreationCommandList);
+												  tableOwner, ddlCommandList);
+
 		MemoryContextReset(localContext);
 	}
 
