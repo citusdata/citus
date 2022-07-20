@@ -705,19 +705,7 @@ CitusEndScan(CustomScanState *node)
  */
 static void
 CitusReScan(CustomScanState *node)
-{
-	CitusScanState *scanState = (CitusScanState *) node;
-	Job *workerJob = scanState->distributedPlan->workerJob;
-	EState *executorState = ScanStateGetExecutorState(scanState);
-	ParamListInfo paramListInfo = executorState->es_param_list_info;
-
-	if (paramListInfo != NULL && !workerJob->parametersInJobQueryResolved)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("Cursors for queries on distributed tables with "
-							   "parameters are currently unsupported")));
-	}
-}
+{ }
 
 
 /*
