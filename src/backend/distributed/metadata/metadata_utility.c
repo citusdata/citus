@@ -2396,6 +2396,57 @@ ScheduleBackgrounRebalanceJob(char *command)
 }
 
 
+void
+ResetRunningJobs(void)
+{
+	const int scanKeyCount = 1;
+	ScanKeyData scanKey[1];
+	const bool indexOK = true;
+
+	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
+											  AccessShareLock);
+
+	/* pg_dist_rebalance_jobs.status == 'running' */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_status,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(JobStatusRunningId()));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
+													DistRebalanceJobsStatusJobsIdIndexId(),
+													indexOK, NULL, scanKeyCount,
+													scanKey);
+
+	HeapTuple jobTuple = NULL;
+	while (HeapTupleIsValid(jobTuple = systable_getnext(scanDescriptor)))
+	{
+		Datum values[Natts_pg_dist_rebalance_jobs] = { 0 };
+		bool isnull[Natts_pg_dist_rebalance_jobs] = { 0 };
+		bool replace[Natts_pg_dist_rebalance_jobs] = { 0 };
+
+		TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
+		heap_deform_tuple(jobTuple, tupleDescriptor, values, isnull);
+
+		values[Anum_pg_dist_rebalance_jobs_status - 1] =
+			ObjectIdGetDatum(JobStatusScheduledId());
+		isnull[Anum_pg_dist_rebalance_jobs_status - 1] = false;
+		replace[Anum_pg_dist_rebalance_jobs_status - 1] = true;
+
+		values[Anum_pg_dist_rebalance_jobs_pid - 1] = InvalidOid;
+		isnull[Anum_pg_dist_rebalance_jobs_pid - 1] = true;
+		replace[Anum_pg_dist_rebalance_jobs_pid - 1] = true;
+
+		jobTuple = heap_modify_tuple(jobTuple, tupleDescriptor, values, isnull, replace);
+
+		CatalogTupleUpdate(pgDistRebalanceJobs, &jobTuple->t_self, jobTuple);
+	}
+
+	CommandCounterIncrement();
+
+	systable_endscan(scanDescriptor);
+
+	table_close(pgDistRebalanceJobs, AccessShareLock);
+}
+
+
 RebalanceJob *
 GetScheduledRebalanceJob(void)
 {
@@ -2407,7 +2458,6 @@ GetScheduledRebalanceJob(void)
 											  AccessShareLock);
 
 	RebalanceJobStatus jobStatus[] = {
-		REBALANCE_JOB_STATUS_RUNNING,
 		REBALANCE_JOB_STATUS_SCHEDULED
 	};
 

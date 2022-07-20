@@ -1892,6 +1892,17 @@ RegisterCitusConfigVariables(void)
 		GUC_UNIT_MS,
 		NULL, NULL, NULL);
 
+	/* TODO remove before merge */
+	DefineCustomBoolVariable(
+		"citus.rebalance_job_debug_delay",
+		NULL,
+		NULL,
+		&RebalanceJobDebugDelay,
+		false,
+		PGC_SIGHUP,
+		GUC_UNIT_MS,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.recover_2pc_interval",
 		gettext_noop("Sets the time to wait between recovering 2PCs."),

@@ -97,6 +97,7 @@ double DistributedDeadlockDetectionTimeoutFactor = 2.0;
 int Recover2PCInterval = 60000;
 int DeferShardDeleteInterval = 15000;
 int RebalanceCheckInterval = 1000;
+bool RebalanceJobDebugDelay = false;
 
 /* config variables for metadata sync timeout */
 int MetadataSyncInterval = 60000;
@@ -856,13 +857,32 @@ RebalanceJobsBackgroundWorkerMain(Datum arg)
 
 	ereport(LOG, (errmsg("background jobs runner")));
 
-/*	pg_usleep(30 * 1000 * 1000); */
+	if (RebalanceJobDebugDelay)
+	{
+		pg_usleep(30 * 1000 * 1000);
+	}
 
 	MemoryContext perJobContext = AllocSetContextCreateExtended(CurrentMemoryContext,
 																"PerJobContext",
 																ALLOCSET_DEFAULT_MINSIZE,
 																ALLOCSET_DEFAULT_INITSIZE,
 																ALLOCSET_DEFAULT_MAXSIZE);
+
+	/*
+	 * First we find all jobs that are running, we need to check if they are still running
+	 * if not reset their state back to scheduled.
+	 */
+	{
+		StartTransactionCommand();
+		PushActiveSnapshot(GetTransactionSnapshot());
+
+		/* TODO have an actual function to check if the worker is still running */
+		ResetRunningJobs();
+
+		PopActiveSnapshot();
+		CommitTransactionCommand();
+	}
+
 
 	MemoryContext oldContextPerJob = MemoryContextSwitchTo(perJobContext);
 	bool hasJobs = true;

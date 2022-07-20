@@ -333,6 +333,7 @@ extern bool HasScheduledRebalanceJobs(void);
 extern int64 GetNextRebalanceJobId(void);
 extern RebalanceJob * ScheduleBackgrounRebalanceJob(char *command);
 extern RebalanceJob * GetScheduledRebalanceJob(void);
+extern void ResetRunningJobs(void);
 extern RebalanceJob * GetScheduledRebalanceJobByJobID(int64 jobId);
 extern void UpdateJobStatus(RebalanceJob *job, RebalanceJobStatus newStatus);
 extern void UpdateJobError(RebalanceJob *job, ErrorData *edata);
