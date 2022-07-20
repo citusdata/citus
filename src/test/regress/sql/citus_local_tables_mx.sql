@@ -460,14 +460,20 @@ CREATE VIEW v103 AS SELECT * from loc_tb;
 CREATE MATERIALIZED VIEW matview_102 AS SELECT * from loc_tb JOIN v103 USING (a);
 CREATE OR REPLACE VIEW v103 AS SELECT * from loc_tb JOIN matview_102 USING (a);
 
+-- fails to add local table to metadata, because of the circular dependency
+ALTER TABLE loc_tb ADD CONSTRAINT fkey FOREIGN KEY (a) references ref_tb(a);
+-- drop the view&matview with circular dependency
+DROP VIEW v103 CASCADE;
+
 SET client_min_messages TO DEBUG1;
--- auto undistribute
+-- now it should successfully add to metadata and create the views on workers
 ALTER TABLE loc_tb ADD CONSTRAINT fkey FOREIGN KEY (a) references ref_tb(a);
 SET client_min_messages TO WARNING;
 
 -- works fine
 select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100, citus_local_tables_mx.v101, citus_local_tables_mx.v102$$);
 
+-- auto undistribute
 ALTER TABLE loc_tb DROP CONSTRAINT fkey;
 -- fails because fkey is dropped and table is converted to local table
 select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100$$);
