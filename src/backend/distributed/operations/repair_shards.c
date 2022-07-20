@@ -126,8 +126,8 @@ static List * CopyShardContentsCommandList(ShardInterval *shardInterval,
 static List * PostLoadShardCreationCommandList(ShardInterval *shardInterval,
 											   const char *sourceNodeName,
 											   int32 sourceNodePort);
-static ShardCommandList* CreateShardCommandList(ShardInterval *shardInterval,
-												List *ddlCommandList);
+static ShardCommandList * CreateShardCommandList(ShardInterval *shardInterval,
+												 List *ddlCommandList);
 
 
 /* declarations for dynamic loading */
@@ -1147,7 +1147,7 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
  * CreateShardCommandList creates a struct for shard interval
  * along with DDL commands to be executed.
  */
-static ShardCommandList*
+static ShardCommandList *
 CreateShardCommandList(ShardInterval *shardInterval, List *ddlCommandList)
 {
 	ShardCommandList *shardCommandList = palloc0(
@@ -1211,8 +1211,8 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 											 sourceNodePort));
 
 		ShardCommandList *shardCommandList = CreateShardCommandList(
-									shardInterval,
-									list_concat(shardCreateCommandList, copyAndPostCreationCommandList));
+			shardInterval,
+			list_concat(shardCreateCommandList, copyAndPostCreationCommandList));
 		shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList,
 												  shardCommandList);
 	}
@@ -1229,10 +1229,10 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 				GenerateAttachShardPartitionCommand(shardInterval);
 
 			ShardCommandList *shardCommandList = CreateShardCommandList(
-										shardInterval,
-										list_make1(attachPartitionCommand));
+				shardInterval,
+				list_make1(attachPartitionCommand));
 			shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList,
-												      shardCommandList);
+													  shardCommandList);
 		}
 	}
 
@@ -1249,10 +1249,11 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 													 &referenceTableForeignConstraintList);
 
 		ShardCommandList *shardCommandList = CreateShardCommandList(
-									shardInterval,
-									list_concat(shardForeignConstraintCommandList,
-										referenceTableForeignConstraintList));
-		shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList, shardCommandList);
+			shardInterval,
+			list_concat(shardForeignConstraintCommandList,
+						referenceTableForeignConstraintList));
+		shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList,
+												  shardCommandList);
 	}
 
 	/* Now execute all DDL Commads. */
