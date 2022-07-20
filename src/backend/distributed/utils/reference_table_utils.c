@@ -62,7 +62,9 @@ PG_FUNCTION_INFO_V1(replicate_reference_tables);
 Datum
 replicate_reference_tables(PG_FUNCTION_ARGS)
 {
-	EnsureReferenceTablesExistOnAllNodes();
+	Oid shardReplicationModeOid = PG_GETARG_OID(0);
+	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
+	EnsureReferenceTablesExistOnAllNodesExtended(shardReplicationMode);
 
 	PG_RETURN_VOID();
 }

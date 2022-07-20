@@ -182,7 +182,7 @@ ORDER BY 1;
  function recover_prepared_transactions()
  function relation_is_a_known_shard(regclass)
  function remove_local_tables_from_metadata()
- function replicate_reference_tables()
+ function replicate_reference_tables(citus.shard_transfer_mode)
  function replicate_table_shards(regclass,integer,integer,bigint[],citus.shard_transfer_mode)
  function role_exists(name)
  function run_command_on_all_nodes(text,boolean,boolean)
