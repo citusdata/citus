@@ -127,6 +127,15 @@ bool DeferShardDeleteOnMove = true;
 double DesiredPercentFreeAfterMove = 10;
 bool CheckAvailableSpaceBeforeMove = true;
 
+/*
+ * ShardInterval along with DDL command list to be executed.
+ */
+typedef struct ShardIntervalWithCommandList
+{
+	ShardInterval *shardInterval;
+	List *ddlCommandList;
+}ShardIntervalWithCommandList;
+
 
 /*
  * citus_copy_shard_placement implements a user-facing UDF to repair data from
@@ -1146,6 +1155,7 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 
 	/* iterate through the colocated shards and copy each */
 	ShardInterval *shardInterval = NULL;
+	List *shardIntervalWithDDCommandsList = NIL;
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
 		/*
@@ -1158,30 +1168,28 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		 * wouldn't be visible in the session that get_rebalance_progress uses.
 		 * So get_rebalance_progress would always report its size as 0.
 		 */
-		List *ddlCommandList = RecreateShardDDLCommandList(shardInterval, sourceNodeName,
+		List *shardCreateCommandList = RecreateShardDDLCommandList(shardInterval, sourceNodeName,
 														   sourceNodePort);
-		char *tableOwner = TableOwner(shardInterval->relationId);
-		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
-												  tableOwner, ddlCommandList);
-
-		ddlCommandList = NIL;
-
 		/*
 		 * Skip copying data for partitioned tables, because they contain no
 		 * data themselves. Their partitions do contain data, but those are
 		 * different colocated shards that will be copied seperately.
 		 */
+		List *copyAndPostCreationCommandList = NIL;
 		if (!PartitionedTable(shardInterval->relationId))
 		{
-			ddlCommandList = CopyShardContentsCommandList(shardInterval, sourceNodeName,
+			copyAndPostCreationCommandList = CopyShardContentsCommandList(shardInterval, sourceNodeName,
 														  sourceNodePort);
 		}
-		ddlCommandList = list_concat(
-			ddlCommandList,
+		copyAndPostCreationCommandList = list_concat(
+			copyAndPostCreationCommandList,
 			PostLoadShardCreationCommandList(shardInterval, sourceNodeName,
 											 sourceNodePort));
-		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
-												  tableOwner, ddlCommandList);
+
+		ShardIntervalWithCommandList *intervalWithCommandList = palloc0(sizeof(ShardIntervalWithCommandList));
+		intervalWithCommandList->shardInterval = shardInterval;
+		intervalWithCommandList->ddlCommandList = list_concat(shardCreateCommandList, copyAndPostCreationCommandList);
+		shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList, intervalWithCommandList);
 
 		MemoryContextReset(localContext);
 	}
@@ -1197,10 +1205,10 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 			char *attachPartitionCommand =
 				GenerateAttachShardPartitionCommand(shardInterval);
 
-			char *tableOwner = TableOwner(shardInterval->relationId);
-			SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
-													  tableOwner,
-													  list_make1(attachPartitionCommand));
+			ShardIntervalWithCommandList *intervalWithCommandList = palloc0(sizeof(ShardIntervalWithCommandList));
+			intervalWithCommandList->shardInterval = shardInterval;
+			intervalWithCommandList->ddlCommandList = list_make1(attachPartitionCommand);
+			shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList, intervalWithCommandList);
 		}
 
 		MemoryContextReset(localContext);
@@ -1218,15 +1226,23 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 													 &shardForeignConstraintCommandList,
 													 &referenceTableForeignConstraintList);
 
-		List *commandList = NIL;
-		commandList = list_concat(commandList, shardForeignConstraintCommandList);
-		commandList = list_concat(commandList, referenceTableForeignConstraintList);
-
-		char *tableOwner = TableOwner(shardInterval->relationId);
-		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
-												  tableOwner, commandList);
+		ShardIntervalWithCommandList *intervalWithCommandList = palloc0(sizeof(ShardIntervalWithCommandList));
+		intervalWithCommandList->shardInterval = shardInterval;
+		intervalWithCommandList->ddlCommandList = list_concat(shardForeignConstraintCommandList,
+												referenceTableForeignConstraintList);
+		shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList, intervalWithCommandList);
 
 		MemoryContextReset(localContext);
+	}
+
+	// Now execute all DDL Commads.
+	ShardIntervalWithCommandList *intervalWithCommandList = NULL;
+	foreach_ptr(intervalWithCommandList, shardIntervalWithDDCommandsList)
+	{
+		char *tableOwner = TableOwner(intervalWithCommandList->shardInterval->relationId);
+		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
+												  tableOwner,
+												  intervalWithCommandList->ddlCommandList);
 	}
 
 	MemoryContextSwitchTo(oldContext);
