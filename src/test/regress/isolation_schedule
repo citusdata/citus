@@ -97,5 +97,6 @@ test: isolation_replicated_dist_on_mx
 test: isolation_replicate_reference_tables_to_coordinator
 test: isolation_multiuser_locking
 test: isolation_acquire_distributed_locks
+test: isolation_concurrent_move_create_table
 
 test: isolation_check_mx

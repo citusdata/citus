@@ -2,13 +2,13 @@ Parsed test spec with 2 sessions
 
 starting permutation: s1-load-cache s2-begin s2-move-placement s1-move-placement s2-commit s2-print-placements
 step s1-load-cache:
- COPY test_move_table FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+	COPY test_move_table FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
 
 step s2-begin:
- BEGIN;
+	BEGIN;
 
 step s2-move-placement:
- SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638, 'force_logical');
+	SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638, 'force_logical');
 
 master_move_shard_placement
 ---------------------------------------------------------------------
@@ -16,24 +16,23 @@ master_move_shard_placement
 (1 row)
 
 step s1-move-placement:
- SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638, 'force_logical');
- <waiting ...>
-step s2-commit: 
- COMMIT;
+	SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638, 'force_logical');
 
-step s1-move-placement: <... completed>
-ERROR:  source placement must be in active state
+ERROR:  could not acquire the lock required to move public.test_move_table
+step s2-commit:
+	COMMIT;
+
 step s2-print-placements:
- SELECT
-  nodename, nodeport, count(*)
- FROM
-  pg_dist_shard_placement
- WHERE
-  shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_table'::regclass)
- AND
-  shardstate = 1
- GROUP BY
-  nodename, nodeport;
+	SELECT
+		nodename, nodeport, count(*)
+	FROM
+		pg_dist_shard_placement
+	WHERE
+		shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_table'::regclass)
+	AND
+		shardstate = 1
+	GROUP BY
+		nodename, nodeport;
 
 nodename |nodeport|count
 ---------------------------------------------------------------------
@@ -43,10 +42,10 @@ localhost|   57638|    2
 
 starting permutation: s2-begin s2-move-placement s1-move-placement s2-commit s2-print-placements
 step s2-begin:
- BEGIN;
+	BEGIN;
 
 step s2-move-placement:
- SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638, 'force_logical');
+	SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638, 'force_logical');
 
 master_move_shard_placement
 ---------------------------------------------------------------------
@@ -54,24 +53,23 @@ master_move_shard_placement
 (1 row)
 
 step s1-move-placement:
- SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638, 'force_logical');
- <waiting ...>
-step s2-commit: 
- COMMIT;
+	SELECT master_move_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638, 'force_logical');
 
-step s1-move-placement: <... completed>
-ERROR:  source placement must be in active state
+ERROR:  could not acquire the lock required to move public.test_move_table
+step s2-commit:
+	COMMIT;
+
 step s2-print-placements:
- SELECT
-  nodename, nodeport, count(*)
- FROM
-  pg_dist_shard_placement
- WHERE
-  shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_table'::regclass)
- AND
-  shardstate = 1
- GROUP BY
-  nodename, nodeport;
+	SELECT
+		nodename, nodeport, count(*)
+	FROM
+		pg_dist_shard_placement
+	WHERE
+		shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_move_table'::regclass)
+	AND
+		shardstate = 1
+	GROUP BY
+		nodename, nodeport;
 
 nodename |nodeport|count
 ---------------------------------------------------------------------

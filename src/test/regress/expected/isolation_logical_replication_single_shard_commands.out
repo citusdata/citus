@@ -10,10 +10,10 @@ pg_advisory_lock
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    	SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-insert: 
     INSERT INTO logical_replicate_placement VALUES (15, 15);
@@ -33,7 +33,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-end:
- COMMIT;
+	COMMIT;
 
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
@@ -62,10 +62,10 @@ pg_advisory_lock
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    	SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-upsert: 
     INSERT INTO logical_replicate_placement VALUES (15, 15);
@@ -86,7 +86,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-end:
- COMMIT;
+	COMMIT;
 
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
@@ -118,10 +118,10 @@ pg_advisory_lock
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    	SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-update: 
     UPDATE logical_replicate_placement SET y = y + 1 WHERE x = 15;
@@ -141,7 +141,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-end:
- COMMIT;
+	COMMIT;
 
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
@@ -173,10 +173,10 @@ pg_advisory_lock
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    	SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-delete: 
     DELETE FROM logical_replicate_placement WHERE x = 15;
@@ -196,7 +196,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-end:
- COMMIT;
+	COMMIT;
 
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
@@ -227,10 +227,10 @@ pg_advisory_lock
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    	SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-select: 
     SELECT * FROM logical_replicate_placement ORDER BY y;
@@ -255,7 +255,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-end:
- COMMIT;
+	COMMIT;
 
 step s1-get-shard-distribution:
   select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 AND shardid in (SELECT * FROM selected_shard) order by nodeport;
@@ -279,10 +279,10 @@ pg_advisory_lock
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    	SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-select-for-update: 
     SELECT * FROM logical_replicate_placement WHERE x=15 FOR UPDATE;
@@ -307,7 +307,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-end:
- COMMIT;
+	COMMIT;
 
 step s1-get-shard-distribution:
   select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 AND shardid in (SELECT * FROM selected_shard) order by nodeport;
@@ -320,7 +320,7 @@ nodeport
 
 starting permutation: s1-begin s2-begin s2-insert s1-move-placement s2-end s1-end s1-select s1-get-shard-distribution
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s2-begin:
     BEGIN;
@@ -329,10 +329,10 @@ step s2-insert:
     INSERT INTO logical_replicate_placement VALUES (15, 15);
 
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    	SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-end: 
-   COMMIT;
+	  COMMIT;
 
 step s1-move-placement: <... completed>
 master_move_shard_placement
@@ -341,7 +341,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-end:
- COMMIT;
+	COMMIT;
 
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
@@ -362,7 +362,7 @@ nodeport
 
 starting permutation: s1-begin s2-begin s2-upsert s1-move-placement s2-end s1-end s1-select s1-get-shard-distribution
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s2-begin:
     BEGIN;
@@ -372,10 +372,10 @@ step s2-upsert:
     INSERT INTO logical_replicate_placement VALUES (15, 15) ON CONFLICT (x) DO UPDATE SET y = logical_replicate_placement.y + 1;
 
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    	SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-end: 
-   COMMIT;
+	  COMMIT;
 
 step s1-move-placement: <... completed>
 master_move_shard_placement
@@ -384,7 +384,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-end:
- COMMIT;
+	COMMIT;
 
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
@@ -408,7 +408,7 @@ step s1-insert:
     INSERT INTO logical_replicate_placement VALUES (15, 15);
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s2-begin:
     BEGIN;
@@ -417,10 +417,10 @@ step s2-update:
     UPDATE logical_replicate_placement SET y = y + 1 WHERE x = 15;
 
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    	SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-end: 
-   COMMIT;
+	  COMMIT;
 
 step s1-move-placement: <... completed>
 master_move_shard_placement
@@ -429,7 +429,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-end:
- COMMIT;
+	COMMIT;
 
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
@@ -453,7 +453,7 @@ step s1-insert:
     INSERT INTO logical_replicate_placement VALUES (15, 15);
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s2-begin:
     BEGIN;
@@ -462,10 +462,10 @@ step s2-delete:
     DELETE FROM logical_replicate_placement WHERE x = 15;
 
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    	SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-end: 
-   COMMIT;
+	  COMMIT;
 
 step s1-move-placement: <... completed>
 master_move_shard_placement
@@ -474,7 +474,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-end:
- COMMIT;
+	COMMIT;
 
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
@@ -497,7 +497,7 @@ step s1-insert:
     INSERT INTO logical_replicate_placement VALUES (15, 15);
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s2-begin:
     BEGIN;
@@ -511,7 +511,7 @@ step s2-select:
 (1 row)
 
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    	SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
 
 master_move_shard_placement
 ---------------------------------------------------------------------
@@ -519,10 +519,10 @@ master_move_shard_placement
 (1 row)
 
 step s2-end:
-   COMMIT;
+	  COMMIT;
 
 step s1-end:
- COMMIT;
+	COMMIT;
 
 step s1-get-shard-distribution:
   select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 AND shardid in (SELECT * FROM selected_shard) order by nodeport;
@@ -538,7 +538,7 @@ step s1-insert:
     INSERT INTO logical_replicate_placement VALUES (15, 15);
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s2-begin:
     BEGIN;
@@ -552,10 +552,10 @@ step s2-select-for-update:
 (1 row)
 
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    	SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s2-end: 
-   COMMIT;
+	  COMMIT;
 
 step s1-move-placement: <... completed>
 master_move_shard_placement
@@ -564,7 +564,7 @@ master_move_shard_placement
 (1 row)
 
 step s1-end:
- COMMIT;
+	COMMIT;
 
 step s1-get-shard-distribution:
   select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 AND shardid in (SELECT * FROM selected_shard) order by nodeport;
@@ -577,13 +577,13 @@ nodeport
 
 starting permutation: s1-begin s2-begin s1-move-placement s2-move-placement s1-end s2-end
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s2-begin:
     BEGIN;
 
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    	SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
 
 master_move_shard_placement
 ---------------------------------------------------------------------
@@ -591,19 +591,14 @@ master_move_shard_placement
 (1 row)
 
 step s2-move-placement:
- SELECT master_move_shard_placement(
-  get_shard_id_for_distribution_column('logical_replicate_placement', 4),
-  'localhost', 57637, 'localhost', 57638);
- <waiting ...>
-step s1-end: 
- COMMIT;
+	SELECT master_move_shard_placement(
+		get_shard_id_for_distribution_column('logical_replicate_placement', 4),
+		'localhost', 57637, 'localhost', 57638);
 
-step s2-move-placement: <... completed>
-master_move_shard_placement
----------------------------------------------------------------------
-
-(1 row)
+ERROR:  could not acquire the lock required to move public.logical_replicate_placement
+step s1-end:
+	COMMIT;
 
 step s2-end:
-   COMMIT;
+	  COMMIT;
 

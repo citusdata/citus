@@ -227,7 +227,7 @@ static float4 NodeCapacity(WorkerNode *workerNode, void *context);
 static ShardCost GetShardCost(uint64 shardId, void *context);
 static List * NonColocatedDistRelationIdList(void);
 static void RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid);
-static void AcquireColocationLock(Oid relationId, const char *operationName);
+static void AcquireRebalanceColocationLock(Oid relationId, const char *operationName);
 static void ExecutePlacementUpdates(List *placementUpdateList, Oid
 									shardReplicationModeOid, char *noticeOperation);
 static float4 CalculateUtilization(float4 totalCost, float4 capacity);
@@ -616,13 +616,13 @@ GetColocatedRebalanceSteps(List *placementUpdateList)
 
 
 /*
- * AcquireColocationLock tries to acquire a lock for rebalance/replication. If
- * this is it not possible it fails instantly because this means another
- * rebalance/replication is currently happening. This would really mess up
- * planning.
+ * AcquireRelationColocationLock tries to acquire a lock for
+ * rebalance/replication. If this is it not possible it fails
+ * instantly because this means another rebalance/replication
+ * is currently happening. This would really mess up planning.
  */
 static void
-AcquireColocationLock(Oid relationId, const char *operationName)
+AcquireRebalanceColocationLock(Oid relationId, const char *operationName)
 {
 	uint32 lockId = relationId;
 	LOCKTAG tag;
@@ -639,8 +639,48 @@ AcquireColocationLock(Oid relationId, const char *operationName)
 	if (!lockAcquired)
 	{
 		ereport(ERROR, (errmsg("could not acquire the lock required to %s %s",
-							   operationName, generate_qualified_relation_name(
-								   relationId))));
+							   operationName,
+							   generate_qualified_relation_name(relationId)),
+						errdetail("It means that either a concurrent shard move "
+								  "or shard copy is happening."),
+						errhint("Make sure that the concurrent operation has "
+								"finished and re-run the command")));
+	}
+}
+
+
+/*
+ * AcquirePlacementColocationLock tries to acquire a lock for
+ * rebalance/replication while moving/copying the placement. If this
+ * is it not possible it fails instantly because this means
+ * another move/copy is currently happening. This would really mess up planning.
+ */
+void
+AcquirePlacementColocationLock(Oid relationId, int lockMode,
+							   const char *operationName)
+{
+	uint32 lockId = relationId;
+	LOCKTAG tag;
+
+	CitusTableCacheEntry *citusTableCacheEntry = GetCitusTableCacheEntry(relationId);
+	if (citusTableCacheEntry->colocationId != INVALID_COLOCATION_ID)
+	{
+		lockId = citusTableCacheEntry->colocationId;
+	}
+
+	SET_LOCKTAG_REBALANCE_PLACEMENT_COLOCATION(tag, (int64) lockId);
+
+	LockAcquireResult lockAcquired = LockAcquire(&tag, lockMode, false, true);
+	if (!lockAcquired)
+	{
+		ereport(ERROR, (errmsg("could not acquire the lock required to %s %s",
+							   operationName,
+							   generate_qualified_relation_name(relationId)),
+						errdetail("It means that either a concurrent shard move "
+								  "or colocated distributed table creation is "
+								  "happening."),
+						errhint("Make sure that the concurrent operation has "
+								"finished and re-run the command")));
 	}
 }
 
@@ -942,7 +982,7 @@ replicate_table_shards(PG_FUNCTION_ARGS)
 	char transferMode = LookupShardTransferMode(shardReplicationModeOid);
 	EnsureReferenceTablesExistOnAllNodesExtended(transferMode);
 
-	AcquireColocationLock(relationId, "replicate");
+	AcquireRebalanceColocationLock(relationId, "replicate");
 
 	List *activeWorkerList = SortedActiveWorkers();
 	List *shardPlacementList = FullShardPlacementList(relationId, excludedShardArray);
@@ -1555,7 +1595,7 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 
 	foreach_oid(relationId, options->relationIdList)
 	{
-		AcquireColocationLock(relationId, operationName);
+		AcquireRebalanceColocationLock(relationId, operationName);
 	}
 
 	List *placementUpdateList = GetRebalanceSteps(options);
