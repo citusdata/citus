@@ -240,6 +240,8 @@ extern Oid DistPartitionColocationidIndexId(void);
 extern Oid DistRebalanceJobsJobsIdIndexId(void);
 extern Oid DistRebalanceJobsStatusJobsIdIndexId(void);
 extern Oid DistRebalanceJobsDependRelationId(void);
+extern Oid DistRebalanceJobsDependJobIdIndexId(void);
+extern Oid DistRebalanceJobsDependDependsOnIndexId(void);
 extern Oid DistShardLogicalRelidIndexId(void);
 extern Oid DistShardShardidIndexId(void);
 extern Oid DistPlacementShardidIndexId(void);
@@ -276,6 +278,7 @@ extern Oid JobStatusScheduledId(void);
 extern Oid JobStatusRunningId(void);
 extern Oid JobStatusDoneId(void);
 extern Oid JobStatusErrorId(void);
+extern Oid JobStatusUnscheduledId(void);
 
 /* user related functions */
 extern Oid CitusExtensionOwner(void);

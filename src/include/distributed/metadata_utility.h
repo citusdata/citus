@@ -210,7 +210,8 @@ typedef enum RebalanceJobStatus
 	REBALANCE_JOB_STATUS_SCHEDULED,
 	REBALANCE_JOB_STATUS_RUNNING,
 	REBALANCE_JOB_STATUS_DONE,
-	REBALANCE_JOB_STATUS_ERROR
+	REBALANCE_JOB_STATUS_ERROR,
+	REBALANCE_JOB_STATUS_UNSCHEDULED
 } RebalanceJobStatus;
 
 
@@ -333,11 +334,13 @@ extern bool HasScheduledRebalanceJobs(void);
 extern int64 GetNextRebalanceJobId(void);
 extern RebalanceJob * ScheduleBackgrounRebalanceJob(char *command, int dependingJobCount,
 													int64 dependingJobIds[]);
-extern RebalanceJob * GetScheduledRebalanceJob(void);
+extern bool JobHasUmnetDependencies(int64 jobid);
+extern RebalanceJob * GetRunableRebalanceJob(void);
 extern void ResetRunningJobs(void);
 extern RebalanceJob * GetScheduledRebalanceJobByJobID(int64 jobId);
 extern void UpdateJobStatus(RebalanceJob *job, RebalanceJobStatus newStatus);
-extern void UpdateJobError(RebalanceJob *job, ErrorData *edata);
+extern bool UpdateJobError(RebalanceJob *job, ErrorData *edata);
+extern void UnscheduleDependantJobs(int64 jobid);
 extern bool IsRebalanceJobStatusTerminal(RebalanceJobStatus status);
 extern Oid RebalanceJobStatusOid(RebalanceJobStatus status);
 #endif   /* METADATA_UTILITY_H */

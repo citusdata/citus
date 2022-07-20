@@ -145,10 +145,13 @@ typedef struct MetadataCacheData
 	Oid distRebalanceJobsJobsIndexId;
 	Oid distRebalanceJobsStatusJobsIndexId;
 	Oid distRebalanceJobsDependRelationId;
+	Oid distRebalanceJobsDependsJobIdIndexId;
+	Oid distRebalanceJobsDependsDependsOnIndexId;
 	Oid jobStatusScheduledId;
 	Oid jobStatusRunningId;
 	Oid jobStatusDoneId;
 	Oid jobStatusErrorId;
+	Oid jobStatusSnscheduledId;
 	Oid distRebalanceStrategyRelationId;
 	Oid distNodeRelationId;
 	Oid distNodeNodeIdIndexId;
@@ -2412,6 +2415,26 @@ DistRebalanceJobsDependRelationId(void)
 }
 
 
+Oid
+DistRebalanceJobsDependJobIdIndexId(void)
+{
+	CachedRelationLookup("pg_dist_rebalance_jobs_depend_jobid",
+						 &MetadataCache.distRebalanceJobsDependsJobIdIndexId);
+
+	return MetadataCache.distRebalanceJobsDependsJobIdIndexId;
+}
+
+
+Oid
+DistRebalanceJobsDependDependsOnIndexId(void)
+{
+	CachedRelationLookup("pg_dist_rebalance_jobs_depend_depends_on",
+						 &MetadataCache.distRebalanceJobsDependsDependsOnIndexId);
+
+	return MetadataCache.distRebalanceJobsDependsDependsOnIndexId;
+}
+
+
 /* return oid of pg_dist_rebalance_strategy relation */
 Oid
 DistRebalanceStrategyRelationId(void)
@@ -3183,6 +3206,19 @@ JobStatusErrorId(void)
 	}
 
 	return MetadataCache.jobStatusErrorId;
+}
+
+
+Oid
+JobStatusUnscheduledId(void)
+{
+	if (!MetadataCache.jobStatusSnscheduledId)
+	{
+		MetadataCache.jobStatusSnscheduledId =
+			LookupStringEnumValueId("citus_job_status", "unscheduled");
+	}
+
+	return MetadataCache.jobStatusSnscheduledId;
 }
 
 

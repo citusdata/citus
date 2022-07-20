@@ -2285,6 +2285,10 @@ RebalanceJobStatusByOid(Oid enumOid)
 	{
 		return REBALANCE_JOB_STATUS_ERROR;
 	}
+	else if (enumOid == JobStatusUnscheduledId())
+	{
+		return REBALANCE_JOB_STATUS_UNSCHEDULED;
+	}
 	ereport(ERROR, (errmsg("unknown enum value for citus_job_status")));
 	return REBALANCE_JOB_STATUS_UNKNOWN;
 }
@@ -2297,6 +2301,7 @@ IsRebalanceJobStatusTerminal(RebalanceJobStatus status)
 	{
 		case REBALANCE_JOB_STATUS_DONE:
 		case REBALANCE_JOB_STATUS_ERROR:
+		case REBALANCE_JOB_STATUS_UNSCHEDULED:
 		{
 			return true;
 		}
@@ -2327,6 +2332,16 @@ RebalanceJobStatusOid(RebalanceJobStatus status)
 		case REBALANCE_JOB_STATUS_DONE:
 		{
 			return JobStatusDoneId();
+		}
+
+		case REBALANCE_JOB_STATUS_ERROR:
+		{
+			return JobStatusErrorId();
+		}
+
+		case REBALANCE_JOB_STATUS_UNSCHEDULED:
+		{
+			return JobStatusUnscheduledId();
 		}
 
 		default:
@@ -2491,8 +2506,64 @@ ResetRunningJobs(void)
 }
 
 
+bool
+JobHasUmnetDependencies(int64 jobid)
+{
+	bool hasUnmetDependency = false;
+
+	Relation pgDistRebalanceJobsDepend = table_open(DistRebalanceJobsDependRelationId(),
+													AccessShareLock);
+
+	const int scanKeyCount = 1;
+	ScanKeyData scanKey[1] = { 0 };
+	bool indexOK = true;
+
+	/* pg_catalog.pg_dist_rebalance_jobs_depend.jobid = $jobid */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_depend_jobid,
+				BTEqualStrategyNumber, F_INT8EQ, jobid);
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobsDepend,
+													DistRebalanceJobsDependJobIdIndexId(),
+													indexOK, NULL, scanKeyCount,
+													scanKey);
+
+	HeapTuple dependTuple = NULL;
+	while (HeapTupleIsValid(dependTuple = systable_getnext(scanDescriptor)))
+	{
+		Form_pg_dist_rebalance_jobs_depend depends =
+			(Form_pg_dist_rebalance_jobs_depend) GETSTRUCT(dependTuple);
+
+		RebalanceJob *dependingJob = GetScheduledRebalanceJobByJobID(depends->depends_on);
+
+		/*
+		 * Only when the status of all depending jobs is done we clear this job and say
+		 * that is has no unmet dependencies.
+		 */
+		if (dependingJob->status == REBALANCE_JOB_STATUS_DONE)
+		{
+			continue;
+		}
+
+		/*
+		 * we assume that when we ask for job to be cleared it has no dependencies that
+		 * have errored. Once we move the job to error it should unschedule all dependant
+		 * jobs recursively.
+		 */
+		Assert(dependingJob->status != REBALANCE_JOB_STATUS_ERROR);
+
+		hasUnmetDependency = true;
+		break;
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistRebalanceJobsDepend, AccessShareLock);
+
+	return hasUnmetDependency;
+}
+
+
 RebalanceJob *
-GetScheduledRebalanceJob(void)
+GetRunableRebalanceJob(void)
 {
 	const int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
@@ -2518,21 +2589,30 @@ GetScheduledRebalanceJob(void)
 														indexOK, NULL, scanKeyCount,
 														scanKey);
 
-		HeapTuple jobTuple = systable_getnext(scanDescriptor);
-		if (HeapTupleIsValid(jobTuple))
+		HeapTuple jobTuple = NULL;
+		while (HeapTupleIsValid(jobTuple = systable_getnext(scanDescriptor)))
 		{
 			Datum datumArray[Natts_pg_dist_rebalance_jobs];
 			bool isNullArray[Natts_pg_dist_rebalance_jobs];
 			TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
 			heap_deform_tuple(jobTuple, tupleDescriptor, datumArray, isNullArray);
 
+			int64 jobid = DatumGetInt64(
+				datumArray[Anum_pg_dist_rebalance_jobs_jobid - 1]);
+			if (JobHasUmnetDependencies(jobid))
+			{
+				continue;
+			}
+
 			job = palloc0(sizeof(RebalanceJob));
-			job->jobid = DatumGetInt64(datumArray[Anum_pg_dist_rebalance_jobs_jobid - 1]);
+			job->jobid = jobid;
 			job->status = RebalanceJobStatusByOid(
 				DatumGetObjectId(datumArray[Anum_pg_dist_rebalance_jobs_status - 1]));
 
 			job->command = text_to_cstring(
 				DatumGetTextP(datumArray[Anum_pg_dist_rebalance_jobs_command - 1]));
+
+			break;
 		}
 
 		systable_endscan(scanDescriptor);
@@ -2648,7 +2728,7 @@ UpdateJobStatus(RebalanceJob *job, RebalanceJobStatus newStatus)
 }
 
 
-void
+bool
 UpdateJobError(RebalanceJob *job, ErrorData *edata)
 {
 	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
@@ -2692,6 +2772,11 @@ UpdateJobError(RebalanceJob *job, ErrorData *edata)
 	isnull[Anum_pg_dist_rebalance_jobs_retry_count - 1] = false;
 	replace[Anum_pg_dist_rebalance_jobs_retry_count - 1] = true;
 
+	values[Anum_pg_dist_rebalance_jobs_pid - 1] = InvalidOid;
+	isnull[Anum_pg_dist_rebalance_jobs_pid - 1] = true;
+	replace[Anum_pg_dist_rebalance_jobs_pid - 1] = true;
+
+	bool statusError = false;
 	if (retryCount >= 3)
 	{
 		/* after 3 failures we will transition the job to error and stop executing */
@@ -2699,6 +2784,8 @@ UpdateJobError(RebalanceJob *job, ErrorData *edata)
 			ObjectIdGetDatum(JobStatusErrorId());
 		isnull[Anum_pg_dist_rebalance_jobs_status - 1] = false;
 		replace[Anum_pg_dist_rebalance_jobs_status - 1] = true;
+
+		statusError = true;
 	}
 
 	StringInfoData buf = { 0 };
@@ -2755,5 +2842,110 @@ UpdateJobError(RebalanceJob *job, ErrorData *edata)
 	CommandCounterIncrement();
 
 	systable_endscan(scanDescriptor);
+	table_close(pgDistRebalanceJobs, NoLock);
+
+	/* when we have changed the status to Error we will need to unschedule all dependent jobs (recursively) */
+	if (statusError)
+	{
+		UnscheduleDependantJobs(job->jobid);
+	}
+
+	return statusError;
+}
+
+
+static List *
+GetDependantJobs(int64 jobid)
+{
+	Relation pgDistRebalanceJobsDepends = table_open(DistRebalanceJobsDependRelationId(),
+													 RowExclusiveLock);
+	const bool indexOK = true;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+
+	/* pg_dist_rebalance_jobs_depend.depends_on = $jobid */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_depend_depends_on,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobid));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobsDepends,
+													DistRebalanceJobsDependDependsOnIndexId(),
+													indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	List *dependantJobs = NIL;
+	HeapTuple heapTuple = NULL;
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		Form_pg_dist_rebalance_jobs_depend depend =
+			(Form_pg_dist_rebalance_jobs_depend) GETSTRUCT(heapTuple);
+
+		int64 *dJobid = palloc0(sizeof(int64));
+		*dJobid = depend->jobid;
+
+		dependantJobs = lappend(dependantJobs, dJobid);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistRebalanceJobsDepends, NoLock);
+
+	return dependantJobs;
+}
+
+
+void
+UnscheduleDependantJobs(int64 jobid)
+{
+	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
+											  RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
+
+	List *dependantJobs = GetDependantJobs(jobid);
+	while (list_length(dependantJobs) > 0)
+	{
+		/* pop last item from stack */
+		int64 cJobid = *(int64 *) llast(dependantJobs);
+		dependantJobs = list_delete_last(dependantJobs);
+
+		/* push new dependant jobs on to stack */
+		dependantJobs = list_concat(dependantJobs, GetDependantJobs(cJobid));
+
+		/* unschedule current job */
+		{
+			ScanKeyData scanKey[1] = { 0 };
+			int scanKeyCount = 1;
+
+			/* WHERE jobid = job->jobid */
+			ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_jobid,
+						BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(cJobid));
+			const bool indexOK = true;
+			SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
+															DistRebalanceJobsJobsIdIndexId(),
+															indexOK,
+															NULL, scanKeyCount, scanKey);
+
+			HeapTuple heapTuple = systable_getnext(scanDescriptor);
+			if (!HeapTupleIsValid(heapTuple))
+			{
+				ereport(ERROR, (errmsg("could not find rebalance job entry for jobid: "
+									   UINT64_FORMAT, cJobid)));
+			}
+
+			Datum values[Natts_pg_dist_rebalance_jobs] = { 0 };
+			bool isnull[Natts_pg_dist_rebalance_jobs] = { 0 };
+			bool replace[Natts_pg_dist_rebalance_jobs] = { 0 };
+
+			values[Anum_pg_dist_rebalance_jobs_status - 1] =
+				ObjectIdGetDatum(JobStatusUnscheduledId());
+			isnull[Anum_pg_dist_rebalance_jobs_status - 1] = false;
+			replace[Anum_pg_dist_rebalance_jobs_status - 1] = true;
+
+			heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
+										  replace);
+			CatalogTupleUpdate(pgDistRebalanceJobs, &heapTuple->t_self, heapTuple);
+
+			systable_endscan(scanDescriptor);
+		}
+	}
+
 	table_close(pgDistRebalanceJobs, NoLock);
 }
