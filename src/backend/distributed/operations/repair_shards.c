@@ -1176,7 +1176,6 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 
 	/* iterate through the colocated shards and copy each */
 	ShardInterval *shardInterval = NULL;
-	List *shardIntervalWithDDCommandsList = NIL;
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
 		/*
@@ -1192,6 +1191,10 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		List *shardCreateCommandList = RecreateShardDDLCommandList(shardInterval,
 																   sourceNodeName,
 																   sourceNodePort);
+
+		char *tableOwner = TableOwner(shardInterval->relationId);
+		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
+												  tableOwner, shardCreateCommandList);
 
 		/*
 		 * Skip copying data for partitioned tables, because they contain no
@@ -1210,17 +1213,17 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 			PostLoadShardCreationCommandList(shardInterval, sourceNodeName,
 											 sourceNodePort));
 
-		ShardCommandList *shardCommandList = CreateShardCommandList(
-			shardInterval,
-			list_concat(shardCreateCommandList, copyAndPostCreationCommandList));
-		shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList,
-												  shardCommandList);
+		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
+												  tableOwner,
+												  copyAndPostCreationCommandList);
+		MemoryContextReset(localContext);
 	}
 
 	/*
-	 * Once all shards are created, we can recreate relationships between shards.
-	 * Attach child tables to their parents in a partitioning hierarchy.
+	 * Once all shards are copied, we can recreate relationships between shards.
+	 * Create DDL commands to Attach child tables to their parents in a partitioning hierarchy.
 	 */
+	List *shardIntervalWithDDCommandsList = NIL;
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
 		if (PartitionTable(shardInterval->relationId))
@@ -1237,7 +1240,8 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 	}
 
 	/*
-	 * Iterate through the colocated shards and create the foreign constraints.
+	 * Iterate through the colocated shards and create DDL commamnds
+	 * to create the foreign constraints.
 	 */
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
@@ -1256,7 +1260,7 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 												  shardCommandList);
 	}
 
-	/* Now execute all DDL Commads. */
+	/* Now execute the Partitioning & Foreign constraints creation commads. */
 	ShardCommandList *shardCommandList = NULL;
 	foreach_ptr(shardCommandList, shardIntervalWithDDCommandsList)
 	{
