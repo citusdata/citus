@@ -82,6 +82,8 @@ static StringInfo CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval
 										 List *workersForPlacementList);
 static void InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 											 List *workersForPlacementList);
+static void CreatePartitioningHierarchy(List *shardGroupSplitIntervalListList,
+										List *workersForPlacementList);
 static void CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 										List *workersForPlacementList);
 static void TryDropSplitShardsOnFailure(HTAB *mapOfShardToPlacementCreatedByWorkflow);
@@ -135,28 +137,6 @@ ErrorIfCannotSplitShard(SplitOperation splitOperation, ShardInterval *sourceShar
 							errdetail("Splitting shards backed by foreign tables "
 									  "is not supported.")));
 		}
-
-		/*
-		 * At the moment, we do not support copying a shard if that shard's
-		 * relation is in a colocation group with a partitioned table or partition.
-		 */
-		if (PartitionedTable(colocatedTableId))
-		{
-			char *sourceRelationName = get_rel_name(relationId);
-			char *colocatedRelationName = get_rel_name(colocatedTableId);
-
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot %s of '%s', because it "
-								   "is a partitioned table",
-								   SplitOperationName[splitOperation],
-								   colocatedRelationName),
-							errdetail("In colocation group of '%s', a partitioned "
-									  "relation exists: '%s'. Citus does not support "
-									  "%s of partitioned tables.",
-									  sourceRelationName,
-									  colocatedRelationName,
-									  SplitOperationName[splitOperation])));
-		}
 	}
 
 	/* check shards with inactive placements */
@@ -209,15 +189,6 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("Cannot %s %s as operation "
 							   "is only supported for hash distributed tables.",
-							   SplitOperationName[splitOperation],
-							   SplitTargetName[splitOperation])));
-	}
-
-	if (extern_IsColumnarTableAmTable(shardIntervalToSplit->relationId))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("Cannot %s %s as operation "
-							   "is not supported for Columnar tables.",
 							   SplitOperationName[splitOperation],
 							   SplitTargetName[splitOperation])));
 	}
@@ -414,8 +385,8 @@ SplitShard(SplitMode splitMode,
 
 
 /*
- * ShardIntervalHashCode computes the hash code for a shard from the
- * placement's shard id.
+ * ShardIntervalHashCode computes the hash code for a Shardinterval using
+ * shardId.
  */
 static uint32
 ShardIntervalHashCode(const void *key, Size keySize)
@@ -527,6 +498,12 @@ BlockingShardSplit(SplitOperation splitOperation,
 			workersForPlacementList);
 
 		/*
+		 * Up to this point, we performed various subtransactions that may
+		 * require additional clean-up in case of failure. The remaining operations
+		 * going forward are part of the same distributed transaction.
+		 */
+
+		/*
 		 * Drop old shards and delete related metadata. Have to do that before
 		 * creating the new shard metadata, because there's cross-checks
 		 * preventing inconsistent metadata (like overlapping shards).
@@ -536,6 +513,10 @@ BlockingShardSplit(SplitOperation splitOperation,
 		/* Insert new shard and placement metdata */
 		InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
 										 workersForPlacementList);
+
+		/* create partitioning hierarchy, if any */
+		CreatePartitioningHierarchy(shardGroupSplitIntervalListList,
+									workersForPlacementList);
 
 		/*
 		 * Create foreign keys if exists after the metadata changes happening in
@@ -719,23 +700,32 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 	forboth_ptr(sourceShardIntervalToCopy, sourceColocatedShardIntervalList,
 				splitShardIntervalList, shardGroupSplitIntervalListList)
 	{
-		StringInfo splitCopyUdfCommand = CreateSplitCopyCommand(sourceShardIntervalToCopy,
-																splitShardIntervalList,
-																destinationWorkerNodesList);
+		/*
+		 * Skip copying data for partitioned tables, because they contain no
+		 * data themselves. Their partitions do contain data, but those are
+		 * different colocated shards that will be copied seperately.
+		 */
+		if (!PartitionedTable(sourceShardIntervalToCopy->relationId))
+		{
+			StringInfo splitCopyUdfCommand = CreateSplitCopyCommand(
+				sourceShardIntervalToCopy,
+				splitShardIntervalList,
+				destinationWorkerNodesList);
 
-		Task *splitCopyTask = CreateBasicTask(
-			sourceShardIntervalToCopy->shardId, /* jobId */
-			taskId,
-			READ_TASK,
-			splitCopyUdfCommand->data);
+			Task *splitCopyTask = CreateBasicTask(
+				INVALID_JOB_ID,
+				taskId,
+				READ_TASK,
+				splitCopyUdfCommand->data);
 
-		ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
-		SetPlacementNodeMetadata(taskPlacement, sourceShardNode);
+			ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
+			SetPlacementNodeMetadata(taskPlacement, sourceShardNode);
 
-		splitCopyTask->taskPlacementList = list_make1(taskPlacement);
+			splitCopyTask->taskPlacementList = list_make1(taskPlacement);
 
-		splitCopyTaskList = lappend(splitCopyTaskList, splitCopyTask);
-		taskId++;
+			splitCopyTaskList = lappend(splitCopyTaskList, splitCopyTask);
+			taskId++;
+		}
 	}
 
 	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, splitCopyTaskList,
@@ -956,6 +946,46 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 
 
 /*
+ * CreatePartitioningHierarchy creates the partitioning
+ * hierarchy between the shardList, if any.
+ */
+static void
+CreatePartitioningHierarchy(List *shardGroupSplitIntervalListList,
+							List *workersForPlacementList)
+{
+	/* Create partition heirarchy between shards */
+	List *shardIntervalList = NIL;
+
+	/*
+	 * Iterate over all the shards in the shard group.
+	 */
+	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
+	{
+		ShardInterval *shardInterval = NULL;
+		WorkerNode *workerPlacementNode = NULL;
+
+		/*
+		 * Iterate on split shards list for a given shard and create constraints.
+		 */
+		forboth_ptr(shardInterval, shardIntervalList, workerPlacementNode,
+					workersForPlacementList)
+		{
+			if (PartitionTable(shardInterval->relationId))
+			{
+				char *attachPartitionCommand =
+					GenerateAttachShardPartitionCommand(shardInterval);
+
+				SendCommandToWorker(
+					workerPlacementNode->workerName,
+					workerPlacementNode->workerPort,
+					attachPartitionCommand);
+			}
+		}
+	}
+}
+
+
+/*
  * Create foreign key constraints on the split children shards.
  */
 static void
@@ -1074,7 +1104,7 @@ DropShardList(List *shardIntervalList)
 
 
 /*
- * In case of failure, DropShardPlacementList drops shard placements and their metadata from both the
+ * In case of failure, TryDropSplitShardsOnFailure drops in-progress shard placements from both the
  * coordinator and mx nodes.
  */
 static void
