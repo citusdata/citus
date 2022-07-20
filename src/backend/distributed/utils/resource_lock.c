@@ -441,7 +441,7 @@ LockColocationId(int colocationId, LOCKMODE lockMode)
 	const bool sessionLock = false;
 	const bool dontWait = false;
 
-	SET_LOCKTAG_REBALANCE_COLOCATION(tag, (int64) colocationId);
+	SET_LOCKTAG_REBALANCE_TABLE_COLOCATION(tag, (int64) colocationId);
 	(void) LockAcquire(&tag, lockMode, sessionLock, dontWait);
 }
 
@@ -455,7 +455,7 @@ UnlockColocationId(int colocationId, LOCKMODE lockMode)
 	LOCKTAG tag;
 	const bool sessionLock = false;
 
-	SET_LOCKTAG_REBALANCE_COLOCATION(tag, (int64) colocationId);
+	SET_LOCKTAG_REBALANCE_TABLE_COLOCATION(tag, (int64) colocationId);
 	LockRelease(&tag, lockMode, sessionLock);
 }
 

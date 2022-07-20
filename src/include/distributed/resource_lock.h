@@ -37,11 +37,12 @@ typedef enum AdvisoryLocktagClass
 	ADV_LOCKTAG_CLASS_CITUS_SHARD_METADATA = 4,
 	ADV_LOCKTAG_CLASS_CITUS_SHARD = 5,
 	ADV_LOCKTAG_CLASS_CITUS_JOB = 6,
-	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_COLOCATION = 7,
+	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_RELATION_COLOCATION = 7,
 	ADV_LOCKTAG_CLASS_CITUS_COLOCATED_SHARDS_METADATA = 8,
 	ADV_LOCKTAG_CLASS_CITUS_OPERATIONS = 9,
 	ADV_LOCKTAG_CLASS_CITUS_PLACEMENT_CLEANUP = 10,
-	ADV_LOCKTAG_CLASS_CITUS_LOGICAL_REPLICATION = 12
+	ADV_LOCKTAG_CLASS_CITUS_LOGICAL_REPLICATION = 12,
+	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_PLACEMENT_COLOCATION = 13
 } AdvisoryLocktagClass;
 
 /* CitusOperations has constants for citus operations */
@@ -77,12 +78,23 @@ typedef enum CitusOperations
 /* reuse advisory lock, but with different, unused field 4 (7)
  * Also it has the database hardcoded to MyDatabaseId, to ensure the locks
  * are local to each database */
-#define SET_LOCKTAG_REBALANCE_COLOCATION(tag, colocationOrTableId) \
+#define SET_LOCKTAG_REBALANCE_TABLE_COLOCATION(tag, colocationOrTableId) \
 	SET_LOCKTAG_ADVISORY(tag, \
 						 MyDatabaseId, \
 						 (uint32) ((colocationOrTableId) >> 32), \
 						 (uint32) (colocationOrTableId), \
-						 ADV_LOCKTAG_CLASS_CITUS_REBALANCE_COLOCATION)
+						 ADV_LOCKTAG_CLASS_CITUS_REBALANCE_RELATION_COLOCATION)
+
+/* reuse advisory lock, but with different, unused field 4 (13)
+ * Also it has the database hardcoded to MyDatabaseId, to ensure the locks
+ * are local to each database */
+#define SET_LOCKTAG_REBALANCE_PLACEMENT_COLOCATION(tag, colocationOrTableId) \
+	SET_LOCKTAG_ADVISORY(tag, \
+						 MyDatabaseId, \
+						 (uint32) ((colocationOrTableId) >> 32), \
+						 (uint32) (colocationOrTableId), \
+						 ADV_LOCKTAG_CLASS_CITUS_REBALANCE_PLACEMENT_COLOCATION)
+
 
 /* advisory lock for citus operations, also it has the database hardcoded to MyDatabaseId,
  * to ensure the locks are local to each database */
