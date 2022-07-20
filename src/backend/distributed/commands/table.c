@@ -652,7 +652,7 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 	List *tableAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true);
 
 	/*  the code-path only supports a single object */
-	Assert(list_length(tableAddress) == 1);
+	Assert(list_length(tableAddresses) == 1);
 
 	/* We have already asserted that we have exactly 1 address in the addresses. */
 	ObjectAddress *tableAddress = linitial(tableAddresses);

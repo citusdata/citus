@@ -120,7 +120,7 @@ PreprocessRenameTypeAttributeStmt(Node *node, const char *queryString,
 	List *typeAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false);
 
 	/*  the code-path only supports a single object */
-	Assert(list_length(objectAddresses) == 1);
+	Assert(list_length(typeAddresses) == 1);
 
 	if (!ShouldPropagateAnyObject(typeAddresses))
 	{

@@ -182,7 +182,7 @@ WorkerCreateOrReplaceObject(List *sqlStatements)
 	 */
 	Node *parseTree = ParseTreeNode(linitial(sqlStatements));
 	List *addresses = GetObjectAddressListFromParseTree(parseTree, true);
-	Assert(list_length(viewAddresses) == 1);
+	Assert(list_length(addresses) == 1);
 
 	/* We have already asserted that we have exactly 1 address in the addresses. */
 	ObjectAddress *address = linitial(addresses);
