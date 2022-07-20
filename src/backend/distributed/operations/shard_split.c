@@ -707,7 +707,7 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 				destinationWorkerNodesList);
 
 			Task *splitCopyTask = CreateBasicTask(
-				sourceShardIntervalToCopy->shardId, /* jobId */
+				INVALID_JOB_ID,
 				taskId,
 				READ_TASK,
 				splitCopyUdfCommand->data);

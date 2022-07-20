@@ -221,6 +221,73 @@ SET citus.shard_replication_factor TO 1;
     ORDER BY stxname ASC;
 -- END: Show the updated state on workers
 
+-- BEGIN: Split a partition table directly
+\c - - - :master_port
+    SET search_path TO "citus_split_test_schema_columnar_partitioned";
+    SET citus.next_shard_id TO 8999100;
+    SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
+    SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
+
+    SELECT pg_catalog.citus_split_shard_by_split_points(
+        8999002, -- sensors_old
+        ARRAY['-2127770000'],
+        ARRAY[:worker_1_node, :worker_2_node],
+        'block_writes');
+-- END: Split a partition table directly
+
+-- BEGIN: Validate Shard Info and Data
+    SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
+    FROM pg_dist_shard AS shard
+    INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
+    INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
+    INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
+    INNER JOIN pg_catalog.pg_namespace ns  ON cls.relnamespace = ns.oid
+    WHERE node.noderole = 'primary' AND ns.nspname = 'citus_split_test_schema_columnar_partitioned'
+    ORDER BY logicalrelid, shardminvalue::BIGINT;
+
+    SELECT count(*) FROM reference_table;
+    SELECT count(*) FROM colocated_partitioned_table;
+    SELECT count(*) FROM colocated_dist_table;
+    SELECT count(*) FROM sensors;
+    SELECT count(*) FROM sensorscolumnar;
+-- END: Validate Shard Info and Data
+
+-- BEGIN: Show the updated state on workers
+    \c - - - :worker_1_port
+    SET search_path TO "citus_split_test_schema_columnar_partitioned";
+    SET citus.show_shards_for_app_name_prefixes = '*';
+    SELECT tbl.relname, fk."Constraint", fk."Definition"
+            FROM pg_catalog.pg_class tbl
+            JOIN public.table_fkeys fk on tbl.oid = fk.relid
+            WHERE tbl.relname like '%_89%'
+            ORDER BY 1, 2;
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
+    SELECT stxname FROM pg_statistic_ext
+    WHERE stxnamespace IN (
+        SELECT oid
+        FROM pg_namespace
+        WHERE nspname IN ('citus_split_test_schema_columnar_partitioned')
+    )
+    ORDER BY stxname ASC;
+
+    \c - - - :worker_2_port
+    SET search_path TO "citus_split_test_schema_columnar_partitioned";
+    SET citus.show_shards_for_app_name_prefixes = '*';
+    SELECT tbl.relname, fk."Constraint", fk."Definition"
+            FROM pg_catalog.pg_class tbl
+            JOIN public.table_fkeys fk on tbl.oid = fk.relid
+            WHERE tbl.relname like '%_89%'
+            ORDER BY 1, 2;
+    SELECT tablename, indexdef FROM pg_indexes WHERE tablename like '%_89%' ORDER BY 1,2;
+    SELECT stxname FROM pg_statistic_ext
+    WHERE stxnamespace IN (
+        SELECT oid
+        FROM pg_namespace
+        WHERE nspname IN ('citus_split_test_schema_columnar_partitioned')
+    )
+    ORDER BY stxname ASC;
+-- END: Show the updated state on workers
+
 --BEGIN : Cleanup
     \c - postgres - :master_port
     DROP SCHEMA "citus_split_test_schema_columnar_partitioned" CASCADE;

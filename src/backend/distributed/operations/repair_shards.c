@@ -1168,8 +1168,10 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		 * wouldn't be visible in the session that get_rebalance_progress uses.
 		 * So get_rebalance_progress would always report its size as 0.
 		 */
-		List *shardCreateCommandList = RecreateShardDDLCommandList(shardInterval, sourceNodeName,
-														   sourceNodePort);
+		List *shardCreateCommandList = RecreateShardDDLCommandList(shardInterval,
+																   sourceNodeName,
+																   sourceNodePort);
+
 		/*
 		 * Skip copying data for partitioned tables, because they contain no
 		 * data themselves. Their partitions do contain data, but those are
@@ -1178,20 +1180,22 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		List *copyAndPostCreationCommandList = NIL;
 		if (!PartitionedTable(shardInterval->relationId))
 		{
-			copyAndPostCreationCommandList = CopyShardContentsCommandList(shardInterval, sourceNodeName,
-														  sourceNodePort);
+			copyAndPostCreationCommandList = CopyShardContentsCommandList(shardInterval,
+																		  sourceNodeName,
+																		  sourceNodePort);
 		}
 		copyAndPostCreationCommandList = list_concat(
 			copyAndPostCreationCommandList,
 			PostLoadShardCreationCommandList(shardInterval, sourceNodeName,
 											 sourceNodePort));
 
-		ShardIntervalWithCommandList *intervalWithCommandList = palloc0(sizeof(ShardIntervalWithCommandList));
+		ShardIntervalWithCommandList *intervalWithCommandList = palloc0(
+			sizeof(ShardIntervalWithCommandList));
 		intervalWithCommandList->shardInterval = shardInterval;
-		intervalWithCommandList->ddlCommandList = list_concat(shardCreateCommandList, copyAndPostCreationCommandList);
-		shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList, intervalWithCommandList);
-
-		MemoryContextReset(localContext);
+		intervalWithCommandList->ddlCommandList = list_concat(shardCreateCommandList,
+															  copyAndPostCreationCommandList);
+		shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList,
+												  intervalWithCommandList);
 	}
 
 	/*
@@ -1205,13 +1209,13 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 			char *attachPartitionCommand =
 				GenerateAttachShardPartitionCommand(shardInterval);
 
-			ShardIntervalWithCommandList *intervalWithCommandList = palloc0(sizeof(ShardIntervalWithCommandList));
+			ShardIntervalWithCommandList *intervalWithCommandList = palloc0(
+				sizeof(ShardIntervalWithCommandList));
 			intervalWithCommandList->shardInterval = shardInterval;
 			intervalWithCommandList->ddlCommandList = list_make1(attachPartitionCommand);
-			shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList, intervalWithCommandList);
+			shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList,
+													  intervalWithCommandList);
 		}
-
-		MemoryContextReset(localContext);
 	}
 
 	/*
@@ -1226,16 +1230,17 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 													 &shardForeignConstraintCommandList,
 													 &referenceTableForeignConstraintList);
 
-		ShardIntervalWithCommandList *intervalWithCommandList = palloc0(sizeof(ShardIntervalWithCommandList));
+		ShardIntervalWithCommandList *intervalWithCommandList = palloc0(
+			sizeof(ShardIntervalWithCommandList));
 		intervalWithCommandList->shardInterval = shardInterval;
-		intervalWithCommandList->ddlCommandList = list_concat(shardForeignConstraintCommandList,
-												referenceTableForeignConstraintList);
-		shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList, intervalWithCommandList);
-
-		MemoryContextReset(localContext);
+		intervalWithCommandList->ddlCommandList = list_concat(
+			shardForeignConstraintCommandList,
+			referenceTableForeignConstraintList);
+		shardIntervalWithDDCommandsList = lappend(shardIntervalWithDDCommandsList,
+												  intervalWithCommandList);
 	}
 
-	// Now execute all DDL Commads.
+	/* Now execute all DDL Commads. */
 	ShardIntervalWithCommandList *intervalWithCommandList = NULL;
 	foreach_ptr(intervalWithCommandList, shardIntervalWithDDCommandsList)
 	{
@@ -1245,6 +1250,7 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 												  intervalWithCommandList->ddlCommandList);
 	}
 
+	MemoryContextReset(localContext);
 	MemoryContextSwitchTo(oldContext);
 }
 
