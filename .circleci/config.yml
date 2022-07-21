@@ -114,7 +114,6 @@ jobs:
       image_tag:
         description: 'docker image tag to use'
         type: string
-        default: 12-13
     docker:
       - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     working_directory: /home/circleci/project
@@ -195,7 +194,6 @@ jobs:
       image_tag:
         description: 'docker image tag to use'
         type: string
-        default: 12-13
     docker:
       - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     resource_class: xlarge
