@@ -12,6 +12,7 @@
 #ifndef CITUS_DEPENDED_OBJECT_H
 #define CITUS_DEPENDED_OBJECT_H
 
+#include "distributed/commands.h"
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 
@@ -22,5 +23,6 @@ extern void SetLocalClientMinMessagesIfRunningPGTests(int
 extern void SetLocalHideCitusDependentObjectsDisabledWhenAlreadyEnabled(void);
 extern bool HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context);
 extern bool IsPgLocksTable(RangeTblEntry *rte);
+extern bool DistOpsHasInvalidObject(Node *node, const DistributeObjectOps *ops);
 
 #endif /* CITUS_DEPENDED_OBJECT_H */

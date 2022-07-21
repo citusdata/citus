@@ -308,3 +308,35 @@ GetCitusDependedObjectArgs(int pgMetaTableVarno, int pgMetaTableOid)
 
 	return list_make2((Node *) metaTableOidConst, (Node *) oidVar);
 }
+
+
+/*
+ * DistOpsHasInvalidObject returns true if any address in the given node
+ * is invalid; otherwise, returns false. If ops is null or it has no
+ * implemented address method, we return false.
+ *
+ * If EnableUnsupportedFeatureMessages is active, then we return false.
+ */
+bool
+DistOpsHasInvalidObject(Node *node, const DistributeObjectOps *ops)
+{
+	if (EnableUnsupportedFeatureMessages)
+	{
+		return false;
+	}
+
+	if (ops && ops->address)
+	{
+		List *objectAddresses = ops->address(node, true);
+		ObjectAddress *objectAddress = NULL;
+		foreach_ptr(objectAddress, objectAddresses)
+		{
+			if (!OidIsValid(objectAddress->objectId))
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}

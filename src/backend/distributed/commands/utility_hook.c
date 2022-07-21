@@ -45,6 +45,7 @@
 #include "commands/tablecmds.h"
 #include "distributed/adaptive_executor.h"
 #include "distributed/backend_data.h"
+#include "distributed/citus_depended_object.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
@@ -376,6 +377,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 {
 	Node *parsetree = pstmt->utilityStmt;
 	List *ddlJobs = NIL;
+	bool distOpsHasInvalidObject = false;
 
 	if (IsA(parsetree, ExplainStmt) &&
 		IsA(((ExplainStmt *) parsetree)->query, Query))
@@ -543,6 +545,16 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		ops = GetDistributeObjectOps(parsetree);
 
 		/*
+		 * Preprocess and qualify steps can cause pg tests to fail because of the
+		 * unwanted citus related warnings or early error logs related to invalid address.
+		 * Therefore, we first check if all addresses in the given statement are valid.
+		 * Then, we do not execute qualify and preprocess if any address is invalid to
+		 * prevent before-mentioned citus related messages. PG will complain about the
+		 * invalid address, so we are safe to not execute qualify and preprocess.
+		 */
+		distOpsHasInvalidObject = DistOpsHasInvalidObject(parsetree, ops);
+
+		/*
 		 * For some statements Citus defines a Qualify function. The goal of this function
 		 * is to take any ambiguity from the statement that is contextual on either the
 		 * search_path or current settings.
@@ -551,12 +563,12 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 * deserialize calls for the statement portable to other postgres servers, the
 		 * workers in our case.
 		 */
-		if (ops && ops->qualify)
+		if (ops && ops->qualify && !distOpsHasInvalidObject)
 		{
 			ops->qualify(parsetree);
 		}
 
-		if (ops && ops->preprocess)
+		if (ops && ops->preprocess && !distOpsHasInvalidObject)
 		{
 			ddlJobs = ops->preprocess(parsetree, queryString, context);
 		}
