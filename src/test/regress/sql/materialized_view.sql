@@ -109,6 +109,7 @@ FROM lineitem_local_to_hash_part, orders_local_to_hash_part, (SELECT SUM(l_exten
 WHERE lineitem_local_to_hash_part.l_orderkey=orders_local_to_hash_part.o_orderkey;
 
 SELECT create_distributed_table('lineitem_local_to_hash_part', 'l_orderkey');
+SELECT create_distributed_table('orders_local_to_hash_part', 'o_orderkey');
 
 REFRESH MATERIALIZED VIEW materialized_view;
 SELECT count(*) FROM materialized_view;

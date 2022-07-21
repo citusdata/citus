@@ -160,6 +160,16 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 
 (1 row)
 
+SELECT create_distributed_table('orders_local_to_hash_part', 'o_orderkey');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$materialized_view.orders_local_to_hash_part$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 REFRESH MATERIALIZED VIEW materialized_view;
 SELECT count(*) FROM materialized_view;
  count
