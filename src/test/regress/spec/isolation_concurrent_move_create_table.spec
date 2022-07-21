@@ -9,11 +9,13 @@ setup
 	SET citus.shard_replication_factor TO 1;
 	SELECT create_distributed_table('concurrent_table_1', 'id', colocate_with := 'none');
 	SELECT create_distributed_table('concurrent_table_4', 'id');
+
+	SELECT nodeid INTO first_node_id FROM pg_dist_node WHERE nodeport = 57637;
 }
 
 teardown
 {
-	DROP TABLE concurrent_table_1, concurrent_table_2, concurrent_table_3, concurrent_table_4, concurrent_table_5 CASCADE;
+	DROP TABLE concurrent_table_1, concurrent_table_2, concurrent_table_3, concurrent_table_4, concurrent_table_5, first_node_id CASCADE;
 }
 
 session "s1"
@@ -30,6 +32,14 @@ step "s1-move-shard-block"
 	WITH shardid AS (SELECT shardid FROM pg_dist_shard where logicalrelid = 'concurrent_table_1'::regclass ORDER BY shardid LIMIT 1)
 	SELECT citus_move_Shard_placement(shardid.shardid, 'localhost', 57637, 'localhost', 57638, 'block_writes') FROM shardid;
 }
+
+step "s1-split-block"
+{
+	WITH shardid AS (SELECT shardid FROM pg_dist_shard where logicalrelid = 'concurrent_table_1'::regclass ORDER BY shardid LIMIT 1)
+	SELECT citus_split_shard_by_split_points(
+	shardid.shardid, ARRAY['2113265921'], ARRAY[(SELECT * FROM first_node_id), (SELECT * FROM first_node_id)], 'block_writes') FROM shardid;
+}
+
 
 session "s2"
 
@@ -119,6 +129,7 @@ permutation  "s2-begin" "s2-create_distributed_table" "s3-create_distributed_tab
 // concurrent create colocated table and shard move properly block each other, and cluster is healthy
 permutation  "s2-begin" "s2-create_distributed_table" "s1-move-shard-logical" "s2-commit" "s3-sanity-check" "s3-sanity-check-2"
 permutation  "s2-begin" "s2-create_distributed_table" "s1-move-shard-block" "s2-commit" "s3-sanity-check" "s3-sanity-check-2"
+permutation  "s2-begin" "s2-create_distributed_table" "s1-split-block" "s2-commit" "s3-sanity-check" "s3-sanity-check-2"
 
 // same test above, but this time implicitly colocated tables
 permutation  "s4-begin" "s4-move-shard-logical" "s5-setup-rep-factor" "s5-create_implicit_colocated_distributed_table" "s4-commit" "s3-sanity-check" "s3-sanity-check-3" "s3-sanity-check-4"
