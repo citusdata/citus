@@ -556,14 +556,6 @@ select create_distributed_table('root_tbl','a');
 -- fix the circular dependency and add to metadata
 create or replace view chain_v2 as select * from chain_v1;
 select citus_add_local_table_to_metadata('root_tbl');
--- now try adding circular dep when the table is added to metadata, errors out
-create or replace view chain_v2 as select * from chain_v1 join chain_v3 using (a);
--- undistribute and try the same for distributed tables
-select undistribute_table('root_tbl');
-select create_distributed_table('root_tbl','a');
--- errors out
-create or replace view chain_v2 as select * from chain_v1 join chain_v3 using (a);
-
 -- todo: add more matview tests once 5968 and 6028 are fixed
 
 -- cleanup at exit
