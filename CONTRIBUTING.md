@@ -13,6 +13,17 @@ why we ask this as well as instructions for how to proceed, see the
 
 ### Getting and building
 
+[PostgreSQL documentation](https://www.postgresql.org/support/versioning/) has a
+section on upgrade policy.
+
+	We always recommend that all users run the latest available minor release [for PostgreSQL] for whatever major version is in use.
+
+We expect Citus users to honor this recommendation and use latest available
+PostgreSQL minor release. Failure to do so may result in failures in our test
+suite. There are some known improvements in PG test architecture such as
+[this commit](https://github.com/postgres/postgres/commit/3f323956128ff8589ce4d3a14e8b950837831803)
+that are missing in earlier minor versions.
+
 #### Mac
 
 1. Install Xcode
