@@ -34,4 +34,5 @@ test: multi_alter_table_row_level_security
 test: multi_alter_table_row_level_security_escape
 test: stat_statements
 test: shard_move_constraints
+test: shard_move_constraints_blocking
 test: check_mx
