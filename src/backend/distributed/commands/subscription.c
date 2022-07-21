@@ -35,9 +35,6 @@ Node *
 ProcessCreateSubscriptionStmt(CreateSubscriptionStmt *createSubStmt)
 {
 	ListCell *currCell = NULL;
-	#if PG_VERSION_NUM < PG_VERSION_13
-	ListCell *prevCell = NULL;
-	#endif
 	bool useAuthinfo = false;
 
 	foreach(currCell, createSubStmt->options)
@@ -54,9 +51,6 @@ ProcessCreateSubscriptionStmt(CreateSubscriptionStmt *createSubStmt)
 
 			break;
 		}
-		#if PG_VERSION_NUM < PG_VERSION_13
-		prevCell = currCell;
-		#endif
 	}
 
 	if (useAuthinfo)
@@ -103,7 +97,7 @@ GenerateConninfoWithAuth(char *conninfo)
 		}
 		else if (strcmp(option->keyword, "port") == 0)
 		{
-			port = pg_atoi(option->val, 4, 0);
+			port = pg_strtoint32(option->val);
 		}
 		else if (strcmp(option->keyword, "user") == 0)
 		{

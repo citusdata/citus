@@ -1,12 +1,3 @@
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 12 AS server_version_above_twelve
-\gset
-\if :server_version_above_twelve
-\else
-\q
-\endif
-
-
 CREATE TABLE with_ties_table (a INT, b INT);
 SELECT create_distributed_table('with_ties_table', 'a');
 INSERT INTO with_ties_table VALUES (10, 20), (11, 21), (12, 22), (12, 22), (12, 22), (12, 23), (14, 24);

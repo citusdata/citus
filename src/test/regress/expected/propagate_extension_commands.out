@@ -1,11 +1,3 @@
--- print whether we're using version > 12 to make version-specific tests clear
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 12 AS version_above_twelve;
- version_above_twelve
----------------------------------------------------------------------
- t
-(1 row)
-
 CREATE SCHEMA "extension'test";
 -- use  a schema name with escape character
 SET search_path TO "extension'test";

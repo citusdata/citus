@@ -1,11 +1,3 @@
--- print version above 11 (eg. 12 and above)
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 11 AS version_above_eleven;
- version_above_eleven
----------------------------------------------------------------------
- t
-(1 row)
-
 -- list all postgres objects belonging to the citus extension
 SELECT pg_catalog.pg_describe_object(classid, objid, 0) AS description
 FROM pg_catalog.pg_depend, pg_catalog.pg_extension e
@@ -85,6 +77,7 @@ ORDER BY 1;
  function citus_jsonb_concatenate(jsonb,jsonb)
  function citus_jsonb_concatenate_final(jsonb)
  function citus_local_disk_space_stats()
+ function citus_locks()
  function citus_move_shard_placement(bigint,text,integer,text,integer,citus.shard_transfer_mode)
  function citus_node_capacity_1(integer)
  function citus_nodeid_for_gpid(bigint)
@@ -234,7 +227,6 @@ ORDER BY 1;
  function worker_partitioned_table_size(regclass)
  function worker_record_sequence_dependency(regclass,regclass,name)
  function worker_save_query_explain_analyze(text,jsonb)
- function worker_split_shard_replication_setup(citus.split_shard_info[])
  function worker_split_copy(bigint,split_copy_info[])
  schema citus
  schema citus_internal
@@ -263,6 +255,7 @@ ORDER BY 1;
  type split_copy_info
  view citus_dist_stat_activity
  view citus_lock_waits
+ view citus_locks
  view citus_schema.citus_tables
  view citus_shard_indexes_on_worker
  view citus_shards
@@ -271,5 +264,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(253 rows)
+(255 rows)
 

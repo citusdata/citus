@@ -178,9 +178,7 @@ typedef struct MultiExtendedOp
 	List *sortClauseList;
 	Node *limitCount;
 	Node *limitOffset;
-#if PG_VERSION_NUM >= PG_VERSION_13
 	LimitOption limitOption;
-#endif
 	Node *havingQual;
 	List *distinctClause;
 	List *windowClause;

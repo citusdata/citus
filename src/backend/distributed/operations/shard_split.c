@@ -77,6 +77,8 @@ static void SplitShardReplicationSetup(ShardInterval *shardIntervalToSplit,
 									   WorkerNode *sourceWorkerNode,
 									   List *workersForPlacementList);
 static HTAB * CreateWorkerForPlacementSet(List *workersForPlacementList);
+static void CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
+												   List *workersForPlacementList);
 static void CreateObjectOnPlacement(List *objectCreationCommandList,
 									WorkerNode *workerNode);
 static List *    CreateSplitIntervalsForShardGroup(List *sourceColocatedShardList,
@@ -98,11 +100,17 @@ static void DoSplitCopy(WorkerNode *sourceShardNode,
 						List *shardGroupSplitIntervalListList,
 						List *workersForPlacementList,
 						char *snapShotName);
+static void DoSplitCopy(WorkerNode *sourceShardNode,
+						List *sourceColocatedShardIntervalList,
+						List *shardGroupSplitIntervalListList,
+						List *workersForPlacementList);
 static StringInfo CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 										 List *splitChildrenShardIntervalList,
 										 List *workersForPlacementList);
 static void InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 											 List *workersForPlacementList);
+static void CreatePartitioningHierarchy(List *shardGroupSplitIntervalListList,
+										List *workersForPlacementList);
 static void CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 										List *workersForPlacementList);
 static void TryDropSplitShardsOnFailure(HTAB *mapOfShardToPlacementCreatedByWorkflow);
@@ -456,8 +464,8 @@ SplitShard(SplitMode splitMode,
 
 
 /*
- * ShardIntervalHashCode computes the hash code for a shard from the
- * placement's shard id.
+ * ShardIntervalHashCode computes the hash code for a Shardinterval using
+ * shardId.
  */
 static uint32
 ShardIntervalHashCode(const void *key, Size keySize)
@@ -569,6 +577,12 @@ BlockingShardSplit(SplitOperation splitOperation,
 			workersForPlacementList);
 
 		/*
+		 * Up to this point, we performed various subtransactions that may
+		 * require additional clean-up in case of failure. The remaining operations
+		 * going forward are part of the same distributed transaction.
+		 */
+
+		/*
 		 * Drop old shards and delete related metadata. Have to do that before
 		 * creating the new shard metadata, because there's cross-checks
 		 * preventing inconsistent metadata (like overlapping shards).
@@ -578,6 +592,10 @@ BlockingShardSplit(SplitOperation splitOperation,
 		/* Insert new shard and placement metdata */
 		InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
 										 workersForPlacementList);
+
+		/* create partitioning hierarchy, if any */
+		CreatePartitioningHierarchy(shardGroupSplitIntervalListList,
+									workersForPlacementList);
 
 		/*
 		 * Create foreign keys if exists after the metadata changes happening in
@@ -666,7 +684,7 @@ CreateTaskForDDLCommandList(List *ddlCommandList, WorkerNode *workerNode)
 /* Create ShardGroup auxiliary structures (indexes, stats, replicaindentities, triggers)
  * on a list of corresponding workers.
  */
-void
+static void
 CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
 									   List *workersForPlacementList)
 {
@@ -762,47 +780,56 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 	forboth_ptr(sourceShardIntervalToCopy, sourceColocatedShardIntervalList,
 				splitShardIntervalList, shardGroupSplitIntervalListList)
 	{
-		StringInfo splitCopyUdfCommand = CreateSplitCopyCommand(sourceShardIntervalToCopy,
+		/*
+		 * Skip copying data for partitioned tables, because they contain no
+		 * data themselves. Their partitions do contain data, but those are
+		 * different colocated shards that will be copied seperately.
+		 */
+		if (!PartitionedTable(sourceShardIntervalToCopy->relationId))
+		{
+			StringInfo splitCopyUdfCommand = CreateSplitCopyCommand(sourceShardIntervalToCopy,
 																splitShardIntervalList,
 																destinationWorkerNodesList);
 
-		List *ddlCommandList = NIL;
-		StringInfo beginTransaction = makeStringInfo();
-		appendStringInfo(beginTransaction,
-						 "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;");
-		ddlCommandList = lappend(ddlCommandList, beginTransaction->data);
+				List *ddlCommandList = NIL;
+				StringInfo beginTransaction = makeStringInfo();
+				appendStringInfo(beginTransaction,
+								"BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;");
+				ddlCommandList = lappend(ddlCommandList, beginTransaction->data);
 
-		/* Set snapshot */
-		if (snapShotName != NULL)
-		{
-			StringInfo snapShotString = makeStringInfo();
-			appendStringInfo(snapShotString, "SET TRANSACTION SNAPSHOT %s;",
-							 quote_literal_cstr(
-								 snapShotName));
-			ddlCommandList = lappend(ddlCommandList, snapShotString->data);
-			printf("Sameer final string snapshotted:%s\n", snapShotString->data);
+				/* Set snapshot */
+				if (snapShotName != NULL)
+				{
+					StringInfo snapShotString = makeStringInfo();
+					appendStringInfo(snapShotString, "SET TRANSACTION SNAPSHOT %s;",
+									quote_literal_cstr(
+										snapShotName));
+					ddlCommandList = lappend(ddlCommandList, snapShotString->data);
+					printf("Sameer final string snapshotted:%s\n", snapShotString->data);
+				}
+
+				ddlCommandList = lappend(ddlCommandList, splitCopyUdfCommand->data);
+
+				StringInfo commitCommand = makeStringInfo();
+				appendStringInfo(commitCommand, "COMMIT;");
+				ddlCommandList = lappend(ddlCommandList, commitCommand->data);
+
+				Task *splitCopyTask = CitusMakeNode(Task);
+				splitCopyTask->jobId = sourceShardIntervalToCopy->shardId;
+				splitCopyTask->taskId = taskId;
+				splitCopyTask->taskType = READ_TASK;
+				splitCopyTask->replicationModel = REPLICATION_MODEL_INVALID;
+				SetTaskQueryStringList(splitCopyTask, ddlCommandList);
+
+				ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
+				SetPlacementNodeMetadata(taskPlacement, sourceShardNode);
+
+				splitCopyTask->taskPlacementList = list_make1(taskPlacement);
+
+				splitCopyTaskList = lappend(splitCopyTaskList, splitCopyTask);
+				taskId++;
+
 		}
-
-		ddlCommandList = lappend(ddlCommandList, splitCopyUdfCommand->data);
-
-		StringInfo commitCommand = makeStringInfo();
-		appendStringInfo(commitCommand, "COMMIT;");
-		ddlCommandList = lappend(ddlCommandList, commitCommand->data);
-
-		Task *splitCopyTask = CitusMakeNode(Task);
-		splitCopyTask->jobId = sourceShardIntervalToCopy->shardId;
-		splitCopyTask->taskId = taskId;
-		splitCopyTask->taskType = READ_TASK;
-		splitCopyTask->replicationModel = REPLICATION_MODEL_INVALID;
-		SetTaskQueryStringList(splitCopyTask, ddlCommandList);
-
-		ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
-		SetPlacementNodeMetadata(taskPlacement, sourceShardNode);
-
-		splitCopyTask->taskPlacementList = list_make1(taskPlacement);
-
-		splitCopyTaskList = lappend(splitCopyTaskList, splitCopyTask);
-		taskId++;
 	}
 
 	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, splitCopyTaskList,
@@ -1023,6 +1050,46 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 
 
 /*
+ * CreatePartitioningHierarchy creates the partitioning
+ * hierarchy between the shardList, if any.
+ */
+static void
+CreatePartitioningHierarchy(List *shardGroupSplitIntervalListList,
+							List *workersForPlacementList)
+{
+	/* Create partition heirarchy between shards */
+	List *shardIntervalList = NIL;
+
+	/*
+	 * Iterate over all the shards in the shard group.
+	 */
+	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
+	{
+		ShardInterval *shardInterval = NULL;
+		WorkerNode *workerPlacementNode = NULL;
+
+		/*
+		 * Iterate on split shards list for a given shard and create constraints.
+		 */
+		forboth_ptr(shardInterval, shardIntervalList, workerPlacementNode,
+					workersForPlacementList)
+		{
+			if (PartitionTable(shardInterval->relationId))
+			{
+				char *attachPartitionCommand =
+					GenerateAttachShardPartitionCommand(shardInterval);
+
+				SendCommandToWorker(
+					workerPlacementNode->workerName,
+					workerPlacementNode->workerPort,
+					attachPartitionCommand);
+			}
+		}
+	}
+}
+
+
+/*
  * Create foreign key constraints on the split children shards.
  */
 static void
@@ -1141,7 +1208,7 @@ DropShardList(List *shardIntervalList)
 
 
 /*
- * In case of failure, DropShardPlacementList drops shard placements and their metadata from both the
+ * In case of failure, TryDropSplitShardsOnFailure drops in-progress shard placements from both the
  * coordinator and mx nodes.
  */
 static void

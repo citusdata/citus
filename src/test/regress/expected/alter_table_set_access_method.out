@@ -12,13 +12,6 @@ NOTICE:  renaming the new table to public.alter_am_pg_version_table
 (1 row)
 
 DROP TABLE alter_am_pg_version_table;
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 11 AS server_version_above_eleven
-\gset
-\if :server_version_above_eleven
-\else
-\q
-\endif
 CREATE SCHEMA alter_table_set_access_method;
 SET search_path TO alter_table_set_access_method;
 SET citus.shard_count TO 4;

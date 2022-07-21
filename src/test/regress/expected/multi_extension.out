@@ -5,16 +5,8 @@
 --
 -- It'd be nice to script generation of this file, but alas, that's
 -- not done yet.
--- differentiate the output file for pg11 and versions above, with regards to objects
--- created per citus version depending on the postgres version. Upgrade tests verify the
--- objects are added in citus_finish_pg_upgrade()
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 11 AS version_above_eleven;
- version_above_eleven
----------------------------------------------------------------------
- t
-(1 row)
-
+--
+-- Upgrade tests verify the objects are added in citus_finish_pg_upgrade()
 SET citus.next_shard_id TO 580000;
 CREATE SCHEMA multi_extension;
 SELECT $definition$
@@ -952,7 +944,7 @@ DELETE FROM pg_dist_shard WHERE shardid = 1;
 CREATE TABLE e_transactions(order_id varchar(255) NULL, transaction_id int) PARTITION BY LIST(transaction_id);
 CREATE TABLE orders_2020_07_01
 PARTITION OF e_transactions FOR VALUES IN (1,2,3);
-INSERT INTO pg_dist_partition VALUES ('e_transactions'::regclass,'h', '{VAR :varno 1 :varattno 1 :vartype 1043 :vartypmod 259 :varcollid 100 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}', 7, 's');
+INSERT INTO pg_dist_partition VALUES ('e_transactions'::regclass,'h', '{VAR :varno 1 :varattno 1 :vartype 1043 :vartypmod 259 :varcollid 100 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1}', 7, 's');
 SELECT
 	(metadata->>'partitioned_citus_table_exists_pre_11')::boolean as partitioned_citus_table_exists_pre_11,
 	(metadata->>'partitioned_citus_table_exists_pre_11') IS NULL as is_null
@@ -1075,6 +1067,13 @@ ERROR:  "options" is not a view
 HINT:  Use DROP TABLE to remove a table.
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 11.1-1
+ALTER EXTENSION citus UPDATE TO '11.1-1';
+SELECT * FROM multi_extension.print_extension_changes();
                                     previous_object                                     |                                           current_object
 ---------------------------------------------------------------------
  access method columnar                                                                 |
@@ -1098,18 +1097,12 @@ SELECT * FROM multi_extension.print_extension_changes();
  table columnar.chunk_group                                                             |
  table columnar.options                                                                 |
  table columnar.stripe                                                                  |
+                                                                                        | function citus_locks() SETOF record
                                                                                         | function citus_split_shard_by_split_points(bigint,text[],integer[],citus.shard_transfer_mode) void
                                                                                         | function worker_split_copy(bigint,split_copy_info[]) void
                                                                                         | type split_copy_info
-(24 rows)
-
--- Snapshot of state at 11.1-1
-ALTER EXTENSION citus UPDATE TO '11.1-1';
-NOTICE:  version "11.1-1" of extension "citus" is already installed
-SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
----------------------------------------------------------------------
-(0 rows)
+                                                                                        | view citus_locks
+(26 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

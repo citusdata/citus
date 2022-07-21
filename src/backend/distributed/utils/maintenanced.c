@@ -53,9 +53,7 @@
 #include "storage/lmgr.h"
 #include "storage/lwlock.h"
 #include "tcop/tcopprot.h"
-#if PG_VERSION_NUM >= PG_VERSION_13
 #include "common/hashfn.h"
-#endif
 #include "utils/memutils.h"
 #include "utils/lsyscache.h"
 
@@ -117,8 +115,6 @@ static bool IsMaintenanceDaemon = false;
 
 static void MaintenanceDaemonSigTermHandler(SIGNAL_ARGS);
 static void MaintenanceDaemonSigHupHandler(SIGNAL_ARGS);
-static size_t MaintenanceDaemonShmemSize(void);
-static void MaintenanceDaemonShmemInit(void);
 static void MaintenanceDaemonShmemExit(int code, Datum arg);
 static void MaintenanceDaemonErrorContext(void *arg);
 static bool MetadataSyncTriggeredCheckAndReset(MaintenanceDaemonDBData *dbData);
@@ -133,11 +129,6 @@ static void WarnMaintenanceDaemonNotStarted(void);
 void
 InitializeMaintenanceDaemon(void)
 {
-	if (!IsUnderPostmaster)
-	{
-		RequestAddinShmemSpace(MaintenanceDaemonShmemSize());
-	}
-
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = MaintenanceDaemonShmemInit;
 }
@@ -743,7 +734,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 /*
  * MaintenanceDaemonShmemSize computes how much shared memory is required.
  */
-static size_t
+size_t
 MaintenanceDaemonShmemSize(void)
 {
 	Size size = 0;
@@ -767,7 +758,7 @@ MaintenanceDaemonShmemSize(void)
  * MaintenanceDaemonShmemInit initializes the requested shared memory for the
  * maintenance daemon.
  */
-static void
+void
 MaintenanceDaemonShmemInit(void)
 {
 	bool alreadyInitialized = false;

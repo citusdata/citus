@@ -290,22 +290,10 @@ PostprocessCreatePolicyStmt(Node *node, const char *queryString)
 static void
 AddRangeTableEntryToQueryCompat(ParseState *parseState, Relation relation)
 {
-#if PG_VERSION_NUM >= PG_VERSION_13
-	ParseNamespaceItem *rte = NULL;
-#else
-	RangeTblEntry *rte = NULL;
-#endif
-
-	rte = addRangeTableEntryForRelation(parseState, relation,
-#if PG_VERSION_NUM >= PG_VERSION_12
-										AccessShareLock,
-#endif
-										NULL, false, false);
-#if PG_VERSION_NUM >= PG_VERSION_13
+	ParseNamespaceItem *rte = addRangeTableEntryForRelation(parseState, relation,
+															AccessShareLock, NULL,
+															false, false);
 	addNSItemToQuery(parseState, rte, false, true, true);
-#else
-	addRTEtoQuery(parseState, rte, false, true, true);
-#endif
 }
 
 
@@ -612,8 +600,8 @@ RenamePolicyEventExtendNames(RenameStmt *stmt, const char *schemaName, uint64 sh
 void
 DropPolicyEventExtendNames(DropStmt *dropStmt, const char *schemaName, uint64 shardId)
 {
-	Value *relationSchemaNameValue = NULL;
-	Value *relationNameValue = NULL;
+	String *relationSchemaNameValue = NULL;
+	String *relationNameValue = NULL;
 
 	uint32 dropCount = list_length(dropStmt->objects);
 	if (dropCount > 1)
@@ -652,10 +640,10 @@ DropPolicyEventExtendNames(DropStmt *dropStmt, const char *schemaName, uint64 sh
 	/* prefix with schema name if it is not added already */
 	if (relationSchemaNameValue == NULL)
 	{
-		Value *schemaNameValue = makeString(pstrdup(schemaName));
+		String *schemaNameValue = makeString(pstrdup(schemaName));
 		relationNameList = lcons(schemaNameValue, relationNameList);
 	}
 
-	char **relationName = &(relationNameValue->val.str);
+	char **relationName = &(strVal(relationNameValue));
 	AppendShardIdToName(relationName, shardId);
 }

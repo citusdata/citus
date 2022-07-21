@@ -169,7 +169,7 @@ CreateCollationDDLsIdempotent(Oid collationId)
 }
 
 
-ObjectAddress
+List *
 AlterCollationOwnerObjectAddress(Node *node, bool missing_ok)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
@@ -177,8 +177,13 @@ AlterCollationOwnerObjectAddress(Node *node, bool missing_ok)
 
 	Assert(stmt->objectType == OBJECT_COLLATION);
 
-	return get_object_address(stmt->objectType, stmt->object, &relation,
-							  AccessExclusiveLock, missing_ok);
+	ObjectAddress objectAddress = get_object_address(stmt->objectType, stmt->object,
+													 &relation, AccessExclusiveLock,
+													 missing_ok);
+
+	ObjectAddress *objectAddressCopy = palloc0(sizeof(ObjectAddress));
+	*objectAddressCopy = objectAddress;
+	return list_make1(objectAddressCopy);
 }
 
 
@@ -186,17 +191,17 @@ AlterCollationOwnerObjectAddress(Node *node, bool missing_ok)
  * RenameCollationStmtObjectAddress returns the ObjectAddress of the type that is the object
  * of the RenameStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+List *
 RenameCollationStmtObjectAddress(Node *node, bool missing_ok)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_COLLATION);
 
 	Oid collationOid = get_collation_oid((List *) stmt->object, missing_ok);
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, CollationRelationId, collationOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, CollationRelationId, collationOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -209,7 +214,7 @@ RenameCollationStmtObjectAddress(Node *node, bool missing_ok)
  * new schema. Errors if missing_ok is false and the type cannot be found in either of the
  * schemas.
  */
-ObjectAddress
+List *
 AlterCollationSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -232,9 +237,9 @@ AlterCollationSchemaStmtObjectAddress(Node *node, bool missing_ok)
 		}
 	}
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, CollationRelationId, collationOid);
-	return address;
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, CollationRelationId, collationOid);
+	return list_make1(address);
 }
 
 
@@ -291,15 +296,15 @@ GenerateBackupNameForCollationCollision(const ObjectAddress *address)
 }
 
 
-ObjectAddress
+List *
 DefineCollationStmtObjectAddress(Node *node, bool missing_ok)
 {
 	DefineStmt *stmt = castNode(DefineStmt, node);
 	Assert(stmt->kind == OBJECT_COLLATION);
 
 	Oid collOid = get_collation_oid(stmt->defnames, missing_ok);
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, CollationRelationId, collOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, CollationRelationId, collOid);
 
-	return address;
+	return list_make1(address);
 }

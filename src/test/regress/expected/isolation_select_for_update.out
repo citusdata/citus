@@ -295,13 +295,13 @@ starting permutation: s1-begin s1-select-from-t1-with-subquery s2-begin s2-updat
 step s1-begin:
  BEGIN;
 
-DEBUG:  Creating router plan
+s1: DEBUG:  Creating router plan
 step s1-select-from-t1-with-subquery:
  SET client_min_messages TO DEBUG2;
  SELECT * FROM (SELECT * FROM test_table_1_rf1 FOR UPDATE) foo WHERE id = 1;
  RESET client_min_messages;
 
-DEBUG:  query has a single distribution column value: 1
+s1: DEBUG:  query has a single distribution column value: 1
 id|val_1
 ---------------------------------------------------------------------
  1|    2

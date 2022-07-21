@@ -112,7 +112,6 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			break;
 		}
 
-#if PG_VERSION_NUM >= PG_VERSION_13
 		case T_AlterStatsStmt:
 		{
 			AlterStatsStmt *alterStatsStmt = (AlterStatsStmt *) parseTree;
@@ -124,7 +123,6 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 
 			break;
 		}
-#endif
 
 		case T_AlterTableStmt:
 		{

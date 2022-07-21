@@ -181,9 +181,12 @@ PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 								(void *) createExtensionStmtSql,
 								ENABLE_DDL_PROPAGATION);
 
-	ObjectAddress extensionAddress = GetObjectAddressFromParseTree(node, false);
+	List *extensionAddresses = GetObjectAddressListFromParseTree(node, false);
 
-	EnsureDependenciesExistOnAllNodes(&extensionAddress);
+	/*  the code-path only supports a single object */
+	Assert(list_length(extensionAddresses) == 1);
+
+	EnsureAllObjectDependenciesExistOnAllNodes(extensionAddresses);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
@@ -319,10 +322,9 @@ FilterDistributedExtensions(List *extensionObjectList)
 			continue;
 		}
 
-		ObjectAddress address = { 0 };
-		ObjectAddressSet(address, ExtensionRelationId, extensionOid);
-
-		if (!IsObjectDistributed(&address))
+		ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*address, ExtensionRelationId, extensionOid);
+		if (!IsAnyObjectDistributed(list_make1(address)))
 		{
 			continue;
 		}
@@ -411,7 +413,10 @@ PreprocessAlterExtensionSchemaStmt(Node *node, const char *queryString,
 List *
 PostprocessAlterExtensionSchemaStmt(Node *node, const char *queryString)
 {
-	ObjectAddress extensionAddress = GetObjectAddressFromParseTree(node, false);
+	List *extensionAddresses = GetObjectAddressListFromParseTree(node, false);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(extensionAddresses) == 1);
 
 	if (!ShouldPropagateExtensionCommand(node))
 	{
@@ -419,7 +424,7 @@ PostprocessAlterExtensionSchemaStmt(Node *node, const char *queryString)
 	}
 
 	/* dependencies (schema) have changed let's ensure they exist */
-	EnsureDependenciesExistOnAllNodes(&extensionAddress);
+	EnsureAllObjectDependenciesExistOnAllNodes(extensionAddresses);
 
 	return NIL;
 }
@@ -504,7 +509,7 @@ PostprocessAlterExtensionCitusUpdateStmt(Node *node)
  *
  * Note that this function is not responsible for ensuring if dependencies exist on
  * nodes and satisfying these dependendencies if not exists, which is already done by
- * EnsureDependenciesExistOnAllNodes on demand. Hence, this function is just designed
+ * EnsureAllObjectDependenciesExistOnAllNodes on demand. Hence, this function is just designed
  * to be used when "ALTER EXTENSION citus UPDATE" is executed.
  * This is because we want to add existing objects that would have already been in
  * pg_dist_object if we had created them in new version of Citus to pg_dist_object.
@@ -1128,7 +1133,7 @@ GetDependentFDWsToExtension(Oid extensionId)
  * AlterExtensionSchemaStmtObjectAddress returns the ObjectAddress of the extension that is
  * the subject of the AlterObjectSchemaStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+List *
 AlterExtensionSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
@@ -1145,10 +1150,10 @@ AlterExtensionSchemaStmtObjectAddress(Node *node, bool missing_ok)
 							   extensionName)));
 	}
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, ExtensionRelationId, extensionOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, ExtensionRelationId, extensionOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -1156,7 +1161,7 @@ AlterExtensionSchemaStmtObjectAddress(Node *node, bool missing_ok)
  * AlterExtensionUpdateStmtObjectAddress returns the ObjectAddress of the extension that is
  * the subject of the AlterExtensionStmt. Errors if missing_ok is false.
  */
-ObjectAddress
+List *
 AlterExtensionUpdateStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterExtensionStmt *stmt = castNode(AlterExtensionStmt, node);
@@ -1171,10 +1176,10 @@ AlterExtensionUpdateStmtObjectAddress(Node *node, bool missing_ok)
 							   extensionName)));
 	}
 
-	ObjectAddress address = { 0 };
-	ObjectAddressSet(address, ExtensionRelationId, extensionOid);
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*address, ExtensionRelationId, extensionOid);
 
-	return address;
+	return list_make1(address);
 }
 
 

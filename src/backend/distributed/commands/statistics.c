@@ -55,9 +55,7 @@ static char * GenerateAlterIndexColumnSetStatsCommand(char *indexNameWithSchema,
 													  int32 attstattarget);
 static Oid GetRelIdByStatsOid(Oid statsOid);
 static char * CreateAlterCommandIfOwnerNotDefault(Oid statsOid);
-#if PG_VERSION_NUM >= PG_VERSION_13
 static char * CreateAlterCommandIfTargetNotDefault(Oid statsOid);
-#endif
 
 /*
  * PreprocessCreateStatisticsStmt is called during the planning phase for
@@ -122,9 +120,12 @@ PostprocessCreateStatisticsStmt(Node *node, const char *queryString)
 	}
 
 	bool missingOk = false;
-	ObjectAddress objectAddress = GetObjectAddressFromParseTree((Node *) stmt, missingOk);
+	List *objectAddresses = GetObjectAddressListFromParseTree((Node *) stmt, missingOk);
 
-	EnsureDependenciesExistOnAllNodes(&objectAddress);
+	/*  the code-path only supports a single object */
+	Assert(list_length(objectAddresses) == 1);
+
+	EnsureAllObjectDependenciesExistOnAllNodes(objectAddresses);
 
 	return NIL;
 }
@@ -138,16 +139,16 @@ PostprocessCreateStatisticsStmt(Node *node, const char *queryString)
  * Never returns NULL, but the objid in the address can be invalid if missingOk
  * was set to true.
  */
-ObjectAddress
+List *
 CreateStatisticsStmtObjectAddress(Node *node, bool missingOk)
 {
 	CreateStatsStmt *stmt = castNode(CreateStatsStmt, node);
 
-	ObjectAddress address = { 0 };
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	Oid statsOid = get_statistics_object_oid(stmt->defnames, missingOk);
-	ObjectAddressSet(address, StatisticExtRelationId, statsOid);
+	ObjectAddressSet(*address, StatisticExtRelationId, statsOid);
 
-	return address;
+	return list_make1(address);
 }
 
 
@@ -306,9 +307,12 @@ PostprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString)
 	}
 
 	bool missingOk = false;
-	ObjectAddress objectAddress = GetObjectAddressFromParseTree((Node *) stmt, missingOk);
+	List *objectAddresses = GetObjectAddressListFromParseTree((Node *) stmt, missingOk);
 
-	EnsureDependenciesExistOnAllNodes(&objectAddress);
+	/*  the code-path only supports a single object */
+	Assert(list_length(objectAddresses) == 1);
+
+	EnsureAllObjectDependenciesExistOnAllNodes(objectAddresses);
 
 	return NIL;
 }
@@ -322,22 +326,20 @@ PostprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString)
  * Never returns NULL, but the objid in the address can be invalid if missingOk
  * was set to true.
  */
-ObjectAddress
+List *
 AlterStatisticsSchemaStmtObjectAddress(Node *node, bool missingOk)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 
-	ObjectAddress address = { 0 };
+	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	String *statName = llast((List *) stmt->object);
 	Oid statsOid = get_statistics_object_oid(list_make2(makeString(stmt->newschema),
 														statName), missingOk);
-	ObjectAddressSet(address, StatisticExtRelationId, statsOid);
+	ObjectAddressSet(*address, StatisticExtRelationId, statsOid);
 
-	return address;
+	return list_make1(address);
 }
 
-
-#if PG_VERSION_NUM >= PG_VERSION_13
 
 /*
  * PreprocessAlterStatisticsStmt is called during the planning phase for
@@ -386,8 +388,6 @@ PreprocessAlterStatisticsStmt(Node *node, const char *queryString,
 	return ddlJobs;
 }
 
-
-#endif
 
 /*
  * PreprocessAlterStatisticsOwnerStmt is called during the planning phase for
@@ -449,10 +449,9 @@ PostprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	ObjectAddress statisticsAddress = { 0 };
-	ObjectAddressSet(statisticsAddress, StatisticExtRelationId, statsOid);
-
-	EnsureDependenciesExistOnAllNodes(&statisticsAddress);
+	ObjectAddress *statisticsAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*statisticsAddress, StatisticExtRelationId, statsOid);
+	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(statisticsAddress));
 
 	return NIL;
 }
@@ -502,7 +501,6 @@ GetExplicitStatisticsCommandList(Oid relationId)
 		explicitStatisticsCommandList =
 			lappend(explicitStatisticsCommandList,
 					makeTableDDLCommandString(createStatisticsCommand));
-#if PG_VERSION_NUM >= PG_VERSION_13
 
 		/* we need to alter stats' target if it's getting distributed after creation */
 		char *alterStatisticsTargetCommand =
@@ -514,7 +512,6 @@ GetExplicitStatisticsCommandList(Oid relationId)
 				lappend(explicitStatisticsCommandList,
 						makeTableDDLCommandString(alterStatisticsTargetCommand));
 		}
-#endif
 
 		/* we need to alter stats' owner if it's getting distributed after creation */
 		char *alterStatisticsOwnerCommand =
@@ -704,8 +701,6 @@ CreateAlterCommandIfOwnerNotDefault(Oid statsOid)
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_13
-
 /*
  * CreateAlterCommandIfTargetNotDefault returns an ALTER STATISTICS .. SET STATISTICS
  * command if the stats object with given id has a target different than the default one.
@@ -740,6 +735,3 @@ CreateAlterCommandIfTargetNotDefault(Oid statsOid)
 
 	return DeparseAlterStatisticsStmt((Node *) alterStatsStmt);
 }
-
-
-#endif

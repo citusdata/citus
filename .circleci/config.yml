@@ -128,7 +128,7 @@ jobs:
           name: 'Configure'
           command: |
             chown -R circleci .
-            gosu circleci ./configure
+            gosu circleci ./configure --without-pg-version-check
       - run:
           name: 'Enable core dumps'
           command: |
@@ -209,7 +209,7 @@ jobs:
           name: 'Configure'
           command: |
             chown -R circleci .
-            gosu circleci ./configure
+            gosu circleci ./configure --without-pg-version-check
       - run:
           name: 'Enable core dumps'
           command: |
@@ -283,7 +283,7 @@ jobs:
           name: 'Configure'
           command: |
             chown -R circleci .
-            gosu circleci ./configure
+            gosu circleci ./configure --without-pg-version-check
       - run:
           name: 'Enable core dumps'
           command: |
@@ -371,7 +371,7 @@ jobs:
           name: 'Configure'
           command: |
             chown -R circleci .
-            gosu circleci ./configure
+            gosu circleci ./configure --without-pg-version-check
       - run:
           name: 'Enable core dumps'
           command: |
@@ -448,7 +448,7 @@ jobs:
           name: 'Configure'
           command: |
             chown -R circleci .
-            gosu circleci ./configure
+            gosu circleci ./configure --without-pg-version-check
       - run:
           name: 'Enable core dumps'
           command: |

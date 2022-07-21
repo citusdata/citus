@@ -874,7 +874,6 @@ static DistributeObjectOps Schema_Rename = {
 	.address = AlterSchemaRenameStmtObjectAddress,
 	.markDistributed = false,
 };
-#if PG_VERSION_NUM >= PG_VERSION_13
 static DistributeObjectOps Statistics_Alter = {
 	.deparse = DeparseAlterStatisticsStmt,
 	.qualify = QualifyAlterStatisticsStmt,
@@ -883,7 +882,6 @@ static DistributeObjectOps Statistics_Alter = {
 	.address = NULL,
 	.markDistributed = false,
 };
-#endif
 static DistributeObjectOps Statistics_AlterObjectSchema = {
 	.deparse = DeparseAlterStatisticsSchemaStmt,
 	.qualify = QualifyAlterStatisticsSchemaStmt,
@@ -1304,13 +1302,11 @@ GetDistributeObjectOps(Node *node)
 			return &Sequence_Alter;
 		}
 
-#if PG_VERSION_NUM >= PG_VERSION_13
 		case T_AlterStatsStmt:
 		{
 			return &Statistics_Alter;
 		}
 
-#endif
 		case T_AlterTableStmt:
 		{
 			AlterTableStmt *stmt = castNode(AlterTableStmt, node);

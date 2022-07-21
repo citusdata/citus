@@ -47,8 +47,8 @@ typedef struct ShardSplitInfo
 } ShardSplitInfo;
 
 /*
- * SplitShard API to split a given shard (or shard group) in blocking / non-blocking fashion
- * based on specified split points to a set of destination nodes.
+ * SplitShard API to split a given shard (or shard group) using split mode and
+ * specified split points to a set of destination nodes.
  */
 extern void SplitShard(SplitMode splitMode,
 					   SplitOperation splitOperation,

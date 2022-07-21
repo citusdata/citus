@@ -1,10 +1,3 @@
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 12 AS server_version_above_twelve
-\gset
-\if :server_version_above_twelve
-\else
-\q
-\endif
 create schema test_pg13;
 set search_path to test_pg13;
 SET citus.shard_replication_factor to 1;

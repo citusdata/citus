@@ -53,6 +53,7 @@
 static char * CreatePgDistObjectEntryCommand(const ObjectAddress *objectAddress);
 static int ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 									 Datum *paramValues);
+static bool IsObjectDistributed(const ObjectAddress *address);
 
 PG_FUNCTION_INFO_V1(citus_unmark_object_distributed);
 PG_FUNCTION_INFO_V1(master_unmark_object_distributed);
@@ -240,17 +241,18 @@ ShouldMarkRelationDistributed(Oid relationId)
 		return false;
 	}
 
-	ObjectAddress relationAddress = { 0 };
-	ObjectAddressSet(relationAddress, RelationRelationId, relationId);
+	ObjectAddress *relationAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*relationAddress, RelationRelationId, relationId);
 
 	bool pgObject = (relationId < FirstNormalObjectId);
-	bool isObjectSupported = SupportedDependencyByCitus(&relationAddress);
+	bool isObjectSupported = SupportedDependencyByCitus(relationAddress);
 	bool ownedByExtension = IsTableOwnedByExtension(relationId);
-	bool alreadyDistributed = IsObjectDistributed(&relationAddress);
+	bool alreadyDistributed = IsObjectDistributed(relationAddress);
 	bool hasUnsupportedDependency =
-		DeferErrorIfHasUnsupportedDependency(&relationAddress) != NULL;
+		DeferErrorIfAnyObjectHasUnsupportedDependency(list_make1(relationAddress)) !=
+		NULL;
 	bool hasCircularDependency =
-		DeferErrorIfCircularDependencyExists(&relationAddress) != NULL;
+		DeferErrorIfCircularDependencyExists(relationAddress) != NULL;
 
 	/*
 	 * pgObject: Citus never marks pg objects as distributed
@@ -390,7 +392,7 @@ UnmarkObjectDistributed(const ObjectAddress *address)
  * IsObjectDistributed returns if the object addressed is already distributed in the
  * cluster. This performs a local indexed lookup in pg_dist_object.
  */
-bool
+static bool
 IsObjectDistributed(const ObjectAddress *address)
 {
 	ScanKeyData key[3];
@@ -419,6 +421,26 @@ IsObjectDistributed(const ObjectAddress *address)
 	relation_close(pgDistObjectRel, AccessShareLock);
 
 	return result;
+}
+
+
+/*
+ * IsAnyObjectDistributed iteratively calls IsObjectDistributed for given addresses to
+ * determine if any object is distributed.
+ */
+bool
+IsAnyObjectDistributed(const List *addresses)
+{
+	ObjectAddress *address = NULL;
+	foreach_ptr(address, addresses)
+	{
+		if (IsObjectDistributed(address))
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 

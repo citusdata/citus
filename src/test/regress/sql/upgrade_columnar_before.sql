@@ -1,11 +1,3 @@
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 11 AS server_version_above_eleven
-\gset
-\if :server_version_above_eleven
-\else
-\q
-\endif
-
 -- Test if relying on topological sort of the objects, not their names, works
 -- fine when re-creating objects during pg_upgrade.
 ALTER SCHEMA public RENAME TO citus_schema;

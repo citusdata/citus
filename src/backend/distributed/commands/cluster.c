@@ -36,7 +36,6 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 {
 	ClusterStmt *clusterStmt = castNode(ClusterStmt, node);
 	bool missingOK = false;
-	DDLJob *ddlJob = NULL;
 
 	if (clusterStmt->relation == NULL)
 	{
@@ -67,18 +66,14 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 		return NIL;
 	}
 
-#if PG_VERSION_NUM >= 120000
 	if (IsClusterStmtVerbose_compat(clusterStmt))
-#else
-	if (clusterStmt->verbose)
-#endif
 	{
 		ereport(ERROR, (errmsg("cannot run CLUSTER command"),
 						errdetail("VERBOSE option is currently unsupported "
 								  "for distributed tables.")));
 	}
 
-	ddlJob = palloc0(sizeof(DDLJob));
+	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->metadataSyncCommand = clusterCommand;
 	ddlJob->taskList = DDLTaskList(relationId, clusterCommand);

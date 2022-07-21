@@ -36,6 +36,9 @@ static void ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress);
 static int ObjectAddressComparator(const void *a, const void *b);
 static List * FilterObjectAddressListByPredicate(List *objectAddressList,
 												 AddressPredicate predicate);
+static void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
+static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
+static bool ShouldPropagateObject(const ObjectAddress *address);
 
 /*
  * EnsureDependenciesExistOnAllNodes finds all the dependencies that we support and makes
@@ -51,7 +54,7 @@ static List * FilterObjectAddressListByPredicate(List *objectAddressList,
  * This is solved by creating the dependencies in an idempotent manner, either via
  * postgres native CREATE IF NOT EXISTS, or citus helper functions.
  */
-void
+static void
 EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 {
 	List *dependenciesWithCommands = NIL;
@@ -143,6 +146,21 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 
 
 /*
+ * EnsureAllObjectDependenciesExistOnAllNodes iteratively calls EnsureDependenciesExistOnAllNodes
+ * for given targets.
+ */
+void
+EnsureAllObjectDependenciesExistOnAllNodes(const List *targets)
+{
+	ObjectAddress *target = NULL;
+	foreach_ptr(target, targets)
+	{
+		EnsureDependenciesExistOnAllNodes(target);
+	}
+}
+
+
+/*
  * EnsureDependenciesCanBeDistributed ensures all dependencies of the given object
  * can be distributed.
  */
@@ -153,7 +171,8 @@ EnsureDependenciesCanBeDistributed(const ObjectAddress *objectAddress)
 	ErrorIfCircularDependencyExists(objectAddress);
 
 	/* If the object has any unsupported dependency, error out */
-	DeferredErrorMessage *depError = DeferErrorIfHasUnsupportedDependency(objectAddress);
+	DeferredErrorMessage *depError = DeferErrorIfAnyObjectHasUnsupportedDependency(
+		list_make1((ObjectAddress *) objectAddress));
 
 	if (depError != NULL)
 	{
@@ -310,7 +329,7 @@ GetDistributableDependenciesForObject(const ObjectAddress *target)
  * GetDependencyCreateDDLCommands returns a list (potentially empty or NIL) of ddl
  * commands to execute on a worker to create the object.
  */
-List *
+static List *
 GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 {
 	switch (getObjectClass(dependency))
@@ -489,6 +508,25 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 
 /*
+ * GetAllDependencyCreateDDLCommands iteratively calls GetDependencyCreateDDLCommands
+ * for given dependencies.
+ */
+List *
+GetAllDependencyCreateDDLCommands(const List *dependencies)
+{
+	List *commands = NIL;
+
+	ObjectAddress *dependency = NULL;
+	foreach_ptr(dependency, dependencies)
+	{
+		commands = list_concat(commands, GetDependencyCreateDDLCommands(dependency));
+	}
+
+	return commands;
+}
+
+
+/*
  * ReplicateAllObjectsToNodeCommandList returns commands to replicate all
  * previously marked objects to a worker node. The function also sets
  * clusterHasDistributedFunction if there are any distributed functions.
@@ -531,7 +569,7 @@ ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort)
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencies)
 	{
-		if (IsObjectAddressOwnedByExtension(dependency, NULL))
+		if (IsAnyObjectAddressOwnedByExtension(list_make1(dependency), NULL))
 		{
 			/*
 			 * we expect extension-owned objects to be created as a result
@@ -663,7 +701,7 @@ ShouldPropagateCreateInCoordinatedTransction()
  * ShouldPropagateObject determines if we should be propagating DDLs based
  * on their object address.
  */
-bool
+static bool
 ShouldPropagateObject(const ObjectAddress *address)
 {
 	if (!ShouldPropagate())
@@ -671,13 +709,33 @@ ShouldPropagateObject(const ObjectAddress *address)
 		return false;
 	}
 
-	if (!IsObjectDistributed(address))
+	if (!IsAnyObjectDistributed(list_make1((ObjectAddress *) address)))
 	{
 		/* do not propagate for non-distributed types */
 		return false;
 	}
 
 	return true;
+}
+
+
+/*
+ * ShouldPropagateAnyObject determines if we should be propagating DDLs based
+ * on their object addresses.
+ */
+bool
+ShouldPropagateAnyObject(List *addresses)
+{
+	ObjectAddress *address = NULL;
+	foreach_ptr(address, addresses)
+	{
+		if (ShouldPropagateObject(address))
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 

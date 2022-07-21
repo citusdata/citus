@@ -17,13 +17,9 @@
 
 #include "distributed/pg_version_constants.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "access/genam.h"
-#endif
 
-#if PG_VERSION_NUM >= PG_VERSION_13
 #include "postmaster/interrupt.h"
-#endif
 
 #include "access/htup_details.h"
 #include "access/sysattr.h"
@@ -33,6 +29,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_constraint.h"
 #include "distributed/adaptive_executor.h"
+#include "distributed/citus_safe_lib.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
@@ -1815,7 +1812,7 @@ TotalRelationSizeForSubscription(MultiConnection *connection, char *command)
 	{
 		char *resultString = PQgetvalue(result, 0, 0);
 
-		remoteTotalSize = pg_strtouint64(resultString, NULL, 10);
+		remoteTotalSize = SafeStringToUint64(resultString);
 	}
 	else
 	{
@@ -2049,13 +2046,11 @@ WaitForMiliseconds(long timeout)
 		CHECK_FOR_INTERRUPTS();
 	}
 
-	#if PG_VERSION_NUM >= PG_VERSION_13
 	if (ConfigReloadPending)
 	{
 		ConfigReloadPending = false;
 		ProcessConfigFile(PGC_SIGHUP);
 	}
-	#endif
 }
 
 

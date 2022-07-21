@@ -152,8 +152,6 @@ QualifyAlterStatisticsSchemaStmt(Node *node)
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_13
-
 /*
  * QualifyAlterStatisticsStmt qualifies AlterStatsStmt's with schema name for
  * ALTER STATISTICS .. SET STATISTICS statements.
@@ -179,8 +177,6 @@ QualifyAlterStatisticsStmt(Node *node)
 	}
 }
 
-
-#endif
 
 /*
  * QualifyAlterStatisticsOwnerStmt qualifies AlterOwnerStmt's with schema

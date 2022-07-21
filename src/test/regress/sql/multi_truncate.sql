@@ -290,7 +290,8 @@ INSERT INTO t1 VALUES(1,1);
 SELECT create_distributed_table('t1', 'a');
 ALTER TABLE t1 ADD CONSTRAINT t1_a_check CHECK(a > 2) NOT VALID;
 
--- will error out with "ERROR:  CHECK CONSTRAINT "t1_a_check" is violated by some row"
+-- will error out with
+-- "ERROR:  CHECK CONSTRAINT "t1_a_check" of relation "t1" is violated by some row"
 ALTER TABLE t1 VALIDATE CONSTRAINT t1_a_check;
 -- remove violating row
 DELETE FROM t1 where a = 1;

@@ -140,6 +140,7 @@ DEFINE_COLUMNAR_PASSTHROUGH_FUNC(test_columnar_storage_write_new_page)
 
 #define DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE 9999999
 static char *CitusVersion = CITUS_VERSION;
+static char *DeprecatedEmptyString = "";
 
 /* deprecated GUC value that should not be used anywhere outside this file */
 static int ReplicationModel = REPLICATION_MODEL_STREAMING;
@@ -149,8 +150,15 @@ static GucStringAssignHook OldApplicationNameAssignHook = NULL;
 
 static object_access_hook_type PrevObjectAccessHook = NULL;
 
+#if PG_VERSION_NUM >= PG_VERSION_15
+static shmem_request_hook_type prev_shmem_request_hook = NULL;
+#endif
+
 void _PG_init(void);
 
+#if PG_VERSION_NUM >= PG_VERSION_15
+static void citus_shmem_request(void);
+#endif
 static void CitusObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int
 								  subId, void *arg);
 static void DoInitialCleanup(void);
@@ -367,6 +375,11 @@ _PG_init(void)
 	original_client_auth_hook = ClientAuthentication_hook;
 	ClientAuthentication_hook = CitusAuthHook;
 
+#if PG_VERSION_NUM >= PG_VERSION_15
+	prev_shmem_request_hook = shmem_request_hook;
+	shmem_request_hook = citus_shmem_request;
+#endif
+
 	InitializeMaintenanceDaemon();
 
 	/* initialize coordinated transaction management */
@@ -401,6 +414,7 @@ _PG_init(void)
 
 	PrevObjectAccessHook = object_access_hook;
 	object_access_hook = CitusObjectAccessHook;
+
 
 	/* ensure columnar module is loaded at the right time */
 	load_file(COLUMNAR_MODULE_NAME, false);
@@ -442,6 +456,30 @@ _PG_init(void)
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_store_memory_stats);
 	INIT_COLUMNAR_SYMBOL(PGFunction, test_columnar_storage_write_new_page);
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_15
+
+/*
+ * Requests any additional shared memory required for citus.
+ */
+static void
+citus_shmem_request(void)
+{
+	if (prev_shmem_request_hook)
+	{
+		prev_shmem_request_hook();
+	}
+
+	RequestAddinShmemSpace(BackendManagementShmemSize());
+	RequestAddinShmemSpace(SharedConnectionStatsShmemSize());
+	RequestAddinShmemSpace(MaintenanceDaemonShmemSize());
+	RequestAddinShmemSpace(CitusQueryStatsSharedMemSize());
+	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
+}
+
+
+#endif
 
 
 /*
@@ -1233,6 +1271,26 @@ RegisterCitusConfigVariables(void)
 		&GrepRemoteCommands,
 		"",
 		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	/*
+	 * This was a GUC we added on Citus 11.0.1, and
+	 * replaced with another name on 11.0.2 via #5920.
+	 * However, as this GUC has been used in
+	 * citus_shard_indexes_on_worker-11.0.1
+	 * script. So, it is not easy to completely get rid
+	 * of the GUC. Especially with PG 15+, Postgres verifies
+	 * existence of the GUCs that are used. So, without this
+	 * CREATE EXTENSION fails.
+	 */
+	DefineCustomStringVariable(
+		"citus.hide_shards_from_app_name_prefixes",
+		gettext_noop("Deprecated, use citus.show_shards_for_app_name_prefixes"),
+		NULL,
+		&DeprecatedEmptyString,
+		"",
+		PGC_SUSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 

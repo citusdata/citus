@@ -297,8 +297,6 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		 */
 		char *queryString = pstrdup("");
 		instr_time planduration;
-		#if PG_VERSION_NUM >= PG_VERSION_13
-
 		BufferUsage bufusage_start,
 					bufusage;
 
@@ -306,7 +304,7 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		{
 			bufusage_start = pgBufferUsage;
 		}
-		#endif
+
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 		{
 			char *resultId = GenerateResultId(planId, subPlan->subPlanId);
@@ -350,15 +348,12 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 		INSTR_TIME_SET_ZERO(planduration);
 
-		#if PG_VERSION_NUM >= PG_VERSION_13
-
 		/* calc differences of buffer counters. */
 		if (es->buffers)
 		{
 			memset(&bufusage, 0, sizeof(BufferUsage));
 			BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
 		}
-		#endif
 
 		ExplainOpenGroup("PlannedStmt", "PlannedStmt", false, es);
 
@@ -923,18 +918,13 @@ BuildRemoteExplainQuery(char *queryString, ExplainState *es)
 
 	appendStringInfo(explainQuery,
 					 "EXPLAIN (ANALYZE %s, VERBOSE %s, "
-					 "COSTS %s, BUFFERS %s, "
-#if PG_VERSION_NUM >= PG_VERSION_13
-					 "WAL %s, "
-#endif
+					 "COSTS %s, BUFFERS %s, WAL %s, "
 					 "TIMING %s, SUMMARY %s, FORMAT %s) %s",
 					 es->analyze ? "TRUE" : "FALSE",
 					 es->verbose ? "TRUE" : "FALSE",
 					 es->costs ? "TRUE" : "FALSE",
 					 es->buffers ? "TRUE" : "FALSE",
-#if PG_VERSION_NUM >= PG_VERSION_13
 					 es->wal ? "TRUE" : "FALSE",
-#endif
 					 es->timing ? "TRUE" : "FALSE",
 					 es->summary ? "TRUE" : "FALSE",
 					 formatStr,
@@ -1028,9 +1018,7 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 
 	/* use the same defaults as NewExplainState() for following options */
 	es->buffers = ExtractFieldBoolean(explainOptions, "buffers", es->buffers);
-#if PG_VERSION_NUM >= PG_VERSION_13
 	es->wal = ExtractFieldBoolean(explainOptions, "wal", es->wal);
-#endif
 	es->costs = ExtractFieldBoolean(explainOptions, "costs", es->costs);
 	es->summary = ExtractFieldBoolean(explainOptions, "summary", es->summary);
 	es->verbose = ExtractFieldBoolean(explainOptions, "verbose", es->verbose);
@@ -1178,9 +1166,7 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	/* save the flags of current EXPLAIN command */
 	CurrentDistributedQueryExplainOptions.costs = es->costs;
 	CurrentDistributedQueryExplainOptions.buffers = es->buffers;
-#if PG_VERSION_NUM >= PG_VERSION_13
 	CurrentDistributedQueryExplainOptions.wal = es->wal;
-#endif
 	CurrentDistributedQueryExplainOptions.verbose = es->verbose;
 	CurrentDistributedQueryExplainOptions.summary = es->summary;
 	CurrentDistributedQueryExplainOptions.timing = es->timing;
@@ -1189,7 +1175,6 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	/* rest is copied from ExplainOneQuery() */
 	instr_time planstart,
 			   planduration;
-	#if PG_VERSION_NUM >= PG_VERSION_13
 	BufferUsage bufusage_start,
 				bufusage;
 
@@ -1197,7 +1182,6 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	{
 		bufusage_start = pgBufferUsage;
 	}
-	#endif
 
 	INSTR_TIME_SET_CURRENT(planstart);
 
@@ -1205,7 +1189,6 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	PlannedStmt *plan = pg_plan_query_compat(query, NULL, cursorOptions, params);
 	INSTR_TIME_SET_CURRENT(planduration);
 	INSTR_TIME_SUBTRACT(planduration, planstart);
-	#if PG_VERSION_NUM >= PG_VERSION_13
 
 	/* calc differences of buffer counters. */
 	if (es->buffers)
@@ -1213,7 +1196,6 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 		memset(&bufusage, 0, sizeof(BufferUsage));
 		BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
 	}
-	#endif
 
 	/* run it (if needed) and produce output */
 	ExplainOnePlanCompat(plan, into, es, queryString, params, queryEnv,
@@ -1467,17 +1449,12 @@ WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc,
 
 	StringInfo explainOptions = makeStringInfo();
 	appendStringInfo(explainOptions,
-					 "{\"verbose\": %s, \"costs\": %s, \"buffers\": %s, "
-#if PG_VERSION_NUM >= PG_VERSION_13
-					 "\"wal\": %s, "
-#endif
+					 "{\"verbose\": %s, \"costs\": %s, \"buffers\": %s, \"wal\": %s, "
 					 "\"timing\": %s, \"summary\": %s, \"format\": \"%s\"}",
 					 CurrentDistributedQueryExplainOptions.verbose ? "true" : "false",
 					 CurrentDistributedQueryExplainOptions.costs ? "true" : "false",
 					 CurrentDistributedQueryExplainOptions.buffers ? "true" : "false",
-#if PG_VERSION_NUM >= PG_VERSION_13
 					 CurrentDistributedQueryExplainOptions.wal ? "true" : "false",
-#endif
 					 CurrentDistributedQueryExplainOptions.timing ? "true" : "false",
 					 CurrentDistributedQueryExplainOptions.summary ? "true" : "false",
 					 ExplainFormatStr(CurrentDistributedQueryExplainOptions.format));
@@ -1632,13 +1609,11 @@ ExplainOneQuery(Query *query, int cursorOptions,
 	{
 		instr_time	planstart,
 					planduration;
-		#if PG_VERSION_NUM >= PG_VERSION_13
 		BufferUsage bufusage_start,
 			    bufusage;
 
 		if (es->buffers)
 			bufusage_start = pgBufferUsage;
-		#endif
 		INSTR_TIME_SET_CURRENT(planstart);
 
 		/* plan the query */
@@ -1647,15 +1622,13 @@ ExplainOneQuery(Query *query, int cursorOptions,
 		INSTR_TIME_SET_CURRENT(planduration);
 		INSTR_TIME_SUBTRACT(planduration, planstart);
 
-		#if PG_VERSION_NUM >= PG_VERSION_13
-
 		/* calc differences of buffer counters. */
 		if (es->buffers)
 		{
 			memset(&bufusage, 0, sizeof(BufferUsage));
 			BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
 		}
-		#endif
+
 		/* run it (if needed) and produce output */
 		ExplainOnePlanCompat(plan, into, es, queryString, params, queryEnv,
 					   &planduration, (es->buffers ? &bufusage : NULL));
@@ -1696,10 +1669,10 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 
 	if (es->buffers)
 		instrument_option |= INSTRUMENT_BUFFERS;
-#if PG_VERSION_NUM >= PG_VERSION_13
+
 	if (es->wal)
 		instrument_option |= INSTRUMENT_WAL;
-#endif
+
 	/*
 	 * We always collect timing for the entire statement, even when node-level
 	 * timing is off, so we don't look at es->timing here.  (We could skip

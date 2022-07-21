@@ -29,9 +29,7 @@
 #include "storage/lockdefs.h"
 #include "utils/fmgroids.h"
 #include "utils/hsearch.h"
-#if PG_VERSION_NUM >= PG_VERSION_13
 #include "common/hashfn.h"
-#endif
 #include "utils/inval.h"
 #include "utils/memutils.h"
 

@@ -121,25 +121,3 @@ SELECT citus_split_shard_by_split_points(
 	51261400,
 	ARRAY['-1073741826'],
 	ARRAY[:worker_1_node, :worker_2_node]);
-
--- Create distributed table with columnar type.
-SET citus.next_shard_id TO 51271400;
-CREATE TABLE table_to_split_columnar (id bigserial PRIMARY KEY, value char) USING columnar;
-SELECT create_distributed_table('table_to_split_columnar','id');
-
--- UDF fails for columnar table.
-SELECT citus_split_shard_by_split_points(
-	51271400,
-	ARRAY['-1073741826'],
-	ARRAY[:worker_1_node, :worker_2_node]);
-
--- Create distributed table which is partitioned.
-SET citus.next_shard_id TO 51271900;
-CREATE TABLE table_to_split_partitioned(id integer, dt date) PARTITION BY RANGE(dt);
-SELECT create_distributed_table('table_to_split_partitioned','id');
-
--- UDF fails for partitioned table.
-SELECT citus_split_shard_by_split_points(
-	51271900,
-	ARRAY['-1073741826'],
-	ARRAY[:worker_1_node, :worker_2_node]);
