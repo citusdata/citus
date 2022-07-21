@@ -2112,6 +2112,13 @@ GetDependingViews(Oid relationId)
 			ObjectAddress relationAddress = { 0 };
 			ObjectAddressSet(relationAddress, RelationRelationId, dependingNode->id);
 
+			/*
+			 * This function does not catch views with circular dependencies,
+			 * because of the remaining dependency count check below.
+			 * Here we check if the view has a circular dependency or not.
+			 * If yes, we error out with a message that tells the user that
+			 * Citus does not handle circular dependencies.
+			 */
 			DeferredErrorMessage *depError =
 				DeferErrorIfCircularDependencyExists(&relationAddress);
 			if (depError != NULL)
