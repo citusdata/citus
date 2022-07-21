@@ -208,6 +208,7 @@ static char * CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaNa
 														  char *targetSchemaName,
 														  char *targetName);
 static void ErrorIfMatViewSizeExceedsTheLimit(Oid matViewOid);
+static char * CreateMaterializedViewDDLCommand(Oid matViewOid);
 static char * GetAccessMethodForMatViewIfExists(Oid viewOid);
 static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
 												   CascadeToColocatedOption cascadeOption);
@@ -1463,7 +1464,7 @@ ErrorIfMatViewSizeExceedsTheLimit(Oid matViewOid)
  *
  * Related issue: https://github.com/citusdata/citus/issues/5968
  */
-char *
+static char *
 CreateMaterializedViewDDLCommand(Oid matViewOid)
 {
 	StringInfo query = makeStringInfo();
