@@ -218,26 +218,6 @@ PrintShardSplitPubSubMetadata(ShardSplitSubscriberMetadata *shardSplitMetadata)
 	printf("\n");
 }
 
-
-/* static void */
-/* CreateShardSplitPublications(MultiConnection *sourceConnection, */
-/*                           List *shardSplitPubSubMetadataList) */
-/* { */
-/*  ShardSplitSubscriberMetadata *shardSplitPubSubMetadata = NULL; */
-/*  foreach_ptr(shardSplitPubSubMetadata, shardSplitPubSubMetadataList) */
-/*  { */
-/*      uint32 publicationForNodeId = shardSplitPubSubMetadata->slotInfo->targetNodeId; */
-/*      Oid tableOwnerId = shardSplitPubSubMetadata->tableOwnerId; */
-
-/*      CreateShardSplitPublicationForNode(sourceConnection, */
-/*                                         shardSplitPubSubMetadata-> */
-/*                                         shardIntervalListForSubscription, */
-/*                                         publicationForNodeId, */
-/*                                         tableOwnerId); */
-/*  } */
-/* } */
-
-
 void
 CreateShardSplitSubscriptions(List *targetNodeConnectionList,
 							  List *shardSplitPubSubMetadataList,
