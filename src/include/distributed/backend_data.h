@@ -42,6 +42,7 @@ typedef struct BackendData
 	uint64 globalPID;
 	bool distributedCommandOriginator;
 	DistributedTransactionId transactionId;
+	bool activeBackend; /* set to false when backend exists */
 } BackendData;
 
 
@@ -54,6 +55,7 @@ extern void LockBackendSharedMemory(LWLockMode lockMode);
 extern void UnlockBackendSharedMemory(void);
 extern void UnSetDistributedTransactionId(void);
 extern void UnSetGlobalPID(void);
+extern void SetActiveMyBackend(bool value);
 extern void AssignDistributedTransactionId(void);
 extern void AssignGlobalPID(void);
 extern uint64 GetGlobalPID(void);

@@ -40,6 +40,7 @@
 #include "storage/ipc.h"
 #include "storage/lmgr.h"
 #include "storage/lwlock.h"
+#include "storage/procarray.h"
 #include "storage/proc.h"
 #include "storage/spin.h"
 #include "storage/s_lock.h"
@@ -392,9 +393,9 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 
 		SpinLockAcquire(&currentBackend->mutex);
 
-		if (currentProc->pid == 0)
+		if (currentProc->pid == 0 || !currentBackend->activeBackend)
 		{
-			/* unused PGPROC slot */
+			/* unused PGPROC slot or the backend already exited */
 			SpinLockRelease(&currentBackend->mutex);
 			continue;
 		}
@@ -698,6 +699,12 @@ InitializeBackendData(void)
 	UnSetDistributedTransactionId();
 	UnSetGlobalPID();
 
+	/*
+	 * Signal that this backend is active and should show up
+	 * on activity monitors.
+	 */
+	SetActiveMyBackend(true);
+
 	UnlockBackendSharedMemory();
 }
 
@@ -740,6 +747,24 @@ UnSetGlobalPID(void)
 		MyBackendData->databaseId = 0;
 		MyBackendData->userId = 0;
 		MyBackendData->distributedCommandOriginator = false;
+
+		SpinLockRelease(&MyBackendData->mutex);
+	}
+}
+
+
+/*
+ * SetActiveMyBackend is a wrapper around MyBackendData->activeBackend.
+ */
+void
+SetActiveMyBackend(bool value)
+{
+	/* backend does not exist if the extension is not created */
+	if (MyBackendData)
+	{
+		SpinLockAcquire(&MyBackendData->mutex);
+
+		MyBackendData->activeBackend = value;
 
 		SpinLockRelease(&MyBackendData->mutex);
 	}
@@ -1224,6 +1249,16 @@ ActiveDistributedTransactionNumbers(void)
 		}
 
 		GetBackendDataForProc(currentProc, &currentBackendData);
+		if (!currentBackendData.activeBackend)
+		{
+			/*
+			 * Skip if the PGPROC slot is unused. We should normally use
+			 * IsBackendPid() to be able to skip reliably all the exited
+			 * processes. However, that is a costly operation. Instead, we
+			 * keep track of activeBackend in Citus code.
+			 */
+			continue;
+		}
 
 		if (!IsInDistributedTransaction(&currentBackendData))
 		{
