@@ -86,9 +86,7 @@ CREATE TABLE distributed_result_info AS
   SELECT resultId, nodeport, rowcount, targetShardId, targetShardIndex
   FROM partition_task_list_results('test', $$ SELECT * FROM source_table $$, 'target_table')
           NATURAL JOIN pg_dist_node;
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 SELECT * FROM distributed_result_info ORDER BY resultId;
        resultid        | nodeport | rowcount | targetshardid | targetshardindex
 ---------------------------------------------------------------------

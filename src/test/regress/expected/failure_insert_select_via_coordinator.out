@@ -53,9 +53,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COPY").kill()');
 (1 row)
 
 INSERT INTO events_summary SELECT event_id, event_type, count(*) FROM events_table GROUP BY 1,2;
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- kill data push
 SELECT citus.mitmproxy('conn.onQuery(query="^COPY coordinator_insert_select").kill()');
@@ -65,9 +63,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COPY coordinator_insert_select").ki
 (1 row)
 
 INSERT INTO events_summary SELECT event_id, event_type, count(*) FROM events_table GROUP BY 1,2;
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancel coordinator pull query
 SELECT citus.mitmproxy('conn.onQuery(query="^COPY").cancel(' || :pid || ')');
@@ -109,9 +105,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COPY").kill()');
 (1 row)
 
 INSERT INTO events_reference SELECT event_type, count(*) FROM events_table GROUP BY 1;
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- kill data push
 SELECT citus.mitmproxy('conn.onQuery(query="^COPY coordinator_insert_select").kill()');
@@ -121,9 +115,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COPY coordinator_insert_select").ki
 (1 row)
 
 INSERT INTO events_reference SELECT event_type, count(*) FROM events_table GROUP BY 1;
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancel coordinator pull query
 SELECT citus.mitmproxy('conn.onQuery(query="^COPY").cancel(' || :pid || ')');
@@ -167,9 +159,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COPY").kill()');
 (1 row)
 
 INSERT INTO events_reference_distributed SELECT * FROM events_reference;
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- kill data push
 SELECT citus.mitmproxy('conn.onQuery(query="^COPY coordinator_insert_select").kill()');
@@ -179,9 +169,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COPY coordinator_insert_select").ki
 (1 row)
 
 INSERT INTO events_reference_distributed SELECT * FROM events_reference;
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancel coordinator pull query
 SELECT citus.mitmproxy('conn.onQuery(query="^COPY").cancel(' || :pid || ')');

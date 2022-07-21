@@ -100,6 +100,14 @@ s/of relation ".*" violates not-null constraint/violates not-null constraint/g
 s/partition ".*" would be violated by some row/partition would be violated by some row/g
 s/of relation ".*" contains null values/contains null values/g
 
+# libpq message changes for minor versions of pg13
+# We ignore multiline error messages, and substitute first line with a single line
+# alternative that is used in some older libpq versions.
+s/(ERROR: |WARNING: |error:) server closed the connection unexpectedly/\1 connection not open/g
+/^\s*This probably means the server terminated abnormally$/d
+/^\s*before or while processing the request.$/d
+/^\s*connection not open$/d
+
 # intermediate_results
 s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\/xx_x_xxx\/\3.data/g
 
