@@ -21,6 +21,7 @@ teardown
 {
 	DROP TABLE test_table;
 	DROP USER test_user_1, test_user_2, test_readonly, test_monitor;
+	DROP TABLE IF EXISTS selected_pid;
 }
 
 session "s1"
@@ -100,4 +101,24 @@ step "s3-as-monitor"
 	SELECT count(*) FROM get_global_active_transactions() WHERE transaction_number != 0;
 }
 
+step "s3-show-activity"
+{
+	SET ROLE postgres;
+	select count(*) from get_all_active_transactions() where process_id IN (SELECT * FROM selected_pid);
+}
+
+session "s4"
+
+step "s4-record-pid"
+{
+	SELECT pg_backend_pid() INTO selected_pid;
+}
+
+step "s4-quit"
+{
+	SELECT pg_terminate_backend(pg_backend_pid());
+}
+
+
 permutation "s1-grant" "s1-begin-insert" "s2-begin-insert" "s3-as-admin" "s3-as-user-1" "s3-as-readonly" "s3-as-monitor" "s1-commit" "s2-commit"
+permutation "s4-record-pid" "s3-show-activity" "s4-quit" "s3-show-activity"

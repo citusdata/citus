@@ -646,6 +646,7 @@ CitusCleanupConnectionsAtExit(int code, Datum arg)
 
 	/* we don't want any monitoring view/udf to show already exited backends */
 	UnSetGlobalPID();
+	SetActiveMyBackend(false);
 }
 
 

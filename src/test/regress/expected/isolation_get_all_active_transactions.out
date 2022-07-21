@@ -1,4 +1,4 @@
-Parsed test spec with 3 sessions
+Parsed test spec with 4 sessions
 
 starting permutation: s1-grant s1-begin-insert s2-begin-insert s3-as-admin s3-as-user-1 s3-as-readonly s3-as-monitor s1-commit s2-commit
 step s1-grant:
@@ -92,4 +92,36 @@ step s1-commit:
 
 step s2-commit:
 	COMMIT;
+
+
+starting permutation: s4-record-pid s3-show-activity s4-quit s3-show-activity
+step s4-record-pid:
+	SELECT pg_backend_pid() INTO selected_pid;
+
+step s3-show-activity:
+	SET ROLE postgres;
+	select count(*) from get_all_active_transactions() where process_id IN (SELECT * FROM selected_pid);
+
+count
+---------------------------------------------------------------------
+    1
+(1 row)
+
+step s4-quit:
+	SELECT pg_terminate_backend(pg_backend_pid());
+
+FATAL:  terminating connection due to administrator command
+FATAL:  terminating connection due to administrator command
+server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+
+step s3-show-activity:
+	SET ROLE postgres;
+	select count(*) from get_all_active_transactions() where process_id IN (SELECT * FROM selected_pid);
+
+count
+---------------------------------------------------------------------
+    0
+(1 row)
 
