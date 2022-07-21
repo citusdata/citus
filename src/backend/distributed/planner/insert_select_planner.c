@@ -83,6 +83,7 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 static DistributedPlan * CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse,
 														   ParamListInfo boundParams);
 static DeferredErrorMessage * NonPushableInsertSelectSupported(Query *insertSelectQuery);
+static Query * WrapSubquery(Query *subquery);
 static void RelabelTargetEntryList(List *selectTargetList, List *insertTargetList);
 static List * AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 								   Oid targetRelationId);
@@ -377,8 +378,17 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *insertSelectQuery,
 	RangeTblEntry *insertRte = ExtractResultRelationRTEOrError(insertSelectQuery);
 	Oid targetRelationId = insertRte->relid;
 	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
+	Query *selectQuery = selectRte->subquery;
+	bool hasSetOperations = false;
 
-	Query *selectQuery = BuildSelectForInsertSelect(insertSelectQuery);
+	if (selectQuery->setOperations != NULL)
+	{
+		selectQuery = selectRte->subquery = WrapSubquery(selectQuery);
+		hasSetOperations = true;
+	}
+
+	/* this is required for correct deparsing of the query */
+	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
 
 	/*
 	 * Cast types of insert target list and select projection list to
@@ -386,10 +396,21 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *insertSelectQuery,
 	 */
 	selectQuery->targetList =
 		AddInsertSelectCasts(insertSelectQuery->targetList,
-							 selectQuery->targetList,
+							 copyObject(selectQuery->targetList),
 							 targetRelationId);
 
-	insertSelectQuery->cteList = NIL;
+	if (list_length(insertSelectQuery->cteList) > 0)
+	{
+		if (!hasSetOperations)
+		{
+			selectQuery = selectRte->subquery = WrapSubquery(selectQuery);
+		}
+
+		/* copy CTEs from the INSERT ... SELECT statement into outer SELECT */
+		selectQuery->cteList = copyObject(insertSelectQuery->cteList);
+		selectQuery->hasModifyingCTE = insertSelectQuery->hasModifyingCTE;
+		insertSelectQuery->cteList = NIL;
+	}
 
 	DistributedPlan *distPlan = CreateDistributedPlan(planId, selectQuery,
 													  copyObject(selectQuery),
@@ -895,10 +916,8 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 	List *newSubqueryTargetlist = NIL;
 	List *newInsertTargetlist = NIL;
 	int resno = 1;
-	Index insertTableId = 1;
+	Index selectTableId = 2;
 	int targetEntryIndex = 0;
-
-	AssertArg(InsertSelectIntoCitusTable(originalQuery));
 
 	Query *subquery = subqueryRte->subquery;
 
@@ -974,7 +993,7 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 		 */
 		Assert(!newSubqueryTargetEntry->resjunk);
 
-		Var *newInsertVar = makeVar(insertTableId, originalAttrNo,
+		Var *newInsertVar = makeVar(selectTableId, resno,
 									exprType((Node *) newSubqueryTargetEntry->expr),
 									exprTypmod((Node *) newSubqueryTargetEntry->expr),
 									exprCollation((Node *) newSubqueryTargetEntry->expr),
@@ -1425,9 +1444,15 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 		return distributedPlan;
 	}
 
-	Query *selectQuery = BuildSelectForInsertSelect(insertSelectQuery);
+	Query *selectQuery = selectRte->subquery;
+	bool hasSetOperations = false;
 
-	selectRte->subquery = selectQuery;
+	if (selectQuery->setOperations != NULL)
+	{
+		selectQuery = selectRte->subquery = WrapSubquery(selectQuery);
+		hasSetOperations = true;
+	}
+
 	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
 
 	/*
@@ -1438,6 +1463,19 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 		AddInsertSelectCasts(insertSelectQuery->targetList,
 							 selectQuery->targetList,
 							 targetRelationId);
+
+	if (list_length(insertSelectQuery->cteList) > 0)
+	{
+		if (!hasSetOperations)
+		{
+			selectQuery = selectRte->subquery = WrapSubquery(selectQuery);
+		}
+
+		/* copy CTEs from the INSERT ... SELECT statement into outer SELECT */
+		selectQuery->cteList = copyObject(insertSelectQuery->cteList);
+		selectQuery->hasModifyingCTE = insertSelectQuery->hasModifyingCTE;
+		insertSelectQuery->cteList = NIL;
+	}
 
 	/*
 	 * Later we might need to call WrapTaskListForProjection(), which requires
@@ -1520,6 +1558,63 @@ InsertSelectResultIdPrefix(uint64 planId)
 
 
 /*
+ * WrapSubquery wraps the given query as a subquery in a newly constructed
+ * "SELECT * FROM (...subquery...) citus_insert_select_subquery" query.
+ */
+static Query *
+WrapSubquery(Query *subquery)
+{
+	ParseState *pstate = make_parsestate(NULL);
+	List *newTargetList = NIL;
+
+	Query *outerQuery = makeNode(Query);
+	outerQuery->commandType = CMD_SELECT;
+
+	/* create range table entries */
+	Alias *selectAlias = makeAlias("citus_insert_select_subquery", NIL);
+	RangeTblEntry *newRangeTableEntry = RangeTableEntryFromNSItem(
+		addRangeTableEntryForSubquery(
+			pstate, subquery,
+			selectAlias, false, true));
+	outerQuery->rtable = list_make1(newRangeTableEntry);
+
+	/* set the FROM expression to the subquery */
+	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
+	newRangeTableRef->rtindex = 1;
+	outerQuery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
+
+	/* create a target list that matches the SELECT */
+	TargetEntry *selectTargetEntry = NULL;
+	foreach_ptr(selectTargetEntry, subquery->targetList)
+	{
+		/* exactly 1 entry in FROM */
+		int indexInRangeTable = 1;
+
+		if (selectTargetEntry->resjunk)
+		{
+			continue;
+		}
+
+		Var *newSelectVar = makeVar(indexInRangeTable, selectTargetEntry->resno,
+									exprType((Node *) selectTargetEntry->expr),
+									exprTypmod((Node *) selectTargetEntry->expr),
+									exprCollation((Node *) selectTargetEntry->expr), 0);
+
+		TargetEntry *newSelectTargetEntry = makeTargetEntry((Expr *) newSelectVar,
+															selectTargetEntry->resno,
+															selectTargetEntry->resname,
+															selectTargetEntry->resjunk);
+
+		newTargetList = lappend(newTargetList, newSelectTargetEntry);
+	}
+
+	outerQuery->targetList = newTargetList;
+
+	return outerQuery;
+}
+
+
+/*
  * RelabelTargetEntryList relabels select target list to have matching names with
  * insert target list.
  */
@@ -1565,8 +1660,8 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 		Oid targetType = attr->atttypid;
 		if (sourceType != targetType)
 		{
-			insertEntry->expr = CastExpr(insertEntry->expr, sourceType, targetType,
-										 attr->attcollation, attr->atttypmod);
+			insertEntry->expr = CastExpr(copyObject(insertEntry->expr), sourceType,
+										 targetType, attr->attcollation, attr->atttypmod);
 
 			/*
 			 * We cannot modify the selectEntry in-place, because ORDER BY or
