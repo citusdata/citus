@@ -139,9 +139,7 @@ SELECT citus.mitmproxy('conn.onParse(query="citus_internal_add_placement_metadat
 (1 row)
 
 SELECT create_distributed_table('t2', 'id');
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 SELECT citus.mitmproxy('conn.onParse(query="citus_internal_add_shard_metadata").cancel(' || :pid || ')');
  mitmproxy
 ---------------------------------------------------------------------

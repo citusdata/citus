@@ -49,9 +49,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS move_shard.t CA
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on sanity checks
 SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS move_shard.t CASCADE").cancel(' || :pid || ')');
@@ -70,9 +68,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE move_shard.t").kill()')
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on move_shard table creation
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE move_shard.t").cancel(' || :pid || ')');
@@ -91,9 +87,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT count\(\*\) FROM pg_subscrip
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on polling subscription state
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT count\(\*\) FROM pg_subscription_rel").cancel(' || :pid || ')');
@@ -112,9 +106,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT sum").kill()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on getting subscriber state
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT sum").cancel(' || :pid || ')');
@@ -133,9 +125,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT min\(latest_end_lsn").kill()
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on polling last write-ahead log location reported to origin WAL sender
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT min\(latest_end_lsn").cancel(' || :pid || ')');
@@ -154,28 +144,15 @@ SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").kill()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-WARNING:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
-connection not open
+WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
-connection not open
+WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
-connection not open
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- cancellation on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").cancel(' || :pid || ')');
  mitmproxy
@@ -193,9 +170,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="t_pkey").kill()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on creating the primary key
 SELECT citus.mitmproxy('conn.onQuery(query="t_pkey").cancel(' || :pid || ')');
@@ -214,19 +189,11 @@ SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-WARNING:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
-connection not open
+WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
-connection not open
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -254,19 +221,11 @@ SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-WARNING:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
-connection not open
+WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
-connection not open
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -288,19 +247,11 @@ SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-WARNING:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
-connection not open
+WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
-connection not open
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- Verify that the shard is not moved and the number of rows are still 100k
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy

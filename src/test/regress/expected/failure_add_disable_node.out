@@ -106,9 +106,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE SCHEMA").kill()');
 (1 row)
 
 SELECT master_activate_node('localhost', :worker_2_proxy_port);
-WARNING:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  failure on connection marked as essential: localhost:xxxxx
 -- verify node is not activated
