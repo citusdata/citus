@@ -118,6 +118,17 @@ s/of relation "t1" is violated by some row/is violated by some row/g
 # pg13.1 changes
 s/^ERROR:  insufficient columns in PRIMARY KEY constraint definition$/ERROR:  unique constraint on partitioned table must include all partitioning columns/g
 
+#if (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14)
+# (This is not preprocessor directive, but a reminder for the developer that will drop PG13 support )
+# libpq message changes for minor versions of pg13
+# We ignore multiline error messages, and substitute first line with a single line
+# alternative that is used in some older libpq versions.
+s/(ERROR: |WARNING: |error:) server closed the connection unexpectedly/\1 connection not open/g
+/^\s*This probably means the server terminated abnormally$/d
+/^\s*before or while processing the request.$/d
+/^\s*connection not open$/d
+#endif /* (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14) */
+
 # intermediate_results
 s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\/xx_x_xxx\/\3.data/g
 
