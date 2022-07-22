@@ -266,6 +266,43 @@ SELECT declares_cursor(5);
 
 (1 row)
 
+FETCH NEXT FROM c;
+ x | y
+---------------------------------------------------------------------
+ 5 | 50
+(1 row)
+
+FETCH FORWARD 3 FROM c;
+ x | y
+---------------------------------------------------------------------
+ 5 | 51
+ 5 | 52
+ 5 | 53
+(3 rows)
+
+FETCH LAST FROM c;
+ x | y
+---------------------------------------------------------------------
+ 5 | 59
+(1 row)
+
+FETCH BACKWARD 3 FROM c;
+ x | y
+---------------------------------------------------------------------
+ 5 | 58
+ 5 | 57
+ 5 | 56
+(3 rows)
+
+FETCH FORWARD 3 FROM c;
+ x | y
+---------------------------------------------------------------------
+ 5 | 57
+ 5 | 58
+ 5 | 59
+(3 rows)
+
+CLOSE c;
 -- Test DECLARE CURSOR .. WITH HOLD without parameter
 CREATE OR REPLACE FUNCTION declares_cursor_2()
 RETURNS void AS $$
@@ -282,15 +319,89 @@ CREATE OR REPLACE FUNCTION declares_cursor_3(p int)
 RETURNS void AS $$
 	DECLARE c3 CURSOR WITH HOLD FOR SELECT * FROM cursor_me WHERE y = $1;
 $$ LANGUAGE SQL;
-SELECT declares_cursor_3(19);
-ERROR:  Cursors for queries on distributed tables with parameters are currently unsupported
+SELECT declares_cursor_3(5);
+ declares_cursor_3
+---------------------------------------------------------------------
+
+(1 row)
+
+FETCH NEXT FROM c3;
+ x | y
+---------------------------------------------------------------------
+ 0 | 5
+(1 row)
+
+FETCH FORWARD 3 FROM c3;
+ x | y
+---------------------------------------------------------------------
+(0 rows)
+
+FETCH LAST FROM c3;
+ x | y
+---------------------------------------------------------------------
+ 0 | 5
+(1 row)
+
+FETCH BACKWARD 3 FROM c3;
+ x | y
+---------------------------------------------------------------------
+(0 rows)
+
+FETCH FORWARD 3 FROM c3;
+ x | y
+---------------------------------------------------------------------
+ 0 | 5
+(1 row)
+
+CLOSE c3;
 -- Test DECLARE CURSOR .. WITH HOLD with parameter on dist key, but not fast-path planner
 CREATE OR REPLACE FUNCTION declares_cursor_4(p int)
 RETURNS void AS $$
 	DECLARE c4 CURSOR WITH HOLD FOR SELECT *, (SELECT 1) FROM cursor_me WHERE x = $1;
 $$ LANGUAGE SQL;
-SELECT declares_cursor_4(19);
-ERROR:  Cursors for queries on distributed tables with parameters are currently unsupported
+SELECT declares_cursor_4(5);
+ declares_cursor_4
+---------------------------------------------------------------------
+
+(1 row)
+
+FETCH NEXT FROM c4;
+ x | y  | ?column?
+---------------------------------------------------------------------
+ 5 | 50 |        1
+(1 row)
+
+FETCH FORWARD 3 FROM c4;
+ x | y  | ?column?
+---------------------------------------------------------------------
+ 5 | 51 |        1
+ 5 | 52 |        1
+ 5 | 53 |        1
+(3 rows)
+
+FETCH LAST FROM c4;
+ x | y  | ?column?
+---------------------------------------------------------------------
+ 5 | 59 |        1
+(1 row)
+
+FETCH BACKWARD 3 FROM c4;
+ x | y  | ?column?
+---------------------------------------------------------------------
+ 5 | 58 |        1
+ 5 | 57 |        1
+ 5 | 56 |        1
+(3 rows)
+
+FETCH FORWARD 3 FROM c4;
+ x | y  | ?column?
+---------------------------------------------------------------------
+ 5 | 57 |        1
+ 5 | 58 |        1
+ 5 | 59 |        1
+(3 rows)
+
+CLOSE c4;
 CREATE OR REPLACE FUNCTION cursor_plpgsql(p int)
 RETURNS SETOF int AS $$
 DECLARE
