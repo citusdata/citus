@@ -1665,6 +1665,13 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 	List *projectedEntries = NIL;
 	List *nonProjectedEntries = NIL;
 
+	/*
+	 * ReorderInsertSelectTargetLists() makes sure that first few columns of
+	 * the SELECT query match the insert targets. It might contain additional
+	 * items for GROUP BY, etc.
+	 */
+	Assert(list_length(insertTargetList) <= list_length(selectTargetList));
+
 	Relation distributedRelation = table_open(targetRelationId, RowExclusiveLock);
 	TupleDesc destTupleDescriptor = RelationGetDescr(distributedRelation);
 
