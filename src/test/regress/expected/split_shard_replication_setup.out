@@ -71,7 +71,7 @@ SELECT count(*) FROM worker_split_shard_replication_setup(ARRAY[
      1
 (1 row)
 
-SELECT slot_name FROM pg_create_logical_replication_slot(FORMAT('citus_split_%s_10', :worker_2_node), 'citus') \gset
+SELECT slot_name FROM pg_create_logical_replication_slot(FORMAT('citus_shard_split_%s_10', :worker_2_node), 'citus') \gset
 -- Create subscription at worker2 with copy_data to 'false' and derived replication slot name
 \c - - - :worker_2_port
 SET search_path TO split_shard_replication_setup_schema;

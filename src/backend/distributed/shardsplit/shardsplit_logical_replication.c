@@ -22,6 +22,7 @@
 #include "utils/builtins.h"
 #include "commands/dbcommands.h"
 
+
 static HTAB *ShardInfoHashMapForPublications = NULL;
 
 /* function declarations */
@@ -32,46 +33,15 @@ ShardSplitSubscriberMetadata * CreateShardSplitSubscriberMetadata(Oid tableOwner
 																  nodeId,
 																  List *
 																  replicationSlotInfoList);
-
 static void CreateShardSplitPublicationForNode(MultiConnection *connection,
 											   List *shardList,
 											   uint32_t publicationForTargetNodeId, Oid
 											   tableOwner);
-
 static char * ShardSplitPublicationName(uint32_t nodeId, Oid ownerId);
-
-
 static void DropAllShardSplitSubscriptions(MultiConnection *cleanupConnection);
 static void DropAllShardSplitPublications(MultiConnection *cleanupConnection);
 static void DropAllShardSplitUsers(MultiConnection *cleanupConnection);
-static void DropAllReplicationSlots(List *replicationSlotInfo);
-
-
-List *
-ParseReplicationSlotInfoFromResult(PGresult *result)
-{
-	int64 rowCount = PQntuples(result);
-	int64 colCount = PQnfields(result);
-
-	List *replicationSlotInfoList = NIL;
-	for (int64 rowIndex = 0; rowIndex < rowCount; rowIndex++)
-	{
-		ReplicationSlotInfo *replicationSlotInfo = (ReplicationSlotInfo *) palloc0(
-			sizeof(ReplicationSlotInfo));
-
-		char *targeNodeIdString = PQgetvalue(result, rowIndex, 0);
-		replicationSlotInfo->targetNodeId = strtoul(targeNodeIdString, NULL, 10);
-
-		/* we're using the pstrdup to copy the data into the current memory context */
-		replicationSlotInfo->tableOwnerName = pstrdup(PQgetvalue(result, rowIndex, 1));
-
-		replicationSlotInfo->slotName = pstrdup(PQgetvalue(result, rowIndex, 2));
-
-		replicationSlotInfoList = lappend(replicationSlotInfoList, replicationSlotInfo);
-	}
-
-	return replicationSlotInfoList;
-}
+static void DropAllShardSplitReplicationSlots(MultiConnection *cleanupConnection);
 
 
 HTAB *
@@ -149,74 +119,6 @@ AddPublishableShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval,
 		lappend(nodeMappingEntry->shardSplitInfoList, (ShardInterval *) shardInterval);
 }
 
-
-void
-LogicallyReplicateSplitShards(WorkerNode *sourceWorkerNode,
-							  List *shardSplitPubSubMetadataList,
-							  List *sourceColocatedShardIntervalList,
-							  List *shardGroupSplitIntervalListList,
-							  List *destinationWorkerNodesList)
-{
-	char *superUser = CitusExtensionOwnerName();
-	char *databaseName = get_database_name(MyDatabaseId);
-	int connectionFlags = FORCE_NEW_CONNECTION;
-
-	/* Get source node connection */
-	MultiConnection *sourceConnection =
-		GetNodeUserDatabaseConnection(connectionFlags, sourceWorkerNode->workerName,
-									  sourceWorkerNode->workerPort,
-									  superUser, databaseName);
-
-	ClaimConnectionExclusively(sourceConnection);
-
-	List *targetNodeConnectionList = CreateTargetNodeConnectionsForShardSplit(
-		shardSplitPubSubMetadataList,
-		connectionFlags,
-		superUser, databaseName);
-
-	/* create publications */
-	/*CreateShardSplitPublications(sourceConnection, shardSplitPubSubMetadataList); */
-
-	CreateShardSplitSubscriptions(targetNodeConnectionList,
-								  shardSplitPubSubMetadataList,
-								  sourceWorkerNode,
-								  superUser,
-								  databaseName);
-
-	WaitForShardSplitRelationSubscriptionsBecomeReady(shardSplitPubSubMetadataList);
-
-	XLogRecPtr sourcePosition = GetRemoteLogPosition(sourceConnection);
-	WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition,
-													   shardSplitPubSubMetadataList);
-
-	CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
-										   destinationWorkerNodesList);
-
-	sourcePosition = GetRemoteLogPosition(sourceConnection);
-	WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition,
-													   shardSplitPubSubMetadataList);
-
-	BlockWritesToShardList(sourceColocatedShardIntervalList);
-
-	sourcePosition = GetRemoteLogPosition(sourceConnection);
-	WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition,
-													   shardSplitPubSubMetadataList);
-
-	/*TOOD : Create foreign key constraints and handle partitioned tables*/
-}
-
-
-void
-PrintShardSplitPubSubMetadata(ShardSplitSubscriberMetadata *shardSplitMetadata)
-{
-	printf("\nsameer: ShardSplitPubSbuMetadata");
-	ReplicationSlotInfo *replicationInfo = shardSplitMetadata->slotInfo;
-	printf("Manual Username from OID at source: %s \n", GetUserNameFromId(
-			   shardSplitMetadata->tableOwnerId, false));
-	printf("slotname:%s  targetNode:%u tableOwner:%s \n", replicationInfo->slotName,
-		   replicationInfo->targetNodeId, replicationInfo->tableOwnerName);
-	printf("\n");
-}
 
 void
 CreateShardSplitSubscriptions(List *targetNodeConnectionList,
@@ -348,18 +250,14 @@ char *
 DropExistingIfAnyAndCreateTemplateReplicationSlot(ShardInterval *shardIntervalToSplit,
 												  MultiConnection *sourceConnection)
 {
-	StringInfo splitTemplateReplicationSlotName = makeStringInfo();
-	appendStringInfo(splitTemplateReplicationSlotName,
-					 "citus_split_replicationslot_for_shard_%lu",
-					 shardIntervalToSplit->shardId);
-
 	/*
 	 * To ensure SPLIT is idempotent drop any existing slot from
 	 * previous failed operation.
 	 */
 	StringInfo dropReplicationSlotCommand = makeStringInfo();
 	appendStringInfo(dropReplicationSlotCommand, "SELECT pg_drop_replication_slot('%s')",
-					 splitTemplateReplicationSlotName->data);
+					 ShardSplitTemplateReplicationSlotName(
+						 shardIntervalToSplit->shardId));
 
 	/* The Drop command can fail so ignore the response / result and proceed anyways */
 	PGresult *result = NULL;
@@ -383,7 +281,8 @@ DropExistingIfAnyAndCreateTemplateReplicationSlot(ShardInterval *shardIntervalTo
 	/*TODO(saawasek): Try creating TEMPORAL once basic flow is ready and we have a testcase*/
 	appendStringInfo(createReplicationSlotCommand,
 					 "CREATE_REPLICATION_SLOT %s LOGICAL citus EXPORT_SNAPSHOT;",
-					 splitTemplateReplicationSlotName->data);
+					 ShardSplitTemplateReplicationSlotName(
+						 shardIntervalToSplit->shardId));
 
 	response = ExecuteOptionalRemoteCommand(sourceConnection,
 											createReplicationSlotCommand->data, &result);
@@ -396,100 +295,7 @@ DropExistingIfAnyAndCreateTemplateReplicationSlot(ShardInterval *shardIntervalTo
 	/*'snapshot_name' is second column where index starts from zero.
 	 * We're using the pstrdup to copy the data into the current memory context */
 	char *snapShotName = pstrdup(PQgetvalue(result, 0, 2 /* columIndex */));
-
 	return snapShotName;
-}
-
-
-void
-DropAllShardSplitLeftOvers(WorkerNode *sourceNode, HTAB *shardSplitHashMapForPubSub)
-{
-	char *superUser = CitusExtensionOwnerName();
-	char *databaseName = get_database_name(MyDatabaseId);
-
-	/*
-	 * We open new connections to all nodes. The reason for this is that
-	 * operations on subscriptions and publications cannot be run in a
-	 * transaction. By forcing a new connection we make sure no transaction is
-	 * active on the connection.
-	 */
-	int connectionFlags = FORCE_NEW_CONNECTION;
-
-	HASH_SEQ_STATUS statusForSubscription;
-	hash_seq_init(&statusForSubscription, shardSplitHashMapForPubSub);
-
-	NodeShardMappingEntry *entry = NULL;
-	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&statusForSubscription)) !=
-		   NULL)
-	{
-		uint32_t nodeId = entry->key.nodeId;
-		WorkerNode *workerNode = FindNodeWithNodeId(nodeId, false /*missingOk*/);
-		MultiConnection *cleanupConnection = GetNodeUserDatabaseConnection(
-			connectionFlags, workerNode->workerName, workerNode->workerPort,
-			superUser, databaseName);
-
-		DropAllShardSplitSubscriptions(cleanupConnection);
-		DropAllShardSplitUsers(cleanupConnection);
-
-		CloseConnection(cleanupConnection);
-	}
-
-	/*Drop all shard split publications at the source*/
-	MultiConnection *sourceNodeConnection = GetNodeUserDatabaseConnection(
-		connectionFlags, sourceNode->workerName, sourceNode->workerPort,
-		superUser, databaseName);
-
-	DropAllShardSplitPublications(sourceNodeConnection);
-
-	CloseConnection(sourceNodeConnection);
-}
-
-
-void
-DropAllShardSplitSubscriptions(MultiConnection *cleanupConnection)
-{
-	char *query = psprintf(
-		"SELECT subname FROM pg_subscription "
-		"WHERE subname LIKE %s || '%%'",
-		quote_literal_cstr(SHARD_SPLIT_SUBSCRIPTION_PREFIX));
-	List *subscriptionNameList = GetQueryResultStringList(cleanupConnection, query);
-	char *subscriptionName = NULL;
-	foreach_ptr(subscriptionName, subscriptionNameList)
-	{
-		DropShardSubscription(cleanupConnection, subscriptionName);
-	}
-}
-
-
-static void
-DropAllShardSplitPublications(MultiConnection *connection)
-{
-	char *query = psprintf(
-		"SELECT pubname FROM pg_publication "
-		"WHERE pubname LIKE %s || '%%'",
-		quote_literal_cstr(SHARD_SPLIT_PUBLICATION_PREFIX));
-	List *publicationNameList = GetQueryResultStringList(connection, query);
-	char *publicationName;
-	foreach_ptr(publicationName, publicationNameList)
-	{
-		DropShardPublication(connection, publicationName);
-	}
-}
-
-
-void
-DropAllShardSplitUsers(MultiConnection *connection)
-{
-	char *query = psprintf(
-		"SELECT rolname FROM pg_roles "
-		"WHERE rolname LIKE %s || '%%'",
-		quote_literal_cstr(SHARD_SPLIT_SUBSCRIPTION_ROLE_PREFIX));
-	List *usernameList = GetQueryResultStringList(connection, query);
-	char *username;
-	foreach_ptr(username, usernameList)
-	{
-		DropShardUser(connection, username);
-	}
 }
 
 
@@ -560,17 +366,13 @@ CreateShardSplitSubscriberMetadata(Oid tableOwnerId, uint32 nodeId,
 		}
 	}
 
-	PrintShardSplitPubSubMetadata(shardSplitSubscriberMetadata);
-
 	return shardSplitSubscriberMetadata;
 }
 
 
 /*TODO(saawasek): Remove existing slots before creating newer ones */
-
-/* extern void CreateReplicationSlots(MultiConnection *sourceNodeConnection, List * shardSplitSubscriberMetadataList); */
 void
-CreateReplicationSlots(MultiConnection *sourceNodeConnection,
+CreateReplicationSlots(MultiConnection *sourceNodeConnection, char *templateSlotName,
 					   List *shardSplitSubscriberMetadataList)
 {
 	ShardSplitSubscriberMetadata *subscriberMetadata = NULL;
@@ -580,10 +382,9 @@ CreateReplicationSlots(MultiConnection *sourceNodeConnection,
 
 		StringInfo createReplicationSlotCommand = makeStringInfo();
 
-		/* TODO(niupre): Replace pgoutput with an appropriate name (to e introduced in by saawasek's PR) */
 		appendStringInfo(createReplicationSlotCommand,
-						 "SELECT * FROM  pg_create_logical_replication_slot('%s','citus', false)",
-						 slotName);
+						 "SELECT * FROM  pg_copy_logical_replication_slot ('%s','%s')",
+						 templateSlotName, slotName);
 
 		PGresult *result = NULL;
 		int response = ExecuteOptionalRemoteCommand(sourceNodeConnection,
@@ -596,5 +397,245 @@ CreateReplicationSlots(MultiConnection *sourceNodeConnection,
 
 		PQclear(result);
 		ForgetResults(sourceNodeConnection);
+	}
+}
+
+
+/*
+ * ShardSplitTemplateReplicationSlotName returns name of template replication slot.
+ */
+char *
+ShardSplitTemplateReplicationSlotName(uint64 shardId)
+{
+	return psprintf("%s%lu", SHARD_SPLIT_TEMPLATE_REPLICATION_SLOT_PREFIX, shardId);
+}
+
+
+/*
+ * ParseReplicationSlotInfoFromResult parses custom datatype 'replication_slot_info'.
+ * 'replication_slot_info' is a tuple with below format:
+ * <targetNodeId, tableOwnerName, replicationSlotName>
+ */
+List *
+ParseReplicationSlotInfoFromResult(PGresult *result)
+{
+	int64 rowCount = PQntuples(result);
+	int64 colCount = PQnfields(result);
+
+	List *replicationSlotInfoList = NIL;
+	for (int64 rowIndex = 0; rowIndex < rowCount; rowIndex++)
+	{
+		ReplicationSlotInfo *replicationSlotInfo = (ReplicationSlotInfo *) palloc0(
+			sizeof(ReplicationSlotInfo));
+
+		char *targeNodeIdString = PQgetvalue(result, rowIndex, 0 /* nodeId column*/);
+
+		replicationSlotInfo->targetNodeId = strtoul(targeNodeIdString, NULL, 10);
+
+		/* We're using the pstrdup to copy the data into the current memory context */
+		replicationSlotInfo->tableOwnerName = pstrdup(PQgetvalue(result, rowIndex,
+																 1 /* table owner name column */));
+
+		/* Replication slot name */
+		replicationSlotInfo->slotName = pstrdup(PQgetvalue(result, rowIndex,
+														   2 /* slot name column */));
+
+		replicationSlotInfoList = lappend(replicationSlotInfoList, replicationSlotInfo);
+	}
+
+	return replicationSlotInfoList;
+}
+
+
+/*
+ * DropAllShardSplitLeftOvers drops shard split subscriptions, publications, roles
+ * and replication slots on all nodes. These might have been left there after
+ * the coordinator crashed during a shard split. It's important to delete them
+ * for two reasons:
+ * 1. Starting new shard split might fail when they exist, because it cannot
+ *    create them.
+ * 2. Leftover replication slots that are not consumed from anymore make it
+ *    impossible for WAL to be dropped. This can cause out-of-disk issues.
+ */
+void
+DropAllShardSplitLeftOvers(WorkerNode *sourceNode, HTAB *shardSplitHashMapForPubSub)
+{
+	char *superUser = CitusExtensionOwnerName();
+	char *databaseName = get_database_name(MyDatabaseId);
+
+	/*
+	 * We open new connections to all nodes. The reason for this is that
+	 * operations on subscriptions and publications cannot be run in a
+	 * transaction. By forcing a new connection we make sure no transaction is
+	 * active on the connection.
+	 */
+	int connectionFlags = FORCE_NEW_CONNECTION;
+
+	HASH_SEQ_STATUS statusForSubscription;
+	hash_seq_init(&statusForSubscription, shardSplitHashMapForPubSub);
+
+	NodeShardMappingEntry *entry = NULL;
+	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&statusForSubscription)) !=
+		   NULL)
+	{
+		uint32_t nodeId = entry->key.nodeId;
+		WorkerNode *workerNode = FindNodeWithNodeId(nodeId, false /*missingOk*/);
+
+		MultiConnection *cleanupConnection = GetNodeUserDatabaseConnection(
+			connectionFlags, workerNode->workerName, workerNode->workerPort,
+			superUser, databaseName);
+
+		/* We need to claim the connection exclusively while dropping the subscription */
+		ClaimConnectionExclusively(cleanupConnection);
+
+		DropAllShardSplitSubscriptions(cleanupConnection);
+		DropAllShardSplitUsers(cleanupConnection);
+
+		/* Close connection after cleanup */
+		CloseConnection(cleanupConnection);
+	}
+
+	/*Drop all shard split publications at the source*/
+	MultiConnection *sourceNodeConnection = GetNodeUserDatabaseConnection(
+		connectionFlags, sourceNode->workerName, sourceNode->workerPort,
+		superUser, databaseName);
+
+	ClaimConnectionExclusively(sourceNodeConnection);
+
+	/*
+	 * If replication slot could not be dropped while dropping the
+	 * subscriber, drop it here.
+	 */
+	DropAllShardSplitReplicationSlots(sourceNodeConnection);
+	DropAllShardSplitPublications(sourceNodeConnection);
+
+	CloseConnection(sourceNodeConnection);
+}
+
+
+void
+DropAllShardSplitSubscriptions(MultiConnection *cleanupConnection)
+{
+	char *query = psprintf(
+		"SELECT subname FROM pg_subscription "
+		"WHERE subname LIKE %s || '%%'",
+		quote_literal_cstr(SHARD_SPLIT_SUBSCRIPTION_PREFIX));
+	List *subscriptionNameList = GetQueryResultStringList(cleanupConnection, query);
+	char *subscriptionName = NULL;
+	foreach_ptr(subscriptionName, subscriptionNameList)
+	{
+		DropShardSubscription(cleanupConnection, subscriptionName);
+	}
+}
+
+
+static void
+DropAllShardSplitPublications(MultiConnection *connection)
+{
+	char *query = psprintf(
+		"SELECT pubname FROM pg_publication "
+		"WHERE pubname LIKE %s || '%%'",
+		quote_literal_cstr(SHARD_SPLIT_PUBLICATION_PREFIX));
+	List *publicationNameList = GetQueryResultStringList(connection, query);
+	char *publicationName;
+	foreach_ptr(publicationName, publicationNameList)
+	{
+		DropShardPublication(connection, publicationName);
+	}
+}
+
+
+static void
+DropAllShardSplitUsers(MultiConnection *connection)
+{
+	char *query = psprintf(
+		"SELECT rolname FROM pg_roles "
+		"WHERE rolname LIKE %s || '%%'",
+		quote_literal_cstr(SHARD_SPLIT_SUBSCRIPTION_ROLE_PREFIX));
+	List *usernameList = GetQueryResultStringList(connection, query);
+	char *username;
+	foreach_ptr(username, usernameList)
+	{
+		DropShardUser(connection, username);
+	}
+}
+
+
+static void
+DropAllShardSplitReplicationSlots(MultiConnection *cleanupConnection)
+{
+	char *query = psprintf(
+		"SELECT slot_name FROM pg_replication_slots "
+		"WHERE slot_name LIKE %s || '%%'",
+		quote_literal_cstr(SHARD_SPLIT_REPLICATION_SLOT_PREFIX));
+	List *slotNameList = GetQueryResultStringList(cleanupConnection, query);
+	char *slotName;
+	foreach_ptr(slotName, slotNameList)
+	{
+		DropShardMoveReplicationSlot(cleanupConnection, slotName);
+	}
+}
+
+
+/*
+ * DropShardSplitPublications drops the publication used for shard splits over the given
+ * connection, if it exists.
+ */
+void
+DropShardSplitPublications(MultiConnection *sourceConnection,
+						   HTAB *shardInfoHashMapForPublication)
+{
+	HASH_SEQ_STATUS status;
+	hash_seq_init(&status, shardInfoHashMapForPublication);
+
+	NodeShardMappingEntry *entry = NULL;
+	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
+	{
+		uint32 nodeId = entry->key.nodeId;
+		uint32 tableOwnerId = entry->key.tableOwnerId;
+		DropShardPublication(sourceConnection, ShardSplitPublicationName(nodeId,
+																		 tableOwnerId));
+	}
+}
+
+
+/*
+ * DropShardSplitSubsriptions drops subscriptions from the subscriber node that
+ * are used to split shards for the given table owners. Note that, it drops the
+ * replication slots on the publisher node if it can drop the slots as well
+ * with the DROP SUBSCRIPTION command. Otherwise, only the subscriptions will
+ * be deleted with DROP SUBSCRIPTION via the connection. In the latter case,
+ * replication slots will be dropped separately by calling DropShardSplitReplicationSlots.
+ */
+void
+DropShardSplitSubsriptions(List *shardSplitSubscribersMetadataList)
+{
+	ShardSplitSubscriberMetadata *subscriberMetadata = NULL;
+	foreach_ptr(subscriberMetadata, shardSplitSubscribersMetadataList)
+	{
+		uint32 tableOwnerId = subscriberMetadata->tableOwnerId;
+		MultiConnection *targetNodeConnection = subscriberMetadata->targetNodeConnection;
+
+		DropShardSubscription(targetNodeConnection, ShardSubscriptionName(tableOwnerId,
+																		  SHARD_SPLIT_SUBSCRIPTION_PREFIX));
+
+		DropShardUser(targetNodeConnection, ShardSubscriptionRole(tableOwnerId,
+																  SHARD_SPLIT_SUBSCRIPTION_ROLE_PREFIX));
+	}
+}
+
+
+/*
+ * CloseShardSplitSubscriberConnections closes connection of  subscriber nodes.
+ * 'ShardSplitSubscriberMetadata' holds connection for a subscriber node. The method
+ * traverses the list and closes each connection.
+ */
+void
+CloseShardSplitSubscriberConnections(List *shardSplitSubscriberMetadataList)
+{
+	ShardSplitSubscriberMetadata *subscriberMetadata = NULL;
+	foreach_ptr(subscriberMetadata, shardSplitSubscriberMetadataList)
+	{
+		CloseConnection(subscriberMetadata->targetNodeConnection);
 	}
 }

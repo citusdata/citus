@@ -67,5 +67,5 @@ SET search_path TO citus_split_shard_by_split_points_negative;
 SELECT * FROM show_catalog;
 SELECT * FROM pg_publication;
 SELECT * FROM pg_subscription;
-SELECT slot_name FROM pg_replication_slots;
+SELECT * FROM pg_replication_slots;
 SELECT * FROM table_to_split_100;

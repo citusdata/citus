@@ -18,8 +18,8 @@ WARNING:  Previous split shard worflow was not successfully and could not comple
      2
 (1 row)
 
-SELECT slot_name AS slot_for_worker1 FROM pg_create_logical_replication_slot(FORMAT('citus_split_%s_10', :worker_1_node), 'citus') \gset
-SELECT slot_name AS slot_for_worker2 FROM pg_create_logical_replication_slot(FORMAT('citus_split_%s_10', :worker_2_node), 'citus') \gset
+SELECT slot_name AS slot_for_worker1 FROM pg_create_logical_replication_slot(FORMAT('citus_shard_split_%s_10', :worker_1_node), 'citus') \gset
+SELECT slot_name AS slot_for_worker2 FROM pg_create_logical_replication_slot(FORMAT('citus_shard_split_%s_10', :worker_2_node), 'citus') \gset
 -- Create subscription at worker1 with copy_data to 'false' and 'slot_for_worker1'
 CREATE SUBSCRIPTION sub_worker1
         CONNECTION 'host=localhost port=xxxxx user=postgres dbname=regression'

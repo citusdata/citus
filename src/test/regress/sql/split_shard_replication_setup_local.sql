@@ -18,7 +18,7 @@ SELECT count(*) FROM worker_split_shard_replication_setup(ARRAY[
     ROW(1, 3, '0', '2147483647', :worker_1_node)::citus.split_shard_info
     ]);
 
-SELECT slot_name AS local_slot FROM pg_create_logical_replication_slot(FORMAT('citus_split_%s_10', :worker_1_node), 'citus') \gset
+SELECT slot_name AS local_slot FROM pg_create_logical_replication_slot(FORMAT('citus_shard_split_%s_10', :worker_1_node), 'citus') \gset
 
 -- Create subscription at worker1 with copy_data to 'false' a
 BEGIN;

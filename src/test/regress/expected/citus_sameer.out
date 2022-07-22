@@ -22,13 +22,13 @@ SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \
 SELECT * FROM citus_shards;
    table_name   | shardid |                         shard_name                          | citus_table_type | colocation_id | nodename  | nodeport | shard_size
 ---------------------------------------------------------------------
- table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390006 | localhost |     8888 |          0
- table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390006 | localhost |     8887 |          0
- table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390006 | localhost |     9995 |          0
- table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390006 | localhost |     9992 |          0
- table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390006 | localhost |    57637 |          0
- table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390006 | localhost |     9998 |          0
- table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390006 | localhost |     9997 |          0
+ table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390009 | localhost |     8888 |          0
+ table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390009 | localhost |     8887 |          0
+ table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390009 | localhost |     9995 |          0
+ table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390009 | localhost |     9992 |          0
+ table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390009 | localhost |    57637 |          0
+ table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390009 | localhost |     9998 |          0
+ table_to_split |       1 | citus_split_shard_by_split_points_negative.table_to_split_1 | distributed      |       1390009 | localhost |     9997 |          0
 (7 rows)
 
 SELECT * FROM pg_dist_shard;
@@ -62,7 +62,7 @@ SELECT citus_split_shard_by_split_points(
 	ARRAY['0'],
 	ARRAY[:worker_1_node, :worker_2_node],
 	'force_logical');
-WARNING:  replication slot "citus_split_replicationslot_for_shard_1" does not exist
+WARNING:  replication slot "citus_shard_split_template_slot_1" does not exist
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection claimed exclusively at transaction commit
 WARNING:  connection claimed exclusively at transaction commit
@@ -88,7 +88,7 @@ SELECT * FROM show_catalog;
 SELECT * FROM pg_subscription;
   oid  | subdbid |              subname              | subowner | subenabled | subbinary | substream |                                            subconninfo                                             |    subslotname    | subsynccommit |            subpublications
 ---------------------------------------------------------------------
- 17311 |   16384 | citus_shard_split_subscription_10 |    17310 | t          | f         | f         | host='localhost' port=xxxxx user='postgres' dbname='regression' connect_timeout=20 sslmode=prefer  | citus_split_18_10 | off           | {citus_shard_split_publication_18_10}
+ 20669 |   16384 | citus_shard_split_subscription_10 |    20668 | t          | f         | f         | host='localhost' port=xxxxx user='postgres' dbname='regression' connect_timeout=20 sslmode=prefer  | citus_split_18_10 | off           | {citus_shard_split_publication_18_10}
 (1 row)
 
 SELECT slot_name FROM pg_replication_slots;
@@ -115,20 +115,20 @@ SELECT * FROM show_catalog;
 SELECT * FROM pg_publication;
   oid  |               pubname               | pubowner | puballtables | pubinsert | pubupdate | pubdelete | pubtruncate | pubviaroot
 ---------------------------------------------------------------------
- 17371 | citus_shard_split_publication_16_10 |       10 | f            | t         | t         | t         | t           | f
- 17374 | citus_shard_split_publication_18_10 |       10 | f            | t         | t         | t         | t           | f
+ 20728 | citus_shard_split_publication_16_10 |       10 | f            | t         | t         | t         | t           | f
+ 20731 | citus_shard_split_publication_18_10 |       10 | f            | t         | t         | t         | t           | f
 (2 rows)
 
 SELECT * FROM pg_subscription;
   oid  | subdbid |              subname              | subowner | subenabled | subbinary | substream |                                            subconninfo                                             |    subslotname    | subsynccommit |            subpublications
 ---------------------------------------------------------------------
- 17378 |   16384 | citus_shard_split_subscription_10 |    17377 | t          | f         | f         | host='localhost' port=xxxxx user='postgres' dbname='regression' connect_timeout=20 sslmode=prefer  | citus_split_16_10 | off           | {citus_shard_split_publication_16_10}
+ 20735 |   16384 | citus_shard_split_subscription_10 |    20734 | t          | f         | f         | host='localhost' port=xxxxx user='postgres' dbname='regression' connect_timeout=20 sslmode=prefer  | citus_split_16_10 | off           | {citus_shard_split_publication_16_10}
 (1 row)
 
 SELECT slot_name FROM pg_replication_slots;
-                slot_name
+             slot_name
 ---------------------------------------------------------------------
- citus_split_replicationslot_for_shard_1
+ citus_shard_split_template_slot_1
  citus_split_16_10
  citus_split_18_10
 (3 rows)

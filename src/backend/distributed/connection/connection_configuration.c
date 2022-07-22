@@ -379,8 +379,9 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 
 	if (key->replication)
 	{
-		connKeywords[authParamsIdx] = "replication";
-		connValues[authParamsIdx] = "database";
+		connKeywords[authParamsIdx] = MemoryContextStrdup(context, "replication");
+		connValues[authParamsIdx] = MemoryContextStrdup(context, "database");
+
 		authParamsIdx++;
 	}
 

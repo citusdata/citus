@@ -140,7 +140,6 @@ static XLogRecPtr GetSubscriptionPosition(MultiConnection *connection,
 										  Bitmapset *tableOwnerIds,
 										  char *operationPrefix);
 static char * ShardMovePublicationName(Oid ownerId);
-static char * ShardSubscriptionName(Oid ownerId, char *operationPrefix);
 static void AcquireLogicalReplicationLock(void);
 static void DropAllShardMoveLeftovers(void);
 static void DropAllShardMoveSubscriptions(MultiConnection *connection);
@@ -149,8 +148,6 @@ static void DropAllShardMovePublications(MultiConnection *connection);
 static void DropAllShardMoveUsers(MultiConnection *connection);
 static char * ShardSubscriptionNamesValueList(Bitmapset *tableOwnerIds,
 											  char *operationPrefix);
-static void DropShardMoveReplicationSlot(MultiConnection *connection,
-										 char *publicationName);
 
 /*
  * LogicallyReplicateShards replicates a list of shards from one node to another
@@ -1096,7 +1093,7 @@ DropShardMovePublications(MultiConnection *connection, Bitmapset *tableOwnerIds)
  * DropShardMoveReplicationSlot drops the replication slot with the given name
  * if it exists.
  */
-static void
+void
 DropShardMoveReplicationSlot(MultiConnection *connection, char *replicationSlotName)
 {
 	ExecuteCriticalRemoteCommand(
@@ -1144,7 +1141,7 @@ ShardMovePublicationName(Oid ownerId)
  * This PID is then extracted from the application_name to find out which PID on the
  * coordinator is blocked by the blocked replication process.
  */
-static char *
+char *
 ShardSubscriptionName(Oid ownerId, char *operationPrefix)
 {
 	if (RunningUnderIsolationTest)
@@ -1162,7 +1159,7 @@ ShardSubscriptionName(Oid ownerId, char *operationPrefix)
  * ShardSubscriptionRole returns the name of the role used by the
  * subscription that subscribes to the tables of the given owner.
  */
-static char *
+char *
 ShardSubscriptionRole(Oid ownerId, char *operationPrefix)
 {
 	return psprintf("%s%i", operationPrefix, ownerId);

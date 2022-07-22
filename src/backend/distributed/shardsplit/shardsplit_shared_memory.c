@@ -15,6 +15,7 @@
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shardsplit_shared_memory.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/multi_logical_replication.h"
 #include "storage/ipc.h"
 #include "utils/memutils.h"
 #include "common/hashfn.h"
@@ -199,7 +200,8 @@ encode_replication_slot(uint32_t nodeId,
 						uint32_t tableOwnerId)
 {
 	StringInfo slotName = makeStringInfo();
-	appendStringInfo(slotName, "citus_split_%u_%u", nodeId, tableOwnerId);
+	appendStringInfo(slotName, "%s%u_%u", SHARD_SPLIT_REPLICATION_SLOT_PREFIX, nodeId,
+					 tableOwnerId);
 
 	if (slotName->len > NAMEDATALEN)
 	{
