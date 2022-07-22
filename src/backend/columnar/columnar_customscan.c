@@ -824,7 +824,8 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 		}
 	}
 
-	if (IsA(node, ScalarArrayOpExpr)) {
+	if (IsA(node, ScalarArrayOpExpr))
+	{
 		return (Expr *) node;
 	}
 

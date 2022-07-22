@@ -445,3 +445,33 @@ RESET columnar.max_custom_scan_paths;
 RESET columnar.qual_pushdown_correlation_threshold;
 RESET columnar.planner_debug_level;
 DROP TABLE pushdown_test;
+
+-- https://github.com/citusdata/citus/issues/5803
+
+set columnar.chunk_group_row_limit = 1000;
+
+CREATE TABLE pushdown_test(id int, country text) using columnar;
+
+BEGIN;
+    INSERT INTO pushdown_test VALUES(1, 'AL');
+    INSERT INTO pushdown_test VALUES(2, 'AU');
+END;
+
+BEGIN;
+    INSERT INTO pushdown_test VALUES(3, 'BR');
+    INSERT INTO pushdown_test VALUES(4, 'BT');
+END;
+
+BEGIN;
+    INSERT INTO pushdown_test VALUES(5, 'PK');
+    INSERT INTO pushdown_test VALUES(6, 'PA');
+END;
+BEGIN;
+    INSERT INTO pushdown_test VALUES(7, 'USA');
+    INSERT INTO pushdown_test VALUES(8, 'ZW');
+END;
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT id FROM pushdown_test WHERE country IN ('USA', 'BR', 'ZW');
+
+RESET columnar.chunk_group_row_limit;
+DROP TABLE pushdown_test;
