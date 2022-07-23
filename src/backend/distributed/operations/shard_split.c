@@ -1713,6 +1713,25 @@ ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 }
 
 
+/*
+ * CreateSplitShardReplicationSetupUDF creates and returns
+ * parameterized 'worker_split_shard_replication_setup' UDF command.
+ *
+ * 'sourceShardSplitIntervalList'    : Source shard interval to split.
+ * 'shardGroupSplitIntervalListList' : List of shard intervals for split children..
+ * 'destinationWorkerNodesList'      : List of workers for split children placement.
+ *
+ * For example consider below input values:
+ * sourceColocatedShardIntervalList : [sourceShardInterval]
+ * shardGroupSplitIntervalListList  : [<childFirstShardInterval, childSecondShardInterval>]
+ * destinationWorkerNodesList       : [worker1, worker2]
+ *
+ * SELECT * FROM worker_split_shard_replication_setup(
+ *  Array[
+ *      ROW(sourceShardId, childFirstShardId, childFirstMinRange, childFirstMaxRange, worker1)::citus.split_shard_info,
+ *      ROW(sourceShardId, childSecondShardId, childSecondMinRange, childSecondMaxRange, worker2)::citus.split_shard_info
+ *  ]);
+ */
 StringInfo
 CreateSplitShardReplicationSetupUDF(List *sourceColocatedShardIntervalList,
 									List *shardGroupSplitIntervalListList,
