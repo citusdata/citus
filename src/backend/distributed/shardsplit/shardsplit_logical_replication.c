@@ -518,42 +518,6 @@ CreateReplicationSlots(MultiConnection *sourceNodeConnection, char *templateSlot
 
 
 /*
- * ParseReplicationSlotInfoFromResult parses custom datatype 'replication_slot_info'.
- * 'replication_slot_info' is a tuple with below format:
- * <targetNodeId, tableOwnerName, replicationSlotName>
- */
-List *
-ParseReplicationSlotInfoFromResult(PGresult *result)
-{
-	int64 rowCount = PQntuples(result);
-	int64 colCount = PQnfields(result);
-
-	List *replicationSlotInfoList = NIL;
-	for (int64 rowIndex = 0; rowIndex < rowCount; rowIndex++)
-	{
-		ReplicationSlotInfo *replicationSlotInfo = (ReplicationSlotInfo *) palloc0(
-			sizeof(ReplicationSlotInfo));
-
-		char *targeNodeIdString = PQgetvalue(result, rowIndex, 0 /* nodeId column*/);
-
-		replicationSlotInfo->targetNodeId = strtoul(targeNodeIdString, NULL, 10);
-
-		/* We're using the pstrdup to copy the data into the current memory context */
-		replicationSlotInfo->tableOwnerName = pstrdup(PQgetvalue(result, rowIndex,
-																 1 /* table owner name column */));
-
-		/* Replication slot name */
-		replicationSlotInfo->slotName = pstrdup(PQgetvalue(result, rowIndex,
-														   2 /* slot name column */));
-
-		replicationSlotInfoList = lappend(replicationSlotInfoList, replicationSlotInfo);
-	}
-
-	return replicationSlotInfoList;
-}
-
-
-/*
  * DropAllShardSplitLeftOvers drops shard split subscriptions, publications, roles
  * and replication slots. These might have been left there after
  * the coordinator crashed during a shard split. It's important to delete them

@@ -61,7 +61,6 @@ extern int NodeShardMappingHashCompare(const void *left, const void *right, Size
 extern HTAB * SetupHashMapForShardInfo(void);
 
 /* Functions for subscriber metadata management */
-extern List * ParseReplicationSlotInfoFromResult(PGresult *result);
 extern List * PopulateShardSplitSubscriptionsMetadataList(HTAB *shardSplitInfoHashMap,
 														  List *replicationSlotInfoList);
 extern HTAB *  CreateShardSplitInfoMapForPublication(
@@ -73,7 +72,7 @@ extern HTAB *  CreateShardSplitInfoMapForPublication(
 extern void CreateShardSplitPublications(MultiConnection *sourceConnection,
 										 HTAB *shardInfoHashMapForPublication);
 extern void CreateShardSplitSubscriptions(List *targetNodeConnectionList,
-										  List *shardSplitPubSubMetadataList,
+										  List *shardSplitSubscriberMetadataList,
 										  WorkerNode *sourceWorkerNode, char *superUser,
 										  char *databaseName);
 extern void CreateReplicationSlots(MultiConnection *sourceNodeConnection,
