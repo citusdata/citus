@@ -2068,7 +2068,7 @@ GetSubscriptionPosition(MultiConnection *connection, Bitmapset *tableOwnerIds,
 }
 
 
-/*Refactor this for ShardMove too.*/
+/*TODO(saawasek):Refactor this for ShardMove too.*/
 void
 CreateShardSubscription(MultiConnection *connection, char *sourceNodeName,
 						int sourceNodePort, char *userName, char *databaseName,

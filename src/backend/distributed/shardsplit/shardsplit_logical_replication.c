@@ -2,6 +2,8 @@
  *
  * shardsplit_logical_replication.c
  *
+ * Function definitions for logically replicating split children.
+ *
  * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------

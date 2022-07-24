@@ -290,13 +290,13 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		strlcpy(key.database, CurrentDatabaseName(), NAMEDATALEN);
 	}
 
-	if (flags & EXCLUSIVE_AND_REPLICATION)
+	if (flags & REQUIRE_REPLICATION_CONNECTION_PARAM)
 	{
-		key.replication = true;
+		key.replicationConnParam = true;
 	}
 	else
 	{
-		key.replication = false;
+		key.replicationConnParam = false;
 	}
 
 	if (CurrentCoordinatedTransactionState == COORD_TRANS_NONE)
@@ -356,10 +356,6 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	MultiConnection *connection = MemoryContextAllocZero(ConnectionContext,
 														 sizeof(MultiConnection));
 	connection->initilizationState = POOL_STATE_NOT_INITIALIZED;
-	if (flags & EXCLUSIVE_AND_REPLICATION)
-	{
-		connection->claimedExclusively = true;
-	}
 	dlist_push_tail(entry->connections, &connection->connectionNode);
 
 	/* these two flags are by nature cannot happen at the same time */
@@ -679,7 +675,7 @@ CloseConnection(MultiConnection *connection)
 
 	strlcpy(key.hostname, connection->hostname, MAX_NODE_LENGTH);
 	key.port = connection->port;
-	key.replication = connection->replication;
+	key.replicationConnParam = connection->requiresReplicationOption;
 	strlcpy(key.user, connection->user, NAMEDATALEN);
 	strlcpy(key.database, connection->database, NAMEDATALEN);
 
@@ -1224,7 +1220,7 @@ ConnectionHashHash(const void *key, Size keysize)
 	hash = hash_combine(hash, hash_uint32(entry->port));
 	hash = hash_combine(hash, string_hash(entry->user, NAMEDATALEN));
 	hash = hash_combine(hash, string_hash(entry->database, NAMEDATALEN));
-	hash = hash_combine(hash, hash_uint32(entry->replication));
+	hash = hash_combine(hash, hash_uint32(entry->replicationConnParam));
 
 	return hash;
 }
@@ -1238,7 +1234,7 @@ ConnectionHashCompare(const void *a, const void *b, Size keysize)
 
 	if (strncmp(ca->hostname, cb->hostname, MAX_NODE_LENGTH) != 0 ||
 		ca->port != cb->port ||
-		ca->replication != cb->replication ||
+		ca->replicationConnParam != cb->replicationConnParam ||
 		strncmp(ca->user, cb->user, NAMEDATALEN) != 0 ||
 		strncmp(ca->database, cb->database, NAMEDATALEN) != 0)
 	{
@@ -1266,7 +1262,7 @@ StartConnectionEstablishment(MultiConnection *connection, ConnectionHashKey *key
 	connection->port = key->port;
 	strlcpy(connection->database, key->database, NAMEDATALEN);
 	strlcpy(connection->user, key->user, NAMEDATALEN);
-	connection->replication = key->replication;
+	connection->requiresReplicationOption = key->replicationConnParam;
 
 	connection->pgConn = PQconnectStartParams((const char **) entry->keywords,
 											  (const char **) entry->values,

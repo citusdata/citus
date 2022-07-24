@@ -771,7 +771,7 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 							 "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;");
 			ddlCommandList = lappend(ddlCommandList, beginTransaction->data);
 
-			/* Set snapshot */
+			/* Set snapshot for non-blocking shard split. */
 			if (snapShotName != NULL)
 			{
 				StringInfo snapShotString = makeStringInfo();
@@ -779,7 +779,6 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 								 quote_literal_cstr(
 									 snapShotName));
 				ddlCommandList = lappend(ddlCommandList, snapShotString->data);
-				printf("Sameer final string snapshotted:%s\n", snapShotString->data);
 			}
 
 			ddlCommandList = lappend(ddlCommandList, splitCopyUdfCommand->data);
@@ -1584,7 +1583,7 @@ CreateTemplateReplicationSlotAndReturnSnapshot(ShardInterval *shardInterval,
 {
 	/*Create Template replication slot */
 	int connectionFlags = FORCE_NEW_CONNECTION;
-	connectionFlags |= EXCLUSIVE_AND_REPLICATION;
+	connectionFlags |= REQUIRE_REPLICATION_CONNECTION_PARAM;
 
 	MultiConnection *sourceConnection = GetNodeUserDatabaseConnection(connectionFlags,
 																	  sourceWorkerNode->
