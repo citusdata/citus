@@ -107,19 +107,20 @@ static Task * CreateTaskForDDLCommandList(List *ddlCommandList, WorkerNode *work
 static StringInfo CreateSplitShardReplicationSetupUDF(
 	List *sourceColocatedShardIntervalList, List *shardGroupSplitIntervalListList,
 	List *destinationWorkerNodesList);
-static void AddDummyShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval);
-static void DropDummyShards(void);
-static void TryDroppingShard(MultiConnection *connection, ShardInterval *shardInterval);
-char * CreateTemplateReplicationSlotAndReturnSnapshot(ShardInterval *shardInterval,
-													  WorkerNode *sourceWorkerNode,
-													  MultiConnection **
-													  templateSlotConnection);
+static char * CreateTemplateReplicationSlotAndReturnSnapshot(ShardInterval *shardInterval,
+															 WorkerNode *sourceWorkerNode,
+															 MultiConnection **
+															 templateSlotConnection);
+static List * ParseReplicationSlotInfoFromResult(PGresult *result);
 
 static List * ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 												   List *sourceColocatedShardIntervalList,
 												   List *shardGroupSplitIntervalListList,
 												   List *destinationWorkerNodesList);
-static List * ParseReplicationSlotInfoFromResult(PGresult *result);
+static void AddDummyShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval);
+static void DropDummyShards(void);
+static void TryDroppingShard(MultiConnection *connection, ShardInterval *shardInterval);
+
 
 /* Customize error message strings based on operation type */
 static const char *const SplitOperationName[] =
@@ -760,6 +761,10 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 				splitShardIntervalList,
 				destinationWorkerNodesList);
 
+			/*
+			 * TODO(saawasek):1)Potentially refactor query list into a different method.
+			 * 2) Assign Distributed Txn(confirm)?
+			 */
 			List *ddlCommandList = NIL;
 			StringInfo beginTransaction = makeStringInfo();
 			appendStringInfo(beginTransaction,
@@ -1419,7 +1424,8 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		TryDropSplitShardsOnFailure(mapOfShardToPlacementCreatedByWorkflow);
 
 		/*TODO(saawasek): Add checks to open new connection if sourceConnection is not valid anymore.*/
-		DropAllShardSplitLeftOvers(sourceConnection, shardSplitHashMapForPublication);
+		DropAllShardSplitLeftOvers(sourceShardToCopyNode,
+								   shardSplitHashMapForPublication);
 
 		DropDummyShards();
 
@@ -1746,7 +1752,6 @@ static List *
 ParseReplicationSlotInfoFromResult(PGresult *result)
 {
 	int64 rowCount = PQntuples(result);
-	int64 colCount = PQnfields(result);
 
 	List *replicationSlotInfoList = NIL;
 	for (int64 rowIndex = 0; rowIndex < rowCount; rowIndex++)

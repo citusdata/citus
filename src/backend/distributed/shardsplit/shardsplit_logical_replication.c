@@ -560,6 +560,7 @@ DropAllShardSplitLeftOvers(WorkerNode *sourceNode, HTAB *shardSplitHashMapForPub
 		ClaimConnectionExclusively(cleanupConnection);
 
 		DropAllShardSplitSubscriptions(cleanupConnection);
+
 		DropAllShardSplitUsers(cleanupConnection);
 
 		/* Close connection after cleanup */
