@@ -82,7 +82,7 @@ LookupSplitMode(Oid shardTransferModeOid)
 		shardSplitMode = BLOCKING_SPLIT;
 	}
 
-	/* Extend with other modes as we support them */
+	/* TODO(saawaek): Handle this appropriately based on replica identity */
 	else if (strncmp(enumLabel, "auto", NAMEDATALEN) == 0 ||
 			 strncmp(enumLabel, "force_logical", NAMEDATALEN) == 0)
 	{
