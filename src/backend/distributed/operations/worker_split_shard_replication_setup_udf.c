@@ -51,10 +51,6 @@ static void PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMH
 static void ReturnReplicationSlotInfo(HTAB *shardInfoHashMap, Tuplestorestate *tupleStore,
 									  TupleDesc tupleDescriptor);
 
-static void CreatePublishersForSplitChildren(HTAB *shardInfoHashMap);
-StringInfo GetSoureAndDestinationShardNames(List *shardSplitInfoList);
-char *  ConstructFullyQualifiedSplitChildShardName(ShardSplitInfo *shardSplitInfo);
-
 /*
  * worker_split_shard_replication_setup UDF creates in-memory data structures
  * to store the meta information about the shard undergoing split and new split
@@ -419,113 +415,6 @@ ParseShardSplitInfoFromDatum(Datum shardSplitInfoDatum,
 	}
 
 	*nodeId = DatumGetInt32(nodeIdDatum);
-}
-
-
-static void
-CreatePublishersForSplitChildren(HTAB *shardInfoHashMap)
-{
-	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, shardInfoHashMap);
-
-	NodeShardMappingEntry *entry = NULL;
-	int splitInfoIndex = 0;
-	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
-	{
-		uint32_t nodeId = entry->key.nodeId;
-		uint32_t tableOwnerId = entry->key.tableOwnerId;
-
-		int connectionFlags = FORCE_NEW_CONNECTION;
-		printf("Sameer getting new connection \n");
-		MultiConnection *sourceConnection = GetNodeUserDatabaseConnection(connectionFlags,
-																		  "localhost",
-																		  PostPortNumber,
-																		  CitusExtensionOwnerName(),
-																		  get_database_name(
-																			  MyDatabaseId));
-		StringInfo shardNamesForPublication = GetSoureAndDestinationShardNames(
-			entry->shardSplitInfoList);
-
-		StringInfo command = makeStringInfo();
-		appendStringInfo(command, "CREATE PUBLICATION sameerpub_%u_%u FOR TABLE %s",
-						 nodeId, tableOwnerId, shardNamesForPublication->data);
-		ExecuteCriticalRemoteCommand(sourceConnection, command->data);
-		printf("Sameer UserName: %s \n", GetUserNameFromId(tableOwnerId, false));
-	}
-}
-
-
-StringInfo
-GetSoureAndDestinationShardNames(List *shardSplitInfoList)
-{
-	HASHCTL info;
-	int flags = HASH_ELEM | HASH_CONTEXT;
-
-	/* initialise the hash table */
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(uint64);
-	info.entrysize = sizeof(uint64);
-	info.hcxt = CurrentMemoryContext;
-
-	HTAB *sourceShardIdSet = hash_create("Source ShardId Set", 128, &info, flags);
-
-	/* Get child shard names */
-	StringInfo allShardNames = makeStringInfo();
-	bool addComma = false;
-
-	ShardSplitInfo *shardSplitInfo = NULL;
-	foreach_ptr(shardSplitInfo, shardSplitInfoList)
-	{
-		/* add source shard id to the hash table to get list of unique source shard ids */
-		bool found = false;
-		uint64 sourceShardId = shardSplitInfo->sourceShardId;
-		hash_search(sourceShardIdSet, &sourceShardId, HASH_ENTER, &found);
-
-		if (addComma)
-		{
-			appendStringInfo(allShardNames, ",");
-		}
-
-		/* Append fully qualified split child shard name */
-		char *childShardName = ConstructFullyQualifiedSplitChildShardName(shardSplitInfo);
-		appendStringInfo(allShardNames, childShardName);
-		addComma = true;
-	}
-
-
-	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, sourceShardIdSet);
-	uint64 *sourceShardIdEntry = NULL;
-	while ((sourceShardIdEntry = hash_seq_search(&status)) != NULL)
-	{
-		ShardInterval *sourceShardInterval = LoadShardInterval(*sourceShardIdEntry);
-		char *sourceShardName = ConstructQualifiedShardName(sourceShardInterval);
-
-		if (addComma)
-		{
-			appendStringInfo(allShardNames, ",");
-		}
-
-		appendStringInfo(allShardNames, sourceShardName);
-		addComma = true;
-	}
-
-	return allShardNames;
-}
-
-
-char *
-ConstructFullyQualifiedSplitChildShardName(ShardSplitInfo *shardSplitInfo)
-{
-	Oid schemaId = get_rel_namespace(shardSplitInfo->distributedTableOid);
-	char *schemaName = get_namespace_name(schemaId);
-	char *tableName = get_rel_name(shardSplitInfo->distributedTableOid);
-
-	char *shardName = pstrdup(tableName);
-	AppendShardIdToName(&shardName, shardSplitInfo->splitChildShardId);
-	shardName = quote_qualified_identifier(schemaName, shardName);
-
-	return shardName;
 }
 
 

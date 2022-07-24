@@ -1220,7 +1220,7 @@ TryDropSplitShardsOnFailure(HTAB *mapOfShardToPlacementCreatedByWorkflow)
 
 
 /*
- * SplitShard API to split a given shard (or shard group) in blocking fashion
+ * SplitShard API to split a given shard (or shard group) in non-blocking fashion
  * based on specified split points to a set of destination nodes.
  * 'splitOperation'             : Customer operation that triggered split.
  * 'shardIntervalToSplit'       : Source shard interval to be split.
@@ -1253,6 +1253,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 	WorkerNode *sourceShardToCopyNode = FindNodeWithNodeId(sourceShardPlacement->nodeId,
 														   false /* missingOk */);
 
+	/* Create hashmap to group shards for publication-subscription management */
 	HTAB *shardSplitHashMapForPublication = CreateShardSplitInfoMapForPublication(
 		sourceColocatedShardIntervalList,
 		shardGroupSplitIntervalListList,
@@ -1273,121 +1274,152 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 
 	HTAB *mapOfShardToPlacementCreatedByWorkflow =
 		CreateEmptyMapForShardsCreatedByWorkflow();
+
+	/* Non-Blocking shard split workflow starts here */
 	PG_TRY();
 	{
-		/* Physically create split children. */
+		/* 1) Physically create split children. */
 		CreateSplitShardsForShardGroup(mapOfShardToPlacementCreatedByWorkflow,
 									   shardGroupSplitIntervalListList,
 									   workersForPlacementList);
 
-
+		/*
+		 * 2) Create dummy shards due logical replication constraints.
+		 *    Refer to the comment section of 'CreateDummyShardsForShardGroup' for indepth
+		 *    information.
+		 */
 		CreateDummyShardsForShardGroup(
 			sourceColocatedShardIntervalList,
 			shardGroupSplitIntervalListList,
 			sourceShardToCopyNode,
 			workersForPlacementList);
 
+		/* 3) Create Publications. */
 		CreateShardSplitPublications(sourceConnection, shardSplitHashMapForPublication);
 
-		/* Create Template Replication Slot */
+		/*
+		 * 4) Create template replication Slot. It returns a snapshot. The snapshot remains
+		 * valid till the lifetime of the session that creates it. The connection is closed
+		 * at the end of the workflow.
+		 */
 		MultiConnection *templateSlotConnection = NULL;
 		char *snapShotName = CreateTemplateReplicationSlotAndReturnSnapshot(
 			shardIntervalToSplit, sourceShardToCopyNode, &templateSlotConnection);
 
-		/* DoSplitCopy */
+
+		/* 5) Do snapshotted Copy */
 		DoSplitCopy(sourceShardToCopyNode, sourceColocatedShardIntervalList,
 					shardGroupSplitIntervalListList, workersForPlacementList,
 					snapShotName);
 
-		/*worker_split_replication_setup_udf*/
+		/* 6) Execute 'worker_split_shard_replication_setup UDF */
 		List *replicationSlotInfoList = ExecuteSplitShardReplicationSetupUDF(
 			sourceShardToCopyNode,
 			sourceColocatedShardIntervalList,
 			shardGroupSplitIntervalListList,
 			workersForPlacementList);
 
-		/* Subscriber flow starts from here */
+		/*
+		 * Subscriber flow starts from here.
+		 * Populate 'ShardSplitSubscriberMetadata' for subscription management.
+		 */
 		List *shardSplitSubscribersMetadataList =
 			PopulateShardSplitSubscriptionsMetadataList(
 				shardSplitHashMapForPublication, replicationSlotInfoList);
 
+		/* Create connections to the target nodes. TODO: can be refactored */
 		List *targetNodeConnectionList = CreateTargetNodeConnectionsForShardSplit(
 			shardSplitSubscribersMetadataList,
 			connectionFlags,
 			superUser, databaseName);
 
-		/* Create copies of template replication slot */
+		/* 7) Create copies of template replication slot */
 		char *templateSlotName = ShardSplitTemplateReplicationSlotName(
 			shardIntervalToSplit->shardId);
 		CreateReplicationSlots(sourceConnection, templateSlotName,
 							   shardSplitSubscribersMetadataList);
 
+		/* 8) Create subscriptions on target nodes */
 		CreateShardSplitSubscriptions(targetNodeConnectionList,
 									  shardSplitSubscribersMetadataList,
 									  sourceShardToCopyNode,
 									  superUser,
 									  databaseName);
 
+		/* 9) Wait for subscriptions to be ready */
 		WaitForShardSplitRelationSubscriptionsBecomeReady(
 			shardSplitSubscribersMetadataList);
 
+		/* 10) Wait for subscribers to catchup till source LSN */
 		XLogRecPtr sourcePosition = GetRemoteLogPosition(sourceConnection);
 		WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition,
 														   shardSplitSubscribersMetadataList);
 
+		/* 11) Create Auxilary structures */
 		CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
 											   workersForPlacementList);
 
+		/* 12) Wait for subscribers to catchup till source LSN */
 		sourcePosition = GetRemoteLogPosition(sourceConnection);
 		WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition,
 														   shardSplitSubscribersMetadataList);
 
+		/* 13) Block writes on source shards */
 		BlockWritesToShardList(sourceColocatedShardIntervalList);
 
+		/* 14) Wait for subscribers to catchup till source LSN */
 		sourcePosition = GetRemoteLogPosition(sourceConnection);
 		WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition,
 														   shardSplitSubscribersMetadataList);
 
-		/* Drop Subscribers */
+		/* 15) Drop Subscribers */
 		DropShardSplitSubsriptions(shardSplitSubscribersMetadataList);
 
-		/* Drop Publications */
+		/* 16) Drop Publications */
 		DropShardSplitPublications(sourceConnection, shardSplitHashMapForPublication);
 
+		/* 17) TODO(saawasek): Try dropping replication slots explicitly */
+
 		/*
-		 * Drop old shards and delete related metadata. Have to do that before
+		 * 18) Drop old shards and delete related metadata. Have to do that before
 		 * creating the new shard metadata, because there's cross-checks
 		 * preventing inconsistent metadata (like overlapping shards).
 		 */
 		DropShardList(sourceColocatedShardIntervalList);
 
-		/* Insert new shard and placement metdata */
+		/* 19) Insert new shard and placement metdata */
 		InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
 										 workersForPlacementList);
 
 		/*
-		 * Create foreign keys if exists after the metadata changes happening in
+		 * 20) Create foreign keys if exists after the metadata changes happening in
 		 * DropShardList() and InsertSplitChildrenShardMetadata() because the foreign
 		 * key creation depends on the new metadata.
 		 */
 		CreateForeignKeyConstraints(shardGroupSplitIntervalListList,
 									workersForPlacementList);
 
+		/* 21) Drop dummy shards.
+		 * TODO(saawasek):Refactor and pass hashmap.Currently map is global variable */
 		DropDummyShards();
 
-		/* Close source connection */
+
+		/* 22) Close source connection */
 		CloseConnection(sourceConnection);
 
-		/* Close all subscriber connections */
+		/* 23) Close all subscriber connections */
 		CloseShardSplitSubscriberConnections(shardSplitSubscribersMetadataList);
 
-		/* Close connection of template replication slot */
+		/* 24) Close connection of template replication slot */
 		CloseConnection(templateSlotConnection);
 	}
 	PG_CATCH();
 	{
 		/* Do a best effort cleanup of shards created on workers in the above block */
 		TryDropSplitShardsOnFailure(mapOfShardToPlacementCreatedByWorkflow);
+
+		/*TODO(saawasek): Add checks to open new connection if sourceConnection is not valid anymore.*/
+		DropAllShardSplitLeftOvers(sourceConnection, shardSplitHashMapForPublication);
 
 		DropDummyShards();
 

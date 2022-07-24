@@ -251,6 +251,7 @@ CreateTargetNodeConnectionsForShardSplit(List *shardSplitSubscribersMetadataList
 
 		targetNodeConnectionList = lappend(targetNodeConnectionList, targetConnection);
 
+		/* Cache the connections for each subscription */
 		shardSplitSubscriberMetadata->targetNodeConnection = targetConnection;
 	}
 
