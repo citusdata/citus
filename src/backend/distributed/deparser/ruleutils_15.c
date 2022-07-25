@@ -6185,7 +6185,6 @@ get_rule_expr(Node *node, deparse_context *context,
 							get_rule_expr_paren((Node *) xexpr->args, context, false, node);
 							break;
 					}
-
 				}
 				if (xexpr->op == IS_XMLSERIALIZE)
 					appendStringInfo(buf, " AS %s",
