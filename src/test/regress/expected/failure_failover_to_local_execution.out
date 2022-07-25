@@ -98,9 +98,7 @@ NOTICE:  issuing SELECT count(*) AS count FROM failure_failover_to_local_executi
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT count(*) AS count FROM failure_failover_to_local_execution.failover_to_local_1980003 failover_to_local WHERE true
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM failure_failover_to_local_execution.failover_to_local_1980000 failover_to_local WHERE true
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM failure_failover_to_local_execution.failover_to_local_1980002 failover_to_local WHERE true
  count

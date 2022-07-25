@@ -33,9 +33,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^DELETE").kill()');
 
 BEGIN;
 DELETE FROM dml_test WHERE id = 1;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 DELETE FROM dml_test WHERE id = 2;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 INSERT INTO dml_test VALUES (5, 'Epsilon');
@@ -95,9 +93,7 @@ BEGIN;
 DELETE FROM dml_test WHERE id = 1;
 DELETE FROM dml_test WHERE id = 2;
 INSERT INTO dml_test VALUES (5, 'Epsilon');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 UPDATE dml_test SET name = 'alpha' WHERE id = 1;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 UPDATE dml_test SET name = 'gamma' WHERE id = 3;
@@ -152,9 +148,7 @@ DELETE FROM dml_test WHERE id = 1;
 DELETE FROM dml_test WHERE id = 2;
 INSERT INTO dml_test VALUES (5, 'Epsilon');
 UPDATE dml_test SET name = 'alpha' WHERE id = 1;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 UPDATE dml_test SET name = 'gamma' WHERE id = 3;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
@@ -218,10 +212,7 @@ COMMIT;
     '],
     false
 );
-WARNING:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
-connection not open
+WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 while executing command on localhost:xxxxx
    master_run_on_worker
@@ -394,17 +385,10 @@ INSERT INTO dml_test VALUES (5, 'Epsilon');
 UPDATE dml_test SET name = 'alpha' WHERE id = 1;
 UPDATE dml_test SET name = 'gamma' WHERE id = 3;
 COMMIT;
-WARNING:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
-connection not open
+WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
-connection not open
-connection not open
+WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- all changes should be committed because we injected
 -- the failure on the COMMIT time. And, we should not
@@ -470,10 +454,7 @@ INSERT INTO dml_test VALUES (5, 'Epsilon');
 UPDATE dml_test SET name = 'alpha' WHERE id = 1;
 UPDATE dml_test SET name = 'gamma' WHERE id = 3;
 COMMIT;
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
-connection not open
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 --- shouldn't see any changes after failed COMMIT
 SELECT * FROM dml_test ORDER BY id ASC;
