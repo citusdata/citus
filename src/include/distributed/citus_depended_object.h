@@ -17,6 +17,8 @@
 
 extern bool HideCitusDependentObjects;
 
+extern void SetLocalClientMinMessagesIfRunningPGTests(int
+													  clientMinMessageLevel);
 extern void SetLocalHideCitusDependentObjectsDisabledWhenAlreadyEnabled(void);
 extern bool HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context);
 extern bool IsPgLocksTable(RangeTblEntry *rte);

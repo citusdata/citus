@@ -23,5 +23,6 @@ extern IsColumnarTableAmTable_type extern_IsColumnarTableAmTable;
 extern ReadColumnarOptions_type extern_ReadColumnarOptions;
 
 extern void StartupCitusBackend(void);
+extern const char * GetClientMinMessageLevelNameForValue(int minMessageLevel);
 
 #endif /* SHARED_LIBRARY_INIT_H */

@@ -33,6 +33,8 @@
 #include "distributed/citus_depended_object.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/listutils.h"
+#include "distributed/log_utils.h"
+#include "distributed/shared_library_init.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
@@ -71,6 +73,27 @@ SetLocalHideCitusDependentObjectsDisabledWhenAlreadyEnabled(void)
 	}
 
 	set_config_option("citus.hide_citus_dependent_objects", "false",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+}
+
+
+/*
+ * SetLocalClientMinMessagesIfRunningPGTests sets client_min_message locally to the given value
+ * if EnableUnsupportedFeatureMessages is set to false.
+ */
+void
+SetLocalClientMinMessagesIfRunningPGTests(int clientMinMessageLevel)
+{
+	if (EnableUnsupportedFeatureMessages)
+	{
+		return;
+	}
+
+	const char *clientMinMessageLevelName = GetClientMinMessageLevelNameForValue(
+		clientMinMessageLevel);
+
+	set_config_option("client_min_messages", clientMinMessageLevelName,
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
 }
