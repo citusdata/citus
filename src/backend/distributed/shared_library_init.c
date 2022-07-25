@@ -1204,6 +1204,17 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.enforce_object_restrictions_for_local_objects",
+		gettext_noop(
+			"Controls some restrictions for local objects."),
+		NULL,
+		&EnforceLocalObjectRestrictions,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.executor_slow_start_interval",
 		gettext_noop("Time to wait between opening connections to the same worker node"),
