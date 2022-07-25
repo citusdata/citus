@@ -48,6 +48,7 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
+#include <nodes/print.h>
 
 
 static void PrepareInsertSelectForCitusPlanner(Query *insertSelectQuery);
@@ -958,6 +959,7 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 	ListCell *insertTargetEntryCell;
 	List *newSubqueryTargetlist = NIL;
 	List *newInsertTargetlist = NIL;
+	List *columnNameList = NIL;
 	int resno = 1;
 	Index selectTableId = 2;
 	int targetEntryIndex = 0;
@@ -1029,6 +1031,9 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 											newSubqueryTargetEntry);
 		}
 
+		String *columnName = makeString(newSubqueryTargetEntry->resname);
+		columnNameList = lappend(columnNameList, columnName);
+
 		/*
 		 * The newly created select target entry cannot be a junk entry since junk
 		 * entries are not in the final target list and we're processing the
@@ -1080,6 +1085,7 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 
 	originalQuery->targetList = newInsertTargetlist;
 	subquery->targetList = newSubqueryTargetlist;
+	subqueryRte->eref->colnames = columnNameList;
 
 	return NULL;
 }
