@@ -188,13 +188,8 @@ check-isolation-base: all  $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/base_isolation_schedule $(EXTRA_TESTS)
 
-check-vanilla: all
-	# it is possible that sometimes vanilla tests will fail, which is related to postgres.
-	# So we try it once more if it fails to prevent some failures in our CI.
-	${MAKE} check-vanilla-internal  || ${MAKE} check-vanilla-internal
-
-check-vanilla-internal:
-	$(pg_regress_multi_check) --load-extension=citus --vanillatest
+check-vanilla:
+	$(pg_regress_multi_check) --vanillatest --vanilla-dev
 
 check-multi-mx: all
 	$(pg_regress_multi_check) --load-extension=citus \
