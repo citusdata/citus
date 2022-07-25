@@ -74,7 +74,11 @@ PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryS
 		addresses);
 	if (depError != NULL)
 	{
-		RaiseDeferredError(depError, WARNING);
+		if (EnableUnsupportedFeatureMessages)
+		{
+			RaiseDeferredError(depError, WARNING);
+		}
+
 		return NIL;
 	}
 

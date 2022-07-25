@@ -1754,10 +1754,13 @@ List *
 PreprocessAlterTableMoveAllStmt(Node *node, const char *queryString,
 								ProcessUtilityContext processUtilityContext)
 {
-	ereport(WARNING, (errmsg("not propagating ALTER TABLE ALL IN TABLESPACE "
-							 "commands to worker nodes"),
-					  errhint("Connect to worker nodes directly to manually "
-							  "move all tables.")));
+	if (EnableUnsupportedFeatureMessages)
+	{
+		ereport(WARNING, (errmsg("not propagating ALTER TABLE ALL IN TABLESPACE "
+								 "commands to worker nodes"),
+						  errhint("Connect to worker nodes directly to manually "
+								  "move all tables.")));
+	}
 
 	return NIL;
 }

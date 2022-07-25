@@ -1387,7 +1387,11 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 
 	if (errMsg != NULL)
 	{
-		RaiseDeferredError(errMsg, WARNING);
+		if (EnableUnsupportedFeatureMessages)
+		{
+			RaiseDeferredError(errMsg, WARNING);
+		}
+
 		return NIL;
 	}
 
