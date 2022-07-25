@@ -4984,7 +4984,7 @@ isSimpleNode(Node *node, Node *parentNode, int prettyFlags)
                 case T_GroupingFunc: /* own parentheses */
 				case T_WindowFunc:	/* own parentheses */
 				case T_CaseExpr:	/* other separators */
-                case T_JsonExpr: /* own parentheses */
+                case T_JsonExpr:    /* own parentheses */
 					return true;
 				default:
 					return false;
@@ -5179,8 +5179,8 @@ get_json_format(JsonFormat *format, StringInfo buf)
 	if (format->encoding != JS_ENC_DEFAULT)
 	{
 		const char *encoding =
-			format->encoding == JS_ENC_UTF16 ? "UTF16" :
-			format->encoding == JS_ENC_UTF32 ? "UTF32" : "UTF8";
+		format->encoding == JS_ENC_UTF16 ? "UTF16" :
+		format->encoding == JS_ENC_UTF32 ? "UTF32" : "UTF8";
 
 		appendStringInfo(buf, " ENCODING %s", encoding);
 	}
@@ -6522,7 +6522,8 @@ get_rule_expr(Node *node, deparse_context *context,
 
 				if (jexpr->passing_values)
 				{
-					ListCell   *lc1, *lc2;
+					ListCell   *lc1,
+							   *lc2;
 					bool		needcomma = false;
 
 					appendStringInfoString(buf, " PASSING ");
@@ -6897,7 +6898,7 @@ get_json_constructor(JsonConstructorExpr *ctor, deparse_context *context,
 		if (nargs > 0)
 		{
 			const char *sep = ctor->type == JSCTOR_JSON_OBJECT &&
-				(nargs % 2) != 0 ? " : " : ", ";
+			(nargs % 2) != 0 ? " : " : ", ";
 
 			appendStringInfoString(buf, sep);
 		}
@@ -7045,7 +7046,8 @@ get_agg_expr_helper(Aggref *aggref, deparse_context *context,
 					if (is_json_objectagg)
 					{
 						if (i > 2)
-							break; /* skip ABSENT ON NULL and WITH UNIQUE args */
+							break;	/* skip ABSENT ON NULL and WITH UNIQUE
+									 * args */
 
 						appendStringInfoString(buf, " : ");
 					}
@@ -7951,16 +7953,16 @@ get_json_table_nested_columns(TableFunc *tf, Node *node,
 	}
 	else
 	{
-		 JsonTableParent *n = castNode(JsonTableParent, node);
+		JsonTableParent *n = castNode(JsonTableParent, node);
 
-		 if (needcomma)
-			 appendStringInfoChar(context->buf, ',');
+		if (needcomma)
+			appendStringInfoChar(context->buf, ',');
 
-		 appendStringInfoChar(context->buf, ' ');
-		 appendContextKeyword(context,  "NESTED PATH ", 0, 0, 0);
-		 get_const_expr(n->path, context, -1);
-         appendStringInfo(context->buf, " AS %s", quote_identifier(n->name));
-		 get_json_table_columns(tf, n, context, showimplicit);
+		appendStringInfoChar(context->buf, ' ');
+		appendContextKeyword(context,  "NESTED PATH ", 0, 0, 0);
+		get_const_expr(n->path, context, -1);
+        appendStringInfo(context->buf, " AS %s", quote_identifier(n->name));
+		get_json_table_columns(tf, n, context, showimplicit);
 	}
 }
 
@@ -7990,17 +7992,17 @@ get_json_table_plan(TableFunc *tf, Node *node, deparse_context *context,
 	}
 	else
 	{
-		 JsonTableParent *n = castNode(JsonTableParent, node);
+		JsonTableParent *n = castNode(JsonTableParent, node);
 
-		 appendStringInfoString(context->buf, quote_identifier(n->name));
+		appendStringInfoString(context->buf, quote_identifier(n->name));
 
-		 if (n->child)
-		 {
+		if (n->child)
+		{
 			appendStringInfoString(context->buf,
 								   n->outerJoin ? " OUTER " : " INNER ");
 			get_json_table_plan(tf, n->child, context,
 								IsA(n->child, JsonTableSibling));
-		 }
+		}
 	}
 
 	if (parenthesize)
@@ -8139,7 +8141,8 @@ get_json_table(TableFunc *tf, deparse_context *context, bool showimplicit)
 
 	if (jexpr->passing_values)
 	{
-		ListCell   *lc1, *lc2;
+		ListCell   *lc1,
+				   *lc2;
 		bool		needcomma = false;
 
 		appendStringInfoChar(buf, ' ');
