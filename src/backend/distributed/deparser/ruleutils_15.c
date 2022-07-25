@@ -8112,7 +8112,7 @@ get_opclass_name(Oid opclass, Oid actual_datatype,
 			appendStringInfo(buf, " %s", quote_identifier(opcname));
 		else
 		{
-			nspname = get_namespace_name(opcrec->opcnamespace);
+			nspname = get_namespace_name_or_temp(opcrec->opcnamespace);
 			appendStringInfo(buf, " %s.%s",
 							 quote_identifier(nspname),
 							 quote_identifier(opcname));
@@ -8271,7 +8271,7 @@ generate_relation_or_shard_name(Oid relid, Oid distrelid, int64 shardid,
 		if (shardid > 0)
 		{
 			Oid schemaOid = get_rel_namespace(relid);
-			char *schemaName = get_namespace_name(schemaOid);
+			char *schemaName = get_namespace_name_or_temp(schemaOid);
 
 			AppendShardIdToName(&relname, shardid);
 
@@ -8339,7 +8339,7 @@ generate_relation_name(Oid relid, List *namespaces)
 		need_qual = !RelationIsVisible(relid);
 
 	if (need_qual)
-		nspname = get_namespace_name(reltup->relnamespace);
+		nspname = get_namespace_name_or_temp(reltup->relnamespace);
 	else
 		nspname = NULL;
 
@@ -8502,7 +8502,7 @@ generate_function_name(Oid funcid, int nargs, List *argnames, Oid *argtypes,
 		p_funcid == funcid)
 		nspname = NULL;
 	else
-		nspname = get_namespace_name(procform->pronamespace);
+		nspname = get_namespace_name_or_temp(procform->pronamespace);
 
 	result = quote_qualified_identifier(nspname, proname);
 
@@ -8544,7 +8544,7 @@ generate_operator_name(Oid operid, Oid arg1, Oid arg2)
 	 * we don't check if the operator is in current namespace or not. This is
 	 * because this check is costly when the operator is not in current namespace.
 	 */
-	nspname = get_namespace_name(operform->oprnamespace);
+	nspname = get_namespace_name_or_temp(operform->oprnamespace);
 	Assert(nspname != NULL);
 	appendStringInfo(&buf, "OPERATOR(%s.", quote_identifier(nspname));
 	appendStringInfoString(&buf, oprname);
