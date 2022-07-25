@@ -48,8 +48,6 @@ step s1-abort: ABORT;
 WARNING: this step had a leftover error message
 FATAL:  terminating connection due to administrator command
 server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
 
 master_remove_node
 
