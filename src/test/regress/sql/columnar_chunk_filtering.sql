@@ -448,8 +448,6 @@ DROP TABLE pushdown_test;
 
 -- https://github.com/citusdata/citus/issues/5803
 
-set columnar.chunk_group_row_limit = 1000;
-
 CREATE TABLE pushdown_test(id int, country text) using columnar;
 
 BEGIN;
@@ -473,5 +471,18 @@ END;
 EXPLAIN (analyze on, costs off, timing off, summary off)
 SELECT id FROM pushdown_test WHERE country IN ('USA', 'BR', 'ZW');
 
-RESET columnar.chunk_group_row_limit;
+SELECT id FROM pushdown_test WHERE country IN ('USA', 'BR', 'ZW');
+
+-- test for volatile functions with IN
+CREATE FUNCTION volatileFunction() returns TEXT language plpgsql AS
+$$
+BEGIN
+    return 'AL';
+END;
+$$;
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT * FROM pushdown_test WHERE country IN ('USA', 'ZW', volatileFunction());
+
+SELECT * FROM pushdown_test WHERE country IN ('USA', 'ZW', volatileFunction());
+
 DROP TABLE pushdown_test;

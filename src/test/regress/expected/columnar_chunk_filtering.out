@@ -1067,7 +1067,6 @@ RESET columnar.qual_pushdown_correlation_threshold;
 RESET columnar.planner_debug_level;
 DROP TABLE pushdown_test;
 -- https://github.com/citusdata/citus/issues/5803
-set columnar.chunk_group_row_limit = 1000;
 CREATE TABLE pushdown_test(id int, country text) using columnar;
 BEGIN;
     INSERT INTO pushdown_test VALUES(1, 'AL');
@@ -1097,5 +1096,37 @@ SELECT id FROM pushdown_test WHERE country IN ('USA', 'BR', 'ZW');
     Columnar Chunk Groups Removed by Filter: 2
 (6 rows)
 
-RESET columnar.chunk_group_row_limit;
+SELECT id FROM pushdown_test WHERE country IN ('USA', 'BR', 'ZW');
+ id
+---------------------------------------------------------------------
+  3
+  7
+  8
+(3 rows)
+
+-- test for volatile functions with IN
+CREATE FUNCTION volatileFunction() returns TEXT language plpgsql AS
+$$
+BEGIN
+    return 'AL';
+END;
+$$;
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT * FROM pushdown_test WHERE country IN ('USA', 'ZW', volatileFunction());
+                                   QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on pushdown_test (actual rows=3 loops=1)
+   Filter: (country = ANY (ARRAY['USA'::text, 'ZW'::text, volatilefunction()]))
+   Rows Removed by Filter: 5
+   Columnar Projected Columns: id, country
+(4 rows)
+
+SELECT * FROM pushdown_test WHERE country IN ('USA', 'ZW', volatileFunction());
+ id | country
+---------------------------------------------------------------------
+  1 | AL
+  7 | USA
+  8 | ZW
+(3 rows)
+
 DROP TABLE pushdown_test;
