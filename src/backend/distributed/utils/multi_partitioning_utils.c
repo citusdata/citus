@@ -571,13 +571,11 @@ CreateFixPartitionShardIndexNames(Oid parentRelationId, Oid partitionRelationId,
 			task->taskId = taskId++;
 			task->taskType = DDL_TASK;
 
+			char *prefix = "SELECT pg_catalog.citus_run_local_command($$";
+			char *postfix = "$$)";
+			char *string = StringJoinParams(queryStringList, ';', prefix, postfix);
 
-			char *string = StringJoin(queryStringList, ';');
-			StringInfo commandToRun = makeStringInfo();
-
-			appendStringInfo(commandToRun,
-							 "SELECT pg_catalog.citus_run_local_command($$%s$$)", string);
-			SetTaskQueryString(task, commandToRun->data);
+			SetTaskQueryString(task, string);
 
 
 			task->dependentTaskList = NULL;
