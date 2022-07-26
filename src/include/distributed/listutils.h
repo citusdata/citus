@@ -166,6 +166,8 @@ extern List * SortList(List *pointerList,
 extern void ** PointerArrayFromList(List *pointerList);
 extern HTAB * ListToHashSet(List *pointerList, Size keySize, bool isStringList);
 extern char * StringJoin(List *stringList, char delimiter);
+extern char * StringJoinParams(List *stringList, char delimiter,
+							   char *prefix, char *postfix);
 extern List * ListTake(List *pointerList, int size);
 extern void * safe_list_nth(const List *list, int index);
 extern List * GeneratePositiveIntSequenceList(int upTo);
