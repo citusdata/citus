@@ -6,16 +6,19 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-v5579d00'
+    default: '-dev-7076133'
   pg13_version:
     type: string
     default: '13.4'
   pg14_version:
     type: string
     default: '14.0'
+  pg15_version:
+    type: string
+    default: '15beta2'
   upgrade_pg_versions:
     type: string
-    default: '13.4-14.0'
+    default: '13.4-14.0-15beta2'
 jobs:
   build:
     description: Build the citus extension
@@ -528,6 +531,10 @@ workflows:
           name: build-14
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
+      - build:
+          name: build-15
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
 
       - check-style
       - check-sql-snapshots
@@ -767,6 +774,123 @@ workflows:
           make: check-failure
           requires: [build-14]
 
+      - test-citus:
+          name: 'test-15_check-split'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-split
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-enterprise'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-enterprise
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-enterprise-isolation'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-enterprise-isolation
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-enterprise-isolation-logicalrep-1'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-enterprise-isolation-logicalrep-1
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-enterprise-isolation-logicalrep-2'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-enterprise-isolation-logicalrep-2
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-enterprise-isolation-logicalrep-3'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-enterprise-isolation-logicalrep-3
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-enterprise-failure'
+          pg_major: 15
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-enterprise-failure
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-multi'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-multi
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-multi-1'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-multi-1
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-mx'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-multi-mx
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-vanilla'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-vanilla
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-isolation'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-isolation
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-operations'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-operations
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-follower-cluster'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-follower-cluster
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-columnar'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-columnar
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-columnar-isolation'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-columnar-isolation
+          requires: [build-15]
+      - tap-test-citus:
+          name: 'test-15_tap-recovery'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          suite: recovery
+          requires: [build-15]
+      - tap-test-citus:
+          name: 'test-15_tap-columnar-freezing'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          suite: columnar_freezing
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-failure'
+          pg_major: 15
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-failure
+          requires: [build-15]
+
       - test-arbitrary-configs:
           name: 'test-13_check-arbitrary-configs'
           pg_major: 13
@@ -777,6 +901,11 @@ workflows:
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           requires: [build-14]
+      - test-arbitrary-configs:
+          name: 'test-15_check-arbitrary-configs'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          requires: [build-15]
 
       - test-pg-upgrade:
           name: 'test-13-14_check-pg-upgrade'
@@ -784,6 +913,13 @@ workflows:
           new_pg_major: 14
           image_tag: '<< pipeline.parameters.upgrade_pg_versions >>'
           requires: [build-13, build-14]
+
+      - test-pg-upgrade:
+          name: 'test-14-15_check-pg-upgrade'
+          old_pg_major: 14
+          new_pg_major: 15
+          image_tag: '<< pipeline.parameters.upgrade_pg_versions >>'
+          requires: [build-14, build-15]
 
       - test-citus-upgrade:
           name: test-13_check-citus-upgrade
