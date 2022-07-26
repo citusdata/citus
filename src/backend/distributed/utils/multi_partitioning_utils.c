@@ -205,6 +205,13 @@ fix_partition_shard_index_names(PG_FUNCTION_ARGS)
 
 	FixPartitionShardIndexNames(relationId, parentIndexOid);
 
+	/*
+	 * This UDF is called from fix_all_partition_shard_index_names() which iterates
+	 * over all the partitioned tables. There is no need to hold all the distributed
+	 * table metadata until the end of the transaction for the input table.
+	 */
+	CitusTableCacheFlushInvalidatedEntries();
+
 	PG_RETURN_VOID();
 }
 
