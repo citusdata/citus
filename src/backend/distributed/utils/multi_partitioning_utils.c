@@ -1291,3 +1291,29 @@ PartitionBound(Oid partitionId)
 
 	return partitionBoundString;
 }
+
+
+/*
+ * ListShardsUnderParentRelation returns a list of ShardInterval for every
+ * shard under a given relation, meaning it includes the shards of child
+ * tables in a partitioning hierarchy.
+ */
+List *
+ListShardsUnderParentRelation(Oid relationId)
+{
+	List *shardList = LoadShardIntervalList(relationId);
+
+	if (PartitionedTable(relationId))
+	{
+		List *partitionList = PartitionList(relationId);
+		Oid partitionRelationId = InvalidOid;
+
+		foreach_oid(partitionRelationId, partitionList)
+		{
+			List *childShardList = ListShardsUnderParentRelation(partitionRelationId);
+			shardList = list_concat(shardList, childShardList);
+		}
+	}
+
+	return shardList;
+}

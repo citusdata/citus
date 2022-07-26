@@ -30,5 +30,6 @@ extern char * GeneratePartitioningInformation(Oid tableId);
 extern void FixPartitionConstraintsOnWorkers(Oid relationId);
 extern void FixLocalPartitionConstraints(Oid relationId, int64 shardId);
 extern void FixPartitionShardIndexNames(Oid relationId, Oid parentIndexOid);
+extern List * ListShardsUnderParentRelation(Oid relationId);
 
 #endif /* MULTI_PARTITIONING_UTILS_H_ */

@@ -70,6 +70,7 @@ DROP FUNCTION pg_catalog.citus_split_shard_by_split_points(
     shard_transfer_mode citus.shard_transfer_mode);
 DROP FUNCTION pg_catalog.worker_split_copy(
     source_shard_id bigint,
+    distribution_column text,
     splitCopyInfos pg_catalog.split_copy_info[]);
 DROP TYPE pg_catalog.split_copy_info;
 
@@ -97,3 +98,5 @@ DROP FUNCTION pg_catalog.replicate_reference_tables(citus.shard_transfer_mode);
 
 DROP FUNCTION pg_catalog.isolate_tenant_to_new_shard(table_name regclass, tenant_id "any", cascade_option text, shard_transfer_mode citus.shard_transfer_mode);
 #include "../udfs/isolate_tenant_to_new_shard/8.0-1.sql"
+DROP FUNCTION pg_catalog.create_distributed_table_concurrently;
+DROP FUNCTION pg_catalog.citus_internal_delete_partition_metadata(regclass);

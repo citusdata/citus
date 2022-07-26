@@ -90,6 +90,7 @@ extern WorkerNode * FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePor
 extern WorkerNode * FindNodeWithNodeId(int nodeId, bool missingOk);
 extern List * ReadDistNode(bool includeNodesFromOtherClusters);
 extern void EnsureCoordinator(void);
+extern void EnsureCoordinatorIsInMetadata(void);
 extern void InsertCoordinatorIfClusterEmpty(void);
 extern uint32 GroupForNode(char *nodeName, int32 nodePort);
 extern WorkerNode * PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes);

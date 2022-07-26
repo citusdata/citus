@@ -69,6 +69,7 @@ extern char * MarkObjectsDistributedCreateCommand(List *addresses,
 extern char * DistributionCreateCommand(CitusTableCacheEntry *cacheEntry);
 extern char * DistributionDeleteCommand(const char *schemaName,
 										const char *tableName);
+extern char * DistributionDeleteMetadataCommand(Oid relationId);
 extern char * TableOwnerResetCommand(Oid distributedRelationId);
 extern char * NodeListInsertCommand(List *workerNodeList);
 extern List * ShardListInsertCommand(List *shardIntervalList);

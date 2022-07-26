@@ -123,7 +123,7 @@ column_to_column_name(PG_FUNCTION_ARGS)
 Var *
 BuildDistributionKeyFromColumnName(Oid relationId, char *columnName, LOCKMODE lockMode)
 {
-	Relation relation = try_relation_open(relationId, ExclusiveLock);
+	Relation relation = try_relation_open(relationId, lockMode);
 
 	if (relation == NULL)
 	{

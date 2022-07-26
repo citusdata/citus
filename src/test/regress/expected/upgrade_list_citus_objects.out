@@ -65,6 +65,7 @@ ORDER BY 1;
  function citus_internal_add_placement_metadata(bigint,integer,bigint,integer,bigint)
  function citus_internal_add_shard_metadata(regclass,bigint,"char",text,text)
  function citus_internal_delete_colocation_metadata(integer)
+ function citus_internal_delete_partition_metadata(regclass)
  function citus_internal_delete_shard_metadata(bigint)
  function citus_internal_global_blocked_processes()
  function citus_internal_local_blocked_processes()
@@ -122,6 +123,7 @@ ORDER BY 1;
  function coord_combine_agg_sfunc(internal,oid,cstring,anyelement)
  function create_distributed_function(regprocedure,text,text,boolean)
  function create_distributed_table(regclass,text,citus.distribution_type,text,integer)
+ function create_distributed_table_concurrently(regclass,text,citus.distribution_type,text,integer)
  function create_intermediate_result(text,text)
  function create_reference_table(regclass)
  function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone)
@@ -268,5 +270,6 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(260 rows)
+=======
+(262 rows)
 

@@ -14,9 +14,10 @@ ALTER TYPE citus.split_copy_info SET SCHEMA pg_catalog;
 
 CREATE OR REPLACE FUNCTION pg_catalog.worker_split_copy(
     source_shard_id bigint,
+	distribution_column text,
     splitCopyInfos pg_catalog.split_copy_info[])
 RETURNS void
 LANGUAGE C STRICT
 AS 'MODULE_PATHNAME', $$worker_split_copy$$;
-COMMENT ON FUNCTION pg_catalog.worker_split_copy(source_shard_id bigint, splitCopyInfos pg_catalog.split_copy_info[])
+COMMENT ON FUNCTION pg_catalog.worker_split_copy(source_shard_id bigint, distribution_column text, splitCopyInfos pg_catalog.split_copy_info[])
     IS 'Perform split copy for shard';

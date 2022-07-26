@@ -28,9 +28,9 @@ typedef enum SplitMode
 typedef enum SplitOperation
 {
 	SHARD_SPLIT_API = 0,
-	ISOLATE_TENANT_TO_NEW_SHARD
+	ISOLATE_TENANT_TO_NEW_SHARD,
+	CREATE_DISTRIBUTED_TABLE
 } SplitOperation;
-
 
 /*
  * SplitShard API to split a given shard (or shard group) using split mode and
@@ -41,6 +41,13 @@ extern void SplitShard(SplitMode splitMode,
 					   uint64 shardIdToSplit,
 					   List *shardSplitPointsList,
 					   List *nodeIdsForPlacementList);
+extern void NonBlockingShardSplit(SplitOperation splitOperation,
+								  uint64 splitWorkflowId,
+								  List *sourceColocatedShardIntervalList,
+								  List *shardSplitPointsList,
+								  List *workersForPlacementList,
+								  HTAB *partitionColumnOverrides,
+								  uint32 targetColocationId);
 
 extern void DropShardList(List *shardIntervalList);
 

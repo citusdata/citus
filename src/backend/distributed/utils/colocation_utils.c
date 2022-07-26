@@ -52,6 +52,10 @@ static int CompareShardPlacementsByNode(const void *leftElement,
 static void DeleteColocationGroup(uint32 colocationId);
 static uint32 CreateColocationGroupForRelation(Oid sourceRelationId);
 static void BreakColocation(Oid sourceRelationId);
+static void EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
+										  Oid distributionColumnType,
+										  Oid sourceRelationId);
+
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(mark_tables_colocated);
@@ -139,6 +143,17 @@ bool
 IsColocateWithNone(char *colocateWithTableName)
 {
 	return pg_strncasecmp(colocateWithTableName, "none", NAMEDATALEN) == 0;
+}
+
+
+/*
+ * IsColocateWithDefault returns true if the given table is
+ * the special keyword "default".
+ */
+bool
+IsColocateWithDefault(char *colocateWithTableName)
+{
+	return pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) == 0;
 }
 
 
@@ -1272,4 +1287,109 @@ DeleteColocationGroupLocally(uint32 colocationId)
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistColocation, RowExclusiveLock);
+}
+
+
+/*
+ * FindColocateWithColocationId tries to find a colocation ID for a given
+ * colocate_with clause passed to create_distributed_table.
+ */
+uint32
+FindColocateWithColocationId(Oid relationId, char replicationModel,
+							 Oid distributionColumnType,
+							 Oid distributionColumnCollation,
+							 int shardCount, bool shardCountIsStrict,
+							 char *colocateWithTableName)
+{
+	uint32 colocationId = INVALID_COLOCATION_ID;
+
+	if (IsColocateWithDefault(colocateWithTableName))
+	{
+		/* check for default colocation group */
+		colocationId = ColocationId(shardCount, ShardReplicationFactor,
+									distributionColumnType,
+									distributionColumnCollation);
+
+		/*
+		 * if the shardCount is strict then we check if the shard count
+		 * of the colocated table is actually shardCount
+		 */
+		if (shardCountIsStrict && colocationId != INVALID_COLOCATION_ID)
+		{
+			Oid colocatedTableId = ColocatedTableId(colocationId);
+
+			if (colocatedTableId != InvalidOid)
+			{
+				CitusTableCacheEntry *cacheEntry =
+					GetCitusTableCacheEntry(colocatedTableId);
+				int colocatedTableShardCount = cacheEntry->shardIntervalArrayLength;
+
+				if (colocatedTableShardCount != shardCount)
+				{
+					colocationId = INVALID_COLOCATION_ID;
+				}
+			}
+		}
+	}
+	else if (!IsColocateWithNone(colocateWithTableName))
+	{
+		text *colocateWithTableNameText = cstring_to_text(colocateWithTableName);
+		Oid sourceRelationId = ResolveRelationId(colocateWithTableNameText, false);
+
+		EnsureTableCanBeColocatedWith(relationId, replicationModel,
+									  distributionColumnType, sourceRelationId);
+
+		colocationId = TableColocationId(sourceRelationId);
+	}
+
+	return colocationId;
+}
+
+
+/*
+ * EnsureTableCanBeColocatedWith checks whether a given replication model and
+ * distribution column type is suitable to distribute a table to be colocated
+ * with given source table.
+ *
+ * We only pass relationId to provide meaningful error messages.
+ */
+static void
+EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
+							  Oid distributionColumnType, Oid sourceRelationId)
+{
+	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(sourceRelationId);
+	char sourceReplicationModel = sourceTableEntry->replicationModel;
+	Var *sourceDistributionColumn = DistPartitionKeyOrError(sourceRelationId);
+
+	if (!IsCitusTableTypeCacheEntry(sourceTableEntry, HASH_DISTRIBUTED))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot distribute relation"),
+						errdetail("Currently, colocate_with option is only supported "
+								  "for hash distributed tables.")));
+	}
+
+	if (sourceReplicationModel != replicationModel)
+	{
+		char *relationName = get_rel_name(relationId);
+		char *sourceRelationName = get_rel_name(sourceRelationId);
+
+		ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
+							   sourceRelationName, relationName),
+						errdetail("Replication models don't match for %s and %s.",
+								  sourceRelationName, relationName)));
+	}
+
+	Oid sourceDistributionColumnType = sourceDistributionColumn->vartype;
+	if (sourceDistributionColumnType != distributionColumnType)
+	{
+		char *relationName = get_rel_name(relationId);
+		char *sourceRelationName = get_rel_name(sourceRelationId);
+
+		ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
+							   sourceRelationName, relationName),
+						errdetail("Distribution column types don't match for "
+								  "%s and %s.", sourceRelationName,
+								  relationName)));
+	}
 }

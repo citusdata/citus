@@ -42,6 +42,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
+#include "distributed/distributed_execution_locks.h"
 #include "distributed/distribution_column.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
@@ -59,12 +60,14 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
-#include "distributed/resource_lock.h"
+#include "distributed/shard_rebalancer.h"
+#include "distributed/shard_split.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/shard_rebalancer.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/utils/distribution_column_map.h"
 #include "distributed/version_compat.h"
 #include "executor/executor.h"
 #include "executor/spi.h"
@@ -93,8 +96,18 @@
 #define LOG_PER_TUPLE_AMOUNT 1000000
 
 /* local function forward declarations */
+static void CreateDistributedTableConcurrently(Oid relationId,
+											   char *distributionColumnName,
+											   char distributionMethod,
+											   char *colocateWithTableName,
+											   int shardCount,
+											   bool shardCountIsStrict);
 static char DecideReplicationModel(char distributionMethod, char *colocateWithTableName,
 								   bool viaDeprecatedAPI);
+static List * HashSplitPointsForShardList(List *shardList);
+static List * HashSplitPointsForShardCount(int shardCount);
+static List * WorkerNodesForShardList(List *shardList);
+static List * RoundRobinWorkerNodeList(List *workerNodeList, int listLength);
 static void CreateHashDistributedTableShards(Oid relationId, int shardCount,
 											 Oid colocatedTableId, bool localTableEmpty);
 static uint32 ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
@@ -105,9 +118,6 @@ static uint32 ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 static void EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 										   char distributionMethod, uint32 colocationId,
 										   char replicationModel, bool viaDeprecatedAPI);
-static void EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
-										  Oid distributionColumnType,
-										  Oid sourceRelationId);
 static void EnsureLocalTableEmpty(Oid relationId);
 static void EnsureRelationHasNoTriggers(Oid relationId);
 static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
@@ -117,6 +127,7 @@ static void EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMe
 static bool ShouldLocalTableBeEmpty(Oid relationId, char distributionMethod, bool
 									viaDeprecatedAPI);
 static void EnsureCitusTableCanBeCreated(Oid relationOid);
+static void PropagatePrerequisiteObjectsForDistributedTable(Oid relationId);
 static void EnsureDistributedSequencesHaveOneType(Oid relationId,
 												  List *seqInfoList);
 static List * GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId,
@@ -137,6 +148,7 @@ static void ErrorIfForeignTable(Oid relationOid);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
+PG_FUNCTION_INFO_V1(create_distributed_table_concurrently);
 PG_FUNCTION_INFO_V1(create_distributed_table);
 PG_FUNCTION_INFO_V1(create_reference_table);
 
@@ -251,6 +263,358 @@ create_distributed_table(PG_FUNCTION_ARGS)
 						   viaDeprecatedAPI);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * create_distributed_concurrently gets a table name, distribution column,
+ * distribution method and colocate_with option, then it creates a
+ * distributed table.
+ */
+Datum
+create_distributed_table_concurrently(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2) || PG_ARGISNULL(3))
+	{
+		PG_RETURN_VOID();
+	}
+
+	Oid relationId = PG_GETARG_OID(0);
+	text *distributionColumnText = PG_GETARG_TEXT_P(1);
+	char *distributionColumnName = text_to_cstring(distributionColumnText);
+	Oid distributionMethodOid = PG_GETARG_OID(2);
+	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
+	text *colocateWithTableNameText = PG_GETARG_TEXT_P(3);
+	char *colocateWithTableName = text_to_cstring(colocateWithTableNameText);
+
+	bool shardCountIsStrict = false;
+	int shardCount = ShardCount;
+	if (!PG_ARGISNULL(4))
+	{
+		if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) != 0 &&
+			pg_strncasecmp(colocateWithTableName, "none", NAMEDATALEN) != 0)
+		{
+			ereport(ERROR, (errmsg("Cannot use colocate_with with a table "
+								   "and shard_count at the same time")));
+		}
+
+		shardCount = PG_GETARG_INT32(4);
+
+		/*
+		 * if shard_count parameter is given than we have to
+		 * make sure table has that many shards
+		 */
+		shardCountIsStrict = true;
+	}
+
+	CreateDistributedTableConcurrently(relationId, distributionColumnName,
+									   distributionMethod,
+									   colocateWithTableName,
+									   shardCount,
+									   shardCountIsStrict);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * CreateDistributedTableConcurrently distributes a table by first converting
+ * it to a Citus local table and then splitting the shard of the Citus local
+ * table.
+ *
+ * If anything goes wrong during the second phase, the table is left as a
+ * Citus local table.
+ */
+static void
+CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
+								   char distributionMethod,
+								   char *colocateWithTableName,
+								   int shardCount,
+								   bool shardCountIsStrict)
+{
+	/*
+	 * We disallow create_distributed_table_concurrently in transaction blocks
+	 * because we cannot handle preceding writes, and we block writes at the
+	 * very end of the operation so the transaction should end immediately after.
+	 */
+	PreventInTransactionBlock(true, "create_distributed_table_concurrently");
+
+	if (distributionMethod != DISTRIBUTE_BY_HASH)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("only hash-distributed tables can be distributed "
+							   "without blocking writes")));
+	}
+
+	if (ShardReplicationFactor > 1)
+	{
+		ereport(ERROR, (errmsg("cannot distribute a table concurrently when "
+							   "citus.shard_replication_factor > 1")));
+	}
+
+	EnsureCoordinatorIsInMetadata();
+	EnsureCitusTableCanBeCreated(relationId);
+
+	/*
+	 * Get name of the table before possibly replacing it in
+	 * citus_add_local_table_to_metadata.
+	 */
+	char *tableName = get_rel_name(relationId);
+	Oid schemaId = get_rel_namespace(relationId);
+	char *schemaName = get_namespace_name(schemaId);
+	RangeVar *rangeVar = makeRangeVar(schemaName, tableName, -1);
+
+	if (!IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	{
+		EnsureTableNotDistributed(relationId);
+
+		/*
+		 * Before taking locks, convert the table into a Citus local table and commit
+		 * to allow shard split to see the shard.
+		 */
+		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+
+		StringInfo command = makeStringInfo();
+		appendStringInfo(command,
+						 "SELECT pg_catalog.citus_add_local_table_to_metadata(%s)",
+						 quote_literal_cstr(qualifiedRelationName));
+
+		ExecuteRebalancerCommandInSeparateTransaction(command->data);
+	}
+
+	/*
+	 * Lock target relation with a shard update exclusive lock to
+	 * block DDL, but not writes.
+	 *
+	 * If there was a concurrent drop/rename, error out by setting missingOK = false.
+	 */
+	bool missingOK = false;
+	relationId = RangeVarGetRelid(rangeVar, ShareUpdateExclusiveLock, missingOK);
+
+	if (PartitionedTable(relationId))
+	{
+		/* also lock partitions */
+		LockPartitionRelations(relationId, ShareUpdateExclusiveLock);
+	}
+
+	List *shardList = LoadShardIntervalList(relationId);
+
+	/*
+	 * It's technically possible for the table to have been concurrently
+	 * distributed just after citus_add_local_table_to_metadata and just
+	 * before acquiring the lock, so double check.
+	 */
+	if (list_length(shardList) != 1 ||
+		!IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("table was concurrently modified")));
+	}
+
+	/*
+	 * The table currently has one shard, we will split that shard to match the
+	 * target distribution.
+	 */
+	ShardInterval *shardToSplit = (ShardInterval *) linitial(shardList);
+
+	PropagatePrerequisiteObjectsForDistributedTable(relationId);
+
+	bool viaDeprecatedAPI = false;
+	char replicationModel = DecideReplicationModel(distributionMethod,
+												   colocateWithTableName,
+												   viaDeprecatedAPI);
+
+	Var *distributionColumn = BuildDistributionKeyFromColumnName(relationId,
+																 distributionColumnName,
+																 NoLock);
+
+	Oid distributionColumnType = distributionColumn->vartype;
+	Oid distributionColumnCollation = distributionColumn->varcollid;
+
+	/*
+	 * At this stage, we only want to check for an existing co-location group.
+	 * We cannot create a new co-location group until after replication slot
+	 * creation in NonBlockingShardSplit.
+	 */
+	uint32 colocationId = FindColocateWithColocationId(relationId,
+													   replicationModel,
+													   distributionColumnType,
+													   distributionColumnCollation,
+													   shardCount,
+													   shardCountIsStrict,
+													   colocateWithTableName);
+
+	EnsureRelationCanBeDistributed(relationId, distributionColumn, distributionMethod,
+								   colocationId, replicationModel, viaDeprecatedAPI);
+
+	/*
+	 * Make sure that existing reference tables have been replicated to all the nodes
+	 * such that we can create foreign keys and joins work immediately after creation.
+	 * We do this after applying all essential checks to error out early in case of
+	 * user error.
+	 */
+	EnsureReferenceTablesExistOnAllNodes();
+
+	Oid colocatedTableId = InvalidOid;
+	if (colocationId != INVALID_COLOCATION_ID)
+	{
+		colocatedTableId = ColocatedTableId(colocationId);
+	}
+
+	List *workersForPlacementList;
+	List *shardSplitPointsList;
+
+	if (colocatedTableId != InvalidOid)
+	{
+		List *colocatedShardList = LoadShardIntervalList(colocatedTableId);
+
+		/*
+		 * Match the shard ranges of an existing table.
+		 */
+		shardSplitPointsList = HashSplitPointsForShardList(colocatedShardList);
+
+		/*
+		 * Find the node IDs of the shard placements.
+		 */
+		workersForPlacementList = WorkerNodesForShardList(colocatedShardList);
+	}
+	else
+	{
+		/*
+		 * Generate a new set of #shardCount shards.
+		 */
+		shardSplitPointsList = HashSplitPointsForShardCount(shardCount);
+
+		/*
+		 * Place shards in a round-robin fashion across all data nodes.
+		 */
+		List *workerNodeList = DistributedTablePlacementNodeList(NoLock);
+		workersForPlacementList = RoundRobinWorkerNodeList(workerNodeList, shardCount);
+	}
+
+	/*
+	 * At this point, the table is a Citus local table, which means it does
+	 * not have a partition column in the metadata. However, we cannot update
+	 * the metadata here because that would prevent us from creating a replication
+	 * slot to copy ongoing changes. Instead, we pass a hash that maps relation
+	 * IDs to partition column vars.
+	 */
+	DistributionColumnMap *distributionColumnOverrides = CreateDistributionColumnMap();
+	AddDistributionColumnForRelation(distributionColumnOverrides, relationId,
+									 distributionColumnName);
+
+	SplitOperation splitOperation = CREATE_DISTRIBUTED_TABLE;
+	uint64 splitWorkflowId = shardToSplit->shardId;
+	List *sourceColocatedShardIntervalList = ListShardsUnderParentRelation(relationId);
+
+	NonBlockingShardSplit(
+		splitOperation,
+		splitWorkflowId,
+		sourceColocatedShardIntervalList,
+		shardSplitPointsList,
+		workersForPlacementList,
+		distributionColumnOverrides,
+		colocationId);
+}
+
+
+/*
+ * HashSplitPointsForShardList returns a list of split points which match
+ * the shard ranges of the given list of shards;
+ */
+static List *
+HashSplitPointsForShardList(List *shardList)
+{
+	List *splitPointList = NIL;
+
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardList)
+	{
+		int32 shardMaxValue = DatumGetInt32(shardInterval->maxValue);
+
+		splitPointList = lappend_int(splitPointList, shardMaxValue);
+	}
+
+	/*
+	 * Split point lists only include the upper boundaries.
+	 */
+	splitPointList = list_delete_last(splitPointList);
+
+	return splitPointList;
+}
+
+
+/*
+ * HashSplitPointsForShardCount returns a list of split points for a given
+ * shard count with roughly equal hash ranges.
+ */
+static List *
+HashSplitPointsForShardCount(int shardCount)
+{
+	List *splitPointList = NIL;
+
+	/* calculate the split of the hash space */
+	uint64 hashTokenIncrement = HASH_TOKEN_COUNT / shardCount;
+
+	/*
+	 * Split points lists only include the upper boundaries, so we only
+	 * go up to shardCount - 1 and do not have to apply the correction
+	 * for the last shardmaxvalue.
+	 */
+	for (int64 shardIndex = 0; shardIndex < shardCount - 1; shardIndex++)
+	{
+		/* initialize the hash token space for this shard */
+		int32 shardMinValue = PG_INT32_MIN + (shardIndex * hashTokenIncrement);
+		int32 shardMaxValue = shardMinValue + (hashTokenIncrement - 1);
+
+		splitPointList = lappend_int(splitPointList, shardMaxValue);
+	}
+
+	return splitPointList;
+}
+
+
+/*
+ * WorkerNodesForShardList returns a list of nodes reflecting the locations of
+ * the given list of shards.
+ */
+static List *
+WorkerNodesForShardList(List *shardList)
+{
+	List *nodeList = NIL;
+
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardList)
+	{
+		WorkerNode *workerNode = ActiveShardPlacementWorkerNode(shardInterval->shardId);
+
+		nodeList = lappend(nodeList, workerNode);
+	}
+
+	return nodeList;
+}
+
+
+/*
+ * RoundRobinWorkerNodeList round robins over the workers in the worker node list
+ * and adds nodes to a list of length listLength.
+ */
+static List *
+RoundRobinWorkerNodeList(List *workerNodeList, int listLength)
+{
+	List *nodeList = NIL;
+
+	for (int nodeIdIndex = 0; nodeIdIndex < listLength; nodeIdIndex++)
+	{
+		int nodeIndex = nodeIdIndex % list_length(workerNodeList);
+		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList, nodeIndex);
+
+		nodeList = lappend(nodeList, workerNode);
+	}
+
+	return nodeList;
 }
 
 
@@ -431,21 +795,9 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 
 	LockRelationOid(relationId, ExclusiveLock);
 
-	/*
-	 * Ensure that the sequences used in column defaults of the table
-	 * have proper types
-	 */
-	EnsureRelationHasCompatibleSequenceTypes(relationId);
+	EnsureTableNotDistributed(relationId);
 
-	/*
-	 * distributed tables might have dependencies on different objects, since we create
-	 * shards for a distributed table via multiple sessions these objects will be created
-	 * via their own connection and committed immediately so they become visible to all
-	 * sessions creating shards.
-	 */
-	ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*tableAddress, RelationRelationId, relationId);
-	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(tableAddress));
+	PropagatePrerequisiteObjectsForDistributedTable(relationId);
 
 	char replicationModel = DecideReplicationModel(distributionMethod,
 												   colocateWithTableName,
@@ -453,7 +805,7 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 
 	Var *distributionColumn = BuildDistributionKeyFromColumnName(relationId,
 																 distributionColumnName,
-																 ExclusiveLock);
+																 NoLock);
 
 	/*
 	 * ColocationIdForNewTable assumes caller acquires lock on relationId. In our case,
@@ -579,6 +931,31 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 	bool skip_validation = true;
 	ExecuteForeignKeyCreateCommandList(originalForeignKeyRecreationCommands,
 									   skip_validation);
+}
+
+
+/*
+ * PropagatePrerequisiteObjectsForDistributedTable ensures we can create shards
+ * on all nodes by ensuring all dependent objects exist on all node.
+ */
+static void
+PropagatePrerequisiteObjectsForDistributedTable(Oid relationId)
+{
+	/*
+	 * Ensure that the sequences used in column defaults of the table
+	 * have proper types
+	 */
+	EnsureRelationHasCompatibleSequenceTypes(relationId);
+
+	/*
+	 * distributed tables might have dependencies on different objects, since we create
+	 * shards for a distributed table via multiple sessions these objects will be created
+	 * via their own connection and committed immediately so they become visible to all
+	 * sessions creating shards.
+	 */
+	ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*tableAddress, RelationRelationId, relationId);
+	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(tableAddress));
 }
 
 
@@ -960,61 +1337,43 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 
 		Oid distributionColumnType = distributionColumn->vartype;
 		Oid distributionColumnCollation = get_typcollation(distributionColumnType);
+
+		colocationId = FindColocateWithColocationId(relationId,
+													replicationModel,
+													distributionColumnType,
+													distributionColumnCollation,
+													shardCount,
+													shardCountIsStrict,
+													colocateWithTableName);
+
 		bool createdColocationGroup = false;
 
-		if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) == 0)
+		if (colocationId == INVALID_COLOCATION_ID)
 		{
-			/* check for default colocation group */
-			colocationId = ColocationId(shardCount, ShardReplicationFactor,
-										distributionColumnType,
-										distributionColumnCollation);
-
 			/*
-			 * if the shardCount is strict then we check if the shard count
-			 * of the colocated table is actually shardCount
+			 * No adding to an existing co-location group, so create a new one.
 			 */
-			if (shardCountIsStrict && colocationId != INVALID_COLOCATION_ID)
+
+			if (IsColocateWithNone(colocateWithTableName))
 			{
-				Oid colocatedTableId = ColocatedTableId(colocationId);
-
-				if (colocatedTableId != InvalidOid)
-				{
-					CitusTableCacheEntry *cacheEntry =
-						GetCitusTableCacheEntry(colocatedTableId);
-					int colocatedTableShardCount = cacheEntry->shardIntervalArrayLength;
-
-					if (colocatedTableShardCount != shardCount)
-					{
-						colocationId = INVALID_COLOCATION_ID;
-					}
-				}
+				/*
+				 * We currently do not insert pg_dist_colocation records for
+				 * colocate_with := 'none'.
+				 */
+				colocationId = GetNextColocationId();
 			}
-
-			if (colocationId == INVALID_COLOCATION_ID)
+			else if (IsColocateWithDefault(colocateWithTableName))
 			{
+				/*
+				 * Generate a new colocation ID and insert a pg_dist_colocation
+				 * record.
+				 */
 				colocationId = CreateColocationGroup(shardCount, ShardReplicationFactor,
 													 distributionColumnType,
 													 distributionColumnCollation);
-				createdColocationGroup = true;
 			}
-		}
-		else if (IsColocateWithNone(colocateWithTableName))
-		{
-			colocationId = CreateColocationGroup(shardCount, ShardReplicationFactor,
-												 distributionColumnType,
-												 distributionColumnCollation);
 
 			createdColocationGroup = true;
-		}
-		else
-		{
-			text *colocateWithTableNameText = cstring_to_text(colocateWithTableName);
-			Oid sourceRelationId = ResolveRelationId(colocateWithTableNameText, false);
-
-			EnsureTableCanBeColocatedWith(relationId, replicationModel,
-										  distributionColumnType, sourceRelationId);
-
-			colocationId = TableColocationId(sourceRelationId);
 		}
 
 		/*
@@ -1055,7 +1414,6 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 {
 	Oid parentRelationId = InvalidOid;
 
-	EnsureTableNotDistributed(relationId);
 	EnsureLocalTableEmptyIfNecessary(relationId, distributionMethod, viaDeprecatedAPI);
 
 	/* user really wants triggers? */
@@ -1224,55 +1582,6 @@ ErrorIfTableIsACatalogTable(Relation relation)
 
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("cannot create a citus table from a catalog table")));
-}
-
-
-/*
- * EnsureTableCanBeColocatedWith checks whether a given replication model and
- * distribution column type is suitable to distribute a table to be colocated
- * with given source table.
- *
- * We only pass relationId to provide meaningful error messages.
- */
-static void
-EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
-							  Oid distributionColumnType, Oid sourceRelationId)
-{
-	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(sourceRelationId);
-	char sourceReplicationModel = sourceTableEntry->replicationModel;
-	Var *sourceDistributionColumn = DistPartitionKeyOrError(sourceRelationId);
-
-	if (!IsCitusTableTypeCacheEntry(sourceTableEntry, HASH_DISTRIBUTED))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot distribute relation"),
-						errdetail("Currently, colocate_with option is only supported "
-								  "for hash distributed tables.")));
-	}
-
-	if (sourceReplicationModel != replicationModel)
-	{
-		char *relationName = get_rel_name(relationId);
-		char *sourceRelationName = get_rel_name(sourceRelationId);
-
-		ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
-							   sourceRelationName, relationName),
-						errdetail("Replication models don't match for %s and %s.",
-								  sourceRelationName, relationName)));
-	}
-
-	Oid sourceDistributionColumnType = sourceDistributionColumn->vartype;
-	if (sourceDistributionColumnType != distributionColumnType)
-	{
-		char *relationName = get_rel_name(relationId);
-		char *sourceRelationName = get_rel_name(sourceRelationId);
-
-		ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
-							   sourceRelationName, relationName),
-						errdetail("Distribution column types don't match for "
-								  "%s and %s.", sourceRelationName,
-								  relationName)));
-	}
 }
 
 

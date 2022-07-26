@@ -14,6 +14,7 @@
 #include "replication/logical.h"
 #include "utils/typcache.h"
 
+
 extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
 static LogicalDecodeChangeCB pgoutputChangeCB;
 
