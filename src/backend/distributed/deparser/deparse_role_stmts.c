@@ -98,59 +98,59 @@ AppendRoleOption(StringInfo buf, ListCell *optionCell)
 {
 	DefElem *option = (DefElem *) lfirst(optionCell);
 
-	if (strcmp(option->defname, "superuser") == 0 && intVal(option->arg))
+	if (strcmp(option->defname, "superuser") == 0 && boolVal(option->arg))
 	{
 		appendStringInfo(buf, " SUPERUSER");
 	}
-	else if (strcmp(option->defname, "superuser") == 0 && !intVal(option->arg))
+	else if (strcmp(option->defname, "superuser") == 0 && !boolVal(option->arg))
 	{
 		appendStringInfo(buf, " NOSUPERUSER");
 	}
-	else if (strcmp(option->defname, "createdb") == 0 && intVal(option->arg))
+	else if (strcmp(option->defname, "createdb") == 0 && boolVal(option->arg))
 	{
 		appendStringInfo(buf, " CREATEDB");
 	}
-	else if (strcmp(option->defname, "createdb") == 0 && !intVal(option->arg))
+	else if (strcmp(option->defname, "createdb") == 0 && !boolVal(option->arg))
 	{
 		appendStringInfo(buf, " NOCREATEDB");
 	}
-	else if (strcmp(option->defname, "createrole") == 0 && intVal(option->arg))
+	else if (strcmp(option->defname, "createrole") == 0 && boolVal(option->arg))
 	{
 		appendStringInfo(buf, " CREATEROLE");
 	}
-	else if (strcmp(option->defname, "createrole") == 0 && !intVal(option->arg))
+	else if (strcmp(option->defname, "createrole") == 0 && !boolVal(option->arg))
 	{
 		appendStringInfo(buf, " NOCREATEROLE");
 	}
-	else if (strcmp(option->defname, "inherit") == 0 && intVal(option->arg))
+	else if (strcmp(option->defname, "inherit") == 0 && boolVal(option->arg))
 	{
 		appendStringInfo(buf, " INHERIT");
 	}
-	else if (strcmp(option->defname, "inherit") == 0 && !intVal(option->arg))
+	else if (strcmp(option->defname, "inherit") == 0 && !boolVal(option->arg))
 	{
 		appendStringInfo(buf, " NOINHERIT");
 	}
-	else if (strcmp(option->defname, "canlogin") == 0 && intVal(option->arg))
+	else if (strcmp(option->defname, "canlogin") == 0 && boolVal(option->arg))
 	{
 		appendStringInfo(buf, " LOGIN");
 	}
-	else if (strcmp(option->defname, "canlogin") == 0 && !intVal(option->arg))
+	else if (strcmp(option->defname, "canlogin") == 0 && !boolVal(option->arg))
 	{
 		appendStringInfo(buf, " NOLOGIN");
 	}
-	else if (strcmp(option->defname, "isreplication") == 0 && intVal(option->arg))
+	else if (strcmp(option->defname, "isreplication") == 0 && boolVal(option->arg))
 	{
 		appendStringInfo(buf, " REPLICATION");
 	}
-	else if (strcmp(option->defname, "isreplication") == 0 && !intVal(option->arg))
+	else if (strcmp(option->defname, "isreplication") == 0 && !boolVal(option->arg))
 	{
 		appendStringInfo(buf, " NOREPLICATION");
 	}
-	else if (strcmp(option->defname, "bypassrls") == 0 && intVal(option->arg))
+	else if (strcmp(option->defname, "bypassrls") == 0 && boolVal(option->arg))
 	{
 		appendStringInfo(buf, " BYPASSRLS");
 	}
-	else if (strcmp(option->defname, "bypassrls") == 0 && !intVal(option->arg))
+	else if (strcmp(option->defname, "bypassrls") == 0 && !boolVal(option->arg))
 	{
 		appendStringInfo(buf, " NOBYPASSRLS");
 	}
