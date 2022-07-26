@@ -1067,6 +1067,26 @@ SELECT * FROM multi_extension.print_extension_changes();
 ---------------------------------------------------------------------
 (0 rows)
 
+-- Snapshot of state at 11.0-4
+ALTER EXTENSION citus UPDATE TO '11.0-4';
+SELECT * FROM multi_extension.print_extension_changes();
+                       previous_object                       |                    current_object
+---------------------------------------------------------------------
+ function citus_finalize_upgrade_to_citus11(boolean) boolean |
+                                                             | function citus_finalize_upgrade_to_citus11(boolean)
+(2 rows)
+
+-- Test downgrade to 11.0-3 from 11.0-4
+ALTER EXTENSION citus UPDATE TO '11.0-3';
+ERROR:  extension "citus" has no update path from version "11.0-4" to version "11.0-3"
+ALTER EXTENSION citus UPDATE TO '11.0-4';
+NOTICE:  version "11.0-4" of extension "citus" is already installed
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
 SHOW citus.version;
