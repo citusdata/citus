@@ -13,6 +13,8 @@
 
 #include "postgres.h"
 
+#include "pg_version_compat.h"
+
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
 #include "lib/stringinfo.h"
@@ -98,6 +100,68 @@ AppendRoleOption(StringInfo buf, ListCell *optionCell)
 {
 	DefElem *option = (DefElem *) lfirst(optionCell);
 
+	/*
+	 * In PG15, Boolean nodes are added. Pre PG15, internal Boolean values
+	 * in Create Role commands were represented by Integer nodes.
+	 */
+#if PG_VERSION_NUM >= PG_VERSION_15
+	if (strcmp(option->defname, "superuser") == 0 && boolVal(option->arg))
+	{
+		appendStringInfo(buf, " SUPERUSER");
+	}
+	else if (strcmp(option->defname, "superuser") == 0 && !boolVal(option->arg))
+	{
+		appendStringInfo(buf, " NOSUPERUSER");
+	}
+	else if (strcmp(option->defname, "createdb") == 0 && boolVal(option->arg))
+	{
+		appendStringInfo(buf, " CREATEDB");
+	}
+	else if (strcmp(option->defname, "createdb") == 0 && !boolVal(option->arg))
+	{
+		appendStringInfo(buf, " NOCREATEDB");
+	}
+	else if (strcmp(option->defname, "createrole") == 0 && boolVal(option->arg))
+	{
+		appendStringInfo(buf, " CREATEROLE");
+	}
+	else if (strcmp(option->defname, "createrole") == 0 && !boolVal(option->arg))
+	{
+		appendStringInfo(buf, " NOCREATEROLE");
+	}
+	else if (strcmp(option->defname, "inherit") == 0 && boolVal(option->arg))
+	{
+		appendStringInfo(buf, " INHERIT");
+	}
+	else if (strcmp(option->defname, "inherit") == 0 && !boolVal(option->arg))
+	{
+		appendStringInfo(buf, " NOINHERIT");
+	}
+	else if (strcmp(option->defname, "canlogin") == 0 && boolVal(option->arg))
+	{
+		appendStringInfo(buf, " LOGIN");
+	}
+	else if (strcmp(option->defname, "canlogin") == 0 && !boolVal(option->arg))
+	{
+		appendStringInfo(buf, " NOLOGIN");
+	}
+	else if (strcmp(option->defname, "isreplication") == 0 && boolVal(option->arg))
+	{
+		appendStringInfo(buf, " REPLICATION");
+	}
+	else if (strcmp(option->defname, "isreplication") == 0 && !boolVal(option->arg))
+	{
+		appendStringInfo(buf, " NOREPLICATION");
+	}
+	else if (strcmp(option->defname, "bypassrls") == 0 && boolVal(option->arg))
+	{
+		appendStringInfo(buf, " BYPASSRLS");
+	}
+	else if (strcmp(option->defname, "bypassrls") == 0 && !boolVal(option->arg))
+	{
+		appendStringInfo(buf, " NOBYPASSRLS");
+	}
+#else
 	if (strcmp(option->defname, "superuser") == 0 && intVal(option->arg))
 	{
 		appendStringInfo(buf, " SUPERUSER");
@@ -154,6 +218,7 @@ AppendRoleOption(StringInfo buf, ListCell *optionCell)
 	{
 		appendStringInfo(buf, " NOBYPASSRLS");
 	}
+#endif
 	else if (strcmp(option->defname, "connectionlimit") == 0)
 	{
 		appendStringInfo(buf, " CONNECTION LIMIT %d", intVal(option->arg));

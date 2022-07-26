@@ -196,10 +196,17 @@ AppendDefElem(StringInfo buf, DefElem *def)
 static void
 AppendDefElemStrict(StringInfo buf, DefElem *def)
 {
+#if PG_VERSION_NUM >= PG_VERSION_15
+	if (boolVal(def->arg))
+	{
+		appendStringInfo(buf, " STRICT");
+	}
+#else
 	if (intVal(def->arg) == 1)
 	{
 		appendStringInfo(buf, " STRICT");
 	}
+#endif
 	else
 	{
 		appendStringInfo(buf, " CALLED ON NULL INPUT");
@@ -223,10 +230,17 @@ AppendDefElemVolatility(StringInfo buf, DefElem *def)
 static void
 AppendDefElemLeakproof(StringInfo buf, DefElem *def)
 {
+#if PG_VERSION_NUM >= PG_VERSION_15
+	if (!boolVal(def->arg))
+	{
+		appendStringInfo(buf, " NOT");
+	}
+#else
 	if (intVal(def->arg) == 0)
 	{
 		appendStringInfo(buf, " NOT");
 	}
+#endif
 	appendStringInfo(buf, " LEAKPROOF");
 }
 
@@ -237,10 +251,17 @@ AppendDefElemLeakproof(StringInfo buf, DefElem *def)
 static void
 AppendDefElemSecurity(StringInfo buf, DefElem *def)
 {
+#if PG_VERSION_NUM >= PG_VERSION_15
+	if (!boolVal(def->arg))
+	{
+		appendStringInfo(buf, " SECURITY INVOKER");
+	}
+#else
 	if (intVal(def->arg) == 0)
 	{
 		appendStringInfo(buf, " SECURITY INVOKER");
 	}
+#endif
 	else
 	{
 		appendStringInfo(buf, " SECURITY DEFINER");

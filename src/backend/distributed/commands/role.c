@@ -10,6 +10,8 @@
 
 #include "postgres.h"
 
+#include "pg_version_compat.h"
+
 #include "distributed/pg_version_constants.h"
 
 #include "access/heapam.h"
@@ -59,6 +61,9 @@ static char * CreateCreateOrAlterRoleCommand(const char *roleName,
 											 CreateRoleStmt *createRoleStmt,
 											 AlterRoleStmt *alterRoleStmt);
 static DefElem * makeDefElemInt(char *name, int value);
+#if PG_VERSION_NUM >= PG_VERSION_15
+static DefElem * makeDefElemBool(char *name, bool value);
+#endif
 static List * GenerateRoleOptionsList(HeapTuple tuple);
 static List * GenerateGrantRoleStmtsFromOptions(RoleSpec *roleSpec, List *options);
 static List * GenerateGrantRoleStmtsOfRole(Oid roleid);
@@ -454,6 +459,20 @@ GenerateRoleOptionsList(HeapTuple tuple)
 	Form_pg_authid role = ((Form_pg_authid) GETSTRUCT(tuple));
 
 	List *options = NIL;
+
+	/*
+	 * In PG15, Boolean nodes are added. Pre PG15, internal Boolean values
+	 * in Create Role commands were represented by Integer nodes.
+	 */
+#if PG_VERSION_NUM >= PG_VERSION_15
+	options = lappend(options, makeDefElemBool("superuser", role->rolsuper));
+	options = lappend(options, makeDefElemBool("createdb", role->rolcreatedb));
+	options = lappend(options, makeDefElemBool("createrole", role->rolcreaterole));
+	options = lappend(options, makeDefElemBool("inherit", role->rolinherit));
+	options = lappend(options, makeDefElemBool("canlogin", role->rolcanlogin));
+	options = lappend(options, makeDefElemBool("isreplication", role->rolreplication));
+	options = lappend(options, makeDefElemBool("bypassrls", role->rolbypassrls));
+#else
 	options = lappend(options, makeDefElemInt("superuser", role->rolsuper));
 	options = lappend(options, makeDefElemInt("createdb", role->rolcreatedb));
 	options = lappend(options, makeDefElemInt("createrole", role->rolcreaterole));
@@ -461,6 +480,8 @@ GenerateRoleOptionsList(HeapTuple tuple)
 	options = lappend(options, makeDefElemInt("canlogin", role->rolcanlogin));
 	options = lappend(options, makeDefElemInt("isreplication", role->rolreplication));
 	options = lappend(options, makeDefElemInt("bypassrls", role->rolbypassrls));
+#endif
+
 	options = lappend(options, makeDefElemInt("connectionlimit", role->rolconnlimit));
 
 	/* load password from heap tuple, use NULL if not set */
@@ -614,6 +635,21 @@ makeDefElemInt(char *name, int value)
 {
 	return makeDefElem(name, (Node *) makeInteger(value), -1);
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_15
+
+/*
+ * makeDefElemBool creates a DefElem with boolean typed value with -1 as location.
+ */
+static DefElem *
+makeDefElemBool(char *name, bool value)
+{
+	return makeDefElem(name, (Node *) makeBoolean(value), -1);
+}
+
+
+#endif
 
 
 /*
