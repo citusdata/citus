@@ -500,6 +500,9 @@ if(!$vanillaDev && $vanillatest)
 {
     # we enable hiding the citus dependent objects from pg meta class queries to not break postgres vanilla test behaviour
     push(@pgOptions, "citus.hide_citus_dependent_objects=true");
+
+    # we disable citus related unwanted messages to not break postgres vanilla test behaviour.
+    push(@pgOptions, "citus.enable_unsupported_feature_messages=false");
 }
 
 if ($useMitmproxy)

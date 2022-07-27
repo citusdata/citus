@@ -48,6 +48,7 @@
 #include "distributed/local_executor.h"
 #include "distributed/local_distributed_join_planner.h"
 #include "distributed/locally_reserved_shared_connections.h"
+#include "distributed/log_utils.h"
 #include "distributed/maintenanced.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/metadata_utility.h"
@@ -1151,6 +1152,17 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_unsupported_feature_messages",
+		gettext_noop("Controls showing of some citus related messages. It is intended to "
+					 "be used before vanilla tests to stop unwanted citus messages."),
+		NULL,
+		&EnableUnsupportedFeatureMessages,
+		true,
+		PGC_SUSET,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
