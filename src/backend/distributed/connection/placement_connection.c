@@ -1089,9 +1089,6 @@ InitPlacementConnectionManagement(void)
 
 	ConnectionShardHash = hash_create("citus connection cache (shardid)",
 									  64, &info, hashFlags);
-
-	/* (relationId) = [relationAccessMode] hash */
-	AllocateRelationAccessHash();
 }
 
 

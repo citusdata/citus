@@ -34,7 +34,7 @@ typedef enum RelationAccessMode
 	RELATION_PARALLEL_ACCESSED
 } RelationAccessMode;
 
-extern void AllocateRelationAccessHash(void);
+extern void InitRelationAccessHash(void);
 extern void ResetRelationAccessHash(void);
 extern void RecordRelationAccessIfNonDistTable(Oid relationId,
 											   ShardPlacementAccessType accessType);
