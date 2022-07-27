@@ -1,11 +1,56 @@
 SET citus.next_shard_id TO 20050000;
 
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 14 AS server_version_above_fourteen
+\gset
+
 CREATE USER collationuser;
 
 CREATE SCHEMA collation_tests AUTHORIZATION collationuser;
 CREATE SCHEMA collation_tests2 AUTHORIZATION collationuser;
 
 SET search_path to collation_tests;
+
+\if :server_version_above_fourteen
+
+-- fail, needs "locale"
+CREATE COLLATION german_phonebook_test (provider = icu, lc_collate = 'de-u-co-phonebk');
+
+-- fail, needs "locale"
+CREATE COLLATION german_phonebook_test (provider = icu, lc_collate = 'de-u-co-phonebk', lc_ctype = 'de-u-co-phonebk');
+
+-- works
+CREATE COLLATION german_phonebook_test (provider = icu, locale = 'de-u-co-phonebk');
+
+-- with icu provider, colliculocale will be set, collcollate and collctype will be null
+SELECT result FROM run_command_on_all_nodes('
+    SELECT collcollate FROM pg_collation WHERE collname = ''german_phonebook_test'';
+');
+SELECT result FROM run_command_on_all_nodes('
+    SELECT collctype FROM pg_collation WHERE collname = ''german_phonebook_test'';
+');
+SELECT result FROM run_command_on_all_nodes('
+    SELECT colliculocale FROM pg_collation WHERE collname = ''german_phonebook_test'';
+');
+
+DROP COLLATION german_phonebook_test;
+
+-- with non-icu provider, colliculocale will be null, collcollate and collctype will be set
+CREATE COLLATION default_provider (provider = libc, lc_collate = "POSIX", lc_ctype = "POSIX");
+
+SELECT result FROM run_command_on_all_nodes('
+    SELECT collcollate FROM pg_collation WHERE collname = ''default_provider'';
+');
+SELECT result FROM run_command_on_all_nodes('
+    SELECT collctype FROM pg_collation WHERE collname = ''default_provider'';
+');
+SELECT result FROM run_command_on_all_nodes('
+    SELECT colliculocale FROM pg_collation WHERE collname = ''default_provider'';
+');
+
+DROP COLLATION default_provider;
+
+\endif
 
 CREATE COLLATION german_phonebook (provider = icu, locale = 'de-u-co-phonebk');
 
