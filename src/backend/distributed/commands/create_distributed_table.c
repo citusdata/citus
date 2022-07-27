@@ -60,6 +60,7 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shared_library_init.h"
+#include "distributed/shard_rebalancer.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
@@ -850,6 +851,17 @@ CreateHashDistributedTableShards(Oid relationId, int shardCount,
 
 	if (colocatedTableId != InvalidOid)
 	{
+		/*
+		 * We currently allow concurrent distribution of colocated tables (which
+		 * we probably should not be allowing because of foreign keys /
+		 * partitioning etc).
+		 *
+		 * We also prevent concurrent shard moves / copy / splits) while creating
+		 * a colocated table.
+		 */
+		AcquirePlacementColocationLock(colocatedTableId, ShareLock,
+									   "colocate distributed table");
+
 		CreateColocatedShards(relationId, colocatedTableId, useExclusiveConnection);
 	}
 	else
