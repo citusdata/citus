@@ -295,7 +295,7 @@ BuildSelectStatementViaStdPlanner(Query *combineQuery, List *remoteScanTargetLis
 		ReplaceCitusExtraDataContainer = true;
 		ReplaceCitusExtraDataContainerWithCustomScan = remoteScan;
 
-		standardStmt = standard_planner_compat(combineQuery, 0, NULL);
+		standardStmt = standard_planner(combineQuery, NULL, 0, NULL);
 
 		ReplaceCitusExtraDataContainer = false;
 		ReplaceCitusExtraDataContainerWithCustomScan = NULL;

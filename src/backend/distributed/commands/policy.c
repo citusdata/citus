@@ -362,7 +362,7 @@ PreprocessAlterPolicyStmt(Node *node, const char *queryString,
 
 			appendStringInfoString(&ddlString, RoleSpecString(roleSpec, true));
 
-			if (lnext_compat(stmt->roles, roleCell) != NULL)
+			if (lnext(stmt->roles, roleCell) != NULL)
 			{
 				appendStringInfoString(&ddlString, ", ");
 			}

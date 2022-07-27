@@ -155,7 +155,7 @@ AllocateRelationAccessHash(void)
 	 * management. Doing so, instead of allocating in TopMemoryContext, makes
 	 * it easier to associate used memory.
 	 */
-	RelationAcessContext = AllocSetContextCreateExtended(TopMemoryContext,
+	RelationAcessContext = AllocSetContextCreateInternal(TopMemoryContext,
 														 "Relation Access Context",
 														 ALLOCSET_DEFAULT_MINSIZE,
 														 ALLOCSET_DEFAULT_INITSIZE,

@@ -191,7 +191,7 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 		*columnNameList = lappend(*columnNameList, columnName);
 
 		List *columnOwnedSequences =
-			GetSequencesOwnedByColumn(relationId, attributeIndex + 1);
+			getOwnedSequences_internal(relationId, attributeIndex + 1, 0);
 
 		Oid ownedSequenceId = InvalidOid;
 		if (list_length(columnOwnedSequences) != 0)

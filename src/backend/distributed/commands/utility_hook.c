@@ -104,7 +104,7 @@ static void ProcessUtilityInternal(PlannedStmt *pstmt,
 								   ParamListInfo params,
 								   struct QueryEnvironment *queryEnv,
 								   DestReceiver *dest,
-								   QueryCompletionCompat *completionTag);
+								   QueryCompletion *completionTag);
 #if PG_VERSION_NUM >= 140000
 static void set_indexsafe_procflags(void);
 #endif
@@ -128,7 +128,7 @@ void
 ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityContext
 						context,
 						ParamListInfo params, DestReceiver *dest,
-						QueryCompletionCompat *completionTag)
+						QueryCompletion *completionTag)
 {
 	PlannedStmt *plannedStmt = makeNode(PlannedStmt);
 	plannedStmt->commandType = CMD_UTILITY;
@@ -158,7 +158,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					 ParamListInfo params,
 					 struct QueryEnvironment *queryEnv,
 					 DestReceiver *dest,
-					 QueryCompletionCompat *completionTag)
+					 QueryCompletion *completionTag)
 {
 	Node *parsetree;
 
@@ -372,7 +372,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 					   ParamListInfo params,
 					   struct QueryEnvironment *queryEnv,
 					   DestReceiver *dest,
-					   QueryCompletionCompat *completionTag)
+					   QueryCompletion *completionTag)
 {
 	Node *parsetree = pstmt->utilityStmt;
 	List *ddlJobs = NIL;

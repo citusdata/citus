@@ -165,7 +165,7 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 		return 0;
 	}
 
-	MemoryContext localContext = AllocSetContextCreateExtended(CurrentMemoryContext,
+	MemoryContext localContext = AllocSetContextCreateInternal(CurrentMemoryContext,
 															   "RecoverWorkerTransactions",
 															   ALLOCSET_DEFAULT_MINSIZE,
 															   ALLOCSET_DEFAULT_INITSIZE,

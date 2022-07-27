@@ -245,7 +245,7 @@ typedef enum LocalCopyStatus
 
 /* Local functions forward declarations */
 static void CopyToExistingShards(CopyStmt *copyStatement,
-								 QueryCompletionCompat *completionTag);
+								 QueryCompletion *completionTag);
 static bool IsCopyInBinaryFormat(CopyStmt *copyStatement);
 static List * FindJsonbInputColumns(TupleDesc tupleDescriptor,
 									List *inputColumnNameList);
@@ -274,7 +274,7 @@ static FmgrInfo * TypeOutputFunctions(uint32 columnCount, Oid *typeIdArray,
 static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist);
 #endif
 static bool CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName);
-static void CitusCopyFrom(CopyStmt *copyStatement, QueryCompletionCompat *completionTag);
+static void CitusCopyFrom(CopyStmt *copyStatement, QueryCompletion *completionTag);
 static void EnsureCopyCanRunOnRelation(Oid relationId);
 static HTAB * CreateConnectionStateHash(MemoryContext memoryContext);
 static HTAB * CreateShardStateHash(MemoryContext memoryContext);
@@ -308,7 +308,7 @@ static void UnclaimCopyConnections(List *connectionStateList);
 static void ShutdownCopyConnectionState(CopyConnectionState *connectionState,
 										CitusCopyDestReceiver *copyDest);
 static SelectStmt * CitusCopySelect(CopyStmt *copyStatement);
-static void CitusCopyTo(CopyStmt *copyStatement, QueryCompletionCompat *completionTag);
+static void CitusCopyTo(CopyStmt *copyStatement, QueryCompletion *completionTag);
 static int64 ForwardCopyDataFromConnection(CopyOutState copyOutState,
 										   MultiConnection *connection);
 
@@ -345,7 +345,7 @@ static bool CitusCopyDestReceiverReceive(TupleTableSlot *slot,
 static void CitusCopyDestReceiverShutdown(DestReceiver *destReceiver);
 static void CitusCopyDestReceiverDestroy(DestReceiver *destReceiver);
 static bool ContainsLocalPlacement(int64 shardId);
-static void CompleteCopyQueryTagCompat(QueryCompletionCompat *completionTag, uint64
+static void CompleteCopyQueryTagCompat(QueryCompletion *completionTag, uint64
 									   processedRowCount);
 static void FinishLocalCopy(CitusCopyDestReceiver *copyDest);
 static void CreateLocalColocatedIntermediateFile(CitusCopyDestReceiver *copyDest,
@@ -368,7 +368,7 @@ PG_FUNCTION_INFO_V1(citus_text_send_as_jsonb);
  * and the partition method of the distributed table.
  */
 static void
-CitusCopyFrom(CopyStmt *copyStatement, QueryCompletionCompat *completionTag)
+CitusCopyFrom(CopyStmt *copyStatement, QueryCompletion *completionTag)
 {
 	UseCoordinatedTransaction();
 
@@ -450,7 +450,7 @@ EnsureCopyCanRunOnRelation(Oid relationId)
  * rows.
  */
 static void
-CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionTag)
+CopyToExistingShards(CopyStmt *copyStatement, QueryCompletion *completionTag)
 {
 	Oid tableId = RangeVarGetRelid(copyStatement->relation, NoLock, false);
 
@@ -471,8 +471,8 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 	bool *columnNulls = palloc0(columnCount * sizeof(bool));
 
 	/* set up a virtual tuple table slot */
-	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlotCompat(tupleDescriptor,
-																	&TTSOpsVirtual);
+	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlot(tupleDescriptor,
+															  &TTSOpsVirtual);
 	tupleTableSlot->tts_nvalid = columnCount;
 	tupleTableSlot->tts_values = columnValues;
 	tupleTableSlot->tts_isnull = columnNulls;
@@ -639,8 +639,8 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 		MemoryContext oldContext = MemoryContextSwitchTo(executorTupleContext);
 
 		/* parse a row from the input */
-		bool nextRowFound = NextCopyFromCompat(copyState, executorExpressionContext,
-											   columnValues, columnNulls);
+		bool nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
+										 columnValues, columnNulls);
 
 		if (!nextRowFound)
 		{
@@ -760,7 +760,7 @@ FindJsonbInputColumns(TupleDesc tupleDescriptor, List *inputColumnNameList)
 
 
 static void
-CompleteCopyQueryTagCompat(QueryCompletionCompat *completionTag, uint64 processedRowCount)
+CompleteCopyQueryTagCompat(QueryCompletion *completionTag, uint64 processedRowCount)
 {
 	SetQueryCompletion(completionTag, CMDTAG_COPY, processedRowCount);
 }
@@ -780,7 +780,7 @@ RemoveOptionFromList(List *optionList, char *optionName)
 
 		if (strncmp(option->defname, optionName, NAMEDATALEN) == 0)
 		{
-			return list_delete_cell_compat(optionList, optionCell, previousCell);
+			return list_delete_cell(optionList, optionCell);
 		}
 	}
 
@@ -1387,7 +1387,7 @@ ColumnCoercionPaths(TupleDesc destTupleDescriptor, TupleDesc inputTupleDescripto
 		ConversionPathForTypes(inputTupleType, destTupleType,
 							   &coercePaths[columnIndex]);
 
-		currentColumnName = lnext_compat(columnNameList, currentColumnName);
+		currentColumnName = lnext(columnNameList, currentColumnName);
 
 		if (currentColumnName == NULL)
 		{
@@ -2864,7 +2864,7 @@ CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName)
  * further processing is needed.
  */
 Node *
-ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletionCompat *completionTag, const
+ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletion *completionTag, const
 				char *queryString)
 {
 	/*
@@ -3016,7 +3016,7 @@ CitusCopySelect(CopyStmt *copyStatement)
  * table dump.
  */
 static void
-CitusCopyTo(CopyStmt *copyStatement, QueryCompletionCompat *completionTag)
+CitusCopyTo(CopyStmt *copyStatement, QueryCompletion *completionTag)
 {
 	ListCell *shardIntervalCell = NULL;
 	int64 tuplesSent = 0;
@@ -3481,7 +3481,7 @@ InitializeCopyShardState(CopyShardState *shardState,
 	bool hasRemoteCopy = false;
 
 	MemoryContext localContext =
-		AllocSetContextCreateExtended(CurrentMemoryContext,
+		AllocSetContextCreateInternal(CurrentMemoryContext,
 									  "InitializeCopyShardState",
 									  ALLOCSET_DEFAULT_MINSIZE,
 									  ALLOCSET_DEFAULT_INITSIZE,

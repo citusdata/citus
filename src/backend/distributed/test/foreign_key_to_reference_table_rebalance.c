@@ -76,7 +76,7 @@ get_foreign_key_to_reference_table_commands(PG_FUNCTION_ARGS)
 		char *command = (char *) lfirst(wrapper->listCell);
 		text *commandText = cstring_to_text(command);
 
-		wrapper->listCell = lnext_compat(wrapper->list, wrapper->listCell);
+		wrapper->listCell = lnext(wrapper->list, wrapper->listCell);
 
 		SRF_RETURN_NEXT(functionContext, PointerGetDatum(commandText));
 	}

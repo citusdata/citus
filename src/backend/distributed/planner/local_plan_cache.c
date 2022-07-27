@@ -88,7 +88,7 @@ CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan
 	LockRelationOid(rangeTableEntry->relid, lockMode);
 
 	LocalPlannedStatement *localPlannedStatement = CitusMakeNode(LocalPlannedStatement);
-	localPlan = planner_compat(localShardQuery, 0, NULL);
+	localPlan = planner(localShardQuery, NULL, 0, NULL);
 	localPlannedStatement->localPlan = localPlan;
 	localPlannedStatement->shardId = task->anchorShardId;
 	localPlannedStatement->localGroupId = GetLocalGroupId();

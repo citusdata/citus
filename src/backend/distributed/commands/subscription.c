@@ -45,9 +45,8 @@ ProcessCreateSubscriptionStmt(CreateSubscriptionStmt *createSubStmt)
 		{
 			useAuthinfo = defGetBoolean(defElem);
 
-			createSubStmt->options = list_delete_cell_compat(createSubStmt->options,
-															 currCell,
-															 prevCell);
+			createSubStmt->options = list_delete_cell(createSubStmt->options,
+													  currCell);
 
 			break;
 		}

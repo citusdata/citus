@@ -170,7 +170,7 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 		Assert(CitusIsA(ddlStatement, TableDDLCommand));
 		text *ddlStatementText = cstring_to_text(GetTableDDLCommand(ddlStatement));
 
-		wrapper->listCell = lnext_compat(wrapper->list, wrapper->listCell);
+		wrapper->listCell = lnext(wrapper->list, wrapper->listCell);
 
 		SRF_RETURN_NEXT(functionContext, PointerGetDatum(ddlStatementText));
 	}

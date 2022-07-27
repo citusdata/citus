@@ -51,10 +51,10 @@ partition_task_list_results(PG_FUNCTION_ARGS)
 	bool binaryFormat = PG_GETARG_BOOL(3);
 
 	Query *parsedQuery = ParseQueryString(queryString, NULL, 0);
-	PlannedStmt *queryPlan = pg_plan_query_compat(parsedQuery,
-												  queryString,
-												  CURSOR_OPT_PARALLEL_OK,
-												  NULL);
+	PlannedStmt *queryPlan = pg_plan_query(parsedQuery,
+										   queryString,
+										   CURSOR_OPT_PARALLEL_OK,
+										   NULL);
 	if (!IsCitusCustomScan(queryPlan->planTree))
 	{
 		ereport(ERROR, (errmsg("query must be distributed and shouldn't require "
@@ -122,10 +122,10 @@ redistribute_task_list_results(PG_FUNCTION_ARGS)
 	bool binaryFormat = PG_GETARG_BOOL(3);
 
 	Query *parsedQuery = ParseQueryString(queryString, NULL, 0);
-	PlannedStmt *queryPlan = pg_plan_query_compat(parsedQuery,
-												  queryString,
-												  CURSOR_OPT_PARALLEL_OK,
-												  NULL);
+	PlannedStmt *queryPlan = pg_plan_query(parsedQuery,
+										   queryString,
+										   CURSOR_OPT_PARALLEL_OK,
+										   NULL);
 	if (!IsCitusCustomScan(queryPlan->planTree))
 	{
 		ereport(ERROR, (errmsg("query must be distributed and shouldn't require "

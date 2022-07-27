@@ -459,8 +459,8 @@ ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescript
 		ResetPerTupleExprContext(executorState);
 		MemoryContext oldContext = MemoryContextSwitchTo(executorTupleContext);
 
-		bool nextRowFound = NextCopyFromCompat(copyState, executorExpressionContext,
-											   columnValues, columnNulls);
+		bool nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
+										 columnValues, columnNulls);
 		if (!nextRowFound)
 		{
 			MemoryContextSwitchTo(oldContext);
@@ -554,8 +554,8 @@ SortTupleStore(CitusScanState *scanState)
 	/* iterate over all the sorted tuples, add them to original tuplestore */
 	while (true)
 	{
-		TupleTableSlot *newSlot = MakeSingleTupleTableSlotCompat(tupleDescriptor,
-																 &TTSOpsMinimalTuple);
+		TupleTableSlot *newSlot = MakeSingleTupleTableSlot(tupleDescriptor,
+														   &TTSOpsMinimalTuple);
 		bool found = tuplesort_gettupleslot(tuplesortstate, true, false, newSlot, NULL);
 
 		if (!found)
@@ -660,7 +660,7 @@ ExecuteQueryIntoDestReceiver(Query *query, ParamListInfo params, DestReceiver *d
 	}
 
 	/* plan the subquery, this may be another distributed query */
-	PlannedStmt *queryPlan = pg_plan_query_compat(query, NULL, cursorOptions, params);
+	PlannedStmt *queryPlan = pg_plan_query(query, NULL, cursorOptions, params);
 
 	ExecutePlanIntoDestReceiver(queryPlan, params, dest);
 }
@@ -686,7 +686,7 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 	PortalDefineQuery(portal,
 					  NULL,
 					  "",
-					  CMDTAG_SELECT_COMPAT,
+					  CMDTAG_SELECT,
 					  list_make1(queryPlan),
 					  NULL);
 
