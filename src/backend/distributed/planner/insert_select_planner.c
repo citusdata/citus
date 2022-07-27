@@ -458,17 +458,11 @@ PrepareInsertSelectForCitusPlanner(Query *insertSelectQuery)
 	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
 	Oid targetRelationId = insertRte->relid;
 
-	bool isWrapped = false;
+	selectRte->subquery = WrapSubquery(selectRte->subquery);
+	selectRte->subquery->cteList = copyObject(insertSelectQuery->cteList);
+	selectRte->subquery->hasModifyingCTE = insertSelectQuery->hasModifyingCTE;
+	insertSelectQuery->cteList = NIL;
 
-	if (selectRte->subquery->setOperations != NULL)
-	{
-		/*
-		 * Prepare UNION query for reordering and adding casts by
-		 * wrapping it in a subquery to have a single target list.
-		 */
-		selectRte->subquery = WrapSubquery(selectRte->subquery);
-		isWrapped = true;
-	}
 
 	/* this is required for correct deparsing of the query */
 	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
@@ -482,22 +476,6 @@ PrepareInsertSelectForCitusPlanner(Query *insertSelectQuery)
 							 copyObject(selectRte->subquery->targetList),
 							 targetRelationId);
 
-	if (list_length(insertSelectQuery->cteList) > 0)
-	{
-		if (!isWrapped)
-		{
-			/*
-			 * By wrapping the SELECT in a subquery, we can avoid adjusting
-			 * ctelevelsup in RTE's that point to the CTEs.
-			 */
-			selectRte->subquery = WrapSubquery(selectRte->subquery);
-		}
-
-		/* copy CTEs from the INSERT ... SELECT statement into outer SELECT */
-		selectRte->subquery->cteList = copyObject(insertSelectQuery->cteList);
-		selectRte->subquery->hasModifyingCTE = insertSelectQuery->hasModifyingCTE;
-		insertSelectQuery->cteList = NIL;
-	}
 }
 
 
