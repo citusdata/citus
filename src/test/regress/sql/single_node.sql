@@ -252,6 +252,42 @@ INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONST
 
 DROP TABLE upsert_test;
 
+CREATE TABLE relation_tracking_table_1(id int, nonid int);
+SELECT create_distributed_table('relation_tracking_table_1', 'id', colocate_with := 'none');
+INSERT INTO relation_tracking_table_1 select generate_series(6, 10000, 1), 0;
+
+CREATE or REPLACE function foo()
+returns setof relation_tracking_table_1
+AS $$
+BEGIN
+RETURN query select * from relation_tracking_table_1 order by 1 limit 10;
+end;
+$$ language plpgsql;
+
+CREATE TABLE relation_tracking_table_2 (id int, nonid int);
+
+-- use the relation-access in this session
+select foo();
+
+-- we should be able to use sequential mode, as the previous multi-shard
+-- relation access has been cleaned-up
+BEGIN;
+SET LOCAL citus.multi_shard_modify_mode TO sequential;
+INSERT INTO relation_tracking_table_2 select generate_series(6, 1000, 1), 0;
+SELECT create_distributed_table('relation_tracking_table_2', 'id', colocate_with := 'none');
+SELECT count(*) FROM relation_tracking_table_2;
+ROLLBACK;
+
+BEGIN;
+INSERT INTO relation_tracking_table_2 select generate_series(6, 1000, 1), 0;
+SELECT create_distributed_table('relation_tracking_table_2', 'id', colocate_with := 'none');
+SELECT count(*) FROM relation_tracking_table_2;
+COMMIT;
+
+SET client_min_messages TO ERROR;
+DROP TABLE relation_tracking_table_2, relation_tracking_table_1 CASCADE;
+RESET client_min_messages;
+
 CREATE SCHEMA "Quoed.Schema";
 SET search_path TO "Quoed.Schema";
 
@@ -280,7 +316,9 @@ ALTER TABLE simple_table_name RENAME CONSTRAINT "looo oooo ooooo ooooooooooooooo
 --INSERT INTO simple_table_name (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT  simple_constraint_name DO NOTHING RETURNING *;
 
 SET search_path TO single_node;
+SET client_min_messages TO ERROR;
 DROP SCHEMA  "Quoed.Schema" CASCADE;
+RESET client_min_messages;
 
 -- test partitioned index creation with long name
 CREATE TABLE test_index_creation1
