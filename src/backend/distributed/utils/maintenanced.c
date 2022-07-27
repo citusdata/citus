@@ -912,57 +912,60 @@ RebalanceJobsBackgroundWorkerMain(Datum arg)
 			RebalanceJob *job = GetRunableRebalanceJob();
 			MemoryContextSwitchTo(oldContext);
 
-			if (job)
+			if (!job)
 			{
-				ereport(LOG, (errmsg("found job with jobid: %ld", job->jobid)));
-				MemoryContext savedContext = CurrentMemoryContext;
-
-				UpdateJobStatus(job, REBALANCE_JOB_STATUS_RUNNING);
 				PopActiveSnapshot();
 				CommitTransactionCommand();
+
+				hasJobs = false;
+				break;
+			}
+
+			ereport(LOG, (errmsg("found job with jobid: %ld", job->jobid)));
+
+			/* Update job status to indicate it is running */
+			UpdateJobStatus(job, REBALANCE_JOB_STATUS_RUNNING);
+
+			PopActiveSnapshot();
+			CommitTransactionCommand();
+
+			MemoryContext savedContext = CurrentMemoryContext;
+			PG_TRY();
+			{
+				StartTransactionCommand();
+				PushActiveSnapshot(GetTransactionSnapshot());
+				if (ExecuteRebalanceJob(job))
+				{
+					UpdateJobStatus(job, REBALANCE_JOB_STATUS_DONE);
+
+					PopActiveSnapshot();
+					CommitTransactionCommand();
+				}
+			}
+			PG_CATCH();
+			{
+				MemoryContextSwitchTo(savedContext);
+
+				ErrorData *edata = CopyErrorData();
+				FlushErrorState();
 
 				StartTransactionCommand();
 				PushActiveSnapshot(GetTransactionSnapshot());
 
-				BeginInternalSubTransaction(NULL);
+				UpdateJobError(job, edata);
 
-				PG_TRY();
-				{
-					if (ExecuteRebalanceJob(job))
-					{
-						UpdateJobStatus(job, REBALANCE_JOB_STATUS_DONE);
-					}
+				PopActiveSnapshot();
+				CommitTransactionCommand();
 
-					ReleaseCurrentSubTransaction();
-				}
-				PG_CATCH();
-				{
-					MemoryContextSwitchTo(savedContext);
+				FreeErrorData(edata);
+				edata = NULL;
 
-					ErrorData *edata = CopyErrorData();
-					FlushErrorState();
-
-					RollbackAndReleaseCurrentSubTransaction();
-
-					UpdateJobError(job, edata);
-
-					FreeErrorData(edata);
-					edata = NULL;
-
-					/* TODO log that there was an error */
-				}
-				PG_END_TRY();
+				/* TODO log that there was an error */
 			}
-			else
-			{
-				hasJobs = false;
-			}
+			PG_END_TRY();
 		}
-
-		PopActiveSnapshot();
-		CommitTransactionCommand();
-		ProcessCompletedNotifies();
 	}
+
 	MemoryContextSwitchTo(oldContextPerJob);
 	MemoryContextDelete(perJobContext);
 }
