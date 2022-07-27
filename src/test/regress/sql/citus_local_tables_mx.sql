@@ -460,14 +460,20 @@ CREATE VIEW v103 AS SELECT * from loc_tb;
 CREATE MATERIALIZED VIEW matview_102 AS SELECT * from loc_tb JOIN v103 USING (a);
 CREATE OR REPLACE VIEW v103 AS SELECT * from loc_tb JOIN matview_102 USING (a);
 
+-- fails to add local table to metadata, because of the circular dependency
+ALTER TABLE loc_tb ADD CONSTRAINT fkey FOREIGN KEY (a) references ref_tb(a);
+-- drop the view&matview with circular dependency
+DROP VIEW v103 CASCADE;
+
 SET client_min_messages TO DEBUG1;
--- auto undistribute
+-- now it should successfully add to metadata and create the views on workers
 ALTER TABLE loc_tb ADD CONSTRAINT fkey FOREIGN KEY (a) references ref_tb(a);
 SET client_min_messages TO WARNING;
 
 -- works fine
 select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100, citus_local_tables_mx.v101, citus_local_tables_mx.v102$$);
 
+-- auto undistribute
 ALTER TABLE loc_tb DROP CONSTRAINT fkey;
 -- fails because fkey is dropped and table is converted to local table
 select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100$$);
@@ -537,6 +543,19 @@ SELECT count(*) FROM citus_local_tables_mx.mv2;
 SELECT count(*) FROM citus_local_tables_mx.mv3;
 SELECT count(*) FROM citus_local_tables_mx.mv4;
 
+-- test circular dependency detection among views
+create table root_tbl (a int);
+create materialized view chain_v1 as select * from root_tbl;
+create view chain_v2 as select * from chain_v1;
+create materialized view chain_v3 as select * from chain_v2;
+create or replace view chain_v2 as select * from chain_v1 join chain_v3 using (a);
+-- catch circular dependency and error out
+select citus_add_local_table_to_metadata('root_tbl');
+-- same for create_distributed_table
+select create_distributed_table('root_tbl','a');
+-- fix the circular dependency and add to metadata
+create or replace view chain_v2 as select * from chain_v1;
+select citus_add_local_table_to_metadata('root_tbl');
 -- todo: add more matview tests once 5968 and 6028 are fixed
 
 -- cleanup at exit
