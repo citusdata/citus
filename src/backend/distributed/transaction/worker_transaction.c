@@ -148,24 +148,32 @@ SendCommandToWorkersWithMetadataViaSuperUser(const char *command)
 List *
 TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 {
-	List *workerNodeList = NIL;
-	if (targetWorkerSet == ALL_SHARD_NODES || targetWorkerSet == METADATA_NODES)
-	{
-		workerNodeList = ActivePrimaryNodeList(lockMode);
-	}
-	else
-	{
-		workerNodeList = ActivePrimaryNonCoordinatorNodeList(lockMode);
-	}
+	List *workerNodeList = ActivePrimaryNodeList(lockMode);
 	List *result = NIL;
+	int localGroupId = GetLocalGroupId();
 
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
 	{
-		if ((targetWorkerSet == NON_COORDINATOR_METADATA_NODES || targetWorkerSet ==
-			 METADATA_NODES) &&
+		if ((targetWorkerSet == OTHER_METADATA_NODES ||
+			 targetWorkerSet == METADATA_NODES) &&
 			!workerNode->hasMetadata)
 		{
+			/* only interested in metadata nodes */
+			continue;
+		}
+
+		if (targetWorkerSet == OTHER_METADATA_NODES &&
+			workerNode->groupId == localGroupId)
+		{
+			/* only interested in other metadata nodes */
+			continue;
+		}
+
+		if (targetWorkerSet == NON_COORDINATOR_NODES &&
+			workerNode->groupId == COORDINATOR_GROUP_ID)
+		{
+			/* only interested in worker nodes */
 			continue;
 		}
 
@@ -186,7 +194,7 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 void
 SendBareCommandListToMetadataWorkers(List *commandList)
 {
-	TargetWorkerSet targetWorkerSet = NON_COORDINATOR_METADATA_NODES;
+	TargetWorkerSet targetWorkerSet = OTHER_METADATA_NODES;
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, RowShareLock);
 	char *nodeUser = CurrentUserName();
 
@@ -227,12 +235,12 @@ SendCommandToMetadataWorkersParams(const char *command,
 								   const Oid *parameterTypes,
 								   const char *const *parameterValues)
 {
-	List *workerNodeList = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
+	List *workerNodeList = TargetWorkerSetNodeList(OTHER_METADATA_NODES,
 												   RowShareLock);
 
 	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
 
-	SendCommandToWorkersParamsInternal(NON_COORDINATOR_METADATA_NODES, command, user,
+	SendCommandToWorkersParamsInternal(OTHER_METADATA_NODES, command, user,
 									   parameterCount, parameterTypes,
 									   parameterValues);
 }
