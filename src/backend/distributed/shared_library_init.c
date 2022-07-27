@@ -2373,7 +2373,11 @@ CitusAuthHook(Port *port, int status)
 
 
 /*
- * IsSuperuser returns whether the role with the given name is superuser.
+ * IsSuperuser returns whether the role with the given name is superuser. If
+ * the user doesn't exist, this simply returns false instead of throwing an
+ * error. This is done to not leak information about users existing or not, in
+ * some cases postgres is vague about this on purpose. So, by returning false
+ * we let postgres return this possibly vague error message.
  */
 static bool
 IsSuperuser(char *roleName)
@@ -2386,9 +2390,7 @@ IsSuperuser(char *roleName)
 	HeapTuple roleTuple = SearchSysCache1(AUTHNAME, CStringGetDatum(roleName));
 	if (!HeapTupleIsValid(roleTuple))
 	{
-		ereport(FATAL,
-				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-				 errmsg("role \"%s\" does not exist", roleName)));
+		return false;
 	}
 
 	Form_pg_authid rform = (Form_pg_authid) GETSTRUCT(roleTuple);
