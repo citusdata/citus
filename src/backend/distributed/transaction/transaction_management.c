@@ -36,6 +36,7 @@
 #include "distributed/repartition_join_execution.h"
 #include "distributed/transaction_management.h"
 #include "distributed/placement_connection.h"
+#include "distributed/relation_access_tracking.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/version_compat.h"
@@ -306,6 +307,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			}
 
 			ResetGlobalVariables();
+			ResetRelationAccessHash();
 
 			/*
 			 * Make sure that we give the shared connections back to the shared
@@ -364,6 +366,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			AfterXactConnectionHandling(false);
 
 			ResetGlobalVariables();
+			ResetRelationAccessHash();
 
 			/*
 			 * Make sure that we give the shared connections back to the shared
