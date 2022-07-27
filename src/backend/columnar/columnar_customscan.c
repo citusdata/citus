@@ -811,6 +811,18 @@ ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 		}
 	}
 
+	if (IsA(node, ScalarArrayOpExpr))
+	{
+		if (!contain_volatile_functions(node))
+		{
+			return (Expr *) node;
+		}
+		else
+		{
+			return NULL;
+		}
+	}
+
 	if (!IsA(node, OpExpr) || list_length(((OpExpr *) node)->args) != 2)
 	{
 		ereport(ColumnarPlannerDebugLevel,
