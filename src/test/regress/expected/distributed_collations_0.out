@@ -9,32 +9,76 @@ SET search_path to collation_tests;
 \if :server_version_above_fourteen
 -- fail, needs "locale"
 CREATE COLLATION german_phonebook_test (provider = icu, lc_collate = 'de-u-co-phonebk');
+ERROR:  parameter "locale" must be specified
 -- fail, needs "locale"
 CREATE COLLATION german_phonebook_test (provider = icu, lc_collate = 'de-u-co-phonebk', lc_ctype = 'de-u-co-phonebk');
+ERROR:  parameter "locale" must be specified
 -- works
 CREATE COLLATION german_phonebook_test (provider = icu, locale = 'de-u-co-phonebk');
 -- with icu provider, colliculocale will be set, collcollate and collctype will be null
 SELECT result FROM run_command_on_all_nodes('
     SELECT collcollate FROM pg_collation WHERE collname = ''german_phonebook_test'';
 ');
+ result
+---------------------------------------------------------------------
+
+
+
+(3 rows)
+
 SELECT result FROM run_command_on_all_nodes('
     SELECT collctype FROM pg_collation WHERE collname = ''german_phonebook_test'';
 ');
+ result
+---------------------------------------------------------------------
+
+
+
+(3 rows)
+
 SELECT result FROM run_command_on_all_nodes('
     SELECT colliculocale FROM pg_collation WHERE collname = ''german_phonebook_test'';
 ');
+     result
+---------------------------------------------------------------------
+ de-u-co-phonebk
+ de-u-co-phonebk
+ de-u-co-phonebk
+(3 rows)
+
 DROP COLLATION german_phonebook_test;
 -- with non-icu provider, colliculocale will be null, collcollate and collctype will be set
 CREATE COLLATION default_provider (provider = libc, lc_collate = "POSIX", lc_ctype = "POSIX");
 SELECT result FROM run_command_on_all_nodes('
     SELECT collcollate FROM pg_collation WHERE collname = ''default_provider'';
 ');
+ result
+---------------------------------------------------------------------
+ POSIX
+ POSIX
+ POSIX
+(3 rows)
+
 SELECT result FROM run_command_on_all_nodes('
     SELECT collctype FROM pg_collation WHERE collname = ''default_provider'';
 ');
+ result
+---------------------------------------------------------------------
+ POSIX
+ POSIX
+ POSIX
+(3 rows)
+
 SELECT result FROM run_command_on_all_nodes('
     SELECT colliculocale FROM pg_collation WHERE collname = ''default_provider'';
 ');
+ result
+---------------------------------------------------------------------
+
+
+
+(3 rows)
+
 DROP COLLATION default_provider;
 \endif
 CREATE COLLATION german_phonebook (provider = icu, locale = 'de-u-co-phonebk');
