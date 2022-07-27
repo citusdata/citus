@@ -67,8 +67,8 @@ ORDER BY 1,2,3;
 SET search_path TO collation_conflict;
 
 -- now test worker_create_or_replace_object directly
-SELECT worker_create_or_replace_object($$CREATE COLLATION collation_conflict.caseinsensitive (provider = 'icu', lc_collate = 'und-u-ks-level2', lc_ctype = 'und-u-ks-level2')$$);
-SELECT worker_create_or_replace_object($$CREATE COLLATION collation_conflict.caseinsensitive (provider = 'icu', lc_collate = 'und-u-ks-level2', lc_ctype = 'und-u-ks-level2')$$);
+SELECT worker_create_or_replace_object($$CREATE COLLATION collation_conflict.caseinsensitive (provider = 'icu', locale = 'und-u-ks-level2')$$);
+SELECT worker_create_or_replace_object($$CREATE COLLATION collation_conflict.caseinsensitive (provider = 'icu', locale = 'und-u-ks-level2')$$);
 
 -- hide cascades
 SET client_min_messages TO error;

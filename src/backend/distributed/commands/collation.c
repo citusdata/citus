@@ -106,7 +106,7 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 					 "CREATE COLLATION %s (provider = '%s'",
 					 *quotedCollationName, providerString);
 
-	if (strcmp(collcollate, collctype))
+	if (strcmp(collcollate, collctype) == 0)
 	{
 		appendStringInfo(&collationNameDef,
 						 ", locale = %s",
