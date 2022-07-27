@@ -14,6 +14,8 @@
 #include "postgres.h"
 
 #include "catalog/objectaddress.h"
+#include "catalog/pg_ts_config.h"
+#include "catalog/pg_ts_dict.h"
 #include "nodes/parsenodes.h"
 #include "tcop/utility.h"
 
@@ -286,4 +288,54 @@ PreprocessDropDistributedObjectStmt(Node *node, const char *queryString,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * DropTextSearchDictObjectAddress returns list of object addresses in
+ * the drop tsdict statement.
+ */
+List *
+DropTextSearchDictObjectAddress(Node *node, bool missing_ok)
+{
+	DropStmt *stmt = castNode(DropStmt, node);
+
+	List *objectAddresses = NIL;
+
+	List *objNameList = NIL;
+	foreach_ptr(objNameList, stmt->objects)
+	{
+		Oid tsdictOid = get_ts_dict_oid(objNameList, missing_ok);
+
+		ObjectAddress *objectAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*objectAddress, TSDictionaryRelationId, tsdictOid);
+		objectAddresses = lappend(objectAddresses, objectAddress);
+	}
+
+	return objectAddresses;
+}
+
+
+/*
+ * DropTextSearchConfigObjectAddress returns list of object addresses in
+ * the drop tsconfig statement.
+ */
+List *
+DropTextSearchConfigObjectAddress(Node *node, bool missing_ok)
+{
+	DropStmt *stmt = castNode(DropStmt, node);
+
+	List *objectAddresses = NIL;
+
+	List *objNameList = NIL;
+	foreach_ptr(objNameList, stmt->objects)
+	{
+		Oid tsconfigOid = get_ts_config_oid(objNameList, missing_ok);
+
+		ObjectAddress *objectAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*objectAddress, TSConfigRelationId, tsconfigOid);
+		objectAddresses = lappend(objectAddresses, objectAddress);
+	}
+
+	return objectAddresses;
 }
