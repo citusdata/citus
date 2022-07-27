@@ -206,6 +206,7 @@ ORDER BY 1;
  function worker_apply_shard_ddl_command(bigint,text)
  function worker_apply_shard_ddl_command(bigint,text,text)
  function worker_change_sequence_dependency(regclass,regclass,regclass)
+ function worker_copy_table_to_node(regclass,integer)
  function worker_create_or_alter_role(text,text,text)
  function worker_create_or_replace_object(text)
  function worker_create_or_replace_object(text[])
@@ -263,5 +264,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(255 rows)
+(256 rows)
 

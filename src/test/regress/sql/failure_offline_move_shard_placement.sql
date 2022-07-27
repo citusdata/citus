@@ -57,12 +57,12 @@ SELECT master_move_shard_placement(201, 'localhost', :worker_1_port, 'localhost'
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE move_shard_offline.t").cancel(' || :pid || ')');
 SELECT master_move_shard_placement(201, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port, 'block_writes');
 
--- failure on blocking append_table_to_shard operation on target node
-SELECT citus.mitmproxy('conn.onQuery(query="worker_append_table_to_shard").kill()');
+-- failure on blocking COPY operation on target node
+SELECT citus.mitmproxy('conn.onQuery(query="COPY").kill()');
 SELECT master_move_shard_placement(201, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port, 'block_writes');
 
--- cancellation on blocking append_table_to_shard operation on target node
-SELECT citus.mitmproxy('conn.onQuery(query="worker_append_table_to_shard").cancel(' || :pid || ')');
+-- cancellation on blocking COPY operation on target node
+SELECT citus.mitmproxy('conn.onQuery(query="COPY").cancel(' || :pid || ')');
 SELECT master_move_shard_placement(201, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port, 'block_writes');
 
 -- failure on adding constraints on target node
@@ -72,14 +72,6 @@ SELECT master_move_shard_placement(201, 'localhost', :worker_1_port, 'localhost'
 -- cancellation on adding constraints on target node
 SELECT citus.mitmproxy('conn.onQuery(query="ADD CONSTRAINT").cancel(' || :pid || ')');
 SELECT master_move_shard_placement(201, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port, 'block_writes');
-
--- failure on CopyData operation on source node
-SELECT citus.mitmproxy('conn.onCopyData().kill()');
-SELECT master_move_shard_placement(200, 'localhost', :worker_2_proxy_port, 'localhost', :worker_1_port, 'block_writes');
-
--- cancellation on CopyData operation on source node
-SELECT citus.mitmproxy('conn.onCopyData().cancel(' || :pid || ')');
-SELECT master_move_shard_placement(200, 'localhost', :worker_2_proxy_port, 'localhost', :worker_1_port, 'block_writes');
 
 CALL citus_cleanup_orphaned_shards();
 
