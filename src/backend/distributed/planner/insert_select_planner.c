@@ -1699,9 +1699,6 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 			 * create a duplicated projected entry with the coerced expression.
 			 */
 			TargetEntry *coercedEntry = copyObject(selectEntry);
-			coercedEntry->expr = CastExpr((Expr *) selectEntry->expr, sourceType,
-										  targetType, attr->attcollation,
-										  attr->atttypmod);
 			coercedEntry->ressortgroupref = 0;
 
 			/*
