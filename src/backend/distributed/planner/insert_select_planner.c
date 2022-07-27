@@ -423,7 +423,7 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *insertSelectQuery,
 	 * distributed select instead of returning it.
 	 */
 	selectRte->subquery = distPlan->combineQuery;
-	distPlan->combineQuery = insertSelectQuery;
+	distPlan->combineQuery = selectQuery;
 
 	return distPlan;
 }
