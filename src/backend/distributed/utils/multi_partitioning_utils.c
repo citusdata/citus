@@ -53,9 +53,9 @@ static Relation try_relation_open_nolock(Oid relationId);
 static List * CreateFixPartitionConstraintsTaskList(Oid relationId);
 static List * WorkerFixPartitionConstraintCommandList(Oid relationId, uint64 shardId,
 													  List *checkConstraintList);
-static List * CreateFixPartitionShardIndexNamesTaskList(Oid parentRelationId,
-														Oid partitionRelationId,
-														Oid parentIndexOid);
+static void CreateFixPartitionShardIndexNames(Oid parentRelationId,
+											  Oid partitionRelationId,
+											  Oid parentIndexOid);
 static List * WorkerFixPartitionShardIndexNamesCommandList(uint64 parentShardId,
 														   List *indexIdList,
 														   Oid partitionRelationId);
@@ -205,6 +205,13 @@ fix_partition_shard_index_names(PG_FUNCTION_ARGS)
 
 	FixPartitionShardIndexNames(relationId, parentIndexOid);
 
+	/*
+	 * This UDF is called from fix_all_partition_shard_index_names() which iterates
+	 * over all the partitioned tables. There is no need to hold all the distributed
+	 * table metadata until the end of the transaction for the input table.
+	 */
+	CitusTableCacheFlushInvalidatedEntries();
+
 	PG_RETURN_VOID();
 }
 
@@ -329,17 +336,9 @@ FixPartitionShardIndexNames(Oid relationId, Oid parentIndexOid)
 							   RelationGetRelationName(relation))));
 	}
 
-	List *taskList =
-		CreateFixPartitionShardIndexNamesTaskList(parentRelationId,
-												  partitionRelationId,
-												  parentIndexOid);
-
-	/* do not do anything if there are no index names to fix */
-	if (taskList != NIL)
-	{
-		bool localExecutionSupported = true;
-		ExecuteUtilityTaskList(taskList, localExecutionSupported);
-	}
+	CreateFixPartitionShardIndexNames(parentRelationId,
+									  partitionRelationId,
+									  parentIndexOid);
 
 	relation_close(relation, NoLock);
 }
@@ -494,15 +493,15 @@ WorkerFixPartitionConstraintCommandList(Oid relationId, uint64 shardId,
  * partition each task will have parent_indexes_count query strings. When we need
  * to fix a single index, parent_indexes_count becomes 1.
  */
-static List *
-CreateFixPartitionShardIndexNamesTaskList(Oid parentRelationId, Oid partitionRelationId,
-										  Oid parentIndexOid)
+static void
+CreateFixPartitionShardIndexNames(Oid parentRelationId, Oid partitionRelationId,
+								  Oid parentIndexOid)
 {
 	List *partitionList = PartitionList(parentRelationId);
 	if (partitionList == NIL)
 	{
 		/* early exit if the parent relation does not have any partitions */
-		return NIL;
+		return;
 	}
 
 	Relation parentRelation = RelationIdGetRelation(parentRelationId);
@@ -526,7 +525,7 @@ CreateFixPartitionShardIndexNamesTaskList(Oid parentRelationId, Oid partitionRel
 	{
 		/* early exit if the parent relation does not have any indexes */
 		RelationClose(parentRelation);
-		return NIL;
+		return;
 	}
 
 	/*
@@ -554,8 +553,12 @@ CreateFixPartitionShardIndexNamesTaskList(Oid parentRelationId, Oid partitionRel
 	/* lock metadata before getting placement lists */
 	LockShardListMetadata(parentShardIntervalList, ShareLock);
 
+	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
+													   "CreateFixPartitionShardIndexNames",
+													   ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
+
 	int taskId = 1;
-	List *taskList = NIL;
 
 	ShardInterval *parentShardInterval = NULL;
 	foreach_ptr(parentShardInterval, parentShardIntervalList)
@@ -566,43 +569,36 @@ CreateFixPartitionShardIndexNamesTaskList(Oid parentRelationId, Oid partitionRel
 			WorkerFixPartitionShardIndexNamesCommandList(parentShardId,
 														 parentIndexIdList,
 														 partitionRelationId);
-
 		if (queryStringList != NIL)
 		{
 			Task *task = CitusMakeNode(Task);
 			task->jobId = INVALID_JOB_ID;
 			task->taskId = taskId++;
-
 			task->taskType = DDL_TASK;
 
-			/*
-			 * There could be O(#partitions * #indexes) queries in
-			 * the queryStringList.
-			 *
-			 * In order to avoid round-trips per query in queryStringList,
-			 * we join the string and send as a single command via the UDF.
-			 * Otherwise, the executor sends each command with one
-			 * round-trip.
-			 */
-			char *string = StringJoin(queryStringList, ';');
-			StringInfo commandToRun = makeStringInfo();
+			char *prefix = "SELECT pg_catalog.citus_run_local_command($$";
+			char *postfix = "$$)";
+			char *string = StringJoinParams(queryStringList, ';', prefix, postfix);
 
-			appendStringInfo(commandToRun,
-							 "SELECT pg_catalog.citus_run_local_command($$%s$$)", string);
-			SetTaskQueryString(task, commandToRun->data);
+			SetTaskQueryString(task, string);
+
 
 			task->dependentTaskList = NULL;
 			task->replicationModel = REPLICATION_MODEL_INVALID;
 			task->anchorShardId = parentShardId;
 			task->taskPlacementList = ActiveShardPlacementList(parentShardId);
 
-			taskList = lappend(taskList, task);
+			bool localExecutionSupported = true;
+			ExecuteUtilityTaskList(list_make1(task), localExecutionSupported);
 		}
+
+		/* after every iteration, clean-up all the memory associated with it */
+		MemoryContextReset(localContext);
 	}
 
-	RelationClose(parentRelation);
+	MemoryContextSwitchTo(oldContext);
 
-	return taskList;
+	RelationClose(parentRelation);
 }
 
 
