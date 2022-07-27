@@ -1615,7 +1615,7 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			 * rule and that rule has dependencies to other objects.
 			 */
 			char relKind = get_rel_relkind(relationId);
-			if (relKind == RELKIND_VIEW)
+			if (relKind == RELKIND_VIEW || relKind == RELKIND_MATVIEW)
 			{
 				List *ruleRefDepList = GetViewRuleReferenceDependencyList(relationId);
 				result = list_concat(result, ruleRefDepList);
@@ -2109,6 +2109,23 @@ GetDependingViews(Oid relationId)
 		ViewDependencyNode *dependingNode = NULL;
 		foreach_ptr(dependingNode, node->dependingNodes)
 		{
+			ObjectAddress relationAddress = { 0 };
+			ObjectAddressSet(relationAddress, RelationRelationId, dependingNode->id);
+
+			/*
+			 * This function does not catch views with circular dependencies,
+			 * because of the remaining dependency count check below.
+			 * Here we check if the view has a circular dependency or not.
+			 * If yes, we error out with a message that tells the user that
+			 * Citus does not handle circular dependencies.
+			 */
+			DeferredErrorMessage *depError =
+				DeferErrorIfCircularDependencyExists(&relationAddress);
+			if (depError != NULL)
+			{
+				RaiseDeferredError(depError, ERROR);
+			}
+
 			dependingNode->remainingDependencyCount--;
 			if (dependingNode->remainingDependencyCount == 0)
 			{

@@ -202,12 +202,12 @@ ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
 
 /*
  * DeferErrorIfCircularDependencyExists checks whether given object has
- * circular dependency with itself via existing objects of pg_dist_object.
+ * circular dependency with itself. If so, returns a deferred error.
  */
 DeferredErrorMessage *
 DeferErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
 {
-	List *dependencies = GetAllSupportedDependenciesForObject(objectAddress);
+	List *dependencies = GetAllDependenciesForObject(objectAddress);
 
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencies)
