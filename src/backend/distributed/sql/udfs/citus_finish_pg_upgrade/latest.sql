@@ -104,7 +104,7 @@ BEGIN
     --
     -- register triggers
     --
-    FOR table_name IN SELECT logicalrelid FROM pg_catalog.pg_dist_partition
+    FOR table_name IN SELECT logicalrelid FROM pg_catalog.pg_dist_partition JOIN pg_class ON (logicalrelid = oid) WHERE relkind <> 'f'
     LOOP
         trigger_name := 'truncate_trigger_' || table_name::oid;
         command := 'create trigger ' || trigger_name || ' after truncate on ' || table_name || ' execute procedure pg_catalog.citus_truncate_trigger()';
