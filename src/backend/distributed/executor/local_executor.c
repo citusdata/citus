@@ -413,6 +413,9 @@ ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterT
 static void
 LocallyExecuteUtilityTask(Task *task)
 {
+	/* keep the parity with multi-node clusters */
+	RecordNonDistTableAccessesForTask(task);
+
 	/*
 	 * If we roll back to a savepoint, we may no longer be in a query on
 	 * a shard. Reset the value as we go back up the stack.

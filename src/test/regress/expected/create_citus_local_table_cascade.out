@@ -60,11 +60,11 @@ BEGIN;
 
 (1 row)
 
-  -- show that we do parallel execution
+  -- show that we do sequential execution
   show citus.multi_shard_modify_mode;
  citus.multi_shard_modify_mode
 ---------------------------------------------------------------------
- parallel
+ sequential
 (1 row)
 
   SELECT conname, conrelid::regclass::text, confrelid::regclass::text
@@ -196,14 +196,10 @@ BEGIN;
 ---------------------------------------------------------------------
 (0 rows)
 
-  -- succeeds as citus_add_local_table_to_metadata would also prefer parallel
+  -- fails as citus_add_local_table_to_metadata would require sequential execution
   -- execution like above select
   SELECT citus_add_local_table_to_metadata('local_table_4', cascade_via_foreign_keys=>true);
- citus_add_local_table_to_metadata
----------------------------------------------------------------------
-
-(1 row)
-
+ERROR:  cannot modify table "local_table_3" because there was a parallel operation on a distributed table
 ROLLBACK;
 BEGIN;
   set citus.multi_shard_modify_mode to 'sequential';
