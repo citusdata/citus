@@ -111,6 +111,9 @@ s/(ERROR: |WARNING: |error:) server closed the connection unexpectedly/\1 connec
 /^\s*connection not open$/d
 #endif /* (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14) */
 
+# pg14 changes
+s/is not a PostgreSQL server process/is not a PostgreSQL backend process/g
+
 # intermediate_results
 s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\/xx_x_xxx\/\3.data/g
 
