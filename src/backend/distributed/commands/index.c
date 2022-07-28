@@ -654,14 +654,21 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 
 /*
  * ReindexStmtObjectAddress returns list of object addresses in the reindex
- * statement.
+ * statement. We add the address if the object is either index or table;
+ * else, we add invalid address.
  */
 List *
 ReindexStmtObjectAddress(Node *stmt, bool missing_ok)
 {
 	ReindexStmt *reindexStatement = castNode(ReindexStmt, stmt);
 
-	Oid relationId = ReindexStmtFindRelationOid(reindexStatement, missing_ok);
+	Oid relationId = InvalidOid;
+	if (reindexStatement->relation != NULL)
+	{
+		/* we currently only support reindex commands on tables */
+		relationId = ReindexStmtFindRelationOid(reindexStatement, missing_ok);
+	}
+
 	ObjectAddress *objectAddress = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*objectAddress, RelationRelationId, relationId);
 
