@@ -969,7 +969,6 @@ ResetPlacementConnectionManagement(void)
 	hash_delete_all(ConnectionPlacementHash);
 	hash_delete_all(ConnectionShardHash);
 	hash_delete_all(ColocatedPlacementsHash);
-	ResetRelationAccessHash();
 
 	/*
 	 * NB: memory for ConnectionReference structs and subordinate data is
@@ -1089,9 +1088,6 @@ InitPlacementConnectionManagement(void)
 
 	ConnectionShardHash = hash_create("citus connection cache (shardid)",
 									  64, &info, hashFlags);
-
-	/* (relationId) = [relationAccessMode] hash */
-	AllocateRelationAccessHash();
 }
 
 

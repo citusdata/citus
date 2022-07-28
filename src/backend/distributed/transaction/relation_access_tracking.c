@@ -47,6 +47,8 @@ bool EnforceForeignKeyRestrictions = true;
 									(1 << (PLACEMENT_ACCESS_DDL + \
 										   PARALLEL_MODE_FLAG_OFFSET)))
 
+MemoryContext RelationAcessContext = NULL;
+
 
 /*
  * Hash table mapping relations to the
@@ -84,8 +86,8 @@ typedef struct RelationAccessHashEntry
 
 static HTAB *RelationAccessHash;
 
-
 /* functions related to access recording */
+static void AllocateRelationAccessHash(void);
 static void RecordRelationAccessBase(Oid relationId, ShardPlacementAccessType accessType);
 static void RecordPlacementAccessToCache(Oid relationId,
 										 ShardPlacementAccessType accessType);
@@ -121,6 +123,18 @@ static bool HoldsConflictingLockWithReferencedRelations(Oid relationId,
 
 
 /*
+ * InitRelationAccessHash performs initialization of the
+ * infrastructure in this file at backend start.
+ */
+void
+InitRelationAccessHash(void)
+{
+	/* allocate (relationId) = [relationAccessMode] hash */
+	AllocateRelationAccessHash();
+}
+
+
+/*
  * Empty RelationAccessHash, without destroying the hash table itself.
  */
 void
@@ -133,19 +147,29 @@ ResetRelationAccessHash()
 /*
  * Allocate RelationAccessHash.
  */
-void
+static void
 AllocateRelationAccessHash(void)
 {
-	HASHCTL info;
+	/*
+	 * Create a single context for relation access related memory
+	 * management. Doing so, instead of allocating in TopMemoryContext, makes
+	 * it easier to associate used memory.
+	 */
+	RelationAcessContext = AllocSetContextCreateExtended(TopMemoryContext,
+														 "Relation Access Context",
+														 ALLOCSET_DEFAULT_MINSIZE,
+														 ALLOCSET_DEFAULT_INITSIZE,
+														 ALLOCSET_DEFAULT_MAXSIZE);
 
+	HASHCTL info;
 	memset(&info, 0, sizeof(info));
 	info.keysize = sizeof(RelationAccessHashKey);
 	info.entrysize = sizeof(RelationAccessHashEntry);
 	info.hash = tag_hash;
-	info.hcxt = ConnectionContext;
+	info.hcxt = RelationAcessContext;
 	uint32 hashFlags = (HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
 
-	RelationAccessHash = hash_create("citus connection cache (relationid)",
+	RelationAccessHash = hash_create("citus relation access cache (relationid)",
 									 8, &info, hashFlags);
 }
 
