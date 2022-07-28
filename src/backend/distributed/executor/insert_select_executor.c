@@ -55,7 +55,6 @@
 bool EnableRepartitionedInsertSelect = true;
 
 
-static Query * WrapSubquery(Query *subquery);
 static List * TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
 										   char *resultIdPrefix);
 static void ExecutePlanIntoRelation(Oid targetRelationId, List *insertTargetList,
@@ -296,100 +295,6 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 	TupleTableSlot *resultSlot = ReturnTupleFromTuplestore(scanState);
 
 	return resultSlot;
-}
-
-
-/*
- * BuildSelectForInsertSelect extracts the SELECT part from an INSERT...SELECT query.
- * If the INSERT...SELECT has CTEs then these are added to the resulting SELECT instead.
- */
-Query *
-BuildSelectForInsertSelect(Query *insertSelectQuery)
-{
-	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
-	Query *selectQuery = selectRte->subquery;
-
-	/*
-	 * Wrap the SELECT as a subquery if the INSERT...SELECT has CTEs or the SELECT
-	 * has top-level set operations.
-	 *
-	 * We could simply wrap all queries, but that might create a subquery that is
-	 * not supported by the logical planner. Since the logical planner also does
-	 * not support CTEs and top-level set operations, we can wrap queries containing
-	 * those without breaking anything.
-	 */
-	if (list_length(insertSelectQuery->cteList) > 0)
-	{
-		selectQuery = WrapSubquery(selectRte->subquery);
-
-		/* copy CTEs from the INSERT ... SELECT statement into outer SELECT */
-		selectQuery->cteList = copyObject(insertSelectQuery->cteList);
-		selectQuery->hasModifyingCTE = insertSelectQuery->hasModifyingCTE;
-	}
-	else if (selectQuery->setOperations != NULL)
-	{
-		/* top-level set operations confuse the ReorderInsertSelectTargetLists logic */
-		selectQuery = WrapSubquery(selectRte->subquery);
-	}
-
-	return selectQuery;
-}
-
-
-/*
- * WrapSubquery wraps the given query as a subquery in a newly constructed
- * "SELECT * FROM (...subquery...) citus_insert_select_subquery" query.
- */
-static Query *
-WrapSubquery(Query *subquery)
-{
-	ParseState *pstate = make_parsestate(NULL);
-	List *newTargetList = NIL;
-
-	Query *outerQuery = makeNode(Query);
-	outerQuery->commandType = CMD_SELECT;
-
-	/* create range table entries */
-	Alias *selectAlias = makeAlias("citus_insert_select_subquery", NIL);
-	RangeTblEntry *newRangeTableEntry = RangeTableEntryFromNSItem(
-		addRangeTableEntryForSubquery(
-			pstate, subquery,
-			selectAlias, false, true));
-	outerQuery->rtable = list_make1(newRangeTableEntry);
-
-	/* set the FROM expression to the subquery */
-	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
-	newRangeTableRef->rtindex = 1;
-	outerQuery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
-
-	/* create a target list that matches the SELECT */
-	TargetEntry *selectTargetEntry = NULL;
-	foreach_ptr(selectTargetEntry, subquery->targetList)
-	{
-		/* exactly 1 entry in FROM */
-		int indexInRangeTable = 1;
-
-		if (selectTargetEntry->resjunk)
-		{
-			continue;
-		}
-
-		Var *newSelectVar = makeVar(indexInRangeTable, selectTargetEntry->resno,
-									exprType((Node *) selectTargetEntry->expr),
-									exprTypmod((Node *) selectTargetEntry->expr),
-									exprCollation((Node *) selectTargetEntry->expr), 0);
-
-		TargetEntry *newSelectTargetEntry = makeTargetEntry((Expr *) newSelectVar,
-															selectTargetEntry->resno,
-															selectTargetEntry->resname,
-															selectTargetEntry->resjunk);
-
-		newTargetList = lappend(newTargetList, newSelectTargetEntry);
-	}
-
-	outerQuery->targetList = newTargetList;
-
-	return outerQuery;
 }
 
 
