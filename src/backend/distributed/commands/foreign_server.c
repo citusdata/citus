@@ -269,7 +269,7 @@ static List *
 GetObjectAddressByServerName(char *serverName, bool missing_ok)
 {
 	ForeignServer *server = GetForeignServerByName(serverName, missing_ok);
-	Oid serverOid = server->serverid;
+	Oid serverOid = (server) ? server->serverid : InvalidOid;
 	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, ForeignServerRelationId, serverOid);
 
