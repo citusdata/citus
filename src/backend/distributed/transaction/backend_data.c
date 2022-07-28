@@ -215,7 +215,7 @@ get_current_transaction_id(PG_FUNCTION_ARGS)
 	values[3] = UInt64GetDatum(distributedTransctionId->transactionNumber);
 
 	/* provide a better output */
-	if (distributedTransctionId->initiatorNodeIdentifier != 0)
+	if (distributedTransctionId->transactionNumber != 0)
 	{
 		values[4] = TimestampTzGetDatum(distributedTransctionId->timestamp);
 	}
