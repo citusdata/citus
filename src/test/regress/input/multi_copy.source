@@ -110,7 +110,11 @@ COPY customer_copy_hash FROM :'customer2datafile' WITH (DELIMITER '|');
 SELECT count(*) FROM customer_copy_hash;
 
 -- Test client-side copy from file
-\copy customer_copy_hash FROM :'customer3datafile' WITH (DELIMITER '|');
+-- \copy does not support variable interpolation. Hence we store and execute
+-- the query in two steps for interpolation to kick in.
+-- See https://stackoverflow.com/a/67642094/4576416 for details.
+\set client_side_copy_command '\\copy customer_copy_hash FROM ' :'customer3datafile' ' WITH (DELIMITER '''|''');'
+:client_side_copy_command
 
 -- Confirm that data was copied
 SELECT count(*) FROM customer_copy_hash;
