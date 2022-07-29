@@ -427,7 +427,7 @@ IncrementSharedConnectionCounter(const char *hostname, int port)
 {
 	SharedConnStatsHashKey connKey;
 
-	if (GetMaxSharedPoolSize() == DISABLE_CONNECTION_THROTTLING)
+	if (MaxSharedPoolSize == DISABLE_CONNECTION_THROTTLING)
 	{
 		/* connection throttling disabled */
 		return;
@@ -491,7 +491,11 @@ DecrementSharedConnectionCounter(const char *hostname, int port)
 {
 	SharedConnStatsHashKey connKey;
 
-	if (GetMaxSharedPoolSize() == DISABLE_CONNECTION_THROTTLING)
+	/*
+	 * Do not call GetMaxSharedPoolSize() here, since it may read from
+	 * the catalog and we may be in the process exit handler.
+	 */
+	if (MaxSharedPoolSize == DISABLE_CONNECTION_THROTTLING)
 	{
 		/* connection throttling disabled */
 		return;
