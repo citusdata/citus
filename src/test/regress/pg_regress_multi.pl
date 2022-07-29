@@ -66,6 +66,7 @@ my $bindir = "";
 my $libdir = undef;
 my $pgxsdir = "";
 my $postgresBuilddir = "";
+my $citusAbsSrcdir = "";
 my $postgresSrcdir = "";
 my $majorversion = "";
 my $synchronousReplication = "";
@@ -104,6 +105,7 @@ GetOptions(
     'pgxsdir=s' => \$pgxsdir,
     'postgres-builddir=s' => \$postgresBuilddir,
     'postgres-srcdir=s' => \$postgresSrcdir,
+    'citus_abs_srcdir=s' => \$citusAbsSrcdir,
     'majorversion=s' => \$majorversion,
     'load-extension=s' => \@extensions,
     'server-option=s' => \@userPgOptions,
@@ -117,6 +119,9 @@ GetOptions(
     'worker-1-public-hostname=s' => \$publicWorker1Host,
     'worker-2-public-hostname=s' => \$publicWorker2Host,
     'help' => sub { Usage() });
+
+$ENV{CITUS_ABS_SRCDIR} = "$citusAbsSrcdir";
+print "env\n " . $ENV{CITUS_ABS_SRCDIR} . "\n";
 
 my $fixopen = "$bindir/postgres.fixopen";
 my @pg_ctl_args = ();
