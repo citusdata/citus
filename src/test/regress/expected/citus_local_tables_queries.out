@@ -1024,8 +1024,7 @@ BEGIN;
 NOTICE:  truncate cascades to table "reference_table"
 NOTICE:  truncate cascades to table "distributed_table"
 NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_table_queries.citus_local_table_xxxxx CASCADE
-NOTICE:  truncate cascades to table "reference_table_xxxxx"
-ERROR:  cannot execute DDL on table "reference_table" because there was a parallel DDL access to distributed table "distributed_table" in the same transaction
+ERROR:  cannot execute DDL on table "citus_local_table" because there was a parallel DDL access to distributed table "distributed_table" in the same transaction
 ROLLBACK;
 BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';

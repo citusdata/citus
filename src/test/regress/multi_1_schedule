@@ -17,6 +17,7 @@
 # ---
 test: multi_extension
 test: single_node
+test: relation_access_tracking_single_node
 test: single_node_truncate
 test: multi_test_helpers multi_test_helpers_superuser
 test: multi_cluster_management
