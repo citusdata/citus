@@ -13,10 +13,10 @@ source ci/ci_helpers.sh
 # 2. Add the desired extension at the end
 # 3. Add a / character at the beginning of each line to conform to .gitignore file format
 #
-# e.g. multi_copy.source -> /multi_copy.sql
+# e.g. tablespace.source -> /tablespace.sql
 ls -1 src/test/regress/input | sed -E "s#(.*)\.source#/\1.sql#" > src/test/regress/sql/.gitignore
 
-# e.g. multi_copy.source -> /multi_copy.out
+# e.g. tablespace.source -> /tablespace.out
 ls -1 src/test/regress/output | sed -E "s#(.*)\.source#/\1.out#" > src/test/regress/expected/.gitignore
 
 # Remove all the ignored files from git tree, and error out
