@@ -1236,7 +1236,7 @@ DeferErrorIfUnsupportedClause(List *clauseList)
 	{
 		Node *clause = (Node *) lfirst(clauseCell);
 
-		if (!(IsSelectClause(clause) || IsJoinClause(clause) || or_clause(clause)))
+		if (!(IsSelectClause(clause) || IsJoinClause(clause) || is_orclause(clause)))
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "unsupported clause type", NULL, NULL);

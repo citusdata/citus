@@ -324,7 +324,7 @@ CreateForeignConstraintRelationshipGraph()
 
 	ClearForeignConstraintRelationshipGraphContext();
 
-	MemoryContext fConstraintRelationshipMemoryContext = AllocSetContextCreateExtended(
+	MemoryContext fConstraintRelationshipMemoryContext = AllocSetContextCreateInternal(
 		CacheMemoryContext,
 		"Forign Constraint Relationship Graph Context",
 		ALLOCSET_DEFAULT_MINSIZE,

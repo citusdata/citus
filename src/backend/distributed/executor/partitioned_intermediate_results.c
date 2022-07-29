@@ -286,14 +286,14 @@ StartPortalForQueryExecution(const char *queryString)
 	Query *query = ParseQueryString(queryString, NULL, 0);
 
 	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
-	PlannedStmt *queryPlan = pg_plan_query_compat(query, NULL, cursorOptions, NULL);
+	PlannedStmt *queryPlan = pg_plan_query(query, NULL, cursorOptions, NULL);
 
 	Portal portal = CreateNewPortal();
 
 	/* don't display the portal in pg_cursors, it is for internal use only */
 	portal->visible = false;
 
-	PortalDefineQuery(portal, NULL, queryString, CMDTAG_SELECT_COMPAT,
+	PortalDefineQuery(portal, NULL, queryString, CMDTAG_SELECT,
 					  list_make1(queryPlan), NULL);
 	int eflags = 0;
 	PortalStart(portal, NULL, eflags, GetActiveSnapshot());

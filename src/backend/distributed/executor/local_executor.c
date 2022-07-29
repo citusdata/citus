@@ -339,7 +339,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 			 * implemented. So, let planner to call distributed_planner() which
 			 * eventually calls standard_planner().
 			 */
-			localPlan = planner_compat(shardQuery, cursorOptions, paramListInfo);
+			localPlan = planner(shardQuery, NULL, cursorOptions, paramListInfo);
 		}
 
 		char *shardQueryString = NULL;
@@ -382,8 +382,8 @@ LocallyPlanAndExecuteMultipleQueries(List *queryStrings, TupleDestination *tuple
 											 0);
 		int cursorOptions = 0;
 		ParamListInfo paramListInfo = NULL;
-		PlannedStmt *localPlan = planner_compat(shardQuery, cursorOptions,
-												paramListInfo);
+		PlannedStmt *localPlan = planner(shardQuery, NULL, cursorOptions,
+										 paramListInfo);
 		totalProcessedRows += LocallyExecuteTaskPlan(localPlan, queryString,
 													 tupleDest, task,
 													 paramListInfo);

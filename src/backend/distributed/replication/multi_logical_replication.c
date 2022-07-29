@@ -1646,7 +1646,7 @@ WaitForRelationSubscriptionsBecomeReady(MultiConnection *targetConnection,
 	 * and reset it on every iteration to make sure we don't slowly build up
 	 * a lot of memory.
 	 */
-	MemoryContext loopContext = AllocSetContextCreateExtended(CurrentMemoryContext,
+	MemoryContext loopContext = AllocSetContextCreateInternal(CurrentMemoryContext,
 															  "WaitForRelationSubscriptionsBecomeReady",
 															  ALLOCSET_DEFAULT_MINSIZE,
 															  ALLOCSET_DEFAULT_INITSIZE,
@@ -1928,7 +1928,7 @@ WaitForShardMoveSubscription(MultiConnection *targetConnection, XLogRecPtr sourc
 	 * and reset it on every iteration to make sure we don't slowly build up
 	 * a lot of memory.
 	 */
-	MemoryContext loopContext = AllocSetContextCreateExtended(CurrentMemoryContext,
+	MemoryContext loopContext = AllocSetContextCreateInternal(CurrentMemoryContext,
 															  "WaitForShardMoveSubscription",
 															  ALLOCSET_DEFAULT_MINSIZE,
 															  ALLOCSET_DEFAULT_INITSIZE,

@@ -868,7 +868,7 @@ BuildExistingQueryIdHash(void)
 		fmgrPGStatStatements->fn_addr,
 		pgStatStatementsOid,
 		commandTypeDatum);
-	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlotCompat(
+	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlot(
 		statStatementsReturnSet->setDesc,
 		&TTSOpsMinimalTuple);
 

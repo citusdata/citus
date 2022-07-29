@@ -358,8 +358,8 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 		ExplainOpenGroup("PlannedStmt", "PlannedStmt", false, es);
 
-		ExplainOnePlanCompat(plan, into, es, queryString, params, NULL, &planduration,
-							 (es->buffers ? &bufusage : NULL));
+		ExplainOnePlan(plan, into, es, queryString, params, NULL, &planduration,
+					   (es->buffers ? &bufusage : NULL));
 
 		ExplainCloseGroup("PlannedStmt", "PlannedStmt", false, es);
 		ExplainCloseGroup("Subplan", NULL, true, es);
@@ -1079,7 +1079,7 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 
 	INSTR_TIME_SET_CURRENT(planStart);
 
-	PlannedStmt *plan = pg_plan_query_compat(query, NULL, CURSOR_OPT_PARALLEL_OK, NULL);
+	PlannedStmt *plan = pg_plan_query(query, NULL, CURSOR_OPT_PARALLEL_OK, NULL);
 
 	INSTR_TIME_SET_CURRENT(planDuration);
 	INSTR_TIME_SUBTRACT(planDuration, planStart);
@@ -1201,7 +1201,7 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	SetLocalHideCitusDependentObjectsDisabledWhenAlreadyEnabled();
 
 	/* plan the query */
-	PlannedStmt *plan = pg_plan_query_compat(query, NULL, cursorOptions, params);
+	PlannedStmt *plan = pg_plan_query(query, NULL, cursorOptions, params);
 	INSTR_TIME_SET_CURRENT(planduration);
 	INSTR_TIME_SUBTRACT(planduration, planstart);
 
@@ -1213,8 +1213,8 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	}
 
 	/* run it (if needed) and produce output */
-	ExplainOnePlanCompat(plan, into, es, queryString, params, queryEnv,
-						 &planduration, (es->buffers ? &bufusage : NULL));
+	ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
+				   &planduration, (es->buffers ? &bufusage : NULL));
 }
 
 
@@ -1632,7 +1632,7 @@ ExplainOneQuery(Query *query, int cursorOptions,
 		INSTR_TIME_SET_CURRENT(planstart);
 
 		/* plan the query */
-		PlannedStmt *plan = pg_plan_query_compat(query, NULL, cursorOptions, params);
+		PlannedStmt *plan = pg_plan_query(query, NULL, cursorOptions, params);
 
 		INSTR_TIME_SET_CURRENT(planduration);
 		INSTR_TIME_SUBTRACT(planduration, planstart);
@@ -1645,7 +1645,7 @@ ExplainOneQuery(Query *query, int cursorOptions,
 		}
 
 		/* run it (if needed) and produce output */
-		ExplainOnePlanCompat(plan, into, es, queryString, params, queryEnv,
+		ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
 					   &planduration, (es->buffers ? &bufusage : NULL));
 	}
 }

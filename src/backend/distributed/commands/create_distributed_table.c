@@ -1654,7 +1654,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 
 	/* get the table columns */
 	TupleDesc tupleDescriptor = RelationGetDescr(distributedRelation);
-	TupleTableSlot *slot = CreateTableSlotForRel(distributedRelation);
+	TupleTableSlot *slot = table_slot_create(distributedRelation, NULL);
 	List *columnNameList = TupleDescColumnNameList(tupleDescriptor);
 
 	int partitionColumnIndex = INVALID_PARTITION_COLUMN_INDEX;

@@ -2209,7 +2209,7 @@ AvailableExtensionVersion(void)
 	/* pg_available_extensions returns result set containing all available extensions */
 	(*pg_available_extensions)(fcinfo);
 
-	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlotCompat(
+	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlot(
 		extensionsResultSet->setDesc,
 		&TTSOpsMinimalTuple);
 	bool hasTuple = tuplestore_gettupleslot(extensionsResultSet->setResult, goForward,
@@ -2700,10 +2700,10 @@ CitusCopyFormatTypeId(void)
 	if (MetadataCache.copyFormatTypeId == InvalidOid)
 	{
 		char *typeName = "citus_copy_format";
-		MetadataCache.copyFormatTypeId = GetSysCacheOid2Compat(TYPENAMENSP,
-															   Anum_pg_enum_oid,
-															   PointerGetDatum(typeName),
-															   PG_CATALOG_NAMESPACE);
+		MetadataCache.copyFormatTypeId = GetSysCacheOid2(TYPENAMENSP,
+														 Anum_pg_enum_oid,
+														 PointerGetDatum(typeName),
+														 PG_CATALOG_NAMESPACE);
 	}
 
 	return MetadataCache.copyFormatTypeId;

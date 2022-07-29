@@ -376,7 +376,7 @@ RemoveLocalNodeFromWorkerList(List *workerNodeList)
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		if (workerNode->groupId == localGroupId)
 		{
-			return list_delete_cell_compat(workerNodeList, workerNodeCell, prev);
+			return list_delete_cell(workerNodeList, workerNodeCell);
 		}
 	}
 

@@ -1214,7 +1214,7 @@ CreateDistributedSubPlan(uint32 subPlanId, Query *subPlanQuery)
 	}
 
 	DistributedSubPlan *subPlan = CitusMakeNode(DistributedSubPlan);
-	subPlan->plan = planner_compat(subPlanQuery, cursorOptions, NULL);
+	subPlan->plan = planner(subPlanQuery, NULL, cursorOptions, NULL);
 	subPlan->subPlanId = subPlanId;
 
 	return subPlan;

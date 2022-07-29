@@ -543,7 +543,7 @@ OrSelectClauseList(List *selectClauseList)
 	Node *selectClause = NULL;
 	foreach_ptr(selectClause, selectClauseList)
 	{
-		bool orClause = or_clause(selectClause);
+		bool orClause = is_orclause(selectClause);
 		if (orClause)
 		{
 			orSelectClauseList = lappend(orSelectClauseList, selectClause);
@@ -3674,9 +3674,9 @@ CoordCombineAggOid()
 static Oid
 TypeOid(Oid schemaId, const char *typeName)
 {
-	Oid typeOid = GetSysCacheOid2Compat(TYPENAMENSP, Anum_pg_type_oid,
-										PointerGetDatum(typeName),
-										ObjectIdGetDatum(schemaId));
+	Oid typeOid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid,
+								  PointerGetDatum(typeName),
+								  ObjectIdGetDatum(schemaId));
 
 	return typeOid;
 }

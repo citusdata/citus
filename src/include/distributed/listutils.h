@@ -52,7 +52,7 @@ typedef struct ListCellAndListWrapper
 	for (ListCell *(var ## CellDoNotUse) = list_head(l); \
 		 (var ## CellDoNotUse) != NULL && \
 		 (((var) = lfirst(var ## CellDoNotUse)) || true); \
-		 var ## CellDoNotUse = lnext_compat(l, var ## CellDoNotUse))
+		 var ## CellDoNotUse = lnext(l, var ## CellDoNotUse))
 
 
 /*
@@ -65,7 +65,7 @@ typedef struct ListCellAndListWrapper
 	for (ListCell *(var ## CellDoNotUse) = list_head(l); \
 		 (var ## CellDoNotUse) != NULL && \
 		 (((var) = lfirst_int(var ## CellDoNotUse)) || true); \
-		 var ## CellDoNotUse = lnext_compat(l, var ## CellDoNotUse))
+		 var ## CellDoNotUse = lnext(l, var ## CellDoNotUse))
 
 
 /*
@@ -78,7 +78,7 @@ typedef struct ListCellAndListWrapper
 	for (ListCell *(var ## CellDoNotUse) = list_head(l); \
 		 (var ## CellDoNotUse) != NULL && \
 		 (((var) = lfirst_oid(var ## CellDoNotUse)) || true); \
-		 var ## CellDoNotUse = lnext_compat(l, var ## CellDoNotUse))
+		 var ## CellDoNotUse = lnext(l, var ## CellDoNotUse))
 
 /*
  * forboth_ptr -
@@ -93,8 +93,8 @@ typedef struct ListCellAndListWrapper
 		 (var2 ## CellDoNotUse) != NULL && \
 		 (((var1) = lfirst(var1 ## CellDoNotUse)) || true) && \
 		 (((var2) = lfirst(var2 ## CellDoNotUse)) || true); \
-		 var1 ## CellDoNotUse = lnext_compat(l1, var1 ## CellDoNotUse), \
-		 var2 ## CellDoNotUse = lnext_compat(l2, var2 ## CellDoNotUse) \
+		 var1 ## CellDoNotUse = lnext(l1, var1 ## CellDoNotUse), \
+		 var2 ## CellDoNotUse = lnext(l2, var2 ## CellDoNotUse) \
 		 )
 
 /*
@@ -111,8 +111,8 @@ typedef struct ListCellAndListWrapper
 		 (var2 ## CellDoNotUse) != NULL && \
 		 (((var1) = lfirst(var1 ## CellDoNotUse)) || true) && \
 		 (((var2) = lfirst_oid(var2 ## CellDoNotUse)) || true); \
-		 var1 ## CellDoNotUse = lnext_compat(l1, var1 ## CellDoNotUse), \
-		 var2 ## CellDoNotUse = lnext_compat(l2, var2 ## CellDoNotUse) \
+		 var1 ## CellDoNotUse = lnext(l1, var1 ## CellDoNotUse), \
+		 var2 ## CellDoNotUse = lnext(l2, var2 ## CellDoNotUse) \
 		 )
 
 /*
@@ -129,8 +129,8 @@ typedef struct ListCellAndListWrapper
 		 (var2 ## CellDoNotUse) != NULL && \
 		 (((var1) = lfirst_int(var1 ## CellDoNotUse)) || true) && \
 		 (((var2) = lfirst_oid(var2 ## CellDoNotUse)) || true); \
-		 var1 ## CellDoNotUse = lnext_compat(l1, var1 ## CellDoNotUse), \
-		 var2 ## CellDoNotUse = lnext_compat(l2, var2 ## CellDoNotUse) \
+		 var1 ## CellDoNotUse = lnext(l1, var1 ## CellDoNotUse), \
+		 var2 ## CellDoNotUse = lnext(l2, var2 ## CellDoNotUse) \
 		 )
 
 /*

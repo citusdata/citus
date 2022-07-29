@@ -123,37 +123,12 @@ RelationGetSmgr(Relation rel)
 #define ROLE_PG_READ_ALL_STATS DEFAULT_ROLE_READ_ALL_STATS
 #endif
 
-#define lnext_compat(l, r) lnext(l, r)
-#define list_delete_cell_compat(l, c, p) list_delete_cell(l, c)
-#define pg_plan_query_compat(p, q, c, b) pg_plan_query(p, q, c, b)
-#define planner_compat(p, c, b) planner(p, NULL, c, b)
-#define standard_planner_compat(a, c, d) standard_planner(a, NULL, c, d)
-#define GetSequencesOwnedByRelation(a) getOwnedSequences(a)
-#define GetSequencesOwnedByColumn(a, b) getOwnedSequences_internal(a, b, 0)
-#define CMDTAG_SELECT_COMPAT CMDTAG_SELECT
-#define ExplainOnePlanCompat(a, b, c, d, e, f, g, h) \
-	ExplainOnePlan(a, b, c, d, e, f, g, h)
 #define SetListCellPtr(a, b) ((a)->ptr_value = (b))
 #define RangeTableEntryFromNSItem(a) ((a)->p_rte)
-#define QueryCompletionCompat QueryCompletion
-
-#define CreateTableSlotForRel(rel) table_slot_create(rel, NULL)
-#define MakeSingleTupleTableSlotCompat MakeSingleTupleTableSlot
-#define AllocSetContextCreateExtended AllocSetContextCreateInternal
-#define NextCopyFromCompat NextCopyFrom
-#define ArrayRef SubscriptingRef
-#define T_ArrayRef T_SubscriptingRef
-#define or_clause is_orclause
-#define GetSysCacheOid1Compat GetSysCacheOid1
-#define GetSysCacheOid2Compat GetSysCacheOid2
-#define GetSysCacheOid3Compat GetSysCacheOid3
-#define GetSysCacheOid4Compat GetSysCacheOid4
-
 #define fcGetArgValue(fc, n) ((fc)->args[n].value)
 #define fcGetArgNull(fc, n) ((fc)->args[n].isnull)
 #define fcSetArgExt(fc, n, val, is_null) \
 	(((fc)->args[n].isnull = (is_null)), ((fc)->args[n].value = (val)))
-
 #define fcSetArg(fc, n, value) fcSetArgExt(fc, n, value, false)
 #define fcSetArgNull(fc, n) fcSetArgExt(fc, n, (Datum) 0, true)
 
