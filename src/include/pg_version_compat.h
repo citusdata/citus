@@ -39,6 +39,8 @@ typedef Value String;
 #define pgstat_init_relation(r) pgstat_initstats(r)
 #define pg_analyze_and_rewrite_fixedparams(a, b, c, d, e) pg_analyze_and_rewrite(a, b, c, \
 																				 d, e)
+#define boolVal(v) intVal(v)
+#define makeBoolean(val) makeInteger(val)
 
 static inline int64
 pg_strtoint64(char *s)
