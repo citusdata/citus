@@ -196,7 +196,7 @@ AppendDefElem(StringInfo buf, DefElem *def)
 static void
 AppendDefElemStrict(StringInfo buf, DefElem *def)
 {
-	if (intVal(def->arg) == 1)
+	if (boolVal(def->arg))
 	{
 		appendStringInfo(buf, " STRICT");
 	}
@@ -223,7 +223,7 @@ AppendDefElemVolatility(StringInfo buf, DefElem *def)
 static void
 AppendDefElemLeakproof(StringInfo buf, DefElem *def)
 {
-	if (intVal(def->arg) == 0)
+	if (!boolVal(def->arg))
 	{
 		appendStringInfo(buf, " NOT");
 	}
@@ -237,7 +237,7 @@ AppendDefElemLeakproof(StringInfo buf, DefElem *def)
 static void
 AppendDefElemSecurity(StringInfo buf, DefElem *def)
 {
-	if (intVal(def->arg) == 0)
+	if (!boolVal(def->arg))
 	{
 		appendStringInfo(buf, " SECURITY INVOKER");
 	}
