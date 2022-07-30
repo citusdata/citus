@@ -8,3 +8,4 @@ test: isolation_cluster_management
 test: isolation_logical_replication_single_shard_commands
 test: isolation_logical_replication_multi_shard_commands
 test: isolation_non_blocking_shard_split
+test: isolation_non_blocking_shard_split_with_index_as_replicaIdentity
