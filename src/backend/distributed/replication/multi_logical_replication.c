@@ -88,8 +88,6 @@ static void CreateForeignConstraintsToReferenceTable(List *shardList,
 													 MultiConnection *targetConnection);
 static List * PrepareReplicationSubscriptionList(List *shardList);
 static Bitmapset * TableOwnerIds(List *shardList);
-static void CreateReplicaIdentity(List *shardList, char *nodeName, int32
-								  nodePort);
 static List * GetReplicaIdentityCommandListForShard(Oid relationId, uint64 shardId);
 static List * GetIndexCommandListForShardBackingReplicaIdentity(Oid relationId,
 																uint64 shardId);
@@ -115,7 +113,6 @@ static void CreatePartitioningHierarchy(List *shardList, char *targetNodeName,
 										int targetNodePort);
 static void CreateColocatedForeignKeys(List *shardList, char *targetNodeName,
 									   int targetNodePort);
-static void ConflictOnlyWithIsolationTesting(void);
 static void DropShardMovePublications(MultiConnection *connection,
 									  Bitmapset *tableOwnerIds);
 static void DropShardMoveSubscriptions(MultiConnection *connection,
@@ -456,7 +453,7 @@ TableOwnerIds(List *shardList)
  * CreateReplicaIdentity gets a shardList and creates all the replica identities
  * on the shards in the given node.
  */
-static void
+void
 CreateReplicaIdentity(List *shardList, char *nodeName, int32 nodePort)
 {
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
@@ -1048,7 +1045,7 @@ CreateForeignConstraintsToReferenceTable(List *shardList,
  * Note that since the cost of calling this function is pretty low, we prefer
  * to use it in non-assert builds as well not to diverge in the behaviour.
  */
-static void
+extern void
 ConflictOnlyWithIsolationTesting()
 {
 	LOCKTAG tag;

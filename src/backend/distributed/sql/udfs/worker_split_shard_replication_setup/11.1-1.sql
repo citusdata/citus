@@ -1,5 +1,6 @@
 CREATE TYPE citus.split_shard_info AS (
     source_shard_id bigint,
+    distribution_column text,
     child_shard_id bigint,
     shard_min_value text,
     shard_max_value text,

@@ -69,7 +69,10 @@ static void CreateDummyShardsForShardGroup(List *sourceColocatedShardIntervalLis
 										   List *workersForPlacementList);
 static HTAB * CreateWorkerForPlacementSet(List *workersForPlacementList);
 static void CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
-												   List *workersForPlacementList);
+												   List *workersForPlacementList,
+												   bool includeReplicaIdentity);
+static void CreateReplicaIdentities(List *shardGroupSplitIntervalListList,
+									List *workersForPlacementList);
 static void CreateObjectOnPlacement(List *objectCreationCommandList,
 									WorkerNode *workerNode);
 static List *    CreateSplitIntervalsForShardGroup(List *sourceColocatedShardList,
@@ -655,7 +658,8 @@ CreateTaskForDDLCommandList(List *ddlCommandList, WorkerNode *workerNode)
  */
 static void
 CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
-									   List *workersForPlacementList)
+									   List *workersForPlacementList, bool
+									   includeReplicaIdentity)
 {
 	List *shardIntervalList = NIL;
 	List *ddlTaskExecList = NIL;
@@ -678,7 +682,7 @@ CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
 			List *ddlCommandList = GetPostLoadTableCreationCommands(
 				shardInterval->relationId,
 				true /* includeIndexes */,
-				true /* includeReplicaIdentity */);
+				includeReplicaIdentity);
 			ddlCommandList = WorkerApplyShardDDLCommandList(
 				ddlCommandList,
 				shardInterval->shardId);
@@ -725,7 +729,8 @@ CreateAndCopySplitShardsForShardGroup(HTAB *mapOfShardToPlacementCreatedByWorkfl
 
 	/* Create auxiliary structures (indexes, stats, replicaindentities, triggers) */
 	CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
-										   workersForPlacementList);
+										   workersForPlacementList,
+										   true /* includeReplicaIdentity*/);
 }
 
 
@@ -1298,6 +1303,9 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 			sourceShardToCopyNode,
 			workersForPlacementList);
 
+		CreateReplicaIdentities(shardGroupSplitIntervalListList, workersForPlacementList);
+
+
 		/* 3) Create Publications. */
 		CreateShardSplitPublications(sourceConnection, shardSplitHashMapForPublication);
 
@@ -1350,6 +1358,9 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 									  superUser,
 									  databaseName);
 
+		/* Used for testing */
+		ConflictOnlyWithIsolationTesting();
+
 		/* 9) Wait for subscriptions to be ready */
 		WaitForShardSplitRelationSubscriptionsBecomeReady(
 			shardSplitSubscribersMetadataList);
@@ -1361,7 +1372,8 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 
 		/* 11) Create Auxilary structures */
 		CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
-											   workersForPlacementList);
+											   workersForPlacementList,
+											   false /* includeReplicaIdentity*/);
 
 		/* 12) Wait for subscribers to catchup till source LSN */
 		sourcePosition = GetRemoteLogPosition(sourceConnection);
@@ -1702,6 +1714,12 @@ CreateSplitShardReplicationSetupUDF(List *sourceColocatedShardIntervalList,
 				splitChildShardIntervalList, shardGroupSplitIntervalListList)
 	{
 		int64 sourceShardId = sourceShardIntervalToCopy->shardId;
+		Oid relationId = sourceShardIntervalToCopy->relationId;
+		Var *partitionColumn = DistPartitionKey(relationId);
+
+		bool missingOK = false;
+		char *partitionColumnName =
+			get_attname(relationId, partitionColumn->varattno, missingOK);
 
 		ShardInterval *splitChildShardInterval = NULL;
 		WorkerNode *destinationWorkerNode = NULL;
@@ -1722,8 +1740,9 @@ CreateSplitShardReplicationSetupUDF(List *sourceColocatedShardIntervalList,
 								 splitChildShardInterval->maxValue));
 
 			appendStringInfo(splitChildrenRows,
-							 "ROW(%lu, %lu, %s, %s, %u)::citus.split_shard_info",
+							 "ROW(%lu, %s, %lu, %s, %s, %u)::citus.split_shard_info",
 							 sourceShardId,
+							 quote_literal_cstr(partitionColumnName),
 							 splitChildShardInterval->shardId,
 							 quote_literal_cstr(minValueString->data),
 							 quote_literal_cstr(maxValueString->data),
@@ -1867,4 +1886,51 @@ TryDroppingShard(MultiConnection *connection, ShardInterval *shardInterval)
 		connection,
 		dropShardQuery->data,
 		NULL /* pgResult */);
+}
+
+
+/*todo(saawasek): Add comments */
+static void
+CreateReplicaIdentities(List *shardGroupSplitIntervalListList,
+						List *workersForPlacementList)
+{
+	/*
+	 * Create Replica Identities for actual child shards.
+	 */
+	List *shardIntervalList = NIL;
+	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
+	{
+		ShardInterval *shardInterval = NULL;
+		WorkerNode *workerPlacementNode = NULL;
+
+		/*
+		 * Iterate on split shard interval list for given shard and create tasks
+		 * for every single split shard in a shard group.
+		 */
+		forboth_ptr(shardInterval, shardIntervalList, workerPlacementNode,
+					workersForPlacementList)
+		{
+			List *shardList = NIL;
+			shardList = lappend(shardList, shardInterval);
+
+			CreateReplicaIdentity(shardList, workerPlacementNode->workerName,
+								  workerPlacementNode->workerPort);
+		}
+	}
+
+	/*todo: remove the global variable dummy map*/
+	HASH_SEQ_STATUS status;
+	hash_seq_init(&status, DummyShardInfoHashMap);
+
+	NodeShardMappingEntry *entry = NULL;
+	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
+	{
+		uint32 nodeId = entry->key.nodeId;
+		WorkerNode *shardToBeDroppedNode = FindNodeWithNodeId(nodeId,
+															  false /* missingOk */);
+
+		List *dummyShardIntervalList = entry->shardSplitInfoList;
+		CreateReplicaIdentity(dummyShardIntervalList, shardToBeDroppedNode->workerName,
+							  shardToBeDroppedNode->workerPort);
+	}
 }

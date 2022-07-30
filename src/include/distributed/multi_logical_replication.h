@@ -26,6 +26,9 @@ extern void LogicallyReplicateShards(List *shardList, char *sourceNodeName,
 									 int sourceNodePort, char *targetNodeName,
 									 int targetNodePort);
 
+extern void ConflictOnlyWithIsolationTesting(void);
+extern void CreateReplicaIdentity(List *shardList, char *nodeName, int32
+								  nodePort);
 extern XLogRecPtr GetRemoteLogPosition(MultiConnection *connection);
 extern List * GetQueryResultStringList(MultiConnection *connection, char *query);
 

@@ -96,6 +96,8 @@ extern char *  DropExistingIfAnyAndCreateTemplateReplicationSlot(
 	ShardInterval *shardIntervalToSplit,
 	MultiConnection *
 	sourceConnection);
+extern void DisableAndDropShardSplitSubscription(MultiConnection *connection,
+												 char *subscriptionName);
 
 /* Wrapper functions which wait for a subscriber to be ready and catchup */
 extern void WaitForShardSplitRelationSubscriptionsBecomeReady(

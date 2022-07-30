@@ -12,6 +12,7 @@
 #include "distributed/shardsplit_shared_memory.h"
 #include "distributed/listutils.h"
 #include "replication/logical.h"
+#include "utils/typcache.h"
 
 /*
  * Dynamically-loaded modules are required to include this macro call to check for
@@ -208,24 +209,22 @@ GetHashValueForIncomingTuple(Relation sourceShardRelation,
 							 int partitionColumnIndex,
 							 Oid distributedTableOid)
 {
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableOid);
-	if (cacheEntry == NULL)
-	{
-		ereport(ERROR, errmsg(
-					"Expected valid Citus Cache entry to be present. But found null"));
-	}
-
 	TupleDesc relationTupleDes = RelationGetDescr(sourceShardRelation);
+	Form_pg_attribute partitionColumn = TupleDescAttr(relationTupleDes,
+													  partitionColumnIndex);
+
 	bool isNull = false;
 	Datum partitionColumnValue = heap_getattr(tuple,
 											  partitionColumnIndex + 1,
 											  relationTupleDes,
 											  &isNull);
 
-	FmgrInfo *hashFunction = cacheEntry->hashFunction;
+	TypeCacheEntry *typeEntry = lookup_type_cache(partitionColumn->atttypid,
+												  TYPECACHE_HASH_PROC_FINFO);
 
 	/* get hashed value of the distribution value */
-	Datum hashedValueDatum = FunctionCall1(hashFunction, partitionColumnValue);
+	Datum hashedValueDatum = FunctionCall1(&(typeEntry->hash_proc_finfo),
+										   partitionColumnValue);
 
 	return DatumGetInt32(hashedValueDatum);
 }

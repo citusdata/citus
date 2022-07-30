@@ -12,6 +12,7 @@
 #include "miscadmin.h"
 #include "postmaster/postmaster.h"
 #include "common/hashfn.h"
+#include "distributed/distribution_column.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shard_utils.h"
 #include "distributed/shardsplit_shared_memory.h"
@@ -34,12 +35,14 @@ static HTAB *ShardInfoHashMap = NULL;
 /* Function declarations */
 static void ParseShardSplitInfoFromDatum(Datum shardSplitInfoDatum,
 										 uint64 *sourceShardId,
+										 char **partitionColumnName,
 										 uint64 *childShardId,
 										 int32 *minValue,
 										 int32 *maxValue,
 										 int32 *nodeId);
 
 static ShardSplitInfo * CreateShardSplitInfo(uint64 sourceShardIdToSplit,
+											 char *partitionColumnName,
 											 uint64 desSplitChildShardId,
 											 int32 minValue,
 											 int32 maxValue,
@@ -111,16 +114,19 @@ worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
 	while (array_iterate(shardInfo_iterator, &shardInfoDatum, &isnull))
 	{
 		uint64 sourceShardId = 0;
+		char *partitionColumnName = NULL;
 		uint64 childShardId = 0;
 		int32 minValue = 0;
 		int32 maxValue = 0;
 		int32 nodeId = 0;
 
-		ParseShardSplitInfoFromDatum(shardInfoDatum, &sourceShardId, &childShardId,
+		ParseShardSplitInfoFromDatum(shardInfoDatum, &sourceShardId,
+									 &partitionColumnName, &childShardId,
 									 &minValue, &maxValue, &nodeId);
 
 		ShardSplitInfo *shardSplitInfo = CreateShardSplitInfo(
 			sourceShardId,
+			partitionColumnName,
 			childShardId,
 			minValue,
 			maxValue,
@@ -177,6 +183,7 @@ SetupHashMapForShardInfo()
  * with appropriate OIs' for source and destination relation.
  *
  * sourceShardIdToSplit - Existing shardId which has a valid entry in cache and catalogue
+ * partitionColumnName  - Name of column to use for partitioning
  * desSplitChildShardId - New split child shard which doesn't have an entry in metacache yet.
  * minValue				- Minimum hash value for desSplitChildShardId
  * maxValue				- Maximum hash value for desSplitChildShardId
@@ -185,6 +192,7 @@ SetupHashMapForShardInfo()
  */
 ShardSplitInfo *
 CreateShardSplitInfo(uint64 sourceShardIdToSplit,
+					 char *partitionColumnName,
 					 uint64 desSplitChildShardId,
 					 int32 minValue,
 					 int32 maxValue,
@@ -203,23 +211,6 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 					"Split workflow assumes metadata to be synced across "
 					"worker nodes hosting source shards.", sourceShardIdToSplit));
 	}
-
-	CitusTableCacheEntry *cachedTableEntry = GetCitusTableCacheEntry(
-		shardIntervalToSplit->relationId);
-
-	if (!IsCitusTableTypeCacheEntry(cachedTableEntry, HASH_DISTRIBUTED))
-	{
-		Relation distributedRel = RelationIdGetRelation(cachedTableEntry->relationId);
-		ereport(ERROR, (errmsg(
-							"Citus does only support Hash distributed tables to be split."),
-						errdetail("Table '%s' is not Hash distributed",
-								  RelationGetRelationName(distributedRel))
-						));
-		RelationClose(distributedRel);
-	}
-
-	Assert(shardIntervalToSplit->minValueExists);
-	Assert(shardIntervalToSplit->maxValueExists);
 
 	/* Oid of distributed table */
 	Oid citusTableOid = shardIntervalToSplit->relationId;
@@ -244,7 +235,9 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 	}
 
 	/* determine the partition column in the tuple descriptor */
-	Var *partitionColumn = cachedTableEntry->partitionColumn;
+	Var *partitionColumn = BuildDistributionKeyFromColumnName(sourceShardToSplitOid,
+															  partitionColumnName,
+															  AccessShareLock);
 	if (partitionColumn == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
@@ -370,6 +363,7 @@ NodeShardMappingHashCompare(const void *left, const void *right, Size keysize)
 static void
 ParseShardSplitInfoFromDatum(Datum shardSplitInfoDatum,
 							 uint64 *sourceShardId,
+							 char **partitionColumnName,
 							 uint64 *childShardId,
 							 int32 *minValue,
 							 int32 *maxValue,
@@ -384,6 +378,15 @@ ParseShardSplitInfoFromDatum(Datum shardSplitInfoDatum,
 		ereport(ERROR, (errmsg("source_shard_id for split_shard_info can't be null")));
 	}
 	*sourceShardId = DatumGetUInt64(sourceShardIdDatum);
+
+	Datum partitionColumnDatum = GetAttributeByName(dataTuple, "distribution_column",
+													&isnull);
+	if (isnull)
+	{
+		ereport(ERROR, (errmsg(
+							"distribution_column for split_shard_info can't be null")));
+	}
+	*partitionColumnName = TextDatumGetCString(partitionColumnDatum);
 
 	Datum childShardIdDatum = GetAttributeByName(dataTuple, "child_shard_id", &isnull);
 	if (isnull)

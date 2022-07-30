@@ -67,10 +67,10 @@ CREATE PUBLICATION pub1 FOR TABLE table_first_4, table_first_5, table_first_6;
 CREATE PUBLICATION pub2 FOR TABLE table_second_7, table_second_8, table_second_9;
 
 SELECT count(*) FROM worker_split_shard_replication_setup(ARRAY[
-    ROW(4, 5, '-2147483648', '-1', :worker_2_node)::citus.split_shard_info,
-    ROW(4, 6, '0', '2147483647', :worker_2_node)::citus.split_shard_info,
-    ROW(7, 8, '-2147483648', '-1', :worker_2_node)::citus.split_shard_info,
-    ROW(7, 9, '0', '2147483647', :worker_2_node)::citus.split_shard_info
+    ROW(4, 'id', 5, '-2147483648', '-1', :worker_2_node)::citus.split_shard_info,
+    ROW(4, 'id', 6, '0', '2147483647', :worker_2_node)::citus.split_shard_info,
+    ROW(7, 'id', 8, '-2147483648', '-1', :worker_2_node)::citus.split_shard_info,
+    ROW(7, 'id', 9, '0', '2147483647', :worker_2_node)::citus.split_shard_info
     ]);
 
 SELECT relowner AS table_owner_one FROM pg_class WHERE relname='table_first' \gset

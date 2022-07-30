@@ -21,3 +21,4 @@ test: citus_split_shard_by_split_points_failure
 # use citus_split_shard_columnar_partitioned instead.
 test: citus_split_shard_columnar_partitioned
 test: citus_non_blocking_split_shards
+# test: citus_sameer

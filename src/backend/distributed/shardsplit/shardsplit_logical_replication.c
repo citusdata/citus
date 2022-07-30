@@ -603,7 +603,7 @@ DropAllShardSplitSubscriptions(MultiConnection *cleanupConnection)
 	char *subscriptionName = NULL;
 	foreach_ptr(subscriptionName, subscriptionNameList)
 	{
-		DropShardSubscription(cleanupConnection, subscriptionName);
+		DisableAndDropShardSplitSubscription(cleanupConnection, subscriptionName);
 	}
 }
 
@@ -709,12 +709,37 @@ DropShardSplitSubsriptions(List *shardSplitSubscribersMetadataList)
 		uint32 tableOwnerId = subscriberMetadata->tableOwnerId;
 		MultiConnection *targetNodeConnection = subscriberMetadata->targetNodeConnection;
 
-		DropShardSubscription(targetNodeConnection, ShardSubscriptionName(tableOwnerId,
-																		  SHARD_SPLIT_SUBSCRIPTION_PREFIX));
+		DisableAndDropShardSplitSubscription(targetNodeConnection, ShardSubscriptionName(
+												 tableOwnerId,
+												 SHARD_SPLIT_SUBSCRIPTION_PREFIX));
 
 		DropShardUser(targetNodeConnection, ShardSubscriptionRole(tableOwnerId,
 																  SHARD_SPLIT_SUBSCRIPTION_ROLE_PREFIX));
 	}
+}
+
+
+/*todo(saawasek): add comments */
+void
+DisableAndDropShardSplitSubscription(MultiConnection *connection, char *subscriptionName)
+{
+	StringInfo alterSubscriptionSlotCommand = makeStringInfo();
+	StringInfo alterSubscriptionDisableCommand = makeStringInfo();
+
+	appendStringInfo(alterSubscriptionDisableCommand,
+					 "ALTER SUBSCRIPTION %s DISABLE",
+					 quote_identifier(subscriptionName));
+	ExecuteCriticalRemoteCommand(connection,
+								 alterSubscriptionDisableCommand->data);
+
+	appendStringInfo(alterSubscriptionSlotCommand,
+					 "ALTER SUBSCRIPTION %s SET (slot_name = NONE)",
+					 quote_identifier(subscriptionName));
+	ExecuteCriticalRemoteCommand(connection, alterSubscriptionSlotCommand->data);
+
+	ExecuteCriticalRemoteCommand(connection, psprintf(
+									 "DROP SUBSCRIPTION %s",
+									 quote_identifier(subscriptionName)));
 }
 
 
