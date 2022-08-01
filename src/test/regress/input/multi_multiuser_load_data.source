@@ -8,9 +8,6 @@
 -- the shard placement policy to the local-node-first policy as other regression
 -- tests expect the placements to be in that order.
 
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
-
 SET citusdb.shard_placement_policy TO 'local-node-first';
 
 -- load as superuser

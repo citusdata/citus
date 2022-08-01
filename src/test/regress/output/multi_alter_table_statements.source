@@ -1,14 +1,6 @@
 --
 -- MULTI_ALTER_TABLE_STATEMENTS
 --
--- this test has different output per version
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
- version_above_ten 
--------------------
- t
-(1 row)
-
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 220000;
 -- Check that we can run ALTER TABLE statements on distributed tables.
 -- We set the shardid sequence here so that the shardids in this test
