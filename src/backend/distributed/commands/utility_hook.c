@@ -550,7 +550,10 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 * Therefore, we first check if all addresses in the given statement are valid.
 		 * Then, we do not execute qualify and preprocess if any address is invalid to
 		 * prevent before-mentioned citus related messages. PG will complain about the
-		 * invalid address, so we are safe to not execute qualify and preprocess.
+		 * invalid address, so we are safe to not execute qualify and preprocess. Also
+		 * note that we should not guard any step after standardProcess_Utility with
+		 * the flag distOpsHasInvalidObject because PG would have already failed the 
+		 * transaction.  
 		 */
 		distOpsHasInvalidObject = DistOpsHasInvalidObject(parsetree, ops);
 

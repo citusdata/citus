@@ -39,6 +39,14 @@ extern void SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(Oid
 																	  Oid
 																	  partitionRelationId);
 
+typedef enum DistOpsOperationType
+{
+	DIST_OPS_NONE,
+	DIST_OPS_CREATE,
+	DIST_OPS_ALTER,
+	DIST_OPS_DROP,
+} DistOpsOperationType;
+
 
 /*
  * DistributeObjectOps specifies handlers for node/object type pairs.
@@ -74,6 +82,9 @@ typedef struct DistributeObjectOps
 	 * common propagation functions will not propagate the creation of the object.
 	 */
 	bool *featureFlag;
+
+	/* specifies the type of the operation */
+	DistOpsOperationType operationType;
 } DistributeObjectOps;
 
 #define CITUS_TRUNCATE_TRIGGER_NAME "citus_truncate_trigger"

@@ -32,6 +32,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/citus_depended_object.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/commands.h"
 #include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/shared_library_init.h"
@@ -48,6 +49,8 @@ bool HideCitusDependentObjects = false;
 
 static Node * CreateCitusDependentObjectExpr(int pgMetaTableVarno, int pgMetaTableOid);
 static List * GetCitusDependedObjectArgs(int pgMetaTableVarno, int pgMetaTableOid);
+static bool StatementContainsIfExist(Node *node);
+static bool AlterRoleSetStatementContainsAll(Node *node);
 
 /*
  * IsPgLocksTable returns true if RTE is pg_locks table.
@@ -315,12 +318,26 @@ GetCitusDependedObjectArgs(int pgMetaTableVarno, int pgMetaTableOid)
  * is invalid; otherwise, returns false. If ops is null or it has no
  * implemented address method, we return false.
  *
- * If EnableUnsupportedFeatureMessages is active, then we return false.
+ * We have some dist ops for which we should not validate.
+ * 1) We should not validate CREATE statements because no address exists
+ * here yet.
+ * 2) We should not validate '[DROP|ALTER] IF EXISTS' statements because it is ok
+ * by the semantics even if any object is invalid.
+ * 3) We should not validate 'ALTER ROLE ALL [SET|UNSET] because for the role ALL
+ * AlterRoleSetStmtObjectAddress returns an invalid address even though it should not.
  */
 bool
 DistOpsHasInvalidObject(Node *node, const DistributeObjectOps *ops)
 {
-	if (EnableUnsupportedFeatureMessages)
+	if (ops && ops->operationType == DIST_OPS_CREATE)
+	{
+		return false;
+	}
+	else if (StatementContainsIfExist(node))
+	{
+		return false;
+	}
+	else if (AlterRoleSetStatementContainsAll(node))
 	{
 		return false;
 	}
@@ -336,6 +353,134 @@ DistOpsHasInvalidObject(Node *node, const DistributeObjectOps *ops)
 				return true;
 			}
 		}
+	}
+
+	return false;
+}
+
+
+/*
+ * StatementContainsIfExist returns true if the statement contains
+ * IF EXIST syntax.
+ */
+static bool
+StatementContainsIfExist(Node *node)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	switch (nodeTag(node))
+	{
+		case T_DropStmt:
+		{
+			DropStmt *dropStmt = castNode(DropStmt, node);
+			return dropStmt->missing_ok;
+		}
+
+		case T_DropRoleStmt:
+		{
+			DropRoleStmt *dropRoleStmt = castNode(DropRoleStmt, node);
+			return dropRoleStmt->missing_ok;
+		}
+
+		case T_DropdbStmt:
+		{
+			DropdbStmt *dropdbStmt = castNode(DropdbStmt, node);
+			return dropdbStmt->missing_ok;
+		}
+
+		case T_DropTableSpaceStmt:
+		{
+			DropTableSpaceStmt *dropTableSpaceStmt = castNode(DropTableSpaceStmt, node);
+			return dropTableSpaceStmt->missing_ok;
+		}
+
+		case T_DropUserMappingStmt:
+		{
+			DropUserMappingStmt *dropUserMappingStmt = castNode(DropUserMappingStmt,
+																node);
+			return dropUserMappingStmt->missing_ok;
+		}
+
+		case T_DropSubscriptionStmt:
+		{
+			DropSubscriptionStmt *dropSubscriptionStmt = castNode(DropSubscriptionStmt,
+																  node);
+			return dropSubscriptionStmt->missing_ok;
+		}
+
+		case T_AlterTableStmt:
+		{
+			AlterTableStmt *alterTableStmt = castNode(AlterTableStmt, node);
+			return alterTableStmt->missing_ok;
+		}
+
+		case T_AlterDomainStmt:
+		{
+			AlterDomainStmt *alterDomainStmt = castNode(AlterDomainStmt, node);
+			return alterDomainStmt->missing_ok;
+		}
+
+		case T_AlterSeqStmt:
+		{
+			AlterSeqStmt *alterSeqStmt = castNode(AlterSeqStmt, node);
+			return alterSeqStmt->missing_ok;
+		}
+
+		case T_AlterStatsStmt:
+		{
+			AlterStatsStmt *alterStatsStmt = castNode(AlterStatsStmt, node);
+			return alterStatsStmt->missing_ok;
+		}
+
+		case T_RenameStmt:
+		{
+			RenameStmt *renameStmt = castNode(RenameStmt, node);
+			return renameStmt->missing_ok;
+		}
+
+		case T_AlterObjectSchemaStmt:
+		{
+			AlterObjectSchemaStmt *alterObjectSchemaStmt = castNode(AlterObjectSchemaStmt,
+																	node);
+			return alterObjectSchemaStmt->missing_ok;
+		}
+
+		case T_AlterTSConfigurationStmt:
+		{
+			AlterTSConfigurationStmt *alterTSConfigurationStmt = castNode(
+				AlterTSConfigurationStmt, node);
+			return alterTSConfigurationStmt->missing_ok;
+		}
+
+		default:
+		{
+			return false;
+		}
+	}
+}
+
+
+/*
+ * AlterRoleSetStatementContainsAll returns true if the statement is a
+ * ALTER ROLE ALL (SET / RESET).
+ */
+static bool
+AlterRoleSetStatementContainsAll(Node *node)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (nodeTag(node) == T_AlterRoleSetStmt)
+	{
+		/* rolespec is null for the role 'ALL' */
+		AlterRoleSetStmt *alterRoleSetStmt = castNode(AlterRoleSetStmt, node);
+
+		return alterRoleSetStmt->role == NULL;
 	}
 
 	return false;
