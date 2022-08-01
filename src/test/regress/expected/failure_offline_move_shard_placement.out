@@ -91,8 +91,8 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE move_shard_offline.t").
 
 SELECT master_move_shard_placement(201, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port, 'block_writes');
 ERROR:  canceling statement due to user request
--- failure on blocking append_table_to_shard operation on target node
-SELECT citus.mitmproxy('conn.onQuery(query="worker_append_table_to_shard").kill()');
+-- failure on blocking COPY operation on target node
+SELECT citus.mitmproxy('conn.onQuery(query="COPY").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -101,8 +101,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_append_table_to_shard").kill(
 SELECT master_move_shard_placement(201, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port, 'block_writes');
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
--- cancellation on blocking append_table_to_shard operation on target node
-SELECT citus.mitmproxy('conn.onQuery(query="worker_append_table_to_shard").cancel(' || :pid || ')');
+while executing command on localhost:xxxxx
+-- cancellation on blocking COPY operation on target node
+SELECT citus.mitmproxy('conn.onQuery(query="COPY").cancel(' || :pid || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -128,25 +129,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="ADD CONSTRAINT").cancel(' || :pid ||
 (1 row)
 
 SELECT master_move_shard_placement(201, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port, 'block_writes');
-ERROR:  canceling statement due to user request
--- failure on CopyData operation on source node
-SELECT citus.mitmproxy('conn.onCopyData().kill()');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT master_move_shard_placement(200, 'localhost', :worker_2_proxy_port, 'localhost', :worker_1_port, 'block_writes');
-ERROR:  could not copy table "t_200" from "localhost:xxxxx"
-CONTEXT:  while executing command on localhost:xxxxx
--- cancellation on CopyData operation on source node
-SELECT citus.mitmproxy('conn.onCopyData().cancel(' || :pid || ')');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT master_move_shard_placement(200, 'localhost', :worker_2_proxy_port, 'localhost', :worker_1_port, 'block_writes');
 ERROR:  canceling statement due to user request
 CALL citus_cleanup_orphaned_shards();
 -- Verify that the shard is not moved and the number of rows are still 100k

@@ -26,7 +26,7 @@ ALTER EXTENSION citus ADD ACCESS METHOD fake_am;
 create table test_hash_dist(id int, val int) using fake_am;
 insert into test_hash_dist values (1, 1);
 
-select create_distributed_table('test_hash_dist','id');
+select create_distributed_table('test_hash_dist','id', colocate_with := 'none');
 
 select * from test_hash_dist;
 insert into test_hash_dist values (1, 1);
@@ -86,11 +86,14 @@ SELECT * FROM master_get_table_ddl_events('test_range_dist');
 
 select a.shardid, a.nodeport
 FROM pg_dist_shard b, pg_dist_shard_placement a
-WHERE a.shardid=b.shardid AND logicalrelid = 'test_range_dist'::regclass::oid
+WHERE a.shardid=b.shardid AND logicalrelid = 'test_hash_dist'::regclass::oid
 ORDER BY a.shardid, nodeport;
 
+-- Change repmodel to allow master_copy_shard_placement
+UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid = 'test_hash_dist'::regclass;
+
 SELECT master_copy_shard_placement(
-           get_shard_id_for_distribution_column('test_range_dist', '1'),
+           get_shard_id_for_distribution_column('test_hash_dist', '1'),
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
            do_repair := false,
@@ -98,18 +101,20 @@ SELECT master_copy_shard_placement(
 
 select a.shardid, a.nodeport
 FROM pg_dist_shard b, pg_dist_shard_placement a
-WHERE a.shardid=b.shardid AND logicalrelid = 'test_range_dist'::regclass::oid
+WHERE a.shardid=b.shardid AND logicalrelid = 'test_hash_dist'::regclass::oid
 ORDER BY a.shardid, nodeport;
 
 -- verify that data was copied correctly
 
 \c - - - :worker_1_port
-select * from test_tableam.test_range_dist_60005 ORDER BY id;
+select * from test_tableam.test_hash_dist_60000 ORDER BY id;
 
 \c - - - :worker_2_port
-select * from test_tableam.test_range_dist_60005 ORDER BY id;
+select * from test_tableam.test_hash_dist_60000 ORDER BY id;
 
 \c - - - :master_port
+
+set search_path to test_tableam;
 
 --
 -- Test that partitioned tables work correctly with a fake_am table
