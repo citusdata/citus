@@ -305,19 +305,7 @@ CREATE EVENT TRIGGER log_ddl_tag ON ddl_command_end EXECUTE PROCEDURE log_ddl_ta
 
 \c - - - :master_port
 -- The above trigger will cause failure at transaction end on one placement.
--- We'll test 2PC first, as it should handle this "best" (no divergence)
-SET citus.multi_shard_commit_protocol TO '2pc';
-BEGIN;
-CREATE INDEX single_index_2 ON single_shard_items(id);
-CREATE INDEX single_index_3 ON single_shard_items(name);
-COMMIT;
-
--- Nothing from the block should have committed
-SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items' ORDER BY 1;
-
--- Even if 1PC is picked for multi-shard commands
--- Citus always uses 2PC for replication > 1
-SET citus.multi_shard_commit_protocol TO '1pc';
+-- Citus always uses 2PC. 2PC should handle this "best" (no divergence)
 BEGIN;
 CREATE INDEX single_index_2 ON single_shard_items(id);
 CREATE INDEX single_index_3 ON single_shard_items(name);
@@ -346,13 +334,12 @@ COMMIT;
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
 DROP INDEX temp_index_2;
 
---- verify that distributed ddl commands can be used with 2pc
-SET citus.multi_shard_commit_protocol TO '2pc';
+-- verify that distributed ddl commands are allowed without transaction block as well
+-- Reminder: Now Citus always uses 2PC
 CREATE INDEX temp_index_3 ON lineitem_alter(l_orderkey);
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
 DROP INDEX temp_index_3;
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
-RESET citus.multi_shard_commit_protocol;
 
 -- verify that not any of shard placements are marked as failed when a query failure occurs
 CREATE TABLE test_ab (a int, b int);

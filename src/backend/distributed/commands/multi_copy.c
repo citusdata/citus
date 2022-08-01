@@ -30,11 +30,7 @@
  * By default, COPY uses normal transactions on the workers. In the case of
  * hash or range-partitioned tables, this can cause a problem when some of the
  * transactions fail to commit while others have succeeded. To ensure no data
- * is lost, COPY can use two-phase commit, by increasing max_prepared_transactions
- * on the worker and setting citus.multi_shard_commit_protocol to '2pc'. The default
- * is '1pc'. This is not a problem for append-partitioned tables because new
- * shards are created and in the case of failure, metadata changes are rolled
- * back on the master node.
+ * is lost, COPY uses two-phase commit.
  *
  * Parsing options are processed and enforced on the node where copy command
  * is run, while constraints are enforced on the worker. In either case,

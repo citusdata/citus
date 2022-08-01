@@ -5,9 +5,7 @@
  *
  * This file contains master_modify_multiple_shards function, which takes a update
  * or delete query and runs it worker shards of the distributed table. The distributed
- * modify operation can be done within a distributed transaction and committed in
- * one-phase or two-phase fashion, depending on the citus.multi_shard_commit_protocol
- * setting.
+ * modify operation can be done within a distributed transaction.
  *
  * Copyright (c) Citus Data, Inc.
  *
