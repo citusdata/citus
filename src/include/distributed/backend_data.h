@@ -58,6 +58,7 @@ extern void UnSetGlobalPID(void);
 extern void SetActiveMyBackend(bool value);
 extern void AssignDistributedTransactionId(void);
 extern void AssignGlobalPID(void);
+extern void SetBackendDataGlobalPID(uint64 globalPID);
 extern uint64 GetGlobalPID(void);
 extern void SetBackendDataDistributedCommandOriginator(bool
 													   distributedCommandOriginator);

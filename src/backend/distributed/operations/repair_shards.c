@@ -25,6 +25,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/connection_management.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/listutils.h"
 #include "distributed/shard_cleaner.h"
@@ -1207,39 +1208,7 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 												  tableOwner, ddlCommandList);
 	}
 
-	int taskId = 0;
-	List *copyTaskList = NIL;
-	foreach_ptr(shardInterval, shardIntervalList)
-	{
-		/*
-		 * Skip copying data for partitioned tables, because they contain no
-		 * data themselves. Their partitions do contain data, but those are
-		 * different colocated shards that will be copied seperately.
-		 */
-		if (!PartitionedTable(shardInterval->relationId))
-		{
-			char *copyCommand = CreateShardCopyCommand(
-				shardInterval, targetNode);
-
-			Task *copyTask = CreateBasicTask(
-				INVALID_JOB_ID,
-				taskId,
-				READ_TASK,
-				copyCommand);
-
-			ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
-			SetPlacementNodeMetadata(taskPlacement, sourceNode);
-
-			copyTask->taskPlacementList = list_make1(taskPlacement);
-
-			copyTaskList = lappend(copyTaskList, copyTask);
-			taskId++;
-		}
-	}
-
-	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, copyTaskList,
-									  MaxAdaptiveExecutorPoolSize,
-									  NULL /* jobIdList (ignored by API implementation) */);
+	CopyShardsToNode(sourceNode, targetNode, shardIntervalList, NULL);
 
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
@@ -1306,6 +1275,85 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 
 	MemoryContextReset(localContext);
 	MemoryContextSwitchTo(oldContext);
+}
+
+
+/*
+ * CopyShardsToNode copies the list of shards from the source to the target.
+ * When snapshotName is not NULL it will do the COPY using this snapshot name.
+ */
+void
+CopyShardsToNode(WorkerNode *sourceNode, WorkerNode *targetNode, List *shardIntervalList,
+				 char *snapshotName)
+{
+	int taskId = 0;
+	List *copyTaskList = NIL;
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
+	{
+		/*
+		 * Skip copying data for partitioned tables, because they contain no
+		 * data themselves. Their partitions do contain data, but those are
+		 * different colocated shards that will be copied seperately.
+		 */
+		if (PartitionedTable(shardInterval->relationId))
+		{
+			continue;
+		}
+
+		List *ddlCommandList = NIL;
+
+		/*
+		 * This uses repeatable read because we want to read the table in
+		 * the state exactly as it was when the snapshot was created. This
+		 * is needed when using this code for the initial data copy when
+		 * using logical replication. The logical replication catchup might
+		 * fail otherwise, because some of the updates that it needs to do
+		 * have already been applied on the target.
+		 */
+		StringInfo beginTransaction = makeStringInfo();
+		appendStringInfo(beginTransaction,
+						 "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;");
+		ddlCommandList = lappend(ddlCommandList, beginTransaction->data);
+
+		/* Set snapshot for non-blocking shard split. */
+		if (snapshotName != NULL)
+		{
+			StringInfo snapShotString = makeStringInfo();
+			appendStringInfo(snapShotString, "SET TRANSACTION SNAPSHOT %s;",
+							 quote_literal_cstr(
+								 snapshotName));
+			ddlCommandList = lappend(ddlCommandList, snapShotString->data);
+		}
+
+		char *copyCommand = CreateShardCopyCommand(
+			shardInterval, targetNode);
+
+		ddlCommandList = lappend(ddlCommandList, copyCommand);
+
+		StringInfo commitCommand = makeStringInfo();
+		appendStringInfo(commitCommand, "COMMIT;");
+		ddlCommandList = lappend(ddlCommandList, commitCommand->data);
+
+		Task *task = CitusMakeNode(Task);
+		task->jobId = shardInterval->shardId;
+		task->taskId = taskId;
+		task->taskType = READ_TASK;
+		task->replicationModel = REPLICATION_MODEL_INVALID;
+		SetTaskQueryStringList(task, ddlCommandList);
+
+		ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
+		SetPlacementNodeMetadata(taskPlacement, sourceNode);
+
+		task->taskPlacementList = list_make1(taskPlacement);
+
+		copyTaskList = lappend(copyTaskList, task);
+		taskId++;
+	}
+
+	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, copyTaskList,
+									  MaxAdaptiveExecutorPoolSize,
+									  NULL /* jobIdList (ignored by API implementation) */);
 }
 
 

@@ -894,6 +894,23 @@ AssignGlobalPID(void)
 
 
 /*
+ * SetBackendDataGlobalPID sets the global PID. This specifically does not read
+ * from catalog tables, because it should be safe to run from our
+ * authentication hook.
+ */
+void
+SetBackendDataGlobalPID(uint64 globalPID)
+{
+	SpinLockAcquire(&MyBackendData->mutex);
+
+	MyBackendData->globalPID = globalPID;
+	MyBackendData->distributedCommandOriginator = false;
+
+	SpinLockRelease(&MyBackendData->mutex);
+}
+
+
+/*
  * SetBackendDataDistributedCommandOriginator is used to set the distributedCommandOriginator
  * field on MyBackendData.
  */
