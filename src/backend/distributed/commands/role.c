@@ -124,6 +124,13 @@ RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok)
 		Oid roleOid = get_rolespec_oid(role, missing_ok);
 		ObjectAddressSet(*address, AuthIdRelationId, roleOid);
 	}
+	else
+	{
+		/*
+		 * If rolespec is null, role can be 'ALL'. We should return a pseudo-valid oid.
+		 */
+		ObjectAddressSet(*address, AuthIdRelationId, OID_MAX);
+	}
 
 	return list_make1(address);
 }
