@@ -359,9 +359,19 @@ AlterStatisticsSchemaStmtObjectAddress(Node *node, bool missingOk)
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 
 	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-	String *statName = llast((List *) stmt->object);
-	Oid statsOid = get_statistics_object_oid(list_make2(makeString(stmt->newschema),
-														statName), missingOk);
+	List *statName = (List *) stmt->object;
+	Oid statsOid = get_statistics_object_oid(statName, true);
+
+	if (statsOid == InvalidOid)
+	{
+		/*
+		 * couldn't find the stat, might have already been moved to the new schema, we
+		 * construct a new stat name that uses the new schema to search in.
+		 */
+		List *newStatName = list_make2(makeString(stmt->newschema), llast(statName));
+		statsOid = get_statistics_object_oid(newStatName, missingOk);
+	}
+
 	ObjectAddressSet(*address, StatisticExtRelationId, statsOid);
 
 	return list_make1(address);
