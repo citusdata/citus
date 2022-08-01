@@ -2,10 +2,6 @@
 -- MULTI_ALTER_TABLE_STATEMENTS
 --
 
--- this test has different output per version
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
-
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 220000;
 
 
