@@ -32,6 +32,7 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
+#include "distributed/citus_depended_object.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/colocation_utils.h"
@@ -1438,7 +1439,17 @@ CreateFunctionStmtObjectAddress(Node *node, bool missing_ok)
 		}
 	}
 
-	return FunctionToObjectAddress(objectType, objectWithArgs, missing_ok);
+	int OldClientMinMessage = client_min_messages;
+
+	/* suppress NOTICE if running under pg vanilla tests */
+	SetLocalClientMinMessagesIfRunningPGTests(WARNING);
+
+	List *funcAddresses = FunctionToObjectAddress(objectType, objectWithArgs, missing_ok);
+
+	/* set it back */
+	SetLocalClientMinMessagesIfRunningPGTests(OldClientMinMessage);
+
+	return funcAddresses;
 }
 
 

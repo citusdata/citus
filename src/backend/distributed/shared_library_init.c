@@ -596,6 +596,21 @@ StartupCitusBackend(void)
 
 
 /*
+ * GetCurrentClientMinMessageLevelName returns the name of the
+ * the GUC client_min_messages for its specified value.
+ */
+const char *
+GetClientMinMessageLevelNameForValue(int minMessageLevel)
+{
+	struct config_enum record = { 0 };
+	record.options = log_level_options;
+	const char *clientMinMessageLevelName = config_enum_lookup_by_value(&record,
+																		minMessageLevel);
+	return clientMinMessageLevelName;
+}
+
+
+/*
  * RegisterConnectionCleanup cleans up any resources left at the end of the
  * session. We prefer to cleanup before shared memory exit to make sure that
  * this session properly releases anything hold in the shared memory.
