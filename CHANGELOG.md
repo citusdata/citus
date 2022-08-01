@@ -12,7 +12,7 @@
 * Fixes a concurrency bug between creating a co-located distributed table and
   shard moves
 
-* Fixes a crash that can happen due to catalog read in shmem_exit
+* Fixes a crash that can happen due to catalog read in `shmem_exit`
 
 * Fixes an unexpected error caused by constraints when moving shards
 
