@@ -63,7 +63,8 @@ static void CreateAndCopySplitShardsForShardGroup(
 static void CreateSplitShardsForShardGroup(HTAB *mapOfShardToPlacementCreatedByWorkflow,
 										   List *shardGroupSplitIntervalListList,
 										   List *workersForPlacementList);
-static void CreateDummyShardsForShardGroup(List *sourceColocatedShardIntervalList,
+static void CreateDummyShardsForShardGroup(HTAB *mapOfDummyShardToPlacement,
+										   List *sourceColocatedShardIntervalList,
 										   List *shardGroupSplitIntervalListList,
 										   WorkerNode *sourceWorkerNode,
 										   List *workersForPlacementList);
@@ -71,7 +72,8 @@ static HTAB * CreateWorkerForPlacementSet(List *workersForPlacementList);
 static void CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
 												   List *workersForPlacementList,
 												   bool includeReplicaIdentity);
-static void CreateReplicaIdentities(List *shardGroupSplitIntervalListList,
+static void CreateReplicaIdentities(HTAB *mapOfDummyShardToPlacement,
+									List *shardGroupSplitIntervalListList,
 									List *workersForPlacementList);
 static void CreateObjectOnPlacement(List *objectCreationCommandList,
 									WorkerNode *workerNode);
@@ -120,8 +122,9 @@ static List * ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 												   List *sourceColocatedShardIntervalList,
 												   List *shardGroupSplitIntervalListList,
 												   List *destinationWorkerNodesList);
-static void AddDummyShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval);
-static void DropDummyShards(void);
+static void AddDummyShardEntryInMap(HTAB *mapOfDummyShards, uint32 targetNodeId,
+									ShardInterval *shardInterval);
+static void DropDummyShards(HTAB *mapOfDummyShardToPlacement);
 static void DropDummyShard(MultiConnection *connection, ShardInterval *shardInterval);
 
 
@@ -136,13 +139,6 @@ static const char *const SplitTargetName[] =
 	[SHARD_SPLIT_API] = "shard",
 	[ISOLATE_TENANT_TO_NEW_SHARD] = "tenant",
 };
-
-/*
- * Map containing list of dummy shards created on target nodes.
- * Key - <nodeId, tableOwnerId>
- * Value - ShardInterval
- */
-static HTAB *DummyShardInfoHashMap = NULL;
 
 /* Function definitions */
 
@@ -1258,7 +1254,6 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 {
 	char *superUser = CitusExtensionOwnerName();
 	char *databaseName = get_database_name(MyDatabaseId);
-	int connectionFlags = FORCE_NEW_CONNECTION;
 
 	List *sourceColocatedShardIntervalList = ColocatedShardIntervalList(
 		shardIntervalToSplit);
@@ -1279,6 +1274,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 
 	DropAllShardSplitLeftOvers(sourceShardToCopyNode, shardSplitHashMapForPublication);
 
+	int connectionFlags = FORCE_NEW_CONNECTION;
 	MultiConnection *sourceConnection = GetNodeUserDatabaseConnection(connectionFlags,
 																	  sourceShardToCopyNode
 																	  ->
@@ -1292,6 +1288,8 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 
 	HTAB *mapOfShardToPlacementCreatedByWorkflow =
 		CreateEmptyMapForShardsCreatedByWorkflow();
+
+	HTAB *mapOfDummyShardToPlacement = SetupHashMapForShardInfo();
 
 	/* Non-Blocking shard split workflow starts here */
 	PG_TRY();
@@ -1307,12 +1305,14 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		 *    information.
 		 */
 		CreateDummyShardsForShardGroup(
+			mapOfDummyShardToPlacement,
 			sourceColocatedShardIntervalList,
 			shardGroupSplitIntervalListList,
 			sourceShardToCopyNode,
 			workersForPlacementList);
 
-		CreateReplicaIdentities(shardGroupSplitIntervalListList, workersForPlacementList);
+		CreateReplicaIdentities(mapOfDummyShardToPlacement,
+								shardGroupSplitIntervalListList, workersForPlacementList);
 
 
 		/* 3) Create Publications. */
@@ -1426,7 +1426,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 
 		/* 21) Drop dummy shards.
 		 * TODO(saawasek):Refactor and pass hashmap.Currently map is global variable */
-		DropDummyShards();
+		DropDummyShards(mapOfDummyShardToPlacement);
 
 
 		/* 22) Close source connection */
@@ -1447,7 +1447,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		DropAllShardSplitLeftOvers(sourceShardToCopyNode,
 								   shardSplitHashMapForPublication);
 
-		DropDummyShards();
+		DropDummyShards(mapOfDummyShardToPlacement);
 
 		PG_RE_THROW();
 	}
@@ -1478,17 +1478,12 @@ NonBlockingShardSplit(SplitOperation splitOperation,
  * Note 2 : Given there is an overlap of source and destination in Worker0, Shard1_1 and Shard2_1 need not be created.
  */
 static void
-CreateDummyShardsForShardGroup(List *sourceColocatedShardIntervalList,
+CreateDummyShardsForShardGroup(HTAB *mapOfDummyShardToPlacement,
+							   List *sourceColocatedShardIntervalList,
 							   List *shardGroupSplitIntervalListList,
 							   WorkerNode *sourceWorkerNode,
 							   List *workersForPlacementList)
 {
-	/*
-	 * Setup a hash map to store list of dummy shards created on nodes.
-	 * This will facilitate easy cleanup.
-	 */
-	DummyShardInfoHashMap = SetupHashMapForShardInfo();
-
 	/*
 	 * Statisfy Constraint 1: Create dummy source shard(s) on all destination nodes.
 	 * If source node is also in desintation, skip dummy shard creation(see Note 1 from function description).
@@ -1524,7 +1519,9 @@ CreateDummyShardsForShardGroup(List *sourceColocatedShardIntervalList,
 			CreateObjectOnPlacement(splitShardCreationCommandList, workerPlacementNode);
 
 			/* Add dummy source shard entry created for placement node in map */
-			AddDummyShardEntryInMap(workerPlacementNode->nodeId, shardInterval);
+			AddDummyShardEntryInMap(mapOfDummyShardToPlacement,
+									workerPlacementNode->nodeId,
+									shardInterval);
 		}
 	}
 
@@ -1557,12 +1554,16 @@ CreateDummyShardsForShardGroup(List *sourceColocatedShardIntervalList,
 			CreateObjectOnPlacement(splitShardCreationCommandList, sourceWorkerNode);
 
 			/* Add dummy split child shard entry created on source node */
-			AddDummyShardEntryInMap(sourceWorkerNode->nodeId, shardInterval);
+			AddDummyShardEntryInMap(mapOfDummyShardToPlacement, sourceWorkerNode->nodeId,
+									shardInterval);
 		}
 	}
 }
 
 
+/*
+ * CreateWorkerForPlacementSet returns a set with unique worker nodes.
+ */
 static HTAB *
 CreateWorkerForPlacementSet(List *workersForPlacementList)
 {
@@ -1813,7 +1814,8 @@ ParseReplicationSlotInfoFromResult(PGresult *result)
  * of logical replication. We cautiously delete only the dummy shards added in the DummyShardHashMap.
  */
 static void
-AddDummyShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval)
+AddDummyShardEntryInMap(HTAB *mapOfDummyShardToPlacement, uint32 targetNodeId,
+						ShardInterval *shardInterval)
 {
 	NodeShardMappingKey key;
 	key.nodeId = targetNodeId;
@@ -1821,7 +1823,8 @@ AddDummyShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval)
 
 	bool found = false;
 	NodeShardMappingEntry *nodeMappingEntry =
-		(NodeShardMappingEntry *) hash_search(DummyShardInfoHashMap, &key, HASH_ENTER,
+		(NodeShardMappingEntry *) hash_search(mapOfDummyShardToPlacement, &key,
+											  HASH_ENTER,
 											  &found);
 	if (!found)
 	{
@@ -1834,16 +1837,10 @@ AddDummyShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval)
 
 
 static void
-DropDummyShards()
+DropDummyShards(HTAB *mapOfDummyShardToPlacement)
 {
-	/* Return if no dummy shards are created */
-	if (DummyShardInfoHashMap == NULL)
-	{
-		return;
-	}
-
 	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, DummyShardInfoHashMap);
+	hash_seq_init(&status, mapOfDummyShardToPlacement);
 
 	NodeShardMappingEntry *entry = NULL;
 	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
@@ -1899,7 +1896,8 @@ DropDummyShard(MultiConnection *connection, ShardInterval *shardInterval)
 
 /*todo(saawasek): Add comments */
 static void
-CreateReplicaIdentities(List *shardGroupSplitIntervalListList,
+CreateReplicaIdentities(HTAB *mapOfDummyShardToPlacement,
+						List *shardGroupSplitIntervalListList,
 						List *workersForPlacementList)
 {
 	/*
@@ -1928,7 +1926,7 @@ CreateReplicaIdentities(List *shardGroupSplitIntervalListList,
 
 	/*todo: remove the global variable dummy map*/
 	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, DummyShardInfoHashMap);
+	hash_seq_init(&status, mapOfDummyShardToPlacement);
 
 	NodeShardMappingEntry *entry = NULL;
 	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)

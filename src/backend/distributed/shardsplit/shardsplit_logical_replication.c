@@ -2,7 +2,7 @@
  *
  * shardsplit_logical_replication.c
  *
- * Function definitions for logically replicating split children.
+ * Function definitions for logically replicating shard to split children.
  *
  * Copyright (c) Citus Data, Inc.
  *
@@ -433,11 +433,7 @@ DropExistingIfAnyAndCreateTemplateReplicationSlot(ShardInterval *shardIntervalTo
 	PQclear(result);
 	ForgetResults(sourceConnection);
 
-	/*
-	 * Note: Temporary slot are only live during the session's lifetime causing them to be dropped when the session ends.
-	 */
 	StringInfo createReplicationSlotCommand = makeStringInfo();
-
 	appendStringInfo(createReplicationSlotCommand,
 					 "CREATE_REPLICATION_SLOT %s LOGICAL citus EXPORT_SNAPSHOT;",
 					 ShardSplitTemplateReplicationSlotName(
@@ -587,7 +583,7 @@ void
 DropAllShardSplitSubscriptions(MultiConnection *cleanupConnection)
 {
 	char *query = psprintf(
-		"SELECT subname FROM pg_subscription "
+		"SELECT subname FROM pg_catalog.pg_subscription "
 		"WHERE subname LIKE %s || '%%'",
 		quote_literal_cstr(SHARD_SPLIT_SUBSCRIPTION_PREFIX));
 	List *subscriptionNameList = GetQueryResultStringList(cleanupConnection, query);
@@ -608,7 +604,7 @@ static void
 DropAllShardSplitPublications(MultiConnection *connection)
 {
 	char *query = psprintf(
-		"SELECT pubname FROM pg_publication "
+		"SELECT pubname FROM pg_catalog.pg_publication "
 		"WHERE pubname LIKE %s || '%%'",
 		quote_literal_cstr(SHARD_SPLIT_PUBLICATION_PREFIX));
 	List *publicationNameList = GetQueryResultStringList(connection, query);
@@ -628,7 +624,7 @@ static void
 DropAllShardSplitUsers(MultiConnection *connection)
 {
 	char *query = psprintf(
-		"SELECT rolname FROM pg_roles "
+		"SELECT rolname FROM pg_catalog.pg_roles "
 		"WHERE rolname LIKE %s || '%%'",
 		quote_literal_cstr(SHARD_SPLIT_SUBSCRIPTION_ROLE_PREFIX));
 	List *usernameList = GetQueryResultStringList(connection, query);
@@ -649,7 +645,7 @@ static void
 DropAllShardSplitReplicationSlots(MultiConnection *cleanupConnection)
 {
 	char *query = psprintf(
-		"SELECT slot_name FROM pg_replication_slots "
+		"SELECT slot_name FROM pg_catalog.pg_replication_slots "
 		"WHERE slot_name LIKE %s || '%%'",
 		quote_literal_cstr(SHARD_SPLIT_REPLICATION_SLOT_PREFIX));
 	List *slotNameList = GetQueryResultStringList(cleanupConnection, query);

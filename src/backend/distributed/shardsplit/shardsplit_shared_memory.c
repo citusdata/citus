@@ -25,9 +25,6 @@ const char *SharedMemoryNameForHandleManagement =
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
-static
-void ShardSplitShmemInit(void);
-
 /* Function declarations */
 static ShardSplitInfoSMHeader * AllocateSharedMemoryForShardSplitInfo(int
 																	  shardSplitInfoCount,
@@ -35,9 +32,10 @@ static ShardSplitInfoSMHeader * AllocateSharedMemoryForShardSplitInfo(int
 																	  shardSplitInfoSize,
 																	  dsm_handle *
 																	  dsmHandle);
-
 static ShardSplitInfoSMHeader * GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle
 																	   dsmHandle);
+static dsm_handle GetShardSplitSharedMemoryHandle(void);
+static void ShardSplitShmemInit(void);
 
 /*
  * GetShardSplitInfoSMHeaderFromDSMHandle returns the header of the shared memory

@@ -14,7 +14,23 @@
 #ifndef SHARDSPLIT_SHARED_MEMORY_H
 #define SHARDSPLIT_SHARED_MEMORY_H
 
-#include "distributed/shard_split.h"
+/*
+ * In-memory mapping of a split child shard.
+ */
+typedef struct ShardSplitInfo
+{
+	Oid distributedTableOid;     /* citus distributed table Oid */
+	int partitionColumnIndex;    /* partition column index */
+	Oid sourceShardOid;          /* parent shard Oid */
+	Oid splitChildShardOid;      /* child shard Oid */
+	int32 shardMinValue;         /* min hash value */
+	int32 shardMaxValue;         /* max hash value */
+	uint32_t nodeId;             /* node where child shard is to be placed */
+	uint64 sourceShardId;        /* parent shardId */
+	uint64 splitChildShardId;        /* child shardId*/
+	char slotName[NAMEDATALEN];  /* replication slot name belonging to this node */
+} ShardSplitInfo;
+
 
 /*
  * Header of the shared memory segment where shard split information is stored.
@@ -52,7 +68,6 @@ typedef struct ShardSplitShmemData
 void InitializeShardSplitSMHandleManagement(void);
 
 void StoreShardSplitSharedMemoryHandle(dsm_handle dsmHandle);
-dsm_handle GetShardSplitSharedMemoryHandle(void);
 
 /* Functions for creating and accessing shared memory segments consisting shard split information */
 extern ShardSplitInfoSMHeader * CreateSharedMemoryForShardSplitInfo(int
@@ -65,5 +80,5 @@ extern ShardSplitInfoSMHeader *  GetShardSplitInfoSMHeader(void);
 extern HTAB * PopulateSourceToDestinationShardMapForSlot(char *slotName, MemoryContext
 														 cxt);
 
-char * encode_replication_slot(uint32_t nodeId, uint32_t tableOwnerId);
+extern char * encode_replication_slot(uint32_t nodeId, uint32_t tableOwnerId);
 #endif /* SHARDSPLIT_SHARED_MEMORY_H */

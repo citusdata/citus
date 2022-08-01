@@ -48,10 +48,9 @@ static ShardSplitInfo * CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 											 int32 maxValue,
 											 int32 nodeId);
 static void AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo);
-static void PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader,
-									   HTAB *shardInfoHashMap);
+static void PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader);
 
-static void ReturnReplicationSlotInfo(HTAB *shardInfoHashMap, Tuplestorestate *tupleStore,
+static void ReturnReplicationSlotInfo(Tuplestorestate *tupleStore,
 									  TupleDesc tupleDescriptor);
 
 /*
@@ -62,18 +61,20 @@ static void ReturnReplicationSlotInfo(HTAB *shardInfoHashMap, Tuplestorestate *t
  * This meta information is stored in a shared memory segment and accessed
  * by logical decoding plugin.
  *
- * Split information is given by user as an Array of custom data type 'citus.split_shard_info'.
- * (worker_split_shard_replication_setup(citus.split_shard_info[]))
+ * Split information is given by user as an Array of custom data type 'pg_catalog.split_shard_info'.
+ * (worker_split_shard_replication_setup(pg_catalog.split_shard_info[]))
  *
- * Fields of custom data type 'citus.split_shard_info':
+ * Fields of custom data type 'pg_catalog.split_shard_info':
  * source_shard_id - id of the shard that is undergoing a split
+ *
+ * distribution_column - Distribution column name
  *
  * child_shard_id  - id of shard that stores a specific range of values
  *                   belonging to sourceShardId(parent)
  *
- * shard_min_value - lower bound(inclusive) of hash value which childShard stores.
+ * shard_min_value - Lower bound(inclusive) of hash value which childShard stores
  *
- * shard_max_value - upper bound(inclusive) of hash value which childShard stores
+ * shard_max_value - Upper bound(inclusive) of hash value which childShard stores
  *
  * node_id         - Node where the childShardId is located
  *
@@ -81,7 +82,7 @@ static void ReturnReplicationSlotInfo(HTAB *shardInfoHashMap, Tuplestorestate *t
  * <nodeId, tableOwner> pair. Multiple shards can be placed on the same destination node.
  * Source and destination nodes can be same too.
  *
- * There is a 1-1 mapping between a table owner and a replication slot. One replication
+ * There is a 1-1 mapping between a (table owner, node) and replication slot. One replication
  * slot takes care of replicating changes for all shards belonging to the same owner on a particular node.
  *
  * During the replication phase, WAL senders will attach to the shared memory
@@ -140,15 +141,14 @@ worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
 	ShardSplitInfoSMHeader *splitShardInfoSMHeader =
 		CreateSharedMemoryForShardSplitInfo(shardSplitInfoCount, &dsmHandle);
 
-	PopulateShardSplitInfoInSM(splitShardInfoSMHeader,
-							   ShardInfoHashMap);
+	PopulateShardSplitInfoInSM(splitShardInfoSMHeader);
 
 	/* store handle in statically allocated shared memory*/
 	StoreShardSplitSharedMemoryHandle(dsmHandle);
 
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
-	ReturnReplicationSlotInfo(ShardInfoHashMap, tupleStore, tupleDescriptor);
+	ReturnReplicationSlotInfo(tupleStore, tupleDescriptor);
 
 	PG_RETURN_VOID();
 }
@@ -184,7 +184,7 @@ SetupHashMapForShardInfo()
  *
  * sourceShardIdToSplit - Existing shardId which has a valid entry in cache and catalogue
  * partitionColumnName  - Name of column to use for partitioning
- * desSplitChildShardId - New split child shard which doesn't have an entry in metacache yet.
+ * desSplitChildShardId - New split child shard which doesn't have an entry in metacache yet
  * minValue				- Minimum hash value for desSplitChildShardId
  * maxValue				- Maximum hash value for desSplitChildShardId
  * nodeId				- NodeId where
@@ -291,16 +291,12 @@ AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo)
  * process during logical replication.
  *
  * shardSplitInfoSMHeader - Shared memory header
- *
- * shardInfoHashMap    - Hashmap containing parsed split information
- *                       per nodeId wise
  */
 static void
-PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader,
-						   HTAB *shardInfoHashMap)
+PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader)
 {
 	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, shardInfoHashMap);
+	hash_seq_init(&status, ShardInfoHashMap);
 
 	NodeShardMappingEntry *entry = NULL;
 	int splitInfoIndex = 0;
@@ -360,6 +356,10 @@ NodeShardMappingHashCompare(const void *left, const void *right, Size keysize)
 }
 
 
+/*
+ * ParseShardSplitInfoFromDatum deserializes individual fields of 'pg_catalog.split_shard_info'
+ * datatype.
+ */
 static void
 ParseShardSplitInfoFromDatum(Datum shardSplitInfoDatum,
 							 uint64 *sourceShardId,
@@ -421,12 +421,18 @@ ParseShardSplitInfoFromDatum(Datum shardSplitInfoDatum,
 }
 
 
+/*
+ * ReturnReplicationSlotInfo writes 'pg_catalog.replication_slot_info'
+ * records to tuplestore.
+ * This information is used by the coordinator to create replication slots as a
+ * part of non-blocking split workflow.
+ */
 static void
-ReturnReplicationSlotInfo(HTAB *shardInfoHashMap, Tuplestorestate *tupleStore, TupleDesc
+ReturnReplicationSlotInfo(Tuplestorestate *tupleStore, TupleDesc
 						  tupleDescriptor)
 {
 	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, shardInfoHashMap);
+	hash_seq_init(&status, ShardInfoHashMap);
 
 	NodeShardMappingEntry *entry = NULL;
 	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)

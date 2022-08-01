@@ -14,13 +14,6 @@
 #include "replication/logical.h"
 #include "utils/typcache.h"
 
-/*
- * Dynamically-loaded modules are required to include this macro call to check for
- * incompatibility (such as being compiled for a different major PostgreSQL version etc).
- * In a multiple source-file module, the macro call should only appear once.
- */
-PG_MODULE_MAGIC;
-
 extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
 static LogicalDecodeChangeCB pgoutputChangeCB;
 

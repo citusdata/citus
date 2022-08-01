@@ -2,7 +2,7 @@
  *
  * shardsplit_logical_replication.h
  *
- * Function declarations for logically replicating split children.
+ * Function declarations for logically replicating shard to split children.
  *
  * Copyright (c) Citus Data, Inc.
  *

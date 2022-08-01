@@ -29,22 +29,6 @@ typedef enum SplitOperation
 	ISOLATE_TENANT_TO_NEW_SHARD
 } SplitOperation;
 
-/*
- * In-memory mapping of a split child shard.
- */
-typedef struct ShardSplitInfo
-{
-	Oid distributedTableOid;     /* citus distributed table Oid */
-	int partitionColumnIndex;    /* partition column index */
-	Oid sourceShardOid;          /* parent shard Oid */
-	Oid splitChildShardOid;      /* child shard Oid */
-	int32 shardMinValue;         /* min hash value */
-	int32 shardMaxValue;         /* max hash value */
-	uint32_t nodeId;             /* node where child shard is to be placed */
-	uint64 sourceShardId;        /* parent shardId */
-	uint64 splitChildShardId;        /* child shardId*/
-	char slotName[NAMEDATALEN];  /* replication slot name belonging to this node */
-} ShardSplitInfo;
 
 /*
  * SplitShard API to split a given shard (or shard group) using split mode and
