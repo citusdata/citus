@@ -13,9 +13,9 @@ SET client_min_messages TO ERROR;
 CREATE PUBLICATION pub1 for table table_to_split_1, table_to_split_2, table_to_split_3;
 
 -- Worker1 is target for table_to_split_2 and table_to_split_3
-SELECT count(*) FROM worker_split_shard_replication_setup(ARRAY[
-    ROW(1, 'id', 2, '-2147483648', '-1', :worker_1_node)::citus.split_shard_info,
-    ROW(1, 'id', 3, '0', '2147483647', :worker_1_node)::citus.split_shard_info
+SELECT count(*) FROM pg_catalog.worker_split_shard_replication_setup(ARRAY[
+    ROW(1, 'id', 2, '-2147483648', '-1', :worker_1_node)::pg_catalog.split_shard_info,
+    ROW(1, 'id', 3, '0', '2147483647', :worker_1_node)::pg_catalog.split_shard_info
     ]);
 
 SELECT slot_name AS local_slot FROM pg_create_logical_replication_slot(FORMAT('citus_shard_split_%s_10', :worker_1_node), 'citus') \gset

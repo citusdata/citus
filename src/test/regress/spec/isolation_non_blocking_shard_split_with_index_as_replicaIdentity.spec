@@ -13,7 +13,7 @@ setup
 
 teardown
 {
-    DROP TABLE to_split_table CASCADE; 
+    DROP TABLE to_split_table CASCADE;
 }
 
 

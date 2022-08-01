@@ -199,7 +199,7 @@ typedef struct MultiConnection
 	uint64 copyBytesWrittenSinceLastFlush;
 
 	/* replication option */
-	bool requiresReplicationOption;
+	bool requiresReplication;
 
 	MultiConnectionStructInitializationState initilizationState;
 } MultiConnection;

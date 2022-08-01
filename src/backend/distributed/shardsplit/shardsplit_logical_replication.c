@@ -505,17 +505,8 @@ CreateReplicationSlots(MultiConnection *sourceNodeConnection, char *templateSlot
 						 "SELECT * FROM  pg_copy_logical_replication_slot ('%s','%s')",
 						 templateSlotName, slotName);
 
-		PGresult *result = NULL;
-		int response = ExecuteOptionalRemoteCommand(sourceNodeConnection,
-													createReplicationSlotCommand->data,
-													&result);
-		if (response != RESPONSE_OKAY || !IsResponseOK(result) || PQntuples(result) != 1)
-		{
-			ReportResultError(sourceNodeConnection, result, ERROR);
-		}
-
-		PQclear(result);
-		ForgetResults(sourceNodeConnection);
+		ExecuteCriticalRemoteCommand(sourceNodeConnection,
+									 createReplicationSlotCommand->data);
 	}
 }
 
@@ -665,7 +656,7 @@ DropAllShardSplitReplicationSlots(MultiConnection *cleanupConnection)
 	char *slotName;
 	foreach_ptr(slotName, slotNameList)
 	{
-		DropShardMoveReplicationSlot(cleanupConnection, slotName);
+		DropShardReplicationSlot(cleanupConnection, slotName);
 	}
 }
 

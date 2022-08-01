@@ -1079,19 +1079,19 @@ DropShardMovePublications(MultiConnection *connection, Bitmapset *tableOwnerIds)
 		 * If replication slot can not be dropped while dropping the subscriber, drop
 		 * it here.
 		 */
-		DropShardMoveReplicationSlot(connection, ShardSubscriptionName(ownerId,
-																	   SHARD_MOVE_SUBSCRIPTION_PREFIX));
+		DropShardReplicationSlot(connection, ShardSubscriptionName(ownerId,
+																   SHARD_MOVE_SUBSCRIPTION_PREFIX));
 		DropShardPublication(connection, ShardMovePublicationName(ownerId));
 	}
 }
 
 
 /*
- * DropShardMoveReplicationSlot drops the replication slot with the given name
+ * DropShardReplicationSlot drops the replication slot with the given name
  * if it exists.
  */
 void
-DropShardMoveReplicationSlot(MultiConnection *connection, char *replicationSlotName)
+DropShardReplicationSlot(MultiConnection *connection, char *replicationSlotName)
 {
 	ExecuteCriticalRemoteCommand(
 		connection,
@@ -1271,7 +1271,7 @@ DropAllShardMoveReplicationSlots(MultiConnection *connection)
 	char *slotName;
 	foreach_ptr(slotName, slotNameList)
 	{
-		DropShardMoveReplicationSlot(connection, slotName);
+		DropShardReplicationSlot(connection, slotName);
 	}
 }
 
@@ -1469,6 +1469,10 @@ CreateShardMoveSubscriptions(MultiConnection *connection, char *sourceNodeName,
 		/*
 		 * The CREATE USER command should not propagate, so we temporarily
 		 * disable DDL propagation.
+		 *
+		 * Subscription workers have SUPERUSER permissions. Hence we temporarily
+		 * create a user with SUPERUSER permissions and then alter it to NOSUPERUSER.
+		 * This prevents permission escalations.
 		 */
 		SendCommandListToWorkerOutsideTransaction(
 			connection->hostname, connection->port, connection->user,

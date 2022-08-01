@@ -37,8 +37,8 @@ extern void DropShardSubscription(MultiConnection *connection,
 extern void DropShardPublication(MultiConnection *connection, char *publicationName);
 
 extern void DropShardUser(MultiConnection *connection, char *username);
-extern void DropShardMoveReplicationSlot(MultiConnection *connection,
-										 char *publicationName);
+extern void DropShardReplicationSlot(MultiConnection *connection,
+									 char *publicationName);
 
 
 extern char * ShardSubscriptionRole(Oid ownerId, char *operationPrefix);

@@ -675,7 +675,7 @@ CloseConnection(MultiConnection *connection)
 
 	strlcpy(key.hostname, connection->hostname, MAX_NODE_LENGTH);
 	key.port = connection->port;
-	key.replicationConnParam = connection->requiresReplicationOption;
+	key.replicationConnParam = connection->requiresReplication;
 	strlcpy(key.user, connection->user, NAMEDATALEN);
 	strlcpy(key.database, connection->database, NAMEDATALEN);
 
@@ -1262,7 +1262,7 @@ StartConnectionEstablishment(MultiConnection *connection, ConnectionHashKey *key
 	connection->port = key->port;
 	strlcpy(connection->database, key->database, NAMEDATALEN);
 	strlcpy(connection->user, key->user, NAMEDATALEN);
-	connection->requiresReplicationOption = key->replicationConnParam;
+	connection->requiresReplication = key->replicationConnParam;
 
 	connection->pgConn = PQconnectStartParams((const char **) entry->keywords,
 											  (const char **) entry->values,

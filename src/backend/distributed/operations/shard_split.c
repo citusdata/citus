@@ -88,7 +88,6 @@ static void NonBlockingShardSplit(SplitOperation splitOperation,
 								  ShardInterval *shardIntervalToSplit,
 								  List *shardSplitPointsList,
 								  List *workersForPlacementList);
-
 static void DoSplitCopy(WorkerNode *sourceShardNode,
 						List *sourceColocatedShardIntervalList,
 						List *shardGroupSplitIntervalListList,
@@ -97,6 +96,8 @@ static void DoSplitCopy(WorkerNode *sourceShardNode,
 static StringInfo CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 										 List *splitChildrenShardIntervalList,
 										 List *workersForPlacementList);
+static Task * CreateSplitCopyTask(StringInfo splitCopyUdfCommand, char *snapshotName, int
+								  taskId, uint64 jobId);
 static void InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 											 List *workersForPlacementList);
 static void CreatePartitioningHierarchy(List *shardGroupSplitIntervalListList,
@@ -106,7 +107,6 @@ static void CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 static void TryDropSplitShardsOnFailure(HTAB *mapOfShardToPlacementCreatedByWorkflow);
 static HTAB * CreateEmptyMapForShardsCreatedByWorkflow();
 static Task * CreateTaskForDDLCommandList(List *ddlCommandList, WorkerNode *workerNode);
-
 static StringInfo CreateSplitShardReplicationSetupUDF(
 	List *sourceColocatedShardIntervalList, List *shardGroupSplitIntervalListList,
 	List *destinationWorkerNodesList);
@@ -122,7 +122,7 @@ static List * ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 												   List *destinationWorkerNodesList);
 static void AddDummyShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval);
 static void DropDummyShards(void);
-static void TryDroppingShard(MultiConnection *connection, ShardInterval *shardInterval);
+static void DropDummyShard(MultiConnection *connection, ShardInterval *shardInterval);
 
 
 /* Customize error message strings based on operation type */
@@ -137,7 +137,11 @@ static const char *const SplitTargetName[] =
 	[ISOLATE_TENANT_TO_NEW_SHARD] = "tenant",
 };
 
-/* Map containing list of dummy shards created on target nodes */
+/*
+ * Map containing list of dummy shards created on target nodes.
+ * Key - <nodeId, tableOwnerId>
+ * Value - ShardInterval
+ */
 static HTAB *DummyShardInfoHashMap = NULL;
 
 /* Function definitions */
@@ -724,8 +728,10 @@ CreateAndCopySplitShardsForShardGroup(HTAB *mapOfShardToPlacementCreatedByWorkfl
 								   shardGroupSplitIntervalListList,
 								   workersForPlacementList);
 
+	/* For Blocking split, copy isn't snapshotted */
+	char *snapshotName = NULL;
 	DoSplitCopy(sourceShardNode, sourceColocatedShardIntervalList,
-				shardGroupSplitIntervalListList, workersForPlacementList, NULL);
+				shardGroupSplitIntervalListList, workersForPlacementList, snapshotName);
 
 	/* Create auxiliary structures (indexes, stats, replicaindentities, triggers) */
 	CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
@@ -766,42 +772,13 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 				splitShardIntervalList,
 				destinationWorkerNodesList);
 
-			/*
-			 * TODO(saawasek):1)Potentially refactor query list into a different method.
-			 * 2) Assign Distributed Txn(confirm)?
-			 */
-			List *ddlCommandList = NIL;
-			StringInfo beginTransaction = makeStringInfo();
-			appendStringInfo(beginTransaction,
-							 "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;");
-			ddlCommandList = lappend(ddlCommandList, beginTransaction->data);
-
-			/* Set snapshot for non-blocking shard split. */
-			if (snapShotName != NULL)
-			{
-				StringInfo snapShotString = makeStringInfo();
-				appendStringInfo(snapShotString, "SET TRANSACTION SNAPSHOT %s;",
-								 quote_literal_cstr(
-									 snapShotName));
-				ddlCommandList = lappend(ddlCommandList, snapShotString->data);
-			}
-
-			ddlCommandList = lappend(ddlCommandList, splitCopyUdfCommand->data);
-
-			StringInfo commitCommand = makeStringInfo();
-			appendStringInfo(commitCommand, "COMMIT;");
-			ddlCommandList = lappend(ddlCommandList, commitCommand->data);
-
-			Task *splitCopyTask = CitusMakeNode(Task);
-			splitCopyTask->jobId = sourceShardIntervalToCopy->shardId;
-			splitCopyTask->taskId = taskId;
-			splitCopyTask->taskType = READ_TASK;
-			splitCopyTask->replicationModel = REPLICATION_MODEL_INVALID;
-			SetTaskQueryStringList(splitCopyTask, ddlCommandList);
+			/* Create copy task. Snapshot name is required for nonblocking splits */
+			Task *splitCopyTask = CreateSplitCopyTask(splitCopyUdfCommand, snapShotName,
+													  taskId,
+													  sourceShardIntervalToCopy->shardId);
 
 			ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
 			SetPlacementNodeMetadata(taskPlacement, sourceShardNode);
-
 			splitCopyTask->taskPlacementList = list_make1(taskPlacement);
 
 			splitCopyTaskList = lappend(splitCopyTaskList, splitCopyTask);
@@ -875,6 +852,43 @@ CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 					 splitCopyInfoArray->data);
 
 	return splitCopyUdf;
+}
+
+
+static Task *
+CreateSplitCopyTask(StringInfo splitCopyUdfCommand, char *snapshotName, int taskId, uint64
+					jobId)
+{
+	List *ddlCommandList = NIL;
+	StringInfo beginTransaction = makeStringInfo();
+	appendStringInfo(beginTransaction,
+					 "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;");
+	ddlCommandList = lappend(ddlCommandList, beginTransaction->data);
+
+	/* Set snapshot for non-blocking shard split. */
+	if (snapshotName != NULL)
+	{
+		StringInfo snapShotString = makeStringInfo();
+		appendStringInfo(snapShotString, "SET TRANSACTION SNAPSHOT %s;",
+						 quote_literal_cstr(
+							 snapshotName));
+		ddlCommandList = lappend(ddlCommandList, snapShotString->data);
+	}
+
+	ddlCommandList = lappend(ddlCommandList, splitCopyUdfCommand->data);
+
+	StringInfo commitCommand = makeStringInfo();
+	appendStringInfo(commitCommand, "COMMIT;");
+	ddlCommandList = lappend(ddlCommandList, commitCommand->data);
+
+	Task *splitCopyTask = CitusMakeNode(Task);
+	splitCopyTask->jobId = jobId;
+	splitCopyTask->taskId = taskId;
+	splitCopyTask->taskType = READ_TASK;
+	splitCopyTask->replicationModel = REPLICATION_MODEL_INVALID;
+	SetTaskQueryStringList(splitCopyTask, ddlCommandList);
+
+	return splitCopyTask;
 }
 
 
@@ -1231,10 +1245,10 @@ TryDropSplitShardsOnFailure(HTAB *mapOfShardToPlacementCreatedByWorkflow)
 /*
  * SplitShard API to split a given shard (or shard group) in non-blocking fashion
  * based on specified split points to a set of destination nodes.
- * 'splitOperation'             : Customer operation that triggered split.
- * 'shardIntervalToSplit'       : Source shard interval to be split.
- * 'shardSplitPointsList'		: Split Points list for the source 'shardInterval'.
- * 'workersForPlacementList'	: Placement list corresponding to split children.
+ * splitOperation             : Customer operation that triggered split.
+ * shardIntervalToSplit       : Source shard interval to be split.
+ * shardSplitPointsList		  : Split Points list for the source 'shardInterval'.
+ * workersForPlacementList	  : Placement list corresponding to split children.
  */
 static void
 NonBlockingShardSplit(SplitOperation splitOperation,
@@ -1254,13 +1268,8 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		sourceColocatedShardIntervalList,
 		shardSplitPointsList);
 
-	/* Only single placement allowed (already validated RelationReplicationFactor = 1) */
-	List *sourcePlacementList = ActiveShardPlacementList(shardIntervalToSplit->shardId);
-	Assert(sourcePlacementList->length == 1);
-	ShardPlacement *sourceShardPlacement = (ShardPlacement *) linitial(
-		sourcePlacementList);
-	WorkerNode *sourceShardToCopyNode = FindNodeWithNodeId(sourceShardPlacement->nodeId,
-														   false /* missingOk */);
+	WorkerNode *sourceShardToCopyNode = ActiveShardPlacementWorkerNode(
+		shardIntervalToSplit->shardId);
 
 	/* Create hashmap to group shards for publication-subscription management */
 	HTAB *shardSplitHashMapForPublication = CreateShardSplitInfoMapForPublication(
@@ -1636,7 +1645,7 @@ ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 		destinationWorkerNodesList);
 
 	/* Force a new connection to execute the UDF */
-	int connectionFlags = FORCE_NEW_CONNECTION;
+	int connectionFlags = 0;
 	MultiConnection *sourceConnection = GetNodeUserDatabaseConnection(connectionFlags,
 																	  sourceWorkerNode->
 																	  workerName,
@@ -1660,14 +1669,14 @@ ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 	if (queryResult != RESPONSE_OKAY || !IsResponseOK(result) || PQntuples(result) < 1 ||
 		PQnfields(result) != 3)
 	{
+		PQclear(result);
+		ForgetResults(sourceConnection);
+		CloseConnection(sourceConnection);
+
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
 						errmsg(
 							"Failed to run worker_split_shard_replication_setup UDF. It should successfully execute "
 							" for splitting a shard in a non-blocking way. Please retry.")));
-
-		PQclear(result);
-		ForgetResults(sourceConnection);
-		CloseConnection(sourceConnection);
 	}
 
 	/* Get replication slot information */
@@ -1740,7 +1749,7 @@ CreateSplitShardReplicationSetupUDF(List *sourceColocatedShardIntervalList,
 								 splitChildShardInterval->maxValue));
 
 			appendStringInfo(splitChildrenRows,
-							 "ROW(%lu, %s, %lu, %s, %s, %u)::citus.split_shard_info",
+							 "ROW(%lu, %s, %lu, %s, %s, %u)::pg_catalog.split_shard_info",
 							 sourceShardId,
 							 quote_literal_cstr(partitionColumnName),
 							 splitChildShardInterval->shardId,
@@ -1754,7 +1763,7 @@ CreateSplitShardReplicationSetupUDF(List *sourceColocatedShardIntervalList,
 
 	StringInfo splitShardReplicationUDF = makeStringInfo();
 	appendStringInfo(splitShardReplicationUDF,
-					 "SELECT * FROM worker_split_shard_replication_setup(ARRAY[%s]);",
+					 "SELECT * FROM pg_catalog.worker_split_shard_replication_setup(ARRAY[%s]);",
 					 splitChildrenRows->data);
 
 	return splitShardReplicationUDF;
@@ -1845,7 +1854,6 @@ DropDummyShards()
 
 		int connectionFlags = FOR_DDL;
 		connectionFlags |= OUTSIDE_TRANSACTION;
-		connectionFlags |= FORCE_NEW_CONNECTION;
 		MultiConnection *connection = GetNodeUserDatabaseConnection(
 			connectionFlags,
 			shardToBeDroppedNode->workerName,
@@ -1857,7 +1865,7 @@ DropDummyShards()
 		ShardInterval *shardInterval = NULL;
 		foreach_ptr(shardInterval, dummyShardIntervalList)
 		{
-			TryDroppingShard(connection, shardInterval);
+			DropDummyShard(connection, shardInterval);
 		}
 
 		CloseConnection(connection);
@@ -1866,10 +1874,11 @@ DropDummyShards()
 
 
 /*
- * TryDroppingShard drops a given shard on the source node connection.
+ * DropDummyShard drops a given shard on the node connection.
+ * It fails if the shard cannot be dropped.
  */
 static void
-TryDroppingShard(MultiConnection *connection, ShardInterval *shardInterval)
+DropDummyShard(MultiConnection *connection, ShardInterval *shardInterval)
 {
 	char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
 	StringInfo dropShardQuery = makeStringInfo();
@@ -1879,13 +1888,12 @@ TryDroppingShard(MultiConnection *connection, ShardInterval *shardInterval)
 					 qualifiedShardName);
 
 	/*
-	 * Perform a drop in best effort manner.
-	 * The shard may or may not exist and the connection could have died.
+	 * Since the dummy shard is expected to be present on the given node,
+	 * fail if it cannot be dropped during cleanup.
 	 */
-	ExecuteOptionalRemoteCommand(
+	ExecuteCriticalRemoteCommand(
 		connection,
-		dropShardQuery->data,
-		NULL /* pgResult */);
+		dropShardQuery->data);
 }
 
 
