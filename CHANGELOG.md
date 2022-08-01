@@ -1,3 +1,28 @@
+### citus v11.0.5 (August 1, 2022) ###
+
+* Avoids possible information leakage about existing users
+
+* Allows using `WITH HOLD` cursors with parameters
+
+* Fixes a bug that could cause failures in `INSERT INTO .. SELECT`
+
+* Fixes a bug that prevents pushing down `IN` expressions when using columnar
+  custom scan
+
+* Fixes a concurrency bug between creating a co-located distributed table and
+  shard moves
+
+* Fixes a crash that can happen due to catalog read in `shmem_exit`
+
+* Fixes an unexpected error caused by constraints when moving shards
+
+* Fixes an unexpected error for foreign tables when upgrading Postgres
+
+* Prevents adding local table into metadata if there is a view with circular
+  dependencies on it
+
+* Reduces memory consumption of index name fix for partitioned tables
+
 ### citus v11.0.4 (July 13, 2022) ###
 
 * Fixes a bug that prevents promoting read-replicas as primaries
