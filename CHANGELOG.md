@@ -9,7 +9,7 @@
 * Fixes a bug that prevents pushing down `IN` expressions when using columnar
   custom scan
 
-* Fixes a concurrency bug between creating co-located distributed table and
+* Fixes a concurrency bug between creating a co-located distributed table and
   shard moves
 
 * Fixes a crash that can happen due to catalog read in shmem_exit
