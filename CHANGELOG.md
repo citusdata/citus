@@ -10,6 +10,8 @@
   custom scan
 
 * Fixes a concurrency bug between creating co-located distributed table and
+
+* Fixes a crash that can happen due to catalog read in shmem_exit
   shard moves
 
 * Fixes an unexpected error caused by constraints when moving shards
