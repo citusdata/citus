@@ -60,14 +60,10 @@ SELECT create_reference_table('ref');
 
 CREATE INDEX CONCURRENTLY ref_concurrent_idx_x ON ref(x);
 CREATE INDEX CONCURRENTLY ref_concurrent_idx_y ON ref(x);
-SELECT substring(current_Setting('server_version'), '\d+')::int > 11 AS server_version_above_eleven
-\gset
-\if :server_version_above_eleven
 REINDEX INDEX CONCURRENTLY ref_concurrent_idx_x;
 REINDEX INDEX CONCURRENTLY ref_concurrent_idx_y;
 REINDEX TABLE CONCURRENTLY ref;
 REINDEX SCHEMA CONCURRENTLY test_schema;
-\endif
 SET search_path TO public;
 \set VERBOSITY TERSE
 DROP SCHEMA test_schema CASCADE;
