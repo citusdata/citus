@@ -2,7 +2,7 @@
 -- MULTI_COPY
 --
 -- directory paths are passed to us in environment variables
-\getenv abs_srcdir CITUS_ABS_SRCDIR
+\set abs_srcdir `echo $CITUS_ABS_SRCDIR`
 \set customer1datafile :abs_srcdir '/data/customer.1.data'
 \set customer2datafile :abs_srcdir '/data/customer.2.data'
 \set customer3datafile :abs_srcdir '/data/customer.3.data'
@@ -107,11 +107,7 @@ SELECT count(*) FROM customer_copy_hash WHERE c_custkey = 9;
 (1 row)
 
 -- Test server-side copy from file
--- \copy does not support variable interpolation. Hence we store and execute
--- the query in two steps for interpolation to kick in.
--- See https://stackoverflow.com/a/67642094/4576416 for details.
-\set client_side_copy_command '\\copy customer_copy_hash FROM ' :'customer3datafile' ' WITH (DELIMITER '''|''');'
-:client_side_copy_command
+COPY customer_copy_hash FROM :'customer2datafile' WITH (DELIMITER '|');
 -- Confirm that data was copied
 SELECT count(*) FROM customer_copy_hash;
  count
@@ -120,7 +116,11 @@ SELECT count(*) FROM customer_copy_hash;
 (1 row)
 
 -- Test client-side copy from file
-\copy customer_copy_hash FROM :'customer3datafile' WITH (DELIMITER '|');
+-- \copy does not support variable interpolation. Hence we store and execute
+-- the query in two steps for interpolation to kick in.
+-- See https://stackoverflow.com/a/67642094/4576416 for details.
+\set client_side_copy_command '\\copy customer_copy_hash FROM ' :'customer3datafile' ' WITH (DELIMITER '''|''');'
+:client_side_copy_command
 -- Confirm that data was copied
 SELECT count(*) FROM customer_copy_hash;
  count
@@ -370,9 +370,9 @@ SELECT count(*) FROM pg_dist_shard WHERE logicalrelid = 'lineitem_copy_append'::
 (1 row)
 
 -- trigger some errors on the append_to_shard option
-COPY lineitem_copy_append FROM :'lineitem1datafile' with (delimiter '|', append_to_shard 1);
+COPY lineitem_copy_append FROM :'lineitem1datafile' with (delimiter '|', append_to_shard xxxxx);
 ERROR:  could not find valid entry for shard xxxxx
-COPY lineitem_copy_append FROM :'lineitem1datafile' with (delimiter '|', append_to_shard 560000);
+COPY lineitem_copy_append FROM :'lineitem1datafile' with (delimiter '|', append_to_shard xxxxx);
 ERROR:  shard xxxxx does not belong to table lineitem_copy_append
 -- Test schema support on append partitioned tables
 CREATE SCHEMA append;

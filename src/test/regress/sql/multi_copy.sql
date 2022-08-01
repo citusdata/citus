@@ -3,7 +3,7 @@
 --
 
 -- directory paths are passed to us in environment variables
-\getenv abs_srcdir CITUS_ABS_SRCDIR
+\set abs_srcdir `echo $CITUS_ABS_SRCDIR`
 \set customer1datafile :abs_srcdir '/data/customer.1.data'
 \set customer2datafile :abs_srcdir '/data/customer.2.data'
 \set customer3datafile :abs_srcdir '/data/customer.3.data'
