@@ -347,18 +347,7 @@ ERROR:  relation "non_existent_table" does not exist at character 27
 CREATE TABLE local_table(a int);
 SELECT undistribute_table('local_table', cascade_via_foreign_keys=>true);
 ERROR:  cannot undistribute table because the table is not distributed
--- as pg < 12 doesn't support foreign keys between partitioned tables,
--- define below foreign key conditionally instead of adding another
--- test output
-DO $proc$
-BEGIN
-IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
-  EXECUTE
-  $$
-  ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_15 FOREIGN KEY (col_1) REFERENCES partitioned_table_1(col_1);
-  $$;
-END IF;
-END$proc$;
+ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_15 FOREIGN KEY (col_1) REFERENCES partitioned_table_1(col_1);
 BEGIN;
   SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
  undistribute_table
@@ -481,18 +470,7 @@ BEGIN;
   SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
 ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_2_100_200 involved in a foreign key relationship that is not inherited from it's parent table
 ROLLBACK;
--- as pg < 12 doesn't support foreign keys between partitioned tables,
--- define below foreign key conditionally instead of adding another
--- test output
-DO $proc$
-BEGIN
-IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
-  EXECUTE
-  $$
-  ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_13 FOREIGN KEY (col_1) REFERENCES partitioned_table_2(col_1);
-  $$;
-END IF;
-END$proc$;
+ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_13 FOREIGN KEY (col_1) REFERENCES partitioned_table_2(col_1);
 BEGIN;
   -- For pg versions 11, 12 & 13, partitioned_table_1 references to reference_table_3
   -- and partitioned_table_2 references to reference_table_3.

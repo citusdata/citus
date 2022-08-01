@@ -19,11 +19,7 @@ SELECT create_reference_table('squares');
 INSERT INTO squares SELECT i, i * i FROM generate_series(1, 10) i;
 NOTICE:  executing the copy locally for shard xxxxx
 CREATE INDEX CONCURRENTLY squares_a_idx ON squares (a);
-SELECT substring(current_Setting('server_version'), '\d+')::int > 11 AS server_version_above_eleven
-\gset
-\if :server_version_above_eleven
 REINDEX INDEX CONCURRENTLY squares_a_idx;
-\endif
 DROP INDEX CONCURRENTLY squares_a_idx;
 -- should be executed locally
 SELECT count(*) FROM squares;
