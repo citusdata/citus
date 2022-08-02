@@ -658,7 +658,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
  * else, we add invalid address.
  */
 List *
-ReindexStmtObjectAddress(Node *stmt, bool missing_ok)
+ReindexStmtObjectAddress(Node *stmt, bool missing_ok, bool isPostprocess)
 {
 	ReindexStmt *reindexStatement = castNode(ReindexStmt, stmt);
 

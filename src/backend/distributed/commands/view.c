@@ -94,7 +94,7 @@ PostprocessViewStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	List *viewAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false);
+	List *viewAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false, true);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(viewAddresses) == 1);
@@ -158,7 +158,7 @@ PostprocessViewStmt(Node *node, const char *queryString)
  * CREATE [OR REPLACE] VIEW statement.
  */
 List *
-ViewStmtObjectAddress(Node *node, bool missing_ok)
+ViewStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	ViewStmt *stmt = castNode(ViewStmt, node);
 
@@ -226,7 +226,7 @@ PreprocessDropViewStmt(Node *node, const char *queryString, ProcessUtilityContex
  * statement.
  */
 List *
-DropViewStmtObjectAddress(Node *stmt, bool missing_ok)
+DropViewStmtObjectAddress(Node *stmt, bool missing_ok, bool isPostprocess)
 {
 	DropStmt *dropStmt = castNode(DropStmt, stmt);
 
@@ -489,7 +489,7 @@ PreprocessAlterViewStmt(Node *node, const char *queryString, ProcessUtilityConte
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
 
-	List *viewAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true);
+	List *viewAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true, false);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(viewAddresses) == 1);
@@ -531,7 +531,7 @@ PostprocessAlterViewStmt(Node *node, const char *queryString)
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
 	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_VIEW);
 
-	List *viewAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true);
+	List *viewAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true, true);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(viewAddresses) == 1);
@@ -563,7 +563,7 @@ PostprocessAlterViewStmt(Node *node, const char *queryString)
  * ALTER VIEW statement.
  */
 List *
-AlterViewStmtObjectAddress(Node *node, bool missing_ok)
+AlterViewStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
 	Oid viewOid = RangeVarGetRelid(stmt->relation, NoLock, missing_ok);
@@ -583,7 +583,7 @@ List *
 PreprocessRenameViewStmt(Node *node, const char *queryString,
 						 ProcessUtilityContext processUtilityContext)
 {
-	List *viewAddresses = GetObjectAddressListFromParseTree(node, true);
+	List *viewAddresses = GetObjectAddressListFromParseTree(node, true, false);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(viewAddresses) == 1);
@@ -622,7 +622,7 @@ PreprocessRenameViewStmt(Node *node, const char *queryString,
  * of the RenameStmt. Errors if missing_ok is false.
  */
 List *
-RenameViewStmtObjectAddress(Node *node, bool missing_ok)
+RenameViewStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 
@@ -645,7 +645,7 @@ PreprocessAlterViewSchemaStmt(Node *node, const char *queryString,
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 
-	List *viewAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true);
+	List *viewAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true, false);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(viewAddresses) == 1);
@@ -687,7 +687,7 @@ PostprocessAlterViewSchemaStmt(Node *node, const char *queryString)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 
-	List *viewAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true);
+	List *viewAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true, true);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(viewAddresses) == 1);
@@ -709,7 +709,7 @@ PostprocessAlterViewSchemaStmt(Node *node, const char *queryString)
  * of the alter schema statement.
  */
 List *
-AlterViewSchemaStmtObjectAddress(Node *node, bool missing_ok)
+AlterViewSchemaStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 

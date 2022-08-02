@@ -117,7 +117,7 @@ PreprocessRenameTypeAttributeStmt(Node *node, const char *queryString,
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
 	Assert(stmt->relationType == OBJECT_TYPE);
 
-	List *typeAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false);
+	List *typeAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false, false);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(typeAddresses) == 1);
@@ -305,7 +305,7 @@ EnumValsList(Oid typeOid)
  * to true.
  */
 List *
-CompositeTypeStmtObjectAddress(Node *node, bool missing_ok)
+CompositeTypeStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	CompositeTypeStmt *stmt = castNode(CompositeTypeStmt, node);
 	TypeName *typeName = MakeTypeNameFromRangeVar(stmt->typevar);
@@ -326,7 +326,7 @@ CompositeTypeStmtObjectAddress(Node *node, bool missing_ok)
  * to true.
  */
 List *
-CreateEnumStmtObjectAddress(Node *node, bool missing_ok)
+CreateEnumStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	CreateEnumStmt *stmt = castNode(CreateEnumStmt, node);
 	TypeName *typeName = makeTypeNameFromNameList(stmt->typeName);
@@ -347,7 +347,7 @@ CreateEnumStmtObjectAddress(Node *node, bool missing_ok)
  * to true.
  */
 List *
-AlterTypeStmtObjectAddress(Node *node, bool missing_ok)
+AlterTypeStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
 	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_TYPE);
@@ -366,7 +366,7 @@ AlterTypeStmtObjectAddress(Node *node, bool missing_ok)
  * object of the AlterEnumStmt. Errors is missing_ok is false.
  */
 List *
-AlterEnumStmtObjectAddress(Node *node, bool missing_ok)
+AlterEnumStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterEnumStmt *stmt = castNode(AlterEnumStmt, node);
 	TypeName *typeName = makeTypeNameFromNameList(stmt->typeName);
@@ -383,7 +383,7 @@ AlterEnumStmtObjectAddress(Node *node, bool missing_ok)
  * of the RenameStmt. Errors if missing_ok is false.
  */
 List *
-RenameTypeStmtObjectAddress(Node *node, bool missing_ok)
+RenameTypeStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_TYPE);
@@ -407,7 +407,7 @@ RenameTypeStmtObjectAddress(Node *node, bool missing_ok)
  * schemas.
  */
 List *
-AlterTypeSchemaStmtObjectAddress(Node *node, bool missing_ok)
+AlterTypeSchemaStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_TYPE || stmt->objectType == OBJECT_DOMAIN);
@@ -487,7 +487,7 @@ RenameTypeAttributeStmtObjectAddress(Node *node, bool missing_ok)
  * of the AlterOwnerStmt. Errors if missing_ok is false.
  */
 List *
-AlterTypeOwnerObjectAddress(Node *node, bool missing_ok)
+AlterTypeOwnerObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Assert(stmt->objectType == OBJECT_TYPE);

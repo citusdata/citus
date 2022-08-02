@@ -318,7 +318,7 @@ PreprocessDropSequenceStmt(Node *node, const char *queryString,
  * statement.
  */
 List *
-SequenceDropStmtObjectAddress(Node *stmt, bool missing_ok)
+SequenceDropStmtObjectAddress(Node *stmt, bool missing_ok, bool isPostprocess)
 {
 	DropStmt *dropSeqStmt = castNode(DropStmt, stmt);
 
@@ -357,7 +357,7 @@ PreprocessRenameSequenceStmt(Node *node, const char *queryString, ProcessUtility
 	Assert(stmt->renameType == OBJECT_SEQUENCE);
 
 	List *addresses = GetObjectAddressListFromParseTree((Node *) stmt,
-														stmt->missing_ok);
+														stmt->missing_ok, false);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(addresses) == 1);
@@ -384,7 +384,7 @@ PreprocessRenameSequenceStmt(Node *node, const char *queryString, ProcessUtility
  * subject of the RenameStmt.
  */
 List *
-RenameSequenceStmtObjectAddress(Node *node, bool missing_ok)
+RenameSequenceStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_SEQUENCE);
@@ -421,7 +421,7 @@ PreprocessAlterSequenceStmt(Node *node, const char *queryString,
 	AlterSeqStmt *stmt = castNode(AlterSeqStmt, node);
 
 	List *addresses = GetObjectAddressListFromParseTree((Node *) stmt,
-														stmt->missing_ok);
+														stmt->missing_ok, false);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(addresses) == 1);
@@ -504,7 +504,7 @@ SequenceUsedInDistributedTable(const ObjectAddress *sequenceAddress)
  * subject of the AlterSeqStmt.
  */
 List *
-AlterSequenceStmtObjectAddress(Node *node, bool missing_ok)
+AlterSequenceStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterSeqStmt *stmt = castNode(AlterSeqStmt, node);
 
@@ -531,7 +531,7 @@ PreprocessAlterSequenceSchemaStmt(Node *node, const char *queryString,
 	Assert(stmt->objectType == OBJECT_SEQUENCE);
 
 	List *addresses = GetObjectAddressListFromParseTree((Node *) stmt,
-														stmt->missing_ok);
+														stmt->missing_ok, false);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(addresses) == 1);
@@ -558,7 +558,7 @@ PreprocessAlterSequenceSchemaStmt(Node *node, const char *queryString,
  * the subject of the AlterObjectSchemaStmt.
  */
 List *
-AlterSequenceSchemaStmtObjectAddress(Node *node, bool missing_ok)
+AlterSequenceSchemaStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_SEQUENCE);
@@ -609,7 +609,7 @@ PostprocessAlterSequenceSchemaStmt(Node *node, const char *queryString)
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_SEQUENCE);
 	List *addresses = GetObjectAddressListFromParseTree((Node *) stmt,
-														stmt->missing_ok);
+														stmt->missing_ok, true);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(addresses) == 1);
@@ -640,7 +640,8 @@ PreprocessAlterSequenceOwnerStmt(Node *node, const char *queryString,
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
 	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
 
-	List *sequenceAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false);
+	List *sequenceAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false,
+																false);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(sequenceAddresses) == 1);
@@ -667,7 +668,7 @@ PreprocessAlterSequenceOwnerStmt(Node *node, const char *queryString,
  * subject of the AlterOwnerStmt.
  */
 List *
-AlterSequenceOwnerStmtObjectAddress(Node *node, bool missing_ok)
+AlterSequenceOwnerStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
 	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
@@ -692,7 +693,8 @@ PostprocessAlterSequenceOwnerStmt(Node *node, const char *queryString)
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
 	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
 
-	List *sequenceAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false);
+	List *sequenceAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false,
+																true);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(sequenceAddresses) == 1);

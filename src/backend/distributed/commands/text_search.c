@@ -570,7 +570,8 @@ get_ts_parser_namelist(Oid tsparserOid)
  * the text search configuration described in the statement doesn't exist.
  */
 List *
-CreateTextSearchConfigurationObjectAddress(Node *node, bool missing_ok)
+CreateTextSearchConfigurationObjectAddress(Node *node, bool missing_ok, bool
+										   isPostprocess)
 {
 	DefineStmt *stmt = castNode(DefineStmt, node);
 	Assert(stmt->kind == OBJECT_TSCONFIGURATION);
@@ -589,7 +590,7 @@ CreateTextSearchConfigurationObjectAddress(Node *node, bool missing_ok)
  * the text search dictionary described in the statement doesn't exist.
  */
 List *
-CreateTextSearchDictObjectAddress(Node *node, bool missing_ok)
+CreateTextSearchDictObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	DefineStmt *stmt = castNode(DefineStmt, node);
 	Assert(stmt->kind == OBJECT_TSDICTIONARY);
@@ -608,7 +609,8 @@ CreateTextSearchDictObjectAddress(Node *node, bool missing_ok)
  * exist based on the missing_ok flag passed in by the caller.
  */
 List *
-RenameTextSearchConfigurationStmtObjectAddress(Node *node, bool missing_ok)
+RenameTextSearchConfigurationStmtObjectAddress(Node *node, bool missing_ok, bool
+											   isPostprocess)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_TSCONFIGURATION);
@@ -627,7 +629,8 @@ RenameTextSearchConfigurationStmtObjectAddress(Node *node, bool missing_ok)
  * exist based on the missing_ok flag passed in by the caller.
  */
 List *
-RenameTextSearchDictionaryStmtObjectAddress(Node *node, bool missing_ok)
+RenameTextSearchDictionaryStmtObjectAddress(Node *node, bool missing_ok, bool
+											isPostprocess)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_TSDICTIONARY);
@@ -646,7 +649,8 @@ RenameTextSearchDictionaryStmtObjectAddress(Node *node, bool missing_ok)
  * exist based on the missing_ok flag passed in by the caller.
  */
 List *
-AlterTextSearchConfigurationStmtObjectAddress(Node *node, bool missing_ok)
+AlterTextSearchConfigurationStmtObjectAddress(Node *node, bool missing_ok, bool
+											  isPostprocess)
 {
 	AlterTSConfigurationStmt *stmt = castNode(AlterTSConfigurationStmt, node);
 
@@ -664,7 +668,8 @@ AlterTextSearchConfigurationStmtObjectAddress(Node *node, bool missing_ok)
  * exist based on the missing_ok flag passed in by the caller.
  */
 List *
-AlterTextSearchDictionaryStmtObjectAddress(Node *node, bool missing_ok)
+AlterTextSearchDictionaryStmtObjectAddress(Node *node, bool missing_ok, bool
+										   isPostprocess)
 {
 	AlterTSDictionaryStmt *stmt = castNode(AlterTSDictionaryStmt, node);
 
@@ -686,7 +691,8 @@ AlterTextSearchDictionaryStmtObjectAddress(Node *node, bool missing_ok)
  * in edgecases will be raised by postgres while executing the move.
  */
 List *
-AlterTextSearchConfigurationSchemaStmtObjectAddress(Node *node, bool missing_ok)
+AlterTextSearchConfigurationSchemaStmtObjectAddress(Node *node, bool missing_ok, bool
+													isPostprocess)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_TSCONFIGURATION);
@@ -739,7 +745,8 @@ AlterTextSearchConfigurationSchemaStmtObjectAddress(Node *node, bool missing_ok)
  * in edgecases will be raised by postgres while executing the move.
  */
 List *
-AlterTextSearchDictionarySchemaStmtObjectAddress(Node *node, bool missing_ok)
+AlterTextSearchDictionarySchemaStmtObjectAddress(Node *node, bool missing_ok, bool
+												 isPostprocess)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_TSDICTIONARY);
@@ -788,7 +795,8 @@ AlterTextSearchDictionarySchemaStmtObjectAddress(Node *node, bool missing_ok)
  * configuration does not exist based on the missing_ok flag passed in by the caller.
  */
 List *
-TextSearchConfigurationCommentObjectAddress(Node *node, bool missing_ok)
+TextSearchConfigurationCommentObjectAddress(Node *node, bool missing_ok, bool
+											isPostprocess)
 {
 	CommentStmt *stmt = castNode(CommentStmt, node);
 	Assert(stmt->objtype == OBJECT_TSCONFIGURATION);
@@ -807,7 +815,7 @@ TextSearchConfigurationCommentObjectAddress(Node *node, bool missing_ok)
  * exist based on the missing_ok flag passed in by the caller.
  */
 List *
-TextSearchDictCommentObjectAddress(Node *node, bool missing_ok)
+TextSearchDictCommentObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	CommentStmt *stmt = castNode(CommentStmt, node);
 	Assert(stmt->objtype == OBJECT_TSDICTIONARY);
@@ -826,7 +834,8 @@ TextSearchDictCommentObjectAddress(Node *node, bool missing_ok)
  * configuration does not exist based on the missing_ok flag passed in by the caller.
  */
 List *
-AlterTextSearchConfigurationOwnerObjectAddress(Node *node, bool missing_ok)
+AlterTextSearchConfigurationOwnerObjectAddress(Node *node, bool missing_ok, bool
+											   isPostprocess)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Relation relation = NULL;
@@ -850,7 +859,7 @@ AlterTextSearchConfigurationOwnerObjectAddress(Node *node, bool missing_ok)
  * configuration does not exist based on the missing_ok flag passed in by the caller.
  */
 List *
-AlterTextSearchDictOwnerObjectAddress(Node *node, bool missing_ok)
+AlterTextSearchDictOwnerObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Relation relation = NULL;

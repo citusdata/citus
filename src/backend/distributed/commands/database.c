@@ -41,7 +41,7 @@ bool EnableAlterDatabaseOwner = true;
  * object of the AlterOwnerStmt. Errors if missing_ok is false.
  */
 List *
-AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok)
+AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Assert(stmt->objectType == OBJECT_DATABASE);
