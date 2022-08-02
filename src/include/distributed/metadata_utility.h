@@ -338,7 +338,8 @@ extern bool JobHasUmnetDependencies(int64 jobid);
 extern RebalanceJob * GetRunableRebalanceJob(void);
 extern void ResetRunningJobs(void);
 extern RebalanceJob * GetScheduledRebalanceJobByJobID(int64 jobId);
-extern void UpdateJobStatus(RebalanceJob *job, RebalanceJobStatus newStatus);
+extern void UpdateJobStatus(int64 jobid, pid_t *pid, RebalanceJobStatus status,
+							int32 *retry_count, char *message);
 extern bool UpdateJobError(RebalanceJob *job, ErrorData *edata);
 extern void UnscheduleDependantJobs(int64 jobid);
 extern bool IsRebalanceJobStatusTerminal(RebalanceJobStatus status);

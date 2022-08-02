@@ -32,6 +32,7 @@
 #include "common/string.h"
 #include "executor/executor.h"
 #include "distributed/backend_data.h"
+#include "distributed/background_jobs.h"
 #include "distributed/citus_depended_object.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_safe_lib.h"

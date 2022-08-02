@@ -33,6 +33,7 @@
 #include "commands/extension.h"
 #include "libpq/pqsignal.h"
 #include "catalog/namespace.h"
+#include "distributed/background_jobs.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/maintenanced.h"
@@ -97,7 +98,6 @@ double DistributedDeadlockDetectionTimeoutFactor = 2.0;
 int Recover2PCInterval = 60000;
 int DeferShardDeleteInterval = 15000;
 int RebalanceCheckInterval = 1000;
-bool RebalanceJobDebugDelay = false;
 
 /* config variables for metadata sync timeout */
 int MetadataSyncInterval = 60000;
@@ -124,9 +124,6 @@ static void MaintenanceDaemonShmemExit(int code, Datum arg);
 static void MaintenanceDaemonErrorContext(void *arg);
 static bool MetadataSyncTriggeredCheckAndReset(MaintenanceDaemonDBData *dbData);
 static void WarnMaintenanceDaemonNotStarted(void);
-static BackgroundWorkerHandle * StartRebalanceJobsBackgroundWorker(Oid database,
-																   Oid extensionOwner);
-static bool ExecuteRebalanceJob(RebalanceJob *job);
 
 /*
  * InitializeMaintenanceDaemon, called at server start, is responsible for
@@ -733,8 +730,8 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 									 "Starting background worker for execution.")));
 
 				rebalanceBgwHandle =
-					StartRebalanceJobsBackgroundWorker(MyDatabaseId,
-													   myDbData->userOid);
+					StartCitusBackgroundJobWorker(MyDatabaseId,
+												  myDbData->userOid);
 
 				if (!rebalanceBgwHandle ||
 					GetBackgroundWorkerPid(rebalanceBgwHandle, &rebalanceWorkerPid) ==
@@ -797,203 +794,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	{
 		TerminateBackgroundWorker(metadataSyncBgwHandle);
 	}
-}
-
-
-static BackgroundWorkerHandle *
-StartRebalanceJobsBackgroundWorker(Oid database, Oid extensionOwner)
-{
-	BackgroundWorker worker;
-	BackgroundWorkerHandle *handle = NULL;
-
-	/* Configure a worker. */
-	memset(&worker, 0, sizeof(worker));
-	SafeSnprintf(worker.bgw_name, BGW_MAXLEN,
-				 "Citus Rebalance Jobs Worker: %u/%u",
-				 database, extensionOwner);
-	worker.bgw_flags =
-		BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
-	worker.bgw_start_time = BgWorkerStart_ConsistentState;
-
-	/* don't restart, we manage restarts from maintenance daemon */
-	worker.bgw_restart_time = BGW_NEVER_RESTART;
-	strcpy_s(worker.bgw_library_name, sizeof(worker.bgw_library_name), "citus");
-	strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_library_name),
-			 "RebalanceJobsBackgroundWorkerMain");
-	worker.bgw_main_arg = ObjectIdGetDatum(MyDatabaseId);
-	memcpy_s(worker.bgw_extra, sizeof(worker.bgw_extra), &extensionOwner,
-			 sizeof(Oid));
-	worker.bgw_notify_pid = MyProcPid;
-
-	if (!RegisterDynamicBackgroundWorker(&worker, &handle))
-	{
-		return NULL;
-	}
-
-	pid_t pid;
-	WaitForBackgroundWorkerStartup(handle, &pid);
-
-	return handle;
-}
-
-
-void
-RebalanceJobsBackgroundWorkerMain(Datum arg)
-{
-	Oid databaseOid = DatumGetObjectId(arg);
-
-	/* extension owner is passed via bgw_extra */
-	Oid extensionOwner = InvalidOid;
-	memcpy_s(&extensionOwner, sizeof(extensionOwner),
-			 MyBgworkerEntry->bgw_extra, sizeof(Oid));
-
-	BackgroundWorkerUnblockSignals();
-
-	/* connect to database, after that we can actually access catalogs */
-	BackgroundWorkerInitializeConnectionByOid(databaseOid, extensionOwner, 0);
-
-	/* make worker recognizable in pg_stat_activity */
-	pgstat_report_appname("rebalance jobs worker");
-
-	ereport(LOG, (errmsg("background jobs runner")));
-
-	if (RebalanceJobDebugDelay)
-	{
-		pg_usleep(30 * 1000 * 1000);
-	}
-
-	MemoryContext perJobContext = AllocSetContextCreateExtended(CurrentMemoryContext,
-																"PerJobContext",
-																ALLOCSET_DEFAULT_MINSIZE,
-																ALLOCSET_DEFAULT_INITSIZE,
-																ALLOCSET_DEFAULT_MAXSIZE);
-
-	/*
-	 * First we find all jobs that are running, we need to check if they are still running
-	 * if not reset their state back to scheduled.
-	 */
-	{
-		StartTransactionCommand();
-		PushActiveSnapshot(GetTransactionSnapshot());
-
-		/* TODO have an actual function to check if the worker is still running */
-		ResetRunningJobs();
-
-		PopActiveSnapshot();
-		CommitTransactionCommand();
-	}
-
-
-	MemoryContext oldContextPerJob = MemoryContextSwitchTo(perJobContext);
-	bool hasJobs = true;
-	while (hasJobs)
-	{
-		MemoryContextReset(perJobContext);
-
-		CHECK_FOR_INTERRUPTS();
-
-		InvalidateMetadataSystemCache();
-		StartTransactionCommand();
-
-		PushActiveSnapshot(GetTransactionSnapshot());
-
-		if (!LockCitusExtension())
-		{
-			ereport(DEBUG1, (errmsg("could not lock the citus extension, "
-									"skipping metadata sync")));
-		}
-		else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
-		{
-			/*
-			 * We need to load the job into the perJobContext as we will switch contexts
-			 * later due to the committing and starting of new transactions
-			 */
-			MemoryContext oldContext = MemoryContextSwitchTo(perJobContext);
-			RebalanceJob *job = GetRunableRebalanceJob();
-			MemoryContextSwitchTo(oldContext);
-
-			if (!job)
-			{
-				PopActiveSnapshot();
-				CommitTransactionCommand();
-
-				hasJobs = false;
-				break;
-			}
-
-			ereport(LOG, (errmsg("found job with jobid: %ld", job->jobid)));
-
-			/* Update job status to indicate it is running */
-			UpdateJobStatus(job, REBALANCE_JOB_STATUS_RUNNING);
-
-			PopActiveSnapshot();
-			CommitTransactionCommand();
-
-			MemoryContext savedContext = CurrentMemoryContext;
-			PG_TRY();
-			{
-				StartTransactionCommand();
-				PushActiveSnapshot(GetTransactionSnapshot());
-				if (ExecuteRebalanceJob(job))
-				{
-					UpdateJobStatus(job, REBALANCE_JOB_STATUS_DONE);
-
-					PopActiveSnapshot();
-					CommitTransactionCommand();
-				}
-			}
-			PG_CATCH();
-			{
-				MemoryContextSwitchTo(savedContext);
-
-				ErrorData *edata = CopyErrorData();
-				FlushErrorState();
-
-				StartTransactionCommand();
-				PushActiveSnapshot(GetTransactionSnapshot());
-
-				UpdateJobError(job, edata);
-
-				PopActiveSnapshot();
-				CommitTransactionCommand();
-
-				FreeErrorData(edata);
-				edata = NULL;
-
-				/* TODO log that there was an error */
-			}
-			PG_END_TRY();
-		}
-	}
-
-	MemoryContextSwitchTo(oldContextPerJob);
-	MemoryContextDelete(perJobContext);
-}
-
-
-static bool
-ExecuteRebalanceJob(RebalanceJob *job)
-{
-	int spiResult = SPI_connect();
-	if (spiResult != SPI_OK_CONNECT)
-	{
-		ereport(ERROR, (errmsg("could not connect to SPI manager")));
-	}
-
-	spiResult = SPI_execute(job->command, false, 0);
-
-/*	if (spiResult != SPIOK) */
-/*	{ */
-/*		ereport(ERROR, (errmsg("could not run SPI query"))); */
-/*	} */
-
-	spiResult = SPI_finish();
-	if (spiResult != SPI_OK_FINISH)
-	{
-		ereport(ERROR, (errmsg("could not finish SPI connection")));
-	}
-
-	return true;
 }
 
 

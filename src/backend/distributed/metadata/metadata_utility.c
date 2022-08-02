@@ -2667,7 +2667,8 @@ GetScheduledRebalanceJobByJobID(int64 jobId)
 
 
 void
-UpdateJobStatus(RebalanceJob *job, RebalanceJobStatus newStatus)
+UpdateJobStatus(int64 jobid, pid_t *pid, RebalanceJobStatus status, int32 *retry_count,
+				char *message)
 {
 	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
 											  RowExclusiveLock);
@@ -2678,7 +2679,7 @@ UpdateJobStatus(RebalanceJob *job, RebalanceJobStatus newStatus)
 
 	/* WHERE jobid = job->jobid */
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_jobid,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(job->jobid));
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobid));
 
 	const bool indexOK = true;
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
@@ -2690,69 +2691,7 @@ UpdateJobStatus(RebalanceJob *job, RebalanceJobStatus newStatus)
 	if (!HeapTupleIsValid(heapTuple))
 	{
 		ereport(ERROR, (errmsg("could not find rebalance job entry for jobid: "
-							   UINT64_FORMAT, job->jobid)));
-	}
-
-	Datum values[Natts_pg_dist_rebalance_jobs] = { 0 };
-	bool isnull[Natts_pg_dist_rebalance_jobs] = { 0 };
-	bool replace[Natts_pg_dist_rebalance_jobs] = { 0 };
-
-	values[Anum_pg_dist_rebalance_jobs_status - 1] =
-		ObjectIdGetDatum(RebalanceJobStatusOid(newStatus));
-	isnull[Anum_pg_dist_rebalance_jobs_status - 1] = false;
-	replace[Anum_pg_dist_rebalance_jobs_status - 1] = true;
-
-	/* TODO figure out a nice way on how to update a tuple selectively */
-	if (newStatus == REBALANCE_JOB_STATUS_RUNNING)
-	{
-		/* update pid for running status */
-		values[Anum_pg_dist_rebalance_jobs_pid - 1] = Int32GetDatum((int32) MyProcPid);
-		isnull[Anum_pg_dist_rebalance_jobs_pid - 1] = false;
-		replace[Anum_pg_dist_rebalance_jobs_pid - 1] = true;
-	}
-	else
-	{
-		values[Anum_pg_dist_rebalance_jobs_pid - 1] = 0;
-		isnull[Anum_pg_dist_rebalance_jobs_pid - 1] = true;
-		replace[Anum_pg_dist_rebalance_jobs_pid - 1] = true;
-	}
-
-	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
-
-	CatalogTupleUpdate(pgDistRebalanceJobs, &heapTuple->t_self, heapTuple);
-
-	CommandCounterIncrement();
-
-	systable_endscan(scanDescriptor);
-	table_close(pgDistRebalanceJobs, NoLock);
-}
-
-
-bool
-UpdateJobError(RebalanceJob *job, ErrorData *edata)
-{
-	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
-											  RowExclusiveLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
-
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
-
-	/* WHERE jobid = job->jobid */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_jobid,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(job->jobid));
-
-	const bool indexOK = true;
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
-													DistRebalanceJobsJobsIdIndexId(),
-													indexOK,
-													NULL, scanKeyCount, scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	if (!HeapTupleIsValid(heapTuple))
-	{
-		ereport(ERROR, (errmsg("could not find rebalance job entry for jobid: "
-							   UINT64_FORMAT, job->jobid)));
+							   UINT64_FORMAT, jobid)));
 	}
 
 	Datum values[Natts_pg_dist_rebalance_jobs] = { 0 };
@@ -2761,79 +2700,45 @@ UpdateJobError(RebalanceJob *job, ErrorData *edata)
 
 	heap_deform_tuple(heapTuple, tupleDescriptor, values, isnull);
 
-	/* increment retry count */
-	int retryCount = 0;
-	if (!isnull[Anum_pg_dist_rebalance_jobs_retry_count - 1])
+#define UPDATE_FIELD(field, newNull, newValue) \
+	replace[(field - 1)] = ((newNull != isnull[(field - 1)]) || (values[(field - 1)] != \
+																 newValue)); \
+	isnull[(field - 1)] = (newNull); \
+	values[(field - 1)] = (newValue);
+
+	if (pid)
 	{
-		retryCount = DatumGetInt32(values[Anum_pg_dist_rebalance_jobs_retry_count - 1]);
-		retryCount++;
+		UPDATE_FIELD(Anum_pg_dist_rebalance_jobs_pid, false, Int32GetDatum(*pid));
 	}
-	values[Anum_pg_dist_rebalance_jobs_retry_count - 1] = Int32GetDatum(retryCount);
-	isnull[Anum_pg_dist_rebalance_jobs_retry_count - 1] = false;
-	replace[Anum_pg_dist_rebalance_jobs_retry_count - 1] = true;
-
-	values[Anum_pg_dist_rebalance_jobs_pid - 1] = InvalidOid;
-	isnull[Anum_pg_dist_rebalance_jobs_pid - 1] = true;
-	replace[Anum_pg_dist_rebalance_jobs_pid - 1] = true;
-
-	bool statusError = false;
-	if (retryCount >= 3)
+	else
 	{
-		/* after 3 failures we will transition the job to error and stop executing */
-		values[Anum_pg_dist_rebalance_jobs_status - 1] =
-			ObjectIdGetDatum(JobStatusErrorId());
-		isnull[Anum_pg_dist_rebalance_jobs_status - 1] = false;
-		replace[Anum_pg_dist_rebalance_jobs_status - 1] = true;
-
-		statusError = true;
+		UPDATE_FIELD(Anum_pg_dist_rebalance_jobs_pid, true, InvalidOid);
 	}
 
-	StringInfoData buf = { 0 };
-	initStringInfo(&buf);
+	Oid statusOid = ObjectIdGetDatum(RebalanceJobStatusOid(status));
+	UPDATE_FIELD(Anum_pg_dist_rebalance_jobs_status, false, statusOid);
 
-	if (edata->message)
+	if (retry_count)
 	{
-		if (buf.len > 0)
-		{
-			appendStringInfo(&buf, "\n");
-		}
-		appendStringInfoString(&buf, "ERROR: ");
-		appendStringInfoString(&buf, edata->message);
+		UPDATE_FIELD(Anum_pg_dist_rebalance_jobs_retry_count, false, Int32GetDatum(
+						 *retry_count));
+	}
+	else
+	{
+		UPDATE_FIELD(Anum_pg_dist_rebalance_jobs_retry_count, true, InvalidOid);
 	}
 
-	if (edata->hint)
+	if (message)
 	{
-		if (buf.len > 0)
-		{
-			appendStringInfo(&buf, "\n");
-		}
-		appendStringInfoString(&buf, "HINT: ");
-		appendStringInfoString(&buf, edata->hint);
+		Oid messageOid = CStringGetTextDatum(message);
+		UPDATE_FIELD(Anum_pg_dist_rebalance_jobs_message, false, messageOid);
+	}
+	else
+	{
+		UPDATE_FIELD(Anum_pg_dist_rebalance_jobs_message, true, InvalidOid);
 	}
 
-	if (edata->detail)
-	{
-		if (buf.len > 0)
-		{
-			appendStringInfo(&buf, "\n");
-		}
-		appendStringInfoString(&buf, "DETAIL: ");
-		appendStringInfoString(&buf, edata->detail);
-	}
-
-	if (edata->context)
-	{
-		if (buf.len > 0)
-		{
-			appendStringInfo(&buf, "\n");
-		}
-		appendStringInfoString(&buf, "CONTEXT: ");
-		appendStringInfoString(&buf, edata->context);
-	}
-
-	values[Anum_pg_dist_rebalance_jobs_message - 1] = CStringGetTextDatum(buf.data);
-	isnull[Anum_pg_dist_rebalance_jobs_message - 1] = false;
-	replace[Anum_pg_dist_rebalance_jobs_message - 1] = true;
+#undef UPDATE_FIELD
 
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
 
@@ -2843,14 +2748,6 @@ UpdateJobError(RebalanceJob *job, ErrorData *edata)
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistRebalanceJobs, NoLock);
-
-	/* when we have changed the status to Error we will need to unschedule all dependent jobs (recursively) */
-	if (statusError)
-	{
-		UnscheduleDependantJobs(job->jobid);
-	}
-
-	return statusError;
 }
 
 
