@@ -43,11 +43,12 @@ extern void DropShardReplicationSlot(MultiConnection *connection,
 
 extern char * ShardSubscriptionRole(Oid ownerId, char *operationPrefix);
 extern char * ShardSubscriptionName(Oid ownerId, char *operationPrefix);
-extern void CreateShardSubscription(MultiConnection *connection, char *sourceNodeName,
-									int sourceNodePort, char *userName,
-									char *databaseName,
-									char *publicationName, char *slotName,
-									Oid ownerId);
+extern void CreateShardSplitSubscription(MultiConnection *connection,
+										 char *sourceNodeName,
+										 int sourceNodePort, char *userName,
+										 char *databaseName,
+										 char *publicationName, char *slotName,
+										 Oid ownerId);
 
 extern void WaitForRelationSubscriptionsBecomeReady(MultiConnection *targetConnection,
 													Bitmapset *tableOwnerIds,

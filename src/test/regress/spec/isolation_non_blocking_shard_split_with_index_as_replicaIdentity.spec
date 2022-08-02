@@ -1,3 +1,8 @@
+// Test scenario for nonblocking split and concurrent INSERT/UPDATE/DELETE.
+// Test uses Index as replica identity.
+//  session s1 - Executes non-blocking shard split
+//  session s2 - Does concurrent writes
+//  session s3 - Holds advisory locks
 setup
 {
 	SET citus.shard_count to 1;
@@ -58,12 +63,6 @@ step "s2-insert"
 	INSERT INTO to_split_table VALUES (123456789, 1);
 }
 
-step "s2-insert-2"
-{
-	SELECT get_shard_id_for_distribution_column('to_split_table', 123456789);
-	INSERT INTO to_split_table VALUES (1234567819, 1);
-}
-
 step "s2-update"
 {
 	UPDATE to_split_table SET value = 111 WHERE id = 123456789;
@@ -115,18 +114,25 @@ step "s3-release-advisory-lock"
 
 ##// nonblocking tests lie below ###
 
-// move placement first
-// the following tests show the non-blocking modifications while shard is being moved
-// in fact, the shard move blocks the writes for a very short duration of time
-// by using an advisory and allowing the other commands continue to run, we prevent
-// the modifications to block on that blocking duration
-//permutation "s3-acquire-advisory-lock" "s1-begin" "s1-non-blocking-shard-split" "s2-insert" "s3-release-advisory-lock" "s1-end" "s1-select" "s1-get-shard-distribution"
-
-
+// Concurrent Insert:
+// s3 holds advisory lock -> s1 starts non-blocking shard split and waits for advisory lock ->
+// s2 inserts a row successfully demonstrating nonblocking split -> s3 releases the advisory lock
+// -> s1 completes split -> result is reflected in new shards
 permutation "s1-load-cache" "s2-print-cluster" "s3-acquire-advisory-lock" "s1-begin" "s2-begin" "s1-non-blocking-shard-split" "s2-insert" "s2-end" "s2-print-cluster" "s3-release-advisory-lock" "s1-end" "s2-print-cluster"
+
+// Concurrent Update:
+// s2 inserts a row to be updated later ->s3 holds advisory lock -> s1 starts non-blocking shard split and waits for advisory lock ->
+// s2 udpates the row -> s3 releases the advisory lock
+// -> s1 completes split -> result is reflected in new shards
 permutation "s1-load-cache" "s2-insert" "s2-print-cluster" "s3-acquire-advisory-lock" "s1-begin" "s1-non-blocking-shard-split" "s2-update" "s3-release-advisory-lock" "s1-end" "s2-print-cluster"
+
+// Concurrent Delete:
+// s2 inserts a row to be deleted later ->s3 holds advisory lock -> s1 starts non-blocking shard split and waits for advisory lock ->
+// s2 deletes the row -> s3 releases the advisory lock
+// -> s1 completes split -> result is reflected in new shards
 permutation "s1-load-cache" "s2-insert" "s2-print-cluster" "s3-acquire-advisory-lock" "s1-begin" "s1-non-blocking-shard-split" "s2-delete" "s3-release-advisory-lock" "s1-end" "s2-print-cluster"
 
+// Same flow without loading cache
 permutation "s2-print-cluster" "s3-acquire-advisory-lock" "s1-begin" "s2-begin" "s1-non-blocking-shard-split" "s2-insert" "s2-end" "s2-print-cluster" "s3-release-advisory-lock" "s1-end" "s2-print-cluster"
 permutation "s2-insert" "s2-print-cluster" "s3-acquire-advisory-lock" "s1-begin" "s1-non-blocking-shard-split" "s2-update" "s3-release-advisory-lock" "s1-end" "s2-print-cluster"
 permutation "s2-insert" "s2-print-cluster" "s3-acquire-advisory-lock" "s1-begin" "s1-non-blocking-shard-split" "s2-delete" "s3-release-advisory-lock" "s1-end" "s2-print-cluster"

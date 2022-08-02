@@ -92,10 +92,11 @@ extern void DropAllShardSplitLeftOvers(WorkerNode *sourceNode,
 extern void DropShardSplitPublications(MultiConnection *sourceConnection,
 									   HTAB *shardInfoHashMapForPublication);
 extern void DropShardSplitSubsriptions(List *shardSplitSubscribersMetadataList);
-extern char *  DropExistingIfAnyAndCreateTemplateReplicationSlot(
-	ShardInterval *shardIntervalToSplit,
-	MultiConnection *
-	sourceConnection);
+extern void DropShardSplitReplicationSlots(MultiConnection *sourceConnection,
+										   List *replicationSlotInfoList);
+extern char *  CreateTemplateReplicationSlot(ShardInterval *shardIntervalToSplit,
+											 MultiConnection *
+											 sourceConnection);
 extern void DisableAndDropShardSplitSubscription(MultiConnection *connection,
 												 char *subscriptionName);
 

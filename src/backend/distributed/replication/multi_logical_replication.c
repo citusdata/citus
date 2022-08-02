@@ -2069,12 +2069,16 @@ GetSubscriptionPosition(MultiConnection *connection, Bitmapset *tableOwnerIds,
 }
 
 
-/*TODO(saawasek):Refactor this for ShardMove too.*/
+/*
+ * CreateShardSplitSubscription creates the subscriptions used for shard split
+ * over the given connection. The subscription is created with 'copy_data'
+ * set to false and with the given replication slot name.
+ */
 void
-CreateShardSubscription(MultiConnection *connection, char *sourceNodeName,
-						int sourceNodePort, char *userName, char *databaseName,
-						char *publicationName, char *slotName,
-						Oid ownerId)
+CreateShardSplitSubscription(MultiConnection *connection, char *sourceNodeName,
+							 int sourceNodePort, char *userName, char *databaseName,
+							 char *publicationName, char *slotName,
+							 Oid ownerId)
 {
 	StringInfo createSubscriptionCommand = makeStringInfo();
 	StringInfo conninfo = makeStringInfo();
@@ -2090,7 +2094,7 @@ CreateShardSubscription(MultiConnection *connection, char *sourceNodeName,
 			psprintf(
 				"CREATE USER %s SUPERUSER IN ROLE %s",
 				ShardSubscriptionRole(ownerId, SHARD_SPLIT_SUBSCRIPTION_ROLE_PREFIX),
-				GetUserNameFromId(ownerId, false)
+				quote_identifier(GetUserNameFromId(ownerId, false))
 				)));
 
 	appendStringInfo(conninfo, "host='%s' port=%d user='%s' dbname='%s' "

@@ -25,7 +25,6 @@ step s1-begin:
 step s2-begin:
  BEGIN;
 
-s2: WARNING:  replication slot "citus_shard_split_template_slot_1500002" does not exist
 step s2-non-blocking-shard-split:
  SELECT pg_catalog.citus_split_shard_by_split_points(
   1500002,
@@ -109,7 +108,6 @@ step s1-begin:
 step s2-begin:
  BEGIN;
 
-s2: WARNING:  replication slot "citus_shard_split_template_slot_1500002" does not exist
 step s2-non-blocking-shard-split:
  SELECT pg_catalog.citus_split_shard_by_split_points(
   1500002,
@@ -192,7 +190,6 @@ step s1-begin:
 step s2-begin:
  BEGIN;
 
-s2: WARNING:  replication slot "citus_shard_split_template_slot_1500002" does not exist
 step s2-non-blocking-shard-split:
  SELECT pg_catalog.citus_split_shard_by_split_points(
   1500002,

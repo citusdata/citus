@@ -188,14 +188,14 @@ ReleaseSharedMemoryOfShardSplitInfo()
 
 
 /*
- * encode_replication_slot returns an encoded replication slot name
+ * EncodeReplicationSlot returns an encoded replication slot name
  * in the following format.
  * Slot Name = citus_split_nodeId_tableOwnerOid
  * Max supported length of replication slot name is 64 bytes.
  */
 char *
-encode_replication_slot(uint32_t nodeId,
-						uint32_t tableOwnerId)
+EncodeReplicationSlot(uint32_t nodeId,
+					  uint32_t tableOwnerId)
 {
 	StringInfo slotName = makeStringInfo();
 	appendStringInfo(slotName, "%s%u_%u", SHARD_SPLIT_REPLICATION_SLOT_PREFIX, nodeId,

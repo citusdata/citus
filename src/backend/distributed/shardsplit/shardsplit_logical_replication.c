@@ -14,10 +14,12 @@
 #include "nodes/pg_list.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shard_split.h"
+#include "distributed/shared_library_init.h"
 #include "distributed/listutils.h"
 #include "distributed/shardsplit_logical_replication.h"
 #include "distributed/resource_lock.h"
@@ -79,6 +81,11 @@ CreateShardSplitInfoMapForPublication(List *sourceColocatedShardIntervalList,
 	forboth_ptr(sourceShardIntervalToCopy, sourceColocatedShardIntervalList,
 				splitChildShardIntervalList, shardGroupSplitIntervalListList)
 	{
+		if (PartitionedTable(sourceShardIntervalToCopy->relationId))
+		{
+			continue;
+		}
+
 		ShardInterval *splitChildShardInterval = NULL;
 		WorkerNode *destinationWorkerNode = NULL;
 		forboth_ptr(splitChildShardInterval, splitChildShardIntervalList,
@@ -232,6 +239,11 @@ ShardSplitPublicationName(uint32_t nodeId, Oid ownerId)
 }
 
 
+/*
+ * CreateTargetNodeConnectionsForShardSplit creates connections on target nodes.
+ * These connections are used for subscription managment. They are closed
+ * at the end of non-blocking split workflow.
+ */
 List *
 CreateTargetNodeConnectionsForShardSplit(List *shardSplitSubscribersMetadataList, int
 										 connectionFlags, char *user, char *databaseName)
@@ -240,7 +252,9 @@ CreateTargetNodeConnectionsForShardSplit(List *shardSplitSubscribersMetadataList
 	ShardSplitSubscriberMetadata *shardSplitSubscriberMetadata = NULL;
 	foreach_ptr(shardSplitSubscriberMetadata, shardSplitSubscribersMetadataList)
 	{
-		/*TODO(saawasek):For slot equals not null */
+		/* slotinfo is expected to be already populated */
+		Assert(shardSplitSubscriberMetadata->slotInfo != NULL);
+
 		uint32 targetWorkerNodeId = shardSplitSubscriberMetadata->slotInfo->targetNodeId;
 		WorkerNode *targetWorkerNode = FindNodeWithNodeId(targetWorkerNodeId, false);
 
@@ -355,14 +369,15 @@ CreateShardSplitSubscriptions(List *targetNodeConnectionList,
 	{
 		uint32 publicationForNodeId = shardSplitPubSubMetadata->slotInfo->targetNodeId;
 		Oid ownerId = shardSplitPubSubMetadata->tableOwnerId;
-		CreateShardSubscription(targetConnection,
-								sourceWorkerNode->workerName,
-								sourceWorkerNode->workerPort,
-								superUser,
-								databaseName,
-								ShardSplitPublicationName(publicationForNodeId, ownerId),
-								shardSplitPubSubMetadata->slotInfo->slotName,
-								ownerId);
+		CreateShardSplitSubscription(targetConnection,
+									 sourceWorkerNode->workerName,
+									 sourceWorkerNode->workerPort,
+									 superUser,
+									 databaseName,
+									 ShardSplitPublicationName(publicationForNodeId,
+															   ownerId),
+									 shardSplitPubSubMetadata->slotInfo->slotName,
+									 ownerId);
 	}
 }
 
@@ -411,36 +426,26 @@ WaitForShardSplitRelationSubscriptionsToBeCaughtUp(XLogRecPtr sourcePosition,
 }
 
 
+/*
+ * CreateTemplateReplicationSlot creates a replication slot that acts as a template
+ * slot for logically replicating split children in the 'catchup' phase of non-blocking split.
+ * It returns a snapshot name which is used to do snapshotted shard copy in the 'copy' phase
+ * of nonblocking split workflow.
+ */
 char *
-DropExistingIfAnyAndCreateTemplateReplicationSlot(ShardInterval *shardIntervalToSplit,
-												  MultiConnection *sourceConnection)
+CreateTemplateReplicationSlot(ShardInterval *shardIntervalToSplit,
+							  MultiConnection *sourceConnection)
 {
-	/*
-	 * To ensure SPLIT is idempotent drop any existing slot from
-	 * previous failed operation.
-	 */
-	StringInfo dropReplicationSlotCommand = makeStringInfo();
-	appendStringInfo(dropReplicationSlotCommand, "SELECT pg_drop_replication_slot('%s')",
-					 ShardSplitTemplateReplicationSlotName(
-						 shardIntervalToSplit->shardId));
-
-	/* The Drop command can fail so ignore the response / result and proceed anyways */
-	PGresult *result = NULL;
-	int response = ExecuteOptionalRemoteCommand(sourceConnection,
-												dropReplicationSlotCommand->data,
-												&result);
-
-	PQclear(result);
-	ForgetResults(sourceConnection);
-
 	StringInfo createReplicationSlotCommand = makeStringInfo();
 	appendStringInfo(createReplicationSlotCommand,
 					 "CREATE_REPLICATION_SLOT %s LOGICAL citus EXPORT_SNAPSHOT;",
 					 ShardSplitTemplateReplicationSlotName(
 						 shardIntervalToSplit->shardId));
 
-	response = ExecuteOptionalRemoteCommand(sourceConnection,
-											createReplicationSlotCommand->data, &result);
+	PGresult *result = NULL;
+	int response = ExecuteOptionalRemoteCommand(sourceConnection,
+												createReplicationSlotCommand->data,
+												&result);
 
 	if (response != RESPONSE_OKAY || !IsResponseOK(result) || PQntuples(result) != 1)
 	{
@@ -498,8 +503,9 @@ CreateReplicationSlots(MultiConnection *sourceNodeConnection, char *templateSlot
 		StringInfo createReplicationSlotCommand = makeStringInfo();
 
 		appendStringInfo(createReplicationSlotCommand,
-						 "SELECT * FROM  pg_copy_logical_replication_slot ('%s','%s')",
-						 templateSlotName, slotName);
+						 "SELECT * FROM  pg_catalog.pg_copy_logical_replication_slot (%s, %s)",
+						 quote_literal_cstr(templateSlotName), quote_literal_cstr(
+							 slotName));
 
 		ExecuteCriticalRemoteCommand(sourceNodeConnection,
 									 createReplicationSlotCommand->data);
@@ -680,12 +686,9 @@ DropShardSplitPublications(MultiConnection *sourceConnection,
 
 
 /*
- * DropShardSplitSubsriptions drops subscriptions from the subscriber node that
- * are used to split shards for the given table owners. Note that, it drops the
- * replication slots on the publisher node if it can drop the slots as well
- * with the DROP SUBSCRIPTION command. Otherwise, only the subscriptions will
- * be deleted with DROP SUBSCRIPTION via the connection. In the latter case,
- * replication slots will be dropped separately by calling DropShardSplitReplicationSlots.
+ * DropShardSplitSubsriptions disables and drops subscriptions from the subscriber node that
+ * are used to split shards. Note that, it does not drop the replication slots on the publisher node.
+ * Replication slots will be dropped separately by calling DropShardSplitReplicationSlots.
  */
 void
 DropShardSplitSubsriptions(List *shardSplitSubscribersMetadataList)
@@ -706,7 +709,15 @@ DropShardSplitSubsriptions(List *shardSplitSubscribersMetadataList)
 }
 
 
-/*todo(saawasek): add comments */
+/*
+ * DisableAndDropShardSplitSubscription disables the subscription, resets the slot name to 'none' and
+ * then drops subscription on the given connection. It does not drop the replication slot.
+ * The caller of this method should ensure to cleanup the replication slot.
+ *
+ * Directly executing 'DROP SUBSCRIPTION' attempts to drop the replication slot at the source node.
+ * When the subscription is local, direcly dropping the subscription can lead to a self deadlock.
+ * To avoid this, we first disable the subscription, reset the slot name and then drop the subscription.
+ */
 void
 DisableAndDropShardSplitSubscription(MultiConnection *connection, char *subscriptionName)
 {
@@ -727,6 +738,21 @@ DisableAndDropShardSplitSubscription(MultiConnection *connection, char *subscrip
 	ExecuteCriticalRemoteCommand(connection, psprintf(
 									 "DROP SUBSCRIPTION %s",
 									 quote_identifier(subscriptionName)));
+}
+
+
+/*
+ * DropShardSplitReplicationSlots drops replication slots on the source node.
+ */
+void
+DropShardSplitReplicationSlots(MultiConnection *sourceConnection,
+							   List *replicationSlotInfoList)
+{
+	ReplicationSlotInfo *replicationSlotInfo = NULL;
+	foreach_ptr(replicationSlotInfo, replicationSlotInfoList)
+	{
+		DropShardReplicationSlot(sourceConnection, replicationSlotInfo->slotName);
+	}
 }
 
 

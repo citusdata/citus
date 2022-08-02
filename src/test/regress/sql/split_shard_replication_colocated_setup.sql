@@ -150,3 +150,14 @@ SELECT * FROM table_second_8;
 
 SELECT wait_for_expected_rowcount_at_table('table_second_9', 1);
 SELECT * FROM table_second_9;
+
+\c - postgres - :worker_1_port
+SET search_path TO split_shard_replication_setup_schema;
+DROP PUBLICATION pub1;
+DROP PUBLICATION pub2;
+
+\c - postgres - :worker_2_port
+SET search_path TO split_shard_replication_setup_schema;
+SET client_min_messages TO ERROR;
+DROP SUBSCRIPTION sub1;
+DROP SUBSCRIPTION sub2;

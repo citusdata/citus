@@ -606,6 +606,7 @@ ConnectionAvailableToNode(char *hostName, int nodePort, const char *userName,
 	key.port = nodePort;
 	strlcpy(key.user, userName, NAMEDATALEN);
 	strlcpy(key.database, database, NAMEDATALEN);
+	key.replicationConnParam = false;
 
 	ConnectionHashEntry *entry =
 		(ConnectionHashEntry *) hash_search(ConnectionHash, &key, HASH_FIND, &found);
@@ -1299,6 +1300,7 @@ WarmUpConnParamsHash(void)
 		key.port = workerNode->workerPort;
 		strlcpy(key.database, CurrentDatabaseName(), NAMEDATALEN);
 		strlcpy(key.user, CurrentUserName(), NAMEDATALEN);
+		key.replicationConnParam = false;
 		FindOrCreateConnParamsEntry(&key);
 	}
 }

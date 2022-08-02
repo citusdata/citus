@@ -305,7 +305,7 @@ PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader)
 		uint32_t nodeId = entry->key.nodeId;
 		uint32_t tableOwnerId = entry->key.tableOwnerId;
 		char *derivedSlotName =
-			encode_replication_slot(nodeId, tableOwnerId);
+			EncodeReplicationSlot(nodeId, tableOwnerId);
 
 		List *shardSplitInfoList = entry->shardSplitInfoList;
 		ShardSplitInfo *splitShardInfo = NULL;
@@ -448,8 +448,8 @@ ReturnReplicationSlotInfo(Tuplestorestate *tupleStore, TupleDesc
 		char *tableOwnerName = GetUserNameFromId(entry->key.tableOwnerId, false);
 		values[1] = CStringGetTextDatum(tableOwnerName);
 
-		char *slotName = encode_replication_slot(entry->key.nodeId,
-												 entry->key.tableOwnerId);
+		char *slotName = EncodeReplicationSlot(entry->key.nodeId,
+											   entry->key.tableOwnerId);
 		values[2] = CStringGetTextDatum(slotName);
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, nulls);

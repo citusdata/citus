@@ -1,3 +1,9 @@
+// Test scenario for nonblocking split and concurrent INSERT/UPDATE/DELETE.
+// Test uses Index as replica identity.
+//  session s1 - Does concurrent writes on reference table
+//  session s2 - Executes non-blocking shard split
+//  session s3 - Holds advisory locks
+
 setup
 {
     SELECT setval('pg_dist_shardid_seq', 1500000);
@@ -113,9 +119,24 @@ step "s3-release-advisory-lock"
 }
 
 
-// Run shard split while concurrently performing an DML and index creation on the
+// Run nonblocking shard split while concurrently performing an DML on the
 // reference table which the distributed table have a foreign key to.
-// All modifications should block on shard split.
+// Modifications should not be blocked.
+
+// Concurrent Insert:
+// s2 add fkey constrain->s3 holds advisory lock -> s2 starts non-blocking shard split and waits for advisory lock ->
+// s1 inserts a row in reference table successfully demonstrating nonblocking split -> s3 releases the advisory lock
+// -> s2 completes split -> result is reflected in new shards
 permutation "s2-add-fkey" "s3-acquire-advisory-lock" "s1-begin" "s2-begin" "s2-non-blocking-shard-split" "s1-insert" "s1-commit" "s3-release-advisory-lock" "s2-commit"  "s2-print-cluster"
+
+// Concurrent Update:
+// s2 add fkey constrain->s3 holds advisory lock -> s2 starts non-blocking shard split and waits for advisory lock ->
+// s1 updates row of reference table -> s3 releases the advisory lock
+// -> s2 completes split -> result is reflected in new shards
 permutation "s2-add-fkey" "s3-acquire-advisory-lock" "s1-begin" "s2-begin" "s2-non-blocking-shard-split" "s1-update" "s1-commit" "s3-release-advisory-lock" "s2-commit"  "s2-print-cluster"
+
+// Concurrent Delete:
+// s2 add fkey constrain->s3 holds advisory lock -> s2 starts non-blocking shard split and waits for advisory lock ->
+// s1 deletes row of reference table -> s3 releases the advisory lock
+// -> s2 completes split -> result is reflected in new shards
 permutation "s2-add-fkey" "s3-acquire-advisory-lock" "s1-begin" "s2-begin" "s2-non-blocking-shard-split" "s1-delete" "s1-commit" "s3-release-advisory-lock" "s2-commit"  "s2-print-cluster"

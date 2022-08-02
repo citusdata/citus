@@ -218,8 +218,6 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     ARRAY['-1073741824'],
     ARRAY[:worker_1_node, :worker_2_node],
     'force_logical');
-WARNING:  replication slot "citus_shard_split_template_slot_8981000" does not exist
-CONTEXT:  while executing command on localhost:xxxxx
  citus_split_shard_by_split_points
 ---------------------------------------------------------------------
 
@@ -231,8 +229,6 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     ARRAY['536870911', '1610612735'],
     ARRAY[:worker_1_node, :worker_1_node, :worker_2_node],
     'force_logical');
-WARNING:  replication slot "citus_shard_split_template_slot_8981001" does not exist
-CONTEXT:  while executing command on localhost:xxxxx
  citus_split_shard_by_split_points
 ---------------------------------------------------------------------
 
@@ -396,8 +392,6 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     ARRAY['-2100000000'],
     ARRAY[:worker_1_node, :worker_2_node],
     'force_logical');
-WARNING:  replication slot "citus_shard_split_template_slot_8981007" does not exist
-CONTEXT:  while executing command on localhost:xxxxx
  citus_split_shard_by_split_points
 ---------------------------------------------------------------------
 

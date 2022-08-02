@@ -425,7 +425,6 @@ SplitShard(SplitMode splitMode,
 	}
 	else
 	{
-		/*TODO(saawasek): Discussing about existing bug with the assumption of move shard*/
 		NonBlockingShardSplit(
 			splitOperation,
 			shardIntervalToSplit,
@@ -851,6 +850,11 @@ CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 }
 
 
+/*
+ * CreateSplitCopyTask creates a task for copying data.
+ * In the case of Non-blocking split, snapshotted copy task is created with given 'snapshotName'.
+ * 'snapshotName' is NULL for Blocking split.
+ */
 static Task *
 CreateSplitCopyTask(StringInfo splitCopyUdfCommand, char *snapshotName, int taskId, uint64
 					jobId)
@@ -1403,7 +1407,12 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		/* 16) Drop Publications */
 		DropShardSplitPublications(sourceConnection, shardSplitHashMapForPublication);
 
-		/* 17) TODO(saawasek): Try dropping replication slots explicitly */
+		/* 17) Drop replication slots
+		 * Drop template and subscriber replication slots
+		 */
+		DropShardReplicationSlot(sourceConnection, ShardSplitTemplateReplicationSlotName(
+									 shardIntervalToSplit->shardId));
+		DropShardSplitReplicationSlots(sourceConnection, replicationSlotInfoList);
 
 		/*
 		 * 18) Drop old shards and delete related metadata. Have to do that before
@@ -1416,6 +1425,9 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
 										 workersForPlacementList);
 
+		CreatePartitioningHierarchy(shardGroupSplitIntervalListList,
+									workersForPlacementList);
+
 		/*
 		 * 20) Create foreign keys if exists after the metadata changes happening in
 		 * DropShardList() and InsertSplitChildrenShardMetadata() because the foreign
@@ -1424,10 +1436,10 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		CreateForeignKeyConstraints(shardGroupSplitIntervalListList,
 									workersForPlacementList);
 
-		/* 21) Drop dummy shards.
-		 * TODO(saawasek):Refactor and pass hashmap.Currently map is global variable */
+		/*
+		 * 21) Drop dummy shards.
+		 */
 		DropDummyShards(mapOfDummyShardToPlacement);
-
 
 		/* 22) Close source connection */
 		CloseConnection(sourceConnection);
@@ -1443,7 +1455,6 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		/* Do a best effort cleanup of shards created on workers in the above block */
 		TryDropSplitShardsOnFailure(mapOfShardToPlacementCreatedByWorkflow);
 
-		/*TODO(saawasek): Add checks to open new connection if sourceConnection is not valid anymore.*/
 		DropAllShardSplitLeftOvers(sourceShardToCopyNode,
 								   shardSplitHashMapForPublication);
 
@@ -1621,8 +1632,8 @@ CreateTemplateReplicationSlotAndReturnSnapshot(ShardInterval *shardInterval,
 	 * Try to drop leftover template replication slot if any from previous operation
 	 * and create new one.
 	 */
-	char *snapShotName = DropExistingIfAnyAndCreateTemplateReplicationSlot(shardInterval,
-																		   sourceConnection);
+	char *snapShotName = CreateTemplateReplicationSlot(shardInterval,
+													   sourceConnection);
 	*templateSlotConnection = sourceConnection;
 
 	return snapShotName;
@@ -1894,7 +1905,9 @@ DropDummyShard(MultiConnection *connection, ShardInterval *shardInterval)
 }
 
 
-/*todo(saawasek): Add comments */
+/*
+ * CreateReplicaIdentities creates replica indentities for split children and dummy shards.
+ */
 static void
 CreateReplicaIdentities(HTAB *mapOfDummyShardToPlacement,
 						List *shardGroupSplitIntervalListList,
@@ -1924,7 +1937,7 @@ CreateReplicaIdentities(HTAB *mapOfDummyShardToPlacement,
 		}
 	}
 
-	/*todo: remove the global variable dummy map*/
+	/* Create Replica Identities for dummy shards */
 	HASH_SEQ_STATUS status;
 	hash_seq_init(&status, mapOfDummyShardToPlacement);
 
