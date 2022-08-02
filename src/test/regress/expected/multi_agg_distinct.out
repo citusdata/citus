@@ -21,9 +21,9 @@ CREATE TABLE lineitem_range (
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null );
 SELECT create_distributed_table('lineitem_range', 'l_orderkey', 'range');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_create_empty_shard('lineitem_range') AS new_shard_id
@@ -38,14 +38,14 @@ COPY lineitem_range FROM :'lineitem_1_data_file' with delimiter '|'
 COPY lineitem_range FROM :'lineitem_2_data_file' with delimiter '|'
 -- Run aggregate(distinct) on partition column for range partitioned table
 SELECT count(distinct l_orderkey) FROM lineitem_range;
- count 
--------
+ count
+---------------------------------------------------------------------
   2985
 (1 row)
 
 SELECT avg(distinct l_orderkey) FROM lineitem_range;
-          avg          
------------------------
+          avg
+---------------------------------------------------------------------
  7463.9474036850921273
 (1 row)
 
@@ -56,8 +56,8 @@ SELECT p_partkey, count(distinct l_orderkey) FROM lineitem_range, part
 	WHERE l_partkey = p_partkey
 	GROUP BY p_partkey
 	ORDER BY p_partkey LIMIT 10;
- p_partkey | count 
------------+-------
+ p_partkey | count
+---------------------------------------------------------------------
         18 |     1
         79 |     1
         91 |     1
@@ -72,53 +72,53 @@ SELECT p_partkey, count(distinct l_orderkey) FROM lineitem_range, part
 
 -- Check that we support more complex expressions.
 SELECT count(distinct (l_orderkey)) FROM lineitem_range;
- count 
--------
+ count
+---------------------------------------------------------------------
   2985
 (1 row)
 
 SELECT count(distinct (l_orderkey + 1)) FROM lineitem_range;
- count 
--------
+ count
+---------------------------------------------------------------------
   2985
 (1 row)
 
 SELECT count(distinct (l_orderkey % 5)) FROM lineitem_range;
- count 
--------
+ count
+---------------------------------------------------------------------
      5
 (1 row)
 
 -- count(distinct) on non-partition column is allowed
 SELECT count(distinct l_partkey) FROM lineitem_range;
- count 
--------
+ count
+---------------------------------------------------------------------
  11661
 (1 row)
 
 SELECT count(distinct (l_partkey + 1)) FROM lineitem_range;
- count 
--------
+ count
+---------------------------------------------------------------------
  11661
 (1 row)
 
 SELECT count(distinct (l_partkey % 5)) FROM lineitem_range;
- count 
--------
+ count
+---------------------------------------------------------------------
      5
 (1 row)
 
 -- Now test append partitioned tables. First run count(distinct) on a single
 -- sharded table.
 SELECT count(distinct p_mfgr) FROM part;
- count 
--------
+ count
+---------------------------------------------------------------------
      5
 (1 row)
 
 SELECT p_mfgr, count(distinct p_partkey) FROM part GROUP BY p_mfgr ORDER BY p_mfgr;
-          p_mfgr           | count 
----------------------------+-------
+          p_mfgr           | count
+---------------------------------------------------------------------
  Manufacturer#1            |   193
  Manufacturer#2            |   190
  Manufacturer#3            |   228
@@ -129,8 +129,8 @@ SELECT p_mfgr, count(distinct p_partkey) FROM part GROUP BY p_mfgr ORDER BY p_mf
 -- We support count(distinct) queries on append partitioned tables
 -- both on partition column, and non-partition column.
 SELECT count(distinct o_orderkey), count(distinct o_custkey) FROM orders;
- count | count 
--------+-------
+ count | count
+---------------------------------------------------------------------
   2985 |   923
 (1 row)
 
@@ -154,61 +154,61 @@ CREATE TABLE lineitem_hash (
 	l_comment varchar(44) not null );
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 COPY lineitem_hash FROM :'lineitem_1_data_file' with delimiter '|'
 COPY lineitem_hash FROM :'lineitem_2_data_file' with delimiter '|'
 -- aggregate(distinct) on partition column is allowed
 SELECT count(distinct l_orderkey) FROM lineitem_hash;
- count 
--------
+ count
+---------------------------------------------------------------------
   2985
 (1 row)
 
 SELECT avg(distinct l_orderkey) FROM lineitem_hash;
-          avg          
------------------------
+          avg
+---------------------------------------------------------------------
  7463.9474036850921273
 (1 row)
 
 -- Check that we support more complex expressions.
 SELECT count(distinct (l_orderkey)) FROM lineitem_hash;
- count 
--------
+ count
+---------------------------------------------------------------------
   2985
 (1 row)
 
 SELECT count(distinct (l_orderkey + 1)) FROM lineitem_hash;
- count 
--------
+ count
+---------------------------------------------------------------------
   2985
 (1 row)
 
 SELECT count(distinct (l_orderkey % 5)) FROM lineitem_hash;
- count 
--------
+ count
+---------------------------------------------------------------------
      5
 (1 row)
 
 -- count(distinct) on non-partition column is allowed
 SELECT count(distinct l_partkey) FROM lineitem_hash;
- count 
--------
+ count
+---------------------------------------------------------------------
  11661
 (1 row)
 
 SELECT count(distinct (l_partkey + 1)) FROM lineitem_hash;
- count 
--------
+ count
+---------------------------------------------------------------------
  11661
 (1 row)
 
 SELECT count(distinct (l_partkey % 5)) FROM lineitem_hash;
- count 
--------
+ count
+---------------------------------------------------------------------
      5
 (1 row)
 
@@ -217,8 +217,8 @@ SELECT l_orderkey, count(distinct l_partkey) INTO hash_results FROM lineitem_has
 SELECT l_orderkey, count(distinct l_partkey) INTO range_results FROM lineitem_range GROUP BY l_orderkey;
 -- they should return the same results
 SELECT * FROM hash_results h, range_results r WHERE h.l_orderkey = r.l_orderkey AND h.count != r.count;
- l_orderkey | count | l_orderkey | count 
-------------+-------+------------+-------
+ l_orderkey | count | l_orderkey | count
+---------------------------------------------------------------------
 (0 rows)
 
 -- count(distinct) is allowed if we group by non-partition column
@@ -226,8 +226,8 @@ SELECT l_partkey, count(distinct l_orderkey) INTO hash_results_np FROM lineitem_
 SELECT l_partkey, count(distinct l_orderkey) INTO range_results_np FROM lineitem_range GROUP BY l_partkey;
 -- they should return the same results
 SELECT * FROM hash_results_np h, range_results_np r WHERE h.l_partkey = r.l_partkey AND h.count != r.count;
- l_partkey | count | l_partkey | count 
------------+-------+-----------+-------
+ l_partkey | count | l_partkey | count
+---------------------------------------------------------------------
 (0 rows)
 
 -- other agg(distinct) are not allowed on non-partition columns even they are grouped

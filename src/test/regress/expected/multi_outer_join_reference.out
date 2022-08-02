@@ -14,9 +14,9 @@ CREATE TABLE multi_outer_join_left_hash
 	l_comment varchar(117) not null
 );
 SELECT create_distributed_table('multi_outer_join_left_hash', 'l_custkey');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE multi_outer_join_right_reference
@@ -31,9 +31,9 @@ CREATE TABLE multi_outer_join_right_reference
 	r_comment varchar(117) not null
 );
 SELECT create_reference_table('multi_outer_join_right_reference');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE multi_outer_join_third_reference
@@ -48,9 +48,9 @@ CREATE TABLE multi_outer_join_third_reference
 	t_comment varchar(117) not null
 );
 SELECT create_reference_table('multi_outer_join_third_reference');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE multi_outer_join_right_hash
@@ -65,9 +65,9 @@ CREATE TABLE multi_outer_join_right_hash
 	r_comment varchar(117) not null
 );
 SELECT create_distributed_table('multi_outer_join_right_hash', 'r_custkey');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Make sure we do not crash if both tables are emmpty
@@ -75,9 +75,9 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_third_reference b ON (l_custkey = t_custkey);
- min | max 
------+-----
-     |    
+ min | max
+---------------------------------------------------------------------
+     |
 (1 row)
 
 -- Left table is a large table
@@ -91,8 +91,8 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_third_reference b ON (l_custkey = t_custkey);
- min | max 
------+-----
+ min | max
+---------------------------------------------------------------------
    1 |  20
 (1 row)
 
@@ -100,9 +100,9 @@ SELECT
 	min(t_custkey), max(t_custkey)
 FROM
 	multi_outer_join_third_reference a LEFT JOIN multi_outer_join_right_reference b ON (r_custkey = t_custkey);
- min | max 
------+-----
-     |    
+ min | max
+---------------------------------------------------------------------
+     |
 (1 row)
 
 -- Third table is a single shard table with all data
@@ -113,8 +113,8 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey);
- min | max 
------+-----
+ min | max
+---------------------------------------------------------------------
    1 |  20
 (1 row)
 
@@ -123,8 +123,8 @@ SELECT
 	count(*)
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_nationkey = r_nationkey);
- count 
--------
+ count
+---------------------------------------------------------------------
     28
 (1 row)
 
@@ -135,8 +135,8 @@ FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL;
- min | max 
------+-----
+ min | max
+---------------------------------------------------------------------
   16 |  20
 (1 row)
 
@@ -147,8 +147,8 @@ FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL OR r_custkey = 5;
- min | max 
------+-----
+ min | max
+---------------------------------------------------------------------
    5 |  20
 (1 row)
 
@@ -160,8 +160,8 @@ FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey = 5 or r_custkey > 15;
- min | max 
------+-----
+ min | max
+---------------------------------------------------------------------
    5 |   5
 (1 row)
 
@@ -171,8 +171,8 @@ SELECT
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND r_custkey = 5);
- count | count 
--------+-------
+ count | count
+---------------------------------------------------------------------
     20 |     1
 (1 row)
 
@@ -182,8 +182,8 @@ SELECT
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND r_custkey = -1 /* nonexistant */);
- count | count 
--------+-------
+ count | count
+---------------------------------------------------------------------
     20 |     0
 (1 row)
 
@@ -193,8 +193,8 @@ SELECT
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND l_custkey = -1 /* nonexistant */);
- count | count 
--------+-------
+ count | count
+---------------------------------------------------------------------
     20 |     0
 (1 row)
 
@@ -210,8 +210,8 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_right_reference a RIGHT JOIN multi_outer_join_left_hash b ON (l_custkey = r_custkey);
- min | max 
------+-----
+ min | max
+---------------------------------------------------------------------
    1 |  20
 (1 row)
 
@@ -242,8 +242,8 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_hash b ON (l_custkey = r_custkey);
- min | max 
------+-----
+ min | max
+---------------------------------------------------------------------
    1 |  30
 (1 row)
 
@@ -260,8 +260,8 @@ FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL;
- min | max 
------+-----
+ min | max
+---------------------------------------------------------------------
    1 |  10
 (1 row)
 
@@ -272,8 +272,8 @@ FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL OR r_custkey = 15;
- min | max 
------+-----
+ min | max
+---------------------------------------------------------------------
    1 |  15
 (1 row)
 
@@ -285,8 +285,8 @@ FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey = 21 or r_custkey < 10;
- min | max 
------+-----
+ min | max
+---------------------------------------------------------------------
   21 |  21
 (1 row)
 
@@ -296,8 +296,8 @@ SELECT
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND r_custkey = 21);
- count | count 
--------+-------
+ count | count
+---------------------------------------------------------------------
     25 |     1
 (1 row)
 
@@ -313,8 +313,8 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_right_reference a RIGHT JOIN multi_outer_join_left_hash b ON (l_custkey = r_custkey);
- min | max 
------+-----
+ min | max
+---------------------------------------------------------------------
    1 |  30
 (1 row)
 
@@ -346,18 +346,18 @@ FROM
 	LEFT JOIN multi_outer_join_right_reference r1 ON (l1.l_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey)
 ORDER BY 1;
- l_custkey | r_custkey | t_custkey 
------------+-----------+-----------
-         1 |           |          
-         2 |           |          
-         3 |           |          
-         4 |           |          
-         5 |           |          
-         6 |           |          
-         7 |           |          
-         8 |           |          
-         9 |           |          
-        10 |           |          
+ l_custkey | r_custkey | t_custkey
+---------------------------------------------------------------------
+         1 |           |
+         2 |           |
+         3 |           |
+         4 |           |
+         5 |           |
+         6 |           |
+         7 |           |
+         8 |           |
+         9 |           |
+        10 |           |
         11 |        11 |        11
         12 |        12 |        12
         13 |        13 |        13
@@ -392,18 +392,18 @@ FROM
 	RIGHT JOIN multi_outer_join_right_hash r1 ON (t1.t_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_left_hash l1 ON (r1.r_custkey  = l1.l_custkey)
 ORDER BY 1,2,3;
- t_custkey | r_custkey | l_custkey 
------------+-----------+-----------
+ t_custkey | r_custkey | l_custkey
+---------------------------------------------------------------------
         11 |        11 |        11
         12 |        12 |        12
         13 |        13 |        13
         14 |        14 |        14
         15 |        15 |        15
-        16 |        16 |          
-        17 |        17 |          
-        18 |        18 |          
-        19 |        19 |          
-        20 |        20 |          
+        16 |        16 |
+        17 |        17 |
+        18 |        18 |
+        19 |        19 |
+        20 |        20 |
         21 |        21 |        21
         22 |        22 |        22
         23 |        23 |        23
@@ -426,13 +426,13 @@ FROM
 WHERE
 	l_custkey is NULL
 ORDER BY 1;
- t_custkey | r_custkey | l_custkey 
------------+-----------+-----------
-        16 |        16 |          
-        17 |        17 |          
-        18 |        18 |          
-        19 |        19 |          
-        20 |        20 |          
+ t_custkey | r_custkey | l_custkey
+---------------------------------------------------------------------
+        16 |        16 |
+        17 |        17 |
+        18 |        18 |
+        19 |        19 |
+        20 |        20 |
 (5 rows)
 
 -- Cascading right join with single shard left most table should work
@@ -443,8 +443,8 @@ FROM
 	RIGHT JOIN multi_outer_join_right_hash r1 ON (t1.t_custkey = r1.r_custkey)
 	RIGHT JOIN multi_outer_join_left_hash l1 ON (r1.r_custkey  = l1.l_custkey)
 ORDER BY l_custkey;
- t_custkey | r_custkey | l_custkey 
------------+-----------+-----------
+ t_custkey | r_custkey | l_custkey
+---------------------------------------------------------------------
            |           |         1
            |           |         2
            |           |         3
@@ -479,18 +479,18 @@ FROM
 	multi_outer_join_left_hash l1
 	FULL JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey = r1.r_custkey)
 ORDER BY 1,2;
- l_custkey | r_custkey 
------------+-----------
-         1 |          
-         2 |          
-         3 |          
-         4 |          
-         5 |          
-         6 |          
-         7 |          
-         8 |          
-         9 |          
-        10 |          
+ l_custkey | r_custkey
+---------------------------------------------------------------------
+         1 |
+         2 |
+         3 |
+         4 |
+         5 |
+         6 |
+         7 |
+         8 |
+         9 |
+        10 |
         11 |        11
         12 |        12
         13 |        13
@@ -519,21 +519,21 @@ SELECT
 FROM
 	multi_outer_join_left_hash l1
 	FULL JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey = r1.r_custkey)
-WHERE 
+WHERE
 	r_custkey is NULL
 ORDER BY 1;
- l_custkey | r_custkey 
------------+-----------
-         1 |          
-         2 |          
-         3 |          
-         4 |          
-         5 |          
-         6 |          
-         7 |          
-         8 |          
-         9 |          
-        10 |          
+ l_custkey | r_custkey
+---------------------------------------------------------------------
+         1 |
+         2 |
+         3 |
+         4 |
+         5 |
+         6 |
+         7 |
+         8 |
+         9 |
+        10 |
 (10 rows)
 
 -- full outer join + anti (left) should work with 1-1 matched shards
@@ -542,11 +542,11 @@ SELECT
 FROM
 	multi_outer_join_left_hash l1
 	FULL JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey = r1.r_custkey)
-WHERE 
+WHERE
 	l_custkey is NULL
 ORDER BY 2;
- l_custkey | r_custkey 
------------+-----------
+ l_custkey | r_custkey
+---------------------------------------------------------------------
            |        16
            |        17
            |        18
@@ -560,21 +560,21 @@ SELECT
 FROM
 	multi_outer_join_left_hash l1
 	FULL JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey = r1.r_custkey)
-WHERE 
+WHERE
 	l_custkey is NULL or r_custkey is NULL
 ORDER BY 1,2 DESC;
- l_custkey | r_custkey 
------------+-----------
-         1 |          
-         2 |          
-         3 |          
-         4 |          
-         5 |          
-         6 |          
-         7 |          
-         8 |          
-         9 |          
-        10 |          
+ l_custkey | r_custkey
+---------------------------------------------------------------------
+         1 |
+         2 |
+         3 |
+         4 |
+         5 |
+         6 |
+         7 |
+         8 |
+         9 |
+        10 |
            |        20
            |        19
            |        18
@@ -598,8 +598,8 @@ FROM
 	INNER JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey)
 ORDER BY 1;
- l_custkey | r_custkey | t_custkey 
------------+-----------+-----------
+ l_custkey | r_custkey | t_custkey
+---------------------------------------------------------------------
         11 |        11 |        11
         12 |        12 |        12
         13 |        13 |        13
@@ -625,18 +625,18 @@ FROM
 	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey  = r1.r_custkey)
 ORDER BY 1,2,3;
- l_custkey | t_custkey | r_custkey 
------------+-----------+-----------
-         1 |         1 |          
-         2 |         2 |          
-         3 |         3 |          
-         4 |         4 |          
-         5 |         5 |          
-         6 |         6 |          
-         7 |         7 |          
-         8 |         8 |          
-         9 |         9 |          
-        10 |        10 |          
+ l_custkey | t_custkey | r_custkey
+---------------------------------------------------------------------
+         1 |         1 |
+         2 |         2 |
+         3 |         3 |
+         4 |         4 |
+         5 |         5 |
+         6 |         6 |
+         7 |         7 |
+         8 |         8 |
+         9 |         9 |
+        10 |        10 |
         11 |        11 |        11
         12 |        12 |        12
         13 |        13 |        13
@@ -662,18 +662,18 @@ FROM
 	INNER JOIN multi_outer_join_left_hash l1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right_reference r1 ON (l1.l_custkey  = r1.r_custkey)
 ORDER BY 1,2,3;
- t_custkey | l_custkey | r_custkey 
------------+-----------+-----------
-         1 |         1 |          
-         2 |         2 |          
-         3 |         3 |          
-         4 |         4 |          
-         5 |         5 |          
-         6 |         6 |          
-         7 |         7 |          
-         8 |         8 |          
-         9 |         9 |          
-        10 |        10 |          
+ t_custkey | l_custkey | r_custkey
+---------------------------------------------------------------------
+         1 |         1 |
+         2 |         2 |
+         3 |         3 |
+         4 |         4 |
+         5 |         5 |
+         6 |         6 |
+         7 |         7 |
+         8 |         8 |
+         9 |         9 |
+        10 |        10 |
         11 |        11 |        11
         12 |        12 |        12
         13 |        13 |        13
@@ -699,18 +699,18 @@ FROM
 	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey  = r1.r_custkey)
 ORDER BY 1,2,3;
- l_custkey | t_custkey | r_custkey 
------------+-----------+-----------
-         1 |         1 |          
-         2 |         2 |          
-         3 |         3 |          
-         4 |         4 |          
-         5 |         5 |          
-         6 |         6 |          
-         7 |         7 |          
-         8 |         8 |          
-         9 |         9 |          
-        10 |        10 |          
+ l_custkey | t_custkey | r_custkey
+---------------------------------------------------------------------
+         1 |         1 |
+         2 |         2 |
+         3 |         3 |
+         4 |         4 |
+         5 |         5 |
+         6 |         6 |
+         7 |         7 |
+         8 |         8 |
+         9 |         9 |
+        10 |        10 |
         11 |        11 |        11
         12 |        12 |        12
         13 |        13 |        13
@@ -738,31 +738,31 @@ FROM
 WHERE
 	r_custkey is NULL
 ORDER BY 1;
- l_custkey | t_custkey | r_custkey 
------------+-----------+-----------
-         1 |         1 |          
-         2 |         2 |          
-         3 |         3 |          
-         4 |         4 |          
-         5 |         5 |          
-         6 |         6 |          
-         7 |         7 |          
-         8 |         8 |          
-         9 |         9 |          
-        10 |        10 |          
+ l_custkey | t_custkey | r_custkey
+---------------------------------------------------------------------
+         1 |         1 |
+         2 |         2 |
+         3 |         3 |
+         4 |         4 |
+         5 |         5 |
+         6 |         6 |
+         7 |         7 |
+         8 |         8 |
+         9 |         9 |
+        10 |        10 |
 (10 rows)
 
 -- Test joinExpr aliases by performing an outer-join.
-SELECT 
+SELECT
 	t_custkey
-FROM   
-	(multi_outer_join_right_hash r1 
+FROM
+	(multi_outer_join_right_hash r1
 	LEFT OUTER JOIN multi_outer_join_left_hash l1 ON (l1.l_custkey = r1.r_custkey)) AS
     test(c_custkey, c_nationkey)
     INNER JOIN multi_outer_join_third_reference t1 ON (test.c_custkey = t1.t_custkey)
 ORDER BY 1;
- t_custkey 
------------
+ t_custkey
+---------------------------------------------------------------------
         11
         12
         13
@@ -802,8 +802,8 @@ LEFT JOIN (
 GROUP BY l1.l_custkey
 ORDER BY cnt DESC, l1.l_custkey DESC
 LIMIT 20;
- l_custkey | cnt 
------------+-----
+ l_custkey | cnt
+---------------------------------------------------------------------
         30 |   1
         29 |   1
         28 |   1
@@ -827,24 +827,24 @@ LIMIT 20;
 (20 rows)
 
 -- full join among reference tables should go thourgh router planner
-SELECT 
-	t_custkey, r_custkey 
-FROM 
-	multi_outer_join_right_reference FULL JOIN 
+SELECT
+	t_custkey, r_custkey
+FROM
+	multi_outer_join_right_reference FULL JOIN
 	multi_outer_join_third_reference ON (t_custkey = r_custkey)
 ORDER BY 1;
- t_custkey | r_custkey 
------------+-----------
-         1 |          
-         2 |          
-         3 |          
-         4 |          
-         5 |          
-         6 |          
-         7 |          
-         8 |          
-         9 |          
-        10 |          
+ t_custkey | r_custkey
+---------------------------------------------------------------------
+         1 |
+         2 |
+         3 |
+         4 |
+         5 |
+         6 |
+         7 |
+         8 |
+         9 |
+        10 |
         11 |        11
         12 |        12
         13 |        13
@@ -879,8 +879,8 @@ LEFT JOIN (
     ON (r_name = t_name)
 ) AS bar
 ON (l_name = r_name);
- count 
--------
+ count
+---------------------------------------------------------------------
     25
 (1 row)
 

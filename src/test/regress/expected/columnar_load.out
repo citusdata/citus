@@ -42,7 +42,7 @@ COPY famous_constants (value, name, id) FROM STDIN WITH CSV;
 COPY famous_constants (name, value) FROM STDIN WITH CSV;
 SELECT * FROM famous_constants ORDER BY id, name;
  id |      name      |   value
-----+----------------+-----------
+---------------------------------------------------------------------
   1 | pi             |     3.141
   2 | e              |     2.718
   3 | gamma          |     0.577
