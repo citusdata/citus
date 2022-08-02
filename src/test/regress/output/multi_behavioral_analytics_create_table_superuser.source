@@ -330,7 +330,7 @@ SELECT master_create_empty_shard('orders_subquery') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = 8997, shardmaxvalue = 14947
 WHERE shardid = :new_shard_id;
-\copy lineitem_subquery FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-\copy lineitem_subquery FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
-\copy orders_subquery FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
-\copy orders_subquery FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
+\copy lineitem_subquery FROM :'lineitem_1_data_file' with delimiter '|'
+\copy lineitem_subquery FROM :'lineitem_2_data_file' with delimiter '|'
+\copy orders_subquery FROM :'orders_1_data_file' with delimiter '|'
+\copy orders_subquery FROM :'orders_2_data_file' with delimiter '|'

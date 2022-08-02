@@ -34,8 +34,8 @@ SELECT master_create_empty_shard('lineitem_range') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = 8997, shardmaxvalue = 14947
 WHERE shardid = :new_shard_id;
-\copy lineitem_range FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-\copy lineitem_range FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+\copy lineitem_range FROM :'lineitem_1_data_file' with delimiter '|'
+\copy lineitem_range FROM :'lineitem_2_data_file' with delimiter '|'
 -- Run aggregate(distinct) on partition column for range partitioned table
 SELECT count(distinct l_orderkey) FROM lineitem_range;
  count 
@@ -159,8 +159,8 @@ SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
  
 (1 row)
 
-\copy lineitem_hash FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-\copy lineitem_hash FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+\copy lineitem_hash FROM :'lineitem_1_data_file' with delimiter '|'
+\copy lineitem_hash FROM :'lineitem_2_data_file' with delimiter '|'
 -- aggregate(distinct) on partition column is allowed
 SELECT count(distinct l_orderkey) FROM lineitem_hash;
  count 

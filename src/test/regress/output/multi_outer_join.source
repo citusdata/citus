@@ -795,7 +795,7 @@ LIMIT 20;
 (16 rows)
 
 -- Add a shard to the left table that overlaps with multiple shards in the right
-\copy multi_outer_join_left FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
+\copy multi_outer_join_left FROM :'customer_1_data_file' with delimiter '|'
 -- All outer joins should error out
 SELECT
 	min(l_custkey), max(l_custkey)

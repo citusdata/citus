@@ -29,8 +29,10 @@ CREATE TABLE lineitem_hash (
 
 SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
 
-\copy lineitem_hash FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-\copy lineitem_hash FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+\set lineitem_1_data_file :abs_srcdir '/data/lineitem_1_data_file'
+\set lineitem_2_data_file :abs_srcdir '/data/lineitem_2_data_file'
+\copy lineitem_hash FROM :'lineitem_1_data_file' with delimiter '|'
+\copy lineitem_hash FROM :'lineitem_2_data_file' with delimiter '|'
 
 ANALYZE lineitem_hash;
 

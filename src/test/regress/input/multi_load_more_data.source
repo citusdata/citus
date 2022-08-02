@@ -10,16 +10,22 @@ SET citus.next_shard_id TO 280000;
 -- loading causes the planner to consider customer and part tables as large, and
 -- evaluate plans where some of the underlying tables need to be repartitioned.
 
-\copy customer FROM '@abs_srcdir@/data/customer.2.data' with delimiter '|'
-\copy customer FROM '@abs_srcdir@/data/customer.3.data' with delimiter '|'
-\copy part FROM '@abs_srcdir@/data/part.more.data' with delimiter '|'
+\set template_file :abs_srcdir '/data/template_file'
+\copy customer FROM :'customer_2_data_file' with delimiter '|'
+\set template_file :abs_srcdir '/data/template_file'
+\copy customer FROM :'customer_3_data_file' with delimiter '|'
+\set template_file :abs_srcdir '/data/template_file'
+\copy part FROM :'part_more_data_file' with delimiter '|'
 
 SELECT master_create_empty_shard('customer_append') AS shardid1 \gset
 SELECT master_create_empty_shard('customer_append') AS shardid2 \gset
 
-copy customer_append FROM '@abs_srcdir@/data/customer.2.data' with (delimiter '|', append_to_shard :shardid1);
-copy customer_append FROM '@abs_srcdir@/data/customer.3.data' with (delimiter '|', append_to_shard :shardid2);
+\set template_file :abs_srcdir '/data/template_file'
+copy customer_append FROM :'customer_2_data_file' with (delimiter '|', append_to_shard :shardid1);
+\set template_file :abs_srcdir '/data/template_file'
+copy customer_append FROM :'customer_3_data_file' with (delimiter '|', append_to_shard :shardid2);
 
 SELECT master_create_empty_shard('part_append') AS shardid \gset
 
-copy part_append FROM '@abs_srcdir@/data/part.more.data' with (delimiter '|', append_to_shard :shardid);
+\set template_file :abs_srcdir '/data/template_file'
+copy part_append FROM :'part_more_data_file' with (delimiter '|', append_to_shard :shardid);

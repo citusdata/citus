@@ -2,7 +2,7 @@
 -- Test loading data into columnar tables.
 --
 -- COPY with incorrect delimiter
-COPY contestant FROM '@abs_srcdir@/data/contestants.1.csv'
+COPY contestant FROM :'contestants_1_csv_file'
 	WITH DELIMITER '|'; -- ERROR
 ERROR:  missing data for column "birthdate"
 CONTEXT:  COPY contestant, line 1: "a,1990-01-10,2090,97.1,XA ,{a}"
@@ -11,7 +11,7 @@ COPY contestant FROM PROGRAM 'invalid_program' WITH CSV; -- ERROR
 ERROR:  program "invalid_program" failed
 DETAIL:  command not found
 -- COPY into uncompressed table from file
-COPY contestant FROM '@abs_srcdir@/data/contestants.1.csv' WITH CSV;
+COPY contestant FROM :'contestants_1_csv_file' WITH CSV;
 -- COPY into uncompressed table from program
 COPY contestant FROM PROGRAM 'cat @abs_srcdir@/data/contestants.2.csv' WITH CSV;
 select
@@ -23,7 +23,7 @@ select
 (1 row)
 
 -- COPY into compressed table
-COPY contestant_compressed FROM '@abs_srcdir@/data/contestants.1.csv' WITH CSV;
+COPY contestant_compressed FROM :'contestants_1_csv_file' WITH CSV;
 -- COPY into uncompressed table from program
 COPY contestant_compressed FROM PROGRAM 'cat @abs_srcdir@/data/contestants.2.csv'
 	WITH CSV;
