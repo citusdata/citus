@@ -1,4 +1,4 @@
-\copy lineitem_hash_part FROM :'lineitem_1_data_file' with delimiter '|'
-\copy lineitem_hash_part FROM :'lineitem_2_data_file' with delimiter '|'
-\copy orders_hash_part FROM :'orders_1_data_file' with delimiter '|'
-\copy orders_hash_part FROM :'orders_2_data_file' with delimiter '|'
+COPY lineitem_hash_part FROM :'lineitem_1_data_file' with delimiter '|'
+COPY lineitem_hash_part FROM :'lineitem_2_data_file' with delimiter '|'
+COPY orders_hash_part FROM :'orders_1_data_file' with delimiter '|'
+COPY orders_hash_part FROM :'orders_2_data_file' with delimiter '|'

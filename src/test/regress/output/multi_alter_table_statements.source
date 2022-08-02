@@ -133,7 +133,7 @@ SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
 -- Verify that SET|DROP DEFAULT works
 ALTER TABLE lineitem_alter ALTER COLUMN float_column SET DEFAULT 1;
 ALTER TABLE lineitem_alter ALTER COLUMN int_column1 DROP DEFAULT;
--- \copy to verify that default values take effect
+-- COPY to verify that default values take effect
 SELECT master_create_empty_shard('lineitem_alter') as shardid \gset
 copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM :'lineitem_1_data_file' with (delimiter '|', append_to_shard :shardid);
 SELECT float_column, count(*) FROM lineitem_alter GROUP BY float_column;
@@ -180,7 +180,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineite
 
 -- Drop default so that NULLs will be inserted for this column
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP DEFAULT;
--- \copy should fail because it will try to insert NULLs for a NOT NULL column
+-- COPY should fail because it will try to insert NULLs for a NOT NULL column
 -- Note, this operation will create a table on the workers but it won't be in the metadata
 BEGIN;
 SELECT master_create_empty_shard('lineitem_alter') as shardid \gset
@@ -216,7 +216,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineite
  null_column     | integer               | 
 (21 rows)
 
--- \copy should succeed now
+-- COPY should succeed now
 SELECT master_create_empty_shard('lineitem_alter') as shardid \gset
 copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM :'lineitem_1_data_file' with (delimiter '|', append_to_shard :shardid);
 SELECT count(*) from lineitem_alter;

@@ -1,16 +1,16 @@
 --
 -- MULTI_LOAD_DATA
 --
-\copy lineitem FROM :'lineitem_1_data_file' with delimiter '|'
-\copy lineitem FROM :'lineitem_2_data_file' with delimiter '|'
-\copy orders FROM :'orders_1_data_file' with delimiter '|'
-\copy orders FROM :'orders_2_data_file' with delimiter '|'
-\copy orders_reference FROM :'orders_1_data_file' with delimiter '|'
-\copy orders_reference FROM :'orders_2_data_file' with delimiter '|'
-\copy customer FROM :'customer_1_data_file' with delimiter '|'
-\copy customer_append FROM :'customer_1_data_file' with (delimiter '|', append_to_shard 360006)
-\copy nation FROM :'nation_data_file' with delimiter '|'
-\copy part FROM :'part_data_file' with delimiter '|'
-\copy part_append FROM :'part_data_file' with (delimiter '|', append_to_shard 360009)
-\copy supplier FROM :'supplier_data_file' with delimiter '|'
-\copy supplier_single_shard FROM :'supplier_data_file' with delimiter '|'
+COPY lineitem FROM :'lineitem_1_data_file' with delimiter '|'
+COPY lineitem FROM :'lineitem_2_data_file' with delimiter '|'
+COPY orders FROM :'orders_1_data_file' with delimiter '|'
+COPY orders FROM :'orders_2_data_file' with delimiter '|'
+COPY orders_reference FROM :'orders_1_data_file' with delimiter '|'
+COPY orders_reference FROM :'orders_2_data_file' with delimiter '|'
+COPY customer FROM :'customer_1_data_file' with delimiter '|'
+COPY customer_append FROM :'customer_1_data_file' with (delimiter '|', append_to_shard 360006)
+COPY nation FROM :'nation_data_file' with delimiter '|'
+COPY part FROM :'part_data_file' with delimiter '|'
+COPY part_append FROM :'part_data_file' with (delimiter '|', append_to_shard 360009)
+COPY supplier FROM :'supplier_data_file' with delimiter '|'
+COPY supplier_single_shard FROM :'supplier_data_file' with delimiter '|'

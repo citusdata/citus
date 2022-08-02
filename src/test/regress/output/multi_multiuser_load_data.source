@@ -8,25 +8,25 @@
 -- tests expect the placements to be in that order.
 SET citusdb.shard_placement_policy TO 'local-node-first';
 -- load as superuser
-\copy lineitem FROM :'lineitem_1_data_file' with delimiter '|'
+COPY lineitem FROM :'lineitem_1_data_file' with delimiter '|'
 -- as user with ALL access
 SET ROLE full_access;
-\copy lineitem FROM :'lineitem_2_data_file' with delimiter '|'
+COPY lineitem FROM :'lineitem_2_data_file' with delimiter '|'
 RESET ROLE;
 -- as user with SELECT access, should fail
 SET ROLE read_access;
-\copy lineitem FROM :'lineitem_2_data_file' with delimiter '|'
+COPY lineitem FROM :'lineitem_2_data_file' with delimiter '|'
 ERROR:  permission denied for table lineitem
 RESET ROLE;
 -- as user with no access, should fail
 SET ROLE no_access;
-\copy lineitem FROM :'lineitem_2_data_file' with delimiter '|'
+COPY lineitem FROM :'lineitem_2_data_file' with delimiter '|'
 ERROR:  permission denied for table lineitem
 RESET ROLE;
 SET ROLE full_access;
-\copy orders FROM :'orders_1_data_file' with delimiter '|'
-\copy orders FROM :'orders_2_data_file' with delimiter '|'
-\copy customer FROM :'customer_1_data_file' with delimiter '|'
-\copy nation FROM :'nation_data_file' with delimiter '|'
-\copy part FROM :'part_data_file' with delimiter '|'
-\copy supplier FROM :'supplier_data_file' with delimiter '|'
+COPY orders FROM :'orders_1_data_file' with delimiter '|'
+COPY orders FROM :'orders_2_data_file' with delimiter '|'
+COPY customer FROM :'customer_1_data_file' with delimiter '|'
+COPY nation FROM :'nation_data_file' with delimiter '|'
+COPY part FROM :'part_data_file' with delimiter '|'
+COPY supplier FROM :'supplier_data_file' with delimiter '|'
