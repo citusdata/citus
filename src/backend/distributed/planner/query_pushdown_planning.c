@@ -349,6 +349,13 @@ IsFunctionOrValuesRTE(Node *node)
 		{
 			return true;
 		}
+		else if (rangeTblEntry->rtekind == RTE_TABLEFUNC)
+		{
+			TableFunc  *tablefunc = rangeTblEntry->tablefunc;
+
+
+			return tablefunc->functype == TFT_JSON_TABLE;
+		}
 	}
 
 	return false;
@@ -1835,6 +1842,15 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 		{
 			*recurType = RECURRING_TUPLES_VALUES;
 			return true;
+		}
+		else if (rangeTableEntry->rtekind == RTE_TABLEFUNC)
+		{
+			TableFunc  *tablefunc = rangeTableEntry->tablefunc;
+			if (tablefunc->functype == TFT_JSON_TABLE)
+			{
+				*recurType = RECURRING_TUPLES_FUNCTION;
+				return true;
+			}
 		}
 
 		return false;
