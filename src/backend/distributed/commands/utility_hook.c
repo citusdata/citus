@@ -552,8 +552,8 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 * prevent before-mentioned citus related messages. PG will complain about the
 		 * invalid address, so we are safe to not execute qualify and preprocess. Also
 		 * note that we should not guard any step after standardProcess_Utility with
-		 * the flag distOpsHasInvalidObject because PG would have already failed the 
-		 * transaction.  
+		 * the flag distOpsHasInvalidObject because PG would have already failed the
+		 * transaction.
 		 */
 		distOpsHasInvalidObject = DistOpsHasInvalidObject(parsetree, ops);
 
@@ -872,7 +872,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 */
 		if (ops && ops->markDistributed)
 		{
-			List *addresses = GetObjectAddressListFromParseTree(parsetree, false);
+			List *addresses = GetObjectAddressListFromParseTree(parsetree, false, true);
 			ObjectAddress *address = NULL;
 			foreach_ptr(address, addresses)
 			{

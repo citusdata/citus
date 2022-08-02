@@ -316,35 +316,43 @@ GetCitusDependedObjectArgs(int pgMetaTableVarno, int pgMetaTableOid)
 /*
  * DistOpsHasInvalidObject returns true if any address in the given node
  * is invalid; otherwise, returns false. If ops is null or it has no
- * implemented address method, we return false.
- *
- * We have some dist ops for which we should not validate.
- * 1) We should not validate CREATE statements because no address exists
- * here yet.
- * 2) We should not validate '[DROP|ALTER] IF EXISTS' statements because it is ok
- * by the semantics even if any object is invalid.
- * 3) We should not validate 'ALTER ROLE ALL [SET|UNSET] because for the role ALL
- * AlterRoleSetStmtObjectAddress returns an invalid address even though it should not.
+ * implemented address method, we return false. We also have some dist ops
+ * for which we should not validate and return false.
  */
 bool
 DistOpsHasInvalidObject(Node *node, const DistributeObjectOps *ops)
 {
 	if (ops && ops->operationType == DIST_OPS_CREATE)
 	{
+		/*
+		 * We should not validate CREATE statements because no address exists
+		 * here yet.
+		 */
 		return false;
 	}
 	else if (StatementContainsIfExist(node))
 	{
+		/*
+		 * We should not validate '[DROP|ALTER] IF EXISTS' statements because it is ok
+		 * by the semantics even if any object is invalid.
+		 */
 		return false;
 	}
 	else if (AlterRoleSetStatementContainsAll(node))
 	{
+		/*
+		 * We should not validate 'ALTER ROLE ALL [SET|UNSET] because for the role ALL
+		 * AlterRoleSetStmtObjectAddress returns an invalid address even though it should not.
+		 */
 		return false;
 	}
 
 	if (ops && ops->address)
 	{
-		List *objectAddresses = ops->address(node, true);
+		bool missingOk = true;
+		bool isPostprocess = false;
+		List *objectAddresses = ops->address(node, missingOk, isPostprocess);
+
 		ObjectAddress *objectAddress = NULL;
 		foreach_ptr(objectAddress, objectAddresses)
 		{

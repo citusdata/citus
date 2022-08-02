@@ -224,7 +224,7 @@ PostprocessCreateTriggerStmt(Node *node, const char *queryString)
 	EnsureCoordinator();
 	ErrorOutForTriggerIfNotSupported(relationId);
 
-	List *objectAddresses = GetObjectAddressListFromParseTree(node, missingOk);
+	List *objectAddresses = GetObjectAddressListFromParseTree(node, missingOk, true);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(objectAddresses) == 1);
@@ -246,7 +246,7 @@ PostprocessCreateTriggerStmt(Node *node, const char *queryString)
  * was set to true.
  */
 List *
-CreateTriggerStmtObjectAddress(Node *node, bool missingOk)
+CreateTriggerStmtObjectAddress(Node *node, bool missingOk, bool isPostprocess)
 {
 	CreateTrigStmt *createTriggerStmt = castNode(CreateTrigStmt, node);
 

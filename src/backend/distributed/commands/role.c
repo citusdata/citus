@@ -88,7 +88,7 @@ bool EnableAlterRoleSetPropagation = true;
  * was unable to find the role that was the target of the statement.
  */
 List *
-AlterRoleStmtObjectAddress(Node *node, bool missing_ok)
+AlterRoleStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
 	return RoleSpecToObjectAddress(stmt->role, missing_ok);
@@ -101,7 +101,7 @@ AlterRoleStmtObjectAddress(Node *node, bool missing_ok)
  * was unable to find the role that was the target of the statement.
  */
 List *
-AlterRoleSetStmtObjectAddress(Node *node, bool missing_ok)
+AlterRoleSetStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterRoleSetStmt *stmt = castNode(AlterRoleSetStmt, node);
 	return RoleSpecToObjectAddress(stmt->role, missing_ok);
@@ -124,13 +124,6 @@ RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok)
 		Oid roleOid = get_rolespec_oid(role, missing_ok);
 		ObjectAddressSet(*address, AuthIdRelationId, roleOid);
 	}
-	else
-	{
-		/*
-		 * If rolespec is null, role can be 'ALL'. We should be returning a pseudo-valid oid.
-		 */
-		ObjectAddressSet(*address, AuthIdRelationId, OID_MAX);
-	}
 
 	return list_make1(address);
 }
@@ -144,7 +137,7 @@ RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok)
 List *
 PostprocessAlterRoleStmt(Node *node, const char *queryString)
 {
-	List *addresses = GetObjectAddressListFromParseTree(node, false);
+	List *addresses = GetObjectAddressListFromParseTree(node, false, true);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(addresses) == 1);
@@ -219,7 +212,7 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	List *addresses = GetObjectAddressListFromParseTree(node, false);
+	List *addresses = GetObjectAddressListFromParseTree(node, false, false);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(addresses) == 1);
@@ -1195,7 +1188,7 @@ ConfigGenericNameCompare(const void *a, const void *b)
  * to true.
  */
 List *
-CreateRoleStmtObjectAddress(Node *node, bool missing_ok)
+CreateRoleStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	CreateRoleStmt *stmt = castNode(CreateRoleStmt, node);
 	Oid roleOid = get_role_oid(stmt->role, missing_ok);

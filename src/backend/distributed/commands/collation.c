@@ -170,7 +170,7 @@ CreateCollationDDLsIdempotent(Oid collationId)
 
 
 List *
-AlterCollationOwnerObjectAddress(Node *node, bool missing_ok)
+AlterCollationOwnerObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Relation relation;
@@ -192,7 +192,7 @@ AlterCollationOwnerObjectAddress(Node *node, bool missing_ok)
  * of the RenameStmt. Errors if missing_ok is false.
  */
 List *
-RenameCollationStmtObjectAddress(Node *node, bool missing_ok)
+RenameCollationStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_COLLATION);
@@ -215,7 +215,7 @@ RenameCollationStmtObjectAddress(Node *node, bool missing_ok)
  * schemas.
  */
 List *
-AlterCollationSchemaStmtObjectAddress(Node *node, bool missing_ok)
+AlterCollationSchemaStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_COLLATION);
@@ -297,7 +297,7 @@ GenerateBackupNameForCollationCollision(const ObjectAddress *address)
 
 
 List *
-DefineCollationStmtObjectAddress(Node *node, bool missing_ok)
+DefineCollationStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	DefineStmt *stmt = castNode(DefineStmt, node);
 	Assert(stmt->kind == OBJECT_COLLATION);

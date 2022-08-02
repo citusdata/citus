@@ -181,7 +181,7 @@ PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 								(void *) createExtensionStmtSql,
 								ENABLE_DDL_PROPAGATION);
 
-	List *extensionAddresses = GetObjectAddressListFromParseTree(node, false);
+	List *extensionAddresses = GetObjectAddressListFromParseTree(node, false, true);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(extensionAddresses) == 1);
@@ -413,7 +413,7 @@ PreprocessAlterExtensionSchemaStmt(Node *node, const char *queryString,
 List *
 PostprocessAlterExtensionSchemaStmt(Node *node, const char *queryString)
 {
-	List *extensionAddresses = GetObjectAddressListFromParseTree(node, false);
+	List *extensionAddresses = GetObjectAddressListFromParseTree(node, false, true);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(extensionAddresses) == 1);
@@ -1134,7 +1134,7 @@ GetDependentFDWsToExtension(Oid extensionId)
  * the subject of the AlterObjectSchemaStmt. Errors if missing_ok is false.
  */
 List *
-AlterExtensionSchemaStmtObjectAddress(Node *node, bool missing_ok)
+AlterExtensionSchemaStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_EXTENSION);
@@ -1162,7 +1162,7 @@ AlterExtensionSchemaStmtObjectAddress(Node *node, bool missing_ok)
  * the subject of the AlterExtensionStmt. Errors if missing_ok is false.
  */
 List *
-AlterExtensionUpdateStmtObjectAddress(Node *node, bool missing_ok)
+AlterExtensionUpdateStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterExtensionStmt *stmt = castNode(AlterExtensionStmt, node);
 	const char *extensionName = stmt->extname;

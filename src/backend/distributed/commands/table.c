@@ -649,7 +649,7 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 	/*
 	 * We will let Postgres deal with missing_ok
 	 */
-	List *tableAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true);
+	List *tableAddresses = GetObjectAddressListFromParseTree((Node *) stmt, true, true);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(tableAddresses) == 1);
@@ -1786,7 +1786,7 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 	}
 
 	List *addresses = GetObjectAddressListFromParseTree((Node *) stmt,
-														stmt->missing_ok);
+														stmt->missing_ok, false);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(addresses) == 1);
@@ -3369,7 +3369,7 @@ ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableStatement)
  * be found in either of the schemas.
  */
 List *
-AlterTableSchemaStmtObjectAddress(Node *node, bool missing_ok)
+AlterTableSchemaStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_TABLE || stmt->objectType == OBJECT_FOREIGN_TABLE);

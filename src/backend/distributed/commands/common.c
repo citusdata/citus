@@ -63,7 +63,7 @@ PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryS
 		return NIL;
 	}
 
-	List *addresses = GetObjectAddressListFromParseTree(stmt, false);
+	List *addresses = GetObjectAddressListFromParseTree(stmt, false, true);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(addresses) == 1);
@@ -121,7 +121,7 @@ PreprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString,
 	const DistributeObjectOps *ops = GetDistributeObjectOps(stmt);
 	Assert(ops != NULL);
 
-	List *addresses = GetObjectAddressListFromParseTree(stmt, false);
+	List *addresses = GetObjectAddressListFromParseTree(stmt, false, false);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(addresses) == 1);
@@ -170,7 +170,7 @@ PostprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString)
 	const DistributeObjectOps *ops = GetDistributeObjectOps(stmt);
 	Assert(ops != NULL);
 
-	List *addresses = GetObjectAddressListFromParseTree(stmt, false);
+	List *addresses = GetObjectAddressListFromParseTree(stmt, false, true);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(addresses) == 1);
@@ -296,7 +296,7 @@ PreprocessDropDistributedObjectStmt(Node *node, const char *queryString,
  * the drop tsdict statement.
  */
 List *
-DropTextSearchDictObjectAddress(Node *node, bool missing_ok)
+DropTextSearchDictObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	DropStmt *stmt = castNode(DropStmt, node);
 
@@ -321,7 +321,7 @@ DropTextSearchDictObjectAddress(Node *node, bool missing_ok)
  * the drop tsconfig statement.
  */
 List *
-DropTextSearchConfigObjectAddress(Node *node, bool missing_ok)
+DropTextSearchConfigObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	DropStmt *stmt = castNode(DropStmt, node);
 
