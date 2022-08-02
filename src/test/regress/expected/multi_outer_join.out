@@ -1,10 +1,6 @@
-
 SET citus.next_shard_id TO 310000;
-
-
 SET citus.log_multi_join_order to true;
 SET client_min_messages TO LOG;
-
 CREATE TABLE multi_outer_join_left
 (
 	l_custkey integer not null,
@@ -17,6 +13,10 @@ CREATE TABLE multi_outer_join_left
 	l_comment varchar(117) not null
 );
 SELECT create_distributed_table('multi_outer_join_left', 'l_custkey', 'hash');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 CREATE TABLE multi_outer_join_right
 (
@@ -30,6 +30,10 @@ CREATE TABLE multi_outer_join_right
 	r_comment varchar(117) not null
 );
 SELECT create_distributed_table('multi_outer_join_right', 'r_custkey', 'hash');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 CREATE TABLE multi_outer_join_right_reference
 (
@@ -43,6 +47,10 @@ CREATE TABLE multi_outer_join_right_reference
 	r_comment varchar(117) not null
 );
 SELECT create_reference_table('multi_outer_join_right_reference');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
 
 CREATE TABLE multi_outer_join_third
 (
@@ -56,6 +64,10 @@ CREATE TABLE multi_outer_join_third
 	t_comment varchar(117) not null
 );
 SELECT create_distributed_table('multi_outer_join_third', 't_custkey', 'hash');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 CREATE TABLE multi_outer_join_third_reference
 (
@@ -69,39 +81,56 @@ CREATE TABLE multi_outer_join_third_reference
 	t_comment varchar(117) not null
 );
 SELECT create_reference_table('multi_outer_join_third_reference');
+ create_reference_table
+---------------------------------------------------------------------
 
-COPY multi_outer_join_left FROM '@abs_srcdir@/data/customer-1-10.data' with delimiter '|'
-COPY multi_outer_join_left FROM '@abs_srcdir@/data/customer-11-20.data' with delimiter '|'
-COPY multi_outer_join_right FROM '@abs_srcdir@/data/customer-1-15.data' with delimiter '|'
-COPY multi_outer_join_right_reference FROM '@abs_srcdir@/data/customer-1-15.data' with delimiter '|'
+(1 row)
 
+COPY multi_outer_join_left FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-10.data' with delimiter '|'
+COPY multi_outer_join_left FROM '/home/hanefi/code/citus/src/test/regress/data/customer-11-20.data' with delimiter '|'
+COPY multi_outer_join_right FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-15.data' with delimiter '|'
+COPY multi_outer_join_right_reference FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-15.data' with delimiter '|'
 -- Make sure we do not crash if one table has no shards
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_third b ON (l_custkey = t_custkey);
+ min | max
+---------------------------------------------------------------------
+   1 |  20
+(1 row)
 
 SELECT
 	min(t_custkey), max(t_custkey)
 FROM
 	multi_outer_join_third a LEFT JOIN multi_outer_join_right_reference b ON (r_custkey = t_custkey);
+ min | max
+---------------------------------------------------------------------
+     |
+(1 row)
 
 -- Third table is a single shard table with all data
-COPY multi_outer_join_third FROM '@abs_srcdir@/data/customer-1-30.data' with delimiter '|'
-COPY multi_outer_join_third_reference FROM '@abs_srcdir@/data/customer-1-30.data' with delimiter '|'
-
+COPY multi_outer_join_third FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-30.data' with delimiter '|'
+COPY multi_outer_join_third_reference FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-30.data' with delimiter '|'
 -- Regular outer join should return results for all rows
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey);
+ min | max
+---------------------------------------------------------------------
+   1 |  20
+(1 row)
 
 -- Since this is a broadcast join, we should be able to join on any key
 SELECT
 	count(*)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_nationkey = r_nationkey);
-
+ count
+---------------------------------------------------------------------
+    28
+(1 row)
 
 -- Anti-join should return customers for which there is no row in the right table
 SELECT
@@ -110,7 +139,10 @@ FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL;
-
+ min | max
+---------------------------------------------------------------------
+  16 |  20
+(1 row)
 
 -- Partial anti-join with specific value
 SELECT
@@ -119,7 +151,10 @@ FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL OR r_custkey = 5;
-
+ min | max
+---------------------------------------------------------------------
+   5 |  20
+(1 row)
 
 -- This query is an INNER JOIN in disguise since there cannot be NULL results
 -- Added extra filter to make query not router plannable
@@ -129,7 +164,10 @@ FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey = 5 or r_custkey > 15;
-
+ min | max
+---------------------------------------------------------------------
+   5 |   5
+(1 row)
 
 -- Apply a filter before the join
 SELECT
@@ -137,6 +175,10 @@ SELECT
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND r_custkey = 5);
+ count | count
+---------------------------------------------------------------------
+    20 |     1
+(1 row)
 
 -- Apply a filter before the join (no matches right)
 SELECT
@@ -144,6 +186,10 @@ SELECT
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND r_custkey = -1 /* nonexistant */);
+ count | count
+---------------------------------------------------------------------
+    20 |     0
+(1 row)
 
 -- Apply a filter before the join (no matches left)
 SELECT
@@ -151,57 +197,68 @@ SELECT
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND l_custkey = -1 /* nonexistant */);
+ count | count
+---------------------------------------------------------------------
+    20 |     0
+(1 row)
 
 -- Right join should be disallowed in this case
 SELECT
 	min(r_custkey), max(r_custkey)
 FROM
 	multi_outer_join_left a RIGHT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-
+ min | max
+---------------------------------------------------------------------
+   1 |  15
+(1 row)
 
 -- Reverse right join should be same as left join
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_right_reference a RIGHT JOIN multi_outer_join_left b ON (l_custkey = r_custkey);
-
+ min | max
+---------------------------------------------------------------------
+   1 |  20
+(1 row)
 
 -- Turn the right table into a large table
-COPY multi_outer_join_right FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'
-
-
+COPY multi_outer_join_right FROM '/home/hanefi/code/citus/src/test/regress/data/customer-21-30.data' with delimiter '|'
 -- Shards do not have 1-1 matching. We should error here.
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
+ min | max
+---------------------------------------------------------------------
+   1 |  20
+(1 row)
 
 -- empty tables
 TRUNCATE multi_outer_join_left;
 TRUNCATE multi_outer_join_right;
-
 -- reload shards with 1-1 matching
-COPY multi_outer_join_left FROM '@abs_srcdir@/data/customer-subset-11-20.data' with delimiter '|'
-COPY multi_outer_join_left FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'
-
-COPY multi_outer_join_right FROM '@abs_srcdir@/data/customer-11-20.data' with delimiter '|'
-COPY multi_outer_join_right FROM '@abs_srcdir@/data/customer-subset-21-30.data' with delimiter '|'
-
+COPY multi_outer_join_left FROM '/home/hanefi/code/citus/src/test/regress/data/customer-subset-11-20.data' with delimiter '|'
+COPY multi_outer_join_left FROM '/home/hanefi/code/citus/src/test/regress/data/customer-21-30.data' with delimiter '|'
+COPY multi_outer_join_right FROM '/home/hanefi/code/citus/src/test/regress/data/customer-11-20.data' with delimiter '|'
+COPY multi_outer_join_right FROM '/home/hanefi/code/citus/src/test/regress/data/customer-subset-21-30.data' with delimiter '|'
 -- multi_outer_join_third is a single shard table
 -- Regular left join should work as expected
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-
+ min | max
+---------------------------------------------------------------------
+  11 |  30
+(1 row)
 
 -- Since we cannot broadcast or re-partition, joining on a different key should error out
 SELECT
 	count(*)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_nationkey = r_nationkey);
-
-
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- Anti-join should return customers for which there is no row in the right table
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -209,7 +266,10 @@ FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL;
-
+ min | max
+---------------------------------------------------------------------
+  23 |  29
+(1 row)
 
 -- Partial anti-join with specific value (5, 11-15)
 SELECT
@@ -218,7 +278,10 @@ FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL OR r_custkey = 15;
-
+ min | max
+---------------------------------------------------------------------
+  23 |  29
+(1 row)
 
 -- This query is an INNER JOIN in disguise since there cannot be NULL results (21)
 -- Added extra filter to make query not router plannable
@@ -228,7 +291,10 @@ FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey = 21 or r_custkey < 10;
-
+ min | max
+---------------------------------------------------------------------
+  21 |  21
+(1 row)
 
 -- Apply a filter before the join
 SELECT
@@ -236,21 +302,30 @@ SELECT
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b
 	ON (l_custkey = r_custkey AND r_custkey = 21);
-
+ count | count
+---------------------------------------------------------------------
+    17 |     1
+(1 row)
 
 -- Right join should be allowed in this case
 SELECT
 	min(r_custkey), max(r_custkey)
 FROM
 	multi_outer_join_left a RIGHT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-
+ min | max
+---------------------------------------------------------------------
+  11 |  30
+(1 row)
 
 -- Reverse right join should be same as left join
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_right a RIGHT JOIN multi_outer_join_left b ON (l_custkey = r_custkey);
-
+ min | max
+---------------------------------------------------------------------
+  11 |  30
+(1 row)
 
 -- Mix of outer joins on partition column
 SELECT
@@ -262,6 +337,10 @@ FROM
 	RIGHT JOIN multi_outer_join_left l2 ON (r2.r_custkey = l2.l_custkey)
 ORDER BY 1
 LIMIT 1;
+ l_custkey
+---------------------------------------------------------------------
+        11
+(1 row)
 
 -- add an anti-join
 SELECT
@@ -275,6 +354,10 @@ WHERE
 	r1.r_custkey is NULL
 ORDER BY 1
 LIMIT 1;
+ l_custkey
+---------------------------------------------------------------------
+
+(1 row)
 
 -- Three way join 2-2-1 (local + broadcast join) should work
 SELECT
@@ -284,6 +367,26 @@ FROM
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey)
 ORDER BY l_custkey, r_custkey, t_custkey;
+ l_custkey | r_custkey | t_custkey
+---------------------------------------------------------------------
+        11 |        11 |        11
+        12 |        12 |        12
+        14 |        14 |        14
+        16 |        16 |        16
+        17 |        17 |        17
+        18 |        18 |        18
+        20 |        20 |        20
+        21 |        21 |        21
+        22 |        22 |        22
+        23 |           |
+        24 |        24 |        24
+        25 |           |
+        26 |        26 |        26
+        27 |        27 |        27
+        28 |        28 |        28
+        29 |           |
+        30 |        30 |        30
+(17 rows)
 
 -- Right join with single shard right most table should error out
 SELECT
@@ -293,7 +396,8 @@ FROM
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
 	RIGHT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey)
 ORDER BY l_custkey, r_custkey, t_custkey;
-
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
 -- Right join with single shard left most table should work
 SELECT
 	t_custkey, r_custkey, l_custkey
@@ -302,6 +406,26 @@ FROM
 	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey)
 ORDER BY t_custkey, r_custkey, l_custkey;
+ t_custkey | r_custkey | l_custkey
+---------------------------------------------------------------------
+        11 |        11 |        11
+        12 |        12 |        12
+        13 |        13 |
+        14 |        14 |        14
+        15 |        15 |
+        16 |        16 |        16
+        17 |        17 |        17
+        18 |        18 |        18
+        19 |        19 |
+        20 |        20 |        20
+        21 |        21 |        21
+        22 |        22 |        22
+        24 |        24 |        24
+        26 |        26 |        26
+        27 |        27 |        27
+        28 |        28 |        28
+        30 |        30 |        30
+(17 rows)
 
 -- Make it anti-join, should display values with l_custkey is null
 SELECT
@@ -313,6 +437,12 @@ FROM
 WHERE
 	l_custkey is NULL
 ORDER BY t_custkey, r_custkey, l_custkey;
+ t_custkey | r_custkey | l_custkey
+---------------------------------------------------------------------
+        13 |        13 |
+        15 |        15 |
+        19 |        19 |
+(3 rows)
 
 -- Cascading right join with single shard left most table
 SELECT
@@ -322,6 +452,26 @@ FROM
 	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
 	RIGHT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey)
 ORDER BY 1,2,3;
+ t_custkey | r_custkey | l_custkey
+---------------------------------------------------------------------
+        11 |        11 |        11
+        12 |        12 |        12
+        14 |        14 |        14
+        16 |        16 |        16
+        17 |        17 |        17
+        18 |        18 |        18
+        20 |        20 |        20
+        21 |        21 |        21
+        22 |        22 |        22
+        24 |        24 |        24
+        26 |        26 |        26
+        27 |        27 |        27
+        28 |        28 |        28
+        30 |        30 |        30
+           |           |        23
+           |           |        25
+           |           |        29
+(17 rows)
 
 -- full outer join should work with 1-1 matched shards
 SELECT
@@ -330,6 +480,29 @@ FROM
 	multi_outer_join_left l1
 	FULL JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
 ORDER BY 1 DESC, 2 DESC;
+ l_custkey | r_custkey
+---------------------------------------------------------------------
+           |        19
+           |        15
+           |        13
+        30 |        30
+        29 |
+        28 |        28
+        27 |        27
+        26 |        26
+        25 |
+        24 |        24
+        23 |
+        22 |        22
+        21 |        21
+        20 |        20
+        18 |        18
+        17 |        17
+        16 |        16
+        14 |        14
+        12 |        12
+        11 |        11
+(20 rows)
 
 -- full outer join + anti (right) should work with 1-1 matched shards
 SELECT
@@ -340,6 +513,12 @@ FROM
 WHERE
 	r_custkey is NULL
 ORDER BY 1 DESC, 2 DESC;
+ l_custkey | r_custkey
+---------------------------------------------------------------------
+        29 |
+        25 |
+        23 |
+(3 rows)
 
 -- full outer join + anti (left) should work with 1-1 matched shards
 SELECT
@@ -350,6 +529,12 @@ FROM
 WHERE
 	l_custkey is NULL
 ORDER BY 1 DESC, 2 DESC;
+ l_custkey | r_custkey
+---------------------------------------------------------------------
+           |        19
+           |        15
+           |        13
+(3 rows)
 
 -- full outer join + anti (both) should work with 1-1 matched shards
 SELECT
@@ -360,6 +545,15 @@ FROM
 WHERE
 	l_custkey is NULL or r_custkey is NULL
 ORDER BY 1 DESC, 2 DESC;
+ l_custkey | r_custkey
+---------------------------------------------------------------------
+           |        19
+           |        15
+           |        13
+        29 |
+        25 |
+        23 |
+(6 rows)
 
 -- full outer join should error out for mismatched shards
 SELECT
@@ -368,6 +562,39 @@ FROM
 	multi_outer_join_left l1
 	FULL JOIN multi_outer_join_third t1 ON (l1.l_custkey = t1.t_custkey)
 ORDER BY 1 DESC, 2 DESC;
+ l_custkey | t_custkey
+---------------------------------------------------------------------
+           |        19
+           |        15
+           |        13
+           |        10
+           |         9
+           |         8
+           |         7
+           |         6
+           |         5
+           |         4
+           |         3
+           |         2
+           |         1
+        30 |        30
+        29 |        29
+        28 |        28
+        27 |        27
+        26 |        26
+        25 |        25
+        24 |        24
+        23 |        23
+        22 |        22
+        21 |        21
+        20 |        20
+        18 |        18
+        17 |        17
+        16 |        16
+        14 |        14
+        12 |        12
+        11 |        11
+(30 rows)
 
 -- inner join  + single shard left join should work
 SELECT
@@ -377,6 +604,23 @@ FROM
 	INNER JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey)
 ORDER BY 1 DESC, 2 DESC, 3 DESC;
+ l_custkey | r_custkey | t_custkey
+---------------------------------------------------------------------
+        30 |        30 |        30
+        28 |        28 |        28
+        27 |        27 |        27
+        26 |        26 |        26
+        24 |        24 |        24
+        22 |        22 |        22
+        21 |        21 |        21
+        20 |        20 |        20
+        18 |        18 |        18
+        17 |        17 |        17
+        16 |        16 |        16
+        14 |        14 |        14
+        12 |        12 |        12
+        11 |        11 |        11
+(14 rows)
 
 -- inner (broadcast) join  + 2 shards left (local) join should work
 SELECT
@@ -386,6 +630,26 @@ FROM
 	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey)
 ORDER BY 1 DESC, 2 DESC, 3 DESC;
+ l_custkey | t_custkey | r_custkey
+---------------------------------------------------------------------
+        30 |        30 |        30
+        29 |        29 |
+        28 |        28 |        28
+        27 |        27 |        27
+        26 |        26 |        26
+        25 |        25 |
+        24 |        24 |        24
+        23 |        23 |
+        22 |        22 |        22
+        21 |        21 |        21
+        20 |        20 |        20
+        18 |        18 |        18
+        17 |        17 |        17
+        16 |        16 |        16
+        14 |        14 |        14
+        12 |        12 |        12
+        11 |        11 |        11
+(17 rows)
 
 -- inner (local) join  + 2 shards left (dual partition) join
 SELECT
@@ -396,6 +660,26 @@ FROM
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey)
 ORDER BY
     t_custkey, l_custkey, r_custkey;
+ t_custkey | l_custkey | r_custkey
+---------------------------------------------------------------------
+        11 |        11 |        11
+        12 |        12 |        12
+        14 |        14 |        14
+        16 |        16 |        16
+        17 |        17 |        17
+        18 |        18 |        18
+        20 |        20 |        20
+        21 |        21 |        21
+        22 |        22 |        22
+        23 |        23 |
+        24 |        24 |        24
+        25 |        25 |
+        26 |        26 |        26
+        27 |        27 |        27
+        28 |        28 |        28
+        29 |        29 |
+        30 |        30 |        30
+(17 rows)
 
 -- inner (local) join  + 2 shards left (dual partition) join
 SELECT
@@ -405,7 +689,26 @@ FROM
 	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey)
 ORDER BY 1 DESC, 2 DESC, 3 DESC;
-
+ l_custkey | t_custkey | r_custkey
+---------------------------------------------------------------------
+        30 |        30 |        30
+        29 |        29 |
+        28 |        28 |        28
+        27 |        27 |        27
+        26 |        26 |        26
+        25 |        25 |
+        24 |        24 |        24
+        23 |        23 |
+        22 |        22 |        22
+        21 |        21 |        21
+        20 |        20 |        20
+        18 |        18 |        18
+        17 |        17 |        17
+        16 |        16 |        16
+        14 |        14 |        14
+        12 |        12 |        12
+        11 |        11 |        11
+(17 rows)
 
 -- inner (broadcast) join  + 2 shards left (local) + anti join should work
 SELECT
@@ -417,6 +720,12 @@ FROM
 WHERE
 	r_custkey is NULL
 ORDER BY 1 DESC, 2 DESC, 3 DESC;
+ l_custkey | t_custkey | r_custkey
+---------------------------------------------------------------------
+        29 |        29 |
+        25 |        25 |
+        23 |        23 |
+(3 rows)
 
 -- Test joinExpr aliases by performing an outer-join.
 SELECT
@@ -427,6 +736,26 @@ FROM
     test(c_custkey, c_nationkey)
     INNER JOIN multi_outer_join_third_reference t1 ON (test.c_custkey = t1.t_custkey)
 ORDER BY 1 DESC;
+ t_custkey
+---------------------------------------------------------------------
+        30
+        28
+        27
+        26
+        24
+        22
+        21
+        20
+        19
+        18
+        17
+        16
+        15
+        14
+        13
+        12
+        11
+(17 rows)
 
 -- Outer joins with subqueries on distribution column
 SELECT
@@ -445,27 +774,55 @@ LEFT JOIN (
 GROUP BY l1.l_custkey
 ORDER BY cnt DESC, l1.l_custkey DESC
 LIMIT 20;
+ l_custkey | cnt
+---------------------------------------------------------------------
+        30 |   1
+        29 |   1
+        28 |   1
+        27 |   1
+        25 |   1
+        24 |   1
+        23 |   1
+        22 |   1
+        21 |   1
+        20 |   1
+        18 |   1
+        17 |   1
+        16 |   1
+        14 |   1
+        12 |   1
+        11 |   1
+(16 rows)
 
 -- Add a shard to the left table that overlaps with multiple shards in the right
-\set customer_1_data_file :abs_srcdir '/data/customer.1.data'
 COPY multi_outer_join_left FROM :'customer_1_data_file' with delimiter '|'
-
-
 -- All outer joins should error out
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
+ min | max
+---------------------------------------------------------------------
+   1 | 1000
+(1 row)
 
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a RIGHT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
+ min | max
+---------------------------------------------------------------------
+  11 |  30
+(1 row)
 
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a FULL JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
+ min | max
+---------------------------------------------------------------------
+   1 | 1000
+(1 row)
 
 SELECT
 	t_custkey
@@ -475,33 +832,60 @@ FROM
     test(c_custkey, c_nationkey)
     INNER JOIN multi_outer_join_third t1 ON (test.c_custkey = t1.t_custkey)
 ORDER BY 1;
+ t_custkey
+---------------------------------------------------------------------
+        11
+        11
+        12
+        12
+        13
+        14
+        14
+        15
+        16
+        16
+        17
+        17
+        18
+        18
+        19
+        20
+        20
+        21
+        21
+        22
+        22
+        24
+        24
+        26
+        26
+        27
+        27
+        28
+        28
+        30
+        30
+(31 rows)
 
 -- simple test to ensure anti-joins work with hash-partitioned tables
 CREATE TABLE left_values(val int);
-
 SET citus.shard_count to 16;
 SET citus.shard_replication_factor to 1;
-
 SELECT create_distributed_table('left_values', 'val');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 COPY left_values from stdin
-1
-2
-3
-4
-5
-\.
-
 CREATE TABLE right_values(val int);
-
 SELECT create_distributed_table('right_values', 'val');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 COPY right_values from stdin
-2
-3
-4
-\.
-
 SELECT
     *
 FROM
@@ -510,3 +894,9 @@ FROM
 WHERE
     r.val IS NULL
 ORDER BY 1 DESC, 2 DESC;
+ val | val
+---------------------------------------------------------------------
+   5 |
+   1 |
+(2 rows)
+

@@ -82,11 +82,11 @@ SELECT create_distributed_table('ads',         'company_id');
 SELECT create_distributed_table('clicks',      'company_id');
 SELECT create_distributed_table('impressions', 'company_id');
 
-\set companies_csv_file :abs_srcdir '/data/companies.csv'
-\set campaigns_csv_file :abs_srcdir '/data/campaigns.csv'
-\set ads_csv_file :abs_srcdir '/data/ads.csv'
-\set clicks_csv_file :abs_srcdir '/data/clicks.csv'
-\set impressions_csv_file :abs_srcdir '/data/impressions.csv'
+\set companies_csv_file :abs_srcdir '/data/companies_csv_file'
+\set campaigns_csv_file :abs_srcdir '/data/campaigns_csv_file'
+\set ads_csv_file :abs_srcdir '/data/ads_csv_file'
+\set clicks_csv_file :abs_srcdir '/data/clicks_csv_file'
+\set impressions_csv_file :abs_srcdir '/data/impressions_csv_file'
 COPY companies from :'companies_csv_file' with csv
 COPY campaigns from :'campaigns_csv_file' with csv
 COPY ads from :'ads_csv_file' with csv

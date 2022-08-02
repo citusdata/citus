@@ -15,8 +15,8 @@ SELECT create_distributed_table('users_table', 'user_id');
 CREATE TABLE events_table (user_id int, time timestamp, event_type int, value_2 int, value_3 float, value_4 bigint);
 SELECT create_distributed_table('events_table', 'user_id');
 
-\set users_table_data_file :abs_srcdir '/data/users_table.data'
-\set events_table_data_file :abs_srcdir '/data/events_table.data'
+\set users_table_data_file :abs_srcdir '/data/users_table_data_file'
+\set events_table_data_file :abs_srcdir '/data/events_table_data_file'
 COPY users_table FROM :'users_table_data_file' WITH CSV;
 COPY events_table FROM :'events_table_data_file' WITH CSV;
 

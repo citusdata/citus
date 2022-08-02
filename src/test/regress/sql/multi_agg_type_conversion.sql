@@ -20,7 +20,7 @@ CREATE TABLE aggregate_type (
 SELECT create_distributed_table('aggregate_type', 'float_value', 'append');
 SELECT master_create_empty_shard('aggregate_type') AS shardid \gset
 
-\set agg_type_data_file :abs_srcdir '/data/agg_type.data'
+\set agg_type_data_file :abs_srcdir '/data/agg_type_data_file'
 copy aggregate_type FROM :'agg_type_data_file' with (append_to_shard :shardid);
 
 -- Test conversions using aggregates on floats and division

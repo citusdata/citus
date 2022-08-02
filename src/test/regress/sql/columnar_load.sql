@@ -3,7 +3,7 @@
 --
 
 -- COPY with incorrect delimiter
-\set contestants_1_csv_file :abs_srcdir '/data/contestants.1.csv'
+\set contestants_1_csv_file :abs_srcdir '/data/contestants_1_csv_file'
 COPY contestant FROM :'contestants_1_csv_file'
 	WITH DELIMITER '|'; -- ERROR
 
@@ -14,7 +14,7 @@ COPY contestant FROM PROGRAM 'invalid_program' WITH CSV; -- ERROR
 COPY contestant FROM :'contestants_1_csv_file' WITH CSV;
 
 -- COPY into uncompressed table from program
-COPY contestant FROM PROGRAM 'cat @abs_srcdir@/data/contestants.2.csv' WITH CSV;
+COPY contestant FROM PROGRAM 'cat /home/hanefi/code/citus/src/test/regress/data/contestants.2.csv' WITH CSV;
 
 select
   version_major, version_minor, reserved_stripe_id, reserved_row_number
@@ -24,7 +24,7 @@ select
 COPY contestant_compressed FROM :'contestants_1_csv_file' WITH CSV;
 
 -- COPY into uncompressed table from program
-COPY contestant_compressed FROM PROGRAM 'cat @abs_srcdir@/data/contestants.2.csv'
+COPY contestant_compressed FROM PROGRAM 'cat /home/hanefi/code/citus/src/test/regress/data/contestants.2.csv'
 	WITH CSV;
 
 select

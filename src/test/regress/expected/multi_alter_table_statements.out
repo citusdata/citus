@@ -1009,7 +1009,7 @@ SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
 DROP TABLE trigger_table;
 -- test ALTER TABLE ALL IN TABLESPACE
 -- we expect that it will warn out
-CREATE TABLESPACE super_fast_ssd LOCATION '@abs_srcdir@/data';
+CREATE TABLESPACE super_fast_ssd LOCATION '/home/hanefi/code/citus/src/test/regress/data';
 ALTER TABLE ALL IN TABLESPACE pg_default SET TABLESPACE super_fast_ssd;
 WARNING:  not propagating ALTER TABLE ALL IN TABLESPACE commands to worker nodes
 HINT:  Connect to worker nodes directly to manually move all tables.

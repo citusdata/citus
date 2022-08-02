@@ -10,9 +10,9 @@ SET citus.next_shard_id TO 280000;
 -- loading causes the planner to consider customer and part tables as large, and
 -- evaluate plans where some of the underlying tables need to be repartitioned.
 
-\set customer_2_data_file :abs_srcdir '/data/customer.2.data'
-\set customer_3_data_file :abs_srcdir '/data/customer.3.data'
-\set part_more_data_file :abs_srcdir '/data/part_more.data'
+\set customer_2_data_file :abs_srcdir '/data/customer_2_data_file'
+\set customer_3_data_file :abs_srcdir '/data/customer_3_data_file'
+\set part_more_data_file :abs_srcdir '/data/part_more_data_file'
 COPY customer FROM :'customer_2_data_file' with delimiter '|'
 COPY customer FROM :'customer_3_data_file' with delimiter '|'
 COPY part FROM :'part_more_data_file' with delimiter '|'
