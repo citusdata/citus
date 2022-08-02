@@ -1,3 +1,11 @@
+--
+-- SINGLE_NODE
+--
+-- This test file has an alternative output because of the change in the
+-- display of SQL-standard function's arguments in INSERT/SELECT in PG15.
+-- The alternative output can be deleted when we drop support for PG14
+--
+
 CREATE SCHEMA single_node;
 SET search_path TO single_node;
 SET citus.shard_count TO 4;
