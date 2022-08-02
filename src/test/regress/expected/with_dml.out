@@ -118,6 +118,11 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- otherwise the coordinator insert select fails
 -- since COPY cannot be executed
 SET citus.force_max_query_parallelization TO on;
+-- We are reducing the log level here to avoid alternative test output
+-- in PG15 because of the change in the display of SQL-standard
+-- function's arguments in INSERT/SELECT in PG15.
+-- The log level changes can be reverted when we drop support for PG14
+SET client_min_messages TO LOG;
 WITH copy_to_other_table AS (
     INSERT INTO distributed_table
         SELECT *
@@ -141,13 +146,8 @@ INSERT INTO second_distributed_table
         EXCEPT
         SELECT *
             FROM copy_to_other_table;
-DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
-DEBUG:  generating subplan XXX_1 for CTE copy_to_other_table: INSERT INTO with_dml.distributed_table (tenant_id, dept) SELECT tenant_id, dept FROM with_dml.second_distributed_table WHERE (dept OPERATOR(pg_catalog.=) 3) ON CONFLICT(tenant_id) DO UPDATE SET dept = 4 RETURNING distributed_table.tenant_id, distributed_table.dept
-DEBUG:  generating subplan XXX_2 for CTE main_table_deleted: DELETE FROM with_dml.distributed_table WHERE ((dept OPERATOR(pg_catalog.<) 10) AND (NOT (EXISTS (SELECT 1 FROM with_dml.second_distributed_table WHERE ((second_distributed_table.dept OPERATOR(pg_catalog.=) 1) AND (second_distributed_table.tenant_id OPERATOR(pg_catalog.=) distributed_table.tenant_id)))))) RETURNING tenant_id, dept
-DEBUG:  generating subplan XXX_3 for subquery SELECT main_table_deleted.tenant_id, main_table_deleted.dept FROM (SELECT intermediate_result.tenant_id, intermediate_result.dept FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, dept integer)) main_table_deleted EXCEPT SELECT copy_to_other_table.tenant_id, copy_to_other_table.dept FROM (SELECT intermediate_result.tenant_id, intermediate_result.dept FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, dept integer)) copy_to_other_table
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT tenant_id, dept FROM (SELECT intermediate_result.tenant_id, intermediate_result.dept FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, dept integer)) citus_insert_select_subquery
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
 SET citus.force_max_query_parallelization TO off;
+SET client_min_messages TO DEBUG1;
 -- CTE inside the UPDATE statement
 UPDATE
 	second_distributed_table
