@@ -120,9 +120,6 @@ GetOptions(
     'worker-2-public-hostname=s' => \$publicWorker2Host,
     'help' => sub { Usage() });
 
-$ENV{CITUS_ABS_SRCDIR} = "$citusAbsSrcdir";
-print "env\n " . $ENV{CITUS_ABS_SRCDIR} . "\n";
-
 my $fixopen = "$bindir/postgres.fixopen";
 my @pg_ctl_args = ();
 if (-e $fixopen)
@@ -645,6 +642,7 @@ print $fh "--variable=worker_2_proxy_port=$mitmPort ";
 print $fh "--variable=follower_master_port=$followerCoordPort ";
 print $fh "--variable=default_user=$user ";
 print $fh "--variable=SHOW_CONTEXT=always ";
+print $fh "--variable=abs_srcdir=$citusAbsSrcdir ";
 for my $workeroff (0 .. $#workerPorts)
 {
 	my $port = $workerPorts[$workeroff];

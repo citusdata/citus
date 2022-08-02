@@ -2,13 +2,11 @@
 -- MULTI_COPY
 --
 
--- directory paths are passed to us in environment variables
-\set abs_srcdir `echo $CITUS_ABS_SRCDIR`
+-- set file paths
 \set customer1datafile :abs_srcdir '/data/customer.1.data'
 \set customer2datafile :abs_srcdir '/data/customer.2.data'
 \set customer3datafile :abs_srcdir '/data/customer.3.data'
 \set lineitem1datafile :abs_srcdir '/data/lineitem.1.data'
-
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 560000;
 
