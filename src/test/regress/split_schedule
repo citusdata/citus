@@ -22,3 +22,4 @@ test: citus_split_shard_by_split_points_failure
 test: citus_split_shard_columnar_partitioned
 test: citus_non_blocking_split_shards
 test: citus_non_blocking_split_shard_partitioned
+test: citus_non_blocking_split_shard_cleanup
