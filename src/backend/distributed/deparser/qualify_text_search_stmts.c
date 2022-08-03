@@ -54,12 +54,15 @@ QualifyDropTextSearchConfigurationStmt(Node *node)
 
 		if (!schemaName)
 		{
-			Oid tsconfigOid = get_ts_config_oid(objName, false);
-			Oid namespaceOid = get_ts_config_namespace(tsconfigOid);
-			schemaName = get_namespace_name(namespaceOid);
+			Oid tsconfigOid = get_ts_config_oid(objName, stmt->missing_ok);
+			if (OidIsValid(tsconfigOid))
+			{
+				Oid namespaceOid = get_ts_config_namespace(tsconfigOid);
+				schemaName = get_namespace_name(namespaceOid);
 
-			objName = list_make2(makeString(schemaName),
-								 makeString(tsconfigName));
+				objName = list_make2(makeString(schemaName),
+									 makeString(tsconfigName));
+			}
 		}
 
 		qualifiedObjects = lappend(qualifiedObjects, objName);
@@ -92,12 +95,15 @@ QualifyDropTextSearchDictionaryStmt(Node *node)
 
 		if (!schemaName)
 		{
-			Oid tsdictOid = get_ts_dict_oid(objName, false);
-			Oid namespaceOid = get_ts_dict_namespace(tsdictOid);
-			schemaName = get_namespace_name(namespaceOid);
+			Oid tsdictOid = get_ts_dict_oid(objName, stmt->missing_ok);
+			if (OidIsValid(tsdictOid))
+			{
+				Oid namespaceOid = get_ts_dict_namespace(tsdictOid);
+				schemaName = get_namespace_name(namespaceOid);
 
-			objName = list_make2(makeString(schemaName),
-								 makeString(tsdictName));
+				objName = list_make2(makeString(schemaName),
+									 makeString(tsdictName));
+			}
 		}
 
 		qualifiedObjects = lappend(qualifiedObjects, objName);
