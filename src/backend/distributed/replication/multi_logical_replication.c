@@ -41,6 +41,7 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_replication.h"
 #include "distributed/multi_partitioning_utils.h"
+#include "distributed/priority.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/remote_commands.h"
 #include "distributed/repair_shards.h"
@@ -1794,6 +1795,13 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 						 sourceConnection->port,
 						 escape_param_str(sourceConnection->user), escape_param_str(
 							 databaseName));
+		if (CpuPriorityLogicalRepSender != CPU_PRIORITY_INHERIT &&
+			list_length(logicalRepTargetList) <= MaxHighPriorityBackgroundProcesess)
+		{
+			appendStringInfo(conninfo,
+							 " options='-c citus.cpu_priority=%d'",
+							 CpuPriorityLogicalRepSender);
+		}
 
 		StringInfo createSubscriptionCommand = makeStringInfo();
 		appendStringInfo(createSubscriptionCommand,

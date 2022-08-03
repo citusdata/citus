@@ -16,6 +16,7 @@
 #include "distributed/hash_helpers.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_partitioning_utils.h"
+#include "distributed/priority.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/remote_commands.h"

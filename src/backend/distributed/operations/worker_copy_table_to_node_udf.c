@@ -18,6 +18,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
+#include "distributed/priority.h"
 #include "distributed/worker_shard_copy.h"
 
 PG_FUNCTION_INFO_V1(worker_copy_table_to_node);
