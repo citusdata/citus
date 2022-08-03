@@ -1851,6 +1851,10 @@ AddDummyShardEntryInMap(HTAB *mapOfDummyShardToPlacement, uint32 targetNodeId,
 }
 
 
+/*
+ * DropDummyShards traverses the dummy shard map and drops shard at given node.
+ * It fails if the shard cannot be dropped.
+ */
 static void
 DropDummyShards(HTAB *mapOfDummyShardToPlacement)
 {
