@@ -3,7 +3,7 @@
 --
 
 -- COPY with incorrect delimiter
-\set contestants_1_csv_file :abs_srcdir '/data/contestants_1_csv_file'
+\set contestants_1_csv_file :abs_srcdir '/data/contestants.1.csv'
 COPY contestant FROM :'contestants_1_csv_file'
 	WITH DELIMITER '|'; -- ERROR
 

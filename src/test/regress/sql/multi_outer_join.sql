@@ -447,7 +447,7 @@ ORDER BY cnt DESC, l1.l_custkey DESC
 LIMIT 20;
 
 -- Add a shard to the left table that overlaps with multiple shards in the right
-\set customer_1_data_file :abs_srcdir '/data/customer_1_data_file'
+\set customer_1_data_file :abs_srcdir '/data/customer.1.data'
 COPY multi_outer_join_left FROM :'customer_1_data_file' with delimiter '|'
 
 

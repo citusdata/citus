@@ -29,7 +29,7 @@ CREATE TABLE lineitem_alter (
   WITH ( fillfactor = 80 );
 SELECT create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
 SELECT master_create_empty_shard('lineitem_alter') AS shardid \gset
-\set lineitem_1_data_file :abs_srcdir '/data/lineitem_1_data_file'
+\set lineitem_1_data_file :abs_srcdir '/data/lineitem.1.data'
 copy lineitem_alter FROM :'lineitem_1_data_file' with (delimiter '|', append_to_shard :shardid);
 
 -- verify that the storage options made it to the table definitions

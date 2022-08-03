@@ -34,8 +34,8 @@ SELECT master_create_empty_shard('lineitem_range') AS new_shard_id
 UPDATE pg_dist_shard SET shardminvalue = 8997, shardmaxvalue = 14947
 WHERE shardid = :new_shard_id;
 
-\set lineitem_1_data_file :abs_srcdir '/data/lineitem_1_data_file'
-\set lineitem_2_data_file :abs_srcdir '/data/lineitem_2_data_file'
+\set lineitem_1_data_file :abs_srcdir '/data/lineitem.1.data'
+\set lineitem_2_data_file :abs_srcdir '/data/lineitem.2.data'
 COPY lineitem_range FROM :'lineitem_1_data_file' with delimiter '|'
 COPY lineitem_range FROM :'lineitem_2_data_file' with delimiter '|'
 

@@ -11,12 +11,12 @@
 SET citusdb.shard_placement_policy TO 'local-node-first';
 
 -- load as superuser
-\set lineitem_1_data_file :abs_srcdir '/data/lineitem_1_data_file'
+\set lineitem_1_data_file :abs_srcdir '/data/lineitem.1.data'
 COPY lineitem FROM :'lineitem_1_data_file' with delimiter '|'
 
 -- as user with ALL access
 SET ROLE full_access;
-\set lineitem_2_data_file :abs_srcdir '/data/lineitem_2_data_file'
+\set lineitem_2_data_file :abs_srcdir '/data/lineitem.2.data'
 COPY lineitem FROM :'lineitem_2_data_file' with delimiter '|'
 RESET ROLE;
 
@@ -31,15 +31,15 @@ COPY lineitem FROM :'lineitem_2_data_file' with delimiter '|'
 RESET ROLE;
 
 SET ROLE full_access;
-\set orders_1_data_file :abs_srcdir '/data/orders_1_data_file'
-\set orders_2_data_file :abs_srcdir '/data/orders_2_data_file'
+\set orders_1_data_file :abs_srcdir '/data/orders.1.data'
+\set orders_2_data_file :abs_srcdir '/data/orders.2.data'
 COPY orders FROM :'orders_1_data_file' with delimiter '|'
 COPY orders FROM :'orders_2_data_file' with delimiter '|'
 
-\set customer_1_data_file :abs_srcdir '/data/customer_1_data_file'
-\set nation_data_file :abs_srcdir '/data/nation_data_file'
-\set part_data_file :abs_srcdir '/data/part_data_file'
-\set supplier_data_file :abs_srcdir '/data/supplier_data_file'
+\set customer_1_data_file :abs_srcdir '/data/customer.1.data'
+\set nation_data_file :abs_srcdir '/data/nation.data'
+\set part_data_file :abs_srcdir '/data/part.data'
+\set supplier_data_file :abs_srcdir '/data/supplier.data'
 COPY customer FROM :'customer_1_data_file' with delimiter '|'
 COPY nation FROM :'nation_data_file' with delimiter '|'
 COPY part FROM :'part_data_file' with delimiter '|'

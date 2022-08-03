@@ -2,7 +2,7 @@
 -- MULTI_MX_COPY_DATA
 --
 
-\set nation_data_file :abs_srcdir '/data/nation_data_file'
+\set nation_data_file :abs_srcdir '/data/nation.data'
 COPY nation_hash FROM :'nation_data_file' with delimiter '|';
 
 SET search_path TO citus_mx_test_schema;
@@ -20,19 +20,19 @@ COPY nation_hash_replicated FROM :'nation_data_file' with delimiter '|';
 \c - - - :worker_1_port
 SET search_path TO public;
 
-\set lineitem_1_data_file :abs_srcdir '/data/lineitem_1_data_file'
-\set lineitem_2_data_file :abs_srcdir '/data/lineitem_2_data_file'
+\set lineitem_1_data_file :abs_srcdir '/data/lineitem.1.data'
+\set lineitem_2_data_file :abs_srcdir '/data/lineitem.2.data'
 COPY lineitem_mx FROM :'lineitem_1_data_file' with delimiter '|'
 COPY lineitem_mx FROM :'lineitem_2_data_file' with delimiter '|'
 
-\set nation_data_file :abs_srcdir '/data/nation_data_file'
+\set nation_data_file :abs_srcdir '/data/nation.data'
 COPY citus_mx_test_schema.nation_hash_replicated FROM :'nation_data_file' with delimiter '|';
 
 \c - - - :worker_2_port
 -- and use second worker as well
-\set orders_1_data_file :abs_srcdir '/data/orders_1_data_file'
-\set orders_2_data_file :abs_srcdir '/data/orders_2_data_file'
-\set nation_data_file :abs_srcdir '/data/nation_data_file'
+\set orders_1_data_file :abs_srcdir '/data/orders.1.data'
+\set orders_2_data_file :abs_srcdir '/data/orders.2.data'
+\set nation_data_file :abs_srcdir '/data/nation.data'
 COPY orders_mx FROM :'orders_1_data_file' with delimiter '|'
 COPY orders_mx FROM :'orders_2_data_file' with delimiter '|'
 COPY citus_mx_test_schema.nation_hash_replicated FROM :'nation_data_file' with delimiter '|';
@@ -48,12 +48,12 @@ SELECT pg_reload_conf();
 SELECT pg_sleep(0.1);
 show citus.local_shared_pool_size;
 
-\set orders_1_data_file :abs_srcdir '/data/orders_1_data_file'
-\set orders_2_data_file :abs_srcdir '/data/orders_2_data_file'
+\set orders_1_data_file :abs_srcdir '/data/orders.1.data'
+\set orders_2_data_file :abs_srcdir '/data/orders.2.data'
 COPY orders_mx FROM :'orders_1_data_file' with delimiter '|'
 COPY orders_mx FROM :'orders_2_data_file' with delimiter '|'
 
-\set nation_data_file :abs_srcdir '/data/nation_data_file'
+\set nation_data_file :abs_srcdir '/data/nation.data'
 COPY citus_mx_test_schema.nation_hash_replicated FROM :'nation_data_file' with delimiter '|';
 
 -- set it back
@@ -69,10 +69,10 @@ show citus.local_shared_pool_size;
 \c - - - :master_port
 SET search_path TO public;
 
-\set customer_1_data_file :abs_srcdir '/data/customer_1_data_file'
-\set nation_data_file :abs_srcdir '/data/nation_data_file'
-\set part_data_file :abs_srcdir '/data/part_data_file'
-\set supplier_data_file :abs_srcdir '/data/supplier_data_file'
+\set customer_1_data_file :abs_srcdir '/data/customer.1.data'
+\set nation_data_file :abs_srcdir '/data/nation.data'
+\set part_data_file :abs_srcdir '/data/part.data'
+\set supplier_data_file :abs_srcdir '/data/supplier.data'
 COPY customer_mx FROM :'customer_1_data_file' with delimiter '|'
 COPY nation_mx FROM :'nation_data_file' with delimiter '|'
 COPY part_mx FROM :'part_data_file' with delimiter '|'
