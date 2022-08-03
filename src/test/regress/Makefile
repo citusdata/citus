@@ -34,11 +34,6 @@ arbitrary_config_check = $(citus_abs_srcdir)/citus_tests/arbitrary_configs/citus
 template_isolation_files = $(shell find $(citus_abs_srcdir)/spec/ -name '*.spec')
 generated_isolation_files = $(patsubst $(citus_abs_srcdir)/spec/%,$(citus_abs_srcdir)/build/specs/%,$(template_isolation_files))
 
-# Test input and expected files.  These are created by pg_regress itself, so we
-# don't have a rule to create them.  We do need rules to clean them however.
-input_files := $(patsubst $(citus_abs_srcdir)/input/%.source,sql/%.sql, $(wildcard $(citus_abs_srcdir)/input/*.source))
-output_files := $(patsubst $(citus_abs_srcdir)/output/%.source,expected/%.out, $(wildcard $(citus_abs_srcdir)/output/*.source))
-
 # have make check actually run all tests, but keep check-full as an
 # intermediate, for muscle memory backward compatibility.
 check: check-full check-enterprise-full
