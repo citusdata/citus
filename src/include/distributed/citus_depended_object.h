@@ -18,11 +18,20 @@
 
 extern bool HideCitusDependentObjects;
 
+/* DistOpsValidationState to be used to determine validity of dist ops */
+typedef enum DistOpsValidationState
+{
+	HasAtLeastOneValidObject,
+	HasNoneValidObject,
+	NoAddressResolutionRequired
+} DistOpsValidationState;
+
 extern void SetLocalClientMinMessagesIfRunningPGTests(int
 													  clientMinMessageLevel);
 extern void SetLocalHideCitusDependentObjectsDisabledWhenAlreadyEnabled(void);
 extern bool HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context);
 extern bool IsPgLocksTable(RangeTblEntry *rte);
-extern bool DistOpsHasInvalidObject(Node *node, const DistributeObjectOps *ops);
+extern DistOpsValidationState DistOpsValidityState(Node *node, const
+												   DistributeObjectOps *ops);
 
 #endif /* CITUS_DEPENDED_OBJECT_H */
