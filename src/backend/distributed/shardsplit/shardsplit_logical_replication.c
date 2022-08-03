@@ -81,6 +81,11 @@ CreateShardSplitInfoMapForPublication(List *sourceColocatedShardIntervalList,
 	forboth_ptr(sourceShardIntervalToCopy, sourceColocatedShardIntervalList,
 				splitChildShardIntervalList, shardGroupSplitIntervalListList)
 	{
+		/*
+		 * Skipping partitioned table for logical replication.
+		 * Since PG13, logical replication is supported for partitioned tables.
+		 * However, we want to keep the behaviour consistent with shard moves.
+		 */
 		if (PartitionedTable(sourceShardIntervalToCopy->relationId))
 		{
 			continue;
@@ -93,12 +98,20 @@ CreateShardSplitInfoMapForPublication(List *sourceColocatedShardIntervalList,
 		{
 			uint32 destinationWorkerNodeId = destinationWorkerNode->nodeId;
 
-			/* Add split child shard interval */
-			AddPublishableShardEntryInMap(destinationWorkerNodeId,
-										  splitChildShardInterval,
-										  true /*isChildShardInterval*/);
+			/* Add child shard for publication.
+			 * If a columnar shard is a part of publications, then writes on the shard fail.
+			 * In the case of local split, adding child shards to the publication
+			 * would prevent copying the initial data done through 'DoSplitCopy'.
+			 * Hence we avoid adding columnar child shards to publication.
+			 */
+			if (!extern_IsColumnarTableAmTable(splitChildShardInterval->relationId))
+			{
+				AddPublishableShardEntryInMap(destinationWorkerNodeId,
+											  splitChildShardInterval,
+											  true /*isChildShardInterval*/);
+			}
 
-			/* Add parent shard interval if not already added */
+			/* Add parent shard if not already added */
 			AddPublishableShardEntryInMap(destinationWorkerNodeId,
 										  sourceShardIntervalToCopy,
 										  false /*isChildShardInterval*/);
@@ -393,7 +406,8 @@ WaitForShardSplitRelationSubscriptionsBecomeReady(List *shardSplitPubSubMetadata
 	ShardSplitSubscriberMetadata *shardSplitPubSubMetadata = NULL;
 	foreach_ptr(shardSplitPubSubMetadata, shardSplitPubSubMetadataList)
 	{
-		Bitmapset *tableOwnerIds = bms_make_singleton(shardSplitPubSubMetadata->tableOwnerId);
+		Bitmapset *tableOwnerIds = bms_make_singleton(
+			shardSplitPubSubMetadata->tableOwnerId);
 		WaitForRelationSubscriptionsBecomeReady(
 			shardSplitPubSubMetadata->targetNodeConnection, tableOwnerIds,
 			SHARD_SPLIT_SUBSCRIPTION_PREFIX);
@@ -412,7 +426,8 @@ WaitForShardSplitRelationSubscriptionsToBeCaughtUp(XLogRecPtr sourcePosition,
 	ShardSplitSubscriberMetadata *shardSplitPubSubMetadata = NULL;
 	foreach_ptr(shardSplitPubSubMetadata, shardSplitPubSubMetadataList)
 	{
-		Bitmapset *tableOwnerIds = bms_make_singleton(shardSplitPubSubMetadata->tableOwnerId);
+		Bitmapset *tableOwnerIds = bms_make_singleton(
+			shardSplitPubSubMetadata->tableOwnerId);
 		WaitForShardSubscriptionToCatchUp(shardSplitPubSubMetadata->targetNodeConnection,
 										  sourcePosition,
 										  tableOwnerIds,

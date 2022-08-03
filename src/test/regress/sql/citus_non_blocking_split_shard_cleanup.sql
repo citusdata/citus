@@ -8,10 +8,6 @@ created for logical replication are cleaned up:
 
 CREATE SCHEMA "citus_split_test_schema";
 
-CREATE ROLE test_split_role WITH LOGIN;
-GRANT USAGE, CREATE ON SCHEMA "citus_split_test_schema" TO test_split_role;
-SET ROLE test_split_role;
-
 SET search_path TO "citus_split_test_schema";
 SET citus.next_shard_id TO 8981000;
 SET citus.next_placement_id TO 8610000;
@@ -34,7 +30,6 @@ INSERT INTO sensors SELECT i, '2020-01-05', '{}', 11011.10, 'A', 'I <3 Citus' FR
 
 -- BEGIN : Move one shard before we split it.
 \c - postgres - :master_port
-SET ROLE test_split_role;
 SET search_path TO "citus_split_test_schema";
 SET citus.next_shard_id TO 8981007;
 SET citus.defer_drop_after_shard_move TO OFF;
@@ -91,3 +86,8 @@ SELECT slot_name FROM pg_replication_slots;
 SELECT count(*) FROM pg_publication;
 -- All subscriptions should be cleaned up.
 SELECT count(*) FROM pg_subscription;
+
+--BEGIN : Cleanup
+    \c - postgres - :master_port
+    DROP SCHEMA "citus_split_test_schema" CASCADE;
+--END : Cleanup
