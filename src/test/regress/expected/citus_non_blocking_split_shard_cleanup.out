@@ -77,18 +77,20 @@ SELECT slot_name FROM pg_replication_slots;
 (0 rows)
 
 -- Publications should be cleaned up on worker1
-SELECT * FROM pg_publication;
- oid | pubname | pubowner | puballtables | pubinsert | pubupdate | pubdelete | pubtruncate | pubviaroot
+SELECT count(*) FROM pg_publication;
+ count
 ---------------------------------------------------------------------
-(0 rows)
+     0
+(1 row)
 
 \c - - - :worker_2_port
 SET search_path TO "citus_split_test_schema";
 -- All subscriptions should be cleaned up.
-SELECT * FROM pg_subscription;
- oid | subdbid | subname | subowner | subenabled | subbinary | substream | subconninfo | subslotname | subsynccommit | subpublications
+SELECT count(*) FROM pg_subscription;
+ count
 ---------------------------------------------------------------------
-(0 rows)
+     0
+(1 row)
 
 -- Trigger a 3-way local split.
 \c - - - :master_port
@@ -112,14 +114,16 @@ SELECT slot_name FROM pg_replication_slots;
 (0 rows)
 
 -- Publications should be cleanedup
-SELECT * FROM pg_publication;
- oid | pubname | pubowner | puballtables | pubinsert | pubupdate | pubdelete | pubtruncate | pubviaroot
+SELECT count(*) FROM pg_publication;
+ count
 ---------------------------------------------------------------------
-(0 rows)
+     0
+(1 row)
 
 -- All subscriptions should be cleaned up.
-SELECT * FROM pg_subscription;
- oid | subdbid | subname | subowner | subenabled | subbinary | substream | subconninfo | subslotname | subsynccommit | subpublications
+SELECT count(*) FROM pg_subscription;
+ count
 ---------------------------------------------------------------------
-(0 rows)
+     0
+(1 row)
 

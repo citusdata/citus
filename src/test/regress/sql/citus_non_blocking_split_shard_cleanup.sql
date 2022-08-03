@@ -66,12 +66,12 @@ SELECT count(*) FROM pg_class where relname like '%sensors_8981008%';
 SELECT slot_name FROM pg_replication_slots;
 
 -- Publications should be cleaned up on worker1
-SELECT * FROM pg_publication;
+SELECT count(*) FROM pg_publication;
 
 \c - - - :worker_2_port
 SET search_path TO "citus_split_test_schema";
 -- All subscriptions should be cleaned up.
-SELECT * FROM pg_subscription;
+SELECT count(*) FROM pg_subscription;
 
 -- Trigger a 3-way local split.
 \c - - - :master_port
@@ -88,6 +88,6 @@ SET search_path TO "citus_split_test_schema";
 SELECT slot_name FROM pg_replication_slots;
 
 -- Publications should be cleanedup
-SELECT * FROM pg_publication;
+SELECT count(*) FROM pg_publication;
 -- All subscriptions should be cleaned up.
-SELECT * FROM pg_subscription;
+SELECT count(*) FROM pg_subscription;
