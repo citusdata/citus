@@ -49,7 +49,6 @@ bool HideCitusDependentObjects = false;
 
 static Node * CreateCitusDependentObjectExpr(int pgMetaTableVarno, int pgMetaTableOid);
 static List * GetCitusDependedObjectArgs(int pgMetaTableVarno, int pgMetaTableOid);
-static bool StatementContainsIfExist(Node *node);
 static bool AlterRoleSetStatementContainsAll(Node *node);
 
 /*
@@ -314,13 +313,10 @@ GetCitusDependedObjectArgs(int pgMetaTableVarno, int pgMetaTableOid)
 
 
 /*
- * DistOpsHasInvalidObject returns true if any address in the given node
- * is invalid; otherwise, returns false. If ops is null or it has no
- * implemented address method, we return false. We also have some dist ops
- * for which we should not validate and return false.
+ * DistOpsValidityState returns validation state for given dist ops.
  */
-bool
-DistOpsHasInvalidObject(Node *node, const DistributeObjectOps *ops)
+DistOpsValidationState
+DistOpsValidityState(Node *node, const DistributeObjectOps *ops)
 {
 	if (ops && ops->operationType == DIST_OPS_CREATE)
 	{
@@ -328,15 +324,7 @@ DistOpsHasInvalidObject(Node *node, const DistributeObjectOps *ops)
 		 * We should not validate CREATE statements because no address exists
 		 * here yet.
 		 */
-		return false;
-	}
-	else if (StatementContainsIfExist(node))
-	{
-		/*
-		 * We should not validate '[DROP|ALTER] IF EXISTS' statements because it is ok
-		 * by the semantics even if any object is invalid.
-		 */
-		return false;
+		return NoAddressResolutionRequired;
 	}
 	else if (AlterRoleSetStatementContainsAll(node))
 	{
@@ -344,7 +332,7 @@ DistOpsHasInvalidObject(Node *node, const DistributeObjectOps *ops)
 		 * We should not validate 'ALTER ROLE ALL [SET|UNSET] because for the role ALL
 		 * AlterRoleSetStmtObjectAddress returns an invalid address even though it should not.
 		 */
-		return false;
+		return NoAddressResolutionRequired;
 	}
 
 	if (ops && ops->address)
@@ -356,117 +344,20 @@ DistOpsHasInvalidObject(Node *node, const DistributeObjectOps *ops)
 		ObjectAddress *objectAddress = NULL;
 		foreach_ptr(objectAddress, objectAddresses)
 		{
-			if (!OidIsValid(objectAddress->objectId))
+			if (OidIsValid(objectAddress->objectId))
 			{
-				return true;
+				/* found one valid object */
+				return HasAtLeastOneValidObject;
 			}
 		}
+
+		/* no valid objects */
+		return HasNoneValidObject;
 	}
-
-	return false;
-}
-
-
-/*
- * StatementContainsIfExist returns true if the statement contains
- * IF EXIST syntax.
- */
-static bool
-StatementContainsIfExist(Node *node)
-{
-	if (node == NULL)
+	else
 	{
-		return false;
-	}
-
-	switch (nodeTag(node))
-	{
-		case T_DropStmt:
-		{
-			DropStmt *dropStmt = castNode(DropStmt, node);
-			return dropStmt->missing_ok;
-		}
-
-		case T_DropRoleStmt:
-		{
-			DropRoleStmt *dropRoleStmt = castNode(DropRoleStmt, node);
-			return dropRoleStmt->missing_ok;
-		}
-
-		case T_DropdbStmt:
-		{
-			DropdbStmt *dropdbStmt = castNode(DropdbStmt, node);
-			return dropdbStmt->missing_ok;
-		}
-
-		case T_DropTableSpaceStmt:
-		{
-			DropTableSpaceStmt *dropTableSpaceStmt = castNode(DropTableSpaceStmt, node);
-			return dropTableSpaceStmt->missing_ok;
-		}
-
-		case T_DropUserMappingStmt:
-		{
-			DropUserMappingStmt *dropUserMappingStmt = castNode(DropUserMappingStmt,
-																node);
-			return dropUserMappingStmt->missing_ok;
-		}
-
-		case T_DropSubscriptionStmt:
-		{
-			DropSubscriptionStmt *dropSubscriptionStmt = castNode(DropSubscriptionStmt,
-																  node);
-			return dropSubscriptionStmt->missing_ok;
-		}
-
-		case T_AlterTableStmt:
-		{
-			AlterTableStmt *alterTableStmt = castNode(AlterTableStmt, node);
-			return alterTableStmt->missing_ok;
-		}
-
-		case T_AlterDomainStmt:
-		{
-			AlterDomainStmt *alterDomainStmt = castNode(AlterDomainStmt, node);
-			return alterDomainStmt->missing_ok;
-		}
-
-		case T_AlterSeqStmt:
-		{
-			AlterSeqStmt *alterSeqStmt = castNode(AlterSeqStmt, node);
-			return alterSeqStmt->missing_ok;
-		}
-
-		case T_AlterStatsStmt:
-		{
-			AlterStatsStmt *alterStatsStmt = castNode(AlterStatsStmt, node);
-			return alterStatsStmt->missing_ok;
-		}
-
-		case T_RenameStmt:
-		{
-			RenameStmt *renameStmt = castNode(RenameStmt, node);
-			return renameStmt->missing_ok;
-		}
-
-		case T_AlterObjectSchemaStmt:
-		{
-			AlterObjectSchemaStmt *alterObjectSchemaStmt = castNode(AlterObjectSchemaStmt,
-																	node);
-			return alterObjectSchemaStmt->missing_ok;
-		}
-
-		case T_AlterTSConfigurationStmt:
-		{
-			AlterTSConfigurationStmt *alterTSConfigurationStmt = castNode(
-				AlterTSConfigurationStmt, node);
-			return alterTSConfigurationStmt->missing_ok;
-		}
-
-		default:
-		{
-			return false;
-		}
+		/* if the object doesn't have address defined, we donot validate */
+		return NoAddressResolutionRequired;
 	}
 }
 

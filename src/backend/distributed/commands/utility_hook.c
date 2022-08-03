@@ -377,7 +377,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 {
 	Node *parsetree = pstmt->utilityStmt;
 	List *ddlJobs = NIL;
-	bool distOpsHasInvalidObject = false;
+	DistOpsValidationState distOpsValidationState = HasNoneValidObject;
 
 	if (IsA(parsetree, ExplainStmt) &&
 		IsA(((ExplainStmt *) parsetree)->query, Query))
@@ -547,15 +547,15 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		/*
 		 * Preprocess and qualify steps can cause pg tests to fail because of the
 		 * unwanted citus related warnings or early error logs related to invalid address.
-		 * Therefore, we first check if all addresses in the given statement are valid.
-		 * Then, we do not execute qualify and preprocess if any address is invalid to
-		 * prevent before-mentioned citus related messages. PG will complain about the
+		 * Therefore, we first check if any address in the given statement is valid.
+		 * Then, we do not execute qualify and preprocess if none of the addresses are valid
+		 * to prevent before-mentioned citus related messages. PG will complain about the
 		 * invalid address, so we are safe to not execute qualify and preprocess. Also
 		 * note that we should not guard any step after standardProcess_Utility with
-		 * the flag distOpsHasInvalidObject because PG would have already failed the
+		 * the enum state distOpsValidationState because PG would have already failed the
 		 * transaction.
 		 */
-		distOpsHasInvalidObject = DistOpsHasInvalidObject(parsetree, ops);
+		distOpsValidationState = DistOpsValidityState(parsetree, ops);
 
 		/*
 		 * For some statements Citus defines a Qualify function. The goal of this function
@@ -565,13 +565,15 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 * and fill them out how postgres would resolve them. This makes subsequent
 		 * deserialize calls for the statement portable to other postgres servers, the
 		 * workers in our case.
+		 * If there are no valid objects, let's skip the qualify and
+		 * preprocess, and do not diverge from Postgres in terms of error messages.
 		 */
-		if (ops && ops->qualify && !distOpsHasInvalidObject)
+		if (ops && ops->qualify && distOpsValidationState != HasNoneValidObject)
 		{
 			ops->qualify(parsetree);
 		}
 
-		if (ops && ops->preprocess && !distOpsHasInvalidObject)
+		if (ops && ops->preprocess && distOpsValidationState != HasNoneValidObject)
 		{
 			ddlJobs = ops->preprocess(parsetree, queryString, context);
 		}
