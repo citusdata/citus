@@ -60,7 +60,8 @@ typedef enum RecurringTuplesType
 	RECURRING_TUPLES_FUNCTION,
 	RECURRING_TUPLES_EMPTY_JOIN_TREE,
 	RECURRING_TUPLES_RESULT_FUNCTION,
-	RECURRING_TUPLES_VALUES
+	RECURRING_TUPLES_VALUES,
+	RECURRING_TUPLES_JSON_TABLE
 } RecurringTuplesType;
 
 /*
@@ -345,7 +346,8 @@ IsFunctionOrValuesRTE(Node *node)
 		RangeTblEntry *rangeTblEntry = (RangeTblEntry *) node;
 
 		if (rangeTblEntry->rtekind == RTE_FUNCTION ||
-			rangeTblEntry->rtekind == RTE_VALUES)
+			rangeTblEntry->rtekind == RTE_VALUES ||
+			IsJsonTableRTE(rangeTblEntry))
 		{
 			return true;
 		}
@@ -718,6 +720,13 @@ DeferErrorIfFromClauseRecurs(Query *queryTree)
 							 "the FROM clause contains VALUES", NULL,
 							 NULL);
 	}
+	else if (recurType == RECURRING_TUPLES_JSON_TABLE)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "correlated subqueries are not supported when "
+							 "the FROM clause contains JSON_TABLE", NULL,
+							 NULL);
+	}
 
 
 	/*
@@ -943,6 +952,13 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "cannot pushdown the subquery",
 							 "There exist a VALUES clause in the outer "
+							 "part of the outer join", NULL);
+	}
+	else if (recurType == RECURRING_TUPLES_JSON_TABLE)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot pushdown the subquery",
+							 "There exist a JSON_TABLE clause in the outer "
 							 "part of the outer join", NULL);
 	}
 
@@ -1235,7 +1251,8 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 		 */
 		if (rangeTableEntry->rtekind == RTE_RELATION ||
 			rangeTableEntry->rtekind == RTE_SUBQUERY ||
-			rangeTableEntry->rtekind == RTE_RESULT)
+			rangeTableEntry->rtekind == RTE_RESULT ||
+			IsJsonTableRTE(rangeTableEntry)) /* TODO: can we have volatile???*/
 		{
 			/* accepted */
 		}
@@ -1403,6 +1420,13 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree)
 							 "VALUES is not supported within a "
 							 "UNION", NULL);
 	}
+	else if (recurType == RECURRING_TUPLES_JSON_TABLE)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot push down this subquery",
+							 "JSON_TABLE is not supported within a "
+							 "UNION", NULL);
+	}
 
 	return NULL;
 }
@@ -1500,6 +1524,11 @@ RecurringTypeDescription(RecurringTuplesType recurType)
 		case RECURRING_TUPLES_VALUES:
 		{
 			return "a VALUES clause";
+		}
+
+		case RECURRING_TUPLES_JSON_TABLE:
+		{
+			return "a JSON_TABLE";
 		}
 
 		case RECURRING_TUPLES_INVALID:
@@ -1698,7 +1727,8 @@ DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo,
 				 * strings anyway.
 				 */
 				if (recurType != RECURRING_TUPLES_VALUES &&
-					recurType != RECURRING_TUPLES_RESULT_FUNCTION)
+					recurType != RECURRING_TUPLES_RESULT_FUNCTION &&
+					recurType != RECURRING_TUPLES_JSON_TABLE)
 				{
 					recurTypeDescription = psprintf("%s (%s)", recurTypeDescription,
 													recurringRangeTableEntry->eref->
@@ -1776,6 +1806,26 @@ ContainsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType)
 
 
 /*
+ * IsJsonTableRTE checks whether the RTE refers to a JSON_TABLE
+ * table function, which was introduced in PostgreSQL 15.
+ */
+bool
+IsJsonTableRTE(RangeTblEntry *rte)
+{
+#if PG_VERSION_NUM >= PG_VERSION_15
+	if (rte == NULL)
+	{
+		return false;
+	}
+	return (rte->rtekind == RTE_TABLEFUNC &&
+			rte->tablefunc->functype == TFT_JSON_TABLE);
+#endif
+
+	return false;
+}
+
+
+/*
  * HasRecurringTuples returns whether any part of the expression will generate
  * the same set of tuples in every query on shards when executing a distributed
  * query.
@@ -1834,6 +1884,11 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 		else if (rangeTableEntry->rtekind == RTE_VALUES)
 		{
 			*recurType = RECURRING_TUPLES_VALUES;
+			return true;
+		}
+		else if (IsJsonTableRTE(rangeTableEntry))
+		{
+			*recurType = RECURRING_TUPLES_JSON_TABLE;
 			return true;
 		}
 
