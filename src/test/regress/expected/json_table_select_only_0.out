@@ -1,0 +1,9 @@
+--
+-- PG15+ test
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 14 AS server_version_above_fourteen
+\gset
+\if :server_version_above_fourteen
+\else
+\q
