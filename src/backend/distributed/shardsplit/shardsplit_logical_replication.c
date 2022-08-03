@@ -393,9 +393,7 @@ WaitForShardSplitRelationSubscriptionsBecomeReady(List *shardSplitPubSubMetadata
 	ShardSplitSubscriberMetadata *shardSplitPubSubMetadata = NULL;
 	foreach_ptr(shardSplitPubSubMetadata, shardSplitPubSubMetadataList)
 	{
-		Bitmapset *tableOwnerIds = NULL;
-		tableOwnerIds = bms_add_member(tableOwnerIds,
-									   shardSplitPubSubMetadata->tableOwnerId);
+		Bitmapset *tableOwnerIds = bms_make_singleton(shardSplitPubSubMetadata->tableOwnerId);
 		WaitForRelationSubscriptionsBecomeReady(
 			shardSplitPubSubMetadata->targetNodeConnection, tableOwnerIds,
 			SHARD_SPLIT_SUBSCRIPTION_PREFIX);
@@ -414,10 +412,7 @@ WaitForShardSplitRelationSubscriptionsToBeCaughtUp(XLogRecPtr sourcePosition,
 	ShardSplitSubscriberMetadata *shardSplitPubSubMetadata = NULL;
 	foreach_ptr(shardSplitPubSubMetadata, shardSplitPubSubMetadataList)
 	{
-		Bitmapset *tableOwnerIds = NULL;
-		tableOwnerIds = bms_add_member(tableOwnerIds,
-									   shardSplitPubSubMetadata->tableOwnerId);
-
+		Bitmapset *tableOwnerIds = bms_make_singleton(shardSplitPubSubMetadata->tableOwnerId);
 		WaitForShardSubscriptionToCatchUp(shardSplitPubSubMetadata->targetNodeConnection,
 										  sourcePosition,
 										  tableOwnerIds,
