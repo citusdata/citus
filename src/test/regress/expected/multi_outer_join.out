@@ -86,10 +86,10 @@ SELECT create_reference_table('multi_outer_join_third_reference');
 
 (1 row)
 
-COPY multi_outer_join_left FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-10.data' with delimiter '|'
-COPY multi_outer_join_left FROM '/home/hanefi/code/citus/src/test/regress/data/customer-11-20.data' with delimiter '|'
-COPY multi_outer_join_right FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-15.data' with delimiter '|'
-COPY multi_outer_join_right_reference FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-15.data' with delimiter '|'
+COPY multi_outer_join_left FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-10.data' with delimiter '|';
+COPY multi_outer_join_left FROM '/home/hanefi/code/citus/src/test/regress/data/customer-11-20.data' with delimiter '|';
+COPY multi_outer_join_right FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-15.data' with delimiter '|';
+COPY multi_outer_join_right_reference FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-15.data' with delimiter '|';
 -- Make sure we do not crash if one table has no shards
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -110,8 +110,8 @@ FROM
 (1 row)
 
 -- Third table is a single shard table with all data
-COPY multi_outer_join_third FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-30.data' with delimiter '|'
-COPY multi_outer_join_third_reference FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-30.data' with delimiter '|'
+COPY multi_outer_join_third FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-30.data' with delimiter '|';
+COPY multi_outer_join_third_reference FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-30.data' with delimiter '|';
 -- Regular outer join should return results for all rows
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -223,7 +223,7 @@ FROM
 (1 row)
 
 -- Turn the right table into a large table
-COPY multi_outer_join_right FROM '/home/hanefi/code/citus/src/test/regress/data/customer-21-30.data' with delimiter '|'
+COPY multi_outer_join_right FROM '/home/hanefi/code/citus/src/test/regress/data/customer-21-30.data' with delimiter '|';
 -- Shards do not have 1-1 matching. We should error here.
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -238,10 +238,10 @@ FROM
 TRUNCATE multi_outer_join_left;
 TRUNCATE multi_outer_join_right;
 -- reload shards with 1-1 matching
-COPY multi_outer_join_left FROM '/home/hanefi/code/citus/src/test/regress/data/customer-subset-11-20.data' with delimiter '|'
-COPY multi_outer_join_left FROM '/home/hanefi/code/citus/src/test/regress/data/customer-21-30.data' with delimiter '|'
-COPY multi_outer_join_right FROM '/home/hanefi/code/citus/src/test/regress/data/customer-11-20.data' with delimiter '|'
-COPY multi_outer_join_right FROM '/home/hanefi/code/citus/src/test/regress/data/customer-subset-21-30.data' with delimiter '|'
+COPY multi_outer_join_left FROM '/home/hanefi/code/citus/src/test/regress/data/customer-subset-11-20.data' with delimiter '|';
+COPY multi_outer_join_left FROM '/home/hanefi/code/citus/src/test/regress/data/customer-21-30.data' with delimiter '|';
+COPY multi_outer_join_right FROM '/home/hanefi/code/citus/src/test/regress/data/customer-11-20.data' with delimiter '|';
+COPY multi_outer_join_right FROM '/home/hanefi/code/citus/src/test/regress/data/customer-subset-21-30.data' with delimiter '|';
 -- multi_outer_join_third is a single shard table
 -- Regular left join should work as expected
 SELECT
@@ -795,7 +795,8 @@ LIMIT 20;
 (16 rows)
 
 -- Add a shard to the left table that overlaps with multiple shards in the right
-COPY multi_outer_join_left FROM :'customer_1_data_file' with delimiter '|'
+\set customer_1_data_file :abs_srcdir '/data/customer.1.data'
+COPY multi_outer_join_left FROM :'customer_1_data_file' with delimiter '|';
 -- All outer joins should error out
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -877,7 +878,7 @@ SELECT create_distributed_table('left_values', 'val');
 
 (1 row)
 
-COPY left_values from stdin
+COPY left_values from stdin;
 CREATE TABLE right_values(val int);
 SELECT create_distributed_table('right_values', 'val');
  create_distributed_table
@@ -885,7 +886,7 @@ SELECT create_distributed_table('right_values', 'val');
 
 (1 row)
 
-COPY right_values from stdin
+COPY right_values from stdin;
 SELECT
     *
 FROM

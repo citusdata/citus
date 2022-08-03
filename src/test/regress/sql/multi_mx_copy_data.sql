@@ -22,8 +22,8 @@ SET search_path TO public;
 
 \set lineitem_1_data_file :abs_srcdir '/data/lineitem.1.data'
 \set lineitem_2_data_file :abs_srcdir '/data/lineitem.2.data'
-COPY lineitem_mx FROM :'lineitem_1_data_file' with delimiter '|'
-COPY lineitem_mx FROM :'lineitem_2_data_file' with delimiter '|'
+COPY lineitem_mx FROM :'lineitem_1_data_file' with delimiter '|';
+COPY lineitem_mx FROM :'lineitem_2_data_file' with delimiter '|';
 
 \set nation_data_file :abs_srcdir '/data/nation.data'
 COPY citus_mx_test_schema.nation_hash_replicated FROM :'nation_data_file' with delimiter '|';
@@ -33,8 +33,8 @@ COPY citus_mx_test_schema.nation_hash_replicated FROM :'nation_data_file' with d
 \set orders_1_data_file :abs_srcdir '/data/orders.1.data'
 \set orders_2_data_file :abs_srcdir '/data/orders.2.data'
 \set nation_data_file :abs_srcdir '/data/nation.data'
-COPY orders_mx FROM :'orders_1_data_file' with delimiter '|'
-COPY orders_mx FROM :'orders_2_data_file' with delimiter '|'
+COPY orders_mx FROM :'orders_1_data_file' with delimiter '|';
+COPY orders_mx FROM :'orders_2_data_file' with delimiter '|';
 COPY citus_mx_test_schema.nation_hash_replicated FROM :'nation_data_file' with delimiter '|';
 
 -- get ready for the next test
@@ -50,8 +50,8 @@ show citus.local_shared_pool_size;
 
 \set orders_1_data_file :abs_srcdir '/data/orders.1.data'
 \set orders_2_data_file :abs_srcdir '/data/orders.2.data'
-COPY orders_mx FROM :'orders_1_data_file' with delimiter '|'
-COPY orders_mx FROM :'orders_2_data_file' with delimiter '|'
+COPY orders_mx FROM :'orders_1_data_file' with delimiter '|';
+COPY orders_mx FROM :'orders_2_data_file' with delimiter '|';
 
 \set nation_data_file :abs_srcdir '/data/nation.data'
 COPY citus_mx_test_schema.nation_hash_replicated FROM :'nation_data_file' with delimiter '|';
@@ -73,7 +73,7 @@ SET search_path TO public;
 \set nation_data_file :abs_srcdir '/data/nation.data'
 \set part_data_file :abs_srcdir '/data/part.data'
 \set supplier_data_file :abs_srcdir '/data/supplier.data'
-COPY customer_mx FROM :'customer_1_data_file' with delimiter '|'
-COPY nation_mx FROM :'nation_data_file' with delimiter '|'
-COPY part_mx FROM :'part_data_file' with delimiter '|'
-COPY supplier_mx FROM :'supplier_data_file' with delimiter '|'
+COPY customer_mx FROM :'customer_1_data_file' with delimiter '|';
+COPY nation_mx FROM :'nation_data_file' with delimiter '|';
+COPY part_mx FROM :'part_data_file' with delimiter '|';
+COPY supplier_mx FROM :'supplier_data_file' with delimiter '|';

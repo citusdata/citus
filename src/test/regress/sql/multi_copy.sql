@@ -43,7 +43,7 @@ COPY customer_copy_hash (c_custkey,c_name) FROM STDIN (append_to_shard 1);
 SELECT count(*) FROM customer_copy_hash;
 
 -- Test primary key violation
-COPY customer_copy_hash (c_custkey, c_name) FROM STDIN
+COPY customer_copy_hash (c_custkey, c_name) FROM STDIN;
 WITH (FORMAT 'csv');
 1,customer1
 2,customer2
@@ -54,7 +54,7 @@ WITH (FORMAT 'csv');
 SELECT count(*) FROM customer_copy_hash;
 
 -- Test headers option
-COPY customer_copy_hash (c_custkey, c_name) FROM STDIN
+COPY customer_copy_hash (c_custkey, c_name) FROM STDIN;
 WITH (FORMAT 'csv', HEADER true, FORCE_NULL (c_custkey));
 # header
 1,customer1
@@ -66,7 +66,7 @@ WITH (FORMAT 'csv', HEADER true, FORCE_NULL (c_custkey));
 SELECT count(*) FROM customer_copy_hash;
 
 -- Test force_not_null option
-COPY customer_copy_hash (c_custkey, c_name, c_address) FROM STDIN
+COPY customer_copy_hash (c_custkey, c_name, c_address) FROM STDIN;
 WITH (FORMAT 'csv', QUOTE '"', FORCE_NOT_NULL (c_address));
 "4","customer4",""
 \.
@@ -75,7 +75,7 @@ WITH (FORMAT 'csv', QUOTE '"', FORCE_NOT_NULL (c_address));
 SELECT count(c_address) FROM customer_copy_hash WHERE c_custkey = 4;
 
 -- Test force_null option
-COPY customer_copy_hash (c_custkey, c_name, c_address) FROM STDIN
+COPY customer_copy_hash (c_custkey, c_name, c_address) FROM STDIN;
 WITH (FORMAT 'csv', QUOTE '"', FORCE_NULL (c_address));
 "5","customer5",""
 \.
@@ -84,7 +84,7 @@ WITH (FORMAT 'csv', QUOTE '"', FORCE_NULL (c_address));
 SELECT count(c_address) FROM customer_copy_hash WHERE c_custkey = 5;
 
 -- Test null violation
-COPY customer_copy_hash (c_custkey, c_name) FROM STDIN
+COPY customer_copy_hash (c_custkey, c_name) FROM STDIN;
 WITH (FORMAT 'csv');
 6,customer6
 7,customer7
@@ -95,7 +95,7 @@ WITH (FORMAT 'csv');
 SELECT count(*) FROM customer_copy_hash;
 
 -- Test server-side copy from program
-COPY customer_copy_hash (c_custkey, c_name) FROM PROGRAM 'echo 9 customer9'
+COPY customer_copy_hash (c_custkey, c_name) FROM PROGRAM 'echo 9 customer9';
 WITH (DELIMITER ' ');
 
 -- Confirm that data was copied
@@ -132,7 +132,7 @@ SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('customer_with_default', 'c_custkey', shard_count:=64);
 
 -- Test with default values for now() function
-COPY customer_with_default (c_custkey, c_name) FROM STDIN
+COPY customer_with_default (c_custkey, c_name) FROM STDIN;
 WITH (FORMAT 'csv');
 1,customer1
 2,customer2
@@ -334,7 +334,7 @@ SELECT master_create_distributed_table('"customer_with_special_\\_character"', '
 
 SELECT master_create_worker_shards('"customer_with_special_\\_character"', 4, 1);
 
-COPY "customer_with_special_\\_character" (c_custkey, c_name) FROM STDIN
+COPY "customer_with_special_\\_character" (c_custkey, c_name) FROM STDIN;
 WITH (FORMAT 'csv');
 1,customer1
 2,customer2
@@ -352,7 +352,7 @@ SELECT master_create_distributed_table('"1_customer"', 'c_custkey', 'hash');
 
 SELECT master_create_worker_shards('"1_customer"', 4, 1);
 
-COPY "1_customer" (c_custkey, c_name) FROM STDIN
+COPY "1_customer" (c_custkey, c_name) FROM STDIN;
 WITH (FORMAT 'csv');
 1,customer1
 2,customer2

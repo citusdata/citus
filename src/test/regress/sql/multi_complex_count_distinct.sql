@@ -31,8 +31,8 @@ SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
 
 \set lineitem_1_data_file :abs_srcdir '/data/lineitem.1.data'
 \set lineitem_2_data_file :abs_srcdir '/data/lineitem.2.data'
-COPY lineitem_hash FROM :'lineitem_1_data_file' with delimiter '|'
-COPY lineitem_hash FROM :'lineitem_2_data_file' with delimiter '|'
+COPY lineitem_hash FROM :'lineitem_1_data_file' with delimiter '|';
+COPY lineitem_hash FROM :'lineitem_2_data_file' with delimiter '|';
 
 ANALYZE lineitem_hash;
 

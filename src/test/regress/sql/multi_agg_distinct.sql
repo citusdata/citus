@@ -36,8 +36,8 @@ WHERE shardid = :new_shard_id;
 
 \set lineitem_1_data_file :abs_srcdir '/data/lineitem.1.data'
 \set lineitem_2_data_file :abs_srcdir '/data/lineitem.2.data'
-COPY lineitem_range FROM :'lineitem_1_data_file' with delimiter '|'
-COPY lineitem_range FROM :'lineitem_2_data_file' with delimiter '|'
+COPY lineitem_range FROM :'lineitem_1_data_file' with delimiter '|';
+COPY lineitem_range FROM :'lineitem_2_data_file' with delimiter '|';
 
 -- Run aggregate(distinct) on partition column for range partitioned table
 
@@ -95,8 +95,8 @@ CREATE TABLE lineitem_hash (
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
 
-COPY lineitem_hash FROM :'lineitem_1_data_file' with delimiter '|'
-COPY lineitem_hash FROM :'lineitem_2_data_file' with delimiter '|'
+COPY lineitem_hash FROM :'lineitem_1_data_file' with delimiter '|';
+COPY lineitem_hash FROM :'lineitem_2_data_file' with delimiter '|';
 
 -- aggregate(distinct) on partition column is allowed
 SELECT count(distinct l_orderkey) FROM lineitem_hash;

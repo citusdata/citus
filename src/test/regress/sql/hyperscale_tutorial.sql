@@ -87,11 +87,11 @@ SELECT create_distributed_table('impressions', 'company_id');
 \set ads_csv_file :abs_srcdir '/data/ads.csv'
 \set clicks_csv_file :abs_srcdir '/data/clicks.csv'
 \set impressions_csv_file :abs_srcdir '/data/impressions.csv'
-COPY companies from :'companies_csv_file' with csv
-COPY campaigns from :'campaigns_csv_file' with csv
-COPY ads from :'ads_csv_file' with csv
-COPY clicks from :'clicks_csv_file' with csv
-COPY impressions from :'impressions_csv_file' with csv
+COPY companies from :'companies_csv_file' with csv;
+COPY campaigns from :'campaigns_csv_file' with csv;
+COPY ads from :'ads_csv_file' with csv;
+COPY clicks from :'clicks_csv_file' with csv;
+COPY impressions from :'impressions_csv_file' with csv;
 
 SELECT a.campaign_id,
        RANK() OVER (
@@ -179,11 +179,11 @@ CREATE TABLE impressions (
     REFERENCES ads (company_id, id)
 );
 
-COPY companies from :'companies_csv_file' with csv
-COPY campaigns from :'campaigns_csv_file' with csv
-COPY ads from :'ads_csv_file' with csv
-COPY clicks from :'clicks_csv_file' with csv
-COPY impressions from :'impressions_csv_file' with csv
+COPY companies from :'companies_csv_file' with csv;
+COPY campaigns from :'campaigns_csv_file' with csv;
+COPY ads from :'ads_csv_file' with csv;
+COPY clicks from :'clicks_csv_file' with csv;
+COPY impressions from :'impressions_csv_file' with csv;
 
 SELECT create_distributed_table('companies',   'id');
 SELECT create_distributed_table('campaigns',   'company_id');
