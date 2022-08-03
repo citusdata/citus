@@ -1154,7 +1154,8 @@ HasComplexRangeTableType(Query *queryTree)
 		if (rangeTableEntry->rtekind != RTE_RELATION &&
 			rangeTableEntry->rtekind != RTE_SUBQUERY &&
 			rangeTableEntry->rtekind != RTE_FUNCTION &&
-			rangeTableEntry->rtekind != RTE_VALUES)
+			rangeTableEntry->rtekind != RTE_VALUES &&
+			!IsJsonTableRTE(rangeTableEntry))
 		{
 			hasComplexRangeTableType = true;
 		}
