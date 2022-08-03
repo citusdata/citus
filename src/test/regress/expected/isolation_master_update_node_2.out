@@ -57,8 +57,6 @@ step s2-abort: ABORT;
 step s1-abort: ABORT;
 FATAL:  terminating connection due to administrator command
 server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
 
 master_remove_node
 ---------------------------------------------------------------------

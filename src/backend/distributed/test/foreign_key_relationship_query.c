@@ -117,7 +117,7 @@ get_referencing_relation_id_list(PG_FUNCTION_ARGS)
 	{
 		Oid refId = lfirst_oid(wrapper->listCell);
 
-		wrapper->listCell = lnext_compat(wrapper->list, wrapper->listCell);
+		wrapper->listCell = lnext(wrapper->list, wrapper->listCell);
 
 		SRF_RETURN_NEXT(functionContext, PointerGetDatum(refId));
 	}
@@ -176,7 +176,7 @@ get_referenced_relation_id_list(PG_FUNCTION_ARGS)
 	{
 		Oid refId = lfirst_oid(wrapper->listCell);
 
-		wrapper->listCell = lnext_compat(wrapper->list, wrapper->listCell);
+		wrapper->listCell = lnext(wrapper->list, wrapper->listCell);
 
 		SRF_RETURN_NEXT(functionContext, PointerGetDatum(refId));
 	}

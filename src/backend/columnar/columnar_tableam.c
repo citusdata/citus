@@ -122,7 +122,7 @@ static void ColumnarProcessUtility(PlannedStmt *pstmt,
 								   ParamListInfo params,
 								   struct QueryEnvironment *queryEnv,
 								   DestReceiver *dest,
-								   QueryCompletionCompat *completionTag);
+								   QueryCompletion *completionTag);
 static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
 											   int timeout, int retryInterval);
 static List * NeededColumnsList(TupleDesc tupdesc, Bitmapset *attr_needed);
@@ -2239,7 +2239,7 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 					   ParamListInfo params,
 					   struct QueryEnvironment *queryEnv,
 					   DestReceiver *dest,
-					   QueryCompletionCompat *completionTag)
+					   QueryCompletion *completionTag)
 {
 #if PG_VERSION_NUM >= PG_VERSION_14
 	if (readOnlyTree)
@@ -2956,7 +2956,7 @@ AvailableExtensionVersionColumnar(void)
 	/* pg_available_extensions returns result set containing all available extensions */
 	(*pg_available_extensions)(fcinfo);
 
-	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlotCompat(
+	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlot(
 		extensionsResultSet->setDesc,
 		&TTSOpsMinimalTuple);
 	bool hasTuple = tuplestore_gettupleslot(extensionsResultSet->setResult, goForward,

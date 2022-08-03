@@ -29,6 +29,7 @@ extern void UnmarkObjectDistributed(const ObjectAddress *address);
 extern bool IsTableOwnedByExtension(Oid relationId);
 extern bool IsAnyObjectAddressOwnedByExtension(const List *targets,
 											   ObjectAddress *extensionAddress);
+extern bool IsObjectAddressOwnedByCitus(const ObjectAddress *objectAddress);
 extern ObjectAddress PgGetObjectAddress(char *ttype, ArrayType *namearr,
 										ArrayType *argsarr);
 extern List * GetDistributedObjectAddressList(void);

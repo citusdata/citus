@@ -19,11 +19,7 @@ SELECT create_reference_table('squares');
 INSERT INTO squares SELECT i, i * i FROM generate_series(1, 10) i;
 NOTICE:  executing the copy locally for shard xxxxx
 CREATE INDEX CONCURRENTLY squares_a_idx ON squares (a);
-SELECT substring(current_Setting('server_version'), '\d+')::int > 11 AS server_version_above_eleven
-\gset
-\if :server_version_above_eleven
 REINDEX INDEX CONCURRENTLY squares_a_idx;
-\endif
 DROP INDEX CONCURRENTLY squares_a_idx;
 -- should be executed locally
 SELECT count(*) FROM squares;
@@ -476,8 +472,13 @@ BEGIN;
 INSERT INTO local_table VALUES (1), (2), (3);
 INSERT INTO numbers SELECT * FROM generate_series(1, 100);
 NOTICE:  executing the copy locally for shard xxxxx
+-- We are reducing the log level here to avoid alternative test output
+-- in PG15 because of the change in the display of SQL-standard
+-- function's arguments in INSERT/SELECT in PG15.
+-- The log level changes can be reverted when we drop support for PG14
+SET client_min_messages TO WARNING;
 INSERT INTO numbers SELECT * FROM numbers;
-NOTICE:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 AS citus_table_alias (a) SELECT a FROM replicate_ref_to_coordinator.numbers_8000001 numbers
+RESET client_min_messages;
 SELECT COUNT(*) FROM local_table JOIN numbers using (a);
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (replicate_ref_to_coordinator.local_table JOIN replicate_ref_to_coordinator.numbers_8000001 numbers(a) USING (a))
  count

@@ -168,8 +168,8 @@ CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest)
 	{
 		Tuplestorestate *tupleStore = tuplestore_begin_heap(true, false, work_mem);
 		TupleDesc tupleDesc = CallStmtResultDesc(callStmt);
-		TupleTableSlot *slot = MakeSingleTupleTableSlotCompat(tupleDesc,
-															  &TTSOpsMinimalTuple);
+		TupleTableSlot *slot = MakeSingleTupleTableSlot(tupleDesc,
+														&TTSOpsMinimalTuple);
 		bool expectResults = true;
 		Task *task = CitusMakeNode(Task);
 

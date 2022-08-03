@@ -45,6 +45,7 @@
 #include "commands/tablecmds.h"
 #include "distributed/adaptive_executor.h"
 #include "distributed/backend_data.h"
+#include "distributed/citus_depended_object.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
@@ -104,7 +105,7 @@ static void ProcessUtilityInternal(PlannedStmt *pstmt,
 								   ParamListInfo params,
 								   struct QueryEnvironment *queryEnv,
 								   DestReceiver *dest,
-								   QueryCompletionCompat *completionTag);
+								   QueryCompletion *completionTag);
 #if PG_VERSION_NUM >= 140000
 static void set_indexsafe_procflags(void);
 #endif
@@ -128,7 +129,7 @@ void
 ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityContext
 						context,
 						ParamListInfo params, DestReceiver *dest,
-						QueryCompletionCompat *completionTag)
+						QueryCompletion *completionTag)
 {
 	PlannedStmt *plannedStmt = makeNode(PlannedStmt);
 	plannedStmt->commandType = CMD_UTILITY;
@@ -158,7 +159,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					 ParamListInfo params,
 					 struct QueryEnvironment *queryEnv,
 					 DestReceiver *dest,
-					 QueryCompletionCompat *completionTag)
+					 QueryCompletion *completionTag)
 {
 	Node *parsetree;
 
@@ -372,10 +373,11 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 					   ParamListInfo params,
 					   struct QueryEnvironment *queryEnv,
 					   DestReceiver *dest,
-					   QueryCompletionCompat *completionTag)
+					   QueryCompletion *completionTag)
 {
 	Node *parsetree = pstmt->utilityStmt;
 	List *ddlJobs = NIL;
+	bool distOpsHasInvalidObject = false;
 
 	if (IsA(parsetree, ExplainStmt) &&
 		IsA(((ExplainStmt *) parsetree)->query, Query))
@@ -543,6 +545,19 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		ops = GetDistributeObjectOps(parsetree);
 
 		/*
+		 * Preprocess and qualify steps can cause pg tests to fail because of the
+		 * unwanted citus related warnings or early error logs related to invalid address.
+		 * Therefore, we first check if all addresses in the given statement are valid.
+		 * Then, we do not execute qualify and preprocess if any address is invalid to
+		 * prevent before-mentioned citus related messages. PG will complain about the
+		 * invalid address, so we are safe to not execute qualify and preprocess. Also
+		 * note that we should not guard any step after standardProcess_Utility with
+		 * the flag distOpsHasInvalidObject because PG would have already failed the
+		 * transaction.
+		 */
+		distOpsHasInvalidObject = DistOpsHasInvalidObject(parsetree, ops);
+
+		/*
 		 * For some statements Citus defines a Qualify function. The goal of this function
 		 * is to take any ambiguity from the statement that is contextual on either the
 		 * search_path or current settings.
@@ -551,12 +566,12 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 * deserialize calls for the statement portable to other postgres servers, the
 		 * workers in our case.
 		 */
-		if (ops && ops->qualify)
+		if (ops && ops->qualify && !distOpsHasInvalidObject)
 		{
 			ops->qualify(parsetree);
 		}
 
-		if (ops && ops->preprocess)
+		if (ops && ops->preprocess && !distOpsHasInvalidObject)
 		{
 			ddlJobs = ops->preprocess(parsetree, queryString, context);
 		}
@@ -734,10 +749,14 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		if (IsA(parsetree, RenameStmt) && ((RenameStmt *) parsetree)->renameType ==
 			OBJECT_ROLE && EnableAlterRolePropagation)
 		{
-			ereport(NOTICE, (errmsg("not propagating ALTER ROLE ... RENAME TO commands "
-									"to worker nodes"),
-							 errhint("Connect to worker nodes directly to manually "
-									 "rename the role")));
+			if (EnableUnsupportedFeatureMessages)
+			{
+				ereport(NOTICE, (errmsg(
+									 "not propagating ALTER ROLE ... RENAME TO commands "
+									 "to worker nodes"),
+								 errhint("Connect to worker nodes directly to manually "
+										 "rename the role")));
+			}
 		}
 	}
 
@@ -853,7 +872,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 */
 		if (ops && ops->markDistributed)
 		{
-			List *addresses = GetObjectAddressListFromParseTree(parsetree, false);
+			List *addresses = GetObjectAddressListFromParseTree(parsetree, false, true);
 			ObjectAddress *address = NULL;
 			foreach_ptr(address, addresses)
 			{

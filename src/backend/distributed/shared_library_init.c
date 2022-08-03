@@ -32,6 +32,7 @@
 #include "common/string.h"
 #include "executor/executor.h"
 #include "distributed/backend_data.h"
+#include "distributed/citus_depended_object.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/commands.h"
@@ -47,6 +48,7 @@
 #include "distributed/local_executor.h"
 #include "distributed/local_distributed_join_planner.h"
 #include "distributed/locally_reserved_shared_connections.h"
+#include "distributed/log_utils.h"
 #include "distributed/maintenanced.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/metadata_utility.h"
@@ -389,6 +391,7 @@ _PG_init(void)
 	InitializeBackendManagement();
 	InitializeConnectionManagement();
 	InitPlacementConnectionManagement();
+	InitRelationAccessHash();
 	InitializeCitusQueryStats();
 	InitializeSharedConnectionStats();
 	InitializeLocallyReservedSharedConnections();
@@ -597,6 +600,21 @@ StartupCitusBackend(void)
 
 
 /*
+ * GetCurrentClientMinMessageLevelName returns the name of the
+ * the GUC client_min_messages for its specified value.
+ */
+const char *
+GetClientMinMessageLevelNameForValue(int minMessageLevel)
+{
+	struct config_enum record = { 0 };
+	record.options = log_level_options;
+	const char *clientMinMessageLevelName = config_enum_lookup_by_value(&record,
+																		minMessageLevel);
+	return clientMinMessageLevelName;
+}
+
+
+/*
  * RegisterConnectionCleanup cleans up any resources left at the end of the
  * session. We prefer to cleanup before shared memory exit to make sure that
  * this session properly releases anything hold in the shared memory.
@@ -650,6 +668,7 @@ CitusCleanupConnectionsAtExit(int code, Datum arg)
 
 	/* we don't want any monitoring view/udf to show already exited backends */
 	UnSetGlobalPID();
+	SetActiveMyBackend(false);
 }
 
 
@@ -1156,6 +1175,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_unsupported_feature_messages",
+		gettext_noop("Controls showing of some citus related messages. It is intended to "
+					 "be used before vanilla tests to stop unwanted citus messages."),
+		NULL,
+		&EnableUnsupportedFeatureMessages,
+		true,
+		PGC_SUSET,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_version_checks",
 		gettext_noop("Enables version checks during CREATE/ALTER EXTENSION commands"),
 		NULL,
@@ -1274,6 +1304,18 @@ RegisterCitusConfigVariables(void)
 		"",
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.hide_citus_dependent_objects",
+		gettext_noop(
+			"Hides some objects, which depends on citus extension, from pg meta class queries."
+			"It is intended to be used only before postgres vanilla tests to not break them."),
+		NULL,
+		&HideCitusDependentObjects,
+		false,
+		PGC_USERSET,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	/*
@@ -2476,7 +2518,11 @@ CitusAuthHook(Port *port, int status)
 
 
 /*
- * IsSuperuser returns whether the role with the given name is superuser.
+ * IsSuperuser returns whether the role with the given name is superuser. If
+ * the user doesn't exist, this simply returns false instead of throwing an
+ * error. This is done to not leak information about users existing or not, in
+ * some cases postgres is vague about this on purpose. So, by returning false
+ * we let postgres return this possibly vague error message.
  */
 static bool
 IsSuperuser(char *roleName)
@@ -2489,9 +2535,7 @@ IsSuperuser(char *roleName)
 	HeapTuple roleTuple = SearchSysCache1(AUTHNAME, CStringGetDatum(roleName));
 	if (!HeapTupleIsValid(roleTuple))
 	{
-		ereport(FATAL,
-				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-				 errmsg("role \"%s\" does not exist", roleName)));
+		return false;
 	}
 
 	Form_pg_authid rform = (Form_pg_authid) GETSTRUCT(roleTuple);

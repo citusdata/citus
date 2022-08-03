@@ -161,12 +161,30 @@ GeneratePositiveIntSequenceList(int upTo)
 /*
  * StringJoin gets a list of char * and then simply
  * returns a newly allocated char * joined with the
- * given delimiter.
+ * given delimiter. It uses ';' as the delimiter by
+ * default.
  */
 char *
 StringJoin(List *stringList, char delimiter)
 {
+	return StringJoinParams(stringList, delimiter, NULL, NULL);
+}
+
+
+/*
+ * StringJoin gets a list of char * and then simply
+ * returns a newly allocated char * joined with the
+ * given delimiter, prefix and postfix.
+ */
+char *
+StringJoinParams(List *stringList, char delimiter, char *prefix, char *postfix)
+{
 	StringInfo joinedString = makeStringInfo();
+
+	if (prefix != NULL)
+	{
+		appendStringInfoString(joinedString, prefix);
+	}
 
 	const char *command = NULL;
 	int curIndex = 0;
@@ -178,6 +196,11 @@ StringJoin(List *stringList, char delimiter)
 		}
 		appendStringInfoString(joinedString, command);
 		curIndex++;
+	}
+
+	if (postfix != NULL)
+	{
+		appendStringInfoString(joinedString, postfix);
 	}
 
 	return joinedString->data;

@@ -26,6 +26,7 @@ teardown
 {
 	SELECT run_command_on_workers('ALTER SYSTEM RESET citus.max_client_connections');
 	SELECT run_command_on_workers('SELECT pg_reload_conf()');
+	DROP TABLE my_table;
 }
 
 session "s1"

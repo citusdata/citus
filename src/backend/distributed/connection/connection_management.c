@@ -105,7 +105,7 @@ InitializeConnectionManagement(void)
 	 * management. Doing so, instead of allocating in TopMemoryContext, makes
 	 * it easier to associate used memory.
 	 */
-	ConnectionContext = AllocSetContextCreateExtended(TopMemoryContext,
+	ConnectionContext = AllocSetContextCreateInternal(TopMemoryContext,
 													  "Connection Context",
 													  ALLOCSET_DEFAULT_MINSIZE,
 													  ALLOCSET_DEFAULT_INITSIZE,

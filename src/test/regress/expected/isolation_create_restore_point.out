@@ -8,7 +8,6 @@ create_reference_table
 
 step s1-begin:
 	BEGIN;
-	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-create-distributed:
 	CREATE TABLE test_create_distributed_table (test_id integer NOT NULL, data text);
@@ -40,7 +39,6 @@ create_reference_table
 
 step s1-begin:
 	BEGIN;
-	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-insert:
 	INSERT INTO restore_table VALUES (1,'hello');
@@ -65,7 +63,6 @@ create_reference_table
 
 step s1-begin:
 	BEGIN;
-	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-modify-multiple:
 	UPDATE restore_table SET data = 'world';
@@ -90,7 +87,6 @@ create_reference_table
 
 step s1-begin:
 	BEGIN;
-	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-ddl:
 	ALTER TABLE restore_table ADD COLUMN x int;
@@ -116,7 +112,6 @@ create_reference_table
 
 step s1-begin:
 	BEGIN;
-	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-copy:
 	COPY restore_table FROM PROGRAM 'echo 1,hello' WITH CSV;
@@ -141,7 +136,6 @@ create_reference_table
 
 step s1-begin:
 	BEGIN;
-	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-recover:
 	SELECT recover_prepared_transactions();
@@ -172,7 +166,6 @@ create_reference_table
 
 step s1-begin:
 	BEGIN;
-	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-drop:
 	DROP TABLE restore_table;
@@ -198,7 +191,6 @@ create_reference_table
 
 step s1-begin:
 	BEGIN;
-	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-add-node:
 	SELECT 1 FROM master_add_inactive_node('localhost', 9999);
@@ -229,7 +221,6 @@ create_reference_table
 
 step s1-begin:
 	BEGIN;
-	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-remove-node:
 	SELECT master_remove_node('localhost', 9999);
@@ -260,7 +251,6 @@ create_reference_table
 
 step s1-begin:
 	BEGIN;
-	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-create-restore:
 	SELECT 1 FROM citus_create_restore_point('citus-test-2');
@@ -351,7 +341,6 @@ step s2-create-restore:
 (1 row)
 
 step s1-multi-statement:
-	SET citus.multi_shard_commit_protocol TO '2pc';
 	BEGIN;
 	INSERT INTO restore_table VALUES (1,'hello');
 	INSERT INTO restore_table VALUES (2,'hello');
@@ -370,7 +359,6 @@ create_reference_table
 
 step s1-begin:
 	BEGIN;
-	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-create-reference:
 	CREATE TABLE test_create_reference_table (test_id integer NOT NULL, data text);
@@ -402,7 +390,6 @@ create_reference_table
 
 step s1-begin:
 	BEGIN;
-	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-insert-ref:
 	INSERT INTO restore_ref_table VALUES (1,'hello');
@@ -428,7 +415,6 @@ create_reference_table
 
 step s1-begin:
 	BEGIN;
-	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-modify-multiple-ref:
 	UPDATE restore_ref_table SET data = 'world';
@@ -454,7 +440,6 @@ create_reference_table
 
 step s1-begin:
 	BEGIN;
-	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-ddl-ref:
 	ALTER TABLE restore_ref_table ADD COLUMN x int;
@@ -480,7 +465,6 @@ create_reference_table
 
 step s1-begin:
 	BEGIN;
-	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-copy-ref:
 	COPY restore_ref_table FROM PROGRAM 'echo 1,hello' WITH CSV;
@@ -506,7 +490,6 @@ create_reference_table
 
 step s1-begin:
 	BEGIN;
-	SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-drop-ref:
 	DROP TABLE restore_ref_table;
@@ -592,7 +575,6 @@ step s2-create-restore:
 (1 row)
 
 step s1-multi-statement-ref:
-	SET citus.multi_shard_commit_protocol TO '2pc';
 	BEGIN;
 	INSERT INTO restore_ref_table VALUES (1,'hello');
 	INSERT INTO restore_ref_table VALUES (2,'hello');

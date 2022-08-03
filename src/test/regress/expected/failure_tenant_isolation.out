@@ -56,9 +56,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE tenant_isolation.table_
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on colocated table creation
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE tenant_isolation.table_2").after(1).cancel(' || :pid || ')');
@@ -77,9 +75,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="INSERT INTO tenant_isolation.table_2
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on colocated table population
 SELECT citus.mitmproxy('conn.onQuery(query="INSERT INTO tenant_isolation.table_2").cancel(' || :pid || ')');
@@ -98,9 +94,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_2
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on colocated table constraints
 SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_2 ADD CONSTRAINT").after(2).cancel(' || :pid || ')');
@@ -119,9 +113,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE tenant_isolation.table_
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on table creation
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE tenant_isolation.table_1").after(1).cancel(' || :pid || ')');
@@ -140,9 +132,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="INSERT INTO tenant_isolation.table_1
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on table population
 SELECT citus.mitmproxy('conn.onQuery(query="INSERT INTO tenant_isolation.table_1").cancel(' || :pid || ')');
@@ -161,9 +151,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_1
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on table constraints
 SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_1 ADD CONSTRAINT").after(2).cancel(' || :pid || ')');
@@ -182,9 +170,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS tenant_isolatio
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on dropping old colocated shard
 SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS tenant_isolation.table_2").cancel(' || :pid || ')');
@@ -203,9 +189,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS tenant_isolatio
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on dropping old shard
 SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS tenant_isolation.table_1").cancel(' || :pid || ')');
@@ -224,9 +208,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="ADD CONSTRAINT table_2_ref_id_fkey F
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- failure on foreign key creation
 SELECT citus.mitmproxy('conn.onQuery(query="ADD CONSTRAINT table_2_ref_id_fkey FOREIGN KEY").after(2).cancel(' || :pid || ')');

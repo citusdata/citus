@@ -230,7 +230,7 @@ MakeCollateClauseFromOid(Oid collationOid)
  * the domain cannot be found in the local catalog.
  */
 List *
-CreateDomainStmtObjectAddress(Node *node, bool missing_ok)
+CreateDomainStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	CreateDomainStmt *stmt = castNode(CreateDomainStmt, node);
 
@@ -249,7 +249,7 @@ CreateDomainStmtObjectAddress(Node *node, bool missing_ok)
  * found.
  */
 List *
-AlterDomainStmtObjectAddress(Node *node, bool missing_ok)
+AlterDomainStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterDomainStmt *stmt = castNode(AlterDomainStmt, node);
 
@@ -264,7 +264,7 @@ AlterDomainStmtObjectAddress(Node *node, bool missing_ok)
  * error if the domain cannot be found.
  */
 List *
-DomainRenameConstraintStmtObjectAddress(Node *node, bool missing_ok)
+DomainRenameConstraintStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 
@@ -279,7 +279,7 @@ DomainRenameConstraintStmtObjectAddress(Node *node, bool missing_ok)
  * cannot be found.
  */
 List *
-AlterDomainOwnerStmtObjectAddress(Node *node, bool missing_ok)
+AlterDomainOwnerStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Assert(stmt->objectType == OBJECT_DOMAIN);
@@ -295,7 +295,7 @@ AlterDomainOwnerStmtObjectAddress(Node *node, bool missing_ok)
  * found.
  */
 List *
-RenameDomainStmtObjectAddress(Node *node, bool missing_ok)
+RenameDomainStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_DOMAIN);

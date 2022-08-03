@@ -200,18 +200,7 @@ SELECT undistribute_table('non_existent_table', cascade_via_foreign_keys=>true);
 CREATE TABLE local_table(a int);
 SELECT undistribute_table('local_table', cascade_via_foreign_keys=>true);
 
--- as pg < 12 doesn't support foreign keys between partitioned tables,
--- define below foreign key conditionally instead of adding another
--- test output
-DO $proc$
-BEGIN
-IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
-  EXECUTE
-  $$
-  ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_15 FOREIGN KEY (col_1) REFERENCES partitioned_table_1(col_1);
-  $$;
-END IF;
-END$proc$;
+ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_15 FOREIGN KEY (col_1) REFERENCES partitioned_table_1(col_1);
 
 BEGIN;
   SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
@@ -318,18 +307,7 @@ BEGIN;
   SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
 ROLLBACK;
 
--- as pg < 12 doesn't support foreign keys between partitioned tables,
--- define below foreign key conditionally instead of adding another
--- test output
-DO $proc$
-BEGIN
-IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
-  EXECUTE
-  $$
-  ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_13 FOREIGN KEY (col_1) REFERENCES partitioned_table_2(col_1);
-  $$;
-END IF;
-END$proc$;
+ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_13 FOREIGN KEY (col_1) REFERENCES partitioned_table_2(col_1);
 
 BEGIN;
   -- For pg versions 11, 12 & 13, partitioned_table_1 references to reference_table_3

@@ -28,9 +28,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE").kill()');
 CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
 WARNING:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
 Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	   This probably means the server terminated abnormally
-	   before or while processing the request.
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -63,9 +61,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE").kill()');
 CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
 WARNING:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
 Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	   This probably means the server terminated abnormally
-	   before or while processing the request.
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -143,9 +139,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DROP INDEX CONCURRENTLY").kill()');
 DROP INDEX CONCURRENTLY IF EXISTS idx_index_test;
 WARNING:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
 Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	   This probably means the server terminated abnormally
-	   before or while processing the request.
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------

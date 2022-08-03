@@ -63,11 +63,6 @@ step "s1-insert-local-10"
   INSERT INTO local_deadlock_table VALUES (10, 10);
 }
 
-step "s1-set-2pc"
-{
-	set citus.multi_shard_commit_protocol TO '2pc';
-}
-
 step "s1-update-1-rep-2"
 {
   UPDATE deadlock_detection_test_rep_2 SET some_val = 1 WHERE user_id = 1;
@@ -143,11 +138,6 @@ step "s2-insert-dist-10"
 step "s2-insert-local-10"
 {
   INSERT INTO local_deadlock_table VALUES (10, 10);
-}
-
-step "s2-set-2pc"
-{
-	set citus.multi_shard_commit_protocol TO '2pc';
 }
 
 step "s2-update-1-rep-2"
@@ -315,14 +305,11 @@ step "deadlock-checker-call"
   SELECT check_distributed_deadlocks();
 }
 
-// simplest case, loop with two nodes
+// simplest case, loop with two nodes (Reminder: Citus uses 2PC)
 permutation "s1-begin" "s2-begin" "s1-update-1" "s2-update-2" "s2-update-1" "deadlock-checker-call" "s1-update-2"  "deadlock-checker-call" "s1-commit" "s2-commit"
 
 // simplest case with replication factor 2
 permutation "s1-begin" "s2-begin" "s1-update-1-rep-2" "s2-update-2-rep-2" "s2-update-1-rep-2" "deadlock-checker-call" "s1-update-2-rep-2"  "deadlock-checker-call" "s1-commit" "s2-commit"
-
-// simplest case with 2pc enabled
-permutation "s1-begin" "s2-begin" "s1-set-2pc" "s2-set-2pc" "s1-update-1" "s2-update-2" "s2-update-1" "deadlock-checker-call" "s1-update-2"  "deadlock-checker-call" "s1-commit" "s2-commit"
 
 // simplest case with multi-shard query is cancelled
 permutation "s1-begin" "s2-begin" "s1-update-1" "s2-update-2" "s1-update-2" "deadlock-checker-call" "s2-upsert-select-all"  "deadlock-checker-call" "s1-commit" "s2-commit"

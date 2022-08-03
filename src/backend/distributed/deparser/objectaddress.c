@@ -24,7 +24,7 @@
  * tree.
  */
 List *
-GetObjectAddressListFromParseTree(Node *parseTree, bool missing_ok)
+GetObjectAddressListFromParseTree(Node *parseTree, bool missing_ok, bool isPostprocess)
 {
 	const DistributeObjectOps *ops = GetDistributeObjectOps(parseTree);
 
@@ -33,12 +33,12 @@ GetObjectAddressListFromParseTree(Node *parseTree, bool missing_ok)
 		ereport(ERROR, (errmsg("unsupported statement to get object address for")));
 	}
 
-	return ops->address(parseTree, missing_ok);
+	return ops->address(parseTree, missing_ok, isPostprocess);
 }
 
 
 List *
-RenameAttributeStmtObjectAddress(Node *node, bool missing_ok)
+RenameAttributeStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
@@ -68,7 +68,7 @@ RenameAttributeStmtObjectAddress(Node *node, bool missing_ok)
  * to true.
  */
 List *
-CreateExtensionStmtObjectAddress(Node *node, bool missing_ok)
+CreateExtensionStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	CreateExtensionStmt *stmt = castNode(CreateExtensionStmt, node);
 	ObjectAddress *address = palloc0(sizeof(ObjectAddress));

@@ -17,7 +17,6 @@ session "s1"
 step "s1-begin"
 {
 	BEGIN;
-	SET citus.multi_shard_commit_protocol TO '2pc';
 }
 
 step "s1-create-reference"
@@ -54,7 +53,6 @@ step "s1-modify-multiple-ref"
 
 step "s1-multi-statement-ref"
 {
-	SET citus.multi_shard_commit_protocol TO '2pc';
 	BEGIN;
 	INSERT INTO restore_ref_table VALUES (1,'hello');
 	INSERT INTO restore_ref_table VALUES (2,'hello');
@@ -63,7 +61,6 @@ step "s1-multi-statement-ref"
 
 step "s1-multi-statement"
 {
-	SET citus.multi_shard_commit_protocol TO '2pc';
 	BEGIN;
 	INSERT INTO restore_table VALUES (1,'hello');
 	INSERT INTO restore_table VALUES (2,'hello');

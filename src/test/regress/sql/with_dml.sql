@@ -97,6 +97,11 @@ INSERT INTO distributed_table
 -- otherwise the coordinator insert select fails
 -- since COPY cannot be executed
 SET citus.force_max_query_parallelization TO on;
+-- We are reducing the log level here to avoid alternative test output
+-- in PG15 because of the change in the display of SQL-standard
+-- function's arguments in INSERT/SELECT in PG15.
+-- The log level changes can be reverted when we drop support for PG14
+SET client_min_messages TO LOG;
 WITH copy_to_other_table AS (
     INSERT INTO distributed_table
         SELECT *
@@ -122,6 +127,7 @@ INSERT INTO second_distributed_table
             FROM copy_to_other_table;
 
 SET citus.force_max_query_parallelization TO off;
+SET client_min_messages TO DEBUG1;
 
 -- CTE inside the UPDATE statement
 UPDATE

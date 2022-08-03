@@ -84,13 +84,13 @@ extern void multi_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 #endif
 								 ProcessUtilityContext context, ParamListInfo params,
 								 struct QueryEnvironment *queryEnv, DestReceiver *dest,
-								 QueryCompletionCompat *completionTag
+								 QueryCompletion *completionTag
 								 );
 extern void ProcessUtilityParseTree(Node *node, const char *queryString,
 									ProcessUtilityContext context, ParamListInfo
 									params,
 									DestReceiver *dest,
-									QueryCompletionCompat *completionTag
+									QueryCompletion *completionTag
 									);
 extern void MarkInvalidateForeignKeyGraph(void);
 extern void InvalidateForeignKeyGraphForDDL(void);

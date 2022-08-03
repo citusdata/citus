@@ -28,3 +28,24 @@
 
 # core dumps
 core
+
+# postgres vanilla test's outputs
+constraints.sql
+copy.sql
+create_function_0.sql
+create_function_1.sql
+create_function_2.sql
+largeobject.sql
+misc.sql
+security_label.sql
+tablespace.sql
+constraints.out
+copy.out
+create_function_0.out
+create_function_1.out
+create_function_2.out
+largeobject.out
+largeobject_1.out
+misc.out
+security_label.out
+tablespace.out

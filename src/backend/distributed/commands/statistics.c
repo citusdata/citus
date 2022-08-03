@@ -120,7 +120,8 @@ PostprocessCreateStatisticsStmt(Node *node, const char *queryString)
 	}
 
 	bool missingOk = false;
-	List *objectAddresses = GetObjectAddressListFromParseTree((Node *) stmt, missingOk);
+	List *objectAddresses = GetObjectAddressListFromParseTree((Node *) stmt, missingOk,
+															  true);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(objectAddresses) == 1);
@@ -140,7 +141,7 @@ PostprocessCreateStatisticsStmt(Node *node, const char *queryString)
  * was set to true.
  */
 List *
-CreateStatisticsStmtObjectAddress(Node *node, bool missingOk)
+CreateStatisticsStmtObjectAddress(Node *node, bool missingOk, bool isPostprocess)
 {
 	CreateStatsStmt *stmt = castNode(CreateStatsStmt, node);
 
@@ -207,6 +208,33 @@ PreprocessDropStatisticsStmt(Node *node, const char *queryString,
 	}
 
 	return ddlJobs;
+}
+
+
+/*
+ * DropStatisticsObjectAddress returns list of object addresses in the drop statistics
+ * statement.
+ */
+List *
+DropStatisticsObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+{
+	DropStmt *dropStatisticsStmt = castNode(DropStmt, node);
+	Assert(dropStatisticsStmt->removeType == OBJECT_STATISTIC_EXT);
+
+	List *objectAddresses = NIL;
+
+	List *objectNameList = NULL;
+	foreach_ptr(objectNameList, dropStatisticsStmt->objects)
+	{
+		Oid statsOid = get_statistics_object_oid(objectNameList,
+												 dropStatisticsStmt->missing_ok);
+
+		ObjectAddress *objectAddress = palloc0(sizeof(ObjectAddress));
+		ObjectAddressSet(*objectAddress, StatisticExtRelationId, statsOid);
+		objectAddresses = lappend(objectAddresses, objectAddress);
+	}
+
+	return objectAddresses;
 }
 
 
@@ -307,7 +335,8 @@ PostprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString)
 	}
 
 	bool missingOk = false;
-	List *objectAddresses = GetObjectAddressListFromParseTree((Node *) stmt, missingOk);
+	List *objectAddresses = GetObjectAddressListFromParseTree((Node *) stmt, missingOk,
+															  true);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(objectAddresses) == 1);
@@ -327,14 +356,30 @@ PostprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString)
  * was set to true.
  */
 List *
-AlterStatisticsSchemaStmtObjectAddress(Node *node, bool missingOk)
+AlterStatisticsSchemaStmtObjectAddress(Node *node, bool missingOk, bool isPostprocess)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 
 	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
-	String *statName = llast((List *) stmt->object);
-	Oid statsOid = get_statistics_object_oid(list_make2(makeString(stmt->newschema),
-														statName), missingOk);
+	Oid statsOid = InvalidOid;
+
+	List *statName = (List *) stmt->object;
+
+	if (isPostprocess)
+	{
+		/*
+		 * we should search the object in the new schema because the method is
+		 * called during postprocess, standard_utility should have already moved
+		 * the stat into new schema.
+		 */
+		List *newStatName = list_make2(makeString(stmt->newschema), llast(statName));
+		statsOid = get_statistics_object_oid(newStatName, missingOk);
+	}
+	else
+	{
+		statsOid = get_statistics_object_oid(statName, missingOk);
+	}
+
 	ObjectAddressSet(*address, StatisticExtRelationId, statsOid);
 
 	return list_make1(address);

@@ -6,13 +6,6 @@
 -- citusdb.shard_max_size. These values are manually set in pg_regress.c. We also set
 -- the shard placement policy to the local-node-first policy as other regression
 -- tests expect the placements to be in that order.
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
- version_above_ten 
--------------------
- t
-(1 row)
-
 SET citusdb.shard_placement_policy TO 'local-node-first';
 -- load as superuser
 \copy lineitem FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'

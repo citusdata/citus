@@ -77,6 +77,9 @@ DROP FUNCTION pg_catalog.worker_split_shard_replication_setup(
     splitShardInfo pg_catalog.split_shard_info[]);
 DROP TYPE pg_catalog.split_shard_info;
 DROP TYPE pg_catalog.replication_slot_info;
+DROP FUNCTION pg_catalog.worker_copy_table_to_node(
+    source_table regclass,
+    target_node_id integer);
 
 DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_id int, OUT initiator_node_identifier int4,
                                                      OUT worker_query BOOL, OUT transaction_number int8, OUT transaction_stamp timestamptz,

@@ -17,6 +17,7 @@
 # ---
 test: multi_extension
 test: single_node
+test: relation_access_tracking_single_node
 test: single_node_truncate
 test: multi_test_helpers multi_test_helpers_superuser
 test: multi_cluster_management
@@ -46,7 +47,7 @@ test: multi_read_from_secondaries
 # ----------
 # multi_citus_tools tests utility functions written for citus tools
 # ----------
-test: multi_citus_tools
+test: multi_citus_tools citus_depended_object
 
 # ----------
 # multi_replicate_reference_table tests replicating reference tables to new nodes after we add new nodes

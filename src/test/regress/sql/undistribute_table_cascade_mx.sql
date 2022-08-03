@@ -112,16 +112,7 @@ SELECT alter_distributed_table ('users', shard_count=>10);
 -- alter_table_set_access_method doesn't support foreign keys
 ALTER TABLE users DROP country_id;
 
--- set access method to columnar if pg version > 11
-DO $proc$
-BEGIN
-IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
-  EXECUTE
-  $$
-  SELECT alter_table_set_access_method('users', 'columnar');
-  $$;
-END IF;
-END$proc$;
+SELECT alter_table_set_access_method('users', 'columnar');
 
 SELECT COUNT(*)
 FROM pg_class s

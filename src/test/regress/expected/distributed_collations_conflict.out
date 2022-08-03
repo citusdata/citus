@@ -74,13 +74,13 @@ ORDER BY 1,2,3;
 \c - - - :master_port
 SET search_path TO collation_conflict;
 -- now test worker_create_or_replace_object directly
-SELECT worker_create_or_replace_object($$CREATE COLLATION collation_conflict.caseinsensitive (provider = 'icu', lc_collate = 'und-u-ks-level2', lc_ctype = 'und-u-ks-level2')$$);
+SELECT worker_create_or_replace_object($$CREATE COLLATION collation_conflict.caseinsensitive (provider = 'icu', locale = 'und-u-ks-level2')$$);
  worker_create_or_replace_object
 ---------------------------------------------------------------------
  f
 (1 row)
 
-SELECT worker_create_or_replace_object($$CREATE COLLATION collation_conflict.caseinsensitive (provider = 'icu', lc_collate = 'und-u-ks-level2', lc_ctype = 'und-u-ks-level2')$$);
+SELECT worker_create_or_replace_object($$CREATE COLLATION collation_conflict.caseinsensitive (provider = 'icu', locale = 'und-u-ks-level2')$$);
  worker_create_or_replace_object
 ---------------------------------------------------------------------
  f

@@ -35,6 +35,7 @@
 #include "commands/extension.h"
 #include "commands/trigger.h"
 #include "distributed/backend_data.h"
+#include "distributed/citus_depended_object.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/citus_ruleutils.h"
@@ -182,6 +183,7 @@ typedef struct MetadataCacheData
 	Oid relationIsAKnownShardFuncId;
 	Oid jsonbExtractPathFuncId;
 	Oid jsonbExtractPathTextFuncId;
+	Oid CitusDependentObjectFuncId;
 	bool databaseNameValid;
 	char databaseName[NAMEDATALEN];
 } MetadataCacheData;
@@ -2206,7 +2208,7 @@ AvailableExtensionVersion(void)
 	/* pg_available_extensions returns result set containing all available extensions */
 	(*pg_available_extensions)(fcinfo);
 
-	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlotCompat(
+	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlot(
 		extensionsResultSet->setDesc,
 		&TTSOpsMinimalTuple);
 	bool hasTuple = tuplestore_gettupleslot(extensionsResultSet->setResult, goForward,
@@ -2697,10 +2699,10 @@ CitusCopyFormatTypeId(void)
 	if (MetadataCache.copyFormatTypeId == InvalidOid)
 	{
 		char *typeName = "citus_copy_format";
-		MetadataCache.copyFormatTypeId = GetSysCacheOid2Compat(TYPENAMENSP,
-															   Anum_pg_enum_oid,
-															   PointerGetDatum(typeName),
-															   PG_CATALOG_NAMESPACE);
+		MetadataCache.copyFormatTypeId = GetSysCacheOid2(TYPENAMENSP,
+														 Anum_pg_enum_oid,
+														 PointerGetDatum(typeName),
+														 PG_CATALOG_NAMESPACE);
 	}
 
 	return MetadataCache.copyFormatTypeId;
@@ -2892,6 +2894,30 @@ JsonbExtractPathTextFuncId(void)
 	}
 
 	return MetadataCache.jsonbExtractPathTextFuncId;
+}
+
+
+/*
+ * CitusDependentObjectFuncId returns oid of the is_citus_depended_object function.
+ */
+Oid
+CitusDependentObjectFuncId(void)
+{
+	if (!HideCitusDependentObjects)
+	{
+		ereport(ERROR, (errmsg(
+							"is_citus_depended_object can only be used while running the regression tests")));
+	}
+
+	if (MetadataCache.CitusDependentObjectFuncId == InvalidOid)
+	{
+		const int argCount = 2;
+
+		MetadataCache.CitusDependentObjectFuncId =
+			FunctionOid("pg_catalog", "is_citus_depended_object", argCount);
+	}
+
+	return MetadataCache.CitusDependentObjectFuncId;
 }
 
 

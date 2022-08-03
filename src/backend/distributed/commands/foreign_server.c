@@ -42,7 +42,7 @@ static List * GetObjectAddressByServerName(char *serverName, bool missing_ok);
  * was set to true.
  */
 List *
-CreateForeignServerStmtObjectAddress(Node *node, bool missing_ok)
+CreateForeignServerStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	CreateForeignServerStmt *stmt = castNode(CreateForeignServerStmt, node);
 
@@ -59,7 +59,7 @@ CreateForeignServerStmtObjectAddress(Node *node, bool missing_ok)
  * was set to true.
  */
 List *
-AlterForeignServerStmtObjectAddress(Node *node, bool missing_ok)
+AlterForeignServerStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterForeignServerStmt *stmt = castNode(AlterForeignServerStmt, node);
 
@@ -124,7 +124,7 @@ PreprocessGrantOnForeignServerStmt(Node *node, const char *queryString,
  * was set to true.
  */
 List *
-RenameForeignServerStmtObjectAddress(Node *node, bool missing_ok)
+RenameForeignServerStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_FOREIGN_SERVER);
@@ -142,7 +142,7 @@ RenameForeignServerStmtObjectAddress(Node *node, bool missing_ok)
  * was set to true.
  */
 List *
-AlterForeignServerOwnerStmtObjectAddress(Node *node, bool missing_ok)
+AlterForeignServerOwnerStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	char *serverName = strVal(stmt->object);
@@ -269,7 +269,7 @@ static List *
 GetObjectAddressByServerName(char *serverName, bool missing_ok)
 {
 	ForeignServer *server = GetForeignServerByName(serverName, missing_ok);
-	Oid serverOid = server->serverid;
+	Oid serverOid = (server) ? server->serverid : InvalidOid;
 	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, ForeignServerRelationId, serverOid);
 

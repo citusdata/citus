@@ -148,8 +148,10 @@ extern void QualifyAlterTypeOwnerStmt(Node *stmt);
 extern char * GetTypeNamespaceNameByNameList(List *names);
 extern Oid TypeOidGetNamespaceOid(Oid typeOid);
 
-extern List * GetObjectAddressListFromParseTree(Node *parseTree, bool missing_ok);
-extern List * RenameAttributeStmtObjectAddress(Node *stmt, bool missing_ok);
+extern List * GetObjectAddressListFromParseTree(Node *parseTree, bool missing_ok, bool
+												isPostprocess);
+extern List * RenameAttributeStmtObjectAddress(Node *stmt, bool missing_ok, bool
+											   isPostprocess);
 
 /* forward declarations for deparse_view_stmts.c */
 extern void QualifyDropViewStmt(Node *node);

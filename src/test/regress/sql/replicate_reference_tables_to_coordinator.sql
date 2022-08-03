@@ -17,11 +17,7 @@ SELECT create_reference_table('squares');
 INSERT INTO squares SELECT i, i * i FROM generate_series(1, 10) i;
 
 CREATE INDEX CONCURRENTLY squares_a_idx ON squares (a);
-SELECT substring(current_Setting('server_version'), '\d+')::int > 11 AS server_version_above_eleven
-\gset
-\if :server_version_above_eleven
 REINDEX INDEX CONCURRENTLY squares_a_idx;
-\endif
 DROP INDEX CONCURRENTLY squares_a_idx;
 
 -- should be executed locally
@@ -233,7 +229,13 @@ ROLLBACK;
 BEGIN;
 INSERT INTO local_table VALUES (1), (2), (3);
 INSERT INTO numbers SELECT * FROM generate_series(1, 100);
+-- We are reducing the log level here to avoid alternative test output
+-- in PG15 because of the change in the display of SQL-standard
+-- function's arguments in INSERT/SELECT in PG15.
+-- The log level changes can be reverted when we drop support for PG14
+SET client_min_messages TO WARNING;
 INSERT INTO numbers SELECT * FROM numbers;
+RESET client_min_messages;
 SELECT COUNT(*) FROM local_table JOIN numbers using (a);
 UPDATE numbers SET a = a + 1;
 SELECT COUNT(*) FROM local_table JOIN numbers using (a);

@@ -20,6 +20,7 @@
 #include "access/htup_details.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_enum.h"
+#include "distributed/adaptive_executor.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
@@ -37,6 +38,8 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shard_rebalancer.h"
+#include "distributed/shard_split.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
@@ -128,6 +131,7 @@ static List * PostLoadShardCreationCommandList(ShardInterval *shardInterval,
 											   int32 sourceNodePort);
 static ShardCommandList * CreateShardCommandList(ShardInterval *shardInterval,
 												 List *ddlCommandList);
+static char * CreateShardCopyCommand(ShardInterval *shard, WorkerNode *targetNode);
 
 
 /* declarations for dynamic loading */
@@ -178,6 +182,9 @@ citus_copy_shard_placement(PG_FUNCTION_ARGS)
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	ErrorIfTableCannotBeReplicated(shardInterval->relationId);
+
+	AcquirePlacementColocationLock(shardInterval->relationId, ExclusiveLock,
+								   doRepair ? "repair" : "copy");
 
 	if (doRepair)
 	{
@@ -331,6 +338,8 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	Oid relationId = RelationIdForShard(shardId);
 	ErrorIfMoveUnsupportedTableType(relationId);
 	ErrorIfTargetNodeIsNotSafeToMove(targetNodeName, targetNodePort);
+
+	AcquirePlacementColocationLock(relationId, ExclusiveLock, "move");
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid distributedTableId = shardInterval->relationId;
@@ -1174,6 +1183,9 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 													   ALLOCSET_DEFAULT_SIZES);
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
+	WorkerNode *sourceNode = FindWorkerNode(sourceNodeName, sourceNodePort);
+	WorkerNode *targetNode = FindWorkerNode(targetNodeName, targetNodePort);
+
 	/* iterate through the colocated shards and copy each */
 	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, shardIntervalList)
@@ -1193,9 +1205,12 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		char *tableOwner = TableOwner(shardInterval->relationId);
 		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
 												  tableOwner, ddlCommandList);
+	}
 
-		ddlCommandList = NIL;
-
+	int taskId = 0;
+	List *copyTaskList = NIL;
+	foreach_ptr(shardInterval, shardIntervalList)
+	{
 		/*
 		 * Skip copying data for partitioned tables, because they contain no
 		 * data themselves. Their partitions do contain data, but those are
@@ -1203,13 +1218,35 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		 */
 		if (!PartitionedTable(shardInterval->relationId))
 		{
-			ddlCommandList = CopyShardContentsCommandList(shardInterval, sourceNodeName,
-														  sourceNodePort);
+			char *copyCommand = CreateShardCopyCommand(
+				shardInterval, targetNode);
+
+			Task *copyTask = CreateBasicTask(
+				INVALID_JOB_ID,
+				taskId,
+				READ_TASK,
+				copyCommand);
+
+			ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
+			SetPlacementNodeMetadata(taskPlacement, sourceNode);
+
+			copyTask->taskPlacementList = list_make1(taskPlacement);
+
+			copyTaskList = lappend(copyTaskList, copyTask);
+			taskId++;
 		}
-		ddlCommandList = list_concat(
-			ddlCommandList,
+	}
+
+	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, copyTaskList,
+									  MaxAdaptiveExecutorPoolSize,
+									  NULL /* jobIdList (ignored by API implementation) */);
+
+	foreach_ptr(shardInterval, shardIntervalList)
+	{
+		List *ddlCommandList =
 			PostLoadShardCreationCommandList(shardInterval, sourceNodeName,
-											 sourceNodePort));
+											 sourceNodePort);
+		char *tableOwner = TableOwner(shardInterval->relationId);
 		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
 												  tableOwner, ddlCommandList);
 
@@ -1269,6 +1306,25 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 
 	MemoryContextReset(localContext);
 	MemoryContextSwitchTo(oldContext);
+}
+
+
+/*
+ * CreateShardCopyCommand constructs the command to copy a shard to another
+ * worker node. This command needs to be run on the node wher you want to copy
+ * the shard from.
+ */
+static char *
+CreateShardCopyCommand(ShardInterval *shard,
+					   WorkerNode *targetNode)
+{
+	char *shardName = ConstructQualifiedShardName(shard);
+	StringInfo query = makeStringInfo();
+	appendStringInfo(query,
+					 "SELECT pg_catalog.worker_copy_table_to_node(%s::regclass, %u);",
+					 quote_literal_cstr(shardName),
+					 targetNode->nodeId);
+	return query->data;
 }
 
 

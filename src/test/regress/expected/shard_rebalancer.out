@@ -416,18 +416,31 @@ SELECT unnest(shard_placement_replication_array(
     2
 ));
 ERROR:  could not find a target for shard xxxxx
+SET client_min_messages TO WARNING;
+set citus.shard_count = 4;
+-- Create a distributed table with all shards on a single node, so that we can
+-- use this as an under-replicated
+SET citus.shard_replication_factor TO 1;
+SELECT * from master_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', false);
+ master_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE replication_test_table(int_column int);
+SELECT create_distributed_table('replication_test_table', 'int_column');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+UPDATE pg_dist_partition SET repmodel = 'c' WHERE logicalrelid = 'replication_test_table'::regclass;
+INSERT INTO replication_test_table SELECT * FROM generate_series(1, 100);
 -- Ensure that shard_replication_factor is 2 during replicate_table_shards
 -- and rebalance_table_shards tests
 SET citus.shard_replication_factor TO 2;
--- Turn off NOTICE messages
-SET client_min_messages TO WARNING;
--- Create a single-row test data for shard rebalancer test shards
-CREATE TABLE shard_rebalancer_test_data AS SELECT 1::int as int_column;
--- Test replicate_table_shards, which will in turn test update_shard_placement
--- in copy mode.
-CREATE TABLE replication_test_table(int_column int);
-SELECT master_create_distributed_table('replication_test_table', 'int_column', 'append');
- master_create_distributed_table
+SELECT * from master_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', true);
+ master_set_node_property
 ---------------------------------------------------------------------
 
 (1 row)
@@ -438,37 +451,14 @@ CREATE VIEW replication_test_table_placements_per_node AS
     AND shardstate != 4
     GROUP BY nodename, nodeport
     ORDER BY nodename, nodeport;
-WARNING:  "view replication_test_table_placements_per_node" has dependency to "table replication_test_table" that is not in Citus' metadata
-DETAIL:  "view replication_test_table_placements_per_node" will be created only locally
-HINT:  Distribute "table replication_test_table" first to distribute "view replication_test_table_placements_per_node"
--- Create four shards with replication factor 2, and delete the placements
--- with smaller port number to simulate under-replicated shards.
-SELECT count(master_create_empty_shard('replication_test_table'))
-    FROM generate_series(1, 4);
- count
----------------------------------------------------------------------
-     4
-(1 row)
-
-DELETE FROM pg_dist_shard_placement WHERE placementid in (
-    SELECT pg_dist_shard_placement.placementid
-    FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard
-    WHERE logicalrelid = 'replication_test_table'::regclass
-        AND (nodename, nodeport) = (SELECT nodename, nodeport FROM pg_dist_shard_placement
-                                    ORDER BY nodename, nodeport limit 1)
-);
--- Upload the test data to the shards
-\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
-\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
-\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
-\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
--- Verify that there is one node with all placements
 SELECT * FROM replication_test_table_placements_per_node;
  count
 ---------------------------------------------------------------------
      4
 (1 row)
 
+-- Test replicate_table_shards, which will in turn test update_shard_placement
+-- in copy mode.
 -- Check excluded_shard_list by excluding three shards with smaller ids
 SELECT replicate_table_shards('replication_test_table',
                               excluded_shard_list := excluded_shard_list,
@@ -540,19 +530,22 @@ SELECT * FROM replication_test_table_placements_per_node;
 SELECT count(*) FROM replication_test_table;
  count
 ---------------------------------------------------------------------
-     4
+   100
 (1 row)
 
 DROP TABLE public.replication_test_table CASCADE;
 -- Test rebalance_table_shards, which will in turn test update_shard_placement
 -- in move mode.
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count TO 6;
 CREATE TABLE rebalance_test_table(int_column int);
-SELECT master_create_distributed_table('rebalance_test_table', 'int_column', 'append');
- master_create_distributed_table
+SELECT create_distributed_table('rebalance_test_table', 'int_column');
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
+UPDATE pg_dist_partition SET repmodel = 'c' WHERE logicalrelid = 'rebalance_test_table'::regclass;
 CREATE VIEW table_placements_per_node AS
 SELECT nodeport, logicalrelid::regclass, count(*)
 FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard
@@ -565,9 +558,6 @@ CREATE PROCEDURE create_unbalanced_shards(rel text)
 LANGUAGE SQL
 AS $$
     SET citus.shard_replication_factor TO 1;
-
-    SELECT count(master_create_empty_shard(rel))
-    FROM generate_series(1, 6);
 
     SELECT count(master_move_shard_placement(shardid,
             src.nodename, src.nodeport::int,
@@ -582,12 +572,7 @@ $$;
 CALL create_unbalanced_shards('rebalance_test_table');
 SET citus.shard_replication_factor TO 2;
 -- Upload the test data to the shards
-\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
-\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
-\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
-\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
-\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
-\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
+INSERT INTO rebalance_test_table SELECT * FROM generate_series(1, 100);
 -- Verify that there is one node with all placements
 SELECT * FROM table_placements_per_node;
  nodeport |     logicalrelid     | count
@@ -772,7 +757,7 @@ SELECT * FROM table_placements_per_node;
 SELECT count(*) FROM rebalance_test_table;
  count
 ---------------------------------------------------------------------
-     6
+   100
 (1 row)
 
 DROP TABLE rebalance_test_table;
@@ -863,21 +848,39 @@ INSERT INTO test_schema_support.imbalanced_table_local VALUES(4);
 CREATE TABLE test_schema_support.imbalanced_table (
     id integer not null
 );
-SELECT master_create_distributed_table('test_schema_support.imbalanced_table', 'id', 'append');
- master_create_distributed_table
+SET citus.shard_count = 3;
+SET citus.shard_replication_factor TO 1;
+SELECT * from master_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', false);
+ master_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('test_schema_support.imbalanced_table', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_schema_support.imbalanced_table SELECT * FROM generate_series(1, 100);
+UPDATE pg_dist_partition SET repmodel = 'c' WHERE logicalrelid = 'test_schema_support.imbalanced_table'::regclass;
+SELECT * from master_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', true);
+ master_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.shard_count = 4;
+-- copy one of the shards to the other node, this is to test that the
+-- rebalancer takes into account all copies of a placement
+SET citus.shard_replication_factor TO 2;
+SELECT replicate_table_shards('test_schema_support.imbalanced_table', max_shard_copies := 1, shard_transfer_mode := 'block_writes');
+ replicate_table_shards
 ---------------------------------------------------------------------
 
 (1 row)
 
 SET citus.shard_replication_factor TO 1;
-SELECT master_create_empty_shard('test_schema_support.imbalanced_table') AS shardid \gset
-COPY test_schema_support.imbalanced_table FROM STDIN WITH (format 'csv', append_to_shard :shardid);
-SET citus.shard_replication_factor TO 2;
-SELECT master_create_empty_shard('test_schema_support.imbalanced_table') AS shardid \gset
-COPY test_schema_support.imbalanced_table FROM STDIN WITH (format 'csv', append_to_shard :shardid);
-SET citus.shard_replication_factor TO 1;
-SELECT master_create_empty_shard('test_schema_support.imbalanced_table') AS shardid \gset
-COPY test_schema_support.imbalanced_table FROM STDIN WITH (format 'csv', append_to_shard :shardid);
 -- imbalanced_table is now imbalanced
 -- Shard counts in each node before rebalance
 SELECT * FROM public.table_placements_per_node;
@@ -891,7 +894,7 @@ SELECT * FROM public.table_placements_per_node;
 SELECT COUNT(*) FROM imbalanced_table;
  count
 ---------------------------------------------------------------------
-    12
+   100
 (1 row)
 
 -- Test rebalance operation
@@ -915,13 +918,13 @@ SELECT * FROM public.table_placements_per_node;
 SELECT COUNT(*) FROM imbalanced_table;
  count
 ---------------------------------------------------------------------
-    12
+   100
 (1 row)
 
-DROP TABLE public.shard_rebalancer_test_data;
 DROP TABLE test_schema_support.imbalanced_table;
 DROP TABLE test_schema_support.imbalanced_table_local;
 SET citus.shard_replication_factor TO 1;
+SET citus.shard_count = 4;
 CREATE TABLE colocated_rebalance_test(id integer);
 CREATE TABLE colocated_rebalance_test2(id integer);
 SELECT create_distributed_table('colocated_rebalance_test', 'id');
@@ -1073,14 +1076,14 @@ CALL citus_cleanup_orphaned_shards();
 select * from pg_dist_placement ORDER BY placementid;
  placementid | shardid | shardstate | shardlength | groupid
 ---------------------------------------------------------------------
-         150 |  123023 |          1 |           0 |      14
-         153 |  123024 |          1 |           0 |      14
-         156 |  123027 |          1 |           0 |      14
-         157 |  123028 |          1 |           0 |      14
-         158 |  123021 |          1 |           0 |      16
-         159 |  123025 |          1 |           0 |      16
-         160 |  123022 |          1 |           0 |      16
-         161 |  123026 |          1 |           0 |      16
+         146 |  123023 |          1 |           0 |      14
+         149 |  123024 |          1 |           0 |      14
+         152 |  123027 |          1 |           0 |      14
+         153 |  123028 |          1 |           0 |      14
+         154 |  123021 |          1 |           0 |      16
+         155 |  123025 |          1 |           0 |      16
+         156 |  123022 |          1 |           0 |      16
+         157 |  123026 |          1 |           0 |      16
 (8 rows)
 
 -- Move all shards to worker1 again
@@ -2123,8 +2126,7 @@ SET citus.shard_replication_factor TO 2;
 SELECT replicate_table_shards('dist_table_test_3',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
 ERROR:  Table 'dist_table_test_3' is streaming replicated. Shards of streaming replicated tables cannot be copied
 -- Mark table as coordinator replicated in order to be able to test replicate_table_shards
-UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
-  ('dist_table_test_3'::regclass);
+UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid = 'dist_table_test_3'::regclass;
 SELECT replicate_table_shards('dist_table_test_3',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
  replicate_table_shards
 ---------------------------------------------------------------------

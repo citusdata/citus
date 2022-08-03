@@ -32,6 +32,7 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
+#include "distributed/citus_depended_object.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/colocation_utils.h"
@@ -1371,7 +1372,8 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	List *functionAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false);
+	List *functionAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false,
+																true);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(functionAddresses) == 1);
@@ -1387,7 +1389,11 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 
 	if (errMsg != NULL)
 	{
-		RaiseDeferredError(errMsg, WARNING);
+		if (EnableUnsupportedFeatureMessages)
+		{
+			RaiseDeferredError(errMsg, WARNING);
+		}
+
 		return NIL;
 	}
 
@@ -1411,7 +1417,7 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
  * normal postgres error for unfound functions.
  */
 List *
-CreateFunctionStmtObjectAddress(Node *node, bool missing_ok)
+CreateFunctionStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	CreateFunctionStmt *stmt = castNode(CreateFunctionStmt, node);
 	ObjectType objectType = OBJECT_FUNCTION;
@@ -1434,7 +1440,17 @@ CreateFunctionStmtObjectAddress(Node *node, bool missing_ok)
 		}
 	}
 
-	return FunctionToObjectAddress(objectType, objectWithArgs, missing_ok);
+	int OldClientMinMessage = client_min_messages;
+
+	/* suppress NOTICE if running under pg vanilla tests */
+	SetLocalClientMinMessagesIfRunningPGTests(WARNING);
+
+	List *funcAddresses = FunctionToObjectAddress(objectType, objectWithArgs, missing_ok);
+
+	/* set it back */
+	SetLocalClientMinMessagesIfRunningPGTests(OldClientMinMessage);
+
+	return funcAddresses;
 }
 
 
@@ -1446,7 +1462,7 @@ CreateFunctionStmtObjectAddress(Node *node, bool missing_ok)
  * objectId in the address can be invalid if missing_ok was set to true.
  */
 List *
-DefineAggregateStmtObjectAddress(Node *node, bool missing_ok)
+DefineAggregateStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	DefineStmt *stmt = castNode(DefineStmt, node);
 
@@ -1499,7 +1515,7 @@ PreprocessAlterFunctionStmt(Node *node, const char *queryString,
 	AlterFunctionStmt *stmt = castNode(AlterFunctionStmt, node);
 	AssertObjectTypeIsFunctional(stmt->objtype);
 
-	List *addresses = GetObjectAddressListFromParseTree((Node *) stmt, false);
+	List *addresses = GetObjectAddressListFromParseTree((Node *) stmt, false, false);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(addresses) == 1);
@@ -1561,7 +1577,7 @@ PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	List *addresses = GetObjectAddressListFromParseTree((Node *) stmt, true);
+	List *addresses = GetObjectAddressListFromParseTree((Node *) stmt, true, false);
 
 	/*  the code-path only supports a single object */
 	Assert(list_length(addresses) == 1);
@@ -1595,7 +1611,7 @@ PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString,
  * missing_ok is set to false the lookup will raise an error.
  */
 List *
-AlterFunctionDependsStmtObjectAddress(Node *node, bool missing_ok)
+AlterFunctionDependsStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterObjectDependsStmt *stmt = castNode(AlterObjectDependsStmt, node);
 	AssertObjectTypeIsFunctional(stmt->objectType);
@@ -1611,7 +1627,7 @@ AlterFunctionDependsStmtObjectAddress(Node *node, bool missing_ok)
  * was unable to find the function/procedure that was the target of the statement.
  */
 List *
-AlterFunctionStmtObjectAddress(Node *node, bool missing_ok)
+AlterFunctionStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterFunctionStmt *stmt = castNode(AlterFunctionStmt, node);
 	return FunctionToObjectAddress(stmt->objtype, stmt->func, missing_ok);
@@ -1623,7 +1639,7 @@ AlterFunctionStmtObjectAddress(Node *node, bool missing_ok)
  * subject of the RenameStmt. Errors if missing_ok is false.
  */
 List *
-RenameFunctionStmtObjectAddress(Node *node, bool missing_ok)
+RenameFunctionStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	return FunctionToObjectAddress(stmt->renameType,
@@ -1636,7 +1652,7 @@ RenameFunctionStmtObjectAddress(Node *node, bool missing_ok)
  * subject of the AlterOwnerStmt. Errors if missing_ok is false.
  */
 List *
-AlterFunctionOwnerObjectAddress(Node *node, bool missing_ok)
+AlterFunctionOwnerObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	return FunctionToObjectAddress(stmt->objectType,
@@ -1654,7 +1670,7 @@ AlterFunctionOwnerObjectAddress(Node *node, bool missing_ok)
  * the schemas.
  */
 List *
-AlterFunctionSchemaStmtObjectAddress(Node *node, bool missing_ok)
+AlterFunctionSchemaStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	AssertObjectTypeIsFunctional(stmt->objectType);

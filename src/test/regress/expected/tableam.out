@@ -5,7 +5,7 @@ SET citus.shard_count TO 4;
 create schema test_tableam;
 set search_path to test_tableam;
 SELECT public.run_command_on_coordinator_and_workers($Q$
-  SET citus.enable_ddl_propagation TO off;
+	SET citus.enable_ddl_propagation TO off;
 	CREATE FUNCTION fake_am_handler(internal)
 	RETURNS table_am_handler
 	AS 'citus'
@@ -26,7 +26,7 @@ ALTER EXTENSION citus ADD ACCESS METHOD fake_am;
 create table test_hash_dist(id int, val int) using fake_am;
 insert into test_hash_dist values (1, 1);
 WARNING:  fake_tuple_insert
-select create_distributed_table('test_hash_dist','id');
+select create_distributed_table('test_hash_dist','id', colocate_with := 'none');
 WARNING:  fake_scan_getnextslot
 CONTEXT:  SQL statement "SELECT TRUE FROM test_tableam.test_hash_dist LIMIT 1"
 WARNING:  fake_scan_getnextslot
@@ -168,16 +168,20 @@ SELECT * FROM master_get_table_ddl_events('test_range_dist');
 --
 select a.shardid, a.nodeport
 FROM pg_dist_shard b, pg_dist_shard_placement a
-WHERE a.shardid=b.shardid AND logicalrelid = 'test_range_dist'::regclass::oid
+WHERE a.shardid=b.shardid AND logicalrelid = 'test_hash_dist'::regclass::oid
 ORDER BY a.shardid, nodeport;
  shardid | nodeport
 ---------------------------------------------------------------------
-   60005 |    57637
-   60006 |    57638
-(2 rows)
+   60000 |    57637
+   60001 |    57638
+   60002 |    57637
+   60003 |    57638
+(4 rows)
 
+-- Change repmodel to allow master_copy_shard_placement
+UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid = 'test_hash_dist'::regclass;
 SELECT master_copy_shard_placement(
-           get_shard_id_for_distribution_column('test_range_dist', '1'),
+           get_shard_id_for_distribution_column('test_hash_dist', '1'),
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
            do_repair := false,
@@ -189,55 +193,42 @@ SELECT master_copy_shard_placement(
 
 select a.shardid, a.nodeport
 FROM pg_dist_shard b, pg_dist_shard_placement a
-WHERE a.shardid=b.shardid AND logicalrelid = 'test_range_dist'::regclass::oid
+WHERE a.shardid=b.shardid AND logicalrelid = 'test_hash_dist'::regclass::oid
 ORDER BY a.shardid, nodeport;
  shardid | nodeport
 ---------------------------------------------------------------------
-   60005 |    57637
-   60005 |    57638
-   60006 |    57638
-(3 rows)
+   60000 |    57637
+   60000 |    57638
+   60001 |    57638
+   60002 |    57637
+   60003 |    57638
+(5 rows)
 
 -- verify that data was copied correctly
 \c - - - :worker_1_port
-select * from test_tableam.test_range_dist_60005 ORDER BY id;
-WARNING:  fake_scan_getnextslot
-WARNING:  fake_scan_getnextslot
-WARNING:  fake_scan_getnextslot
-WARNING:  fake_scan_getnextslot
+select * from test_tableam.test_hash_dist_60000 ORDER BY id;
 WARNING:  fake_scan_getnextslot
 WARNING:  fake_scan_getnextslot
 WARNING:  fake_scan_getnextslot
  id | val
 ---------------------------------------------------------------------
-  0 |   0
   1 |   1
-  1 |  -1
-  2 |   4
-  3 |   9
-  7 |   9
-(6 rows)
+  1 |   1
+(2 rows)
 
 \c - - - :worker_2_port
-select * from test_tableam.test_range_dist_60005 ORDER BY id;
-WARNING:  fake_scan_getnextslot
-WARNING:  fake_scan_getnextslot
-WARNING:  fake_scan_getnextslot
-WARNING:  fake_scan_getnextslot
+select * from test_tableam.test_hash_dist_60000 ORDER BY id;
 WARNING:  fake_scan_getnextslot
 WARNING:  fake_scan_getnextslot
 WARNING:  fake_scan_getnextslot
  id | val
 ---------------------------------------------------------------------
-  0 |   0
   1 |   1
-  1 |  -1
-  2 |   4
-  3 |   9
-  7 |   9
-(6 rows)
+  1 |   1
+(2 rows)
 
 \c - - - :master_port
+set search_path to test_tableam;
 --
 -- Test that partitioned tables work correctly with a fake_am table
 --
@@ -254,15 +245,15 @@ SELECT create_distributed_table('test_partitioned', 'id');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
 DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.test_partitioned_p1$$)
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_tableam.test_partitioned_p1$$)
 WARNING:  fake_scan_getnextslot
-CONTEXT:  SQL statement "SELECT TRUE FROM public.test_partitioned_p2 LIMIT 1"
+CONTEXT:  SQL statement "SELECT TRUE FROM test_tableam.test_partitioned_p2 LIMIT 1"
 WARNING:  fake_scan_getnextslot
 NOTICE:  Copying data from local table...
 WARNING:  fake_scan_getnextslot
 NOTICE:  copying the data has completed
 DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.test_partitioned_p2$$)
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_tableam.test_partitioned_p2$$)
  create_distributed_table
 ---------------------------------------------------------------------
 

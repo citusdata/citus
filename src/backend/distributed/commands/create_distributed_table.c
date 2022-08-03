@@ -60,6 +60,7 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shared_library_init.h"
+#include "distributed/shard_rebalancer.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
@@ -850,6 +851,17 @@ CreateHashDistributedTableShards(Oid relationId, int shardCount,
 
 	if (colocatedTableId != InvalidOid)
 	{
+		/*
+		 * We currently allow concurrent distribution of colocated tables (which
+		 * we probably should not be allowing because of foreign keys /
+		 * partitioning etc).
+		 *
+		 * We also prevent concurrent shard moves / copy / splits) while creating
+		 * a colocated table.
+		 */
+		AcquirePlacementColocationLock(colocatedTableId, ShareLock,
+									   "colocate distributed table");
+
 		CreateColocatedShards(relationId, colocatedTableId, useExclusiveConnection);
 	}
 	else
@@ -1642,7 +1654,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 
 	/* get the table columns */
 	TupleDesc tupleDescriptor = RelationGetDescr(distributedRelation);
-	TupleTableSlot *slot = CreateTableSlotForRel(distributedRelation);
+	TupleTableSlot *slot = table_slot_create(distributedRelation, NULL);
 	List *columnNameList = TupleDescColumnNameList(tupleDescriptor);
 
 	int partitionColumnIndex = INVALID_PARTITION_COLUMN_INDEX;

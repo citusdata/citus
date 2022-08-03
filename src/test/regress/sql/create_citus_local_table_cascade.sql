@@ -49,7 +49,7 @@ BEGIN;
 
   SELECT citus_add_local_table_to_metadata('local_table_1', cascade_via_foreign_keys=>true);
 
-  -- show that we do parallel execution
+  -- show that we do sequential execution
   show citus.multi_shard_modify_mode;
 
   SELECT conname, conrelid::regclass::text, confrelid::regclass::text
@@ -127,7 +127,7 @@ SELECT create_distributed_Table('distributed_table', 'col');
 
 BEGIN;
   SELECT * FROM distributed_table;
-  -- succeeds as citus_add_local_table_to_metadata would also prefer parallel
+  -- fails as citus_add_local_table_to_metadata would require sequential execution
   -- execution like above select
   SELECT citus_add_local_table_to_metadata('local_table_4', cascade_via_foreign_keys=>true);
 ROLLBACK;

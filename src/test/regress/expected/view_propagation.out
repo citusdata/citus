@@ -811,11 +811,8 @@ WARNING:  "view v_test_2" has dependency to "table employees" that is not in Cit
 DETAIL:  "view v_test_2" will be created only locally
 HINT:  Distribute "table employees" first to distribute "view v_test_2"
 SELECT create_distributed_table('employees','employee_id');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
+ERROR:  Citus can not handle circular dependencies between distributed objects
+DETAIL:  "view v_test_1" circularly depends itself, resolve circular dependency first
 -- verify not distributed
 SELECT run_command_on_workers($$SELECT count(*) FROM v_test_1$$);
                        run_command_on_workers

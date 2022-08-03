@@ -16,6 +16,8 @@
 #define CITUS_LOG_LEVEL_OFF 0
 
 
+extern bool EnableUnsupportedFeatureMessages;
+
 extern bool IsLoggableLevel(int logLevel);
 extern char * HashLogMessage(const char *text);
 

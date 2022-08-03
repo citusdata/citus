@@ -882,8 +882,13 @@ CREATE MATERIALIZED VIEW matview_101 AS SELECT * from loc_tb;
 CREATE VIEW v103 AS SELECT * from loc_tb;
 CREATE MATERIALIZED VIEW matview_102 AS SELECT * from loc_tb JOIN v103 USING (a);
 CREATE OR REPLACE VIEW v103 AS SELECT * from loc_tb JOIN matview_102 USING (a);
+-- fails to add local table to metadata, because of the circular dependency
+ALTER TABLE loc_tb ADD CONSTRAINT fkey FOREIGN KEY (a) references ref_tb(a);
+ERROR:  Citus can not handle circular dependencies between distributed objects
+-- drop the view&matview with circular dependency
+DROP VIEW v103 CASCADE;
 SET client_min_messages TO DEBUG1;
--- auto undistribute
+-- now it should successfully add to metadata and create the views on workers
 ALTER TABLE loc_tb ADD CONSTRAINT fkey FOREIGN KEY (a) references ref_tb(a);
 DEBUG:  executing "CREATE OR REPLACE VIEW citus_local_tables_mx.v100 (a) AS  SELECT loc_tb.a
    FROM citus_local_tables_mx.loc_tb; ALTER VIEW citus_local_tables_mx.v100 OWNER TO postgres"
@@ -907,6 +912,7 @@ select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100,
  (localhost,57638,t,0)
 (2 rows)
 
+-- auto undistribute
 ALTER TABLE loc_tb DROP CONSTRAINT fkey;
 -- fails because fkey is dropped and table is converted to local table
 select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100$$);
@@ -1073,6 +1079,29 @@ SELECT count(*) FROM citus_local_tables_mx.mv4;
  count
 ---------------------------------------------------------------------
      0
+(1 row)
+
+-- test circular dependency detection among views
+create table root_tbl (a int);
+create materialized view chain_v1 as select * from root_tbl;
+create view chain_v2 as select * from chain_v1;
+WARNING:  "view chain_v2" has dependency to "table root_tbl" that is not in Citus' metadata
+create materialized view chain_v3 as select * from chain_v2;
+create or replace view chain_v2 as select * from chain_v1 join chain_v3 using (a);
+WARNING:  "view chain_v2" has dependency on unsupported object "materialized view chain_v3"
+-- catch circular dependency and error out
+select citus_add_local_table_to_metadata('root_tbl');
+ERROR:  Citus can not handle circular dependencies between distributed objects
+-- same for create_distributed_table
+select create_distributed_table('root_tbl','a');
+ERROR:  Citus can not handle circular dependencies between distributed objects
+-- fix the circular dependency and add to metadata
+create or replace view chain_v2 as select * from chain_v1;
+WARNING:  "view chain_v2" has dependency to "table root_tbl" that is not in Citus' metadata
+select citus_add_local_table_to_metadata('root_tbl');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
 (1 row)
 
 -- todo: add more matview tests once 5968 and 6028 are fixed

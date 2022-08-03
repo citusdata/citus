@@ -38,6 +38,7 @@
 #include "commands/dbcommands.h"
 #include "distributed/shardsplit_logical_replication.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/shard_rebalancer.h"
 
 /*
  * Entry for map that tracks ShardInterval -> Placement Node
@@ -375,6 +376,9 @@ SplitShard(SplitMode splitMode,
 
 	ShardInterval *shardIntervalToSplit = LoadShardInterval(shardIdToSplit);
 	List *colocatedTableList = ColocatedTableList(shardIntervalToSplit->relationId);
+
+	Oid relationId = RelationIdForShard(shardIdToSplit);
+	AcquirePlacementColocationLock(relationId, ExclusiveLock, "split");
 
 	/* sort the tables to avoid deadlocks */
 	colocatedTableList = SortList(colocatedTableList, CompareOids);

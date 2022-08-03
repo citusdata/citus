@@ -30,18 +30,14 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").kill()');
 (1 row)
 
 SELECT * FROM select_test WHERE key = 3;
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
  key |   value
 ---------------------------------------------------------------------
    3 | test data
 (1 row)
 
 SELECT * FROM select_test WHERE key = 3;
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
  key |   value
 ---------------------------------------------------------------------
    3 | test data
@@ -58,9 +54,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").kill()');
 BEGIN;
 INSERT INTO select_test VALUES (3, 'more data');
 SELECT * FROM select_test WHERE key = 3;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 COMMIT;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -148,9 +142,7 @@ SELECT * FROM select_test WHERE key = 3;
 
 INSERT INTO select_test VALUES (3, 'even more data');
 SELECT * FROM select_test WHERE key = 3;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 COMMIT;
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(2).kill()');
  mitmproxy
@@ -165,9 +157,7 @@ SELECT recover_prepared_transactions();
 (1 row)
 
 SELECT recover_prepared_transactions();
-ERROR:  server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- bug from https://github.com/citusdata/citus/issues/1926
 SET citus.max_cached_conns_per_worker TO 0; -- purge cache
@@ -196,9 +186,7 @@ SELECT * FROM select_test WHERE key = 1;
 (1 row)
 
 SELECT * FROM select_test WHERE key = 1;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- now the same test with query cancellation
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).cancel(' ||  pg_backend_pid() || ')');
  mitmproxy
