@@ -25,6 +25,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/errormessage.h"
 #include "distributed/relay_utility.h"
+#include "distributed/worker_manager.h"
 #include "utils/acl.h"
 #include "utils/relcache.h"
 
@@ -226,6 +227,7 @@ extern List * ActiveShardPlacementListOnGroup(uint64 shardId, int32 groupId);
 extern List * ActiveShardPlacementList(uint64 shardId);
 extern List * ShardPlacementListWithoutOrphanedPlacements(uint64 shardId);
 extern ShardPlacement * ActiveShardPlacement(uint64 shardId, bool missingOk);
+extern WorkerNode * ActiveShardPlacementWorkerNode(uint64 shardId);
 extern List * BuildShardPlacementList(int64 shardId);
 extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
 extern List * AllShardPlacementsWithShardPlacementState(ShardState shardState);

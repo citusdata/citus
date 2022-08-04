@@ -75,6 +75,7 @@
 #include "distributed/run_from_same_connection.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/shared_connection_stats.h"
+#include "distributed/shardsplit_shared_memory.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/time_constants.h"
 #include "distributed/query_stats.h"
@@ -394,6 +395,9 @@ _PG_init(void)
 	InitializeCitusQueryStats();
 	InitializeSharedConnectionStats();
 	InitializeLocallyReservedSharedConnections();
+
+	/* initialize shard split shared memory handle management */
+	InitializeShardSplitSMHandleManagement();
 
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)

@@ -1,0 +1,640 @@
+unused step name: s2-select
+Parsed test spec with 3 sessions
+
+starting permutation: s1-load-cache s2-print-cluster s3-acquire-advisory-lock s1-begin s2-begin s1-non-blocking-shard-split s2-insert s2-end s2-print-cluster s3-release-advisory-lock s1-end s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+ -- Indirect way to load cache.
+ TRUNCATE to_split_table;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     0
+(1 row)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s2-begin:
+    BEGIN;
+
+step s1-non-blocking-shard-split:
+     SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500001,
+  ARRAY['-1073741824'],
+  ARRAY[2, 2],
+  'force_logical');
+ <waiting ...>
+step s2-insert: 
+ SELECT get_shard_id_for_distribution_column('to_split_table', 123456789);
+ INSERT INTO to_split_table VALUES (123456789, 1);
+
+get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                             1500001
+(1 row)
+
+step s2-end:
+   COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     1
+(1 row)
+
+       id|value
+---------------------------------------------------------------------
+123456789|    1
+(1 row)
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-non-blocking-shard-split: <... completed>
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57638|1500002|t      |     0
+   57638|1500003|t      |     1
+(2 rows)
+
+       id|value
+---------------------------------------------------------------------
+123456789|    1
+(1 row)
+
+
+starting permutation: s1-load-cache s2-insert s2-print-cluster s3-acquire-advisory-lock s1-begin s1-non-blocking-shard-split s2-update s3-release-advisory-lock s1-end s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+ -- Indirect way to load cache.
+ TRUNCATE to_split_table;
+
+step s2-insert:
+ SELECT get_shard_id_for_distribution_column('to_split_table', 123456789);
+ INSERT INTO to_split_table VALUES (123456789, 1);
+
+get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                             1500001
+(1 row)
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     1
+(1 row)
+
+       id|value
+---------------------------------------------------------------------
+123456789|    1
+(1 row)
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s1-non-blocking-shard-split:
+     SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500001,
+  ARRAY['-1073741824'],
+  ARRAY[2, 2],
+  'force_logical');
+ <waiting ...>
+step s2-update: 
+ UPDATE to_split_table SET value = 111 WHERE id = 123456789;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-non-blocking-shard-split: <... completed>
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57638|1500002|t      |     0
+   57638|1500003|t      |     1
+(2 rows)
+
+       id|value
+---------------------------------------------------------------------
+123456789|  111
+(1 row)
+
+
+starting permutation: s1-load-cache s2-insert s2-print-cluster s3-acquire-advisory-lock s1-begin s1-non-blocking-shard-split s2-delete s3-release-advisory-lock s1-end s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+ -- Indirect way to load cache.
+ TRUNCATE to_split_table;
+
+step s2-insert:
+ SELECT get_shard_id_for_distribution_column('to_split_table', 123456789);
+ INSERT INTO to_split_table VALUES (123456789, 1);
+
+get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                             1500001
+(1 row)
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     1
+(1 row)
+
+       id|value
+---------------------------------------------------------------------
+123456789|    1
+(1 row)
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s1-non-blocking-shard-split:
+     SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500001,
+  ARRAY['-1073741824'],
+  ARRAY[2, 2],
+  'force_logical');
+ <waiting ...>
+step s2-delete: 
+ DELETE FROM to_split_table WHERE id = 123456789;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-non-blocking-shard-split: <... completed>
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57638|1500002|t      |     0
+   57638|1500003|t      |     0
+(2 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+
+starting permutation: s2-print-cluster s3-acquire-advisory-lock s1-begin s2-begin s1-non-blocking-shard-split s2-insert s2-end s2-print-cluster s3-release-advisory-lock s1-end s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     0
+(1 row)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s2-begin:
+    BEGIN;
+
+step s1-non-blocking-shard-split:
+     SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500001,
+  ARRAY['-1073741824'],
+  ARRAY[2, 2],
+  'force_logical');
+ <waiting ...>
+step s2-insert: 
+ SELECT get_shard_id_for_distribution_column('to_split_table', 123456789);
+ INSERT INTO to_split_table VALUES (123456789, 1);
+
+get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                             1500001
+(1 row)
+
+step s2-end:
+   COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     1
+(1 row)
+
+       id|value
+---------------------------------------------------------------------
+123456789|    1
+(1 row)
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-non-blocking-shard-split: <... completed>
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57638|1500002|t      |     0
+   57638|1500003|t      |     1
+(2 rows)
+
+       id|value
+---------------------------------------------------------------------
+123456789|    1
+(1 row)
+
+
+starting permutation: s2-insert s2-print-cluster s3-acquire-advisory-lock s1-begin s1-non-blocking-shard-split s2-update s3-release-advisory-lock s1-end s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-insert:
+ SELECT get_shard_id_for_distribution_column('to_split_table', 123456789);
+ INSERT INTO to_split_table VALUES (123456789, 1);
+
+get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                             1500001
+(1 row)
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     1
+(1 row)
+
+       id|value
+---------------------------------------------------------------------
+123456789|    1
+(1 row)
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s1-non-blocking-shard-split:
+     SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500001,
+  ARRAY['-1073741824'],
+  ARRAY[2, 2],
+  'force_logical');
+ <waiting ...>
+step s2-update: 
+ UPDATE to_split_table SET value = 111 WHERE id = 123456789;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-non-blocking-shard-split: <... completed>
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57638|1500002|t      |     0
+   57638|1500003|t      |     1
+(2 rows)
+
+       id|value
+---------------------------------------------------------------------
+123456789|  111
+(1 row)
+
+
+starting permutation: s2-insert s2-print-cluster s3-acquire-advisory-lock s1-begin s1-non-blocking-shard-split s2-delete s3-release-advisory-lock s1-end s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-insert:
+ SELECT get_shard_id_for_distribution_column('to_split_table', 123456789);
+ INSERT INTO to_split_table VALUES (123456789, 1);
+
+get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                             1500001
+(1 row)
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     1
+(1 row)
+
+       id|value
+---------------------------------------------------------------------
+123456789|    1
+(1 row)
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s1-non-blocking-shard-split:
+     SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500001,
+  ARRAY['-1073741824'],
+  ARRAY[2, 2],
+  'force_logical');
+ <waiting ...>
+step s2-delete: 
+ DELETE FROM to_split_table WHERE id = 123456789;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-non-blocking-shard-split: <... completed>
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-end:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57638|1500002|t      |     0
+   57638|1500003|t      |     0
+(2 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+

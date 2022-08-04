@@ -15,7 +15,8 @@
 /* Split Modes supported by Shard Split API */
 typedef enum SplitMode
 {
-	BLOCKING_SPLIT = 0
+	BLOCKING_SPLIT = 0,
+	NON_BLOCKING_SPLIT = 1
 } SplitMode;
 
 /*
@@ -27,6 +28,7 @@ typedef enum SplitOperation
 	SHARD_SPLIT_API = 0,
 	ISOLATE_TENANT_TO_NEW_SHARD
 } SplitOperation;
+
 
 /*
  * SplitShard API to split a given shard (or shard group) using split mode and

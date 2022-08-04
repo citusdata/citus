@@ -110,6 +110,7 @@ extern List * PgDistTableMetadataSyncCommandList(void);
 
 /* Function declarations for worker node utilities */
 extern int CompareWorkerNodes(const void *leftElement, const void *rightElement);
+extern uint32 WorkerNodeHashCode(const void *key, Size keySize);
 extern int WorkerNodeCompare(const void *lhsKey, const void *rhsKey, Size keySize);
 extern int NodeNamePortCompare(const char *workerLhsName, const char *workerRhsName,
 							   int workerLhsPort, int workerRhsPort);

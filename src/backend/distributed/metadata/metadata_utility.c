@@ -1438,6 +1438,27 @@ ActiveShardPlacement(uint64 shardId, bool missingOk)
 
 
 /*
+ * ActiveShardPlacementWorkerNode returns the worker node of the first placement of
+ * a shard.
+ */
+WorkerNode *
+ActiveShardPlacementWorkerNode(uint64 shardId)
+{
+	bool missingOK = false;
+
+	List *sourcePlacementList = ActiveShardPlacementList(shardId);
+
+	Assert(sourcePlacementList->length == 1);
+
+	ShardPlacement *sourceShardPlacement = linitial(sourcePlacementList);
+	WorkerNode *sourceShardToCopyNode = FindNodeWithNodeId(sourceShardPlacement->nodeId,
+														   missingOK);
+
+	return sourceShardToCopyNode;
+}
+
+
+/*
  * BuildShardPlacementList finds shard placements for the given shardId from
  * system catalogs, converts these placements to their in-memory
  * representation, and returns the converted shard placements in a new list.

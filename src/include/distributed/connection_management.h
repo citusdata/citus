@@ -97,7 +97,18 @@ enum MultiConnectionMode
 	 * establishments may be suspended until a connection slot is available to
 	 * the remote host.
 	 */
-	WAIT_FOR_CONNECTION = 1 << 7
+	WAIT_FOR_CONNECTION = 1 << 7,
+
+	/*
+	 * Use the flag to start a connection for streaming replication.
+	 * This flag constructs additional libpq connection parameters needed for streaming
+	 * replication protocol. It adds 'replication=database' param which instructs
+	 * the backend to go into logical replication walsender mode.
+	 *  https://www.postgresql.org/docs/current/protocol-replication.html
+	 *
+	 * This is need to run 'CREATE_REPLICATION_SLOT' command.
+	 */
+	REQUIRE_REPLICATION_CONNECTION_PARAM = 1 << 8
 };
 
 
@@ -187,6 +198,9 @@ typedef struct MultiConnection
 	/* number of bytes sent to PQputCopyData() since last flush */
 	uint64 copyBytesWrittenSinceLastFlush;
 
+	/* replication option */
+	bool requiresReplication;
+
 	MultiConnectionStructInitializationState initilizationState;
 } MultiConnection;
 
@@ -207,6 +221,7 @@ typedef struct ConnectionHashKey
 	int32 port;
 	char user[NAMEDATALEN];
 	char database[NAMEDATALEN];
+	bool replicationConnParam;
 } ConnectionHashKey;
 
 /* hash entry */

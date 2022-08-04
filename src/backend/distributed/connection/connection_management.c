@@ -290,6 +290,15 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		strlcpy(key.database, CurrentDatabaseName(), NAMEDATALEN);
 	}
 
+	if (flags & REQUIRE_REPLICATION_CONNECTION_PARAM)
+	{
+		key.replicationConnParam = true;
+	}
+	else
+	{
+		key.replicationConnParam = false;
+	}
+
 	if (CurrentCoordinatedTransactionState == COORD_TRANS_NONE)
 	{
 		CurrentCoordinatedTransactionState = COORD_TRANS_IDLE;
@@ -597,6 +606,7 @@ ConnectionAvailableToNode(char *hostName, int nodePort, const char *userName,
 	key.port = nodePort;
 	strlcpy(key.user, userName, NAMEDATALEN);
 	strlcpy(key.database, database, NAMEDATALEN);
+	key.replicationConnParam = false;
 
 	ConnectionHashEntry *entry =
 		(ConnectionHashEntry *) hash_search(ConnectionHash, &key, HASH_FIND, &found);
@@ -666,6 +676,7 @@ CloseConnection(MultiConnection *connection)
 
 	strlcpy(key.hostname, connection->hostname, MAX_NODE_LENGTH);
 	key.port = connection->port;
+	key.replicationConnParam = connection->requiresReplication;
 	strlcpy(key.user, connection->user, NAMEDATALEN);
 	strlcpy(key.database, connection->database, NAMEDATALEN);
 
@@ -1210,6 +1221,7 @@ ConnectionHashHash(const void *key, Size keysize)
 	hash = hash_combine(hash, hash_uint32(entry->port));
 	hash = hash_combine(hash, string_hash(entry->user, NAMEDATALEN));
 	hash = hash_combine(hash, string_hash(entry->database, NAMEDATALEN));
+	hash = hash_combine(hash, hash_uint32(entry->replicationConnParam));
 
 	return hash;
 }
@@ -1223,6 +1235,7 @@ ConnectionHashCompare(const void *a, const void *b, Size keysize)
 
 	if (strncmp(ca->hostname, cb->hostname, MAX_NODE_LENGTH) != 0 ||
 		ca->port != cb->port ||
+		ca->replicationConnParam != cb->replicationConnParam ||
 		strncmp(ca->user, cb->user, NAMEDATALEN) != 0 ||
 		strncmp(ca->database, cb->database, NAMEDATALEN) != 0)
 	{
@@ -1250,6 +1263,7 @@ StartConnectionEstablishment(MultiConnection *connection, ConnectionHashKey *key
 	connection->port = key->port;
 	strlcpy(connection->database, key->database, NAMEDATALEN);
 	strlcpy(connection->user, key->user, NAMEDATALEN);
+	connection->requiresReplication = key->replicationConnParam;
 
 	connection->pgConn = PQconnectStartParams((const char **) entry->keywords,
 											  (const char **) entry->values,
@@ -1286,6 +1300,7 @@ WarmUpConnParamsHash(void)
 		key.port = workerNode->workerPort;
 		strlcpy(key.database, CurrentDatabaseName(), NAMEDATALEN);
 		strlcpy(key.user, CurrentUserName(), NAMEDATALEN);
+		key.replicationConnParam = false;
 		FindOrCreateConnParamsEntry(&key);
 	}
 }
@@ -1460,6 +1475,7 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 		   connection->forceCloseAtTransactionEnd ||
 		   PQstatus(connection->pgConn) != CONNECTION_OK ||
 		   !RemoteTransactionIdle(connection) ||
+		   connection->requiresReplication ||
 		   (MaxCachedConnectionLifetime >= 0 &&
 			MillisecondsToTimeout(connection->connectionEstablishmentStart,
 								  MaxCachedConnectionLifetime) <= 0);

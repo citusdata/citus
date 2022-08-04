@@ -88,8 +88,6 @@ static void CreateForeignConstraintsToReferenceTable(List *shardList,
 													 MultiConnection *targetConnection);
 static List * PrepareReplicationSubscriptionList(List *shardList);
 static Bitmapset * TableOwnerIds(List *shardList);
-static void CreateReplicaIdentity(List *shardList, char *nodeName, int32
-								  nodePort);
 static List * GetReplicaIdentityCommandListForShard(Oid relationId, uint64 shardId);
 static List * GetIndexCommandListForShardBackingReplicaIdentity(Oid relationId,
 																uint64 shardId);
@@ -115,7 +113,6 @@ static void CreatePartitioningHierarchy(List *shardList, char *targetNodeName,
 										int targetNodePort);
 static void CreateColocatedForeignKeys(List *shardList, char *targetNodeName,
 									   int targetNodePort);
-static void ConflictOnlyWithIsolationTesting(void);
 static void DropShardMovePublications(MultiConnection *connection,
 									  Bitmapset *tableOwnerIds);
 static void DropShardMoveSubscriptions(MultiConnection *connection,
@@ -128,35 +125,26 @@ static void CreateShardMoveSubscriptions(MultiConnection *connection,
 										 char *databaseName,
 										 Bitmapset *tableOwnerIds);
 static char * escape_param_str(const char *str);
-static XLogRecPtr GetRemoteLogPosition(MultiConnection *connection);
 static XLogRecPtr GetRemoteLSN(MultiConnection *connection, char *command);
-static void WaitForRelationSubscriptionsBecomeReady(MultiConnection *targetConnection,
-													Bitmapset *tableOwnerIds);
+
 static uint64 TotalRelationSizeForSubscription(MultiConnection *connection,
 											   char *command);
 static bool RelationSubscriptionsAreReady(MultiConnection *targetConnection,
-										  Bitmapset *tableOwnerIds);
-static void WaitForShardMoveSubscription(MultiConnection *targetConnection,
-										 XLogRecPtr sourcePosition,
-										 Bitmapset *tableOwnerIds);
+										  Bitmapset *tableOwnerIds,
+										  char *operationPrefix);
 static void WaitForMiliseconds(long timeout);
 static XLogRecPtr GetSubscriptionPosition(MultiConnection *connection,
-										  Bitmapset *tableOwnerIds);
+										  Bitmapset *tableOwnerIds,
+										  char *operationPrefix);
 static char * ShardMovePublicationName(Oid ownerId);
-static char * ShardMoveSubscriptionName(Oid ownerId);
 static void AcquireLogicalReplicationLock(void);
 static void DropAllShardMoveLeftovers(void);
 static void DropAllShardMoveSubscriptions(MultiConnection *connection);
 static void DropAllShardMoveReplicationSlots(MultiConnection *connection);
 static void DropAllShardMovePublications(MultiConnection *connection);
 static void DropAllShardMoveUsers(MultiConnection *connection);
-static char * ShardMoveSubscriptionNamesValueList(Bitmapset *tableOwnerIds);
-static void DropShardMoveSubscription(MultiConnection *connection,
-									  char *subscriptionName);
-static void DropShardMoveReplicationSlot(MultiConnection *connection,
-										 char *publicationName);
-static void DropShardMovePublication(MultiConnection *connection, char *publicationName);
-static void DropShardMoveUser(MultiConnection *connection, char *username);
+static char * ShardSubscriptionNamesValueList(Bitmapset *tableOwnerIds,
+											  char *operationPrefix);
 
 /*
  * LogicallyReplicateShards replicates a list of shards from one node to another
@@ -229,14 +217,16 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 * subscription is not ready. There is no point of locking the shards before the
 		 * subscriptions for each relation becomes ready, so wait for it.
 		 */
-		WaitForRelationSubscriptionsBecomeReady(targetConnection, tableOwnerIds);
+		WaitForRelationSubscriptionsBecomeReady(targetConnection, tableOwnerIds,
+												SHARD_MOVE_SUBSCRIPTION_PREFIX);
 
 		/*
 		 * Wait until the subscription is caught up to changes that has happened
 		 * after the initial COPY on the shards.
 		 */
 		XLogRecPtr sourcePosition = GetRemoteLogPosition(sourceConnection);
-		WaitForShardMoveSubscription(targetConnection, sourcePosition, tableOwnerIds);
+		WaitForShardSubscriptionToCatchUp(targetConnection, sourcePosition, tableOwnerIds,
+										  SHARD_MOVE_SUBSCRIPTION_PREFIX);
 
 		/*
 		 * Now lets create the post-load objects, such as the indexes, constraints
@@ -246,7 +236,8 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		CreatePostLogicalReplicationDataLoadObjects(shardList, targetNodeName,
 													targetNodePort);
 		sourcePosition = GetRemoteLogPosition(sourceConnection);
-		WaitForShardMoveSubscription(targetConnection, sourcePosition, tableOwnerIds);
+		WaitForShardSubscriptionToCatchUp(targetConnection, sourcePosition, tableOwnerIds,
+										  SHARD_MOVE_SUBSCRIPTION_PREFIX);
 
 		/*
 		 * We're almost done, we'll block the writes to the shards that we're
@@ -259,7 +250,8 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		BlockWritesToShardList(shardList);
 
 		sourcePosition = GetRemoteLogPosition(sourceConnection);
-		WaitForShardMoveSubscription(targetConnection, sourcePosition, tableOwnerIds);
+		WaitForShardSubscriptionToCatchUp(targetConnection, sourcePosition, tableOwnerIds,
+										  SHARD_MOVE_SUBSCRIPTION_PREFIX);
 
 		/*
 		 * We're creating the foreign constraints to reference tables after the
@@ -461,7 +453,7 @@ TableOwnerIds(List *shardList)
  * CreateReplicaIdentity gets a shardList and creates all the replica identities
  * on the shards in the given node.
  */
-static void
+void
 CreateReplicaIdentity(List *shardList, char *nodeName, int32 nodePort)
 {
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
@@ -1053,7 +1045,7 @@ CreateForeignConstraintsToReferenceTable(List *shardList,
  * Note that since the cost of calling this function is pretty low, we prefer
  * to use it in non-assert builds as well not to diverge in the behaviour.
  */
-static void
+extern void
 ConflictOnlyWithIsolationTesting()
 {
 	LOCKTAG tag;
@@ -1087,18 +1079,19 @@ DropShardMovePublications(MultiConnection *connection, Bitmapset *tableOwnerIds)
 		 * If replication slot can not be dropped while dropping the subscriber, drop
 		 * it here.
 		 */
-		DropShardMoveReplicationSlot(connection, ShardMoveSubscriptionName(ownerId));
-		DropShardMovePublication(connection, ShardMovePublicationName(ownerId));
+		DropShardReplicationSlot(connection, ShardSubscriptionName(ownerId,
+																   SHARD_MOVE_SUBSCRIPTION_PREFIX));
+		DropShardPublication(connection, ShardMovePublicationName(ownerId));
 	}
 }
 
 
 /*
- * DropShardMoveReplicationSlot drops the replication slot with the given name
+ * DropShardReplicationSlot drops the replication slot with the given name
  * if it exists.
  */
-static void
-DropShardMoveReplicationSlot(MultiConnection *connection, char *replicationSlotName)
+void
+DropShardReplicationSlot(MultiConnection *connection, char *replicationSlotName)
 {
 	ExecuteCriticalRemoteCommand(
 		connection,
@@ -1111,11 +1104,11 @@ DropShardMoveReplicationSlot(MultiConnection *connection, char *replicationSlotN
 
 
 /*
- * DropShardMovePublication drops the publication with the given name if it
+ * DropShardPublication drops the publication with the given name if it
  * exists.
  */
-static void
-DropShardMovePublication(MultiConnection *connection, char *publicationName)
+void
+DropShardPublication(MultiConnection *connection, char *publicationName)
 {
 	ExecuteCriticalRemoteCommand(connection, psprintf(
 									 "DROP PUBLICATION IF EXISTS %s",
@@ -1135,7 +1128,7 @@ ShardMovePublicationName(Oid ownerId)
 
 
 /*
- * ShardMoveSubscriptionName returns the name of the subscription for the given
+ * ShardSubscriptionName returns the name of the subscription for the given
  * owner. If we're running the isolation tester the function also appends the
  * process id normal subscription name.
  *
@@ -1145,28 +1138,28 @@ ShardMovePublicationName(Oid ownerId)
  * This PID is then extracted from the application_name to find out which PID on the
  * coordinator is blocked by the blocked replication process.
  */
-static char *
-ShardMoveSubscriptionName(Oid ownerId)
+char *
+ShardSubscriptionName(Oid ownerId, char *operationPrefix)
 {
 	if (RunningUnderIsolationTest)
 	{
-		return psprintf("%s%i_%i", SHARD_MOVE_SUBSCRIPTION_PREFIX, ownerId, MyProcPid);
+		return psprintf("%s%i_%i", operationPrefix, ownerId, MyProcPid);
 	}
 	else
 	{
-		return psprintf("%s%i", SHARD_MOVE_SUBSCRIPTION_PREFIX, ownerId);
+		return psprintf("%s%i", operationPrefix, ownerId);
 	}
 }
 
 
 /*
- * ShardMoveSubscriptionRole returns the name of the role used by the
+ * ShardSubscriptionRole returns the name of the role used by the
  * subscription that subscribes to the tables of the given owner.
  */
-static char *
-ShardMoveSubscriptionRole(Oid ownerId)
+char *
+ShardSubscriptionRole(Oid ownerId, char *operationPrefix)
 {
-	return psprintf("%s%i", SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX, ownerId);
+	return psprintf("%s%i", operationPrefix, ownerId);
 }
 
 
@@ -1175,7 +1168,7 @@ ShardMoveSubscriptionRole(Oid ownerId)
  * strings. This query is executed on the connection and the function then
  * returns the results of the query in a List.
  */
-static List *
+List *
 GetQueryResultStringList(MultiConnection *connection, char *query)
 {
 	bool raiseInterrupts = true;
@@ -1236,7 +1229,7 @@ DropAllShardMoveSubscriptions(MultiConnection *connection)
 	char *subscriptionName;
 	foreach_ptr(subscriptionName, subscriptionNameList)
 	{
-		DropShardMoveSubscription(connection, subscriptionName);
+		DropShardSubscription(connection, subscriptionName);
 	}
 }
 
@@ -1257,7 +1250,7 @@ DropAllShardMoveUsers(MultiConnection *connection)
 	char *username;
 	foreach_ptr(username, usernameList)
 	{
-		DropShardMoveUser(connection, username);
+		DropShardUser(connection, username);
 	}
 }
 
@@ -1278,7 +1271,7 @@ DropAllShardMoveReplicationSlots(MultiConnection *connection)
 	char *slotName;
 	foreach_ptr(slotName, slotNameList)
 	{
-		DropShardMoveReplicationSlot(connection, slotName);
+		DropShardReplicationSlot(connection, slotName);
 	}
 }
 
@@ -1299,7 +1292,7 @@ DropAllShardMovePublications(MultiConnection *connection)
 	char *publicationName;
 	foreach_ptr(publicationName, publicationNameList)
 	{
-		DropShardMovePublication(connection, publicationName);
+		DropShardPublication(connection, publicationName);
 	}
 }
 
@@ -1319,21 +1312,23 @@ DropShardMoveSubscriptions(MultiConnection *connection, Bitmapset *tableOwnerIds
 	int ownerId = -1;
 	while ((ownerId = bms_next_member(tableOwnerIds, ownerId)) >= 0)
 	{
-		DropShardMoveSubscription(connection, ShardMoveSubscriptionName(ownerId));
-		DropShardMoveUser(connection, ShardMoveSubscriptionRole(ownerId));
+		DropShardSubscription(connection, ShardSubscriptionName(ownerId,
+																SHARD_MOVE_SUBSCRIPTION_PREFIX));
+		DropShardUser(connection, ShardSubscriptionRole(ownerId,
+														SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX));
 	}
 }
 
 
 /*
- * DropShardMoveSubscription drops subscription with the given name on the
+ * DropShardSubscription drops subscription with the given name on the
  * subscriber node. Note that, it also drops the replication slot on the
  * publisher node if it can drop the slot as well with the DROP SUBSCRIPTION
  * command. Otherwise, only the subscription will be deleted with DROP
  * SUBSCRIPTION via the connection.
  */
-static void
-DropShardMoveSubscription(MultiConnection *connection, char *subscriptionName)
+void
+DropShardSubscription(MultiConnection *connection, char *subscriptionName)
 {
 	PGresult *result = NULL;
 
@@ -1386,10 +1381,10 @@ DropShardMoveSubscription(MultiConnection *connection, char *subscriptionName)
 
 
 /*
- * DropShardMoveUser drops the user with the given name if it exists.
+ * DropShardUser drops the user with the given name if it exists.
  */
-static void
-DropShardMoveUser(MultiConnection *connection, char *username)
+void
+DropShardUser(MultiConnection *connection, char *username)
 {
 	/*
 	 * The DROP USER command should not propagate, so we temporarily disable
@@ -1474,6 +1469,10 @@ CreateShardMoveSubscriptions(MultiConnection *connection, char *sourceNodeName,
 		/*
 		 * The CREATE USER command should not propagate, so we temporarily
 		 * disable DDL propagation.
+		 *
+		 * Subscription workers have SUPERUSER permissions. Hence we temporarily
+		 * create a user with SUPERUSER permissions and then alter it to NOSUPERUSER.
+		 * This prevents permission escalations.
 		 */
 		SendCommandListToWorkerOutsideTransaction(
 			connection->hostname, connection->port, connection->user,
@@ -1481,7 +1480,7 @@ CreateShardMoveSubscriptions(MultiConnection *connection, char *sourceNodeName,
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
 					"CREATE USER %s SUPERUSER IN ROLE %s",
-					ShardMoveSubscriptionRole(ownerId),
+					ShardSubscriptionRole(ownerId, SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX),
 					GetUserNameFromId(ownerId, false)
 					)));
 
@@ -1493,7 +1492,8 @@ CreateShardMoveSubscriptions(MultiConnection *connection, char *sourceNodeName,
 		appendStringInfo(createSubscriptionCommand,
 						 "CREATE SUBSCRIPTION %s CONNECTION %s PUBLICATION %s "
 						 "WITH (citus_use_authinfo=true, enabled=false)",
-						 quote_identifier(ShardMoveSubscriptionName(ownerId)),
+						 quote_identifier(ShardSubscriptionName(ownerId,
+																SHARD_MOVE_SUBSCRIPTION_PREFIX)),
 						 quote_literal_cstr(conninfo->data),
 						 quote_identifier(ShardMovePublicationName(ownerId)));
 
@@ -1502,8 +1502,10 @@ CreateShardMoveSubscriptions(MultiConnection *connection, char *sourceNodeName,
 		pfree(createSubscriptionCommand);
 		ExecuteCriticalRemoteCommand(connection, psprintf(
 										 "ALTER SUBSCRIPTION %s OWNER TO %s",
-										 ShardMoveSubscriptionName(ownerId),
-										 ShardMoveSubscriptionRole(ownerId)
+										 ShardSubscriptionName(ownerId,
+															   SHARD_MOVE_SUBSCRIPTION_PREFIX),
+										 ShardSubscriptionRole(ownerId,
+															   SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX)
 										 ));
 
 		/*
@@ -1516,12 +1518,13 @@ CreateShardMoveSubscriptions(MultiConnection *connection, char *sourceNodeName,
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
 					"ALTER ROLE %s NOSUPERUSER",
-					ShardMoveSubscriptionRole(ownerId)
+					ShardSubscriptionRole(ownerId, SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX)
 					)));
 
 		ExecuteCriticalRemoteCommand(connection, psprintf(
 										 "ALTER SUBSCRIPTION %s ENABLE",
-										 ShardMoveSubscriptionName(ownerId)
+										 ShardSubscriptionName(ownerId,
+															   SHARD_MOVE_SUBSCRIPTION_PREFIX)
 										 ));
 	}
 }
@@ -1558,7 +1561,7 @@ escape_param_str(const char *str)
 /*
  * GetRemoteLogPosition gets the current WAL log position over the given connection.
  */
-static XLogRecPtr
+XLogRecPtr
 GetRemoteLogPosition(MultiConnection *connection)
 {
 	return GetRemoteLSN(connection, CURRENT_LOG_POSITION_COMMAND);
@@ -1627,9 +1630,9 @@ GetRemoteLSN(MultiConnection *connection, char *command)
  * on the target node doesn't change within LogicalReplicationErrorTimeout. The
  * function also reports its progress in every logicalReplicationProgressReportTimeout.
  */
-static void
+void
 WaitForRelationSubscriptionsBecomeReady(MultiConnection *targetConnection,
-										Bitmapset *tableOwnerIds)
+										Bitmapset *tableOwnerIds, char *operationPrefix)
 {
 	uint64 previousTotalRelationSizeForSubscription = 0;
 	TimestampTz previousSizeChangeTime = GetCurrentTimestamp();
@@ -1657,7 +1660,8 @@ WaitForRelationSubscriptionsBecomeReady(MultiConnection *targetConnection,
 	while (true)
 	{
 		/* we're done, all relations are ready */
-		if (RelationSubscriptionsAreReady(targetConnection, tableOwnerIds))
+		if (RelationSubscriptionsAreReady(targetConnection, tableOwnerIds,
+										  operationPrefix))
 		{
 			ereport(LOG, (errmsg("The states of the relations belonging to the "
 								 "subscriptions became READY on the "
@@ -1667,7 +1671,8 @@ WaitForRelationSubscriptionsBecomeReady(MultiConnection *targetConnection,
 
 			break;
 		}
-		char *subscriptionValueList = ShardMoveSubscriptionNamesValueList(tableOwnerIds);
+		char *subscriptionValueList = ShardSubscriptionNamesValueList(tableOwnerIds,
+																	  operationPrefix);
 
 		/* Get the current total size of tables belonging to the subscriber */
 		uint64 currentTotalRelationSize =
@@ -1821,12 +1826,12 @@ TotalRelationSizeForSubscription(MultiConnection *connection, char *command)
 
 
 /*
- * ShardMoveSubscriptionNamesValueList returns a SQL value list containing the
+ * ShardSubscriptionNamesValueList returns a SQL value list containing the
  * subscription names for all of the given table owner ids. This value list can
  * be used in a query by using the IN operator.
  */
 static char *
-ShardMoveSubscriptionNamesValueList(Bitmapset *tableOwnerIds)
+ShardSubscriptionNamesValueList(Bitmapset *tableOwnerIds, char *operationPrefix)
 {
 	StringInfo subscriptionValueList = makeStringInfo();
 	appendStringInfoString(subscriptionValueList, "(");
@@ -1844,7 +1849,8 @@ ShardMoveSubscriptionNamesValueList(Bitmapset *tableOwnerIds)
 			first = false;
 		}
 		appendStringInfoString(subscriptionValueList,
-							   quote_literal_cstr(ShardMoveSubscriptionName(ownerId)));
+							   quote_literal_cstr(ShardSubscriptionName(ownerId,
+																		operationPrefix)));
 	}
 	appendStringInfoString(subscriptionValueList, ")");
 	return subscriptionValueList->data;
@@ -1857,11 +1863,12 @@ ShardMoveSubscriptionNamesValueList(Bitmapset *tableOwnerIds)
  */
 static bool
 RelationSubscriptionsAreReady(MultiConnection *targetConnection,
-							  Bitmapset *tableOwnerIds)
+							  Bitmapset *tableOwnerIds, char *operationPrefix)
 {
 	bool raiseInterrupts = false;
 
-	char *subscriptionValueList = ShardMoveSubscriptionNamesValueList(tableOwnerIds);
+	char *subscriptionValueList = ShardSubscriptionNamesValueList(tableOwnerIds,
+																  operationPrefix);
 	char *query = psprintf(
 		"SELECT count(*) FROM pg_subscription_rel, pg_stat_subscription "
 		"WHERE srsubid = subid AND srsubstate != 'r' AND subname IN %s",
@@ -1906,14 +1913,15 @@ RelationSubscriptionsAreReady(MultiConnection *targetConnection,
 
 
 /*
- * WaitForShardMoveSubscription waits until the last LSN reported by the subscription.
+ * WaitForShardSubscriptionToCatchUp waits until the last LSN reported by the subscription.
  *
  * The function errors if the target LSN doesn't increase within LogicalReplicationErrorTimeout.
  * The function also reports its progress in every logicalReplicationProgressReportTimeout.
  */
-static void
-WaitForShardMoveSubscription(MultiConnection *targetConnection, XLogRecPtr sourcePosition,
-							 Bitmapset *tableOwnerIds)
+void
+WaitForShardSubscriptionToCatchUp(MultiConnection *targetConnection, XLogRecPtr
+								  sourcePosition,
+								  Bitmapset *tableOwnerIds, char *operationPrefix)
 {
 	XLogRecPtr previousTargetPosition = 0;
 	TimestampTz previousLSNIncrementTime = GetCurrentTimestamp();
@@ -1929,7 +1937,7 @@ WaitForShardMoveSubscription(MultiConnection *targetConnection, XLogRecPtr sourc
 	 * a lot of memory.
 	 */
 	MemoryContext loopContext = AllocSetContextCreateInternal(CurrentMemoryContext,
-															  "WaitForShardMoveSubscription",
+															  "WaitForShardSubscriptionToCatchUp",
 															  ALLOCSET_DEFAULT_MINSIZE,
 															  ALLOCSET_DEFAULT_INITSIZE,
 															  ALLOCSET_DEFAULT_MAXSIZE);
@@ -1939,7 +1947,8 @@ WaitForShardMoveSubscription(MultiConnection *targetConnection, XLogRecPtr sourc
 	while (true)
 	{
 		XLogRecPtr targetPosition = GetSubscriptionPosition(targetConnection,
-															tableOwnerIds);
+															tableOwnerIds,
+															operationPrefix);
 		if (targetPosition >= sourcePosition)
 		{
 			ereport(LOG, (errmsg(
@@ -2049,10 +2058,86 @@ WaitForMiliseconds(long timeout)
  * replication.
  */
 static XLogRecPtr
-GetSubscriptionPosition(MultiConnection *connection, Bitmapset *tableOwnerIds)
+GetSubscriptionPosition(MultiConnection *connection, Bitmapset *tableOwnerIds,
+						char *operationPrefix)
 {
-	char *subscriptionValueList = ShardMoveSubscriptionNamesValueList(tableOwnerIds);
+	char *subscriptionValueList = ShardSubscriptionNamesValueList(tableOwnerIds,
+																  operationPrefix);
 	return GetRemoteLSN(connection, psprintf(
 							"SELECT min(latest_end_lsn) FROM pg_stat_subscription "
 							"WHERE subname IN %s", subscriptionValueList));
+}
+
+
+/*
+ * CreateShardSplitSubscription creates the subscriptions used for shard split
+ * over the given connection. The subscription is created with 'copy_data'
+ * set to false and with the given replication slot name.
+ */
+void
+CreateShardSplitSubscription(MultiConnection *connection, char *sourceNodeName,
+							 int sourceNodePort, char *userName, char *databaseName,
+							 char *publicationName, char *slotName,
+							 Oid ownerId)
+{
+	StringInfo createSubscriptionCommand = makeStringInfo();
+	StringInfo conninfo = makeStringInfo();
+
+	/*
+	 * The CREATE USER command should not propagate, so we temporarily
+	 * disable DDL propagation.
+	 */
+	SendCommandListToWorkerOutsideTransaction(
+		connection->hostname, connection->port, connection->user,
+		list_make2(
+			"SET LOCAL citus.enable_ddl_propagation TO OFF;",
+			psprintf(
+				"CREATE USER %s SUPERUSER IN ROLE %s",
+				ShardSubscriptionRole(ownerId, SHARD_SPLIT_SUBSCRIPTION_ROLE_PREFIX),
+				quote_identifier(GetUserNameFromId(ownerId, false))
+				)));
+
+	appendStringInfo(conninfo, "host='%s' port=%d user='%s' dbname='%s' "
+							   "connect_timeout=20",
+					 escape_param_str(sourceNodeName), sourceNodePort,
+					 escape_param_str(userName), escape_param_str(databaseName));
+
+	appendStringInfo(createSubscriptionCommand,
+					 "CREATE SUBSCRIPTION %s CONNECTION %s PUBLICATION %s "
+					 "WITH (citus_use_authinfo=true, enabled=false, create_slot=false, copy_data=false, slot_name='%s')",
+					 quote_identifier(ShardSubscriptionName(ownerId,
+															SHARD_SPLIT_SUBSCRIPTION_PREFIX)),
+					 quote_literal_cstr(conninfo->data),
+					 quote_identifier(publicationName),
+					 escape_param_str(slotName));
+
+	ExecuteCriticalRemoteCommand(connection, createSubscriptionCommand->data);
+	pfree(createSubscriptionCommand->data);
+	pfree(createSubscriptionCommand);
+	ExecuteCriticalRemoteCommand(connection, psprintf(
+									 "ALTER SUBSCRIPTION %s OWNER TO %s",
+									 ShardSubscriptionName(ownerId,
+														   SHARD_SPLIT_SUBSCRIPTION_PREFIX),
+									 ShardSubscriptionRole(ownerId,
+														   SHARD_SPLIT_SUBSCRIPTION_ROLE_PREFIX)
+									 ));
+
+	/*
+	 * The ALTER ROLE command should not propagate, so we temporarily
+	 * disable DDL propagation.
+	 */
+	SendCommandListToWorkerOutsideTransaction(
+		connection->hostname, connection->port, connection->user,
+		list_make2(
+			"SET LOCAL citus.enable_ddl_propagation TO OFF;",
+			psprintf(
+				"ALTER ROLE %s NOSUPERUSER",
+				ShardSubscriptionRole(ownerId, SHARD_SPLIT_SUBSCRIPTION_ROLE_PREFIX)
+				)));
+
+	ExecuteCriticalRemoteCommand(connection, psprintf(
+									 "ALTER SUBSCRIPTION %s ENABLE",
+									 ShardSubscriptionName(ownerId,
+														   SHARD_SPLIT_SUBSCRIPTION_PREFIX)
+									 ));
 }

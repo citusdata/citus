@@ -1,0 +1,250 @@
+unused step name: s1-copy
+unused step name: s1-ddl
+Parsed test spec with 3 sessions
+
+starting permutation: s2-add-fkey s3-acquire-advisory-lock s1-begin s2-begin s2-non-blocking-shard-split s1-insert s1-commit s3-release-advisory-lock s2-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-add-fkey:
+ ALTER TABLE table_to_split ADD CONSTRAINT fkey_const FOREIGN KEY(value) REFERENCES reference_table(id);
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+ BEGIN;
+
+step s2-non-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['-1073741824'],
+  ARRAY[1, 2],
+  'force_logical');
+ <waiting ...>
+step s1-insert: 
+ INSERT INTO reference_table VALUES (5, 10);
+
+step s1-commit:
+ COMMIT;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-non-blocking-shard-split: <... completed>
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-commit:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('table_to_split', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows of table_to_split
+ SELECT id, value FROM table_to_split ORDER BY id, value;
+ -- rows of reference table
+ SELECT * FROM reference_table;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500004|t      |     0
+   57638|1500003|t      |     0
+   57638|1500005|t      |     0
+(3 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+id|value
+---------------------------------------------------------------------
+ 5|   10
+(1 row)
+
+
+starting permutation: s2-add-fkey s3-acquire-advisory-lock s1-begin s2-begin s2-non-blocking-shard-split s1-update s1-commit s3-release-advisory-lock s2-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-add-fkey:
+ ALTER TABLE table_to_split ADD CONSTRAINT fkey_const FOREIGN KEY(value) REFERENCES reference_table(id);
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+ BEGIN;
+
+step s2-non-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['-1073741824'],
+  ARRAY[1, 2],
+  'force_logical');
+ <waiting ...>
+step s1-update: 
+ UPDATE reference_table SET value = 5 WHERE id = 5;
+
+step s1-commit:
+ COMMIT;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-non-blocking-shard-split: <... completed>
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-commit:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('table_to_split', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows of table_to_split
+ SELECT id, value FROM table_to_split ORDER BY id, value;
+ -- rows of reference table
+ SELECT * FROM reference_table;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500004|t      |     0
+   57638|1500003|t      |     0
+   57638|1500005|t      |     0
+(3 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+
+starting permutation: s2-add-fkey s3-acquire-advisory-lock s1-begin s2-begin s2-non-blocking-shard-split s1-delete s1-commit s3-release-advisory-lock s2-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-add-fkey:
+ ALTER TABLE table_to_split ADD CONSTRAINT fkey_const FOREIGN KEY(value) REFERENCES reference_table(id);
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+ BEGIN;
+
+step s2-non-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['-1073741824'],
+  ARRAY[1, 2],
+  'force_logical');
+ <waiting ...>
+step s1-delete: 
+ DELETE FROM reference_table WHERE id = 5;
+
+step s1-commit:
+ COMMIT;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-non-blocking-shard-split: <... completed>
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-commit:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('table_to_split', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows of table_to_split
+ SELECT id, value FROM table_to_split ORDER BY id, value;
+ -- rows of reference table
+ SELECT * FROM reference_table;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500004|t      |     0
+   57638|1500003|t      |     0
+   57638|1500005|t      |     0
+(3 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+

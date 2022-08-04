@@ -81,18 +81,18 @@ LookupSplitMode(Oid shardTransferModeOid)
 	{
 		shardSplitMode = BLOCKING_SPLIT;
 	}
+
+	/* TODO(saawaek): Handle this appropriately based on replica identity */
 	else if (strncmp(enumLabel, "auto", NAMEDATALEN) == 0 ||
 			 strncmp(enumLabel, "force_logical", NAMEDATALEN) == 0)
 	{
-		ereport(ERROR, (errmsg(
-							"Shard Tranfer mode: '%s' is not supported. Please use 'block_writes' instead.",
-							enumLabel)));
+		shardSplitMode = NON_BLOCKING_SPLIT;
 	}
 	else
 	{
 		/* We will not get here as postgres will validate the enum value. */
 		ereport(ERROR, (errmsg(
-							"Invalid shard tranfer mode: '%s'. Expected split mode is 'block_writes'.",
+							"Invalid shard tranfer mode: '%s'. Expected split mode is 'block_writes/auto/force_logical'.",
 							enumLabel)));
 	}
 

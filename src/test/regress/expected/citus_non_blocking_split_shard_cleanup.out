@@ -1,0 +1,129 @@
+/*
+Citus non-blocking shard split test.
+The test ensures after a error free non-blocking split operation, following objects
+created for logical replication are cleaned up:
+1) At source node: Publications, replication slots, dummy shards.
+2) At destination node: Subscriptions, dummy shards.
+*/
+CREATE SCHEMA "citus_split_test_schema";
+SET search_path TO "citus_split_test_schema";
+SET citus.next_shard_id TO 8981000;
+SET citus.next_placement_id TO 8610000;
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 1;
+-- BEGIN: Create table to split, along with other co-located tables. Add indexes, statistics etc.
+CREATE TABLE sensors(
+    measureid               integer,
+    eventdatetime           date,
+    measure_data            jsonb,
+	meaure_quantity         decimal(15, 2),
+    measure_status          char(1),
+	measure_comment         varchar(44),
+    PRIMARY KEY (measureid, eventdatetime, measure_data));
+SELECT create_distributed_table('sensors', 'measureid', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO sensors SELECT i, '2020-01-05', '{}', 11011.10, 'A', 'I <3 Citus' FROM generate_series(0,1000)i;
+-- BEGIN : Move one shard before we split it.
+\c - postgres - :master_port
+SET search_path TO "citus_split_test_schema";
+SET citus.next_shard_id TO 8981007;
+SET citus.defer_drop_after_shard_move TO OFF;
+-- BEGIN : Set node id variables
+SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
+SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
+-- END   : Set node id variables
+-- BEGIN : Split two shards
+-- Perform 2 way split
+SELECT pg_catalog.citus_split_shard_by_split_points(
+    8981000,
+    ARRAY['-1073741824'],
+    ARRAY[:worker_2_node, :worker_2_node],
+    'force_logical');
+ citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_1_port
+SET search_path TO "citus_split_test_schema";
+SET citus.show_shards_for_app_name_prefixes = '*';
+-- Dummy shards should be cleaned up. 8981007, 8981008 are dummy shards
+-- created at source.
+SELECT count(*) FROM pg_class where relname like '%sensors_8981007%';
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM pg_class where relname like '%sensors_8981008%';
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- Replication slots should be cleanedup at source
+SELECT slot_name FROM pg_replication_slots;
+ slot_name
+---------------------------------------------------------------------
+(0 rows)
+
+-- Publications should be cleaned up on worker1
+SELECT count(*) FROM pg_publication;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+\c - - - :worker_2_port
+SET search_path TO "citus_split_test_schema";
+-- All subscriptions should be cleaned up.
+SELECT count(*) FROM pg_subscription;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- Trigger a 3-way local split.
+\c - - - :master_port
+SET search_path TO "citus_split_test_schema";
+SELECT pg_catalog.citus_split_shard_by_split_points(
+    8981001,
+    ARRAY['536870911', '1610612735'],
+    ARRAY[:worker_2_node, :worker_2_node, :worker_2_node],
+    'force_logical');
+ citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_port
+SET search_path TO "citus_split_test_schema";
+-- Replication slots should be cleaned up
+SELECT slot_name FROM pg_replication_slots;
+ slot_name
+---------------------------------------------------------------------
+(0 rows)
+
+-- Publications should be cleanedup
+SELECT count(*) FROM pg_publication;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- All subscriptions should be cleaned up.
+SELECT count(*) FROM pg_subscription;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+--BEGIN : Cleanup
+    \c - postgres - :master_port
+    DROP SCHEMA "citus_split_test_schema" CASCADE;
+NOTICE:  drop cascades to table citus_split_test_schema.sensors
+--END : Cleanup

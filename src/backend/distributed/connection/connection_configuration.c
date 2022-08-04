@@ -377,6 +377,14 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 		authParamsIdx++;
 	}
 
+	if (key->replicationConnParam)
+	{
+		connKeywords[authParamsIdx] = MemoryContextStrdup(context, "replication");
+		connValues[authParamsIdx] = MemoryContextStrdup(context, "database");
+
+		authParamsIdx++;
+	}
+
 	PQconninfoFree(optionArray);
 
 	/* final step: add terminal NULL, required by libpq */
