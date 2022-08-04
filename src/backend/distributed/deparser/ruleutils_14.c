@@ -18,8 +18,7 @@
 
 #include "pg_config.h"
 
-/* We should drop PG 15 support from this file, this is only for testing purposes until #6085 is merged. */
-#if (PG_VERSION_NUM >= PG_VERSION_14) && (PG_VERSION_NUM <= PG_VERSION_15)
+#if (PG_VERSION_NUM >= PG_VERSION_14) && (PG_VERSION_NUM < PG_VERSION_15)
 
 #include "postgres.h"
 
