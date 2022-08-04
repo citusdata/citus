@@ -87,8 +87,8 @@ extern List * CreateTargetNodeConnectionsForShardSplit(
 	char *databaseName);
 
 /* Functions to drop publisher-subscriber resources */
-extern void CreateShardSplitEmptyPublications(MultiConnection *sourceConnection,
-											  HTAB *shardInfoHashMapForPublication);
+extern void CreateShardSplitPublications(MultiConnection *sourceConnection,
+										 HTAB *shardInfoHashMapForPublication);
 extern char *  CreateTemplateReplicationSlot(ShardInterval *shardIntervalToSplit,
 											 MultiConnection *
 											 sourceConnection);
