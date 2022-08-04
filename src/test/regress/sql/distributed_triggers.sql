@@ -3,7 +3,6 @@ DROP SCHEMA IF EXISTS distributed_triggers CASCADE;
 CREATE SCHEMA distributed_triggers;
 SET search_path TO 'distributed_triggers';
 SET citus.shard_replication_factor = 1;
-SET citus.shard_count = 32;
 SET citus.next_shard_id TO 800000;
 
 --
@@ -302,7 +301,7 @@ CREATE TRIGGER record_emp_trig
 AFTER INSERT OR UPDATE OR DELETE ON emptest
     FOR EACH STATEMENT EXECUTE FUNCTION distributed_triggers.record_emp();
 
-INSERT INTO emptest VALUES ('test5', 1);
+INSERT INTO emptest VALUES ('test6', 1);
 DELETE FROM emptest;
 SELECT * FROM emptest;
 SELECT operation_type FROM record_op;
