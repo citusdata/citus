@@ -31,6 +31,8 @@ extern bool EnableUnsafeTriggers;
 
 extern int MaxMatViewSizeToAutoRecreate;
 
+extern bool EnforceLocalObjectRestrictions;
+
 extern void SwitchToSequentialAndLocalExecutionIfRelationNameTooLong(Oid relationId,
 																	 char *
 																	 finalRelationName);

@@ -843,7 +843,10 @@ ErrorOrWarnIfObjectHasUnsupportedDependency(const ObjectAddress *objectAddress)
 		}
 		else
 		{
-			RaiseDeferredError(errMsg, WARNING);
+			if (EnableUnsupportedFeatureMessages)
+			{
+				RaiseDeferredError(errMsg, WARNING);
+			}
 		}
 
 		return true;
