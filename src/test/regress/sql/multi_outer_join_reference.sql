@@ -64,12 +64,15 @@ FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_third_reference b ON (l_custkey = t_custkey);
 
 -- Left table is a large table
-COPY multi_outer_join_left_hash FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-10.data' with delimiter '|';
-COPY multi_outer_join_left_hash FROM '/home/hanefi/code/citus/src/test/regress/data/customer-11-20.data' with delimiter '|';
+\set customer_1_10_data :abs_srcdir '/data/customer-1-10.data'
+\set customer_11_20_data :abs_srcdir '/data/customer-11-20.data'
+COPY multi_outer_join_left_hash FROM :'customer_1_10_data' with delimiter '|';
+COPY multi_outer_join_left_hash FROM :'customer_11_20_data' with delimiter '|';
 
 -- Right table is a small table
-COPY multi_outer_join_right_reference FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-15.data' with delimiter '|';
-COPY multi_outer_join_right_hash FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-15.data' with delimiter '|';
+\set customer_1_15_data :abs_srcdir '/data/customer-1-15.data'
+COPY multi_outer_join_right_reference FROM :'customer_1_15_data' with delimiter '|';
+COPY multi_outer_join_right_hash FROM :'customer_1_15_data' with delimiter '|';
 
 -- Make sure we do not crash if one table has data
 SELECT
@@ -83,8 +86,9 @@ FROM
 	multi_outer_join_third_reference a LEFT JOIN multi_outer_join_right_reference b ON (r_custkey = t_custkey);
 
 -- Third table is a single shard table with all data
-COPY multi_outer_join_third_reference FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-30.data' with delimiter '|';
-COPY multi_outer_join_right_hash FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-30.data' with delimiter '|';
+\set customer_1_30_data :abs_srcdir '/data/customer-1-30.data'
+COPY multi_outer_join_third_reference FROM :'customer_1_30_data' with delimiter '|';
+COPY multi_outer_join_right_hash FROM :'customer_1_30_data' with delimiter '|';
 
 
 -- Regular outer join should return results for all rows
@@ -164,7 +168,8 @@ FROM
 
 
 -- load some more data
-COPY multi_outer_join_right_reference FROM '/home/hanefi/code/citus/src/test/regress/data/customer-21-30.data' with delimiter '|';
+\set customer_21_30_data :abs_srcdir '/data/customer-21-30.data'
+COPY multi_outer_join_right_reference FROM :'customer_21_30_data' with delimiter '|';
 
 -- Update shards so that they do not have 1-1 matching, triggering an error.
 UPDATE pg_dist_shard SET shardminvalue = '2147483646' WHERE shardid = 1260006;
@@ -180,14 +185,14 @@ UPDATE pg_dist_shard SET shardmaxvalue = '-1073741825' WHERE shardid = 1260006;
 TRUNCATE multi_outer_join_left_hash, multi_outer_join_right_hash, multi_outer_join_right_reference;
 
 -- reload shards with 1-1 matching
-COPY multi_outer_join_left_hash FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-15.data' with delimiter '|';
-COPY multi_outer_join_left_hash FROM '/home/hanefi/code/citus/src/test/regress/data/customer-21-30.data' with delimiter '|';
+COPY multi_outer_join_left_hash FROM :'customer_1_15_data' with delimiter '|';
+COPY multi_outer_join_left_hash FROM :'customer_21_30_data' with delimiter '|';
 
-COPY multi_outer_join_right_reference FROM '/home/hanefi/code/citus/src/test/regress/data/customer-11-20.data' with delimiter '|';
-COPY multi_outer_join_right_reference FROM '/home/hanefi/code/citus/src/test/regress/data/customer-21-30.data' with delimiter '|';
+COPY multi_outer_join_right_reference FROM :'customer_11_20_data' with delimiter '|';
+COPY multi_outer_join_right_reference FROM :'customer_21_30_data' with delimiter '|';
 
-COPY multi_outer_join_right_hash FROM '/home/hanefi/code/citus/src/test/regress/data/customer-11-20.data' with delimiter '|';
-COPY multi_outer_join_right_hash FROM '/home/hanefi/code/citus/src/test/regress/data/customer-21-30.data' with delimiter '|';
+COPY multi_outer_join_right_hash FROM :'customer_11_20_data' with delimiter '|';
+COPY multi_outer_join_right_hash FROM :'customer_21_30_data' with delimiter '|';
 
 -- multi_outer_join_third_reference is a single shard table
 

@@ -69,11 +69,13 @@ CREATE TABLE multi_outer_join_third_reference
 	t_comment varchar(117) not null
 );
 SELECT create_reference_table('multi_outer_join_third_reference');
-
-COPY multi_outer_join_left FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-10.data' with delimiter '|';
-COPY multi_outer_join_left FROM '/home/hanefi/code/citus/src/test/regress/data/customer-11-20.data' with delimiter '|';
-COPY multi_outer_join_right FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-15.data' with delimiter '|';
-COPY multi_outer_join_right_reference FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-15.data' with delimiter '|';
+\set customer_1_10_data :abs_srcdir '/data/customer-1-10.data'
+\set customer_11_20_data :abs_srcdir '/data/customer-11-20.data'
+\set customer_1_15_data :abs_srcdir '/data/customer-1-15.data'
+COPY multi_outer_join_left FROM :'customer_1_10_data' with delimiter '|';
+COPY multi_outer_join_left FROM :'customer_11_20_data' with delimiter '|';
+COPY multi_outer_join_right FROM :'customer_1_15_data' with delimiter '|';
+COPY multi_outer_join_right_reference FROM :'customer_1_15_data' with delimiter '|';
 
 -- Make sure we do not crash if one table has no shards
 SELECT
@@ -87,8 +89,9 @@ FROM
 	multi_outer_join_third a LEFT JOIN multi_outer_join_right_reference b ON (r_custkey = t_custkey);
 
 -- Third table is a single shard table with all data
-COPY multi_outer_join_third FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-30.data' with delimiter '|';
-COPY multi_outer_join_third_reference FROM '/home/hanefi/code/citus/src/test/regress/data/customer-1-30.data' with delimiter '|';
+\set customer_1_30_data :abs_srcdir '/data/customer-1-30.data'
+COPY multi_outer_join_third FROM :'customer_1_30_data' with delimiter '|';
+COPY multi_outer_join_third_reference FROM :'customer_1_30_data' with delimiter '|';
 
 -- Regular outer join should return results for all rows
 SELECT
@@ -167,7 +170,8 @@ FROM
 
 
 -- Turn the right table into a large table
-COPY multi_outer_join_right FROM '/home/hanefi/code/citus/src/test/regress/data/customer-21-30.data' with delimiter '|';
+\set customer_21_30_data :abs_srcdir '/data/customer-21-30.data'
+COPY multi_outer_join_right FROM :'customer_21_30_data' with delimiter '|';
 
 
 -- Shards do not have 1-1 matching. We should error here.
@@ -181,11 +185,13 @@ TRUNCATE multi_outer_join_left;
 TRUNCATE multi_outer_join_right;
 
 -- reload shards with 1-1 matching
-COPY multi_outer_join_left FROM '/home/hanefi/code/citus/src/test/regress/data/customer-subset-11-20.data' with delimiter '|';
-COPY multi_outer_join_left FROM '/home/hanefi/code/citus/src/test/regress/data/customer-21-30.data' with delimiter '|';
+\set customer_subset_11_20_data :abs_srcdir '/data/customer-subset-11-20.data'
+COPY multi_outer_join_left FROM :'customer_subset_11_20_data' with delimiter '|';
+COPY multi_outer_join_left FROM :'customer_21_30_data' with delimiter '|';
 
-COPY multi_outer_join_right FROM '/home/hanefi/code/citus/src/test/regress/data/customer-11-20.data' with delimiter '|';
-COPY multi_outer_join_right FROM '/home/hanefi/code/citus/src/test/regress/data/customer-subset-21-30.data' with delimiter '|';
+\set customer_subset_21_30_data :abs_srcdir '/data/customer-subset-21-30.data'
+COPY multi_outer_join_right FROM :'customer_11_20_data' with delimiter '|';
+COPY multi_outer_join_right FROM :'customer_subset_21_30_data' with delimiter '|';
 
 -- multi_outer_join_third is a single shard table
 -- Regular left join should work as expected

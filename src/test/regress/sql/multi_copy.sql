@@ -43,7 +43,7 @@ COPY customer_copy_hash (c_custkey,c_name) FROM STDIN (append_to_shard 1);
 SELECT count(*) FROM customer_copy_hash;
 
 -- Test primary key violation
-COPY customer_copy_hash (c_custkey, c_name) FROM STDIN;
+COPY customer_copy_hash (c_custkey, c_name) FROM STDIN
 WITH (FORMAT 'csv');
 1,customer1
 2,customer2
@@ -54,7 +54,7 @@ WITH (FORMAT 'csv');
 SELECT count(*) FROM customer_copy_hash;
 
 -- Test headers option
-COPY customer_copy_hash (c_custkey, c_name) FROM STDIN;
+COPY customer_copy_hash (c_custkey, c_name) FROM STDIN
 WITH (FORMAT 'csv', HEADER true, FORCE_NULL (c_custkey));
 # header
 1,customer1
@@ -84,7 +84,7 @@ WITH (FORMAT 'csv', QUOTE '"', FORCE_NULL (c_address));
 SELECT count(c_address) FROM customer_copy_hash WHERE c_custkey = 5;
 
 -- Test null violation
-COPY customer_copy_hash (c_custkey, c_name) FROM STDIN;
+COPY customer_copy_hash (c_custkey, c_name) FROM STDIN
 WITH (FORMAT 'csv');
 6,customer6
 7,customer7

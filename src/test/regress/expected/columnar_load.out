@@ -14,7 +14,8 @@ DETAIL:  command not found
 -- COPY into uncompressed table from file
 COPY contestant FROM :'contestants_1_csv_file' WITH CSV;
 -- COPY into uncompressed table from program
-COPY contestant FROM PROGRAM 'cat /home/hanefi/code/citus/src/test/regress/data/contestants.2.csv' WITH CSV;
+\set cat_contestants_2_csv_file 'cat ' :abs_srcdir '/data/contestants.2.csv'
+COPY contestant FROM PROGRAM :'cat_contestants_2_csv_file' WITH CSV;
 select
   version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('contestant');
@@ -26,7 +27,7 @@ select
 -- COPY into compressed table
 COPY contestant_compressed FROM :'contestants_1_csv_file' WITH CSV;
 -- COPY into uncompressed table from program
-COPY contestant_compressed FROM PROGRAM 'cat /home/hanefi/code/citus/src/test/regress/data/contestants.2.csv'
+COPY contestant_compressed FROM PROGRAM :'cat_contestants_2_csv_file'
 	WITH CSV;
 select
   version_major, version_minor, reserved_stripe_id, reserved_row_number

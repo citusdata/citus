@@ -517,7 +517,8 @@ DROP TABLE trigger_table;
 
 -- test ALTER TABLE ALL IN TABLESPACE
 -- we expect that it will warn out
-CREATE TABLESPACE super_fast_ssd LOCATION '/home/hanefi/code/citus/src/test/regress/data';
+\set tablespace_location :abs_srcdir '/data'
+CREATE TABLESPACE super_fast_ssd LOCATION :'tablespace_location';
 ALTER TABLE ALL IN TABLESPACE pg_default SET TABLESPACE super_fast_ssd;
 ALTER TABLE ALL IN TABLESPACE super_fast_ssd SET TABLESPACE pg_default;
 DROP TABLESPACE super_fast_ssd;
