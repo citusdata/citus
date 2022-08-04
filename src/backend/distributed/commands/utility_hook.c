@@ -549,11 +549,11 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 * unwanted citus related warnings or early error logs related to invalid address.
 		 * Therefore, we first check if any address in the given statement is valid.
 		 * Then, we do not execute qualify and preprocess if none of the addresses are valid
-		 * to prevent before-mentioned citus related messages. PG will complain about the
-		 * invalid address, so we are safe to not execute qualify and preprocess. Also
-		 * note that we should not guard any step after standardProcess_Utility with
-		 * the enum state distOpsValidationState because PG would have already failed the
-		 * transaction.
+		 * or any address violates ownership rules to prevent before-mentioned citus related
+		 * messages. PG will complain about the invalid address or ownership violation, so we
+		 * are safe to not execute qualify and preprocess. Also note that we should not guard
+		 * any step after standardProcess_Utility with the enum state distOpsValidationState
+		 * because PG would have already failed the transaction.
 		 */
 		distOpsValidationState = DistOpsValidityState(parsetree, ops);
 
@@ -565,15 +565,16 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 * and fill them out how postgres would resolve them. This makes subsequent
 		 * deserialize calls for the statement portable to other postgres servers, the
 		 * workers in our case.
-		 * If there are no valid objects, let's skip the qualify and
-		 * preprocess, and do not diverge from Postgres in terms of error messages.
+		 * If there are no valid objects or any object violates ownership, let's skip
+		 * the qualify and preprocess, and do not diverge from Postgres in terms of
+		 * error messages.
 		 */
-		if (ops && ops->qualify && distOpsValidationState != HasNoneValidObject)
+		if (ops && ops->qualify && DistOpsInValidState(distOpsValidationState))
 		{
 			ops->qualify(parsetree);
 		}
 
-		if (ops && ops->preprocess && distOpsValidationState != HasNoneValidObject)
+		if (ops && ops->preprocess && DistOpsInValidState(distOpsValidationState))
 		{
 			ddlJobs = ops->preprocess(parsetree, queryString, context);
 		}
