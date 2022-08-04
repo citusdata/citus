@@ -254,7 +254,37 @@ AlterDomainStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
 	AlterDomainStmt *stmt = castNode(AlterDomainStmt, node);
 
 	TypeName *domainName = makeTypeNameFromNameList(stmt->typeName);
-	return GetDomainAddressByName(domainName, missing_ok);
+	List *domainObjectAddresses = GetDomainAddressByName(domainName, missing_ok);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(domainObjectAddresses) == 1);
+
+	/* We have already asserted that we have exactly 1 address in the addresses. */
+	ObjectAddress *address = linitial(domainObjectAddresses);
+
+	Oid domainOid = address->objectId;
+	bool isDropConstraintStmt = (stmt->subtype == 'X');
+	if (!isPostprocess && isDropConstraintStmt && OidIsValid(domainOid))
+	{
+		/*
+		 * we validate constraint if we are not in postprocess yet. It should have
+		 * been already dropped at postprocess, so we do not validate in postprocess.
+		 */
+		char *constraintName = stmt->name;
+		Oid constraintOid = get_domain_constraint_oid(domainOid, constraintName,
+													  missing_ok);
+		if (!OidIsValid(constraintOid))
+		{
+			/*
+			 * Although the domain is valid, the constraint is not. Eventually, PG will
+			 * throw an error. To prevent diverging outputs between Citus and PG, we treat
+			 * the domain as invalid.
+			 */
+			address->objectId = InvalidOid;
+		}
+	}
+
+	return list_make1(address);
 }
 
 

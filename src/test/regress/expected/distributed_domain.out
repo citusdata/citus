@@ -636,7 +636,7 @@ SELECT * FROM run_command_on_workers($$ SELECT null::distributed_domain.alter_ad
 (2 rows)
 
 ALTER DOMAIN alter_add_constraint DROP CONSTRAINT IF EXISTS check_distinct;
-NOTICE:  constraint "check_distinct" of domain "distributed_domain.alter_add_constraint" does not exist, skipping
+NOTICE:  constraint "check_distinct" of domain "alter_add_constraint" does not exist, skipping
 ALTER DOMAIN alter_add_constraint ADD CONSTRAINT check_distinct CHECK (sql_is_distinct_from(value, null));
 ALTER DOMAIN alter_add_constraint RENAME CONSTRAINT check_distinct TO check_distinct_renamed;
 ALTER DOMAIN alter_add_constraint DROP CONSTRAINT check_distinct_renamed;
