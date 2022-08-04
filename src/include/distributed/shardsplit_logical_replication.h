@@ -71,8 +71,8 @@ extern HTAB *  CreateShardSplitInfoMapForPublication(
 	List *destinationWorkerNodesList);
 
 /* Functions for creating publications and subscriptions*/
-extern void CreateShardSplitPublications(MultiConnection *sourceConnection,
-										 HTAB *shardInfoHashMapForPublication);
+extern void AlterShardSplitPublications(MultiConnection *sourceConnection,
+										HTAB *shardInfoHashMapForPublication);
 extern void CreateShardSplitSubscriptions(List *targetNodeConnectionList,
 										  List *shardSplitSubscriberMetadataList,
 										  WorkerNode *sourceWorkerNode, char *superUser,
@@ -87,6 +87,11 @@ extern List * CreateTargetNodeConnectionsForShardSplit(
 	char *databaseName);
 
 /* Functions to drop publisher-subscriber resources */
+extern void CreateShardSplitEmptyPublications(MultiConnection *sourceConnection,
+											  HTAB *shardInfoHashMapForPublication);
+extern char *  CreateTemplateReplicationSlot(ShardInterval *shardIntervalToSplit,
+											 MultiConnection *
+											 sourceConnection);
 extern void DropAllShardSplitLeftOvers(WorkerNode *sourceNode,
 									   HTAB *shardSplitMapOfPublications);
 extern void DropShardSplitPublications(MultiConnection *sourceConnection,
@@ -94,9 +99,6 @@ extern void DropShardSplitPublications(MultiConnection *sourceConnection,
 extern void DropShardSplitSubsriptions(List *shardSplitSubscribersMetadataList);
 extern void DropShardSplitReplicationSlots(MultiConnection *sourceConnection,
 										   List *replicationSlotInfoList);
-extern char *  CreateTemplateReplicationSlot(ShardInterval *shardIntervalToSplit,
-											 MultiConnection *
-											 sourceConnection);
 extern void DisableAndDropShardSplitSubscription(MultiConnection *connection,
 												 char *subscriptionName);
 
@@ -108,6 +110,5 @@ extern void WaitForShardSplitRelationSubscriptionsToBeCaughtUp(XLogRecPtr source
 															   shardSplitPubSubMetadataList);
 
 extern char * ShardSplitTemplateReplicationSlotName(uint64 shardId);
-
 extern void CloseShardSplitSubscriberConnections(List *shardSplitSubscriberMetadataList);
 #endif /* SHARDSPLIT_LOGICAL_REPLICATION_H */

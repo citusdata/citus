@@ -33,20 +33,19 @@ static HTAB *ShardInfoHashMapForPublications = NULL;
 static void AddPublishableShardEntryInMap(uint32 targetNodeId,
 										  ShardInterval *shardInterval, bool
 										  isChildShardInterval);
+static void AlterShardSplitPublicationForNode(MultiConnection *connection,
+											  List *shardList,
+											  uint32_t publicationForTargetNodeId, Oid
+											  ownerId);
 ShardSplitSubscriberMetadata * CreateShardSplitSubscriberMetadata(Oid tableOwnerId, uint32
 																  nodeId,
 																  List *
 																  replicationSlotInfoList);
-static void CreateShardSplitPublicationForNode(MultiConnection *connection,
-											   List *shardList,
-											   uint32_t publicationForTargetNodeId, Oid
-											   tableOwner);
 static char * ShardSplitPublicationName(uint32_t nodeId, Oid ownerId);
 static void DropAllShardSplitSubscriptions(MultiConnection *cleanupConnection);
 static void DropAllShardSplitPublications(MultiConnection *cleanupConnection);
 static void DropAllShardSplitUsers(MultiConnection *cleanupConnection);
 static void DropAllShardSplitReplicationSlots(MultiConnection *cleanupConnection);
-
 
 /*
  * CreateShardSplitInfoMapForPublication creates a hashmap that groups
@@ -175,7 +174,44 @@ AddPublishableShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval,
 
 
 /*
- * CreateShardSplitPublications creates publications on the source node.
+ * CreateShardSplitEmptyPublications creates empty publications on the source node.
+ * Due to a sporadic bug in PG, we have to create publications before we create replication slot.
+ * After the template replication slot is created, these empty publications are altered
+ * with actual tables to be replicated.
+ * More details about the bug can be found in the below mailing link.
+ * (https://www.postgresql.org/message-id/20191010115752.2d0f27af%40firost).
+ *
+ * We follow the 'SHARD_SPLIT_X_PREFIX' naming scheme for creating publications
+ * related to split operations.
+ */
+void
+CreateShardSplitEmptyPublications(MultiConnection *sourceConnection,
+								  HTAB *shardInfoHashMapForPublication)
+{
+	HASH_SEQ_STATUS status;
+	hash_seq_init(&status, shardInfoHashMapForPublication);
+
+	NodeShardMappingEntry *entry = NULL;
+	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
+	{
+		uint32 nodeId = entry->key.nodeId;
+		uint32 tableOwnerId = entry->key.tableOwnerId;
+
+		StringInfo createEmptyPublicationCommand = makeStringInfo();
+		appendStringInfo(createEmptyPublicationCommand, "CREATE PUBLICATION %s",
+						 ShardSplitPublicationName(nodeId, tableOwnerId));
+
+		ExecuteCriticalRemoteCommand(sourceConnection,
+									 createEmptyPublicationCommand->data);
+		pfree(createEmptyPublicationCommand->data);
+		pfree(createEmptyPublicationCommand);
+	}
+}
+
+
+/*
+ * AlterShardSplitPublications alters publications on the source node.
+ * It adds split shards for logical replication.
  *
  * sourceConnection - Connection of source node.
  *
@@ -184,8 +220,8 @@ AddPublishableShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval,
  *                                  ShardIntervals mapped by key.
  */
 void
-CreateShardSplitPublications(MultiConnection *sourceConnection,
-							 HTAB *shardInfoHashMapForPublication)
+AlterShardSplitPublications(MultiConnection *sourceConnection,
+							HTAB *shardInfoHashMapForPublication)
 {
 	HASH_SEQ_STATUS status;
 	hash_seq_init(&status, shardInfoHashMapForPublication);
@@ -196,30 +232,26 @@ CreateShardSplitPublications(MultiConnection *sourceConnection,
 		uint32 nodeId = entry->key.nodeId;
 		uint32 tableOwnerId = entry->key.tableOwnerId;
 		List *shardListForPublication = entry->shardSplitInfoList;
-
-		/* Create publication on shard list */
-		CreateShardSplitPublicationForNode(sourceConnection,
-										   shardListForPublication,
-										   nodeId,
-										   tableOwnerId);
+		AlterShardSplitPublicationForNode(sourceConnection,
+										  shardListForPublication,
+										  nodeId,
+										  tableOwnerId);
 	}
 }
 
 
 /*
- * CreateShardSplitPublicationForNode creates a publication on source node
- * for given shard list.
- * We follow the 'SHARD_SPLIT_X_PREFIX' naming scheme for creating publications
- * related to split operations.
+ * AlterShardSplitPublicationForNode adds shards that have to be replicated
+ * for a given publication.
  */
 static void
-CreateShardSplitPublicationForNode(MultiConnection *connection, List *shardList,
-								   uint32_t publicationForTargetNodeId, Oid ownerId)
+AlterShardSplitPublicationForNode(MultiConnection *connection, List *shardList,
+								  uint32_t publicationForTargetNodeId, Oid ownerId)
 {
-	StringInfo createPublicationCommand = makeStringInfo();
+	StringInfo alterPublicationCommand = makeStringInfo();
 	bool prefixWithComma = false;
 
-	appendStringInfo(createPublicationCommand, "CREATE PUBLICATION %s FOR TABLE ",
+	appendStringInfo(alterPublicationCommand, "ALTER PUBLICATION %s ADD TABLE ",
 					 ShardSplitPublicationName(publicationForTargetNodeId, ownerId));
 
 	ShardInterval *shard = NULL;
@@ -229,16 +261,16 @@ CreateShardSplitPublicationForNode(MultiConnection *connection, List *shardList,
 
 		if (prefixWithComma)
 		{
-			appendStringInfoString(createPublicationCommand, ",");
+			appendStringInfoString(alterPublicationCommand, ",");
 		}
 
-		appendStringInfoString(createPublicationCommand, shardName);
+		appendStringInfoString(alterPublicationCommand, shardName);
 		prefixWithComma = true;
 	}
 
-	ExecuteCriticalRemoteCommand(connection, createPublicationCommand->data);
-	pfree(createPublicationCommand->data);
-	pfree(createPublicationCommand);
+	ExecuteCriticalRemoteCommand(connection, alterPublicationCommand->data);
+	pfree(alterPublicationCommand->data);
+	pfree(alterPublicationCommand);
 }
 
 

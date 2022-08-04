@@ -1302,13 +1302,30 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 	/* Non-Blocking shard split workflow starts here */
 	PG_TRY();
 	{
-		/* 1) Physically create split children. */
+		/*
+		 * 1) Create empty publications. Tables will be added after
+		 * template replication slot and split shards are created.
+		 */
+		CreateShardSplitEmptyPublications(sourceConnection,
+										  shardSplitHashMapForPublication);
+
+		/*
+		 * 2) Create template replication Slot. It returns a snapshot. The snapshot remains
+		 * valid till the lifetime of the session that creates it. The connection is closed
+		 * at the end of the workflow.
+		 */
+		MultiConnection *templateSlotConnection = NULL;
+		char *snapShotName = CreateTemplateReplicationSlotAndReturnSnapshot(
+			shardIntervalToSplit, sourceShardToCopyNode, &templateSlotConnection);
+
+
+		/* 3) Physically create split children. */
 		CreateSplitShardsForShardGroup(mapOfShardToPlacementCreatedByWorkflow,
 									   shardGroupSplitIntervalListList,
 									   workersForPlacementList);
 
 		/*
-		 * 2) Create dummy shards due logical replication constraints.
+		 * 4) Create dummy shards due to PG logical replication constraints.
 		 *    Refer to the comment section of 'CreateDummyShardsForShardGroup' for indepth
 		 *    information.
 		 */
@@ -1323,25 +1340,16 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 								shardGroupSplitIntervalListList, workersForPlacementList);
 
 
-		/* 3) Create Publications. */
-		CreateShardSplitPublications(sourceConnection, shardSplitHashMapForPublication);
-
-		/*
-		 * 4) Create template replication Slot. It returns a snapshot. The snapshot remains
-		 * valid till the lifetime of the session that creates it. The connection is closed
-		 * at the end of the workflow.
-		 */
-		MultiConnection *templateSlotConnection = NULL;
-		char *snapShotName = CreateTemplateReplicationSlotAndReturnSnapshot(
-			shardIntervalToSplit, sourceShardToCopyNode, &templateSlotConnection);
+		/* 5) Alter Publications and add split shards for logical replication */
+		AlterShardSplitPublications(sourceConnection, shardSplitHashMapForPublication);
 
 
-		/* 5) Do snapshotted Copy */
+		/* 6) Do snapshotted Copy */
 		DoSplitCopy(sourceShardToCopyNode, sourceColocatedShardIntervalList,
 					shardGroupSplitIntervalListList, workersForPlacementList,
 					snapShotName);
 
-		/* 6) Execute 'worker_split_shard_replication_setup UDF */
+		/* 7) Execute 'worker_split_shard_replication_setup UDF */
 		List *replicationSlotInfoList = ExecuteSplitShardReplicationSetupUDF(
 			sourceShardToCopyNode,
 			sourceColocatedShardIntervalList,
@@ -1362,13 +1370,13 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 			connectionFlags,
 			superUser, databaseName);
 
-		/* 7) Create copies of template replication slot */
+		/* 8) Create copies of template replication slot */
 		char *templateSlotName = ShardSplitTemplateReplicationSlotName(
 			shardIntervalToSplit->shardId);
 		CreateReplicationSlots(sourceConnection, templateSlotName,
 							   shardSplitSubscribersMetadataList);
 
-		/* 8) Create subscriptions on target nodes */
+		/* 9) Create subscriptions on target nodes */
 		CreateShardSplitSubscriptions(targetNodeConnectionList,
 									  shardSplitSubscribersMetadataList,
 									  sourceShardToCopyNode,
@@ -1378,40 +1386,40 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		/* Used for testing */
 		ConflictOnlyWithIsolationTesting();
 
-		/* 9) Wait for subscriptions to be ready */
+		/* 10) Wait for subscriptions to be ready */
 		WaitForShardSplitRelationSubscriptionsBecomeReady(
 			shardSplitSubscribersMetadataList);
 
-		/* 10) Wait for subscribers to catchup till source LSN */
+		/* 11) Wait for subscribers to catchup till source LSN */
 		XLogRecPtr sourcePosition = GetRemoteLogPosition(sourceConnection);
 		WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition,
 														   shardSplitSubscribersMetadataList);
 
-		/* 11) Create Auxilary structures */
+		/* 12) Create Auxilary structures */
 		CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
 											   workersForPlacementList,
 											   false /* includeReplicaIdentity*/);
 
-		/* 12) Wait for subscribers to catchup till source LSN */
+		/* 13) Wait for subscribers to catchup till source LSN */
 		sourcePosition = GetRemoteLogPosition(sourceConnection);
 		WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition,
 														   shardSplitSubscribersMetadataList);
 
-		/* 13) Block writes on source shards */
+		/* 14) Block writes on source shards */
 		BlockWritesToShardList(sourceColocatedShardIntervalList);
 
-		/* 14) Wait for subscribers to catchup till source LSN */
+		/* 15) Wait for subscribers to catchup till source LSN */
 		sourcePosition = GetRemoteLogPosition(sourceConnection);
 		WaitForShardSplitRelationSubscriptionsToBeCaughtUp(sourcePosition,
 														   shardSplitSubscribersMetadataList);
 
-		/* 15) Drop Subscribers */
+		/* 16) Drop Subscribers */
 		DropShardSplitSubsriptions(shardSplitSubscribersMetadataList);
 
-		/* 16) Drop Publications */
+		/* 17) Drop Publications */
 		DropShardSplitPublications(sourceConnection, shardSplitHashMapForPublication);
 
-		/* 17) Drop replication slots
+		/* 18) Drop replication slots
 		 * Drop template and subscriber replication slots
 		 */
 		DropShardReplicationSlot(sourceConnection, ShardSplitTemplateReplicationSlotName(
@@ -1419,13 +1427,13 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		DropShardSplitReplicationSlots(sourceConnection, replicationSlotInfoList);
 
 		/*
-		 * 18) Drop old shards and delete related metadata. Have to do that before
+		 * 19) Drop old shards and delete related metadata. Have to do that before
 		 * creating the new shard metadata, because there's cross-checks
 		 * preventing inconsistent metadata (like overlapping shards).
 		 */
 		DropShardList(sourceColocatedShardIntervalList);
 
-		/* 19) Insert new shard and placement metdata */
+		/* 20) Insert new shard and placement metdata */
 		InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
 										 workersForPlacementList);
 
@@ -1433,7 +1441,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 									workersForPlacementList);
 
 		/*
-		 * 20) Create foreign keys if exists after the metadata changes happening in
+		 * 21) Create foreign keys if exists after the metadata changes happening in
 		 * DropShardList() and InsertSplitChildrenShardMetadata() because the foreign
 		 * key creation depends on the new metadata.
 		 */
@@ -1441,17 +1449,17 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 									workersForPlacementList);
 
 		/*
-		 * 21) Drop dummy shards.
+		 * 22) Drop dummy shards.
 		 */
 		DropDummyShards(mapOfDummyShardToPlacement);
 
-		/* 22) Close source connection */
+		/* 23) Close source connection */
 		CloseConnection(sourceConnection);
 
-		/* 23) Close all subscriber connections */
+		/* 24) Close all subscriber connections */
 		CloseShardSplitSubscriberConnections(shardSplitSubscribersMetadataList);
 
-		/* 24) Close connection of template replication slot */
+		/* 25) Close connection of template replication slot */
 		CloseConnection(templateSlotConnection);
 	}
 	PG_CATCH();
