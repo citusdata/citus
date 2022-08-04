@@ -234,15 +234,6 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 							   SplitTargetName[splitOperation])));
 	}
 
-	if (extern_IsColumnarTableAmTable(shardIntervalToSplit->relationId))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("Cannot %s %s as operation "
-							   "is not supported for Columnar tables.",
-							   SplitOperationName[splitOperation],
-							   SplitTargetName[splitOperation])));
-	}
-
 	uint32 relationReplicationFactor = TableShardReplicationFactor(
 		shardIntervalToSplit->relationId);
 	if (relationReplicationFactor > 1)

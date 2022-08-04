@@ -2109,7 +2109,7 @@ CreateShardSplitSubscription(MultiConnection *connection, char *sourceNodeName,
 															SHARD_SPLIT_SUBSCRIPTION_PREFIX)),
 					 quote_literal_cstr(conninfo->data),
 					 quote_identifier(publicationName),
-					 slotName);
+					 escape_param_str(slotName));
 
 	ExecuteCriticalRemoteCommand(connection, createSubscriptionCommand->data);
 	pfree(createSubscriptionCommand->data);

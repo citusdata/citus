@@ -1475,6 +1475,7 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 		   connection->forceCloseAtTransactionEnd ||
 		   PQstatus(connection->pgConn) != CONNECTION_OK ||
 		   !RemoteTransactionIdle(connection) ||
+		   connection->requiresReplication ||
 		   (MaxCachedConnectionLifetime >= 0 &&
 			MillisecondsToTimeout(connection->connectionEstablishmentStart,
 								  MaxCachedConnectionLifetime) <= 0);
