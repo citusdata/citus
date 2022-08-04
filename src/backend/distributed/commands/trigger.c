@@ -26,6 +26,9 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#if PG_VERSION_NUM >= PG_VERSION_15
+#include "distributed/multi_partitioning_utils.h"
+#endif
 #include "distributed/namespace_utils.h"
 #include "distributed/shard_utils.h"
 #include "distributed/worker_protocol.h"
@@ -53,6 +56,9 @@ static void ExtractDropStmtTriggerAndRelationName(DropStmt *dropTriggerStmt,
 												  char **relationName);
 static void ErrorIfDropStmtDropsMultipleTriggers(DropStmt *dropTriggerStmt);
 static int16 GetTriggerTypeById(Oid triggerId);
+#if PG_VERSION_NUM >= PG_VERSION_15
+static bool TriggerExists(Oid relationId, char *triggerName);
+#endif
 
 
 /* GUC that overrides trigger checks for distributed tables and reference tables */
@@ -158,6 +164,15 @@ GetTriggerTupleById(Oid triggerId, bool missingOk)
 List *
 GetExplicitTriggerIdList(Oid relationId)
 {
+#if PG_VERSION_NUM >= PG_VERSION_15
+	bool partitionTable = false;
+	Oid parentRelationId = InvalidOid;
+	if (PartitionTable(relationId))
+	{
+		partitionTable = true;
+		parentRelationId = PartitionParentOid(relationId);
+	}
+#endif
 	List *triggerIdList = NIL;
 
 	Relation pgTrigger = table_open(TriggerRelationId, AccessShareLock);
@@ -183,7 +198,22 @@ GetExplicitTriggerIdList(Oid relationId)
 		 * internal. Hence, below we discard citus_truncate_trigger as well as
 		 * the implicit triggers created by postgres for foreign key validation.
 		 */
+#if PG_VERSION_NUM >= PG_VERSION_15
+
+		/*
+		 * Pre PG15, tgisinternal is true for a "child" trigger on a partition
+		 * cloned from the trigger on the parent.
+		 * In PG15, tgisinternal is false in that case. However, we don't want to
+		 * create this trigger on the partition since it will create a conflict
+		 * when we try to attach the partition to the parent table:
+		 * ERROR: trigger "..." for relation "{partition_name}" already exists
+		 */
+		bool isChildTrigger = partitionTable && TriggerExists(parentRelationId, NameStr(
+																  triggerForm->tgname));
+		if (!triggerForm->tgisinternal && !isChildTrigger)
+#else
 		if (!triggerForm->tgisinternal)
+#endif
 		{
 			triggerIdList = lappend_oid(triggerIdList, triggerForm->oid);
 		}
@@ -196,6 +226,52 @@ GetExplicitTriggerIdList(Oid relationId)
 
 	return triggerIdList;
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_15
+
+/*
+ * ChildTrigger returns
+ * true: if the given trigger is a child trigger on the given partition
+ * cloned from the trigger on the parent
+ * false: otherwise
+ * It makes use of pg_trigger_tgrelid_tgname_index index on pg_trigger
+ */
+static bool
+TriggerExists(Oid relationId, char *triggerName)
+{
+	bool relationTriggerExists = false;
+	Relation pgTrigger = table_open(TriggerRelationId, AccessShareLock);
+
+	int scanKeyCount = 2;
+	ScanKeyData scanKey[2];
+
+	ScanKeyInit(&scanKey[0], Anum_pg_trigger_tgrelid,
+				BTEqualStrategyNumber, F_OIDEQ, relationId);
+
+	ScanKeyInit(&scanKey[1], Anum_pg_trigger_tgname,
+				BTEqualStrategyNumber, F_NAMEEQ, CStringGetDatum(triggerName));
+
+	bool useIndex = true;
+	SysScanDesc scanDescriptor = systable_beginscan(pgTrigger, TriggerRelidNameIndexId,
+													useIndex, NULL, scanKeyCount,
+													scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		relationTriggerExists = true;
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgTrigger, NoLock);
+
+	return relationTriggerExists;
+}
+
+
+#endif
 
 
 /*
