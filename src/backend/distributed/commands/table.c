@@ -439,9 +439,18 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 			Oid parentRelationId = AlterTableLookupRelation(alterTableStatement,
 															lockmode);
 			PartitionCmd *partitionCommand = (PartitionCmd *) alterTableCommand->def;
-			bool partitionMissingOk = false;
+			bool partitionMissingOk = true;
 			Oid partitionRelationId = RangeVarGetRelid(partitionCommand->name, lockmode,
 													   partitionMissingOk);
+			if (!OidIsValid(partitionRelationId))
+			{
+				/*
+				 * We can stop propagation here instead of logging error. Pg will complain
+				 * in standard_utility, so we are safe to stop here. We pass missing_ok
+				 * as true to not diverge from pg output.
+				 */
+				return NIL;
+			}
 
 			if (!IsCitusTable(parentRelationId))
 			{
