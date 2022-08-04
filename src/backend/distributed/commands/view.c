@@ -35,11 +35,50 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
+/*
+ * GUC controls some restrictions for local objects. For example,
+ * if it is disabled, a local view with no distributed relation dependency
+ * will be created even if it has circular dependency and will not
+ * log error or warning. Citus will normally restrict that behaviour for the
+ * local views. e.g CREATE TABLE local_t (a int);
+ *                  CREATE VIEW vv1 as SELECT * FROM local_t;
+ *					CREATE OR REPLACE VIEW vv2 as SELECT * FROM vv1;
+ *
+ * When the GUC is disabled, citus also wont distribute the local
+ * view which has no citus relation dependency to workers. Otherwise, it distributes
+ * them by default. e.g create view v as select 1;
+ */
+bool EnforceLocalObjectRestrictions = true;
+
 static List * FilterNameListForDistributedViews(List *viewNamesList, bool missing_ok);
 static void AppendQualifiedViewNameToCreateViewCommand(StringInfo buf, Oid viewOid);
 static void AppendViewDefinitionToCreateViewCommand(StringInfo buf, Oid viewOid);
 static void AppendAliasesToCreateViewCommand(StringInfo createViewCommand, Oid viewOid);
 static void AppendOptionsToCreateViewCommand(StringInfo createViewCommand, Oid viewOid);
+static bool ViewHasDistributedRelationDependency(ObjectAddress *viewObjectAddress);
+
+/*
+ * ViewHasDistributedRelationDependency returns true if given view at address has
+ * any distributed relation dependency.
+ */
+static bool
+ViewHasDistributedRelationDependency(ObjectAddress *viewObjectAddress)
+{
+	List *dependencies = GetAllDependenciesForObject(viewObjectAddress);
+	ObjectAddress *dependency = NULL;
+
+	foreach_ptr(dependency, dependencies)
+	{
+		if (dependency->classId == RelationRelationId && IsAnyObjectDistributed(
+				list_make1(dependency)))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 
 /*
  * PreprocessViewStmt is called during the planning phase for CREATE OR REPLACE VIEW
@@ -108,6 +147,36 @@ PostprocessViewStmt(Node *node, const char *queryString)
 	if (ErrorOrWarnIfAnyObjectHasUnsupportedDependency(viewAddresses))
 	{
 		return NIL;
+	}
+
+	/*
+	 * If it is disabled, a local view with no distributed relation dependency
+	 * will be created even if it has circular dependency and will not
+	 * log error or warning. Citus will normally restrict that behaviour for the
+	 * local views. e.g CREATE TABLE local_t (a int);
+	 *                  CREATE VIEW vv1 as SELECT * FROM local_t;
+	 *					CREATE OR REPLACE VIEW vv2 as SELECT * FROM vv1;
+	 *
+	 * When the GUC is disabled, citus also wont distribute the local
+	 * view which has no citus relation dependency to workers. Otherwise, it distributes
+	 * them by default. e.g create view v as select 1;
+	 *
+	 * We disable local object restrictions during pg vanilla tests to not diverge
+	 * from Postgres in terms of error messages.
+	 */
+	if (!EnforceLocalObjectRestrictions)
+	{
+		/* we asserted that we have only one address. */
+		ObjectAddress *viewAddress = linitial(viewAddresses);
+
+		if (!ViewHasDistributedRelationDependency(viewAddress))
+		{
+			/*
+			 * The local view has no distributed relation dependency, so we can allow
+			 * it to be created even if it has circular dependency.
+			 */
+			return NIL;
+		}
 	}
 
 	EnsureAllObjectDependenciesExistOnAllNodes(viewAddresses);

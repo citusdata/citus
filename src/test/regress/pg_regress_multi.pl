@@ -503,6 +503,9 @@ if(!$vanillaDev && $vanillatest)
 
     # we disable citus related unwanted messages to not break postgres vanilla test behaviour.
     push(@pgOptions, "citus.enable_unsupported_feature_messages=false");
+
+    # we disable some restrictions for local objects like local views to not break postgres vanilla test behaviour.
+    push(@pgOptions, "citus.enforce_object_restrictions_for_local_objects=false");
 }
 
 if ($useMitmproxy)

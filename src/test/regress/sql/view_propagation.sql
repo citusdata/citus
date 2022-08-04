@@ -497,6 +497,50 @@ DROP VIEW IF EXISTS axx.temp_view_to_drop;
 DROP MATERIALIZED VIEW IF EXISTS axx.temp_view_to_drop;
 DROP MATERIALIZED VIEW IF EXISTS axx.temp_view_to_drop;
 
+-- Test the GUC citus.enforce_object_restrictions_for_local_objects
+SET search_path to view_prop_schema;
+CREATE TABLE local_t (a int);
+
+-- tests when citus.enforce_object_restrictions_for_local_objects=true
+SET citus.enforce_object_restrictions_for_local_objects TO true;
+-- views will be created locally with warnings
+CREATE VIEW vv1 as SELECT * FROM local_t;
+CREATE OR REPLACE VIEW vv2 as SELECT * FROM vv1;
+-- view will fail due to local circular dependency
+CREATE OR REPLACE VIEW vv1 as SELECT * FROM vv2;
+-- local view with no citus relation dependency will be distributed
+CREATE VIEW v_dist AS SELECT 1;
+-- show that the view is in pg_dist_object
+SELECT COUNT(*) FROM pg_dist_object WHERE objid = 'v_dist'::regclass;
+
+-- tests when citus.enforce_object_restrictions_for_local_objects=false
+SET citus.enforce_object_restrictions_for_local_objects TO false;
+SET citus.enable_unsupported_feature_messages TO false;
+-- views will be created locally without errors OR warnings
+CREATE VIEW vv3 as SELECT * FROM local_t;
+CREATE OR REPLACE VIEW vv4 as SELECT * FROM vv3;
+CREATE OR REPLACE VIEW vv3 as SELECT * FROM vv4;
+-- show that views are NOT in pg_dist_object
+SELECT COUNT(*) FROM pg_dist_object WHERE objid IN ('vv3'::regclass, 'vv4'::regclass);
+-- local view with no citus relation dependency will NOT be distributed
+CREATE VIEW v_local_only AS SELECT 1;
+-- show that the view is NOT in pg_dist_object
+SELECT COUNT(*) FROM pg_dist_object WHERE objid = 'v_local_only'::regclass;
+
+-- distribute the local table and check the distribution of dependent views
+SELECT create_distributed_table('local_t', 'a');
+-- show that views with no circular dependency are in pg_dist_object
+SELECT COUNT(*) FROM pg_dist_object WHERE objid IN ('vv1'::regclass, 'vv2'::regclass);
+-- show that views with circular dependency are NOT in pg_dist_object
+SELECT COUNT(*) FROM pg_dist_object WHERE objid IN ('vv3'::regclass, 'vv4'::regclass);
+
+-- show that we cannot re-create the circular views ever
+CREATE OR REPLACE VIEW vv3 as SELECT * FROM local_t;
+CREATE OR REPLACE VIEW vv4 as SELECT * FROM vv3;
+CREATE OR REPLACE VIEW vv3 as SELECT * FROM vv4;
+
+RESET citus.enable_unsupported_feature_messages;
+RESET citus.enforce_object_restrictions_for_local_objects;
 SET client_min_messages TO ERROR;
 DROP SCHEMA view_prop_schema_inner CASCADE;
 DROP SCHEMA view_prop_schema, axx CASCADE;
