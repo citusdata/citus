@@ -76,6 +76,15 @@ static DistributeObjectOps Aggregate_Rename = {
 	.address = RenameFunctionStmtObjectAddress,
 	.markDistributed = false,
 };
+static DistributeObjectOps Aggregate_Grant = {
+	.deparse = DeparseGrantOnFunctionStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessGrantOnFunctionStmt,
+	.postprocess = PostprocessGrantOnFunctionStmt,
+	.operationType = DIST_OPS_ALTER,
+	.address = NULL,
+	.markDistributed = false,
+};
 static DistributeObjectOps Any_AlterEnum = {
 	.deparse = DeparseAlterEnumStmt,
 	.qualify = QualifyAlterEnumStmt,
@@ -1743,6 +1752,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_FUNCTION:
 				{
 					return &Function_Grant;
+				}
+
+				case OBJECT_AGGREGATE:
+				{
+					return &Aggregate_Grant;
 				}
 
 				case OBJECT_PROCEDURE:

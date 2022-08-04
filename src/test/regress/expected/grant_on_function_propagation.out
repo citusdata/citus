@@ -274,6 +274,27 @@ GRANT EXECUTE ON FUNCTION function_notice() TO function_user_1, non_existent_use
 ERROR:  role "non_existent_user" does not exist
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA grant_on_function, non_existent_schema TO function_user_1;
 ERROR:  schema "non_existent_schema" does not exist
+-- ROUTINE syntax in GRANT should support functions.
+CREATE USER function_user_4;
+GRANT EXECUTE ON ROUTINE function_notice() TO function_user_4;
+-- check if the grants are propagated correctly
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname IN ('function_notice') ORDER BY 1, 2;
+     proname     | pronargs |                                                                            proacl
+---------------------------------------------------------------------
+ function_notice |        0 | {=X/postgres,postgres=X/postgres,function_user_2=X*/postgres,function_user_1=X/function_user_2,function_user_3=X/function_user_2,function_user_4=X/postgres}
+ function_notice |        1 | {=X/postgres,postgres=X/postgres,function_user_2=X*/postgres,function_user_1=X/function_user_2,function_user_3=X/function_user_2}
+(2 rows)
+
+\c - - - :worker_2_port
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname IN ('function_notice') ORDER BY 1, 2;
+     proname     | pronargs |                                                                            proacl
+---------------------------------------------------------------------
+ function_notice |        0 | {=X/postgres,postgres=X/postgres,function_user_2=X*/postgres,function_user_1=X/function_user_2,function_user_3=X/function_user_2,function_user_4=X/postgres}
+ function_notice |        1 | {=X/postgres,postgres=X/postgres,function_user_2=X*/postgres,function_user_1=X/function_user_2,function_user_3=X/function_user_2}
+(2 rows)
+
+\c - - - :master_port
+SET search_path TO grant_on_function, public;
 DROP FUNCTION function_notice(), function_notice(text), function_hello, not_distributed_function, not_propagated_function_user_test;
 -- add similar tests for procedures
 -- remove one of the worker nodes to test adding a new node later
@@ -532,7 +553,281 @@ GRANT EXECUTE ON PROCEDURE procedure_notice() TO procedure_user_1, non_existent_
 ERROR:  role "non_existent_user" does not exist
 GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA grant_on_function, non_existent_schema TO procedure_user_1;
 ERROR:  schema "non_existent_schema" does not exist
+-- ROUTINE syntax in GRANT should support procedures.
+CREATE USER procedure_user_4;
+GRANT EXECUTE ON ROUTINE procedure_notice() TO procedure_user_4;
+-- check if the grants are propagated correctly
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname IN ('procedure_notice') ORDER BY 1, 2;
+     proname      | pronargs |                                                                               proacl
+---------------------------------------------------------------------
+ procedure_notice |        0 | {=X/postgres,postgres=X/postgres,procedure_user_2=X*/postgres,procedure_user_1=X/procedure_user_2,procedure_user_3=X/procedure_user_2,procedure_user_4=X/postgres}
+ procedure_notice |        1 | {=X/postgres,postgres=X/postgres,procedure_user_2=X*/postgres,procedure_user_1=X/procedure_user_2,procedure_user_3=X/procedure_user_2}
+(2 rows)
+
+\c - - - :worker_2_port
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname IN ('procedure_notice') ORDER BY 1, 2;
+     proname      | pronargs |                                                                               proacl
+---------------------------------------------------------------------
+ procedure_notice |        0 | {=X/postgres,postgres=X/postgres,procedure_user_2=X*/postgres,procedure_user_1=X/procedure_user_2,procedure_user_3=X/procedure_user_2,procedure_user_4=X/postgres}
+ procedure_notice |        1 | {=X/postgres,postgres=X/postgres,procedure_user_2=X*/postgres,procedure_user_1=X/procedure_user_2,procedure_user_3=X/procedure_user_2}
+(2 rows)
+
+\c - - - :master_port
+SET search_path TO grant_on_function, public;
 DROP PROCEDURE procedure_notice(), procedure_notice(text), procedure_hello, not_distributed_procedure, not_propagated_procedure_user_test;
+-- add similar tests for aggregates
+-- remove one of the worker nodes to test adding a new node later
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- create some simple aggregates
+CREATE AGGREGATE dist_float_avg (float8)
+(
+    sfunc = float8_accum,
+    stype = float8[],
+    finalfunc = float8_avg,
+    initcond = '{0,0,0}'
+);
+CREATE AGGREGATE dist_float_avg_2 (float8)
+(
+    sfunc = float8_accum,
+    stype = float8[],
+    finalfunc = float8_avg,
+    initcond = '{0,0,0}'
+);
+SET citus.enable_metadata_sync TO OFF;
+CREATE AGGREGATE no_dist_float_avg (float8)
+(
+    sfunc = float8_accum,
+    stype = float8[],
+    finalfunc = float8_avg,
+    initcond = '{0,0,0}'
+);
+RESET citus.enable_metadata_sync;
+-- create some users and grant them permission on grant_on_function schema
+CREATE USER aggregate_user_1;
+CREATE USER aggregate_user_2;
+CREATE USER aggregate_user_3;
+GRANT ALL ON SCHEMA grant_on_function TO aggregate_user_1, aggregate_user_2, aggregate_user_3;
+-- do some varying grants
+GRANT EXECUTE ON ROUTINE dist_float_avg(float8) TO aggregate_user_1;
+GRANT EXECUTE ON ROUTINE dist_float_avg(float8) TO aggregate_user_2 WITH GRANT OPTION;
+SET ROLE aggregate_user_2;
+GRANT EXECUTE ON ROUTINE dist_float_avg(float8) TO aggregate_user_3;
+RESET ROLE;
+SELECT create_distributed_function('dist_float_avg(float8)');
+NOTICE:  procedure grant_on_function.dist_float_avg is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+-- re-distributing the same aggregate with GRANTs should be fine
+SELECT create_distributed_function('dist_float_avg(float8)');
+NOTICE:  procedure grant_on_function.dist_float_avg is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+-- check grants propagated correctly after create_distributed_function
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname = 'dist_float_avg' ORDER BY 1, 2;
+    proname     | pronargs |                                                             proacl
+---------------------------------------------------------------------
+ dist_float_avg |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_1=X/postgres,aggregate_user_2=X*/postgres,aggregate_user_3=X/aggregate_user_2}
+(1 row)
+
+\c - - - :worker_1_port
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname = 'dist_float_avg' ORDER BY 1, 2;
+    proname     | pronargs |                                                             proacl
+---------------------------------------------------------------------
+ dist_float_avg |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_1=X/postgres,aggregate_user_2=X*/postgres,aggregate_user_3=X/aggregate_user_2}
+(1 row)
+
+\c - - - :master_port
+-- do some varying revokes
+REVOKE EXECUTE ON ROUTINE grant_on_function.dist_float_avg(float8) FROM aggregate_user_1, aggregate_user_3;
+REVOKE GRANT OPTION FOR EXECUTE ON ROUTINE grant_on_function.dist_float_avg(float8) FROM aggregate_user_2 CASCADE;
+-- check revokes propagated correctly for the distributed aggregate dist_float_avg(float8)
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname = 'dist_float_avg' ORDER BY 1, 2;
+    proname     | pronargs |                            proacl
+---------------------------------------------------------------------
+ dist_float_avg |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_2=X/postgres}
+(1 row)
+
+\c - - - :worker_1_port
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname = 'dist_float_avg' ORDER BY 1, 2;
+    proname     | pronargs |                            proacl
+---------------------------------------------------------------------
+ dist_float_avg |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_2=X/postgres}
+(1 row)
+
+\c - - - :master_port
+REVOKE EXECUTE ON ROUTINE grant_on_function.dist_float_avg(float8) FROM aggregate_user_2;
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname = 'dist_float_avg' ORDER BY 1, 2;
+    proname     | pronargs |              proacl
+---------------------------------------------------------------------
+ dist_float_avg |        1 | {=X/postgres,postgres=X/postgres}
+(1 row)
+
+\c - - - :worker_1_port
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname = 'dist_float_avg' ORDER BY 1, 2;
+    proname     | pronargs |              proacl
+---------------------------------------------------------------------
+ dist_float_avg |        1 | {=X/postgres,postgres=X/postgres}
+(1 row)
+
+\c - - - :master_port
+-- GRANT .. ON ALL ROUTINES IN SCHEMA .. with multiple roles
+GRANT EXECUTE ON ALL ROUTINES IN SCHEMA grant_on_function TO aggregate_user_1, aggregate_user_3;
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname = 'dist_float_avg' ORDER BY 1, 2;
+    proname     | pronargs |                                          proacl
+---------------------------------------------------------------------
+ dist_float_avg |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_1=X/postgres,aggregate_user_3=X/postgres}
+(1 row)
+
+\c - - - :worker_1_port
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname = 'dist_float_avg' ORDER BY 1, 2;
+    proname     | pronargs |                                          proacl
+---------------------------------------------------------------------
+ dist_float_avg |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_1=X/postgres,aggregate_user_3=X/postgres}
+(1 row)
+
+\c - - - :master_port
+-- REVOKE .. ON ALL PROCEDURES IN SCHEMA .. with multiple roles
+REVOKE EXECUTE ON ALL ROUTINES IN SCHEMA grant_on_function FROM aggregate_user_1, aggregate_user_3;
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname = 'dist_float_avg' ORDER BY 1, 2;
+    proname     | pronargs |              proacl
+---------------------------------------------------------------------
+ dist_float_avg |        1 | {=X/postgres,postgres=X/postgres}
+(1 row)
+
+\c - - - :worker_1_port
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname = 'dist_float_avg' ORDER BY 1, 2;
+    proname     | pronargs |              proacl
+---------------------------------------------------------------------
+ dist_float_avg |        1 | {=X/postgres,postgres=X/postgres}
+(1 row)
+
+\c - - - :master_port
+-- distribute another aggregate
+SET search_path TO grant_on_function, public;
+SELECT create_distributed_function('dist_float_avg_2(float8)');
+NOTICE:  procedure grant_on_function.dist_float_avg_2 is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+-- GRANT with multiple aggregates and multiple roles
+GRANT EXECUTE ON ROUTINE grant_on_function.dist_float_avg(float8), grant_on_function.dist_float_avg_2(float8),
+grant_on_function.no_dist_float_avg(float8) TO aggregate_user_2 WITH GRANT OPTION;
+SET ROLE aggregate_user_2;
+GRANT EXECUTE ON ROUTINE grant_on_function.dist_float_avg(float8), grant_on_function.dist_float_avg_2(float8),
+grant_on_function.no_dist_float_avg(float8) TO aggregate_user_1, aggregate_user_3;
+RESET ROLE;
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname IN ('dist_float_avg', 'dist_float_avg_2', 'no_dist_float_avg') ORDER BY 1, 2;
+      proname      | pronargs |                                                                 proacl
+---------------------------------------------------------------------
+ dist_float_avg    |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_2=X*/postgres,aggregate_user_1=X/aggregate_user_2,aggregate_user_3=X/aggregate_user_2}
+ dist_float_avg_2  |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_2=X*/postgres,aggregate_user_1=X/aggregate_user_2,aggregate_user_3=X/aggregate_user_2}
+ no_dist_float_avg |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_2=X*/postgres,aggregate_user_1=X/aggregate_user_2,aggregate_user_3=X/aggregate_user_2}
+(3 rows)
+
+\c - - - :worker_1_port
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname IN ('dist_float_avg', 'dist_float_avg_2', 'no_dist_float_avg') ORDER BY 1, 2;
+     proname      | pronargs |                                                                 proacl
+---------------------------------------------------------------------
+ dist_float_avg   |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_2=X*/postgres,aggregate_user_1=X/aggregate_user_2,aggregate_user_3=X/aggregate_user_2}
+ dist_float_avg_2 |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_2=X*/postgres,aggregate_user_1=X/aggregate_user_2,aggregate_user_3=X/aggregate_user_2}
+(2 rows)
+
+\c - - - :master_port
+-- add the previously removed node
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- check if the grants are propagated correctly
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname IN ('dist_float_avg', 'dist_float_avg_2') ORDER BY 1, 2;
+     proname      | pronargs |                                                                 proacl
+---------------------------------------------------------------------
+ dist_float_avg   |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_2=X*/postgres,aggregate_user_1=X/aggregate_user_2,aggregate_user_3=X/aggregate_user_2}
+ dist_float_avg_2 |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_2=X*/postgres,aggregate_user_1=X/aggregate_user_2,aggregate_user_3=X/aggregate_user_2}
+(2 rows)
+
+\c - - - :worker_2_port
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname IN ('dist_float_avg', 'dist_float_avg_2') ORDER BY 1, 2;
+     proname      | pronargs |                                                                 proacl
+---------------------------------------------------------------------
+ dist_float_avg   |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_2=X*/postgres,aggregate_user_1=X/aggregate_user_2,aggregate_user_3=X/aggregate_user_2}
+ dist_float_avg_2 |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_2=X*/postgres,aggregate_user_1=X/aggregate_user_2,aggregate_user_3=X/aggregate_user_2}
+(2 rows)
+
+\c - - - :master_port
+-- check that it works correctly with a user that is not distributed
+CREATE AGGREGATE not_propagated_aggregate_user_test (float8)
+(
+    sfunc = float8_accum,
+    stype = float8[],
+    finalfunc = float8_avg,
+    initcond = '{0,0,0}'
+);
+SET citus.enable_ddl_propagation TO off;
+CREATE USER not_propagated_aggregate_user_4;
+SET citus.enable_ddl_propagation TO on;
+GRANT EXECUTE ON ROUTINE not_propagated_aggregate_user_test TO aggregate_user_1, not_propagated_aggregate_user_4;
+-- check if the grants are propagated correctly
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname IN ('not_propagated_aggregate_user_test') ORDER BY 1, 2;
+              proname               | pronargs |                                                  proacl
+---------------------------------------------------------------------
+ not_propagated_aggregate_user_test |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_1=X/postgres,not_propagated_aggregate_user_4=X/postgres}
+(1 row)
+
+\c - - - :worker_2_port
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname IN ('not_propagated_aggregate_user_test') ORDER BY 1, 2;
+              proname               | pronargs |                                                  proacl
+---------------------------------------------------------------------
+ not_propagated_aggregate_user_test |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_1=X/postgres,not_propagated_aggregate_user_4=X/postgres}
+(1 row)
+
+\c - - - :master_port
+SET search_path TO grant_on_function, public;
+-- the following should fail is in plain PG
+GRANT EXECUTE ON ROUTINE dist_float_avg(float8), non_existent_aggregate TO aggregate_user_1;
+ERROR:  could not find a function named "non_existent_aggregate"
+GRANT EXECUTE ON ROUTINE dist_float_avg(float8) TO aggregate_user_1, non_existent_user;
+ERROR:  role "non_existent_user" does not exist
+GRANT EXECUTE ON ALL ROUTINES IN SCHEMA grant_on_function, non_existent_schema TO aggregate_user_1;
+ERROR:  schema "non_existent_schema" does not exist
+-- ROUTINE syntax in GRANT should support aggregates.
+CREATE USER aggregate_user_4;
+GRANT EXECUTE ON ROUTINE dist_float_avg(float8) TO aggregate_user_4;
+-- check if the grants are propagated correctly
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname IN ('dist_float_avg') ORDER BY 1, 2;
+    proname     | pronargs |                                                                               proacl
+---------------------------------------------------------------------
+ dist_float_avg |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_2=X*/postgres,aggregate_user_1=X/aggregate_user_2,aggregate_user_3=X/aggregate_user_2,aggregate_user_4=X/postgres}
+(1 row)
+
+\c - - - :worker_2_port
+SELECT proname, pronargs, proacl FROM pg_proc WHERE proname IN ('dist_float_avg') ORDER BY 1, 2;
+    proname     | pronargs |                                                                               proacl
+---------------------------------------------------------------------
+ dist_float_avg |        1 | {=X/postgres,postgres=X/postgres,aggregate_user_2=X*/postgres,aggregate_user_1=X/aggregate_user_2,aggregate_user_3=X/aggregate_user_2,aggregate_user_4=X/postgres}
+(1 row)
+
+\c - - - :master_port
+SET search_path TO grant_on_function, public;
+DROP AGGREGATE dist_float_avg(float8), dist_float_avg_2(float8), no_dist_float_avg(float8), not_propagated_aggregate_user_test(float8);
 SELECT run_command_on_coordinator_and_workers('DROP SCHEMA grant_on_function CASCADE');
  run_command_on_coordinator_and_workers
 ---------------------------------------------------------------------

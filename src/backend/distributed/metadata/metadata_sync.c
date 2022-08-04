@@ -2070,6 +2070,7 @@ GetObjectsForGrantStmt(ObjectType objectType, Oid objectId)
 
 		/* enterprise supported object types */
 		case OBJECT_FUNCTION:
+		case OBJECT_AGGREGATE:
 		case OBJECT_PROCEDURE:
 		{
 			ObjectWithArgs *owa = ObjectWithArgsFromOid(objectId);
@@ -2252,11 +2253,15 @@ GenerateGrantOnFunctionQueriesFromAclItem(Oid functionOid, AclItem *aclItem)
 		{
 			objectType = OBJECT_PROCEDURE;
 		}
+		else if (prokind == PROKIND_AGGREGATE)
+		{
+			objectType = OBJECT_AGGREGATE;
+		}
 		else
 		{
 			ereport(ERROR, (errmsg("unsupported prokind"),
 							errdetail("GRANT commands on procedures are propagated only "
-									  "for procedures and functions.")));
+									  "for procedures, functions, and aggregates.")));
 		}
 
 		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
