@@ -415,10 +415,15 @@ SELECT operation_type, product_sku, state_code FROM record_sale ORDER BY 1,2,3;
 --
 --Test ALTER TRIGGER
 --
+-- Pre PG15, renaming the trigger on the parent table didn't rename the same trigger on
+-- the children as well. Hence, let's not print the trigger names of the children
+-- In PG15, rename is consistent for all partitions of the parent
+-- This is tested in pg15.sql file.
+
 CREATE VIEW sale_triggers AS
     SELECT tgname, tgrelid::regclass, tgenabled
     FROM pg_trigger
-    WHERE tgrelid::regclass::text like 'sale%'
+    WHERE tgrelid::regclass::text = 'sale'
     ORDER BY 1, 2;
 
 SELECT * FROM sale_triggers ORDER BY 1,2;
