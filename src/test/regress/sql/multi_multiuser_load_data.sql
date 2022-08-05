@@ -12,35 +12,45 @@ SET citusdb.shard_placement_policy TO 'local-node-first';
 
 -- load as superuser
 \set lineitem_1_data_file :abs_srcdir '/data/lineitem.1.data'
-COPY lineitem FROM :'lineitem_1_data_file' with delimiter '|';
+\set copy_command '\\COPY lineitem FROM ' :'lineitem_1_data_file' ' with delimiter '''|''';'
+:copy_command
 
 -- as user with ALL access
 SET ROLE full_access;
 \set lineitem_2_data_file :abs_srcdir '/data/lineitem.2.data'
-COPY lineitem FROM :'lineitem_2_data_file' with delimiter '|';
+\set copy_command '\\COPY lineitem FROM ' :'lineitem_2_data_file' ' with delimiter '''|''';'
+:copy_command
 RESET ROLE;
 
 -- as user with SELECT access, should fail
 SET ROLE read_access;
-COPY lineitem FROM :'lineitem_2_data_file' with delimiter '|';
+\set copy_command '\\COPY lineitem FROM ' :'lineitem_2_data_file' ' with delimiter '''|''';'
+:copy_command
 RESET ROLE;
 
 -- as user with no access, should fail
 SET ROLE no_access;
-COPY lineitem FROM :'lineitem_2_data_file' with delimiter '|';
+\set copy_command '\\COPY lineitem FROM ' :'lineitem_2_data_file' ' with delimiter '''|''';'
+:copy_command
 RESET ROLE;
 
 SET ROLE full_access;
 \set orders_1_data_file :abs_srcdir '/data/orders.1.data'
 \set orders_2_data_file :abs_srcdir '/data/orders.2.data'
-COPY orders FROM :'orders_1_data_file' with delimiter '|';
-COPY orders FROM :'orders_2_data_file' with delimiter '|';
+\set copy_command '\\COPY orders FROM ' :'orders_1_data_file' ' with delimiter '''|''';'
+:copy_command
+\set copy_command '\\COPY orders FROM ' :'orders_2_data_file' ' with delimiter '''|''';'
+:copy_command
 
 \set customer_1_data_file :abs_srcdir '/data/customer.1.data'
 \set nation_data_file :abs_srcdir '/data/nation.data'
 \set part_data_file :abs_srcdir '/data/part.data'
 \set supplier_data_file :abs_srcdir '/data/supplier.data'
-COPY customer FROM :'customer_1_data_file' with delimiter '|';
-COPY nation FROM :'nation_data_file' with delimiter '|';
-COPY part FROM :'part_data_file' with delimiter '|';
-COPY supplier FROM :'supplier_data_file' with delimiter '|';
+\set copy_command '\\COPY customer FROM ' :'customer_1_data_file' ' with delimiter '''|''';'
+:copy_command
+\set copy_command '\\COPY nation FROM ' :'nation_data_file' ' with delimiter '''|''';'
+:copy_command
+\set copy_command '\\COPY part FROM ' :'part_data_file' ' with delimiter '''|''';'
+:copy_command
+\set copy_command '\\COPY supplier FROM ' :'supplier_data_file' ' with delimiter '''|''';'
+:copy_command
