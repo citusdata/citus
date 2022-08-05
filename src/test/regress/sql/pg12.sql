@@ -348,8 +348,12 @@ ROLLBACK;
 
 BEGIN;
   -- drop some of the columns not having "generated always as stored" expressions
-  -- this would drop generated columns too
-  ALTER TABLE generated_stored_ref DROP COLUMN col_1;
+  -- PRE PG15, this would drop generated columns too
+  -- In PG15, CASCADE option must be specified
+  -- Relevant PG Commit: cb02fcb4c95bae08adaca1202c2081cfc81a28b5
+  SET client_min_messages TO WARNING;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_1 CASCADE;
+  RESET client_min_messages;
   ALTER TABLE generated_stored_ref DROP COLUMN col_4;
 
   -- show that undistribute_table works fine
