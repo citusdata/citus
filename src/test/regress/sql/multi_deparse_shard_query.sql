@@ -1,7 +1,10 @@
 --
 -- MULTI_DEPARSE_SHARD_QUERY
 --
-
+-- This test file has an alternative output because of the change in the
+-- display of SQL-standard function's arguments in INSERT/SELECT in PG15.
+-- The alternative output can be deleted when we drop support for PG14
+--
 
 SET citus.next_shard_id TO 13100000;
 SET citus.shard_replication_factor TO 1;
