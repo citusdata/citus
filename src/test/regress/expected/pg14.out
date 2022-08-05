@@ -279,7 +279,7 @@ SELECT create_distributed_table('col_compression', 'a', shard_count:=4);
 
 (1 row)
 
-SELECT attname || ' ' || attcompression AS column_compression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'col\_compression%' AND attnum > 0 ORDER BY 1;
+SELECT attname || ' ' || attcompression::text AS column_compression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'col\_compression%' AND attnum > 0 ORDER BY 1;
  column_compression
 ---------------------------------------------------------------------
  a p
@@ -287,7 +287,7 @@ SELECT attname || ' ' || attcompression AS column_compression FROM pg_attribute 
 (2 rows)
 
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
-SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
+SELECT attname || ' ' || attcompression::text FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
 )$$);
          column_compression
 ---------------------------------------------------------------------
@@ -313,7 +313,7 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 CALL citus_cleanup_orphaned_shards();
 NOTICE:  cleaned up 1 orphaned shards
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
-SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
+SELECT attname || ' ' || attcompression::text FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
 )$$);
          column_compression
 ---------------------------------------------------------------------
@@ -325,7 +325,7 @@ SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regcla
 ALTER TABLE col_compression ALTER COLUMN b SET COMPRESSION pglz;
 ALTER TABLE col_compression ALTER COLUMN a SET COMPRESSION default;
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
-SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
+SELECT attname || ' ' || attcompression::text FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
 )$$);
          column_compression
 ---------------------------------------------------------------------
@@ -336,7 +336,7 @@ SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regcla
 -- test propagation of ALTER TABLE .. ADD COLUMN .. COMPRESSION ..
 ALTER TABLE col_compression ADD COLUMN c TEXT COMPRESSION pglz;
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
-SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
+SELECT attname || ' ' || attcompression::text FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
 )$$);
                   column_compression
 ---------------------------------------------------------------------
@@ -354,7 +354,7 @@ SELECT create_distributed_table('col_comp_par', 'a');
 
 CREATE TABLE col_comp_par_1 PARTITION OF col_comp_par FOR VALUES FROM ('abc') TO ('def');
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
-SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_comp\_par\_1\_%' AND attnum > 0 ORDER BY 1
+SELECT attname || ' ' || attcompression::text FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_comp\_par\_1\_%' AND attnum > 0 ORDER BY 1
 )$$);
  column_compression
 ---------------------------------------------------------------------
