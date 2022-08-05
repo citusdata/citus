@@ -3,26 +3,26 @@
 --
 -- Test aggregate type conversions using sums of integers and division operator
 SELECT sum(l_suppkey) FROM lineitem;
-   sum    
-----------
+   sum
+---------------------------------------------------------------------
  60617976
 (1 row)
 
 SELECT sum(l_suppkey) / 2 FROM lineitem;
- ?column? 
-----------
+ ?column?
+---------------------------------------------------------------------
  30308988
 (1 row)
 
 SELECT sum(l_suppkey) / 2::numeric FROM lineitem;
-       ?column?        
------------------------
+       ?column?
+---------------------------------------------------------------------
  30308988.000000000000
 (1 row)
 
 SELECT sum(l_suppkey)::int8 / 2 FROM lineitem;
- ?column? 
-----------
+ ?column?
+---------------------------------------------------------------------
  30308988
 (1 row)
 
@@ -34,27 +34,28 @@ CREATE TABLE aggregate_type (
        double_value float(40) not null,
        interval_value interval not null);
 SELECT create_distributed_table('aggregate_type', 'float_value', 'append');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_create_empty_shard('aggregate_type') AS shardid \gset
-copy aggregate_type FROM '@abs_srcdir@/data/agg_type.data' with (append_to_shard :shardid);
+\set agg_type_data_file :abs_srcdir '/data/agg_type.data'
+copy aggregate_type FROM :'agg_type_data_file' with (append_to_shard :shardid);
 -- Test conversions using aggregates on floats and division
 SELECT min(float_value), max(float_value),
        sum(float_value), count(float_value), avg(float_value)
 FROM aggregate_type;
- min | max | sum  | count |  avg  
------+-----+------+-------+-------
+ min | max | sum  | count |  avg
+---------------------------------------------------------------------
    1 | 4.5 | 10.5 |     4 | 2.625
 (1 row)
 
 SELECT min(float_value) / 2, max(float_value) / 2,
        sum(float_value) / 2, count(float_value) / 2, avg(float_value) / 2
 FROM aggregate_type;
- ?column? | ?column? | ?column? | ?column? | ?column? 
-----------+----------+----------+----------+----------
+ ?column? | ?column? | ?column? | ?column? | ?column?
+---------------------------------------------------------------------
       0.5 |     2.25 |     5.25 |        2 |   1.3125
 (1 row)
 
@@ -62,16 +63,16 @@ FROM aggregate_type;
 SELECT min(double_value), max(double_value),
        sum(double_value), count(double_value), avg(double_value)
 FROM aggregate_type;
-  min  |   max   |   sum    | count |    avg    
--------+---------+----------+-------+-----------
+  min  |   max   |   sum    | count |    avg
+---------------------------------------------------------------------
  2.343 | 6.34343 | 15.79703 |     4 | 3.9492575
 (1 row)
 
 SELECT min(double_value) * 2, max(double_value) * 2,
        sum(double_value) * 2, count(double_value) * 2, avg(double_value) * 2
 FROM aggregate_type;
- ?column? | ?column? | ?column? | ?column? | ?column? 
-----------+----------+----------+----------+----------
+ ?column? | ?column? | ?column? | ?column? | ?column?
+---------------------------------------------------------------------
     4.686 | 12.68686 | 31.59406 |        8 | 7.898515
 (1 row)
 
@@ -81,16 +82,16 @@ SET IntervalStyle TO 'postgres';
 SELECT min(interval_value), max(interval_value),
        sum(interval_value), count(interval_value), avg(interval_value)
 FROM aggregate_type;
-     min     |    max     |     sum     | count |     avg     
--------------+------------+-------------+-------+-------------
+     min     |    max     |     sum     | count |     avg
+---------------------------------------------------------------------
  00:00:23.44 | 00:38:52.9 | 01:23:33.64 |     4 | 00:20:53.41
 (1 row)
 
 SELECT min(interval_value) / 2, max(interval_value) / 2,
        sum(interval_value) / 2, count(interval_value) / 2, avg(interval_value) / 2
 FROM aggregate_type;
-  ?column?   |  ?column?   |  ?column?   | ?column? |   ?column?   
--------------+-------------+-------------+----------+--------------
+  ?column?   |  ?column?   |  ?column?   | ?column? |   ?column?
+---------------------------------------------------------------------
  00:00:11.72 | 00:19:26.45 | 00:41:46.82 |        2 | 00:10:26.705
 (1 row)
 

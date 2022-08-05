@@ -25,24 +25,25 @@ CREATE TABLE lineitem_alter (
 	)
   WITH ( fillfactor = 80 );
 SELECT create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_create_empty_shard('lineitem_alter') AS shardid \gset
-copy lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', append_to_shard :shardid);
+\set lineitem_1_data_file :abs_srcdir '/data/lineitem.1.data'
+copy lineitem_alter FROM :'lineitem_1_data_file' with (delimiter '|', append_to_shard :shardid);
 -- verify that the storage options made it to the table definitions
 SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
-    relname     |   reloptions    
-----------------+-----------------
+    relname     |   reloptions
+---------------------------------------------------------------------
  lineitem_alter | {fillfactor=80}
 (1 row)
 
 \c - - - :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%' ORDER BY relname;
-        relname        |   reloptions    
------------------------+-----------------
+        relname        |   reloptions
+---------------------------------------------------------------------
  lineitem_alter_220000 | {fillfactor=80}
 (1 row)
 
@@ -60,8 +61,8 @@ FROM
     (SELECT oid FROM pg_class WHERE relname LIKE 'lineitem_alter_%' ORDER BY relname LIMIT 1) pc
     JOIN pg_attribute ON (pc.oid = pg_attribute.attrelid)
 ORDER BY attnum;
-     attname     |     atttypid      
------------------+-------------------
+     attname     |     atttypid
+---------------------------------------------------------------------
  tableoid        | oid
  cmax            | cid
  xmax            | xid
@@ -93,8 +94,8 @@ ORDER BY attnum;
 
 \c - - - :master_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
-     Column      |         Type          | Modifiers 
------------------+-----------------------+-----------
+     Column      |         Type          | Modifiers
+---------------------------------------------------------------------
  l_orderkey      | bigint                | not null
  l_partkey       | integer               | not null
  l_suppkey       | integer               | not null
@@ -111,41 +112,41 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineite
  l_shipinstruct  | character(25)         | not null
  l_shipmode      | character(10)         | not null
  l_comment       | character varying(44) | not null
- float_column    | double precision      | 
- date_column     | date                  | 
+ float_column    | double precision      |
+ date_column     | date                  |
  int_column1     | integer               | default 1
  int_column2     | integer               | default 2
- null_column     | integer               | 
+ null_column     | integer               |
 (21 rows)
 
 SELECT float_column, count(*) FROM lineitem_alter GROUP BY float_column;
- float_column | count 
---------------+-------
+ float_column | count
+---------------------------------------------------------------------
               |  6000
 (1 row)
 
 SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
- int_column1 | count 
--------------+-------
+ int_column1 | count
+---------------------------------------------------------------------
            1 |  6000
 (1 row)
 
 -- Verify that SET|DROP DEFAULT works
 ALTER TABLE lineitem_alter ALTER COLUMN float_column SET DEFAULT 1;
 ALTER TABLE lineitem_alter ALTER COLUMN int_column1 DROP DEFAULT;
--- \copy to verify that default values take effect
+-- COPY to verify that default values take effect
 SELECT master_create_empty_shard('lineitem_alter') as shardid \gset
-copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', append_to_shard :shardid);
+copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM :'lineitem_1_data_file' with (delimiter '|', append_to_shard :shardid);
 SELECT float_column, count(*) FROM lineitem_alter GROUP BY float_column;
- float_column | count 
---------------+-------
+ float_column | count
+---------------------------------------------------------------------
               |  6000
             1 |  6000
 (2 rows)
 
 SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
- int_column1 | count 
--------------+-------
+ int_column1 | count
+---------------------------------------------------------------------
              |  6000
            1 |  6000
 (2 rows)
@@ -153,8 +154,8 @@ SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
 -- Verify that SET NOT NULL works
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 SET NOT NULL;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
-     Column      |         Type          |     Modifiers      
------------------+-----------------------+--------------------
+     Column      |         Type          |     Modifiers
+---------------------------------------------------------------------
  l_orderkey      | bigint                | not null
  l_partkey       | integer               | not null
  l_suppkey       | integer               | not null
@@ -172,27 +173,27 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineite
  l_shipmode      | character(10)         | not null
  l_comment       | character varying(44) | not null
  float_column    | double precision      | default 1
- date_column     | date                  | 
- int_column1     | integer               | 
+ date_column     | date                  |
+ int_column1     | integer               |
  int_column2     | integer               | not null default 2
- null_column     | integer               | 
+ null_column     | integer               |
 (21 rows)
 
 -- Drop default so that NULLs will be inserted for this column
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP DEFAULT;
--- \copy should fail because it will try to insert NULLs for a NOT NULL column
+-- COPY should fail because it will try to insert NULLs for a NOT NULL column
 -- Note, this operation will create a table on the workers but it won't be in the metadata
 BEGIN;
 SELECT master_create_empty_shard('lineitem_alter') as shardid \gset
-copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', append_to_shard :shardid);
-ERROR:  null value in column "int_column2" of relation "lineitem_alter_220002" violates not-null constraint
+copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM :'lineitem_1_data_file' with (delimiter '|', append_to_shard :shardid);
+ERROR:  null value in column "int_column2" violates not-null constraint
 DETAIL:  Failing row contains (1, 155190, 7706, 1, 17.00, 21168.23, 0.04, 0.02, N, O, 1996-03-13, 1996-02-12, 1996-03-22, DELIVER IN PERSON        , TRUCK     , egular courts above the, 1, null, null, null, null).
 END;
 -- Verify that DROP NOT NULL works
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP NOT NULL;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
-     Column      |         Type          | Modifiers 
------------------+-----------------------+-----------
+     Column      |         Type          | Modifiers
+---------------------------------------------------------------------
  l_orderkey      | bigint                | not null
  l_partkey       | integer               | not null
  l_suppkey       | integer               | not null
@@ -210,33 +211,33 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineite
  l_shipmode      | character(10)         | not null
  l_comment       | character varying(44) | not null
  float_column    | double precision      | default 1
- date_column     | date                  | 
- int_column1     | integer               | 
- int_column2     | integer               | 
- null_column     | integer               | 
+ date_column     | date                  |
+ int_column1     | integer               |
+ int_column2     | integer               |
+ null_column     | integer               |
 (21 rows)
 
--- \copy should succeed now
+-- COPY should succeed now
 SELECT master_create_empty_shard('lineitem_alter') as shardid \gset
-copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', append_to_shard :shardid);
+copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM :'lineitem_1_data_file' with (delimiter '|', append_to_shard :shardid);
 SELECT count(*) from lineitem_alter;
- count 
--------
+ count
+---------------------------------------------------------------------
  18000
 (1 row)
 
 -- Verify that SET DATA TYPE works
 SELECT int_column2, pg_typeof(int_column2), count(*) from lineitem_alter GROUP BY int_column2;
- int_column2 | pg_typeof | count 
--------------+-----------+-------
+ int_column2 | pg_typeof | count
+---------------------------------------------------------------------
              | integer   |  6000
            2 | integer   | 12000
 (2 rows)
 
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 SET DATA TYPE FLOAT;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
-     Column      |         Type          | Modifiers 
------------------+-----------------------+-----------
+     Column      |         Type          | Modifiers
+---------------------------------------------------------------------
  l_orderkey      | bigint                | not null
  l_partkey       | integer               | not null
  l_suppkey       | integer               | not null
@@ -254,15 +255,15 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineite
  l_shipmode      | character(10)         | not null
  l_comment       | character varying(44) | not null
  float_column    | double precision      | default 1
- date_column     | date                  | 
- int_column1     | integer               | 
- int_column2     | double precision      | 
- null_column     | integer               | 
+ date_column     | date                  |
+ int_column1     | integer               |
+ int_column2     | double precision      |
+ null_column     | integer               |
 (21 rows)
 
 SELECT int_column2, pg_typeof(int_column2), count(*) from lineitem_alter GROUP BY int_column2;
- int_column2 |    pg_typeof     | count 
--------------+------------------+-------
+ int_column2 |    pg_typeof     | count
+---------------------------------------------------------------------
              | double precision |  6000
            2 | double precision | 12000
 (2 rows)
@@ -274,8 +275,8 @@ ALTER TABLE lineitem_alter DROP COLUMN date_column;
 -- Verify that RENAME COLUMN works
 ALTER TABLE lineitem_alter RENAME COLUMN l_orderkey TO l_orderkey_renamed;
 SELECT SUM(l_orderkey_renamed) FROM lineitem_alter;
-   sum    
-----------
+   sum
+---------------------------------------------------------------------
  53620791
 (1 row)
 
@@ -293,14 +294,14 @@ ALTER TABLE lineitem_alter DROP COLUMN IF EXISTS int_column2;
 -- Verify with IF EXISTS for extant table
 ALTER TABLE IF EXISTS lineitem_alter RENAME COLUMN l_orderkey_renamed TO l_orderkey;
 SELECT SUM(l_orderkey) FROM lineitem_alter;
-   sum    
-----------
+   sum
+---------------------------------------------------------------------
  53620791
 (1 row)
 
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
-     Column      |         Type          | Modifiers 
------------------+-----------------------+-----------
+     Column      |         Type          | Modifiers
+---------------------------------------------------------------------
  l_orderkey      | bigint                | not null
  l_partkey       | integer               | not null
  l_suppkey       | integer               | not null
@@ -317,15 +318,15 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineite
  l_shipinstruct  | character(25)         | not null
  l_shipmode      | character(10)         | not null
  l_comment       | character varying(44) | not null
- null_column     | integer               | 
+ null_column     | integer               |
 (17 rows)
 
 -- Verify that we can execute commands with multiple subcommands
 ALTER TABLE lineitem_alter ADD COLUMN int_column1 INTEGER,
 	ADD COLUMN int_column2 INTEGER;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
-     Column      |         Type          | Modifiers 
------------------+-----------------------+-----------
+     Column      |         Type          | Modifiers
+---------------------------------------------------------------------
  l_orderkey      | bigint                | not null
  l_partkey       | integer               | not null
  l_suppkey       | integer               | not null
@@ -342,9 +343,9 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineite
  l_shipinstruct  | character(25)         | not null
  l_shipmode      | character(10)         | not null
  l_comment       | character varying(44) | not null
- null_column     | integer               | 
- int_column1     | integer               | 
- int_column2     | integer               | 
+ null_column     | integer               |
+ int_column1     | integer               |
+ int_column2     | integer               |
 (19 rows)
 
 ALTER TABLE lineitem_alter ADD COLUMN int_column3 INTEGER,
@@ -353,8 +354,8 @@ ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
 ALTER TABLE lineitem_alter DROP COLUMN int_column1, DROP COLUMN int_column2;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
-     Column      |         Type          | Modifiers 
------------------+-----------------------+-----------
+     Column      |         Type          | Modifiers
+---------------------------------------------------------------------
  l_orderkey      | bigint                | not null
  l_partkey       | integer               | not null
  l_suppkey       | integer               | not null
@@ -371,7 +372,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineite
  l_shipinstruct  | character(25)         | not null
  l_shipmode      | character(10)         | not null
  l_comment       | character varying(44) | not null
- null_column     | integer               | 
+ null_column     | integer               |
 (17 rows)
 
 -- Verify that we cannot execute alter commands on the distribution column
@@ -392,11 +393,9 @@ DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VAL
 -- types
 ALTER TABLE lineitem_alter ADD COLUMN new_column non_existent_type;
 ERROR:  type "non_existent_type" does not exist
-LINE 1: ALTER TABLE lineitem_alter ADD COLUMN new_column non_existen...
-                                                         ^
 ALTER TABLE lineitem_alter ALTER COLUMN null_column SET NOT NULL;
-ERROR:  column "null_column" of relation "lineitem_alter_220000" contains null values
-CONTEXT:  while executing command on localhost:57637
+ERROR:  column "null_column" contains null values
+CONTEXT:  while executing command on localhost:xxxxx
 ALTER TABLE lineitem_alter ALTER COLUMN l_partkey SET DEFAULT 'a';
 ERROR:  invalid input syntax for type integer: "a"
 -- Verify that we error out on RENAME CONSTRAINT statement
@@ -412,8 +411,8 @@ NOTICE:  relation "non_existent_table" does not exist, skipping
 -- Verify that none of the failed alter table commands took effect on the master
 -- node
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
-     Column      |         Type          | Modifiers 
------------------+-----------------------+-----------
+     Column      |         Type          | Modifiers
+---------------------------------------------------------------------
  l_orderkey      | bigint                | not null
  l_partkey       | integer               | not null
  l_suppkey       | integer               | not null
@@ -430,7 +429,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineite
  l_shipinstruct  | character(25)         | not null
  l_shipmode      | character(10)         | not null
  l_comment       | character varying(44) | not null
- null_column     | integer               | 
+ null_column     | integer               |
 (17 rows)
 
 -- verify that non-propagated ddl commands are allowed inside a transaction block
@@ -439,8 +438,8 @@ BEGIN;
 CREATE INDEX temp_index_1 ON lineitem_alter(l_linenumber);
 COMMIT;
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
-  indexname   |   tablename    
---------------+----------------
+  indexname   |   tablename
+---------------------------------------------------------------------
  temp_index_1 | lineitem_alter
 (1 row)
 
@@ -451,8 +450,8 @@ BEGIN;
 CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
 COMMIT;
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
-  indexname   |   tablename    
---------------+----------------
+  indexname   |   tablename
+---------------------------------------------------------------------
  temp_index_2 | lineitem_alter
 (1 row)
 
@@ -463,8 +462,8 @@ CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
 ALTER TABLE lineitem_alter ADD COLUMN first integer;
 COMMIT;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
-     Column      |         Type          | Modifiers 
------------------+-----------------------+-----------
+     Column      |         Type          | Modifiers
+---------------------------------------------------------------------
  l_orderkey      | bigint                | not null
  l_partkey       | integer               | not null
  l_suppkey       | integer               | not null
@@ -481,14 +480,14 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineite
  l_shipinstruct  | character(25)         | not null
  l_shipmode      | character(10)         | not null
  l_comment       | character varying(44) | not null
- null_column     | integer               | 
- first           | integer               | 
+ null_column     | integer               |
+ first           | integer               |
 (18 rows)
 
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'temp_index_2'::regclass;
-   Column   |  Type  | Definition 
-------------+--------+------------
+   Column   |  Type  | Definition
+---------------------------------------------------------------------
  l_orderkey | bigint | l_orderkey
 (1 row)
 
@@ -500,8 +499,8 @@ CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
 CREATE INDEX temp_index_3 ON lineitem_alter(l_partkey);
 ROLLBACK;
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
- indexname | tablename 
------------+-----------
+ indexname | tablename
+---------------------------------------------------------------------
 (0 rows)
 
 -- ensure that errors cause full rollback
@@ -511,8 +510,8 @@ CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
 ERROR:  relation "temp_index_2" already exists
 ROLLBACK;
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
- indexname | tablename 
------------+-----------
+ indexname | tablename
+---------------------------------------------------------------------
 (0 rows)
 
 -- verify that SAVEPOINT is allowed...
@@ -529,8 +528,8 @@ CREATE INDEX temp_index_3 ON lineitem_alter(l_partkey);
 ROLLBACK TO my_savepoint;
 COMMIT;
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
-  indexname   |   tablename    
---------------+----------------
+  indexname   |   tablename
+---------------------------------------------------------------------
  temp_index_2 | lineitem_alter
 (1 row)
 
@@ -544,12 +543,12 @@ BEGIN;
 CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
 ALTER TABLE lineitem_alter ADD COLUMN first integer;
 ERROR:  column "first" of relation "lineitem_alter_220000" already exists
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:xxxxx
 COMMIT;
 -- Nothing from the block should have committed
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
- indexname | tablename 
------------+-----------
+ indexname | tablename
+---------------------------------------------------------------------
 (0 rows)
 
 -- Create single-shard table (to avoid deadlocks in the upcoming test hackery)
@@ -557,78 +556,78 @@ CREATE TABLE single_shard_items (id integer NOT NULL, name text);
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 2;
 SELECT create_distributed_table('single_shard_items', 'id', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Verify that ALTER TABLE .. REPLICATION IDENTITY [USING INDEX]* .. works
 CREATE UNIQUE INDEX replica_idx on single_shard_items(id);
 SELECT relreplident FROM pg_class WHERE relname = 'single_shard_items';
- relreplident 
---------------
+ relreplident
+---------------------------------------------------------------------
  d
 (1 row)
 
 SELECT run_command_on_workers('SELECT relreplident FROM pg_class WHERE relname LIKE ''single_shard_items_%'' LIMIT 1;');
- run_command_on_workers 
-------------------------
+ run_command_on_workers
+---------------------------------------------------------------------
  (localhost,57637,t,d)
  (localhost,57638,t,d)
 (2 rows)
 
 ALTER TABLE single_shard_items REPLICA IDENTITY nothing;
 SELECT relreplident FROM pg_class WHERE relname = 'single_shard_items';
- relreplident 
---------------
+ relreplident
+---------------------------------------------------------------------
  n
 (1 row)
 
 SELECT run_command_on_workers('SELECT relreplident FROM pg_class WHERE relname LIKE ''single_shard_items_%'' LIMIT 1;');
- run_command_on_workers 
-------------------------
+ run_command_on_workers
+---------------------------------------------------------------------
  (localhost,57637,t,n)
  (localhost,57638,t,n)
 (2 rows)
 
 ALTER TABLE single_shard_items REPLICA IDENTITY full;
 SELECT relreplident FROM pg_class WHERE relname = 'single_shard_items';
- relreplident 
---------------
+ relreplident
+---------------------------------------------------------------------
  f
 (1 row)
 
 SELECT run_command_on_workers('SELECT relreplident FROM pg_class WHERE relname LIKE ''single_shard_items_%'' LIMIT 1;');
- run_command_on_workers 
-------------------------
+ run_command_on_workers
+---------------------------------------------------------------------
  (localhost,57637,t,f)
  (localhost,57638,t,f)
 (2 rows)
 
 ALTER TABLE single_shard_items REPLICA IDENTITY USING INDEX replica_idx;
 SELECT relreplident FROM pg_class WHERE relname = 'single_shard_items';
- relreplident 
---------------
+ relreplident
+---------------------------------------------------------------------
  i
 (1 row)
 
 SELECT run_command_on_workers('SELECT relreplident FROM pg_class WHERE relname LIKE ''single_shard_items_%'' LIMIT 1;');
- run_command_on_workers 
-------------------------
+ run_command_on_workers
+---------------------------------------------------------------------
  (localhost,57637,t,i)
  (localhost,57638,t,i)
 (2 rows)
 
 ALTER TABLE single_shard_items REPLICA IDENTITY default, REPLICA IDENTITY USING INDEX replica_idx, REPLICA IDENTITY nothing;
 SELECT relreplident FROM pg_class WHERE relname = 'single_shard_items';
- relreplident 
---------------
+ relreplident
+---------------------------------------------------------------------
  n
 (1 row)
 
 SELECT run_command_on_workers('SELECT relreplident FROM pg_class WHERE relname LIKE ''single_shard_items_%'' LIMIT 1;');
- run_command_on_workers 
-------------------------
+ run_command_on_workers
+---------------------------------------------------------------------
  (localhost,57637,t,n)
  (localhost,57638,t,n)
 (2 rows)
@@ -659,11 +658,11 @@ CREATE INDEX single_index_3 ON single_shard_items(name);
 COMMIT;
 ERROR:  duplicate key value violates unique constraint "ddl_commands_command_key"
 DETAIL:  Key (command)=(CREATE INDEX) already exists.
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:xxxxx
 -- Nothing from the block should have committed
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items' ORDER BY 1;
- indexname | tablename 
------------+-----------
+ indexname | tablename
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :worker_2_port
@@ -675,8 +674,8 @@ DROP TABLE ddl_commands;
 BEGIN;
 CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
 SELECT count(*) FROM lineitem_alter;
- count 
--------
+ count
+---------------------------------------------------------------------
  18000
 (1 row)
 
@@ -684,16 +683,16 @@ ROLLBACK;
 -- and before
 BEGIN;
 SELECT count(*) FROM lineitem_alter;
- count 
--------
+ count
+---------------------------------------------------------------------
  18000
 (1 row)
 
 CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
 COMMIT;
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
-  indexname   |   tablename    
---------------+----------------
+  indexname   |   tablename
+---------------------------------------------------------------------
  temp_index_2 | lineitem_alter
 (1 row)
 
@@ -702,24 +701,24 @@ DROP INDEX temp_index_2;
 -- Reminder: Now Citus always uses 2PC
 CREATE INDEX temp_index_3 ON lineitem_alter(l_orderkey);
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
-  indexname   |   tablename    
---------------+----------------
+  indexname   |   tablename
+---------------------------------------------------------------------
  temp_index_3 | lineitem_alter
 (1 row)
 
 DROP INDEX temp_index_3;
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
- indexname | tablename 
------------+-----------
+ indexname | tablename
+---------------------------------------------------------------------
 (0 rows)
 
 -- verify that not any of shard placements are marked as failed when a query failure occurs
 CREATE TABLE test_ab (a int, b int);
 SET citus.shard_count TO 8;
 SELECT create_distributed_table('test_ab', 'a', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO test_ab VALUES (2, 10);
@@ -727,11 +726,11 @@ INSERT INTO test_ab VALUES (2, 11);
 CREATE UNIQUE INDEX temp_unique_index_1 ON test_ab(a);
 ERROR:  could not create unique index "temp_unique_index_1_220011"
 DETAIL:  Key (a)=(2) is duplicated.
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT shardid FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard
 WHERE logicalrelid='test_ab'::regclass AND shardstate=3;
- shardid 
----------
+ shardid
+---------------------------------------------------------------------
 (0 rows)
 
 -- Check that the schema on the worker still looks reasonable
@@ -741,8 +740,8 @@ FROM
     (SELECT oid FROM pg_class WHERE relname LIKE 'lineitem_alter_%' ORDER BY relname LIMIT 1) pc
     JOIN pg_attribute ON (pc.oid = pg_attribute.attrelid)
 ORDER BY attnum;
-            attname            |     atttypid      
--------------------------------+-------------------
+            attname            |     atttypid
+---------------------------------------------------------------------
  tableoid                      | oid
  cmax                          | cid
  xmax                          | xid
@@ -778,24 +777,24 @@ ORDER BY attnum;
 \c - - - :master_port
 -- verify that we can rename distributed tables
 SHOW citus.enable_ddl_propagation;
- citus.enable_ddl_propagation 
-------------------------------
+ citus.enable_ddl_propagation
+---------------------------------------------------------------------
  on
 (1 row)
 
 ALTER TABLE lineitem_alter RENAME TO lineitem_renamed;
 -- verify rename is performed
 SELECT relname FROM pg_class WHERE relname = 'lineitem_renamed';
-     relname      
-------------------
+     relname
+---------------------------------------------------------------------
  lineitem_renamed
 (1 row)
 
 -- show rename worked on one worker, too
 \c - - - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_renamed%'  ORDER BY relname;
-         relname         
--------------------------
+         relname
+---------------------------------------------------------------------
  lineitem_renamed_220000
  lineitem_renamed_220001
  lineitem_renamed_220003
@@ -807,8 +806,8 @@ ALTER TABLE lineitem_renamed RENAME TO lineitem_alter;
 -- show rename worked on one worker, too
 \c - - - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220002' /* failed copy trails */ ORDER BY relname;
-        relname        
------------------------
+        relname
+---------------------------------------------------------------------
  lineitem_alter_220000
  lineitem_alter_220001
  lineitem_alter_220003
@@ -818,15 +817,15 @@ SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <>
 -- verify that we can set and reset storage parameters
 ALTER TABLE lineitem_alter SET(fillfactor=40);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
-    relname     |   reloptions    
-----------------+-----------------
+    relname     |   reloptions
+---------------------------------------------------------------------
  lineitem_alter | {fillfactor=40}
 (1 row)
 
 \c - - - :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220002' /* failed copy trails */ ORDER BY relname;
-        relname        |   reloptions    
------------------------+-----------------
+        relname        |   reloptions
+---------------------------------------------------------------------
  lineitem_alter_220000 | {fillfactor=40}
  lineitem_alter_220001 | {fillfactor=40}
  lineitem_alter_220003 | {fillfactor=40}
@@ -835,18 +834,18 @@ SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%' AN
 \c - - - :master_port
 ALTER TABLE lineitem_alter RESET(fillfactor);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
-    relname     | reloptions 
-----------------+------------
- lineitem_alter | 
+    relname     | reloptions
+---------------------------------------------------------------------
+ lineitem_alter |
 (1 row)
 
 \c - - - :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%'  AND relname <> 'lineitem_alter_220002' /* failed copy trails */ ORDER BY relname;
-        relname        | reloptions 
------------------------+------------
- lineitem_alter_220000 | 
- lineitem_alter_220001 | 
- lineitem_alter_220003 | 
+        relname        | reloptions
+---------------------------------------------------------------------
+ lineitem_alter_220000 |
+ lineitem_alter_220001 |
+ lineitem_alter_220003 |
 (3 rows)
 
 \c - - - :master_port
@@ -855,16 +854,16 @@ CREATE INDEX temp_index_1 ON lineitem_alter(l_linenumber);
 ALTER INDEX temp_index_1 RENAME TO idx_lineitem_linenumber;
 -- verify rename is performed
 SELECT relname FROM pg_class WHERE relname = 'idx_lineitem_linenumber';
-         relname         
--------------------------
+         relname
+---------------------------------------------------------------------
  idx_lineitem_linenumber
 (1 row)
 
 -- show rename worked on one worker, too
 \c - - - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'idx_lineitem_linenumber%' ORDER BY relname;
-            relname             
---------------------------------
+            relname
+---------------------------------------------------------------------
  idx_lineitem_linenumber_220000
  idx_lineitem_linenumber_220001
  idx_lineitem_linenumber_220003
@@ -879,8 +878,8 @@ SET citus.enable_ddl_propagation to false;
 ALTER TABLE lineitem_alter RENAME TO lineitem_renamed;
 -- verify rename is performed
 SELECT relname FROM pg_class WHERE relname = 'lineitem_alter' or relname = 'lineitem_renamed';
-     relname      
-------------------
+     relname
+---------------------------------------------------------------------
  lineitem_renamed
 (1 row)
 
@@ -892,23 +891,21 @@ ALTER TABLE lineitem_alter ADD COLUMN column_only_added_to_master int;
 \c - - - :worker_1_port
 SELECT column_only_added_to_master FROM lineitem_alter_220000 LIMIT 0;
 ERROR:  column "column_only_added_to_master" does not exist
-LINE 1: SELECT column_only_added_to_master FROM lineitem_alter_22000...
-               ^
 \c - - - :master_port
 -- ddl propagation flag is reset to default, disable it again
 SET citus.enable_ddl_propagation to false;
 -- following query succeeds since it accesses an previously existing column
 SELECT l_orderkey FROM lineitem_alter LIMIT 0;
- l_orderkey 
-------------
+ l_orderkey
+---------------------------------------------------------------------
 (0 rows)
 
 -- make master and workers have the same schema again
 ALTER TABLE lineitem_alter DROP COLUMN column_only_added_to_master;
 -- now this should succeed
 SELECT * FROM lineitem_alter LIMIT 0;
- l_orderkey | l_partkey | l_suppkey | l_linenumber | l_quantity | l_extendedprice | l_discount | l_tax | l_returnflag | l_linestatus | l_shipdate | l_commitdate | l_receiptdate | l_shipinstruct | l_shipmode | l_comment | null_column 
-------------+-----------+-----------+--------------+------------+-----------------+------------+-------+--------------+--------------+------------+--------------+---------------+----------------+------------+-----------+-------------
+ l_orderkey | l_partkey | l_suppkey | l_linenumber | l_quantity | l_extendedprice | l_discount | l_tax | l_returnflag | l_linestatus | l_shipdate | l_commitdate | l_receiptdate | l_shipinstruct | l_shipmode | l_comment | null_column
+---------------------------------------------------------------------
 (0 rows)
 
 -- previously unsupported statements are accepted by postgresql now
@@ -923,16 +920,16 @@ ERROR:  cannot execute ALTER TABLE command dropping partition column
 -- Citus would have prevented that.
 CREATE UNIQUE INDEX unique_lineitem_partkey on lineitem_alter(l_partkey);
 SELECT  indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
-        indexname        |   tablename    
--------------------------+----------------
+        indexname        |   tablename
+---------------------------------------------------------------------
  unique_lineitem_partkey | lineitem_alter
 (1 row)
 
 -- verify index is not created on worker
 \c - - - :worker_1_port
 SELECT  indexname, tablename FROM pg_indexes WHERE tablename like 'lineitem_alter_%';
- indexname | tablename 
------------+-----------
+ indexname | tablename
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -941,9 +938,9 @@ SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE sequence_deadlock_test (a serial, b serial);
 SELECT create_distributed_table('sequence_deadlock_test', 'a');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 BEGIN;
@@ -962,9 +959,9 @@ CREATE TABLE trigger_table (
 	value text
 );
 SELECT create_distributed_table('trigger_table', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- first set a trigger on a shard
@@ -983,8 +980,8 @@ FOR EACH ROW EXECUTE PROCEDURE update_value();
 \c - - - :master_port
 INSERT INTO trigger_table VALUES (1, 'trigger disabled');
 SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
-      value      | count 
------------------+-------
+      value      | count
+---------------------------------------------------------------------
  trigger enabled |     1
 (1 row)
 
@@ -992,8 +989,8 @@ ALTER TABLE trigger_table DISABLE TRIGGER ALL;
 ERROR:  triggers are not supported on distributed tables when "citus.enable_unsafe_triggers" is set to "false"
 INSERT INTO trigger_table VALUES (1, 'trigger disabled');
 SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
-      value      | count 
------------------+-------
+      value      | count
+---------------------------------------------------------------------
  trigger enabled |     2
 (1 row)
 
@@ -1001,15 +998,16 @@ ALTER TABLE trigger_table ENABLE TRIGGER ALL;
 ERROR:  triggers are not supported on distributed tables when "citus.enable_unsafe_triggers" is set to "false"
 INSERT INTO trigger_table VALUES (1, 'trigger disabled');
 SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
-      value      | count 
------------------+-------
+      value      | count
+---------------------------------------------------------------------
  trigger enabled |     3
 (1 row)
 
 DROP TABLE trigger_table;
 -- test ALTER TABLE ALL IN TABLESPACE
 -- we expect that it will warn out
-CREATE TABLESPACE super_fast_ssd LOCATION '@abs_srcdir@/data';
+\set tablespace_location :abs_srcdir '/data'
+CREATE TABLESPACE super_fast_ssd LOCATION :'tablespace_location';
 ALTER TABLE ALL IN TABLESPACE pg_default SET TABLESPACE super_fast_ssd;
 WARNING:  not propagating ALTER TABLE ALL IN TABLESPACE commands to worker nodes
 HINT:  Connect to worker nodes directly to manually move all tables.
@@ -1033,8 +1031,8 @@ ALTER TABLE lineitem_alter OWNER TO alter_table_owner;
 \c - alter_table_owner - :master_port
 -- should be able to query the table as table owner
 SELECT count(*) FROM lineitem_alter;
- count 
--------
+ count
+---------------------------------------------------------------------
  18000
 (1 row)
 
@@ -1044,8 +1042,8 @@ DROP TABLE lineitem_alter;
 -- during the unsuccessful COPY
 \c - postgres - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%';
-        relname        
------------------------
+        relname
+---------------------------------------------------------------------
  lineitem_alter_220002
 (1 row)
 
@@ -1057,9 +1055,9 @@ DROP ROLE alter_table_owner;
 BEGIN;
 CREATE TABLE test_table_1(id int);
 SELECT create_distributed_table('test_table_1','id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 ALTER TABLE test_table_1 ADD CONSTRAINT u_key UNIQUE(id);
@@ -1068,8 +1066,8 @@ END;
 -- There should be no test_table_1 shard on workers
 \c - - - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'test_table_1%';
- relname 
----------
+ relname
+---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :master_port
@@ -1077,15 +1075,15 @@ SELECT relname FROM pg_class WHERE relname LIKE 'test_table_1%';
 CREATE TABLE logged_test(id int);
 ALTER TABLE logged_test SET UNLOGGED;
 SELECT create_distributed_table('logged_test', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 \c - - - :worker_1_port
 SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
-      relname       | logged_info 
---------------------+-------------
+      relname       | logged_info
+---------------------------------------------------------------------
  logged_test_220022 | unlogged
  logged_test_220023 | unlogged
  logged_test_220024 | unlogged
@@ -1096,15 +1094,15 @@ SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logg
 -- verify SET LOGGED/UNLOGGED works after distributing the table
 ALTER TABLE logged_test SET LOGGED;
 SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
-   relname   | logged_info 
--------------+-------------
+   relname   | logged_info
+---------------------------------------------------------------------
  logged_test | logged
 (1 row)
 
 \c - - - :worker_1_port
 SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
-      relname       | logged_info 
---------------------+-------------
+      relname       | logged_info
+---------------------------------------------------------------------
  logged_test_220022 | logged
  logged_test_220023 | logged
  logged_test_220024 | logged
@@ -1114,15 +1112,15 @@ SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logg
 \c - - - :master_port
 ALTER TABLE logged_test SET UNLOGGED;
 SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
-   relname   | logged_info 
--------------+-------------
+   relname   | logged_info
+---------------------------------------------------------------------
  logged_test | unlogged
 (1 row)
 
 \c - - - :worker_1_port
 SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
-      relname       | logged_info 
---------------------+-------------
+      relname       | logged_info
+---------------------------------------------------------------------
  logged_test_220022 | unlogged
  logged_test_220023 | unlogged
  logged_test_220024 | unlogged
@@ -1134,22 +1132,22 @@ DROP TABLE logged_test;
 -- Test WITH options on a normal simple hash-distributed table
 CREATE TABLE hash_dist(id bigint primary key, f1 text) WITH (fillfactor=40);
 SELECT create_distributed_table('hash_dist','id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- verify that the storage options made it to the table definitions
 SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist';
-  relname  |   reloptions    
------------+-----------------
+  relname  |   reloptions
+---------------------------------------------------------------------
  hash_dist | {fillfactor=40}
 (1 row)
 
 \c - - - :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relkind = 'r' AND relname LIKE 'hash_dist_%' ORDER BY relname;
-     relname      |   reloptions    
-------------------+-----------------
+     relname      |   reloptions
+---------------------------------------------------------------------
  hash_dist_220026 | {fillfactor=40}
  hash_dist_220027 | {fillfactor=40}
  hash_dist_220028 | {fillfactor=40}
@@ -1160,15 +1158,15 @@ SELECT relname, reloptions FROM pg_class WHERE relkind = 'r' AND relname LIKE 'h
 -- verify that we can set and reset index storage parameters
 ALTER INDEX hash_dist_pkey SET(fillfactor=40);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
-    relname     |   reloptions    
-----------------+-----------------
+    relname     |   reloptions
+---------------------------------------------------------------------
  hash_dist_pkey | {fillfactor=40}
 (1 row)
 
 \c - - - :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey_%' ORDER BY relname;
-        relname        |   reloptions    
------------------------+-----------------
+        relname        |   reloptions
+---------------------------------------------------------------------
  hash_dist_pkey_220026 | {fillfactor=40}
  hash_dist_pkey_220027 | {fillfactor=40}
  hash_dist_pkey_220028 | {fillfactor=40}
@@ -1178,19 +1176,19 @@ SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey_%' O
 \c - - - :master_port
 ALTER INDEX hash_dist_pkey RESET(fillfactor);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
-    relname     | reloptions 
-----------------+------------
- hash_dist_pkey | 
+    relname     | reloptions
+---------------------------------------------------------------------
+ hash_dist_pkey |
 (1 row)
 
 \c - - - :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey_%' ORDER BY relname;
-        relname        | reloptions 
------------------------+------------
- hash_dist_pkey_220026 | 
- hash_dist_pkey_220027 | 
- hash_dist_pkey_220028 | 
- hash_dist_pkey_220029 | 
+        relname        | reloptions
+---------------------------------------------------------------------
+ hash_dist_pkey_220026 |
+ hash_dist_pkey_220027 |
+ hash_dist_pkey_220028 |
+ hash_dist_pkey_220029 |
 (4 rows)
 
 \c - - - :master_port
@@ -1202,15 +1200,15 @@ DETAIL:  Only RENAME TO, SET (), RESET (), ATTACH PARTITION and SET STATISTICS a
 CREATE UNIQUE INDEX another_index ON hash_dist(id) WITH (fillfactor=50);
 -- show the index and its storage options on coordinator, then workers
 SELECT relname, reloptions FROM pg_class WHERE relname = 'another_index';
-    relname    |   reloptions    
----------------+-----------------
+    relname    |   reloptions
+---------------------------------------------------------------------
  another_index | {fillfactor=50}
 (1 row)
 
 \c - - - :worker_1_port
 SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'another_index_%' ORDER BY relname;
-       relname        |   reloptions    
-----------------------+-----------------
+       relname        |   reloptions
+---------------------------------------------------------------------
  another_index_220026 | {fillfactor=50}
  another_index_220027 | {fillfactor=50}
  another_index_220028 | {fillfactor=50}
@@ -1226,9 +1224,9 @@ DROP INDEX another_index;
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE test_table_1(id int);
 SELECT create_distributed_table('test_table_1', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 ALTER TABLE test_table_1 ADD COLUMN test_col int UNIQUE;
@@ -1243,9 +1241,9 @@ DETAIL:  Adding a column with a constraint in one command is not supported becau
 HINT:  You can issue each command separately such as ALTER TABLE test_table_1 ADD COLUMN test_col data_type; ALTER TABLE test_table_1 ADD CONSTRAINT constraint_name CHECK (check_expression);
 CREATE TABLE reference_table(i int UNIQUE);
 SELECT create_reference_table('reference_table');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 ALTER TABLE test_table_1 ADD COLUMN test_col int REFERENCES reference_table(i) ON DELETE CASCADE;
@@ -1259,9 +1257,9 @@ HINT:  You can issue each command separately such as ALTER TABLE test_table_1 AD
 DROP TABLE reference_table;
 CREATE TABLE referenced_table(i int UNIQUE);
 SELECT create_distributed_table('referenced_table', 'i');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 ALTER TABLE test_table_1 ADD COLUMN test_col int REFERENCES referenced_table(i);
@@ -1272,7 +1270,7 @@ DROP TABLE referenced_table, test_table_1;
 CREATE TABLE table_without_sequence(a int);
 SELECT create_distributed_table('table_without_sequence', 'a');
  create_distributed_table
---------------------------
+---------------------------------------------------------------------
 
 (1 row)
 
@@ -1281,14 +1279,14 @@ CREATE SEQUENCE test_schema_for_sequence_propagation.seq_10;
 ALTER TABLE table_without_sequence ADD COLUMN x BIGINT DEFAULT nextval('test_schema_for_sequence_propagation.seq_10');
 -- Should be distributed along with the sequence
 SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object WHERE objid IN ('test_schema_for_sequence_propagation.seq_10'::regclass);
-                 pg_identify_object_as_address             
----------------------------------------------------------------
+                 pg_identify_object_as_address
+---------------------------------------------------------------------
  (sequence,"{test_schema_for_sequence_propagation,seq_10}",{})
 (1 row)
 
 SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object WHERE objid IN ('test_schema_for_sequence_propagation'::regnamespace);
-           pg_identify_object_as_address        
-----------------------------------------------------
+           pg_identify_object_as_address
+---------------------------------------------------------------------
  (schema,{test_schema_for_sequence_propagation},{})
 (1 row)
 

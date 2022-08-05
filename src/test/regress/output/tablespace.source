@@ -1,5 +1,8 @@
-CREATE TABLESPACE test_tablespace LOCATION '@abs_srcdir@/tmp_check/ts0';
+\set test_tablespace :abs_srcdir '/tmp_check/ts0'
+CREATE TABLESPACE test_tablespace LOCATION XXXX
 \c - - - :worker_1_port
-CREATE TABLESPACE test_tablespace LOCATION '@abs_srcdir@/tmp_check/ts1';
+\set test_tablespace :abs_srcdir '/tmp_check/ts1'
+CREATE TABLESPACE test_tablespace LOCATION XXXX
 \c - - - :worker_2_port
-CREATE TABLESPACE test_tablespace LOCATION '@abs_srcdir@/tmp_check/ts2';
+\set test_tablespace :abs_srcdir '/tmp_check/ts2'
+CREATE TABLESPACE test_tablespace LOCATION XXXX

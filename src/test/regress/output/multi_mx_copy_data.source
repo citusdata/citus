@@ -1,12 +1,13 @@
 --
 -- MULTI_MX_COPY_DATA
 --
-\COPY nation_hash FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
+\set nation_data_file :abs_srcdir '/data/nation.data'
+COPY nation_hash FROM :'nation_data_file' with delimiter '|';
 SET search_path TO citus_mx_test_schema;
-\COPY nation_hash FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
-\COPY citus_mx_test_schema_join_1.nation_hash FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
-\COPY citus_mx_test_schema_join_1.nation_hash_2 FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
-\COPY citus_mx_test_schema_join_2.nation_hash FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
+COPY nation_hash FROM :'nation_data_file' with delimiter '|';
+COPY citus_mx_test_schema_join_1.nation_hash FROM :'nation_data_file' with delimiter '|';
+COPY citus_mx_test_schema_join_1.nation_hash_2 FROM :'nation_data_file' with delimiter '|';
+COPY citus_mx_test_schema_join_2.nation_hash FROM :'nation_data_file' with delimiter '|';
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE citus_mx_test_schema.nation_hash_replicated AS SELECT * FROM citus_mx_test_schema.nation_hash;
 SELECT create_distributed_table('citus_mx_test_schema.nation_hash_replicated', 'n_nationkey');
@@ -19,18 +20,24 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 
 (1 row)
 
-\COPY nation_hash_replicated FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
+COPY nation_hash_replicated FROM :'nation_data_file' with delimiter '|';
 -- now try loading data from worker node
 \c - - - :worker_1_port
 SET search_path TO public;
-\COPY lineitem_mx FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-\COPY lineitem_mx FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
-\COPY citus_mx_test_schema.nation_hash_replicated FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
+\set lineitem_1_data_file :abs_srcdir '/data/lineitem.1.data'
+\set lineitem_2_data_file :abs_srcdir '/data/lineitem.2.data'
+COPY lineitem_mx FROM :'lineitem_1_data_file' with delimiter '|';
+COPY lineitem_mx FROM :'lineitem_2_data_file' with delimiter '|';
+\set nation_data_file :abs_srcdir '/data/nation.data'
+COPY citus_mx_test_schema.nation_hash_replicated FROM :'nation_data_file' with delimiter '|';
 \c - - - :worker_2_port
 -- and use second worker as well
-\COPY orders_mx FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
-\COPY orders_mx FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
-\COPY citus_mx_test_schema.nation_hash_replicated FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
+\set orders_1_data_file :abs_srcdir '/data/orders.1.data'
+\set orders_2_data_file :abs_srcdir '/data/orders.2.data'
+\set nation_data_file :abs_srcdir '/data/nation.data'
+COPY orders_mx FROM :'orders_1_data_file' with delimiter '|';
+COPY orders_mx FROM :'orders_2_data_file' with delimiter '|';
+COPY citus_mx_test_schema.nation_hash_replicated FROM :'nation_data_file' with delimiter '|';
 -- get ready for the next test
 TRUNCATE orders_mx;
 \c - - - :worker_2_port
@@ -55,7 +62,9 @@ show citus.local_shared_pool_size;
  -1
 (1 row)
 
-\COPY orders_mx FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
+\set orders_1_data_file :abs_srcdir '/data/orders.1.data'
+\set orders_2_data_file :abs_srcdir '/data/orders.2.data'
+COPY orders_mx FROM :'orders_1_data_file' with delimiter '|';
 NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY orders_mx, line 3: "3|1234|F|205654.30|1993-10-14|5-LOW|Clerk#000000955|0|sly final accounts boost. carefully regular id..."
 NOTICE:  executing the copy locally for shard xxxxx
@@ -72,7 +81,7 @@ NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY orders_mx, line 25: "97|211|F|100572.55|1993-01-29|3-MEDIUM|Clerk#000000547|0|hang blithely along the regular accounts. f..."
 NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY orders_mx, line 38: "134|62|F|208201.46|1992-05-01|4-NOT SPECIFIED|Clerk#000000711|0|lar theodolites boos"
-\COPY orders_mx FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
+COPY orders_mx FROM :'orders_2_data_file' with delimiter '|';
 NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY orders_mx, line 2: "8998|80|F|147264.16|1993-01-04|5-LOW|Clerk#000000733|0| fluffily pending sauternes cajo"
 NOTICE:  executing the copy locally for shard xxxxx
@@ -89,7 +98,8 @@ NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY orders_mx, line 43: "9159|1135|O|99594.61|1995-07-26|1-URGENT|Clerk#000000892|0|xcuses. quickly ironic deposits wake alon..."
 NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY orders_mx, line 69: "9281|904|F|173278.28|1992-02-24|1-URGENT|Clerk#000000530|0|eep furiously according to the requests; ..."
-\COPY citus_mx_test_schema.nation_hash_replicated FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
+\set nation_data_file :abs_srcdir '/data/nation.data'
+COPY citus_mx_test_schema.nation_hash_replicated FROM :'nation_data_file' with delimiter '|';
 NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY nation_hash_replicated, line 1: "0|ALGERIA|0| haggle. carefully final deposits detect slyly agai"
 NOTICE:  executing the copy locally for shard xxxxx
@@ -124,7 +134,11 @@ show citus.local_shared_pool_size;
 -- when worker nodes gain capability to run dml commands on reference tables.
 \c - - - :master_port
 SET search_path TO public;
-\COPY customer_mx FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
-\COPY nation_mx FROM '@abs_srcdir@/data/nation.data' with delimiter '|'
-\COPY part_mx FROM '@abs_srcdir@/data/part.data' with delimiter '|'
-\COPY supplier_mx FROM '@abs_srcdir@/data/supplier.data' with delimiter '|'
+\set customer_1_data_file :abs_srcdir '/data/customer.1.data'
+\set nation_data_file :abs_srcdir '/data/nation.data'
+\set part_data_file :abs_srcdir '/data/part.data'
+\set supplier_data_file :abs_srcdir '/data/supplier.data'
+COPY customer_mx FROM :'customer_1_data_file' with delimiter '|';
+COPY nation_mx FROM :'nation_data_file' with delimiter '|';
+COPY part_mx FROM :'part_data_file' with delimiter '|';
+COPY supplier_mx FROM :'supplier_data_file' with delimiter '|';
