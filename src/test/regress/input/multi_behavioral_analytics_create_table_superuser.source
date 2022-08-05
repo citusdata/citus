@@ -163,7 +163,7 @@ SELECT master_create_empty_shard('events') AS new_shard_id
 UPDATE pg_dist_shard SET shardminvalue = '(2,2000000001)', shardmaxvalue = '(2,4300000000)'
 WHERE shardid = :new_shard_id;
 
-\COPY events FROM STDIN WITH CSV
+COPY events FROM STDIN WITH CSV;
 "(1,1001)",20001,click,1472807012
 "(1,1001)",20002,submit,1472807015
 "(1,1001)",20003,pay,1472807020
@@ -207,7 +207,7 @@ SELECT master_create_empty_shard('users') AS new_shard_id
 UPDATE pg_dist_shard SET shardminvalue = '(2,2000000001)', shardmaxvalue = '(2,4300000000)'
 WHERE shardid = :new_shard_id;
 
-\COPY users FROM STDIN WITH CSV
+COPY users FROM STDIN WITH CSV;
 "(1,1001)",1472807115
 "(1,1002)",1472807215
 "(1,1003)",1472807315
@@ -290,8 +290,12 @@ SELECT master_create_empty_shard('orders_subquery') AS new_shard_id
 UPDATE pg_dist_shard SET shardminvalue = 8997, shardmaxvalue = 14947
 WHERE shardid = :new_shard_id;
 
-\copy lineitem_subquery FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-\copy lineitem_subquery FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+\set lineitem_1_data_file :abs_srcdir '/data/lineitem.1.data'
+COPY lineitem_subquery FROM :'lineitem_1_data_file' with delimiter '|';
+\set lineitem_2_data_file :abs_srcdir '/data/lineitem.2.data'
+COPY lineitem_subquery FROM :'lineitem_2_data_file' with delimiter '|';
 
-\copy orders_subquery FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
-\copy orders_subquery FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
+\set orders_1_data_file :abs_srcdir '/data/orders.1.data'
+COPY orders_subquery FROM :'orders_1_data_file' with delimiter '|';
+\set orders_2_data_file :abs_srcdir '/data/orders.2.data'
+COPY orders_subquery FROM :'orders_2_data_file' with delimiter '|';
