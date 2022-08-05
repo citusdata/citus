@@ -120,7 +120,7 @@ SELECT a.campaign_id,
    AND i.ad_id      = a.id
  WHERE a.company_id = 5
 GROUP BY a.campaign_id, a.id
-ORDER BY a.campaign_id, n_impressions desc
+ORDER BY a.campaign_id, n_impressions desc, a.id
 LIMIT 10;
  campaign_id | rank | n_impressions | id  
 -------------+------+---------------+-----
@@ -264,7 +264,7 @@ SELECT a.campaign_id,
    AND i.ad_id      = a.id
  WHERE a.company_id = 8
 GROUP BY a.campaign_id, a.id
-ORDER BY a.campaign_id, n_impressions desc
+ORDER BY a.campaign_id, n_impressions desc, a.id
 LIMIT 10;
  campaign_id | rank | n_impressions | id  
 -------------+------+---------------+-----
