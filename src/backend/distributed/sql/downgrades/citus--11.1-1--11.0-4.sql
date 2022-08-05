@@ -86,7 +86,6 @@ DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_
                                                      OUT worker_query BOOL, OUT transaction_number int8, OUT transaction_stamp timestamptz,
                                                      OUT global_pid int8);
 #include "../udfs/get_all_active_transactions/11.0-1.sql"
-#include "../udfs/citus_finish_pg_upgrade/11.0-1.sql"
 
 DROP VIEW pg_catalog.citus_locks;
 DROP FUNCTION pg_catalog.citus_locks();
