@@ -789,7 +789,15 @@ static void
 AppendGrantOnFunctionFunctions(StringInfo buf, GrantStmt *stmt)
 {
 	ListCell *cell = NULL;
-	appendStringInfo(buf, " ON %s ", ObjectTypeToKeyword(stmt->objtype));
+
+	/*
+	 * The FUNCTION syntax works for plain functions, aggregate functions, and window
+	 * functions, but not for procedures; use PROCEDURE for those. Alternatively, use
+	 * ROUTINE to refer to a function, aggregate function, window function, or procedure
+	 * regardless of its precise type.
+	 * https://www.postgresql.org/docs/current/sql-grant.html
+	 */
+	appendStringInfo(buf, " ON ROUTINE ");
 
 	foreach(cell, stmt->objects)
 	{
@@ -815,12 +823,12 @@ AppendGrantOnFunctionFunctions(StringInfo buf, GrantStmt *stmt)
 
 
 /*
- * isFunction returns true if the given ObjectType is a function, a procedure or a routine
- * otherwise returns false
+ * isFunction returns true if the given ObjectType is a function, a procedure, a routine
+ * or an aggregate otherwise returns false
  */
 bool
 isFunction(ObjectType objectType)
 {
 	return (objectType == OBJECT_FUNCTION || objectType == OBJECT_PROCEDURE ||
-			objectType == OBJECT_ROUTINE);
+			objectType == OBJECT_ROUTINE || objectType == OBJECT_AGGREGATE);
 }
