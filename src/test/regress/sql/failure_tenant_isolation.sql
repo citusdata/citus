@@ -12,6 +12,7 @@ SET SEARCH_PATH = tenant_isolation;
 SET citus.shard_count TO 2;
 SET citus.next_shard_id TO 300;
 SET citus.shard_replication_factor TO 1;
+SET citus.max_adaptive_executor_pool_size TO 1;
 SELECT pg_backend_pid() as pid \gset
 SELECT citus.mitmproxy('conn.allow()');
 
@@ -41,15 +42,15 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE tenant_isolation.table_
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
 
 -- cancellation on colocated table creation
-SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE tenant_isolation.table_2").after(1).cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE tenant_isolation.table_2").cancel(' || :pid || ')');
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
 
 -- failure on colocated table population
-SELECT citus.mitmproxy('conn.onQuery(query="INSERT INTO tenant_isolation.table_2").after(2).kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(302").kill()');
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
 
 -- cancellation on colocated table population
-SELECT citus.mitmproxy('conn.onQuery(query="INSERT INTO tenant_isolation.table_2").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(302").cancel(' || :pid || ')');
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
 
 -- failure on colocated table constraints
@@ -66,15 +67,15 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE tenant_isolation.table_
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
 
 -- cancellation on table creation
-SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE tenant_isolation.table_1").after(1).cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE tenant_isolation.table_1").cancel(' || :pid || ')');
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
 
 -- failure on table population
-SELECT citus.mitmproxy('conn.onQuery(query="INSERT INTO tenant_isolation.table_1").after(2).kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(300").kill()');
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
 
 -- cancellation on table population
-SELECT citus.mitmproxy('conn.onQuery(query="INSERT INTO tenant_isolation.table_1").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(300").cancel(' || :pid || ')');
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
 
 -- failure on table constraints
