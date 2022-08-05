@@ -169,9 +169,9 @@ ROLLBACK;
 -- test a succesfull transaction block
 BEGIN;
 SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE');
-SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE');
 COMMIT;
 
+SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE');
 SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE');
 SELECT isolate_tenant_to_new_shard('orders_streaming', 101, 'CASCADE');
 
@@ -254,7 +254,7 @@ SET citus.override_table_visibility TO false;
 
 \c - postgres - :worker_1_port
 SET search_path to "Tenant Isolation";
-SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='orders_streaming_1230045'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='orders_streaming_1230039'::regclass;
 
 \c - mx_isolation_role_ent - :worker_1_port
 SET search_path to "Tenant Isolation";
@@ -560,6 +560,36 @@ SELECT create_reference_table('ref_table');
 
 \c - postgres - :master_port
 SET search_path to "Tenant Isolation";
+
+-- partitioning tests
+-- create partitioned table
+CREATE TABLE partitioning_test(id int, time date) PARTITION BY RANGE (time);
+
+-- create a regular partition
+CREATE TABLE partitioning_test_2009 PARTITION OF partitioning_test FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+-- create a columnar partition
+CREATE TABLE partitioning_test_2010 PARTITION OF partitioning_test FOR VALUES FROM ('2010-01-01') TO ('2011-01-01') USING columnar;
+
+-- load some data and distribute tables
+INSERT INTO partitioning_test VALUES (1, '2009-06-06');
+INSERT INTO partitioning_test VALUES (2, '2010-07-07');
+
+INSERT INTO partitioning_test_2009 VALUES (3, '2009-09-09');
+INSERT INTO partitioning_test_2010 VALUES (4, '2010-03-03');
+
+-- distribute partitioned table
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('partitioning_test', 'id');
+
+SELECT count(*) FROM pg_dist_shard WHERE logicalrelid = 'partitioning_test'::regclass;
+SELECT count(*) FROM partitioning_test;
+
+-- isolate a value into its own shard
+SELECT 1 FROM isolate_tenant_to_new_shard('partitioning_test', 2, 'CASCADE');
+
+SELECT count(*) FROM pg_dist_shard WHERE logicalrelid = 'partitioning_test'::regclass;
+SELECT count(*) FROM partitioning_test;
+
 
 SET citus.replicate_reference_tables_on_activate TO off;
 SET client_min_messages TO WARNING;

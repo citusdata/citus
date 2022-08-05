@@ -126,6 +126,7 @@ CREATE SCHEMA multiuser_schema;
 CREATE TABLE multiuser_schema.hash_table(a int, b int);
 CREATE TABLE multiuser_schema.reference_table(a int, b int);
 
+SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('multiuser_schema.hash_table', 'a', colocate_with => 'none');
 
 
