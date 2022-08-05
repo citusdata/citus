@@ -66,6 +66,7 @@ my $bindir = "";
 my $libdir = undef;
 my $pgxsdir = "";
 my $postgresBuilddir = "";
+my $citusAbsSrcdir = "";
 my $postgresSrcdir = "";
 my $majorversion = "";
 my $synchronousReplication = "";
@@ -104,6 +105,7 @@ GetOptions(
     'pgxsdir=s' => \$pgxsdir,
     'postgres-builddir=s' => \$postgresBuilddir,
     'postgres-srcdir=s' => \$postgresSrcdir,
+    'citus_abs_srcdir=s' => \$citusAbsSrcdir,
     'majorversion=s' => \$majorversion,
     'load-extension=s' => \@extensions,
     'server-option=s' => \@userPgOptions,
@@ -640,6 +642,7 @@ print $fh "--variable=worker_2_proxy_port=$mitmPort ";
 print $fh "--variable=follower_master_port=$followerCoordPort ";
 print $fh "--variable=default_user=$user ";
 print $fh "--variable=SHOW_CONTEXT=always ";
+print $fh "--variable=abs_srcdir=$citusAbsSrcdir ";
 for my $workeroff (0 .. $#workerPorts)
 {
 	my $port = $workerPorts[$workeroff];
