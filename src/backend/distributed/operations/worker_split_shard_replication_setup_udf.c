@@ -53,6 +53,12 @@ static void PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMH
 static void ReturnReplicationSlotInfo(Tuplestorestate *tupleStore,
 									  TupleDesc tupleDescriptor);
 
+typedef struct GroupedShardSplitInfos
+{
+	NodeAndOwner key;
+	List *shardSplitInfoList;
+} GroupedShardSplitInfos;
+
 /*
  * worker_split_shard_replication_setup UDF creates in-memory data structures
  * to store the meta information about the shard undergoing split and new split
@@ -165,10 +171,10 @@ SetupHashMapForShardInfo()
 {
 	HASHCTL info;
 	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(NodeShardMappingKey);
-	info.entrysize = sizeof(NodeShardMappingEntry);
-	info.hash = NodeShardMappingHash;
-	info.match = NodeShardMappingHashCompare;
+	info.keysize = sizeof(NodeAndOwner);
+	info.entrysize = sizeof(GroupedShardSplitInfos);
+	info.hash = HashNodeAndOwner;
+	info.match = CompareNodeAndOwner;
 	info.hcxt = CurrentMemoryContext;
 
 	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION | HASH_COMPARE);
@@ -267,21 +273,21 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 static void
 AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo)
 {
-	NodeShardMappingKey key;
+	NodeAndOwner key;
 	key.nodeId = shardSplitInfo->nodeId;
 	key.tableOwnerId = TableOwnerOid(shardSplitInfo->distributedTableOid);
 
 	bool found = false;
-	NodeShardMappingEntry *nodeMappingEntry =
-		(NodeShardMappingEntry *) hash_search(ShardInfoHashMap, &key, HASH_ENTER,
-											  &found);
+	GroupedShardSplitInfos *groupedInfos =
+		(GroupedShardSplitInfos *) hash_search(ShardInfoHashMap, &key, HASH_ENTER,
+											   &found);
 	if (!found)
 	{
-		nodeMappingEntry->shardSplitInfoList = NIL;
+		groupedInfos->shardSplitInfoList = NIL;
 	}
 
-	nodeMappingEntry->shardSplitInfoList =
-		lappend(nodeMappingEntry->shardSplitInfoList, (ShardSplitInfo *) shardSplitInfo);
+	groupedInfos->shardSplitInfoList =
+		lappend(groupedInfos->shardSplitInfoList, (ShardSplitInfo *) shardSplitInfo);
 }
 
 
@@ -298,14 +304,13 @@ PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader)
 	HASH_SEQ_STATUS status;
 	hash_seq_init(&status, ShardInfoHashMap);
 
-	NodeShardMappingEntry *entry = NULL;
+	GroupedShardSplitInfos *entry = NULL;
 	int splitInfoIndex = 0;
-	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
+	while ((entry = (GroupedShardSplitInfos *) hash_seq_search(&status)) != NULL)
 	{
 		uint32_t nodeId = entry->key.nodeId;
 		uint32_t tableOwnerId = entry->key.tableOwnerId;
-		char *derivedSlotName =
-			EncodeReplicationSlot(nodeId, tableOwnerId);
+		char *derivedSlotName = ReplicationSlotName(SHARD_SPLIT, nodeId, tableOwnerId);
 
 		List *shardSplitInfoList = entry->shardSplitInfoList;
 		ShardSplitInfo *splitShardInfo = NULL;
@@ -317,41 +322,6 @@ PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader)
 					 derivedSlotName);
 			splitInfoIndex++;
 		}
-	}
-}
-
-
-/*
- * NodeShardMappingHash returns hash value by combining hash of node id
- * and tableowner Id.
- */
-uint32
-NodeShardMappingHash(const void *key, Size keysize)
-{
-	NodeShardMappingKey *entry = (NodeShardMappingKey *) key;
-	uint32 hash = hash_uint32(entry->nodeId);
-	hash = hash_combine(hash, hash_uint32(entry->tableOwnerId));
-	return hash;
-}
-
-
-/*
- * Comparator function for hash keys
- */
-int
-NodeShardMappingHashCompare(const void *left, const void *right, Size keysize)
-{
-	NodeShardMappingKey *leftKey = (NodeShardMappingKey *) left;
-	NodeShardMappingKey *rightKey = (NodeShardMappingKey *) right;
-
-	if (leftKey->nodeId != rightKey->nodeId ||
-		leftKey->tableOwnerId != rightKey->tableOwnerId)
-	{
-		return 1;
-	}
-	else
-	{
-		return 0;
 	}
 }
 
@@ -434,8 +404,8 @@ ReturnReplicationSlotInfo(Tuplestorestate *tupleStore, TupleDesc
 	HASH_SEQ_STATUS status;
 	hash_seq_init(&status, ShardInfoHashMap);
 
-	NodeShardMappingEntry *entry = NULL;
-	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
+	GroupedShardSplitInfos *entry = NULL;
+	while ((entry = (GroupedShardSplitInfos *) hash_seq_search(&status)) != NULL)
 	{
 		Datum values[3];
 		bool nulls[3];
@@ -448,8 +418,8 @@ ReturnReplicationSlotInfo(Tuplestorestate *tupleStore, TupleDesc
 		char *tableOwnerName = GetUserNameFromId(entry->key.tableOwnerId, false);
 		values[1] = CStringGetTextDatum(tableOwnerName);
 
-		char *slotName = EncodeReplicationSlot(entry->key.nodeId,
-											   entry->key.tableOwnerId);
+		char *slotName = ReplicationSlotName(SHARD_SPLIT, entry->key.nodeId,
+											 entry->key.tableOwnerId);
 		values[2] = CStringGetTextDatum(slotName);
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, nulls);

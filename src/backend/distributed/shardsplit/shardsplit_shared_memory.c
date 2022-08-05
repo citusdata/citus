@@ -188,32 +188,6 @@ ReleaseSharedMemoryOfShardSplitInfo()
 
 
 /*
- * EncodeReplicationSlot returns an encoded replication slot name
- * in the following format.
- * Slot Name = citus_split_nodeId_tableOwnerOid
- * Max supported length of replication slot name is 64 bytes.
- */
-char *
-EncodeReplicationSlot(uint32_t nodeId,
-					  uint32_t tableOwnerId)
-{
-	StringInfo slotName = makeStringInfo();
-	appendStringInfo(slotName, "%s%u_%u", SHARD_SPLIT_REPLICATION_SLOT_PREFIX, nodeId,
-					 tableOwnerId);
-
-	if (slotName->len > NAMEDATALEN)
-	{
-		ereport(ERROR,
-				(errmsg(
-					 "Replication Slot name:%s having length:%d is greater than maximum allowed length:%d",
-					 slotName->data, slotName->len, NAMEDATALEN)));
-	}
-
-	return slotName->data;
-}
-
-
-/*
  * InitializeShardSplitSMHandleManagement requests the necessary shared memory
  * from Postgres and sets up the shared memory startup hook.
  * This memory is used to store handle of other shared memories allocated during split workflow.

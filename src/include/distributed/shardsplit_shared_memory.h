@@ -14,6 +14,8 @@
 #ifndef SHARDSPLIT_SHARED_MEMORY_H
 #define SHARDSPLIT_SHARED_MEMORY_H
 
+#include "postgres.h"
+
 /*
  * In-memory mapping of a split child shard.
  */
@@ -79,6 +81,4 @@ extern ShardSplitInfoSMHeader *  GetShardSplitInfoSMHeader(void);
 
 extern HTAB * PopulateSourceToDestinationShardMapForSlot(char *slotName, MemoryContext
 														 cxt);
-
-extern char * EncodeReplicationSlot(uint32_t nodeId, uint32_t tableOwnerId);
 #endif /* SHARDSPLIT_SHARED_MEMORY_H */

@@ -431,12 +431,12 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	{
 		AlterSubscriptionStmt *alterSubStmt = (AlterSubscriptionStmt *) parsetree;
 		if (!superuser() &&
-			StringStartsWith(alterSubStmt->subname,
-							 SHARD_MOVE_SUBSCRIPTION_PREFIX))
+			StringStartsWith(alterSubStmt->subname, "citus_"))
 		{
 			ereport(ERROR, (
 						errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						errmsg("Only superusers can alter shard move subscriptions")));
+						errmsg(
+							"Only superusers can alter subscriptions that are created by citus")));
 		}
 	}
 
@@ -444,11 +444,12 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	{
 		DropSubscriptionStmt *dropSubStmt = (DropSubscriptionStmt *) parsetree;
 		if (!superuser() &&
-			StringStartsWith(dropSubStmt->subname, SHARD_MOVE_SUBSCRIPTION_PREFIX))
+			StringStartsWith(dropSubStmt->subname, "citus_"))
 		{
 			ereport(ERROR, (
 						errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						errmsg("Only superusers can drop shard move subscriptions")));
+						errmsg(
+							"Only superusers can drop subscriptions that are created by citus")));
 		}
 	}
 

@@ -33,19 +33,9 @@ static HTAB *ShardInfoHashMapForPublications = NULL;
 static void AddPublishableShardEntryInMap(uint32 targetNodeId,
 										  ShardInterval *shardInterval, bool
 										  isChildShardInterval);
-ShardSplitSubscriberMetadata * CreateShardSplitSubscriberMetadata(Oid tableOwnerId, uint32
-																  nodeId,
-																  List *
-																  replicationSlotInfoList);
-static void CreateShardSplitPublicationForNode(MultiConnection *connection,
-											   List *shardList,
-											   uint32_t publicationForTargetNodeId, Oid
-											   tableOwner);
-static char * ShardSplitPublicationName(uint32_t nodeId, Oid ownerId);
-static void DropAllShardSplitSubscriptions(MultiConnection *cleanupConnection);
-static void DropAllShardSplitPublications(MultiConnection *cleanupConnection);
-static void DropAllShardSplitUsers(MultiConnection *cleanupConnection);
-static void DropAllShardSplitReplicationSlots(MultiConnection *cleanupConnection);
+SubscriptionInfo * CreateSubscriptionInfo(Oid tableOwnerId,
+										  uint32 nodeId,
+										  List *replicationSlotInfoList);
 
 /*
  * CreateShardSplitInfoMapForPublication creates a hashmap that groups
@@ -74,7 +64,7 @@ CreateShardSplitInfoMapForPublication(List *sourceColocatedShardIntervalList,
 									  List *shardGroupSplitIntervalListList,
 									  List *destinationWorkerNodesList)
 {
-	ShardInfoHashMapForPublications = SetupHashMapForShardInfo();
+	ShardInfoHashMapForPublications = InitPublicationInfoHash();
 	ShardInterval *sourceShardIntervalToCopy = NULL;
 	List *splitChildShardIntervalList = NULL;
 	forboth_ptr(sourceShardIntervalToCopy, sourceColocatedShardIntervalList,
@@ -129,28 +119,29 @@ static void
 AddPublishableShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval, bool
 							  isChildShardInterval)
 {
-	NodeShardMappingKey key;
+	NodeAndOwner key;
 	key.nodeId = targetNodeId;
 	key.tableOwnerId = TableOwnerOid(shardInterval->relationId);
 
 	bool found = false;
-	NodeShardMappingEntry *nodeMappingEntry =
-		(NodeShardMappingEntry *) hash_search(ShardInfoHashMapForPublications, &key,
-											  HASH_ENTER,
-											  &found);
+	PublicationInfo *publicationInfo =
+		(PublicationInfo *) hash_search(ShardInfoHashMapForPublications, &key,
+										HASH_ENTER,
+										&found);
 
 	/* Create a new list for <nodeId, owner> pair */
 	if (!found)
 	{
-		nodeMappingEntry->shardSplitInfoList = NIL;
+		publicationInfo->shardIntervals = NIL;
+		publicationInfo->name = PublicationName(SHARD_SPLIT, key.nodeId,
+												key.tableOwnerId);
 	}
 
 	/* Add child shard interval */
 	if (isChildShardInterval)
 	{
-		nodeMappingEntry->shardSplitInfoList =
-			lappend(nodeMappingEntry->shardSplitInfoList,
-					(ShardInterval *) shardInterval);
+		publicationInfo->shardIntervals =
+			lappend(publicationInfo->shardIntervals, shardInterval);
 
 		/* We return from here as the child interval is only added once in the list */
 		return;
@@ -158,7 +149,7 @@ AddPublishableShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval,
 
 	/* Check if parent is already added */
 	ShardInterval *existingShardInterval = NULL;
-	foreach_ptr(existingShardInterval, nodeMappingEntry->shardSplitInfoList)
+	foreach_ptr(existingShardInterval, publicationInfo->shardIntervals)
 	{
 		if (existingShardInterval->shardId == shardInterval->shardId)
 		{
@@ -168,127 +159,13 @@ AddPublishableShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval,
 	}
 
 	/* Add parent shard Interval */
-	nodeMappingEntry->shardSplitInfoList =
-		lappend(nodeMappingEntry->shardSplitInfoList, (ShardInterval *) shardInterval);
+	publicationInfo->shardIntervals =
+		lappend(publicationInfo->shardIntervals, shardInterval);
 }
 
 
 /*
- * CreateShardSplitPublications creates publications on the source node.
- *
- * sourceConnection - Connection of source node.
- *
- * shardInfoHashMapForPublication - ShardIntervals are grouped by <owner, nodeId> key.
- *                                  A publication is created for list of
- *                                  ShardIntervals mapped by key.
- */
-void
-CreateShardSplitPublications(MultiConnection *sourceConnection,
-							 HTAB *shardInfoHashMapForPublication)
-{
-	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, shardInfoHashMapForPublication);
-
-	NodeShardMappingEntry *entry = NULL;
-	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
-	{
-		uint32 nodeId = entry->key.nodeId;
-		uint32 tableOwnerId = entry->key.tableOwnerId;
-		List *shardListForPublication = entry->shardSplitInfoList;
-
-		/* Create publication on shard list */
-		CreateShardSplitPublicationForNode(sourceConnection,
-										   shardListForPublication,
-										   nodeId,
-										   tableOwnerId);
-	}
-}
-
-
-/*
- * CreateShardSplitPublicationForNode creates a publication on source node
- * for given shard list.
- * We follow the 'SHARD_SPLIT_X_PREFIX' naming scheme for creating publications
- * related to split operations.
- */
-static void
-CreateShardSplitPublicationForNode(MultiConnection *connection, List *shardList,
-								   uint32_t publicationForTargetNodeId, Oid ownerId)
-{
-	StringInfo createPublicationCommand = makeStringInfo();
-	bool prefixWithComma = false;
-
-	appendStringInfo(createPublicationCommand, "CREATE PUBLICATION %s FOR TABLE ",
-					 ShardSplitPublicationName(publicationForTargetNodeId, ownerId));
-
-	ShardInterval *shard = NULL;
-	foreach_ptr(shard, shardList)
-	{
-		char *shardName = ConstructQualifiedShardName(shard);
-
-		if (prefixWithComma)
-		{
-			appendStringInfoString(createPublicationCommand, ",");
-		}
-
-		appendStringInfoString(createPublicationCommand, shardName);
-		prefixWithComma = true;
-	}
-
-	ExecuteCriticalRemoteCommand(connection, createPublicationCommand->data);
-	pfree(createPublicationCommand->data);
-	pfree(createPublicationCommand);
-}
-
-
-/*
- * ShardSplitPublicationName returns publication name for Shard Split operations.
- */
-static char *
-ShardSplitPublicationName(uint32_t nodeId, Oid ownerId)
-{
-	return psprintf("%s%u_%u", SHARD_SPLIT_PUBLICATION_PREFIX, nodeId, ownerId);
-}
-
-
-/*
- * CreateTargetNodeConnectionsForShardSplit creates connections on target nodes.
- * These connections are used for subscription managment. They are closed
- * at the end of non-blocking split workflow.
- */
-List *
-CreateTargetNodeConnectionsForShardSplit(List *shardSplitSubscribersMetadataList, int
-										 connectionFlags, char *user, char *databaseName)
-{
-	List *targetNodeConnectionList = NIL;
-	ShardSplitSubscriberMetadata *shardSplitSubscriberMetadata = NULL;
-	foreach_ptr(shardSplitSubscriberMetadata, shardSplitSubscribersMetadataList)
-	{
-		/* slotinfo is expected to be already populated */
-		Assert(shardSplitSubscriberMetadata->slotInfo != NULL);
-
-		uint32 targetWorkerNodeId = shardSplitSubscriberMetadata->slotInfo->targetNodeId;
-		WorkerNode *targetWorkerNode = FindNodeWithNodeId(targetWorkerNodeId, false);
-
-		MultiConnection *targetConnection =
-			GetNodeUserDatabaseConnection(connectionFlags, targetWorkerNode->workerName,
-										  targetWorkerNode->workerPort,
-										  user,
-										  databaseName);
-		ClaimConnectionExclusively(targetConnection);
-
-		targetNodeConnectionList = lappend(targetNodeConnectionList, targetConnection);
-
-		/* Cache the connections for each subscription */
-		shardSplitSubscriberMetadata->targetNodeConnection = targetConnection;
-	}
-
-	return targetNodeConnectionList;
-}
-
-
-/*
- * PopulateShardSplitSubscriptionsMetadataList returns a list of 'ShardSplitSubscriberMetadata'
+ * PopulateShardSplitSubscriptionsMetadataList returns a list of 'SubscriptionInfo'
  * structure.
  *
  * shardSplitInfoHashMap - Shards are grouped by <owner, node id> key.
@@ -299,483 +176,92 @@ CreateTargetNodeConnectionsForShardSplit(List *shardSplitSubscribersMetadataList
  */
 List *
 PopulateShardSplitSubscriptionsMetadataList(HTAB *shardSplitInfoHashMap,
-											List *replicationSlotInfoList)
+											List *replicationSlotInfoList,
+											List *shardGroupSplitIntervalListList,
+											List *workersForPlacementList)
 {
 	HASH_SEQ_STATUS status;
 	hash_seq_init(&status, shardSplitInfoHashMap);
 
-	NodeShardMappingEntry *entry = NULL;
-	List *shardSplitSubscriptionMetadataList = NIL;
-	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
+	PublicationInfo *publication = NULL;
+	List *subscriptionInfoList = NIL;
+	while ((publication = (PublicationInfo *) hash_seq_search(&status)) != NULL)
 	{
-		uint32 nodeId = entry->key.nodeId;
-		uint32 tableOwnerId = entry->key.tableOwnerId;
-		ShardSplitSubscriberMetadata *shardSplitSubscriberMetadata =
-			CreateShardSplitSubscriberMetadata(tableOwnerId, nodeId,
-											   replicationSlotInfoList);
+		uint32 nodeId = publication->key.nodeId;
+		uint32 tableOwnerId = publication->key.tableOwnerId;
+		SubscriptionInfo *subscription =
+			CreateSubscriptionInfo(tableOwnerId, nodeId,
+								   replicationSlotInfoList);
+		subscription->publication = publication;
+		publication->subscription = subscription;
 
-		shardSplitSubscriptionMetadataList = lappend(shardSplitSubscriptionMetadataList,
-													 shardSplitSubscriberMetadata);
+		subscriptionInfoList = lappend(subscriptionInfoList, subscription);
 	}
 
-	return shardSplitSubscriptionMetadataList;
+	List *shardIntervalList = NIL;
+	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
+	{
+		ShardInterval *shardInterval = NULL;
+		WorkerNode *workerPlacementNode = NULL;
+		forboth_ptr(shardInterval, shardIntervalList, workerPlacementNode,
+					workersForPlacementList)
+		{
+			NodeAndOwner key;
+			key.nodeId = workerPlacementNode->nodeId;
+			key.tableOwnerId = TableOwnerOid(shardInterval->relationId);
+
+			bool found = false;
+			publication = (PublicationInfo *) hash_search(
+				ShardInfoHashMapForPublications,
+				&key,
+				HASH_FIND,
+				&found);
+			if (!found)
+			{
+				ereport(ERROR, errmsg("Could not find publication matching a split"));
+			}
+			publication->subscription->newShards = lappend(
+				publication->subscription->newShards, shardInterval);
+		}
+	}
+
+	return subscriptionInfoList;
 }
 
 
 /*
- * Creates a 'ShardSplitSubscriberMetadata' structure for given table owner, node id.
+ * Creates a 'SubscriptionInfo' structure for given table owner, node id.
  * It scans the list of 'ReplicationSlotInfo' to identify the corresponding slot
  * to be used for given tableOwnerId and nodeId.
  */
-ShardSplitSubscriberMetadata *
-CreateShardSplitSubscriberMetadata(Oid tableOwnerId, uint32 nodeId,
-								   List *replicationSlotInfoList)
+SubscriptionInfo *
+CreateSubscriptionInfo(Oid tableOwnerId, uint32 nodeId,
+					   List *replicationSlotInfoList)
 {
-	ShardSplitSubscriberMetadata *shardSplitSubscriberMetadata = palloc0(
-		sizeof(ShardSplitSubscriberMetadata));
-	shardSplitSubscriberMetadata->tableOwnerId = tableOwnerId;
+	SubscriptionInfo *subscription = palloc0(
+		sizeof(SubscriptionInfo));
+	subscription->name = SubscriptionName(SHARD_SPLIT, tableOwnerId);
+	subscription->tableOwnerId = tableOwnerId;
+	subscription->temporaryOwnerName =
+		SubscriptionRoleName(SHARD_SPLIT, tableOwnerId);
+	subscription->targetConnection = NULL;
 
 	/*
 	 * Each 'ReplicationSlotInfo' belongs to a unique combination of node id and owner.
 	 * Traverse the slot list to identify the corresponding slot for given
 	 * table owner and node.
 	 */
-	char *tableOwnerName = GetUserNameFromId(tableOwnerId, false);
-	ReplicationSlotInfo *replicationSlotInfo = NULL;
-	foreach_ptr(replicationSlotInfo, replicationSlotInfoList)
+	ReplicationSlotInfo *replicationSlot = NULL;
+	foreach_ptr(replicationSlot, replicationSlotInfoList)
 	{
-		if (nodeId == replicationSlotInfo->targetNodeId &&
-			strcmp(tableOwnerName, replicationSlotInfo->tableOwnerName) == 0)
+		if (nodeId == replicationSlot->targetNodeId &&
+			tableOwnerId == replicationSlot->tableOwnerId)
 		{
-			shardSplitSubscriberMetadata->slotInfo = replicationSlotInfo;
+			subscription->replicationSlot = replicationSlot;
+
 			break;
 		}
 	}
 
-	return shardSplitSubscriberMetadata;
-}
-
-
-/*
- * CreateShardSplitSubscriptions creates subscriptions for Shard Split operation.
- * We follow Shard Split naming scheme for Publication-Subscription management.
- *
- * targetNodeConnectionList - List of connections to target nodes on which
- *                            subscriptions have to be created.
- *
- * shardSplitSubscriberMetadataList - List of subscriber metadata.
- *
- * sourceWorkerNode - Source node.
- */
-void
-CreateShardSplitSubscriptions(List *targetNodeConnectionList,
-							  List *shardSplitSubscriberMetadataList,
-							  WorkerNode *sourceWorkerNode,
-							  char *superUser,
-							  char *databaseName)
-{
-	MultiConnection *targetConnection = NULL;
-	ShardSplitSubscriberMetadata *shardSplitPubSubMetadata = NULL;
-	forboth_ptr(targetConnection, targetNodeConnectionList,
-				shardSplitPubSubMetadata, shardSplitSubscriberMetadataList)
-	{
-		uint32 publicationForNodeId = shardSplitPubSubMetadata->slotInfo->targetNodeId;
-		Oid ownerId = shardSplitPubSubMetadata->tableOwnerId;
-		CreateShardSplitSubscription(targetConnection,
-									 sourceWorkerNode->workerName,
-									 sourceWorkerNode->workerPort,
-									 superUser,
-									 databaseName,
-									 ShardSplitPublicationName(publicationForNodeId,
-															   ownerId),
-									 shardSplitPubSubMetadata->slotInfo->slotName,
-									 ownerId);
-	}
-}
-
-
-/*
- * WaitForShardSplitRelationSubscriptionsBecomeReady waits for a list of subscriptions
- * to be come ready. This method invokes 'WaitForRelationSubscriptionsBecomeReady' for each
- * subscription.
- */
-void
-WaitForShardSplitRelationSubscriptionsBecomeReady(List *shardSplitPubSubMetadataList)
-{
-	ShardSplitSubscriberMetadata *shardSplitPubSubMetadata = NULL;
-	foreach_ptr(shardSplitPubSubMetadata, shardSplitPubSubMetadataList)
-	{
-		Bitmapset *tableOwnerIds = bms_make_singleton(
-			shardSplitPubSubMetadata->tableOwnerId);
-		WaitForRelationSubscriptionsBecomeReady(
-			shardSplitPubSubMetadata->targetNodeConnection, tableOwnerIds,
-			SHARD_SPLIT_SUBSCRIPTION_PREFIX);
-	}
-}
-
-
-/*
- * WaitForShardSplitRelationSubscriptionsToBeCaughtUp waits until subscriptions are caught up till
- * the source LSN. This method invokes 'WaitForShardSubscriptionToCatchUp' for each subscription.
- */
-void
-WaitForShardSplitRelationSubscriptionsToBeCaughtUp(XLogRecPtr sourcePosition,
-												   List *shardSplitPubSubMetadataList)
-{
-	ShardSplitSubscriberMetadata *shardSplitPubSubMetadata = NULL;
-	foreach_ptr(shardSplitPubSubMetadata, shardSplitPubSubMetadataList)
-	{
-		Bitmapset *tableOwnerIds = bms_make_singleton(
-			shardSplitPubSubMetadata->tableOwnerId);
-		WaitForShardSubscriptionToCatchUp(shardSplitPubSubMetadata->targetNodeConnection,
-										  sourcePosition,
-										  tableOwnerIds,
-										  SHARD_SPLIT_SUBSCRIPTION_PREFIX);
-	}
-}
-
-
-/*
- * CreateTemplateReplicationSlot creates a replication slot that acts as a template
- * slot for logically replicating split children in the 'catchup' phase of non-blocking split.
- * It returns a snapshot name which is used to do snapshotted shard copy in the 'copy' phase
- * of nonblocking split workflow.
- */
-char *
-CreateTemplateReplicationSlot(ShardInterval *shardIntervalToSplit,
-							  MultiConnection *sourceConnection)
-{
-	StringInfo createReplicationSlotCommand = makeStringInfo();
-	appendStringInfo(createReplicationSlotCommand,
-					 "CREATE_REPLICATION_SLOT %s LOGICAL citus EXPORT_SNAPSHOT;",
-					 ShardSplitTemplateReplicationSlotName(
-						 shardIntervalToSplit->shardId));
-
-	PGresult *result = NULL;
-	int response = ExecuteOptionalRemoteCommand(sourceConnection,
-												createReplicationSlotCommand->data,
-												&result);
-
-	if (response != RESPONSE_OKAY || !IsResponseOK(result) || PQntuples(result) != 1)
-	{
-		ReportResultError(sourceConnection, result, ERROR);
-	}
-
-	/*'snapshot_name' is second column where index starts from zero.
-	 * We're using the pstrdup to copy the data into the current memory context */
-	char *snapShotName = pstrdup(PQgetvalue(result, 0, 2 /* columIndex */));
-	return snapShotName;
-}
-
-
-/*
- * ShardSplitTemplateReplicationSlotName returns name of template replication slot
- * following the shard split naming scheme.
- */
-char *
-ShardSplitTemplateReplicationSlotName(uint64 shardId)
-{
-	return psprintf("%s%lu", SHARD_SPLIT_TEMPLATE_REPLICATION_SLOT_PREFIX, shardId);
-}
-
-
-/*
- * CreateReplicationSlots creates copies of template replication slot
- * on the source node.
- *
- * sourceNodeConnection - Source node connection.
- *
- * templateSlotName - Template replication slot name whose copies have to be created.
- *                    This slot holds a LSN from which the logical replication
- *                    begins.
- *
- * shardSplitSubscriberMetadataList - List of 'ShardSplitSubscriberMetadata. '
- *
- * 'ShardSplitSubscriberMetadata' contains replication slot name that is used
- *  to create copies of template replication slot on source node. These slot names are returned by
- * 'worker_split_shard_replication_setup' UDF and each slot is responsible for a specific
- * split range. We try multiple attemtps to clean up these replicaton slot copies in the
- * below order to be on safer side.
- * 1. Clean up before starting shard split workflow.
- * 2. Implicitly dropping slots while dropping subscriptions.
- * 3. Explicitly dropping slots which would have skipped over from 2.
- */
-void
-CreateReplicationSlots(MultiConnection *sourceNodeConnection, char *templateSlotName,
-					   List *shardSplitSubscriberMetadataList)
-{
-	ShardSplitSubscriberMetadata *subscriberMetadata = NULL;
-	foreach_ptr(subscriberMetadata, shardSplitSubscriberMetadataList)
-	{
-		char *slotName = subscriberMetadata->slotInfo->slotName;
-
-		StringInfo createReplicationSlotCommand = makeStringInfo();
-
-		appendStringInfo(createReplicationSlotCommand,
-						 "SELECT * FROM  pg_catalog.pg_copy_logical_replication_slot (%s, %s)",
-						 quote_literal_cstr(templateSlotName), quote_literal_cstr(
-							 slotName));
-
-		ExecuteCriticalRemoteCommand(sourceNodeConnection,
-									 createReplicationSlotCommand->data);
-	}
-}
-
-
-/*
- * DropAllShardSplitLeftOvers drops shard split subscriptions, publications, roles
- * and replication slots. These might have been left there after
- * the coordinator crashed during a shard split. It's important to delete them
- * for two reasons:
- * 1. Starting new shard split might fail when they exist, because it cannot
- *    create them.
- * 2. Leftover replication slots that are not consumed from anymore make it
- *    impossible for WAL to be dropped. This can cause out-of-disk issues.
- */
-void
-DropAllShardSplitLeftOvers(WorkerNode *sourceNode, HTAB *shardSplitHashMapForPubSub)
-{
-	char *superUser = CitusExtensionOwnerName();
-	char *databaseName = get_database_name(MyDatabaseId);
-
-	/*
-	 * We open new connections to all nodes. The reason for this is that
-	 * operations on subscriptions and publications cannot be run in a
-	 * transaction. By forcing a new connection we make sure no transaction is
-	 * active on the connection.
-	 */
-	int connectionFlags = FORCE_NEW_CONNECTION;
-
-	HASH_SEQ_STATUS statusForSubscription;
-	hash_seq_init(&statusForSubscription, shardSplitHashMapForPubSub);
-
-	NodeShardMappingEntry *entry = NULL;
-	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&statusForSubscription)) !=
-		   NULL)
-	{
-		uint32_t nodeId = entry->key.nodeId;
-		WorkerNode *workerNode = FindNodeWithNodeId(nodeId, false /*missingOk*/);
-
-		MultiConnection *cleanupConnection = GetNodeUserDatabaseConnection(
-			connectionFlags, workerNode->workerName, workerNode->workerPort,
-			superUser, databaseName);
-
-		/* We need to claim the connection exclusively while dropping the subscription */
-		ClaimConnectionExclusively(cleanupConnection);
-
-		DropAllShardSplitSubscriptions(cleanupConnection);
-
-		DropAllShardSplitUsers(cleanupConnection);
-
-		/* Close connection after cleanup */
-		CloseConnection(cleanupConnection);
-	}
-
-	/*Drop all shard split publications at the source*/
-	MultiConnection *sourceNodeConnection = GetNodeUserDatabaseConnection(
-		connectionFlags, sourceNode->workerName, sourceNode->workerPort,
-		superUser, databaseName);
-
-	ClaimConnectionExclusively(sourceNodeConnection);
-
-	/*
-	 * If replication slot could not be dropped while dropping the
-	 * subscriber, drop it here.
-	 */
-	DropAllShardSplitReplicationSlots(sourceNodeConnection);
-	DropAllShardSplitPublications(sourceNodeConnection);
-
-	CloseConnection(sourceNodeConnection);
-}
-
-
-/*
- * DropAllShardSplitSubscriptions drops all the existing subscriptions that
- * match our shard split naming scheme on the node that the connection points
- * to.
- */
-void
-DropAllShardSplitSubscriptions(MultiConnection *cleanupConnection)
-{
-	char *query = psprintf(
-		"SELECT subname FROM pg_catalog.pg_subscription "
-		"WHERE subname LIKE %s || '%%'",
-		quote_literal_cstr(SHARD_SPLIT_SUBSCRIPTION_PREFIX));
-	List *subscriptionNameList = GetQueryResultStringList(cleanupConnection, query);
-	char *subscriptionName = NULL;
-	foreach_ptr(subscriptionName, subscriptionNameList)
-	{
-		DisableAndDropShardSplitSubscription(cleanupConnection, subscriptionName);
-	}
-}
-
-
-/*
- * DropAllShardSplitPublications drops all the existing publications that
- * match our shard split naming scheme on the node that the connection points
- * to.
- */
-static void
-DropAllShardSplitPublications(MultiConnection *connection)
-{
-	char *query = psprintf(
-		"SELECT pubname FROM pg_catalog.pg_publication "
-		"WHERE pubname LIKE %s || '%%'",
-		quote_literal_cstr(SHARD_SPLIT_PUBLICATION_PREFIX));
-	List *publicationNameList = GetQueryResultStringList(connection, query);
-	char *publicationName;
-	foreach_ptr(publicationName, publicationNameList)
-	{
-		DropShardPublication(connection, publicationName);
-	}
-}
-
-
-/*
- * DropAllShardSplitUsers drops all the users that match our shard split naming
- * scheme. The users are temporary created for shard splits.
- */
-static void
-DropAllShardSplitUsers(MultiConnection *connection)
-{
-	char *query = psprintf(
-		"SELECT rolname FROM pg_catalog.pg_roles "
-		"WHERE rolname LIKE %s || '%%'",
-		quote_literal_cstr(SHARD_SPLIT_SUBSCRIPTION_ROLE_PREFIX));
-	List *usernameList = GetQueryResultStringList(connection, query);
-	char *username;
-	foreach_ptr(username, usernameList)
-	{
-		DropShardUser(connection, username);
-	}
-}
-
-
-/*
- * DropAllShardSplitReplicationSlots drops all the existing replication slots
- * that match shard split naming scheme on the node that the connection
- * points to.
- */
-static void
-DropAllShardSplitReplicationSlots(MultiConnection *cleanupConnection)
-{
-	char *query = psprintf(
-		"SELECT slot_name FROM pg_catalog.pg_replication_slots "
-		"WHERE slot_name LIKE %s || '%%'",
-		quote_literal_cstr(SHARD_SPLIT_REPLICATION_SLOT_PREFIX));
-	List *slotNameList = GetQueryResultStringList(cleanupConnection, query);
-	char *slotName;
-	foreach_ptr(slotName, slotNameList)
-	{
-		DropShardReplicationSlot(cleanupConnection, slotName);
-	}
-}
-
-
-/*
- * DropShardSplitPublications drops the publication used for shard splits over the given
- * connection, if it exists.
- */
-void
-DropShardSplitPublications(MultiConnection *sourceConnection,
-						   HTAB *shardInfoHashMapForPublication)
-{
-	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, shardInfoHashMapForPublication);
-
-	NodeShardMappingEntry *entry = NULL;
-	while ((entry = (NodeShardMappingEntry *) hash_seq_search(&status)) != NULL)
-	{
-		uint32 nodeId = entry->key.nodeId;
-		uint32 tableOwnerId = entry->key.tableOwnerId;
-		DropShardPublication(sourceConnection, ShardSplitPublicationName(nodeId,
-																		 tableOwnerId));
-	}
-}
-
-
-/*
- * DropShardSplitSubsriptions disables and drops subscriptions from the subscriber node that
- * are used to split shards. Note that, it does not drop the replication slots on the publisher node.
- * Replication slots will be dropped separately by calling DropShardSplitReplicationSlots.
- */
-void
-DropShardSplitSubsriptions(List *shardSplitSubscribersMetadataList)
-{
-	ShardSplitSubscriberMetadata *subscriberMetadata = NULL;
-	foreach_ptr(subscriberMetadata, shardSplitSubscribersMetadataList)
-	{
-		uint32 tableOwnerId = subscriberMetadata->tableOwnerId;
-		MultiConnection *targetNodeConnection = subscriberMetadata->targetNodeConnection;
-
-		DisableAndDropShardSplitSubscription(targetNodeConnection, ShardSubscriptionName(
-												 tableOwnerId,
-												 SHARD_SPLIT_SUBSCRIPTION_PREFIX));
-
-		DropShardUser(targetNodeConnection, ShardSubscriptionRole(tableOwnerId,
-																  SHARD_SPLIT_SUBSCRIPTION_ROLE_PREFIX));
-	}
-}
-
-
-/*
- * DisableAndDropShardSplitSubscription disables the subscription, resets the slot name to 'none' and
- * then drops subscription on the given connection. It does not drop the replication slot.
- * The caller of this method should ensure to cleanup the replication slot.
- *
- * Directly executing 'DROP SUBSCRIPTION' attempts to drop the replication slot at the source node.
- * When the subscription is local, direcly dropping the subscription can lead to a self deadlock.
- * To avoid this, we first disable the subscription, reset the slot name and then drop the subscription.
- */
-void
-DisableAndDropShardSplitSubscription(MultiConnection *connection, char *subscriptionName)
-{
-	StringInfo alterSubscriptionSlotCommand = makeStringInfo();
-	StringInfo alterSubscriptionDisableCommand = makeStringInfo();
-
-	appendStringInfo(alterSubscriptionDisableCommand,
-					 "ALTER SUBSCRIPTION %s DISABLE",
-					 quote_identifier(subscriptionName));
-	ExecuteCriticalRemoteCommand(connection,
-								 alterSubscriptionDisableCommand->data);
-
-	appendStringInfo(alterSubscriptionSlotCommand,
-					 "ALTER SUBSCRIPTION %s SET (slot_name = NONE)",
-					 quote_identifier(subscriptionName));
-	ExecuteCriticalRemoteCommand(connection, alterSubscriptionSlotCommand->data);
-
-	ExecuteCriticalRemoteCommand(connection, psprintf(
-									 "DROP SUBSCRIPTION %s",
-									 quote_identifier(subscriptionName)));
-}
-
-
-/*
- * DropShardSplitReplicationSlots drops replication slots on the source node.
- */
-void
-DropShardSplitReplicationSlots(MultiConnection *sourceConnection,
-							   List *replicationSlotInfoList)
-{
-	ReplicationSlotInfo *replicationSlotInfo = NULL;
-	foreach_ptr(replicationSlotInfo, replicationSlotInfoList)
-	{
-		DropShardReplicationSlot(sourceConnection, replicationSlotInfo->slotName);
-	}
-}
-
-
-/*
- * CloseShardSplitSubscriberConnections closes connection of  subscriber nodes.
- * 'ShardSplitSubscriberMetadata' holds connection for a subscriber node. The method
- * traverses the list and closes each connection.
- */
-void
-CloseShardSplitSubscriberConnections(List *shardSplitSubscriberMetadataList)
-{
-	ShardSplitSubscriberMetadata *subscriberMetadata = NULL;
-	foreach_ptr(subscriberMetadata, shardSplitSubscriberMetadataList)
-	{
-		CloseConnection(subscriberMetadata->targetNodeConnection);
-	}
+	return subscription;
 }

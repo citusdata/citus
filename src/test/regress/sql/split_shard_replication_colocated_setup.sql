@@ -76,9 +76,9 @@ SELECT count(*) FROM pg_catalog.worker_split_shard_replication_setup(ARRAY[
 SELECT relowner AS table_owner_one FROM pg_class WHERE relname='table_first' \gset
 SELECT relowner AS table_owner_two FROM pg_class WHERE relname='table_second' \gset
 
-SELECT slot_name AS slot_for_first_owner FROM pg_create_logical_replication_slot(FORMAT('citus_shard_split_%s_%s', :worker_2_node, :table_owner_one), 'citus') \gset
+SELECT slot_name AS slot_for_first_owner FROM pg_create_logical_replication_slot(FORMAT('citus_shard_split_slot_%s_%s', :worker_2_node, :table_owner_one), 'citus') \gset
 
-SELECT slot_name AS slot_for_second_owner FROM pg_create_logical_replication_slot(FORMAT('citus_shard_split_%s_%s', :worker_2_node, :table_owner_two), 'citus') \gset
+SELECT slot_name AS slot_for_second_owner FROM pg_create_logical_replication_slot(FORMAT('citus_shard_split_slot_%s_%s', :worker_2_node, :table_owner_two), 'citus') \gset
 
 -- Create subscription at worker2 with copy_data to 'false'
 \c - postgres - :worker_2_port

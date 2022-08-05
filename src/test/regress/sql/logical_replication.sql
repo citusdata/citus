@@ -24,7 +24,10 @@ CREATE PUBLICATION citus_shard_move_publication_:postgres_oid FOR TABLE dist_683
 \c - - - :master_port
 SET search_path TO logical_replication;
 \set connection_string '\'user=postgres host=localhost port=' :worker_1_port '\''
-CREATE SUBSCRIPTION citus_shard_move_subscription_:postgres_oid CONNECTION :connection_string PUBLICATION citus_shard_move_publication_:postgres_oid;
+CREATE SUBSCRIPTION citus_shard_move_subscription_:postgres_oid
+    CONNECTION :connection_string
+    PUBLICATION citus_shard_move_publication_:postgres_oid
+    WITH (slot_name=citus_shard_move_slot_:postgres_oid);
 
 SELECT count(*) from pg_subscription;
 SELECT count(*) from pg_publication;
