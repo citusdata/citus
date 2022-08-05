@@ -168,12 +168,83 @@ SELECT * FROM sale_triggers ORDER BY 1, 2;
  truncate_trigger_xxxxxxx  | sale_newyork    | O
 (6 rows)
 
+--
+-- In PG15, For GENERATED columns, all dependencies of the generation
+-- expression are recorded as NORMAL dependencies of the column itself.
+-- This requires CASCADE to drop generated cols with the original col.
+-- Test this behavior in distributed table, specifically with
+-- undistribute_table within a transaction.
+-- Relevant PG Commit: cb02fcb4c95bae08adaca1202c2081cfc81a28b5
+--
+CREATE TABLE generated_stored_ref (
+  col_1 int,
+  col_2 int,
+  col_3 int generated always as (col_1+col_2) stored,
+  col_4 int,
+  col_5 int generated always as (col_4*2-col_1) stored
+);
+SELECT create_reference_table ('generated_stored_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- populate the table
+INSERT INTO generated_stored_ref (col_1, col_4) VALUES (1,2), (11,12);
+INSERT INTO generated_stored_ref (col_1, col_2, col_4) VALUES (100,101,102), (200,201,202);
+SELECT * FROM generated_stored_ref ORDER BY 1,2,3,4,5;
+ col_1 | col_2 | col_3 | col_4 | col_5
+---------------------------------------------------------------------
+     1 |       |       |     2 |     3
+    11 |       |       |    12 |    13
+   100 |   101 |   201 |   102 |   104
+   200 |   201 |   401 |   202 |   204
+(4 rows)
+
+-- fails, CASCADE must be specified
+-- will test CASCADE inside the transcation
+ALTER TABLE generated_stored_ref DROP COLUMN col_1;
+ERROR:  cannot drop column col_1 of table generated_stored_ref because other objects depend on it
+DETAIL:  column col_3 of table generated_stored_ref depends on column col_1 of table generated_stored_ref
+column col_5 of table generated_stored_ref depends on column col_1 of table generated_stored_ref
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+BEGIN;
+  -- drops col_1, col_3, col_5
+  ALTER TABLE generated_stored_ref DROP COLUMN col_1 CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to column col_3 of table generated_stored_ref
+drop cascades to column col_5 of table generated_stored_ref
+  ALTER TABLE generated_stored_ref DROP COLUMN col_4;
+  -- show that undistribute_table works fine
+  SELECT undistribute_table('generated_stored_ref');
+NOTICE:  creating a new table for pg15.generated_stored_ref
+NOTICE:  moving the data of pg15.generated_stored_ref
+NOTICE:  dropping the old pg15.generated_stored_ref
+NOTICE:  renaming the new table to pg15.generated_stored_ref
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+  INSERT INTO generated_stored_ref VALUES (5);
+  SELECT * FROM generated_stored_REF ORDER BY 1;
+ col_2
+---------------------------------------------------------------------
+     5
+   101
+   201
+
+
+(5 rows)
+
+ROLLBACK;
 -- Clean up
 DROP SCHEMA pg15 CASCADE;
-NOTICE:  drop cascades to 6 other objects
+NOTICE:  drop cascades to 7 other objects
 DETAIL:  drop cascades to collation german_phonebook_test
 drop cascades to collation default_provider
 drop cascades to table sale
 drop cascades to table record_sale
 drop cascades to function record_sale()
 drop cascades to view sale_triggers
+drop cascades to table generated_stored_ref
