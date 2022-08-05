@@ -263,7 +263,7 @@ clean-upgrade-artifacts:
 	rm -rf $(citus_abs_srcdir)/tmp_citus_tarballs/ $(citus_abs_srcdir)/tmp_citus_upgrade/ /tmp/citus_copy/
 
 clean distclean maintainer-clean:
-	rm -f $(output_files) $(input_files)
+	rm -rf input/ output/
 	rm -rf tmp_check/
 	rm -rf tmp_citus_test/
 
