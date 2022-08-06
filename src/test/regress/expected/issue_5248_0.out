@@ -6,17 +6,14 @@
 -- issue: pg_stop_backup PRE PG15 vs pg_backup_stop PG15+
 -- The alternative output can be deleted when we drop support for PG14
 --
-
 CREATE SCHEMA issue_5248;
 SET search_path TO issue_5248;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 3013000;
-
 SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
 \gset
-
 create table countries(
   id serial primary key
   , name text
@@ -24,6 +21,14 @@ create table countries(
 );
 insert into countries(name, code) select 'country-'||i, i::text from generate_series(10,99) i;
 select create_reference_table('countries');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$issue_5248.countries$$)
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
 
 create table orgs (
     id bigserial primary key
@@ -31,6 +36,10 @@ create table orgs (
   , created_at timestamptz default now()
 );
 select create_distributed_table('orgs', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 create table users (
     id bigserial
@@ -42,8 +51,12 @@ create table users (
   , primary key (org_id, id)
 );
 select create_distributed_table('users', 'org_id');
-alter table users add constraint fk_user_country foreign key (country_id) references countries(id);
+ create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
+
+alter table users add constraint fk_user_country foreign key (country_id) references countries(id);
 create table orders (
     id bigserial
   , org_id bigint references orgs(id)
@@ -54,7 +67,10 @@ create table orders (
   , foreign key (org_id, user_id) references users(org_id, id)
 );
 select create_distributed_table('orders', 'org_id');
+ create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 create table events (
     id bigserial not null
@@ -68,19 +84,20 @@ create table events (
 create index event_time_idx on events using BRIN (event_time);
 create index event_json_idx on events using gin(payload);
 select create_distributed_table('events', 'user_id'); -- on purpose don't colocate on correctly on org_id
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 create table local_data(
   id bigserial primary key
   , val int default ( (random()*100)::int )
 );
-
 insert into orgs(id, name) select  i,'org-'||i from generate_series(1,10) i;
 insert into users(id, name, org_id, country_id) select i,'user-'||i, i+1, (i%90)+1  from generate_series(1,5) i;
 insert into orders(id, org_id, user_id, price) select i, ((i+1))+1 , i+1, i/100 from generate_series(1,2) i;
 insert into events(id, org_id, user_id, event_type) select i, ((i+1))+1 , i+1, i/100 from generate_series(1,10) i;
 insert into local_data(id) select generate_series(1,10);
-
-
 /*
  * Test that we don't get a crash. See #5248.
  */
@@ -207,7 +224,8 @@ FROM     (
 WHERE    pg_catalog.pg_backup_stop() > cast(NULL AS record) limit 100;
 \else
 WHERE    pg_catalog.pg_stop_backup() > cast(NULL AS pg_lsn) limit 100;
+ERROR:  cannot push down subquery on the target list
+DETAIL:  Subqueries in the SELECT part of the query can only be pushed down if they happen before aggregates and window functions
 \endif
-
 SET client_min_messages TO WARNING;
 DROP SCHEMA issue_5248 CASCADE;
