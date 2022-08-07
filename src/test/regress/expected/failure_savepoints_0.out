@@ -6,6 +6,11 @@
 -- The alternative output can be deleted when we drop support for PG14
 -- One of relevant PG commits: 618c16707a6d6e8f5c83ede2092975e4670201ad
 --
+-- We have two different output files for this failure test because the
+-- failure behaviour of SAVEPOINT and RELEASE commands are different if
+-- we use the executor. If we use it, these commands error out if any of
+-- the placement commands fail. Otherwise, we might mark the placement
+-- as invalid and continue with a WARNING.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -93,6 +98,8 @@ DELETE FROM artists WHERE id=4;
 ROLLBACK TO SAVEPOINT s1;
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
 COMMIT;
 ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT * FROM artists WHERE id IN (4, 5);
@@ -142,6 +149,8 @@ DELETE FROM artists WHERE id=5;
 ROLLBACK TO SAVEPOINT s2;
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
 COMMIT;
 ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT * FROM artists WHERE id IN (4, 5);
@@ -188,7 +197,10 @@ INSERT INTO artists VALUES (7, 'Emily Carr');
 INSERT INTO artists VALUES (7, 'Emily Carr');
 ROLLBACK TO SAVEPOINT s1;
 WARNING:  connection not open
+WARNING:  connection not open
+WARNING:  connection not open
 WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection not open
 WARNING:  connection not open
 COMMIT;
 ERROR:  failure on connection marked as essential: localhost:xxxxx
@@ -258,6 +270,7 @@ INSERT INTO researchers VALUES (7, 4, 'Jan Plaza');
 SAVEPOINT s1;
 INSERT INTO researchers VALUES (8, 4, 'Alonzo Church');
 ROLLBACK TO s1;
+WARNING:  connection not open
 WARNING:  connection not open
 RELEASE SAVEPOINT s1;
 COMMIT;
