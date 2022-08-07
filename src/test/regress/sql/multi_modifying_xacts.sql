@@ -299,6 +299,12 @@ ORDER BY nodeport, shardid;
 
 -- hide postgresql version dependend messages for next test only
 \set VERBOSITY terse
+
+-- reduce the log level for differences between PG14 and PG15
+-- in PGconn->errorMessage
+-- relevant PG commit b15f254466aefbabcbed001929f6e09db59fd158
+SET client_min_messages to ERROR;
+
 -- for replicated tables use 2PC even if multi-shard commit protocol
 -- is set to 2PC
 BEGIN;
@@ -334,6 +340,7 @@ BEGIN;
 ROLLBACK;
 
 \unset VERBOSITY
+RESET client_min_messages;
 
 -- verify everyhing including delete is rolled back
 SELECT * FROM researchers WHERE lab_id = 6;
@@ -550,12 +557,19 @@ FOR EACH ROW EXECUTE PROCEDURE reject_bad();
 
 \c - - - :master_port
 
+-- reduce the log level for differences between PG14 and PG15
+-- in PGconn->errorMessage
+-- relevant PG commit b15f254466aefbabcbed001929f6e09db59fd158
+SET client_min_messages to ERROR;
+
 BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO objects VALUES (2, 'BAD');
 INSERT INTO labs VALUES (8, 'Aperture Science');
 INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
+
+RESET client_min_messages;
 
 -- data should NOT be persisted
 SELECT * FROM objects WHERE id = 1;
