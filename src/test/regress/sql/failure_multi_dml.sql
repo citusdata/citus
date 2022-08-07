@@ -192,46 +192,53 @@ COMMIT;
 -- should see changes, because cancellation is ignored
 SELECT * FROM dml_test ORDER BY id ASC;
 
--- drop table and recreate with different replication/sharding
+-- Commenting out the following test since it has an output with no
+-- duplicate error messages in PG15
+-- To avoid adding alternative output file for this test, this
+-- part is moved to failure_pg15.sql file.
+-- Uncomment the following part when we drop support for PG14
+-- and we delete failure_pg15.sql file.
 
-DROP TABLE dml_test;
-SET citus.shard_count = 1;
-SET citus.shard_replication_factor = 2; -- two placements
+-- -- drop table and recreate with different replication/sharding
 
-CREATE TABLE dml_test (id integer, name text);
-SELECT create_distributed_table('dml_test', 'id');
+-- DROP TABLE dml_test;
+-- SET citus.shard_count = 1;
+-- SET citus.shard_replication_factor = 2; -- two placements
 
-COPY dml_test FROM STDIN WITH CSV;
-1,Alpha
-2,Beta
-3,Gamma
-4,Delta
-\.
+-- CREATE TABLE dml_test (id integer, name text);
+-- SELECT create_distributed_table('dml_test', 'id');
 
----- test multiple statements against a single shard, but with two placements
+-- COPY dml_test FROM STDIN WITH CSV;
+-- 1,Alpha
+-- 2,Beta
+-- 3,Gamma
+-- 4,Delta
+-- \.
 
--- fail at PREPARED COMMIT as we use 2PC
-SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
+-- -- test multiple statements against a single shard, but with two placements
 
-BEGIN;
-DELETE FROM dml_test WHERE id = 1;
-DELETE FROM dml_test WHERE id = 2;
-INSERT INTO dml_test VALUES (5, 'Epsilon');
-UPDATE dml_test SET name = 'alpha' WHERE id = 1;
-UPDATE dml_test SET name = 'gamma' WHERE id = 3;
-COMMIT;
+-- -- fail at PREPARED COMMIT as we use 2PC
+-- SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
 
--- all changes should be committed because we injected
--- the failure on the COMMIT time. And, we should not
--- mark any placements as INVALID
-SELECT citus.mitmproxy('conn.allow()');
-SELECT recover_prepared_transactions();
-SELECT shardid FROM pg_dist_shard_placement WHERE shardstate = 3;
+-- BEGIN;
+-- DELETE FROM dml_test WHERE id = 1;
+-- DELETE FROM dml_test WHERE id = 2;
+-- INSERT INTO dml_test VALUES (5, 'Epsilon');
+-- UPDATE dml_test SET name = 'alpha' WHERE id = 1;
+-- UPDATE dml_test SET name = 'gamma' WHERE id = 3;
+-- COMMIT;
 
-SET citus.task_assignment_policy TO "round-robin";
-SELECT * FROM dml_test ORDER BY id ASC;
-SELECT * FROM dml_test ORDER BY id ASC;
-RESET citus.task_assignment_policy;
+-- -- all changes should be committed because we injected
+-- -- the failure on the COMMIT time. And, we should not
+-- -- mark any placements as INVALID
+-- SELECT citus.mitmproxy('conn.allow()');
+-- SELECT recover_prepared_transactions();
+-- SELECT shardid FROM pg_dist_shard_placement WHERE shardstate = 3;
+
+-- SET citus.task_assignment_policy TO "round-robin";
+-- SELECT * FROM dml_test ORDER BY id ASC;
+-- SELECT * FROM dml_test ORDER BY id ASC;
+-- RESET citus.task_assignment_policy;
 
 -- drop table and recreate as reference table
 DROP TABLE dml_test;
