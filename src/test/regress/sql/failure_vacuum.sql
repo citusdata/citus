@@ -14,22 +14,29 @@ SELECT create_distributed_table('vacuum_test', 'key');
 
 SELECT citus.clear_network_traffic();
 
-SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM").kill()');
-VACUUM vacuum_test;
+-- Commenting out the following test since it has an output with no
+-- duplicate error messages in PG15
+-- To avoid adding alternative output file for this test, this
+-- part is moved to failure_pg15.sql file.
+-- Uncomment the following part when we drop support for PG14
+-- and we delete failure_pg15.sql file.
 
-SELECT citus.mitmproxy('conn.onQuery(query="^ANALYZE").kill()');
-ANALYZE vacuum_test;
+-- SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM").kill()');
+-- VACUUM vacuum_test;
 
-SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
-ANALYZE vacuum_test;
+-- SELECT citus.mitmproxy('conn.onQuery(query="^ANALYZE").kill()');
+-- ANALYZE vacuum_test;
 
-SELECT citus.mitmproxy('conn.allow()');
-SELECT recover_prepared_transactions();
+-- SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
+-- ANALYZE vacuum_test;
 
--- ANALYZE transactions being critical is an open question, see #2430
--- show that we never mark as INVALID on COMMIT FAILURE
-SELECT shardid, shardstate FROM pg_dist_shard_placement where shardstate != 1 AND
-shardid in ( SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'vacuum_test'::regclass);
+-- SELECT citus.mitmproxy('conn.allow()');
+-- SELECT recover_prepared_transactions();
+
+-- -- ANALYZE transactions being critical is an open question, see #2430
+-- -- show that we never mark as INVALID on COMMIT FAILURE
+-- SELECT shardid, shardstate FROM pg_dist_shard_placement where shardstate != 1 AND
+-- shardid in ( SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'vacuum_test'::regclass);
 
 -- the same tests with cancel
 SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM").cancel(' ||  pg_backend_pid() || ')');

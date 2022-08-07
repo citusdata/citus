@@ -83,26 +83,34 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
 
--- the following tests rely the column not exists, so drop manually
-ALTER TABLE test_table DROP COLUMN new_column;
+-- Commenting out the following test since it has an output with no
+-- duplicate error messages in PG15
+-- To avoid adding alternative output file for this test, this
+-- part is moved to failure_pg15.sql file.
+-- Uncomment the following part when we drop support for PG14
+-- and we delete failure_pg15.sql file.
 
--- but now kill just after the worker sends response to
--- COMMIT command, so we'll have lots of warnings but the command
--- should have been committed both on the distributed table and the placements
-SET client_min_messages TO WARNING;
-SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT").kill()');
-ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
+-- -- the following tests rely the column not exists, so drop manually
+-- ALTER TABLE test_table DROP COLUMN new_column;
 
-SET client_min_messages TO ERROR;
+-- -- but now kill just after the worker sends response to
+-- -- COMMIT command, so we'll have lots of warnings but the command
+-- -- should have been committed both on the distributed table and the placements
+-- SET client_min_messages TO WARNING;
+-- SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT").kill()');
+-- ALTER TABLE test_table ADD COLUMN new_column INT;
+-- SELECT citus.mitmproxy('conn.allow()');
 
-SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
-SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
+-- SET client_min_messages TO ERROR;
+
+-- SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
+-- SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
 
 -- now cancel just after the worker sends response to
 -- but Postgres doesn't accepts interrupts during COMMIT and ROLLBACK
 -- so should not cancel at all, so not an effective test but adding in
 -- case Citus messes up this behaviour
+SET client_min_messages TO ERROR;
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT").cancel(' ||  pg_backend_pid() || ')');
 ALTER TABLE test_table DROP COLUMN new_column;
 SELECT citus.mitmproxy('conn.allow()');

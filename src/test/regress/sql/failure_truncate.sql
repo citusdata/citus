@@ -103,18 +103,25 @@ SELECT count(*) FROM test_table;
 TRUNCATE test_table;
 INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
 
-SET client_min_messages TO WARNING;
--- now kill just after the worker sends response to
--- COMMIT command, so we'll have lots of warnings but the command
--- should have been committed both on the distributed table and the placements
-SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT").kill()');
-TRUNCATE test_table;
-SELECT citus.mitmproxy('conn.allow()');
-SELECT * FROM unhealthy_shard_count;
-SELECT count(*) FROM test_table;
-SET client_min_messages TO ERROR;
+-- Commenting out the following test since it has an output with no
+-- duplicate error messages in PG15
+-- To avoid adding alternative output file for this test, this
+-- part is moved to failure_pg15.sql file.
+-- Uncomment the following part when we drop support for PG14
+-- and we delete failure_pg15.sql file.
 
-INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
+-- SET client_min_messages TO WARNING;
+-- -- now kill just after the worker sends response to
+-- -- COMMIT command, so we'll have lots of warnings but the command
+-- -- should have been committed both on the distributed table and the placements
+-- SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT").kill()');
+-- TRUNCATE test_table;
+-- SELECT citus.mitmproxy('conn.allow()');
+-- SELECT * FROM unhealthy_shard_count;
+-- SELECT count(*) FROM test_table;
+-- SET client_min_messages TO ERROR;
+
+-- INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
 
 -- now cancel just after the worker sends response to
 -- but Postgres doesn't accept interrupts during COMMIT and ROLLBACK
