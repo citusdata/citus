@@ -130,11 +130,15 @@ INSERT INTO another_columnar_table SELECT generate_series(0,5);
 EXPLAIN (analyze on, costs off, timing off, summary off)
   SELECT a, y FROM multi_column_chunk_filtering, another_columnar_table WHERE x > 1;
 
+SELECT public.plan_without_result_lines($Q$
 EXPLAIN (costs off, timing off, summary off)
   SELECT y, * FROM another_columnar_table;
+$Q$);
 
+SELECT public.plan_without_result_lines($Q$
 EXPLAIN (costs off, timing off, summary off)
   SELECT *, x FROM another_columnar_table;
+$Q$);
 
 EXPLAIN (costs off, timing off, summary off)
   SELECT y, another_columnar_table FROM another_columnar_table;
