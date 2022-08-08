@@ -575,6 +575,9 @@ BlockingShardSplit(SplitOperation splitOperation,
 	}
 	PG_CATCH();
 	{
+		/* end ongoing transactions to enable us to clean up */
+		ShutdownAllConnections();
+
 		/* Do a best effort cleanup of shards created on workers in the above block */
 		TryDropSplitShardsOnFailure(mapOfShardToPlacementCreatedByWorkflow);
 
@@ -1447,6 +1450,9 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 	}
 	PG_CATCH();
 	{
+		/* end ongoing transactions to enable us to clean up */
+		ShutdownAllConnections();
+
 		/* Do a best effort cleanup of shards created on workers in the above block */
 		TryDropSplitShardsOnFailure(mapOfShardToPlacementCreatedByWorkflow);
 
