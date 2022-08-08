@@ -36,7 +36,7 @@ step "s1-view-locks"
 		ARRAY[$$
           SELECT array_agg(ROW(t.mode, t.count) ORDER BY t.mode) FROM
           (SELECT mode, count(*) count FROM pg_locks
-           WHERE locktype='advisory' GROUP BY mode) t$$]::text[],
+           WHERE locktype='advisory' GROUP BY mode ORDER BY 1, 2) t$$]::text[],
 		false);
 }
 
