@@ -31,7 +31,6 @@ SELECT count(*) FROM lineitem;
 RESET ROLE;
 
 -- verify that broadcast joins work
-SET citus.large_table_shard_count TO 2;
 
 SET ROLE read_access;
 
@@ -74,7 +73,6 @@ LIMIT 30;
 RESET ROLE;
 
 -- verify that re-partition queries work
-SET citus.large_table_shard_count TO 1;
 SET citus.task_executor_type TO 'task-tracker';
 
 SET ROLE read_access;
