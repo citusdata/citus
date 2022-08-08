@@ -702,23 +702,16 @@ PREPARE insert_plan AS
 INSERT INTO target_table
   SELECT a, max(b) FROM source_table
   WHERE a BETWEEN 1 AND 2 GROUP BY a;
+SELECT public.coordinator_plan($Q$
 EXPLAIN EXECUTE insert_plan;
-                                                   QUERY PLAN
+$Q$);
+                             coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)  (cost=0.00..0.00 rows=0 width=0)
    INSERT/SELECT method: repartition
    ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=8)
          Task Count: 4
-         Tasks Shown: One of 4
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  GroupAggregate  (cost=44.09..44.28 rows=11 width=8)
-                     Group Key: a
-                     ->  Sort  (cost=44.09..44.12 rows=11 width=8)
-                           Sort Key: a
-                           ->  Seq Scan on source_table_4213606 source_table  (cost=0.00..43.90 rows=11 width=8)
-                                 Filter: ((a >= 1) AND (a <= 2))
-(13 rows)
+(4 rows)
 
 SET client_min_messages TO DEBUG1;
 EXECUTE insert_plan;
@@ -1254,8 +1247,10 @@ NOTICE:  copying the data has completed
 
 (1 row)
 
+SELECT public.plan_without_result_lines($Q$
 explain (costs off) insert into table_with_sequences select y, x from table_with_sequences;
-                                   QUERY PLAN
+$Q$);
+                               plan_without_result_lines
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
@@ -1280,8 +1275,10 @@ NOTICE:  copying the data has completed
 
 (1 row)
 
+SELECT public.plan_without_result_lines($Q$
 explain (costs off) insert into table_with_user_sequences select y, x from table_with_user_sequences;
-                                        QUERY PLAN
+$Q$);
+                                    plan_without_result_lines
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
