@@ -354,7 +354,9 @@ INSERT INTO target_table
   SELECT a, max(b) FROM source_table
   WHERE a BETWEEN 1 AND 2 GROUP BY a;
 
+SELECT public.coordinator_plan($Q$
 EXPLAIN EXECUTE insert_plan;
+$Q$);
 
 SET client_min_messages TO DEBUG1;
 EXECUTE insert_plan;
@@ -623,7 +625,9 @@ DO UPDATE SET
 create table table_with_sequences (x int, y int, z bigserial);
 insert into table_with_sequences values (1,1);
 select create_distributed_table('table_with_sequences','x');
+SELECT public.plan_without_result_lines($Q$
 explain (costs off) insert into table_with_sequences select y, x from table_with_sequences;
+$Q$);
 
 -- verify that we don't report repartitioned insert/select for tables
 -- with user-defined sequences.
@@ -631,7 +635,9 @@ CREATE SEQUENCE user_defined_sequence;
 create table table_with_user_sequences (x int, y int, z bigint default nextval('user_defined_sequence'));
 insert into table_with_user_sequences values (1,1);
 select create_distributed_table('table_with_user_sequences','x');
+SELECT public.plan_without_result_lines($Q$
 explain (costs off) insert into table_with_user_sequences select y, x from table_with_user_sequences;
+$Q$);
 
 -- clean-up
 SET client_min_messages TO WARNING;

@@ -423,6 +423,8 @@ DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
 (1 row)
 
 -- EXPLAIN should show the differences between MATERIALIZED and NOT MATERIALIZED
+\set VERBOSITY terse
+SELECT public.coordinator_plan_with_subplans($Q$
 EXPLAIN (COSTS OFF) WITH cte_1 AS (SELECT * FROM test_table)
 SELECT
 	count(*)
@@ -431,36 +433,22 @@ FROM
 		JOIN
 	cte_1 as second_entry
 		USING (key);
+$Q$);
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value, other_value FROM cte_inline.test_table
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) first_entry JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) second_entry USING (key))
 DEBUG:  Creating router plan
-                                          QUERY PLAN
+      coordinator_plan_with_subplans
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    ->  Distributed Subplan XXX_1
          ->  Custom Scan (Citus Adaptive)
                Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  Seq Scan on test_table_1960000 test_table
    Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Aggregate
-               ->  Merge Join
-                     Merge Cond: (intermediate_result.key = intermediate_result_1.key)
-                     ->  Sort
-                           Sort Key: intermediate_result.key
-                           ->  Function Scan on read_intermediate_result intermediate_result
-                     ->  Sort
-                           Sort Key: intermediate_result_1.key
-                           ->  Function Scan on read_intermediate_result intermediate_result_1
-(21 rows)
+(5 rows)
 
+SELECT public.coordinator_plan_with_subplans($Q$
 EXPLAIN (COSTS OFF) WITH cte_1 AS NOT MATERIALIZED (SELECT * FROM test_table)
 SELECT
 	count(*)
@@ -469,6 +457,7 @@ FROM
 		JOIN
 	cte_1 as second_entry
 		USING (key);
+$Q$);
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
@@ -483,22 +472,14 @@ DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
 DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
 DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
-                                   QUERY PLAN
+   coordinator_plan_with_subplans
 ---------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Adaptive)
          Task Count: 4
-         Tasks Shown: One of 4
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  Aggregate
-                     ->  Hash Join
-                           Hash Cond: (test_table.key = test_table_1.key)
-                           ->  Seq Scan on test_table_1960000 test_table
-                           ->  Hash
-                                 ->  Seq Scan on test_table_1960000 test_table_1
-(12 rows)
+(3 rows)
 
+\set VERBOSITY default
 -- ctes with volatile functions are not
 -- inlined
 WITH cte_1 AS (SELECT *, random() FROM test_table)
