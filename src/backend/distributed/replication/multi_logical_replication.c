@@ -41,6 +41,7 @@
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/remote_commands.h"
+#include "distributed/repair_shards.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_rebalancer.h"
 #include "distributed/version_compat.h"
@@ -119,16 +120,16 @@ static void DropShardMoveSubscriptions(MultiConnection *connection,
 									   Bitmapset *tableOwnerIds);
 static void CreateShardMovePublications(MultiConnection *connection, List *shardList,
 										Bitmapset *tableOwnerIds);
-static void CreateShardMoveSubscriptions(MultiConnection *connection,
-										 char *sourceNodeName,
-										 int sourceNodePort, char *userName,
-										 char *databaseName,
+static MultiConnection * GetReplicationConnection(char *nodeName, int nodePort);
+static char * CreateShardMoveSubscriptions(MultiConnection *sourceConnection,
+										   MultiConnection *targetConnection,
+										   MultiConnection *sourceReplicationConnection,
+										   char *databaseName,
+										   Bitmapset *tableOwnerIds);
+static void EnableShardMoveSubscriptions(MultiConnection *targetConnection,
 										 Bitmapset *tableOwnerIds);
 static char * escape_param_str(const char *str);
 static XLogRecPtr GetRemoteLSN(MultiConnection *connection, char *command);
-
-static uint64 TotalRelationSizeForSubscription(MultiConnection *connection,
-											   char *command);
 static bool RelationSubscriptionsAreReady(MultiConnection *targetConnection,
 										  Bitmapset *tableOwnerIds,
 										  char *operationPrefix);
@@ -183,6 +184,9 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		GetNodeUserDatabaseConnection(connectionFlags, targetNodeName, targetNodePort,
 									  superUser, databaseName);
 
+	MultiConnection *sourceReplicationConnection =
+		GetReplicationConnection(sourceNodeName, sourceNodePort);
+
 	/*
 	 * Operations on publications and subscriptions cannot run in a transaction
 	 * block. Claim the connections exclusively to ensure they do not get used
@@ -193,29 +197,57 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 
 	PG_TRY();
 	{
-		/*
-		 * We have to create the primary key (or any other replica identity)
-		 * before the initial COPY is done. This is necessary because as soon
-		 * as the COPY command finishes, the update/delete operations that
-		 * are queued will be replicated. And, if the replica identity does not
-		 * exist on the target, the replication would fail.
-		 */
-		CreateReplicaIdentity(shardList, targetNodeName, targetNodePort);
-
 		/* set up the publication on the source and subscription on the target */
 		CreateShardMovePublications(sourceConnection, replicationSubscriptionList,
 									tableOwnerIds);
-		CreateShardMoveSubscriptions(targetConnection, sourceNodeName, sourceNodePort,
-									 superUser, databaseName, tableOwnerIds);
+		char *snapshot = CreateShardMoveSubscriptions(
+			sourceConnection,
+			targetConnection,
+			sourceReplicationConnection,
+			databaseName,
+			tableOwnerIds);
 
 		/* only useful for isolation testing, see the function comment for the details */
 		ConflictOnlyWithIsolationTesting();
 
+		WorkerNode *sourceNode = FindWorkerNode(sourceNodeName, sourceNodePort);
+		WorkerNode *targetNode = FindWorkerNode(targetNodeName, targetNodePort);
+		CopyShardsToNode(sourceNode, targetNode, shardList, snapshot);
+
 		/*
-		 * Logical replication starts with copying the existing data for each table in
-		 * the publication. During the copy operation the state of the associated relation
-		 * subscription is not ready. There is no point of locking the shards before the
-		 * subscriptions for each relation becomes ready, so wait for it.
+		 * We can close this connection now, because we're done copying the
+		 * data and thus don't need access to the snapshot anymore. The
+		 * replication slot will still be at the same LSN, because the
+		 * subscriptions have not been enabled yet.
+		 */
+		CloseConnection(sourceReplicationConnection);
+
+		/*
+		 * We have to create the primary key (or any other replica identity)
+		 * before the update/delete operations that are queued will be
+		 * replicated. Because if the replica identity does not exist on the
+		 * target, the replication would fail.
+		 *
+		 * So we it right after the initial data COPY, but before enabling the
+		 * susbcriptions. We do it at this latest possible moment, because its
+		 * much cheaper to build an index at once than to create it
+		 * incrementally. So this way we create the primary key index in one go
+		 * for all data from the initial COPY.
+		 */
+		CreateReplicaIdentity(shardList, targetNodeName, targetNodePort);
+
+		/* Start applying the changes from the replication slots to catch up. */
+		EnableShardMoveSubscriptions(targetConnection, tableOwnerIds);
+
+		/*
+		 * The following check is a leftover from when used subscriptions with
+		 * copy_data=true. It's probably not really necessary anymore, but it
+		 * seemed like a nice check to keep. At least for debugging issues it
+		 * seems nice to report differences between the subscription never
+		 * becoming ready and the subscriber not applying WAL. It's also not
+		 * entirely clear if the catchup check handles the case correctly where
+		 * the subscription is not in the ready state yet, because so far it
+		 * never had to.
 		 */
 		WaitForRelationSubscriptionsBecomeReady(targetConnection, tableOwnerIds,
 												SHARD_MOVE_SUBSCRIPTION_PREFIX);
@@ -1129,26 +1161,12 @@ ShardMovePublicationName(Oid ownerId)
 
 /*
  * ShardSubscriptionName returns the name of the subscription for the given
- * owner. If we're running the isolation tester the function also appends the
- * process id normal subscription name.
- *
- * When it contains the PID of the current process it is used for block detection
- * by the isolation test runner, since the replication process on the publishing
- * node uses the name of the subscription as the application_name of the SQL session.
- * This PID is then extracted from the application_name to find out which PID on the
- * coordinator is blocked by the blocked replication process.
+ * owner.
  */
 char *
 ShardSubscriptionName(Oid ownerId, char *operationPrefix)
 {
-	if (RunningUnderIsolationTest)
-	{
-		return psprintf("%s%i_%i", operationPrefix, ownerId, MyProcPid);
-	}
-	else
-	{
-		return psprintf("%s%i", operationPrefix, ownerId);
-	}
+	return psprintf("%s%i", operationPrefix, ownerId);
 }
 
 
@@ -1446,6 +1464,63 @@ CreateShardMovePublications(MultiConnection *connection, List *shardList,
 
 
 /*
+ * GetReplicationConnection opens a new replication connection to this node.
+ * This connection can be used to send replication commands, such as
+ * CREATE_REPLICATION_SLOT.
+ */
+static MultiConnection *
+GetReplicationConnection(char *nodeName, int nodePort)
+{
+	int connectionFlags = FORCE_NEW_CONNECTION;
+	connectionFlags |= REQUIRE_REPLICATION_CONNECTION_PARAM;
+
+	MultiConnection *connection = GetNodeUserDatabaseConnection(
+		connectionFlags,
+		nodeName,
+		nodePort,
+		CitusExtensionOwnerName(),
+		get_database_name(MyDatabaseId));
+	ClaimConnectionExclusively(connection);
+	return connection;
+}
+
+
+/*
+ * CreateReplicationSlot creates a replication slot with the given slot name
+ * over the given connection. The given connection should be a replication
+ * connection. This function returns the name of the snapshot that is used for
+ * this replication slot. When using this snapshot name for other transactions
+ * you need to keep the given replication connection open until you have used
+ * the snapshot name.
+ */
+static char *
+CreateReplicationSlot(MultiConnection *connection, char *slotname)
+{
+	StringInfo createReplicationSlotCommand = makeStringInfo();
+	appendStringInfo(createReplicationSlotCommand,
+					 "CREATE_REPLICATION_SLOT %s LOGICAL pgoutput EXPORT_SNAPSHOT;",
+					 quote_identifier(slotname));
+
+	PGresult *result = NULL;
+	int response = ExecuteOptionalRemoteCommand(connection,
+												createReplicationSlotCommand->data,
+												&result);
+
+	if (response != RESPONSE_OKAY || !IsResponseOK(result) || PQntuples(result) != 1)
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+
+	/*'snapshot_name' is second column where index starts from zero.
+	 * We're using the pstrdup to copy the data into the current memory context */
+	char *snapShotName = pstrdup(PQgetvalue(result, 0, 2 /* columIndex */));
+	PQclear(result);
+	ForgetResults(connection);
+	return snapShotName;
+}
+
+
+/*
  * CreateShardMoveSubscriptions creates the subscriptions used for shard moves
  * over the given connection. One subscription is created for each of the table
  * owners in tableOwnerIds. The remote node needs to have appropriate
@@ -1454,18 +1529,28 @@ CreateShardMovePublications(MultiConnection *connection, List *shardList,
  * names directly (rather than looking up any relevant pg_dist_poolinfo rows),
  * all such connections remain direct and will not route through any configured
  * poolers.
+ *
+ * The subscriptions created by this function are created in the disabled
+ * state. This is done so a data copy can be done manually afterwards. To
+ * enable the subscriptions you can use EnableShardMoveSubscriptions().
+ *
+ * This function returns the snapshot name of the replication slots that are
+ * used by the subscription. When using this snapshot name for other
+ * transactions you need to keep the given replication connection open until
+ * you have used the snapshot name.
  */
-static void
-CreateShardMoveSubscriptions(MultiConnection *connection, char *sourceNodeName,
-							 int sourceNodePort, char *userName, char *databaseName,
+static char *
+CreateShardMoveSubscriptions(MultiConnection *sourceConnection,
+							 MultiConnection *targetConnection,
+							 MultiConnection *sourceReplicationConnection,
+							 char *databaseName,
 							 Bitmapset *tableOwnerIds)
 {
 	int ownerId = -1;
+	char *firstReplicationSlot = NULL;
+	char *snapshot = NULL;
 	while ((ownerId = bms_next_member(tableOwnerIds, ownerId)) >= 0)
 	{
-		StringInfo createSubscriptionCommand = makeStringInfo();
-		StringInfo conninfo = makeStringInfo();
-
 		/*
 		 * The CREATE USER command should not propagate, so we temporarily
 		 * disable DDL propagation.
@@ -1475,7 +1560,9 @@ CreateShardMoveSubscriptions(MultiConnection *connection, char *sourceNodeName,
 		 * This prevents permission escalations.
 		 */
 		SendCommandListToWorkerOutsideTransaction(
-			connection->hostname, connection->port, connection->user,
+			targetConnection->hostname,
+			targetConnection->port,
+			targetConnection->user,
 			list_make2(
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
@@ -1484,23 +1571,45 @@ CreateShardMoveSubscriptions(MultiConnection *connection, char *sourceNodeName,
 					GetUserNameFromId(ownerId, false)
 					)));
 
+		if (!firstReplicationSlot)
+		{
+			firstReplicationSlot = ShardSubscriptionName(ownerId,
+														 SHARD_MOVE_SUBSCRIPTION_PREFIX);
+			snapshot = CreateReplicationSlot(
+				sourceReplicationConnection,
+				firstReplicationSlot);
+		}
+		else
+		{
+			ExecuteCriticalRemoteCommand(
+				sourceConnection,
+				psprintf("SELECT pg_catalog.pg_copy_logical_replication_slot(%s, %s)",
+						 quote_literal_cstr(firstReplicationSlot),
+						 quote_literal_cstr(ShardSubscriptionName(ownerId,
+																  SHARD_MOVE_SUBSCRIPTION_PREFIX))));
+		}
+
+		StringInfo conninfo = makeStringInfo();
 		appendStringInfo(conninfo, "host='%s' port=%d user='%s' dbname='%s' "
 								   "connect_timeout=20",
-						 escape_param_str(sourceNodeName), sourceNodePort,
-						 escape_param_str(userName), escape_param_str(databaseName));
+						 escape_param_str(sourceConnection->hostname),
+						 sourceConnection->port,
+						 escape_param_str(sourceConnection->user), escape_param_str(
+							 databaseName));
 
+		StringInfo createSubscriptionCommand = makeStringInfo();
 		appendStringInfo(createSubscriptionCommand,
 						 "CREATE SUBSCRIPTION %s CONNECTION %s PUBLICATION %s "
-						 "WITH (citus_use_authinfo=true, enabled=false)",
+						 "WITH (citus_use_authinfo=true, create_slot=false, copy_data=false, enabled=false)",
 						 quote_identifier(ShardSubscriptionName(ownerId,
 																SHARD_MOVE_SUBSCRIPTION_PREFIX)),
 						 quote_literal_cstr(conninfo->data),
 						 quote_identifier(ShardMovePublicationName(ownerId)));
 
-		ExecuteCriticalRemoteCommand(connection, createSubscriptionCommand->data);
+		ExecuteCriticalRemoteCommand(targetConnection, createSubscriptionCommand->data);
 		pfree(createSubscriptionCommand->data);
 		pfree(createSubscriptionCommand);
-		ExecuteCriticalRemoteCommand(connection, psprintf(
+		ExecuteCriticalRemoteCommand(targetConnection, psprintf(
 										 "ALTER SUBSCRIPTION %s OWNER TO %s",
 										 ShardSubscriptionName(ownerId,
 															   SHARD_MOVE_SUBSCRIPTION_PREFIX),
@@ -1513,15 +1622,31 @@ CreateShardMoveSubscriptions(MultiConnection *connection, char *sourceNodeName,
 		 * disable DDL propagation.
 		 */
 		SendCommandListToWorkerOutsideTransaction(
-			connection->hostname, connection->port, connection->user,
+			targetConnection->hostname,
+			targetConnection->port,
+			targetConnection->user,
 			list_make2(
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
 					"ALTER ROLE %s NOSUPERUSER",
 					ShardSubscriptionRole(ownerId, SHARD_MOVE_SUBSCRIPTION_ROLE_PREFIX)
 					)));
+	}
+	return snapshot;
+}
 
-		ExecuteCriticalRemoteCommand(connection, psprintf(
+
+/*
+ * EnableShardMoveSubscriptions enables all the the shard move subscriptions
+ * that belong to the given table owners.
+ */
+static void
+EnableShardMoveSubscriptions(MultiConnection *targetConnection, Bitmapset *tableOwnerIds)
+{
+	int ownerId = -1;
+	while ((ownerId = bms_next_member(tableOwnerIds, ownerId)) >= 0)
+	{
+		ExecuteCriticalRemoteCommand(targetConnection, psprintf(
 										 "ALTER SUBSCRIPTION %s ENABLE",
 										 ShardSubscriptionName(ownerId,
 															   SHARD_MOVE_SUBSCRIPTION_PREFIX)
@@ -1622,25 +1747,21 @@ GetRemoteLSN(MultiConnection *connection, char *command)
 
 
 /*
- * WaitForRelationSubscriptionsBecomeReady waits until the states of the subsriptions
- * for each shard becomes ready. This indicates that the initial COPY is finished
- * on the shards.
+ * WaitForRelationSubscriptionsBecomeReady waits until the states of the
+ * subsriptions for each shard becomes ready. This should happen very quickly,
+ * because we don't use the COPY logic from the subscriptions. So all that's
+ * needed is to start reading from the replication slot.
  *
- * The function errors if the total size of the relations that belong to the subscription
- * on the target node doesn't change within LogicalReplicationErrorTimeout. The
- * function also reports its progress in every logicalReplicationProgressReportTimeout.
+ * The function errors if the subscriptions don't become ready within
+ * LogicalReplicationErrorTimeout. The function also reports its progress in
+ * every logicalReplicationProgressReportTimeout.
  */
 void
 WaitForRelationSubscriptionsBecomeReady(MultiConnection *targetConnection,
 										Bitmapset *tableOwnerIds, char *operationPrefix)
 {
-	uint64 previousTotalRelationSizeForSubscription = 0;
 	TimestampTz previousSizeChangeTime = GetCurrentTimestamp();
-
-	/* report in the first iteration as well */
-	TimestampTz previousReportTime = 0;
-
-	uint64 previousReportedTotalSize = 0;
+	TimestampTz previousReportTime = GetCurrentTimestamp();
 
 
 	/*
@@ -1671,93 +1792,36 @@ WaitForRelationSubscriptionsBecomeReady(MultiConnection *targetConnection,
 
 			break;
 		}
-		char *subscriptionValueList = ShardSubscriptionNamesValueList(tableOwnerIds,
-																	  operationPrefix);
 
-		/* Get the current total size of tables belonging to the subscriber */
-		uint64 currentTotalRelationSize =
-			TotalRelationSizeForSubscription(targetConnection, psprintf(
-												 "SELECT sum(pg_total_relation_size(srrelid)) "
-												 "FROM pg_subscription_rel, pg_stat_subscription "
-												 "WHERE srsubid = subid AND subname IN %s",
-												 subscriptionValueList
-												 )
-											 );
-
-		/*
-		 * The size has not been changed within the last iteration. If necessary
-		 * log a messages. If size does not change over a given replication timeout
-		 * error out.
-		 */
-		if (currentTotalRelationSize == previousTotalRelationSizeForSubscription)
+		/* log the progress if necessary */
+		if (TimestampDifferenceExceeds(previousReportTime,
+									   GetCurrentTimestamp(),
+									   logicalReplicationProgressReportTimeout))
 		{
-			/* log the progress if necessary */
-			if (TimestampDifferenceExceeds(previousReportTime,
-										   GetCurrentTimestamp(),
-										   logicalReplicationProgressReportTimeout))
-			{
-				ereport(LOG, (errmsg("Subscription size has been staying same for the "
-									 "last %d msec",
-									 logicalReplicationProgressReportTimeout)));
+			ereport(LOG, (errmsg("Not all subscriptions for the shard move are "
+								 "READY yet")));
 
-				previousReportTime = GetCurrentTimestamp();
-			}
-
-			/* Error out if the size does not change within the given time threshold */
-			if (TimestampDifferenceExceeds(previousSizeChangeTime,
-										   GetCurrentTimestamp(),
-										   LogicalReplicationTimeout))
-			{
-				ereport(ERROR, (errmsg("The logical replication waiting timeout "
-									   "%d msec exceeded",
-									   LogicalReplicationTimeout),
-								errdetail("The subscribed relations haven't become "
-										  "ready on the target node %s:%d",
-										  targetConnection->hostname,
-										  targetConnection->port),
-								errhint(
-									"There might have occurred problems on the target "
-									"node. If not, consider using higher values for "
-									"citus.logical_replication_timeout")));
-			}
+			previousReportTime = GetCurrentTimestamp();
 		}
-		else
+
+		/* Error out if the size does not change within the given time threshold */
+		if (TimestampDifferenceExceeds(previousSizeChangeTime,
+									   GetCurrentTimestamp(),
+									   LogicalReplicationTimeout))
 		{
-			/* first, record that there is some change in the size */
-			previousSizeChangeTime = GetCurrentTimestamp();
-
-			/*
-			 * Subscription size may decrease or increase.
-			 *
-			 * Subscription size may decrease in case of VACUUM operation, which
-			 * may get fired with autovacuum, on it.
-			 *
-			 * Increase of the relation's size belonging to subscriber means a successful
-			 * copy from publisher to subscriber.
-			 */
-			bool sizeIncreased = currentTotalRelationSize >
-								 previousTotalRelationSizeForSubscription;
-
-			if (TimestampDifferenceExceeds(previousReportTime,
-										   GetCurrentTimestamp(),
-										   logicalReplicationProgressReportTimeout))
-			{
-				ereport(LOG, ((errmsg("The total size of the relations belonging to "
-									  "subscriptions %s from %ld to %ld at %s "
-									  "on the target node %s:%d",
-									  sizeIncreased ? "increased" : "decreased",
-									  previousReportedTotalSize,
-									  currentTotalRelationSize,
-									  timestamptz_to_str(previousSizeChangeTime),
+			ereport(ERROR, (errmsg("The logical replication waiting timeout "
+								   "of %d msec is exceeded",
+								   LogicalReplicationTimeout),
+							errdetail("The subscribed relations haven't become "
+									  "ready on the target node %s:%d",
 									  targetConnection->hostname,
-									  targetConnection->port))));
-
-				previousReportedTotalSize = currentTotalRelationSize;
-				previousReportTime = GetCurrentTimestamp();
-			}
+									  targetConnection->port),
+							errhint(
+								"Logical replication has failed to initialize "
+								"on the target node. If not, consider using "
+								"higher values for "
+								"citus.logical_replication_timeout")));
 		}
-
-		previousTotalRelationSizeForSubscription = currentTotalRelationSize;
 
 		/* wait for 1 second (1000 miliseconds) and try again */
 		WaitForMiliseconds(1000);
@@ -1766,62 +1830,6 @@ WaitForRelationSubscriptionsBecomeReady(MultiConnection *targetConnection,
 	}
 
 	MemoryContextSwitchTo(oldContext);
-}
-
-
-/*
- * TotalRelationSizeForSubscription is a helper function which returns the total
- * size of the shards that are replicated via the subscription. Note that the
- * function returns the total size including indexes.
- */
-static uint64
-TotalRelationSizeForSubscription(MultiConnection *connection, char *command)
-{
-	bool raiseInterrupts = false;
-	uint64 remoteTotalSize = 0;
-
-	int querySent = SendRemoteCommand(connection, command);
-	if (querySent == 0)
-	{
-		ReportConnectionError(connection, ERROR);
-	}
-
-	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
-	if (!IsResponseOK(result))
-	{
-		ReportResultError(connection, result, ERROR);
-	}
-
-	int rowCount = PQntuples(result);
-	if (rowCount != 1)
-	{
-		ereport(ERROR, (errmsg("unexpected number of rows returned by: %s",
-							   command)));
-	}
-
-	int colCount = PQnfields(result);
-	if (colCount != 1)
-	{
-		ereport(ERROR, (errmsg("unexpected number of columns returned by: %s",
-							   command)));
-	}
-
-	if (!PQgetisnull(result, 0, 0))
-	{
-		char *resultString = PQgetvalue(result, 0, 0);
-
-		remoteTotalSize = SafeStringToUint64(resultString);
-	}
-	else
-	{
-		ereport(ERROR, (errmsg("unexpected value returned by: %s",
-							   command)));
-	}
-
-	PQclear(result);
-	ForgetResults(connection);
-
-	return remoteTotalSize;
 }
 
 
@@ -1997,7 +2005,7 @@ WaitForShardSubscriptionToCatchUp(MultiConnection *targetConnection, XLogRecPtr
 										   LogicalReplicationTimeout))
 			{
 				ereport(ERROR, (errmsg("The logical replication waiting timeout "
-									   "%d msec exceeded",
+									   "of %d msec is exceeded",
 									   LogicalReplicationTimeout),
 								errdetail("The LSN on the target subscription hasn't "
 										  "caught up ready on the target node %s:%d",

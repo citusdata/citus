@@ -2515,9 +2515,25 @@ CitusAuthHook(Port *port, int status)
 		 *
 		 * We do this so that this backend gets the chance to show
 		 * up in citus_lock_waits.
+		 *
+		 * We cannot assign a new global PID yet here, because that
+		 * would require reading from catalogs, but that's not allowed
+		 * this early in the connection startup (because no database
+		 * has been assigned yet).
 		 */
 		InitializeBackendData();
 		SetBackendDataDistributedCommandOriginator(true);
+	}
+	else
+	{
+		/*
+		 * We set the global PID in the backend data here already to be able to
+		 * do blocked process detection on connections that are opened over a
+		 * replication connection. A replication connection backend will never
+		 * call StartupCitusBackend, which normally sets up the global PID.
+		 */
+		InitializeBackendData();
+		SetBackendDataGlobalPID(gpid);
 	}
 
 	/* let other authentication hooks to kick in first */
