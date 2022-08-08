@@ -374,6 +374,7 @@ VACUUM ANALYZE users_table;
 -- explain tests
 EXPLAIN (COSTS FALSE) SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER BY 1;
 
+SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS FALSE) SELECT *
 	FROM (
 		(SELECT user_id FROM recent_users)
@@ -381,6 +382,7 @@ EXPLAIN (COSTS FALSE) SELECT *
 		(SELECT user_id FROM selected_users) ) u
 	WHERE user_id < 4 AND user_id > 1
 	ORDER BY user_id;
+$Q$);
 
 EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
 SET citus.subquery_pushdown to ON;
