@@ -38,6 +38,7 @@ SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \
 -- BEGIN: Test Negative scenario
 SELECT * from worker_split_copy(
     101, -- Invalid source shard id.
+    'id',
     ARRAY[
          -- split copy info for split children 1
         ROW(81070015, -- destination shard id
@@ -54,26 +55,31 @@ SELECT * from worker_split_copy(
 
 SELECT * from worker_split_copy(
     81070000, -- source shard id to copy
+    'id',
     ARRAY[] -- empty array
     );
 
 SELECT * from worker_split_copy(
     81070000, -- source shard id to copy
+    'id',
     ARRAY[NULL] -- empty array
     );
 
 SELECT * from worker_split_copy(
     81070000, -- source shard id to copy
+    'id',
     ARRAY[NULL::pg_catalog.split_copy_info]-- empty array
     );
 
 SELECT * from worker_split_copy(
     81070000, -- source shard id to copy
+    'id',
     ARRAY[ROW(NULL)]-- empty array
     );
 
 SELECT * from worker_split_copy(
     81070000, -- source shard id to copy
+    'id',
     ARRAY[ROW(NULL, NULL, NULL, NULL)::pg_catalog.split_copy_info] -- empty array
     );
 -- END: Test Negative scenario
@@ -83,6 +89,7 @@ SELECT * from worker_split_copy(
 SET citus.enable_binary_protocol = false;
 SELECT * from worker_split_copy(
     81070000, -- source shard id to copy
+    'id',
     ARRAY[
          -- split copy info for split children 1
         ROW(81070015, -- destination shard id
