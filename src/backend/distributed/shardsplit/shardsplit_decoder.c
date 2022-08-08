@@ -216,8 +216,9 @@ GetHashValueForIncomingTuple(Relation sourceShardRelation,
 												  TYPECACHE_HASH_PROC_FINFO);
 
 	/* get hashed value of the distribution value */
-	Datum hashedValueDatum = FunctionCall1(&(typeEntry->hash_proc_finfo),
-										   partitionColumnValue);
+	Datum hashedValueDatum = FunctionCall1Coll(&(typeEntry->hash_proc_finfo),
+											   typeEntry->typcollation,
+											   partitionColumnValue);
 
 	return DatumGetInt32(hashedValueDatum);
 }
