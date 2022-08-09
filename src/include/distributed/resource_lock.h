@@ -48,7 +48,8 @@ typedef enum AdvisoryLocktagClass
 /* CitusOperations has constants for citus operations */
 typedef enum CitusOperations
 {
-	CITUS_TRANSACTION_RECOVERY = 0
+	CITUS_TRANSACTION_RECOVERY = 0,
+	CITUS_BACKGROUND_TASK_MONITOR = 1
 } CitusOperations;
 
 /* reuse advisory lock, but with different, unused field 4 (4)*/

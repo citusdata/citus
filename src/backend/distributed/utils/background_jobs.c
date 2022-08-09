@@ -28,6 +28,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/shard_cleaner.h"
+#include "distributed/resource_lock.h"
 
 bool BackgroundTaskMonitorDebugDelay = false;
 
@@ -120,13 +121,30 @@ CitusBackgroundTaskMonitorMain(Datum arg)
 	/* connect to database, after that we can actually access catalogs */
 	BackgroundWorkerInitializeConnectionByOid(databaseOid, extensionOwner, 0);
 
-	/* TODO get lock to make sure there is only one worker running per databasse */
+	/*
+	 * There should be exactly one background task monitor running, running multiple would
+	 * cause conflicts on processing the tasks in the catalog table as well as violate
+	 * parallelism guarantees. To make sure there is at most, exactly one backend running
+	 * we take a session lock on the CITUS_BACKGROUND_TASK_MONITOR operation.
+	 */
+	LOCKTAG tag = { 0 };
+	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_BACKGROUND_TASK_MONITOR);
+	const bool sessionLock = true;
+	const bool dontWait = true;
+	LockAcquireResult locked =
+		LockAcquire(&tag, AccessExclusiveLock, sessionLock, dontWait);
+	if (locked == LOCKACQUIRE_NOT_AVAIL)
+	{
+		ereport(ERROR, (errmsg("background task monitor already running for database")));
+		exit(0);
+	}
 
 	/* make worker recognizable in pg_stat_activity */
 	pgstat_report_appname("citus background task monitor");
 
 	ereport(LOG, (errmsg("citus background task monitor")));
 
+	/* TODO this is here for debugging purposses, remove before merge. */
 	if (BackgroundTaskMonitorDebugDelay)
 	{
 		pg_usleep(30 * 1000 * 1000);
@@ -147,7 +165,6 @@ CitusBackgroundTaskMonitorMain(Datum arg)
 		StartTransactionCommand();
 		PushActiveSnapshot(GetTransactionSnapshot());
 
-		/* TODO have an actual function to check if the worker is still running */
 		ResetRunningBackgroundTasks();
 
 		PopActiveSnapshot();
