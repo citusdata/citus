@@ -828,11 +828,7 @@ SELECT proname, pronargs, proacl FROM pg_proc WHERE proname IN ('dist_float_avg'
 \c - - - :master_port
 SET search_path TO grant_on_function, public;
 DROP AGGREGATE dist_float_avg(float8), dist_float_avg_2(float8), no_dist_float_avg(float8), not_propagated_aggregate_user_test(float8);
-SELECT run_command_on_coordinator_and_workers('DROP SCHEMA grant_on_function CASCADE');
- run_command_on_coordinator_and_workers
----------------------------------------------------------------------
-
-(1 row)
-
+DROP SCHEMA grant_on_function CASCADE;
 DROP USER function_user_1, function_user_2, function_user_3, not_propagated_function_user_4;
 DROP USER procedure_user_1, procedure_user_2, procedure_user_3, not_propagated_procedure_user_4;
+DROP USER aggregate_user_1, aggregate_user_2, aggregate_user_3, not_propagated_aggregate_user_4;

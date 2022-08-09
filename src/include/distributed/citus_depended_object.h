@@ -23,6 +23,7 @@ typedef enum DistOpsValidationState
 {
 	HasAtLeastOneValidObject,
 	HasNoneValidObject,
+	HasObjectWithInvalidOwnership,
 	NoAddressResolutionRequired
 } DistOpsValidationState;
 
@@ -33,5 +34,6 @@ extern bool HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *c
 extern bool IsPgLocksTable(RangeTblEntry *rte);
 extern DistOpsValidationState DistOpsValidityState(Node *node, const
 												   DistributeObjectOps *ops);
+extern bool DistOpsInValidState(DistOpsValidationState distOpsValidationState);
 
 #endif /* CITUS_DEPENDED_OBJECT_H */
