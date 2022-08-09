@@ -1,0 +1,152 @@
+create schema create_distributed_table_concurrently;
+set search_path to create_distributed_table_concurrently;
+set citus.shard_replication_factor to 1;
+-- make sure we have the coordinator in the metadata
+SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+create table ref (id int primary key);
+select create_reference_table('ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+insert into ref select s from generate_series(0,9) s;
+create table test (key text, id int references ref (id) on delete cascade, t timestamptz default now()) partition by range (t);
+create table test_1 partition of test for values from ('2022-01-01') to ('2022-12-31');
+create table test_2 partition of test for values from ('2023-01-01') to ('2023-12-31');
+insert into test (key,id,t) select s,s%10, '2022-01-01'::date + interval '1 year' * (s%2) from generate_series(1,100) s;
+create table nocolo (x int, y int);
+-- test error conditions
+select create_distributed_table_concurrently('test','key', 'append');
+ERROR:  only hash-distributed tables can be distributed without blocking writes
+select create_distributed_table_concurrently('test','key', 'range');
+ERROR:  only hash-distributed tables can be distributed without blocking writes
+select create_distributed_table_concurrently('test','noexists', 'hash');
+ERROR:  column "noexists" of relation "test" does not exist
+select create_distributed_table_concurrently(0,'key');
+ERROR:  relation with OID XXXX does not exist
+select create_distributed_table_concurrently('ref','id');
+ERROR:  table "ref" is already distributed
+set citus.shard_replication_factor to 2;
+select create_distributed_table_concurrently('test','key', 'hash');
+ERROR:  cannot distribute a table concurrently when citus.shard_replication_factor > 1
+set citus.shard_replication_factor to 1;
+begin;
+select create_distributed_table_concurrently('test','key');
+ERROR:  create_distributed_table_concurrently cannot run inside a transaction block
+rollback;
+select create_distributed_table_concurrently('nocolo','x');
+ create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+select create_distributed_table_concurrently('test','key', colocate_with := 'nocolo');
+ERROR:  cannot colocate tables nocolo and test
+DETAIL:  Distribution column types don't match for nocolo and test.
+select create_distributed_table_concurrently('test','key', colocate_with := 'noexists');
+ERROR:  relation "noexists" does not exist
+-- use colocate_with "default"
+select create_distributed_table_concurrently('test','key', shard_count := 11);
+ create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+select shardcount from pg_dist_partition p join pg_dist_colocation c using (colocationid) where logicalrelid = 'test'::regclass;
+ shardcount
+---------------------------------------------------------------------
+         11
+(1 row)
+
+select count(*) from pg_dist_shard where logicalrelid = 'test'::regclass;
+ count
+---------------------------------------------------------------------
+    11
+(1 row)
+
+-- verify queries still work
+select count(*) from test;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+select key, id from test where key = '1';
+ key | id
+---------------------------------------------------------------------
+ 1   |  1
+(1 row)
+
+select count(*) from test_1;
+ count
+---------------------------------------------------------------------
+    50
+(1 row)
+
+-- verify that the foreign key to reference table was created
+begin;
+delete from ref;
+select count(*) from test;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+rollback;
+-- verify that we can undistribute the table
+begin;
+select undistribute_table('test', cascade_via_foreign_keys := true);
+NOTICE:  converting the partitions of create_distributed_table_concurrently.test
+NOTICE:  creating a new table for create_distributed_table_concurrently.test
+NOTICE:  dropping the old create_distributed_table_concurrently.test
+NOTICE:  renaming the new table to create_distributed_table_concurrently.test
+NOTICE:  creating a new table for create_distributed_table_concurrently.ref
+NOTICE:  moving the data of create_distributed_table_concurrently.ref
+NOTICE:  dropping the old create_distributed_table_concurrently.ref
+NOTICE:  renaming the new table to create_distributed_table_concurrently.ref
+NOTICE:  creating a new table for create_distributed_table_concurrently.test_1
+NOTICE:  moving the data of create_distributed_table_concurrently.test_1
+NOTICE:  dropping the old create_distributed_table_concurrently.test_1
+NOTICE:  renaming the new table to create_distributed_table_concurrently.test_1
+NOTICE:  creating a new table for create_distributed_table_concurrently.test_2
+NOTICE:  moving the data of create_distributed_table_concurrently.test_2
+NOTICE:  dropping the old create_distributed_table_concurrently.test_2
+NOTICE:  renaming the new table to create_distributed_table_concurrently.test_2
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+rollback;
+-- verify that we can co-locate with create_distributed_table_concurrently
+create table test2 (x text primary key, y text);
+insert into test2 (x,y) select s,s from generate_series(1,100) s;
+select create_distributed_table_concurrently('test2','x', colocate_with := 'test');
+ create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify co-located joins work
+select count(*) from test join test2 on (key = x);
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+select id, y from test join test2 on (key = x) where key = '1';
+ id | y
+---------------------------------------------------------------------
+  1 | 1
+(1 row)
+
+-- verify co-locaed foreign keys work
+alter table test add constraint fk foreign key (key) references test2 (x);
+set client_min_messages to warning;
+drop schema create_distributed_table_concurrently cascade;
