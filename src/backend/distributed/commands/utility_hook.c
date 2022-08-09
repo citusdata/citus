@@ -617,12 +617,15 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	/* inform the user about potential caveats */
 	if (IsA(parsetree, CreatedbStmt))
 	{
-		ereport(NOTICE, (errmsg("Citus partially supports CREATE DATABASE for "
-								"distributed databases"),
-						 errdetail("Citus does not propagate CREATE DATABASE "
-								   "command to workers"),
-						 errhint("You can manually create a database and its "
-								 "extensions on workers.")));
+		if (EnableUnsupportedFeatureMessages)
+		{
+			ereport(NOTICE, (errmsg("Citus partially supports CREATE DATABASE for "
+									"distributed databases"),
+							 errdetail("Citus does not propagate CREATE DATABASE "
+									   "command to workers"),
+							 errhint("You can manually create a database and its "
+									 "extensions on workers.")));
+		}
 	}
 	else if (IsA(parsetree, CreateRoleStmt) && !EnableCreateRolePropagation)
 	{
