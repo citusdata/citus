@@ -350,17 +350,12 @@ CitusBackgroundTaskMonitorMain(Datum arg)
 }
 
 
-/*
- * bgw_generate_returned_message -
- *      generates the message to be inserted into the job_run_details table
- *      first part is comming from error_severity (elog.c)
- */
-static void
-bgw_generate_returned_message(StringInfoData *display_msg, ErrorData edata)
+static const char *
+error_severity(int elevel)
 {
-	const char *prefix = NULL;
+	const char *prefix;
 
-	switch (edata.elevel)
+	switch (elevel)
 	{
 		case DEBUG1:
 		case DEBUG2:
@@ -392,6 +387,7 @@ bgw_generate_returned_message(StringInfoData *display_msg, ErrorData edata)
 		}
 
 		case WARNING:
+		case WARNING_CLIENT_ONLY:
 		{
 			prefix = gettext_noop("WARNING");
 			break;
@@ -422,6 +418,19 @@ bgw_generate_returned_message(StringInfoData *display_msg, ErrorData edata)
 		}
 	}
 
+	return prefix;
+}
+
+
+/*
+ * bgw_generate_returned_message -
+ *      generates the message to be inserted into the job_run_details table
+ *      first part is comming from error_severity (elog.c)
+ */
+static void
+bgw_generate_returned_message(StringInfoData *display_msg, ErrorData edata)
+{
+	const char *prefix = error_severity(edata.elevel);
 	appendStringInfo(display_msg, "%s: %s", prefix, edata.message);
 	if (edata.detail != NULL)
 	{
