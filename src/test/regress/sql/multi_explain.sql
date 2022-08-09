@@ -122,9 +122,11 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+SELECT public.plan_normalize_memory($Q$
 EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+$Q$);
 
 -- EXPLAIN ANALYZE doesn't show worker tasks for repartition joins yet
 SET citus.shard_count TO 3;
@@ -142,9 +144,11 @@ END;
 DROP TABLE t1, t2;
 
 -- Test query text output, with ANALYZE ON
+SELECT public.plan_normalize_memory($Q$
 EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+$Q$);
 
 -- Test query text output, with ANALYZE OFF
 EXPLAIN (COSTS FALSE, ANALYZE FALSE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE)
@@ -468,9 +472,11 @@ EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem_hash_part;
 
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+SELECT public.plan_normalize_memory($Q$
 EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+$Q$);
 
 SET citus.explain_all_tasks TO off;
 
