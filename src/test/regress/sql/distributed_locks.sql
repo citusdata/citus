@@ -83,7 +83,7 @@ SET ROLE TO user_with_view_permissions;
 BEGIN;
 LOCK myview IN ACCESS EXCLUSIVE MODE;
 SELECT run_command_on_workers($$
-    SELECT mode FROM pg_locks WHERE relation = 'distribute_lock_tests.dist_table'::regclass;
+    SELECT mode FROM pg_locks WHERE relation = 'distribute_lock_tests.dist_table'::regclass ORDER BY 1;
 $$);
 
 ROLLBACK;

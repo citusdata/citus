@@ -174,7 +174,7 @@ BEGIN;
 
 -- pick up a shard lock and look for it in pg_locks
 SELECT acquire_shared_shard_lock(5);
-SELECT objid, mode FROM pg_locks WHERE locktype = 'advisory' AND objid = 5;
+SELECT objid, mode FROM pg_locks WHERE locktype = 'advisory' AND objid = 5 ORDER BY 2;
 
 -- commit should drop the lock
 COMMIT;

@@ -76,7 +76,8 @@ step "s1-view-locks"
     SELECT mode, count(*)
     FROM pg_locks
     WHERE locktype='advisory'
-    GROUP BY mode;
+    GROUP BY mode
+    ORDER BY 1, 2;
 }
 
 step "s1-rollback"
