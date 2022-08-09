@@ -2,7 +2,6 @@
 -- Test different operations on empty columnar tables.
 --
 
-SET citus.compression to 'none';
 create table t_uncompressed(a int) using columnar;
 create table t_compressed(a int) using columnar;
 
