@@ -7,7 +7,8 @@ CREATE TABLE test_contestant(handle TEXT, birthdate DATE, rating INT,
 
 -- load table data from file
 \set contestants_1_csv_file :abs_srcdir '/data/contestants.1.csv'
-COPY test_contestant FROM :'contestants_1_csv_file' WITH CSV;
+\set client_side_copy_command '\\copy test_contestant FROM ' :'contestants_1_csv_file' ' WITH CSV;'
+:client_side_copy_command
 
 -- export using COPY table TO ...
 COPY test_contestant TO STDOUT;

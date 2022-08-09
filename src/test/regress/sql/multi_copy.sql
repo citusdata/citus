@@ -102,7 +102,8 @@ WITH (DELIMITER ' ');
 SELECT count(*) FROM customer_copy_hash WHERE c_custkey = 9;
 
 -- Test server-side copy from file
-COPY customer_copy_hash FROM :'customer2datafile' WITH (DELIMITER '|');
+\set client_side_copy_command '\\copy customer_copy_hash FROM ' :'customer2datafile' ' WITH (DELIMITER '''|''');'
+:client_side_copy_command
 
 -- Confirm that data was copied
 SELECT count(*) FROM customer_copy_hash;
@@ -184,7 +185,8 @@ CREATE TABLE customer_copy_range (
 SELECT master_create_distributed_table('customer_copy_range', 'c_custkey', 'range');
 
 -- Test COPY into empty range-partitioned table
-COPY customer_copy_range FROM :'customer1datafile' WITH (DELIMITER '|');
+\set client_side_copy_command '\\copy customer_copy_range FROM ' :'customer1datafile' ' WITH (DELIMITER '''|''');'
+:client_side_copy_command
 
 SELECT master_create_empty_shard('customer_copy_range') AS new_shard_id
 \gset
@@ -197,7 +199,8 @@ UPDATE pg_dist_shard SET shardminvalue = 501, shardmaxvalue = 1000
 WHERE shardid = :new_shard_id;
 
 -- Test copy into range-partitioned table
-COPY customer_copy_range FROM :'customer1datafile' WITH (DELIMITER '|');
+\set client_side_copy_command '\\copy customer_copy_range FROM ' :'customer1datafile' ' WITH (DELIMITER '''|''');'
+:client_side_copy_command
 
 -- Check whether data went into the right shard (maybe)
 SELECT min(c_custkey), max(c_custkey), avg(c_custkey), count(*)
@@ -293,14 +296,17 @@ SELECT create_distributed_table('lineitem_copy_append', 'l_orderkey', 'append');
 
 BEGIN;
 SELECT master_create_empty_shard('lineitem_copy_append') AS shardid \gset
-COPY lineitem_copy_append FROM :'lineitem1datafile' with (delimiter '|', append_to_shard :shardid);
+\set client_side_copy_command '\\copy lineitem_copy_append FROM ' :'lineitem1datafile' ' with (delimiter '''|''', append_to_shard ' :shardid ');'
+:client_side_copy_command
 END;
 
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid = 'lineitem_copy_append'::regclass;
 
 -- trigger some errors on the append_to_shard option
-COPY lineitem_copy_append FROM :'lineitem1datafile' with (delimiter '|', append_to_shard 1);
-COPY lineitem_copy_append FROM :'lineitem1datafile' with (delimiter '|', append_to_shard 560000);
+\set client_side_copy_command '\\copy lineitem_copy_append FROM ' :'lineitem1datafile' ' with (delimiter '''|''', append_to_shard 1);'
+:client_side_copy_command
+\set client_side_copy_command '\\copy lineitem_copy_append FROM ' :'lineitem1datafile' ' with (delimiter '''|''', append_to_shard 560000);'
+:client_side_copy_command
 
 -- Test schema support on append partitioned tables
 CREATE SCHEMA append;
@@ -319,8 +325,10 @@ SELECT master_create_empty_shard('append.customer_copy') AS shardid1 \gset
 SELECT master_create_empty_shard('append.customer_copy') AS shardid2 \gset
 
 -- Test copy from the master node
-COPY append.customer_copy FROM :'customer1datafile' with (delimiter '|', append_to_shard :shardid1);
-COPY append.customer_copy FROM :'customer2datafile' with (delimiter '|', append_to_shard :shardid2);
+\set client_side_copy_command '\\copy append.customer_copy FROM ' :'customer1datafile' ' with (delimiter '''|''', append_to_shard ' :shardid1 ');'
+:client_side_copy_command
+\set client_side_copy_command '\\copy append.customer_copy FROM ' :'customer2datafile' ' with (delimiter '''|''', append_to_shard ' :shardid2 ');'
+:client_side_copy_command
 
 -- Test the content of the table
 SELECT min(c_custkey), max(c_custkey), avg(c_acctbal), count(*) FROM append.customer_copy;

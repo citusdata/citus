@@ -4,14 +4,15 @@
 
 -- COPY with incorrect delimiter
 \set contestants_1_csv_file :abs_srcdir '/data/contestants.1.csv'
-COPY contestant FROM :'contestants_1_csv_file'
-	WITH DELIMITER '|'; -- ERROR
+\set client_side_copy_command '\\copy contestant FROM ' :'contestants_1_csv_file' ' WITH DELIMITER '''|''';'
+:client_side_copy_command -- ERROR
 
 -- COPY with invalid program
 COPY contestant FROM PROGRAM 'invalid_program' WITH CSV; -- ERROR
 
 -- COPY into uncompressed table from file
-COPY contestant FROM :'contestants_1_csv_file' WITH CSV;
+\set client_side_copy_command '\\copy contestant FROM ' :'contestants_1_csv_file' ' WITH CSV;'
+:client_side_copy_command
 
 -- COPY into uncompressed table from program
 \set cat_contestants_2_csv_file 'cat ' :abs_srcdir '/data/contestants.2.csv'
@@ -22,7 +23,8 @@ select
   from columnar_test_helpers.columnar_storage_info('contestant');
 
 -- COPY into compressed table
-COPY contestant_compressed FROM :'contestants_1_csv_file' WITH CSV;
+\set client_side_copy_command '\\copy contestant_compressed FROM ' :'contestants_1_csv_file' ' WITH CSV;'
+:client_side_copy_command
 
 -- COPY into uncompressed table from program
 COPY contestant_compressed FROM PROGRAM :'cat_contestants_2_csv_file'

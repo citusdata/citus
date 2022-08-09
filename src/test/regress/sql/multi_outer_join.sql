@@ -72,10 +72,14 @@ SELECT create_reference_table('multi_outer_join_third_reference');
 \set customer_1_10_data :abs_srcdir '/data/customer-1-10.data'
 \set customer_11_20_data :abs_srcdir '/data/customer-11-20.data'
 \set customer_1_15_data :abs_srcdir '/data/customer-1-15.data'
-COPY multi_outer_join_left FROM :'customer_1_10_data' with delimiter '|';
-COPY multi_outer_join_left FROM :'customer_11_20_data' with delimiter '|';
-COPY multi_outer_join_right FROM :'customer_1_15_data' with delimiter '|';
-COPY multi_outer_join_right_reference FROM :'customer_1_15_data' with delimiter '|';
+\set client_side_copy_command '\\copy multi_outer_join_left FROM ' :'customer_1_10_data' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy multi_outer_join_left FROM ' :'customer_11_20_data' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy multi_outer_join_right FROM ' :'customer_1_15_data' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy multi_outer_join_right_reference FROM ' :'customer_1_15_data' ' with delimiter '''|''';'
+:client_side_copy_command
 
 -- Make sure we do not crash if one table has no shards
 SELECT
@@ -90,8 +94,10 @@ FROM
 
 -- Third table is a single shard table with all data
 \set customer_1_30_data :abs_srcdir '/data/customer-1-30.data'
-COPY multi_outer_join_third FROM :'customer_1_30_data' with delimiter '|';
-COPY multi_outer_join_third_reference FROM :'customer_1_30_data' with delimiter '|';
+\set client_side_copy_command '\\copy multi_outer_join_third FROM ' :'customer_1_30_data' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy multi_outer_join_third_reference FROM ' :'customer_1_30_data' ' with delimiter '''|''';'
+:client_side_copy_command
 
 -- Regular outer join should return results for all rows
 SELECT
@@ -171,7 +177,8 @@ FROM
 
 -- Turn the right table into a large table
 \set customer_21_30_data :abs_srcdir '/data/customer-21-30.data'
-COPY multi_outer_join_right FROM :'customer_21_30_data' with delimiter '|';
+\set client_side_copy_command '\\copy multi_outer_join_right FROM ' :'customer_21_30_data' ' with delimiter '''|''';'
+:client_side_copy_command
 
 
 -- Shards do not have 1-1 matching. We should error here.
@@ -186,12 +193,16 @@ TRUNCATE multi_outer_join_right;
 
 -- reload shards with 1-1 matching
 \set customer_subset_11_20_data :abs_srcdir '/data/customer-subset-11-20.data'
-COPY multi_outer_join_left FROM :'customer_subset_11_20_data' with delimiter '|';
-COPY multi_outer_join_left FROM :'customer_21_30_data' with delimiter '|';
+\set client_side_copy_command '\\copy multi_outer_join_left FROM ' :'customer_subset_11_20_data' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy multi_outer_join_left FROM ' :'customer_21_30_data' ' with delimiter '''|''';'
+:client_side_copy_command
 
 \set customer_subset_21_30_data :abs_srcdir '/data/customer-subset-21-30.data'
-COPY multi_outer_join_right FROM :'customer_11_20_data' with delimiter '|';
-COPY multi_outer_join_right FROM :'customer_subset_21_30_data' with delimiter '|';
+\set client_side_copy_command '\\copy multi_outer_join_right FROM ' :'customer_11_20_data' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy multi_outer_join_right FROM ' :'customer_subset_21_30_data' ' with delimiter '''|''';'
+:client_side_copy_command
 
 -- multi_outer_join_third is a single shard table
 -- Regular left join should work as expected
@@ -454,7 +465,8 @@ LIMIT 20;
 
 -- Add a shard to the left table that overlaps with multiple shards in the right
 \set customer_1_data_file :abs_srcdir '/data/customer.1.data'
-COPY multi_outer_join_left FROM :'customer_1_data_file' with delimiter '|';
+\set client_side_copy_command '\\copy multi_outer_join_left FROM ' :'customer_1_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
 
 
 -- All outer joins should error out

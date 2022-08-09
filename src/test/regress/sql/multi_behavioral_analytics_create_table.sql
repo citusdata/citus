@@ -17,8 +17,10 @@ SELECT create_distributed_table('events_table', 'user_id');
 
 \set users_table_data_file :abs_srcdir '/data/users_table.data'
 \set events_table_data_file :abs_srcdir '/data/events_table.data'
-COPY users_table FROM :'users_table_data_file' WITH CSV;
-COPY events_table FROM :'events_table_data_file' WITH CSV;
+\set client_side_copy_command '\\copy users_table FROM ' :'users_table_data_file' ' WITH CSV;'
+:client_side_copy_command
+\set client_side_copy_command '\\copy events_table FROM ' :'events_table_data_file' ' WITH CSV;'
+:client_side_copy_command
 
 SET citus.shard_count = 96;
 CREATE SCHEMA subquery_and_ctes;
@@ -30,8 +32,10 @@ SELECT create_distributed_table('users_table', 'user_id');
 CREATE TABLE events_table (user_id int, time timestamp, event_type int, value_2 int, value_3 float, value_4 bigint);
 SELECT create_distributed_table('events_table', 'user_id');
 
-COPY users_table FROM :'users_table_data_file' WITH CSV;
-COPY events_table FROM :'events_table_data_file' WITH CSV;
+\set client_side_copy_command '\\copy users_table FROM ' :'users_table_data_file' ' WITH CSV;'
+:client_side_copy_command
+\set client_side_copy_command '\\copy events_table FROM ' :'events_table_data_file' ' WITH CSV;'
+:client_side_copy_command
 
 SET citus.shard_count TO DEFAULT;
 SET search_path TO DEFAULT;
@@ -70,8 +74,10 @@ INSERT INTO users_ref_test_table VALUES(4,'User_4',48);
 INSERT INTO users_ref_test_table VALUES(5,'User_5',49);
 INSERT INTO users_ref_test_table VALUES(6,'User_6',50);
 
-COPY users_table FROM :'users_table_data_file' WITH CSV;
-COPY events_table FROM :'events_table_data_file' WITH CSV;
+\set client_side_copy_command '\\copy users_table FROM ' :'users_table_data_file' ' WITH CSV;'
+:client_side_copy_command
+\set client_side_copy_command '\\copy events_table FROM ' :'events_table_data_file' ' WITH CSV;'
+:client_side_copy_command
 
 -- create indexes for
 CREATE INDEX is_index1 ON users_table(user_id);

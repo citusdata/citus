@@ -66,13 +66,17 @@ FROM
 -- Left table is a large table
 \set customer_1_10_data :abs_srcdir '/data/customer-1-10.data'
 \set customer_11_20_data :abs_srcdir '/data/customer-11-20.data'
-COPY multi_outer_join_left_hash FROM :'customer_1_10_data' with delimiter '|';
-COPY multi_outer_join_left_hash FROM :'customer_11_20_data' with delimiter '|';
+\set client_side_copy_command '\\copy multi_outer_join_left_hash FROM ' :'customer_1_10_data' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy multi_outer_join_left_hash FROM ' :'customer_11_20_data' ' with delimiter '''|''';'
+:client_side_copy_command
 
 -- Right table is a small table
 \set customer_1_15_data :abs_srcdir '/data/customer-1-15.data'
-COPY multi_outer_join_right_reference FROM :'customer_1_15_data' with delimiter '|';
-COPY multi_outer_join_right_hash FROM :'customer_1_15_data' with delimiter '|';
+\set client_side_copy_command '\\copy multi_outer_join_right_reference FROM ' :'customer_1_15_data' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy multi_outer_join_right_hash FROM ' :'customer_1_15_data' ' with delimiter '''|''';'
+:client_side_copy_command
 
 -- Make sure we do not crash if one table has data
 SELECT
@@ -87,8 +91,10 @@ FROM
 
 -- Third table is a single shard table with all data
 \set customer_1_30_data :abs_srcdir '/data/customer-1-30.data'
-COPY multi_outer_join_third_reference FROM :'customer_1_30_data' with delimiter '|';
-COPY multi_outer_join_right_hash FROM :'customer_1_30_data' with delimiter '|';
+\set client_side_copy_command '\\copy multi_outer_join_third_reference FROM ' :'customer_1_30_data' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy multi_outer_join_right_hash FROM ' :'customer_1_30_data' ' with delimiter '''|''';'
+:client_side_copy_command
 
 
 -- Regular outer join should return results for all rows
@@ -169,7 +175,8 @@ FROM
 
 -- load some more data
 \set customer_21_30_data :abs_srcdir '/data/customer-21-30.data'
-COPY multi_outer_join_right_reference FROM :'customer_21_30_data' with delimiter '|';
+\set client_side_copy_command '\\copy multi_outer_join_right_reference FROM ' :'customer_21_30_data' ' with delimiter '''|''';'
+:client_side_copy_command
 
 -- Update shards so that they do not have 1-1 matching, triggering an error.
 UPDATE pg_dist_shard SET shardminvalue = '2147483646' WHERE shardid = 1260006;
@@ -185,14 +192,20 @@ UPDATE pg_dist_shard SET shardmaxvalue = '-1073741825' WHERE shardid = 1260006;
 TRUNCATE multi_outer_join_left_hash, multi_outer_join_right_hash, multi_outer_join_right_reference;
 
 -- reload shards with 1-1 matching
-COPY multi_outer_join_left_hash FROM :'customer_1_15_data' with delimiter '|';
-COPY multi_outer_join_left_hash FROM :'customer_21_30_data' with delimiter '|';
+\set client_side_copy_command '\\copy multi_outer_join_left_hash FROM ' :'customer_1_15_data' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy multi_outer_join_left_hash FROM ' :'customer_21_30_data' ' with delimiter '''|''';'
+:client_side_copy_command
 
-COPY multi_outer_join_right_reference FROM :'customer_11_20_data' with delimiter '|';
-COPY multi_outer_join_right_reference FROM :'customer_21_30_data' with delimiter '|';
+\set client_side_copy_command '\\copy multi_outer_join_right_reference FROM ' :'customer_11_20_data' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy multi_outer_join_right_reference FROM ' :'customer_21_30_data' ' with delimiter '''|''';'
+:client_side_copy_command
 
-COPY multi_outer_join_right_hash FROM :'customer_11_20_data' with delimiter '|';
-COPY multi_outer_join_right_hash FROM :'customer_21_30_data' with delimiter '|';
+\set client_side_copy_command '\\copy multi_outer_join_right_hash FROM ' :'customer_11_20_data' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy multi_outer_join_right_hash FROM ' :'customer_21_30_data' ' with delimiter '''|''';'
+:client_side_copy_command
 
 -- multi_outer_join_third_reference is a single shard table
 

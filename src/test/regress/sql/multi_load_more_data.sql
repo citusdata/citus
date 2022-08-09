@@ -13,9 +13,12 @@ SET citus.next_shard_id TO 280000;
 \set customer_2_data_file :abs_srcdir '/data/customer.2.data'
 \set customer_3_data_file :abs_srcdir '/data/customer.3.data'
 \set part_more_data_file :abs_srcdir '/data/part.more.data'
-COPY customer FROM :'customer_2_data_file' with delimiter '|';
-COPY customer FROM :'customer_3_data_file' with delimiter '|';
-COPY part FROM :'part_more_data_file' with delimiter '|';
+\set client_side_copy_command '\\copy customer FROM ' :'customer_2_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy customer FROM ' :'customer_3_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy part FROM ' :'part_more_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
 
 SELECT master_create_empty_shard('customer_append') AS shardid1 \gset
 SELECT master_create_empty_shard('customer_append') AS shardid2 \gset

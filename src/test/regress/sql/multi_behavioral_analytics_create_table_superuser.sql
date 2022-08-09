@@ -291,11 +291,15 @@ UPDATE pg_dist_shard SET shardminvalue = 8997, shardmaxvalue = 14947
 WHERE shardid = :new_shard_id;
 
 \set lineitem_1_data_file :abs_srcdir '/data/lineitem.1.data'
-COPY lineitem_subquery FROM :'lineitem_1_data_file' with delimiter '|';
+\set client_side_copy_command '\\copy lineitem_subquery FROM ' :'lineitem_1_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
 \set lineitem_2_data_file :abs_srcdir '/data/lineitem.2.data'
-COPY lineitem_subquery FROM :'lineitem_2_data_file' with delimiter '|';
+\set client_side_copy_command '\\copy lineitem_subquery FROM ' :'lineitem_2_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
 
 \set orders_1_data_file :abs_srcdir '/data/orders.1.data'
-COPY orders_subquery FROM :'orders_1_data_file' with delimiter '|';
+\set client_side_copy_command '\\copy orders_subquery FROM ' :'orders_1_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
 \set orders_2_data_file :abs_srcdir '/data/orders.2.data'
-COPY orders_subquery FROM :'orders_2_data_file' with delimiter '|';
+\set client_side_copy_command '\\copy orders_subquery FROM ' :'orders_2_data_file' ' with delimiter '''|''';'
+:client_side_copy_command

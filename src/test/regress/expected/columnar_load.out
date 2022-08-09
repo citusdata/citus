@@ -3,8 +3,8 @@
 --
 -- COPY with incorrect delimiter
 \set contestants_1_csv_file :abs_srcdir '/data/contestants.1.csv'
-COPY contestant FROM :'contestants_1_csv_file'
-	WITH DELIMITER '|'; -- ERROR
+\set client_side_copy_command '\\copy contestant FROM ' :'contestants_1_csv_file' ' WITH DELIMITER '''|''';'
+:client_side_copy_command -- ERROR
 ERROR:  missing data for column "birthdate"
 CONTEXT:  COPY contestant, line 1: "a,1990-01-10,2090,97.1,XA ,{a}"
 -- COPY with invalid program
@@ -12,7 +12,8 @@ COPY contestant FROM PROGRAM 'invalid_program' WITH CSV; -- ERROR
 ERROR:  program "invalid_program" failed
 DETAIL:  command not found
 -- COPY into uncompressed table from file
-COPY contestant FROM :'contestants_1_csv_file' WITH CSV;
+\set client_side_copy_command '\\copy contestant FROM ' :'contestants_1_csv_file' ' WITH CSV;'
+:client_side_copy_command
 -- COPY into uncompressed table from program
 \set cat_contestants_2_csv_file 'cat ' :abs_srcdir '/data/contestants.2.csv'
 COPY contestant FROM PROGRAM :'cat_contestants_2_csv_file' WITH CSV;
@@ -25,7 +26,8 @@ select
 (1 row)
 
 -- COPY into compressed table
-COPY contestant_compressed FROM :'contestants_1_csv_file' WITH CSV;
+\set client_side_copy_command '\\copy contestant_compressed FROM ' :'contestants_1_csv_file' ' WITH CSV;'
+:client_side_copy_command
 -- COPY into uncompressed table from program
 COPY contestant_compressed FROM PROGRAM :'cat_contestants_2_csv_file'
 	WITH CSV;
