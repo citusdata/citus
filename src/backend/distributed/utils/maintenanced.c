@@ -718,7 +718,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
 			{
 				/* perform catalog precheck */
-				shouldStartRebalanceJobsBackgroundWorker = HasScheduledRebalanceJobs();
+				shouldStartRebalanceJobsBackgroundWorker = HasScheduledBackgroundTask();
 			}
 
 			CommitTransactionCommand();

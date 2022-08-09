@@ -215,12 +215,15 @@ typedef enum BackgroundTaskStatus
 } BackgroundTaskStatus;
 
 
-typedef struct RebalanceJob
+typedef struct BackgroundTask
 {
-	int64 jobid;
+	int64 taskid;
+	int32 *pid;
 	BackgroundTaskStatus status;
 	char *command;
-} RebalanceJob;
+	int32 *retry_count;
+	char *message;
+} BackgroundTask;
 
 
 /* Size functions */
@@ -330,18 +333,18 @@ extern void EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid
 										ownerRelationId);
 extern void AlterSequenceType(Oid seqOid, Oid typeOid);
 extern void EnsureRelationHasCompatibleSequenceTypes(Oid relationId);
-extern bool HasScheduledRebalanceJobs(void);
+extern bool HasScheduledBackgroundTask(void);
 extern int64 GetNextBackgroundTaskTaskId(void);
-extern RebalanceJob * ScheduleBackgrounRebalanceJob(char *command, int dependingJobCount,
-													int64 dependingJobIds[]);
-extern bool JobHasUmnetDependencies(int64 jobid);
-extern RebalanceJob * GetRunableRebalanceJob(void);
+extern BackgroundTask * ScheduleBackgroundTask(char *command, int dependingTaskCount,
+											   int64 dependingTaskIds[]);
+extern bool BackgroundTaskHasUmnetDependencies(int64 taskId);
+extern BackgroundTask * GetRunnableBackgroundTask(void);
 extern void ResetRunningBackgroundTasks(void);
-extern RebalanceJob * GetScheduledRebalanceJobByJobID(int64 jobId);
-extern void UpdateJobStatus(int64 jobid, pid_t *pid, BackgroundTaskStatus status,
-							int32 *retry_count, char *message);
-extern bool UpdateJobError(RebalanceJob *job, ErrorData *edata);
-extern void UnscheduleDependantJobs(int64 jobid);
-extern bool IsRebalanceJobStatusTerminal(BackgroundTaskStatus status);
-extern Oid RebalanceJobStatusOid(BackgroundTaskStatus status);
+extern BackgroundTask * GetBackgroundTaskByTaskId(int64 taskId);
+extern void UpdateJobStatus(int64 taskId, const pid_t *pid, BackgroundTaskStatus status,
+							const int32 *retry_count, char *message);
+extern bool UpdateJobError(BackgroundTask *job, ErrorData *edata);
+extern void UnscheduleDependantTasks(int64 taskId);
+extern bool IsCitusTaskStatusTerminal(BackgroundTaskStatus status);
+extern Oid CitusTaskStatusOid(BackgroundTaskStatus status);
 #endif   /* METADATA_UTILITY_H */

@@ -25,13 +25,13 @@ citus_wait_for_rebalance_job(PG_FUNCTION_ARGS)
 	{
 		CHECK_FOR_INTERRUPTS();
 
-		RebalanceJob *job = GetScheduledRebalanceJobByJobID(jobid);
+		BackgroundTask *job = GetBackgroundTaskByTaskId(jobid);
 		if (!job)
 		{
 			ereport(ERROR, (errmsg("unkown job with jobid: %ld", jobid)));
 		}
 
-		if (IsRebalanceJobStatusTerminal(job->status))
+		if (IsCitusTaskStatusTerminal(job->status))
 		{
 			PG_RETURN_VOID();
 		}

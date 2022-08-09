@@ -1579,9 +1579,9 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 						 move->targetNode->workerPort,
 						 quote_literal_cstr(shardTranferModeLabel));
 
-		RebalanceJob *job = ScheduleBackgrounRebalanceJob(buf.data, first ? 0 : 1,
-														  &prevJobId);
-		prevJobId = job->jobid;
+		BackgroundTask *job = ScheduleBackgroundTask(buf.data, first ? 0 : 1,
+													 &prevJobId);
+		prevJobId = job->taskid;
 		first = false;
 	}
 

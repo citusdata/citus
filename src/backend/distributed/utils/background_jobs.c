@@ -148,7 +148,7 @@ CitusBackgroundTaskMonitorMain(Datum arg)
 		 * later due to the committing and starting of new transactions
 		 */
 		MemoryContext oldContext = MemoryContextSwitchTo(perTaskContext);
-		RebalanceJob *job = GetRunableRebalanceJob();
+		BackgroundTask *job = GetRunnableBackgroundTask();
 		MemoryContextSwitchTo(oldContext);
 
 		if (!job)
@@ -178,13 +178,13 @@ CitusBackgroundTaskMonitorMain(Datum arg)
 		pid_t pid = 0;
 		GetBackgroundWorkerPid(handle, &pid);
 
-		ereport(LOG, (errmsg("found job with jobid: %ld", job->jobid)));
+		ereport(LOG, (errmsg("found job with jobid: %ld", job->taskid)));
 
 		StartTransactionCommand();
 		PushActiveSnapshot(GetTransactionSnapshot());
 
 		/* Update job status to indicate it is running */
-		UpdateJobStatus(job->jobid, &pid, BACKGROUND_TASK_STATUS_RUNNING, NULL, NULL);
+		UpdateJobStatus(job->taskid, &pid, BACKGROUND_TASK_STATUS_RUNNING, NULL, NULL);
 
 		PopActiveSnapshot();
 		CommitTransactionCommand();
@@ -214,7 +214,7 @@ CitusBackgroundTaskMonitorMain(Datum arg)
 		PushActiveSnapshot(GetTransactionSnapshot());
 
 		/* TODO job can actually also have failed*/
-		UpdateJobStatus(job->jobid, NULL, BACKGROUND_TASK_STATUS_DONE, NULL, NULL);
+		UpdateJobStatus(job->taskid, NULL, BACKGROUND_TASK_STATUS_DONE, NULL, NULL);
 
 		PopActiveSnapshot();
 		CommitTransactionCommand();

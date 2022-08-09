@@ -144,7 +144,7 @@ typedef struct MetadataCacheData
 	Oid distBackgroundTasksRelationId;
 	Oid distBackgroundTasksTaskIdIndexId;
 	Oid distBackgroundTasksStatusTaskIdIndexId;
-	Oid distBackgroundTaskssDependRelationId;
+	Oid distBackgroundTasksDependRelationId;
 	Oid distBackgroundTasksDependTaskIdIndexId;
 	Oid distBackgroundTasksDependDependsOnIndexId;
 	Oid citusTaskStatusScheduledId;
@@ -2406,12 +2406,12 @@ DistBackgroundTasksStatusTaskIdIndexId(void)
 
 
 Oid
-DistBackgroundTaskssDependRelationId(void)
+DistBackgroundTasksDependRelationId(void)
 {
 	CachedRelationLookup("pg_dist_background_tasks_depend",
-						 &MetadataCache.distBackgroundTaskssDependRelationId);
+						 &MetadataCache.distBackgroundTasksDependRelationId);
 
-	return MetadataCache.distBackgroundTaskssDependRelationId;
+	return MetadataCache.distBackgroundTasksDependRelationId;
 }
 
 

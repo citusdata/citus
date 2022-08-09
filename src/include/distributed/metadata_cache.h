@@ -239,7 +239,7 @@ extern Oid DistPartitionLogicalRelidIndexId(void);
 extern Oid DistPartitionColocationidIndexId(void);
 extern Oid DistBackgroundTasksTaskIdIndexId(void);
 extern Oid DistBackgroundTasksStatusTaskIdIndexId(void);
-extern Oid DistBackgroundTaskssDependRelationId(void);
+extern Oid DistBackgroundTasksDependRelationId(void);
 extern Oid DistBackgroundTasksDependTaskIdIndexId(void);
 extern Oid DistBackgroundTasksDependDependsOnIndexId(void);
 extern Oid DistShardLogicalRelidIndexId(void);
