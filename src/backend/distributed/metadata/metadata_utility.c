@@ -45,7 +45,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
-#include "distributed/pg_dist_rebalance_jobs.h"
+#include "distributed/pg_dist_background_tasks.h"
 #include "distributed/pg_dist_rebalance_jobs_depend.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/pg_dist_placement.h"
@@ -2228,26 +2228,26 @@ HasScheduledRebalanceJobs()
 	ScanKeyData scanKey[1];
 	bool indexOK = true;
 
-	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
+	Relation pgDistRebalanceJobs = table_open(DistBackgroundTasksRelationId(),
 											  AccessShareLock);
 
 	/* find any job in states listed here */
-	RebalanceJobStatus jobs[] = {
-		REBALANCE_JOB_STATUS_RUNNING,
-		REBALANCE_JOB_STATUS_SCHEDULED
+	BackgroundTaskStatus jobs[] = {
+		BACKGROUND_TASK_STATUS_RUNNING,
+		BACKGROUND_TASK_STATUS_SCHEDULED
 	};
 
 	bool hasScheduledJob = false;
 	for (int i = 0; !hasScheduledJob && i < sizeof(jobs) / sizeof(jobs[0]); i++)
 	{
 		/* pg_dist_rebalance_jobs.status == jobs[i] */
-		ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_status,
+		ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_status,
 					BTEqualStrategyNumber, F_OIDEQ,
 					ObjectIdGetDatum(RebalanceJobStatusOid(jobs[i])));
 
 		SysScanDesc scanDescriptor = systable_beginscan(
 			pgDistRebalanceJobs,
-			DistRebalanceJobsStatusJobsIdIndexId(),
+			DistBackgroundTasksStatusTaskIdIndexId(),
 			indexOK, NULL, scanKeyCount,
 			scanKey);
 
@@ -2266,42 +2266,42 @@ HasScheduledRebalanceJobs()
 }
 
 
-static RebalanceJobStatus
+static BackgroundTaskStatus
 RebalanceJobStatusByOid(Oid enumOid)
 {
-	if (enumOid == JobStatusDoneId())
+	if (enumOid == CitusTaskStatusDoneId())
 	{
-		return REBALANCE_JOB_STATUS_DONE;
+		return BACKGROUND_TASK_STATUS_DONE;
 	}
-	else if (enumOid == JobStatusScheduledId())
+	else if (enumOid == CitusTaskStatusScheduledId())
 	{
-		return REBALANCE_JOB_STATUS_SCHEDULED;
+		return BACKGROUND_TASK_STATUS_SCHEDULED;
 	}
-	else if (enumOid == JobStatusRunningId())
+	else if (enumOid == CitusTaskStatusRunningId())
 	{
-		return REBALANCE_JOB_STATUS_RUNNING;
+		return BACKGROUND_TASK_STATUS_RUNNING;
 	}
-	else if (enumOid == JobStatusErrorId())
+	else if (enumOid == CitusTaskStatusErrorId())
 	{
-		return REBALANCE_JOB_STATUS_ERROR;
+		return BACKGROUND_TASK_STATUS_ERROR;
 	}
-	else if (enumOid == JobStatusUnscheduledId())
+	else if (enumOid == CitusTaskStatusSnscheduledId())
 	{
-		return REBALANCE_JOB_STATUS_UNSCHEDULED;
+		return BACKGROUND_TASK_STATUS_UNSCHEDULED;
 	}
 	ereport(ERROR, (errmsg("unknown enum value for citus_job_status")));
-	return REBALANCE_JOB_STATUS_UNKNOWN;
+	return BACKGROUND_TASK_STATUS_UNKNOWN;
 }
 
 
 bool
-IsRebalanceJobStatusTerminal(RebalanceJobStatus status)
+IsRebalanceJobStatusTerminal(BackgroundTaskStatus status)
 {
 	switch (status)
 	{
-		case REBALANCE_JOB_STATUS_DONE:
-		case REBALANCE_JOB_STATUS_ERROR:
-		case REBALANCE_JOB_STATUS_UNSCHEDULED:
+		case BACKGROUND_TASK_STATUS_DONE:
+		case BACKGROUND_TASK_STATUS_ERROR:
+		case BACKGROUND_TASK_STATUS_UNSCHEDULED:
 		{
 			return true;
 		}
@@ -2315,33 +2315,33 @@ IsRebalanceJobStatusTerminal(RebalanceJobStatus status)
 
 
 Oid
-RebalanceJobStatusOid(RebalanceJobStatus status)
+RebalanceJobStatusOid(BackgroundTaskStatus status)
 {
 	switch (status)
 	{
-		case REBALANCE_JOB_STATUS_SCHEDULED:
+		case BACKGROUND_TASK_STATUS_SCHEDULED:
 		{
-			return JobStatusScheduledId();
+			return CitusTaskStatusScheduledId();
 		}
 
-		case REBALANCE_JOB_STATUS_RUNNING:
+		case BACKGROUND_TASK_STATUS_RUNNING:
 		{
-			return JobStatusRunningId();
+			return CitusTaskStatusRunningId();
 		}
 
-		case REBALANCE_JOB_STATUS_DONE:
+		case BACKGROUND_TASK_STATUS_DONE:
 		{
-			return JobStatusDoneId();
+			return CitusTaskStatusDoneId();
 		}
 
-		case REBALANCE_JOB_STATUS_ERROR:
+		case BACKGROUND_TASK_STATUS_ERROR:
 		{
-			return JobStatusErrorId();
+			return CitusTaskStatusErrorId();
 		}
 
-		case REBALANCE_JOB_STATUS_UNSCHEDULED:
+		case BACKGROUND_TASK_STATUS_UNSCHEDULED:
 		{
-			return JobStatusUnscheduledId();
+			return CitusTaskStatusSnscheduledId();
 		}
 
 		default:
@@ -2353,9 +2353,9 @@ RebalanceJobStatusOid(RebalanceJobStatus status)
 
 
 int64
-GetNextRebalanceJobId(void)
+GetNextBackgroundTaskTaskId(void)
 {
-	text *sequenceName = cstring_to_text(REBALANCE_JOB_JOBID_SEQUENCE_NAME);
+	text *sequenceName = cstring_to_text(PG_DIST_BACKGROUND_TASK_TASK_ID_SEQUENCE_NAME);
 	Oid sequenceId = ResolveRelationId(sequenceName, false);
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 	Oid savedUserId = InvalidOid;
@@ -2381,12 +2381,12 @@ ScheduleBackgrounRebalanceJob(char *command, int dependingJobCount,
 {
 	RebalanceJob *job = NULL;
 
-	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
+	Relation pgDistRebalanceJobs = table_open(DistBackgroundTasksRelationId(),
 											  RowExclusiveLock);
 	Relation pgDistRebalanceJobsDepend = NULL;
 	if (dependingJobCount > 0)
 	{
-		pgDistRebalanceJobsDepend = table_open(DistRebalanceJobsDependRelationId(),
+		pgDistRebalanceJobsDepend = table_open(DistBackgroundTaskssDependRelationId(),
 											   RowExclusiveLock);
 	}
 
@@ -2394,21 +2394,21 @@ ScheduleBackgrounRebalanceJob(char *command, int dependingJobCount,
 
 	/* 2. insert new job */
 	{
-		Datum values[Natts_pg_dist_rebalance_jobs] = { 0 };
-		bool nulls[Natts_pg_dist_rebalance_jobs] = { 0 };
+		Datum values[Natts_pg_dist_background_tasks] = { 0 };
+		bool nulls[Natts_pg_dist_background_tasks] = { 0 };
 
 		memset(nulls, true, sizeof(nulls));
 
-		int64 jobid = GetNextRebalanceJobId();
+		int64 jobid = GetNextBackgroundTaskTaskId();
 
-		values[Anum_pg_dist_rebalance_jobs_jobid - 1] = Int64GetDatum(jobid);
-		nulls[Anum_pg_dist_rebalance_jobs_jobid - 1] = false;
+		values[Anum_pg_dist_background_tasks_task_id - 1] = Int64GetDatum(jobid);
+		nulls[Anum_pg_dist_background_tasks_task_id - 1] = false;
 
-		values[Anum_pg_dist_rebalance_jobs_status - 1] = JobStatusScheduledId();
-		nulls[Anum_pg_dist_rebalance_jobs_status - 1] = false;
+		values[Anum_pg_dist_background_tasks_status - 1] = CitusTaskStatusScheduledId();
+		nulls[Anum_pg_dist_background_tasks_status - 1] = false;
 
-		values[Anum_pg_dist_rebalance_jobs_command - 1] = CStringGetTextDatum(command);
-		nulls[Anum_pg_dist_rebalance_jobs_command - 1] = false;
+		values[Anum_pg_dist_background_tasks_command - 1] = CStringGetTextDatum(command);
+		nulls[Anum_pg_dist_background_tasks_command - 1] = false;
 
 		HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistRebalanceJobs),
 											 values, nulls);
@@ -2417,7 +2417,7 @@ ScheduleBackgrounRebalanceJob(char *command, int dependingJobCount,
 		job = palloc0(sizeof(RebalanceJob));
 
 		job->jobid = jobid;
-		job->status = REBALANCE_JOB_STATUS_SCHEDULED;
+		job->status = BACKGROUND_TASK_STATUS_SCHEDULED;
 		job->command = pstrdup(command);
 	}
 
@@ -2456,42 +2456,43 @@ ScheduleBackgrounRebalanceJob(char *command, int dependingJobCount,
 
 
 void
-ResetRunningJobs(void)
+ResetRunningBackgroundTasks(void)
 {
 	const int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
 	const bool indexOK = true;
 
-	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
+	Relation pgDistRebalanceJobs = table_open(DistBackgroundTasksRelationId(),
 											  AccessShareLock);
 
 	/* pg_dist_rebalance_jobs.status == 'running' */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_status,
-				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(JobStatusRunningId()));
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_status,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(
+					CitusTaskStatusRunningId()));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
-													DistRebalanceJobsStatusJobsIdIndexId(),
+													DistBackgroundTasksStatusTaskIdIndexId(),
 													indexOK, NULL, scanKeyCount,
 													scanKey);
 
 	HeapTuple jobTuple = NULL;
 	while (HeapTupleIsValid(jobTuple = systable_getnext(scanDescriptor)))
 	{
-		Datum values[Natts_pg_dist_rebalance_jobs] = { 0 };
-		bool isnull[Natts_pg_dist_rebalance_jobs] = { 0 };
-		bool replace[Natts_pg_dist_rebalance_jobs] = { 0 };
+		Datum values[Natts_pg_dist_background_tasks] = { 0 };
+		bool isnull[Natts_pg_dist_background_tasks] = { 0 };
+		bool replace[Natts_pg_dist_background_tasks] = { 0 };
 
 		TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
 		heap_deform_tuple(jobTuple, tupleDescriptor, values, isnull);
 
-		values[Anum_pg_dist_rebalance_jobs_status - 1] =
-			ObjectIdGetDatum(JobStatusScheduledId());
-		isnull[Anum_pg_dist_rebalance_jobs_status - 1] = false;
-		replace[Anum_pg_dist_rebalance_jobs_status - 1] = true;
+		values[Anum_pg_dist_background_tasks_status - 1] =
+			ObjectIdGetDatum(CitusTaskStatusScheduledId());
+		isnull[Anum_pg_dist_background_tasks_status - 1] = false;
+		replace[Anum_pg_dist_background_tasks_status - 1] = true;
 
-		values[Anum_pg_dist_rebalance_jobs_pid - 1] = InvalidOid;
-		isnull[Anum_pg_dist_rebalance_jobs_pid - 1] = true;
-		replace[Anum_pg_dist_rebalance_jobs_pid - 1] = true;
+		values[Anum_pg_dist_background_tasks_pid - 1] = InvalidOid;
+		isnull[Anum_pg_dist_background_tasks_pid - 1] = true;
+		replace[Anum_pg_dist_background_tasks_pid - 1] = true;
 
 		jobTuple = heap_modify_tuple(jobTuple, tupleDescriptor, values, isnull, replace);
 
@@ -2511,8 +2512,9 @@ JobHasUmnetDependencies(int64 jobid)
 {
 	bool hasUnmetDependency = false;
 
-	Relation pgDistRebalanceJobsDepend = table_open(DistRebalanceJobsDependRelationId(),
-													AccessShareLock);
+	Relation pgDistRebalanceJobsDepend = table_open(
+		DistBackgroundTaskssDependRelationId(),
+		AccessShareLock);
 
 	const int scanKeyCount = 1;
 	ScanKeyData scanKey[1] = { 0 };
@@ -2523,7 +2525,7 @@ JobHasUmnetDependencies(int64 jobid)
 				BTEqualStrategyNumber, F_INT8EQ, jobid);
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobsDepend,
-													DistRebalanceJobsDependJobIdIndexId(),
+													DistBackgroundTasksDependTaskIdIndexId(),
 													indexOK, NULL, scanKeyCount,
 													scanKey);
 
@@ -2539,7 +2541,7 @@ JobHasUmnetDependencies(int64 jobid)
 		 * Only when the status of all depending jobs is done we clear this job and say
 		 * that is has no unmet dependencies.
 		 */
-		if (dependingJob->status == REBALANCE_JOB_STATUS_DONE)
+		if (dependingJob->status == BACKGROUND_TASK_STATUS_DONE)
 		{
 			continue;
 		}
@@ -2549,7 +2551,7 @@ JobHasUmnetDependencies(int64 jobid)
 		 * have errored. Once we move the job to error it should unschedule all dependant
 		 * jobs recursively.
 		 */
-		Assert(dependingJob->status != REBALANCE_JOB_STATUS_ERROR);
+		Assert(dependingJob->status != BACKGROUND_TASK_STATUS_ERROR);
 
 		hasUnmetDependency = true;
 		break;
@@ -2569,36 +2571,36 @@ GetRunableRebalanceJob(void)
 	ScanKeyData scanKey[1];
 	bool indexOK = true;
 
-	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
+	Relation pgDistRebalanceJobs = table_open(DistBackgroundTasksRelationId(),
 											  AccessShareLock);
 
-	RebalanceJobStatus jobStatus[] = {
-		REBALANCE_JOB_STATUS_SCHEDULED
+	BackgroundTaskStatus jobStatus[] = {
+		BACKGROUND_TASK_STATUS_SCHEDULED
 	};
 
 	RebalanceJob *job = NULL;
 	for (int i = 0; !job && i < sizeof(jobStatus) / sizeof(jobStatus[0]); i++)
 	{
 		/* pg_dist_rebalance_jobs.status == jobStatus[i] */
-		ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_status,
+		ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_status,
 					BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(
 						RebalanceJobStatusOid(jobStatus[i])));
 
 		SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
-														DistRebalanceJobsStatusJobsIdIndexId(),
+														DistBackgroundTasksStatusTaskIdIndexId(),
 														indexOK, NULL, scanKeyCount,
 														scanKey);
 
 		HeapTuple jobTuple = NULL;
 		while (HeapTupleIsValid(jobTuple = systable_getnext(scanDescriptor)))
 		{
-			Datum datumArray[Natts_pg_dist_rebalance_jobs];
-			bool isNullArray[Natts_pg_dist_rebalance_jobs];
+			Datum datumArray[Natts_pg_dist_background_tasks];
+			bool isNullArray[Natts_pg_dist_background_tasks];
 			TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
 			heap_deform_tuple(jobTuple, tupleDescriptor, datumArray, isNullArray);
 
 			int64 jobid = DatumGetInt64(
-				datumArray[Anum_pg_dist_rebalance_jobs_jobid - 1]);
+				datumArray[Anum_pg_dist_background_tasks_task_id - 1]);
 			if (JobHasUmnetDependencies(jobid))
 			{
 				continue;
@@ -2607,10 +2609,10 @@ GetRunableRebalanceJob(void)
 			job = palloc0(sizeof(RebalanceJob));
 			job->jobid = jobid;
 			job->status = RebalanceJobStatusByOid(
-				DatumGetObjectId(datumArray[Anum_pg_dist_rebalance_jobs_status - 1]));
+				DatumGetObjectId(datumArray[Anum_pg_dist_background_tasks_status - 1]));
 
 			job->command = text_to_cstring(
-				DatumGetTextP(datumArray[Anum_pg_dist_rebalance_jobs_command - 1]));
+				DatumGetTextP(datumArray[Anum_pg_dist_background_tasks_command - 1]));
 
 			break;
 		}
@@ -2631,32 +2633,32 @@ GetScheduledRebalanceJobByJobID(int64 jobId)
 	ScanKeyData scanKey[1];
 	bool indexOK = true;
 
-	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
+	Relation pgDistRebalanceJobs = table_open(DistBackgroundTasksRelationId(),
 											  AccessShareLock);
 
 	/* pg_dist_rebalance_jobs.jobid == $jobId */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_jobid,
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_task_id,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
-													DistRebalanceJobsStatusJobsIdIndexId(),
+													DistBackgroundTasksStatusTaskIdIndexId(),
 													indexOK, NULL, scanKeyCount, scanKey);
 
 	HeapTuple jobTuple = systable_getnext(scanDescriptor);
 	RebalanceJob *job = NULL;
 	if (HeapTupleIsValid(jobTuple))
 	{
-		Datum datumArray[Natts_pg_dist_rebalance_jobs];
-		bool isNullArray[Natts_pg_dist_rebalance_jobs];
+		Datum datumArray[Natts_pg_dist_background_tasks];
+		bool isNullArray[Natts_pg_dist_background_tasks];
 		TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
 		heap_deform_tuple(jobTuple, tupleDescriptor, datumArray, isNullArray);
 
 		job = palloc0(sizeof(RebalanceJob));
-		job->jobid = DatumGetInt64(datumArray[Anum_pg_dist_rebalance_jobs_jobid - 1]);
+		job->jobid = DatumGetInt64(datumArray[Anum_pg_dist_background_tasks_task_id - 1]);
 		job->status = RebalanceJobStatusByOid(
-			DatumGetObjectId(datumArray[Anum_pg_dist_rebalance_jobs_status - 1]));
+			DatumGetObjectId(datumArray[Anum_pg_dist_background_tasks_status - 1]));
 		job->command = text_to_cstring(
-			DatumGetTextP(datumArray[Anum_pg_dist_rebalance_jobs_command - 1]));
+			DatumGetTextP(datumArray[Anum_pg_dist_background_tasks_command - 1]));
 	}
 
 	systable_endscan(scanDescriptor);
@@ -2667,10 +2669,10 @@ GetScheduledRebalanceJobByJobID(int64 jobId)
 
 
 void
-UpdateJobStatus(int64 jobid, pid_t *pid, RebalanceJobStatus status, int32 *retry_count,
+UpdateJobStatus(int64 jobid, pid_t *pid, BackgroundTaskStatus status, int32 *retry_count,
 				char *message)
 {
-	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
+	Relation pgDistRebalanceJobs = table_open(DistBackgroundTasksRelationId(),
 											  RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
 
@@ -2678,12 +2680,12 @@ UpdateJobStatus(int64 jobid, pid_t *pid, RebalanceJobStatus status, int32 *retry
 	int scanKeyCount = 1;
 
 	/* WHERE jobid = job->jobid */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_jobid,
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_task_id,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobid));
 
 	const bool indexOK = true;
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
-													DistRebalanceJobsJobsIdIndexId(),
+													DistBackgroundTasksTaskIdIndexId(),
 													indexOK,
 													NULL, scanKeyCount, scanKey);
 
@@ -2694,9 +2696,9 @@ UpdateJobStatus(int64 jobid, pid_t *pid, RebalanceJobStatus status, int32 *retry
 							   UINT64_FORMAT, jobid)));
 	}
 
-	Datum values[Natts_pg_dist_rebalance_jobs] = { 0 };
-	bool isnull[Natts_pg_dist_rebalance_jobs] = { 0 };
-	bool replace[Natts_pg_dist_rebalance_jobs] = { 0 };
+	Datum values[Natts_pg_dist_background_tasks] = { 0 };
+	bool isnull[Natts_pg_dist_background_tasks] = { 0 };
+	bool replace[Natts_pg_dist_background_tasks] = { 0 };
 
 	heap_deform_tuple(heapTuple, tupleDescriptor, values, isnull);
 
@@ -2708,34 +2710,34 @@ UpdateJobStatus(int64 jobid, pid_t *pid, RebalanceJobStatus status, int32 *retry
 
 	if (pid)
 	{
-		UPDATE_FIELD(Anum_pg_dist_rebalance_jobs_pid, false, Int32GetDatum(*pid));
+		UPDATE_FIELD(Anum_pg_dist_background_tasks_pid, false, Int32GetDatum(*pid));
 	}
 	else
 	{
-		UPDATE_FIELD(Anum_pg_dist_rebalance_jobs_pid, true, InvalidOid);
+		UPDATE_FIELD(Anum_pg_dist_background_tasks_pid, true, InvalidOid);
 	}
 
 	Oid statusOid = ObjectIdGetDatum(RebalanceJobStatusOid(status));
-	UPDATE_FIELD(Anum_pg_dist_rebalance_jobs_status, false, statusOid);
+	UPDATE_FIELD(Anum_pg_dist_background_tasks_status, false, statusOid);
 
 	if (retry_count)
 	{
-		UPDATE_FIELD(Anum_pg_dist_rebalance_jobs_retry_count, false, Int32GetDatum(
+		UPDATE_FIELD(Anum_pg_dist_background_tasks_retry_count, false, Int32GetDatum(
 						 *retry_count));
 	}
 	else
 	{
-		UPDATE_FIELD(Anum_pg_dist_rebalance_jobs_retry_count, true, InvalidOid);
+		UPDATE_FIELD(Anum_pg_dist_background_tasks_retry_count, true, InvalidOid);
 	}
 
 	if (message)
 	{
 		Oid messageOid = CStringGetTextDatum(message);
-		UPDATE_FIELD(Anum_pg_dist_rebalance_jobs_message, false, messageOid);
+		UPDATE_FIELD(Anum_pg_dist_background_tasks_message, false, messageOid);
 	}
 	else
 	{
-		UPDATE_FIELD(Anum_pg_dist_rebalance_jobs_message, true, InvalidOid);
+		UPDATE_FIELD(Anum_pg_dist_background_tasks_message, true, InvalidOid);
 	}
 
 #undef UPDATE_FIELD
@@ -2754,8 +2756,9 @@ UpdateJobStatus(int64 jobid, pid_t *pid, RebalanceJobStatus status, int32 *retry
 static List *
 GetDependantJobs(int64 jobid)
 {
-	Relation pgDistRebalanceJobsDepends = table_open(DistRebalanceJobsDependRelationId(),
-													 RowExclusiveLock);
+	Relation pgDistRebalanceJobsDepends = table_open(
+		DistBackgroundTaskssDependRelationId(),
+		RowExclusiveLock);
 	const bool indexOK = true;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
@@ -2765,7 +2768,7 @@ GetDependantJobs(int64 jobid)
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobid));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobsDepends,
-													DistRebalanceJobsDependDependsOnIndexId(),
+													DistBackgroundTasksDependDependsOnIndexId(),
 													indexOK,
 													NULL, scanKeyCount, scanKey);
 
@@ -2792,7 +2795,7 @@ GetDependantJobs(int64 jobid)
 void
 UnscheduleDependantJobs(int64 jobid)
 {
-	Relation pgDistRebalanceJobs = table_open(DistRebalanceJobsRelationId(),
+	Relation pgDistRebalanceJobs = table_open(DistBackgroundTasksRelationId(),
 											  RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistRebalanceJobs);
 
@@ -2812,11 +2815,11 @@ UnscheduleDependantJobs(int64 jobid)
 			int scanKeyCount = 1;
 
 			/* WHERE jobid = job->jobid */
-			ScanKeyInit(&scanKey[0], Anum_pg_dist_rebalance_jobs_jobid,
+			ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_task_id,
 						BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(cJobid));
 			const bool indexOK = true;
 			SysScanDesc scanDescriptor = systable_beginscan(pgDistRebalanceJobs,
-															DistRebalanceJobsJobsIdIndexId(),
+															DistBackgroundTasksTaskIdIndexId(),
 															indexOK,
 															NULL, scanKeyCount, scanKey);
 
@@ -2827,14 +2830,14 @@ UnscheduleDependantJobs(int64 jobid)
 									   UINT64_FORMAT, cJobid)));
 			}
 
-			Datum values[Natts_pg_dist_rebalance_jobs] = { 0 };
-			bool isnull[Natts_pg_dist_rebalance_jobs] = { 0 };
-			bool replace[Natts_pg_dist_rebalance_jobs] = { 0 };
+			Datum values[Natts_pg_dist_background_tasks] = { 0 };
+			bool isnull[Natts_pg_dist_background_tasks] = { 0 };
+			bool replace[Natts_pg_dist_background_tasks] = { 0 };
 
-			values[Anum_pg_dist_rebalance_jobs_status - 1] =
-				ObjectIdGetDatum(JobStatusUnscheduledId());
-			isnull[Anum_pg_dist_rebalance_jobs_status - 1] = false;
-			replace[Anum_pg_dist_rebalance_jobs_status - 1] = true;
+			values[Anum_pg_dist_background_tasks_status - 1] =
+				ObjectIdGetDatum(CitusTaskStatusSnscheduledId());
+			isnull[Anum_pg_dist_background_tasks_status - 1] = false;
+			replace[Anum_pg_dist_background_tasks_status - 1] = true;
 
 			heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
 										  replace);

@@ -141,17 +141,17 @@ typedef struct MetadataCacheData
 	bool extensionLoaded;
 	Oid distShardRelationId;
 	Oid distPlacementRelationId;
-	Oid distRebalanceJobsRelationId;
-	Oid distRebalanceJobsJobsIndexId;
-	Oid distRebalanceJobsStatusJobsIndexId;
-	Oid distRebalanceJobsDependRelationId;
-	Oid distRebalanceJobsDependsJobIdIndexId;
-	Oid distRebalanceJobsDependsDependsOnIndexId;
-	Oid jobStatusScheduledId;
-	Oid jobStatusRunningId;
-	Oid jobStatusDoneId;
-	Oid jobStatusErrorId;
-	Oid jobStatusSnscheduledId;
+	Oid distBackgroundTasksRelationId;
+	Oid distBackgroundTasksTaskIdIndexId;
+	Oid distBackgroundTasksStatusTaskIdIndexId;
+	Oid distBackgroundTaskssDependRelationId;
+	Oid distBackgroundTasksDependTaskIdIndexId;
+	Oid distBackgroundTasksDependDependsOnIndexId;
+	Oid citusTaskStatusScheduledId;
+	Oid citusTaskStatusRunningId;
+	Oid citusTaskStatusDoneId;
+	Oid citusTaskStatusErrorId;
+	Oid citusTaskStatusSnscheduledId;
 	Oid distRebalanceStrategyRelationId;
 	Oid distNodeRelationId;
 	Oid distNodeNodeIdIndexId;
@@ -2376,62 +2376,62 @@ DistLocalGroupIdRelationId(void)
 
 
 Oid
-DistRebalanceJobsRelationId(void)
+DistBackgroundTasksRelationId(void)
 {
-	CachedRelationLookup("pg_dist_rebalance_jobs",
-						 &MetadataCache.distRebalanceJobsRelationId);
+	CachedRelationLookup("pg_dist_background_tasks",
+						 &MetadataCache.distBackgroundTasksRelationId);
 
-	return MetadataCache.distRebalanceJobsRelationId;
+	return MetadataCache.distBackgroundTasksRelationId;
 }
 
 
 Oid
-DistRebalanceJobsJobsIdIndexId(void)
+DistBackgroundTasksTaskIdIndexId(void)
 {
-	CachedRelationLookup("pg_dist_rebalance_jobs_jobid_index",
-						 &MetadataCache.distRebalanceJobsJobsIndexId);
+	CachedRelationLookup("pg_dist_background_tasks_task_id_index",
+						 &MetadataCache.distBackgroundTasksTaskIdIndexId);
 
-	return MetadataCache.distRebalanceJobsJobsIndexId;
+	return MetadataCache.distBackgroundTasksTaskIdIndexId;
 }
 
 
 Oid
-DistRebalanceJobsStatusJobsIdIndexId(void)
+DistBackgroundTasksStatusTaskIdIndexId(void)
 {
-	CachedRelationLookup("pg_dist_rebalance_jobs_status_jobid_index",
-						 &MetadataCache.distRebalanceJobsStatusJobsIndexId);
+	CachedRelationLookup("pg_dist_background_tasks_status_task_id_index",
+						 &MetadataCache.distBackgroundTasksStatusTaskIdIndexId);
 
-	return MetadataCache.distRebalanceJobsStatusJobsIndexId;
+	return MetadataCache.distBackgroundTasksStatusTaskIdIndexId;
 }
 
 
 Oid
-DistRebalanceJobsDependRelationId(void)
+DistBackgroundTaskssDependRelationId(void)
 {
-	CachedRelationLookup("pg_dist_rebalance_jobs_depend",
-						 &MetadataCache.distRebalanceJobsDependRelationId);
+	CachedRelationLookup("pg_dist_background_tasks_depend",
+						 &MetadataCache.distBackgroundTaskssDependRelationId);
 
-	return MetadataCache.distRebalanceJobsDependRelationId;
+	return MetadataCache.distBackgroundTaskssDependRelationId;
 }
 
 
 Oid
-DistRebalanceJobsDependJobIdIndexId(void)
+DistBackgroundTasksDependTaskIdIndexId(void)
 {
-	CachedRelationLookup("pg_dist_rebalance_jobs_depend_jobid",
-						 &MetadataCache.distRebalanceJobsDependsJobIdIndexId);
+	CachedRelationLookup("pg_dist_background_tasks_depend_task_id",
+						 &MetadataCache.distBackgroundTasksDependTaskIdIndexId);
 
-	return MetadataCache.distRebalanceJobsDependsJobIdIndexId;
+	return MetadataCache.distBackgroundTasksDependTaskIdIndexId;
 }
 
 
 Oid
-DistRebalanceJobsDependDependsOnIndexId(void)
+DistBackgroundTasksDependDependsOnIndexId(void)
 {
-	CachedRelationLookup("pg_dist_rebalance_jobs_depend_depends_on",
-						 &MetadataCache.distRebalanceJobsDependsDependsOnIndexId);
+	CachedRelationLookup("pg_dist_background_tasks_depend_depends_on",
+						 &MetadataCache.distBackgroundTasksDependDependsOnIndexId);
 
-	return MetadataCache.distRebalanceJobsDependsDependsOnIndexId;
+	return MetadataCache.distBackgroundTasksDependDependsOnIndexId;
 }
 
 
@@ -3158,67 +3158,67 @@ SecondaryNodeRoleId(void)
 
 
 Oid
-JobStatusScheduledId(void)
+CitusTaskStatusScheduledId(void)
 {
-	if (!MetadataCache.jobStatusScheduledId)
+	if (!MetadataCache.citusTaskStatusScheduledId)
 	{
-		MetadataCache.jobStatusScheduledId =
-			LookupStringEnumValueId("citus_job_status", "scheduled");
+		MetadataCache.citusTaskStatusScheduledId =
+			LookupStringEnumValueId("citus_task_status", "scheduled");
 	}
 
-	return MetadataCache.jobStatusScheduledId;
+	return MetadataCache.citusTaskStatusScheduledId;
 }
 
 
 Oid
-JobStatusRunningId(void)
+CitusTaskStatusRunningId(void)
 {
-	if (!MetadataCache.jobStatusRunningId)
+	if (!MetadataCache.citusTaskStatusRunningId)
 	{
-		MetadataCache.jobStatusRunningId =
-			LookupStringEnumValueId("citus_job_status", "running");
+		MetadataCache.citusTaskStatusRunningId =
+			LookupStringEnumValueId("citus_task_status", "running");
 	}
 
-	return MetadataCache.jobStatusRunningId;
+	return MetadataCache.citusTaskStatusRunningId;
 }
 
 
 Oid
-JobStatusDoneId(void)
+CitusTaskStatusDoneId(void)
 {
-	if (!MetadataCache.jobStatusDoneId)
+	if (!MetadataCache.citusTaskStatusDoneId)
 	{
-		MetadataCache.jobStatusDoneId =
-			LookupStringEnumValueId("citus_job_status", "done");
+		MetadataCache.citusTaskStatusDoneId =
+			LookupStringEnumValueId("citus_task_status", "done");
 	}
 
-	return MetadataCache.jobStatusDoneId;
+	return MetadataCache.citusTaskStatusDoneId;
 }
 
 
 Oid
-JobStatusErrorId(void)
+CitusTaskStatusErrorId(void)
 {
-	if (!MetadataCache.jobStatusErrorId)
+	if (!MetadataCache.citusTaskStatusErrorId)
 	{
-		MetadataCache.jobStatusErrorId =
-			LookupStringEnumValueId("citus_job_status", "error");
+		MetadataCache.citusTaskStatusErrorId =
+			LookupStringEnumValueId("citus_task_status", "error");
 	}
 
-	return MetadataCache.jobStatusErrorId;
+	return MetadataCache.citusTaskStatusErrorId;
 }
 
 
 Oid
-JobStatusUnscheduledId(void)
+CitusTaskStatusSnscheduledId(void)
 {
-	if (!MetadataCache.jobStatusSnscheduledId)
+	if (!MetadataCache.citusTaskStatusSnscheduledId)
 	{
-		MetadataCache.jobStatusSnscheduledId =
-			LookupStringEnumValueId("citus_job_status", "unscheduled");
+		MetadataCache.citusTaskStatusSnscheduledId =
+			LookupStringEnumValueId("citus_task_status", "unscheduled");
 	}
 
-	return MetadataCache.jobStatusSnscheduledId;
+	return MetadataCache.citusTaskStatusSnscheduledId;
 }
 
 

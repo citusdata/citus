@@ -730,8 +730,8 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 									 "Starting background worker for execution.")));
 
 				rebalanceBgwHandle =
-					StartCitusBackgroundJobWorker(MyDatabaseId,
-												  myDbData->userOid);
+					StartCitusBackgroundTaskMonitorWorker(MyDatabaseId,
+														  myDbData->userOid);
 
 				if (!rebalanceBgwHandle ||
 					GetBackgroundWorkerPid(rebalanceBgwHandle, &rebalanceWorkerPid) ==

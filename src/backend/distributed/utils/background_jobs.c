@@ -29,7 +29,7 @@
 #include "distributed/metadata_utility.h"
 #include "distributed/shard_cleaner.h"
 
-bool RebalanceJobDebugDelay = false;
+bool BackgroundTaskMonitorDebugDelay = false;
 
 /* Table-of-contents constants for our dynamic shared memory segment. */
 #define CITUS_BACKGROUND_JOB_MAGIC 0x51028081
@@ -45,7 +45,7 @@ static BackgroundWorkerHandle * StartCitusBackgroundJobExecuter(char *database,
 static void ExecuteSqlString(const char *sql);
 
 BackgroundWorkerHandle *
-StartCitusBackgroundJobWorker(Oid database, Oid extensionOwner)
+StartCitusBackgroundTaskMonitorWorker(Oid database, Oid extensionOwner)
 {
 	BackgroundWorker worker = { 0 };
 	BackgroundWorkerHandle *handle = NULL;
@@ -53,7 +53,7 @@ StartCitusBackgroundJobWorker(Oid database, Oid extensionOwner)
 	/* Configure a worker. */
 	memset(&worker, 0, sizeof(worker));
 	SafeSnprintf(worker.bgw_name, BGW_MAXLEN,
-				 "Citus Rebalance Jobs Worker: %u/%u",
+				 "Citus Background Task Monitor: %u/%u",
 				 database, extensionOwner);
 	worker.bgw_flags =
 		BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
@@ -63,7 +63,7 @@ StartCitusBackgroundJobWorker(Oid database, Oid extensionOwner)
 	worker.bgw_restart_time = BGW_NEVER_RESTART;
 	strcpy_s(worker.bgw_library_name, sizeof(worker.bgw_library_name), "citus");
 	strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_library_name),
-			 "CitusBackgroundJobMain");
+			 "CitusBackgroundTaskMonitorMain");
 	worker.bgw_main_arg = ObjectIdGetDatum(MyDatabaseId);
 	memcpy_s(worker.bgw_extra, sizeof(worker.bgw_extra), &extensionOwner,
 			 sizeof(Oid));
@@ -82,7 +82,7 @@ StartCitusBackgroundJobWorker(Oid database, Oid extensionOwner)
 
 
 void
-CitusBackgroundJobMain(Datum arg)
+CitusBackgroundTaskMonitorMain(Datum arg)
 {
 	Oid databaseOid = DatumGetObjectId(arg);
 
@@ -96,21 +96,24 @@ CitusBackgroundJobMain(Datum arg)
 	/* connect to database, after that we can actually access catalogs */
 	BackgroundWorkerInitializeConnectionByOid(databaseOid, extensionOwner, 0);
 
+	/* TODO get lock to make sure there is only one worker running per databasse */
+
 	/* make worker recognizable in pg_stat_activity */
-	pgstat_report_appname("rebalance jobs worker");
+	pgstat_report_appname("citus background task monitor");
 
-	ereport(LOG, (errmsg("background jobs runner")));
+	ereport(LOG, (errmsg("citus background task monitor")));
 
-	if (RebalanceJobDebugDelay)
+	if (BackgroundTaskMonitorDebugDelay)
 	{
 		pg_usleep(30 * 1000 * 1000);
 	}
 
-	MemoryContext perJobContext = AllocSetContextCreateExtended(CurrentMemoryContext,
-																"PerJobContext",
-																ALLOCSET_DEFAULT_MINSIZE,
-																ALLOCSET_DEFAULT_INITSIZE,
-																ALLOCSET_DEFAULT_MAXSIZE);
+	MemoryContext perTaskContext =
+		AllocSetContextCreateExtended(CurrentMemoryContext,
+									  "PerTaskContext",
+									  ALLOCSET_DEFAULT_MINSIZE,
+									  ALLOCSET_DEFAULT_INITSIZE,
+									  ALLOCSET_DEFAULT_MAXSIZE);
 
 	/*
 	 * First we find all jobs that are running, we need to check if they are still running
@@ -121,18 +124,18 @@ CitusBackgroundJobMain(Datum arg)
 		PushActiveSnapshot(GetTransactionSnapshot());
 
 		/* TODO have an actual function to check if the worker is still running */
-		ResetRunningJobs();
+		ResetRunningBackgroundTasks();
 
 		PopActiveSnapshot();
 		CommitTransactionCommand();
 	}
 
 
-	MemoryContext oldContextPerJob = MemoryContextSwitchTo(perJobContext);
+	MemoryContext oldContextPerJob = MemoryContextSwitchTo(perTaskContext);
 	bool hasJobs = true;
 	while (hasJobs)
 	{
-		MemoryContextReset(perJobContext);
+		MemoryContextReset(perTaskContext);
 
 		CHECK_FOR_INTERRUPTS();
 
@@ -141,10 +144,10 @@ CitusBackgroundJobMain(Datum arg)
 		PushActiveSnapshot(GetTransactionSnapshot());
 
 		/*
-		 * We need to load the job into the perJobContext as we will switch contexts
+		 * We need to load the job into the perTaskContext as we will switch contexts
 		 * later due to the committing and starting of new transactions
 		 */
-		MemoryContext oldContext = MemoryContextSwitchTo(perJobContext);
+		MemoryContext oldContext = MemoryContextSwitchTo(perTaskContext);
 		RebalanceJob *job = GetRunableRebalanceJob();
 		MemoryContextSwitchTo(oldContext);
 
@@ -160,7 +163,7 @@ CitusBackgroundJobMain(Datum arg)
 		PopActiveSnapshot();
 		CommitTransactionCommand();
 
-		MemoryContextSwitchTo(perJobContext);
+		MemoryContextSwitchTo(perTaskContext);
 
 		/* TODO find the actual database and username */
 		BackgroundWorkerHandle *handle =
@@ -181,12 +184,12 @@ CitusBackgroundJobMain(Datum arg)
 		PushActiveSnapshot(GetTransactionSnapshot());
 
 		/* Update job status to indicate it is running */
-		UpdateJobStatus(job->jobid, &pid, REBALANCE_JOB_STATUS_RUNNING, NULL, NULL);
+		UpdateJobStatus(job->jobid, &pid, BACKGROUND_TASK_STATUS_RUNNING, NULL, NULL);
 
 		PopActiveSnapshot();
 		CommitTransactionCommand();
 
-		MemoryContextSwitchTo(perJobContext);
+		MemoryContextSwitchTo(perTaskContext);
 
 		/* TODO keep polling the job */
 		while (GetBackgroundWorkerPid(handle, &pid) != BGWH_STOPPED)
@@ -211,14 +214,14 @@ CitusBackgroundJobMain(Datum arg)
 		PushActiveSnapshot(GetTransactionSnapshot());
 
 		/* TODO job can actually also have failed*/
-		UpdateJobStatus(job->jobid, NULL, REBALANCE_JOB_STATUS_DONE, NULL, NULL);
+		UpdateJobStatus(job->jobid, NULL, BACKGROUND_TASK_STATUS_DONE, NULL, NULL);
 
 		PopActiveSnapshot();
 		CommitTransactionCommand();
 	}
 
 	MemoryContextSwitchTo(oldContextPerJob);
-	MemoryContextDelete(perJobContext);
+	MemoryContextDelete(perTaskContext);
 }
 
 

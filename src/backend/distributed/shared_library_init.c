@@ -841,6 +841,17 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	/* TODO remove before merge */
+	DefineCustomBoolVariable(
+		"citus.background_task_monitor_debug_delay",
+		NULL,
+		NULL,
+		&BackgroundTaskMonitorDebugDelay,
+		false,
+		PGC_SIGHUP,
+		GUC_UNIT_MS,
+		NULL, NULL, NULL);
+
 	DefineCustomBoolVariable(
 		"citus.check_available_space_before_move",
 		gettext_noop("When enabled will check free disk space before a shard move"),
@@ -1889,17 +1900,6 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&RebalanceCheckInterval,
 		1000, -1, 7 * 24 * 3600 * 1000,
-		PGC_SIGHUP,
-		GUC_UNIT_MS,
-		NULL, NULL, NULL);
-
-	/* TODO remove before merge */
-	DefineCustomBoolVariable(
-		"citus.rebalance_job_debug_delay",
-		NULL,
-		NULL,
-		&RebalanceJobDebugDelay,
-		false,
 		PGC_SIGHUP,
 		GUC_UNIT_MS,
 		NULL, NULL, NULL);

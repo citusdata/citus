@@ -24,7 +24,7 @@
 #include "distributed/citus_nodes.h"
 #include "distributed/connection_management.h"
 #include "distributed/errormessage.h"
-#include "distributed/pg_dist_rebalance_jobs.h"
+#include "distributed/pg_dist_background_tasks.h"
 #include "distributed/relay_utility.h"
 #include "distributed/worker_manager.h"
 #include "utils/acl.h"
@@ -204,21 +204,21 @@ typedef enum SizeQueryType
 	TABLE_SIZE /* pg_table_size() */
 } SizeQueryType;
 
-typedef enum RebalanceJobStatus
+typedef enum BackgroundTaskStatus
 {
-	REBALANCE_JOB_STATUS_UNKNOWN,
-	REBALANCE_JOB_STATUS_SCHEDULED,
-	REBALANCE_JOB_STATUS_RUNNING,
-	REBALANCE_JOB_STATUS_DONE,
-	REBALANCE_JOB_STATUS_ERROR,
-	REBALANCE_JOB_STATUS_UNSCHEDULED
-} RebalanceJobStatus;
+	BACKGROUND_TASK_STATUS_UNKNOWN,
+	BACKGROUND_TASK_STATUS_SCHEDULED,
+	BACKGROUND_TASK_STATUS_RUNNING,
+	BACKGROUND_TASK_STATUS_DONE,
+	BACKGROUND_TASK_STATUS_ERROR,
+	BACKGROUND_TASK_STATUS_UNSCHEDULED
+} BackgroundTaskStatus;
 
 
 typedef struct RebalanceJob
 {
 	int64 jobid;
-	RebalanceJobStatus status;
+	BackgroundTaskStatus status;
 	char *command;
 } RebalanceJob;
 
@@ -331,17 +331,17 @@ extern void EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid
 extern void AlterSequenceType(Oid seqOid, Oid typeOid);
 extern void EnsureRelationHasCompatibleSequenceTypes(Oid relationId);
 extern bool HasScheduledRebalanceJobs(void);
-extern int64 GetNextRebalanceJobId(void);
+extern int64 GetNextBackgroundTaskTaskId(void);
 extern RebalanceJob * ScheduleBackgrounRebalanceJob(char *command, int dependingJobCount,
 													int64 dependingJobIds[]);
 extern bool JobHasUmnetDependencies(int64 jobid);
 extern RebalanceJob * GetRunableRebalanceJob(void);
-extern void ResetRunningJobs(void);
+extern void ResetRunningBackgroundTasks(void);
 extern RebalanceJob * GetScheduledRebalanceJobByJobID(int64 jobId);
-extern void UpdateJobStatus(int64 jobid, pid_t *pid, RebalanceJobStatus status,
+extern void UpdateJobStatus(int64 jobid, pid_t *pid, BackgroundTaskStatus status,
 							int32 *retry_count, char *message);
 extern bool UpdateJobError(RebalanceJob *job, ErrorData *edata);
 extern void UnscheduleDependantJobs(int64 jobid);
-extern bool IsRebalanceJobStatusTerminal(RebalanceJobStatus status);
-extern Oid RebalanceJobStatusOid(RebalanceJobStatus status);
+extern bool IsRebalanceJobStatusTerminal(BackgroundTaskStatus status);
+extern Oid RebalanceJobStatusOid(BackgroundTaskStatus status);
 #endif   /* METADATA_UTILITY_H */
