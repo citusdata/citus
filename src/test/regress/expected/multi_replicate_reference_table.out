@@ -870,7 +870,7 @@ SELECT count(*) FROM ref_table;
     10
 (1 row)
 
-SELECT replicate_reference_tables();
+SELECT replicate_reference_tables('block_writes');
  replicate_reference_tables
 ---------------------------------------------------------------------
 
@@ -1052,7 +1052,14 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
         1
 (1 row)
 
+-- detects correctly that referecence table doesn't have replica identity
 SELECT replicate_reference_tables();
+ERROR:  cannot use logical replication to transfer shards of the relation initially_not_replicated_reference_table since it doesn't have a REPLICA IDENTITY or PRIMARY KEY
+DETAIL:  UPDATE and DELETE commands on the shard will error out during logical replication unless there is a REPLICA IDENTITY or PRIMARY KEY.
+HINT:  If you wish to continue without a replica identity set the shard_transfer_mode to 'force_logical' or 'block_writes'.
+CONTEXT:  while executing command on localhost:xxxxx
+-- allows force_logical
+SELECT replicate_reference_tables('force_logical');
  replicate_reference_tables
 ---------------------------------------------------------------------
 

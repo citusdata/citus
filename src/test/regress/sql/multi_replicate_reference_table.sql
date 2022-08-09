@@ -567,7 +567,7 @@ ROLLBACK;
 --
 BEGIN;
 SELECT count(*) FROM ref_table;
-SELECT replicate_reference_tables();
+SELECT replicate_reference_tables('block_writes');
 INSERT INTO ref_table VALUES (11);
 SELECT count(*), sum(a) FROM ref_table;
 UPDATE ref_table SET a = a + 1;
@@ -642,7 +642,10 @@ WHERE nodeport=:worker_1_port;
 SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
+-- detects correctly that referecence table doesn't have replica identity
 SELECT replicate_reference_tables();
+-- allows force_logical
+SELECT replicate_reference_tables('force_logical');
 
 SELECT result::int - :ref_table_placements
 FROM run_command_on_workers('SELECT count(*) FROM pg_dist_placement a, pg_dist_shard b, pg_class c WHERE a.shardid=b.shardid AND b.logicalrelid=c.oid AND c.relname=''ref_table''')

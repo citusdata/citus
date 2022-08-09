@@ -89,3 +89,6 @@ DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_
 
 DROP VIEW pg_catalog.citus_locks;
 DROP FUNCTION pg_catalog.citus_locks();
+
+DROP FUNCTION pg_catalog.replicate_reference_tables(citus.shard_transfer_mode);
+#include "../udfs/replicate_reference_tables/9.3-2.sql"
