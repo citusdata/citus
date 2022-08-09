@@ -1,3 +1,12 @@
+--
+-- MULTI_MX_INSERT_SELECT_REPARTITION
+--
+-- Test queries on a distributed table with shards on the coordinator
+--
+-- This test file has an alternative output because of the change in the
+-- display of SQL-standard function's arguments in INSERT/SELECT in PG15.
+-- The alternative output can be deleted when we drop support for PG14
+--
 -- Test behaviour of repartitioned INSERT ... SELECT in MX setup
 
 CREATE SCHEMA multi_mx_insert_select_repartition;

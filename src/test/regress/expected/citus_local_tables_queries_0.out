@@ -579,7 +579,7 @@ SELECT clear_and_init_test_tables();
 
 INSERT INTO citus_local_table
 SELECT * from reference_table;
-NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.citus_local_table_1509001 AS citus_table_alias (a, b) SELECT reference_table.a, reference_table.b FROM citus_local_table_queries.reference_table_1509003 reference_table
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.citus_local_table_1509001 AS citus_table_alias (a, b) SELECT a, b FROM citus_local_table_queries.reference_table_1509003 reference_table
 INSERT INTO reference_table
 SELECT * from citus_local_table;
 NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
@@ -592,7 +592,7 @@ SELECT * from citus_local_table;
 NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
 INSERT INTO citus_local_table
 SELECT * from citus_local_table_2;
-NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.citus_local_table_1509001 AS citus_table_alias (a, b) SELECT citus_local_table_2.a, citus_local_table_2.b FROM citus_local_table_queries.citus_local_table_2_1509002 citus_local_table_2
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.citus_local_table_1509001 AS citus_table_alias (a, b) SELECT a, b FROM citus_local_table_queries.citus_local_table_2_1509002 citus_local_table_2
 INSERT INTO citus_local_table
 SELECT * from citus_local_table_2
 ORDER BY 1,2
