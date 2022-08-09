@@ -1,0 +1,66 @@
+--
+-- Test loading data into columnar tables.
+--
+-- COPY with incorrect delimiter
+\set contestants_1_csv_file :abs_srcdir '/data/contestants.1.csv'
+\set client_side_copy_command '\\copy contestant FROM ' :'contestants_1_csv_file' ' WITH DELIMITER '''|''';'
+:client_side_copy_command -- ERROR
+ERROR:  missing data for column "birthdate"
+CONTEXT:  COPY contestant, line 1: "a,1990-01-10,2090,97.1,XA ,{a}"
+-- COPY with invalid program
+COPY contestant FROM PROGRAM 'invalid_program' WITH CSV; -- ERROR
+ERROR:  program "invalid_program" failed
+DETAIL:  command not found
+-- COPY into uncompressed table from file
+\set client_side_copy_command '\\copy contestant FROM ' :'contestants_1_csv_file' ' WITH CSV;'
+:client_side_copy_command
+-- COPY into uncompressed table from program
+\set cat_contestants_2_csv_file 'cat ' :abs_srcdir '/data/contestants.2.csv'
+COPY contestant FROM PROGRAM :'cat_contestants_2_csv_file' WITH CSV;
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
+  from columnar_test_helpers.columnar_storage_info('contestant');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
+---------------------------------------------------------------------
+             2 |             0 |                  3 |              300001
+(1 row)
+
+-- COPY into compressed table
+\set client_side_copy_command '\\copy contestant_compressed FROM ' :'contestants_1_csv_file' ' WITH CSV;'
+:client_side_copy_command
+-- COPY into uncompressed table from program
+COPY contestant_compressed FROM PROGRAM :'cat_contestants_2_csv_file'
+	WITH CSV;
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
+  from columnar_test_helpers.columnar_storage_info('contestant_compressed');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
+---------------------------------------------------------------------
+             2 |             0 |                  3 |              300001
+(1 row)
+
+-- Test column list
+CREATE TABLE famous_constants (id int, name text, value real)
+    USING columnar;
+COPY famous_constants (value, name, id) FROM STDIN WITH CSV;
+COPY famous_constants (name, value) FROM STDIN WITH CSV;
+SELECT * FROM famous_constants ORDER BY id, name;
+ id |      name      |   value
+---------------------------------------------------------------------
+  1 | pi             |     3.141
+  2 | e              |     2.718
+  3 | gamma          |     0.577
+  4 | bohr radius    | 5.291e-11
+    | avagadro       | 6.022e+23
+    | electron mass  | 9.109e-31
+    | proton mass    | 1.672e-27
+    | speed of light | 2.997e+08
+(8 rows)
+
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP TABLE famous_constants;

@@ -17,12 +17,6 @@ trim_trailing_whitespace = true
 insert_final_newline = unset
 trim_trailing_whitespace = unset
 
-# Don't change test/regress/output directory, this needs to be a separate rule
-# for some reason
-[/src/test/regress/output/**]
-insert_final_newline = unset
-trim_trailing_whitespace = unset
-
 [*.{sql,sh,py}]
 indent_style = space
 indent_size = 4

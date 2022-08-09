@@ -1,0 +1,163 @@
+--
+-- MULTI_MX_COPY_DATA
+--
+\set nation_data_file :abs_srcdir '/data/nation.data'
+\set client_side_copy_command '\\copy nation_hash FROM ' :'nation_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+SET search_path TO citus_mx_test_schema;
+\set client_side_copy_command '\\copy nation_hash FROM ' :'nation_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy citus_mx_test_schema_join_1.nation_hash FROM ' :'nation_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy citus_mx_test_schema_join_1.nation_hash_2 FROM ' :'nation_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy citus_mx_test_schema_join_2.nation_hash FROM ' :'nation_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE citus_mx_test_schema.nation_hash_replicated AS SELECT * FROM citus_mx_test_schema.nation_hash;
+SELECT create_distributed_table('citus_mx_test_schema.nation_hash_replicated', 'n_nationkey');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$citus_mx_test_schema.nation_hash_replicated$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\set client_side_copy_command '\\copy nation_hash_replicated FROM ' :'nation_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+-- now try loading data from worker node
+\c - - - :worker_1_port
+SET search_path TO public;
+\set lineitem_1_data_file :abs_srcdir '/data/lineitem.1.data'
+\set lineitem_2_data_file :abs_srcdir '/data/lineitem.2.data'
+\set client_side_copy_command '\\copy lineitem_mx FROM ' :'lineitem_1_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy lineitem_mx FROM ' :'lineitem_2_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+\set nation_data_file :abs_srcdir '/data/nation.data'
+\set client_side_copy_command '\\copy citus_mx_test_schema.nation_hash_replicated FROM ' :'nation_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+\c - - - :worker_2_port
+-- and use second worker as well
+\set orders_1_data_file :abs_srcdir '/data/orders.1.data'
+\set orders_2_data_file :abs_srcdir '/data/orders.2.data'
+\set nation_data_file :abs_srcdir '/data/nation.data'
+\set client_side_copy_command '\\copy orders_mx FROM ' :'orders_1_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy orders_mx FROM ' :'orders_2_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy citus_mx_test_schema.nation_hash_replicated FROM ' :'nation_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+-- get ready for the next test
+TRUNCATE orders_mx;
+\c - - - :worker_2_port
+SET citus.log_local_commands TO ON;
+-- simulate the case where there is no connection slots available
+ALTER SYSTEM SET citus.local_shared_pool_size TO -1;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+show citus.local_shared_pool_size;
+ citus.local_shared_pool_size
+---------------------------------------------------------------------
+ -1
+(1 row)
+
+\set orders_1_data_file :abs_srcdir '/data/orders.1.data'
+\set orders_2_data_file :abs_srcdir '/data/orders.2.data'
+\set client_side_copy_command '\\copy orders_mx FROM ' :'orders_1_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY orders_mx, line 3: "3|1234|F|205654.30|1993-10-14|5-LOW|Clerk#000000955|0|sly final accounts boost. carefully regular id..."
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY orders_mx, line 5: "5|445|F|105367.67|1994-07-30|5-LOW|Clerk#000000925|0|quickly. bold deposits sleep slyly. packages us..."
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY orders_mx, line 9: "33|670|F|146567.24|1993-10-27|3-MEDIUM|Clerk#000000409|0|uriously. furiously final request"
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY orders_mx, line 15: "39|818|O|326565.37|1996-09-20|3-MEDIUM|Clerk#000000659|0|ole express, ironic requests: ir"
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY orders_mx, line 19: "67|568|O|182481.16|1996-12-19|4-NOT SPECIFIED|Clerk#000000547|0|symptotes haggle slyly around the fu..."
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY orders_mx, line 24: "96|1078|F|64364.30|1994-04-17|2-HIGH|Clerk#000000395|0|oost furiously. pinto"
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY orders_mx, line 25: "97|211|F|100572.55|1993-01-29|3-MEDIUM|Clerk#000000547|0|hang blithely along the regular accounts. f..."
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY orders_mx, line 38: "134|62|F|208201.46|1992-05-01|4-NOT SPECIFIED|Clerk#000000711|0|lar theodolites boos"
+\set client_side_copy_command '\\copy orders_mx FROM ' :'orders_2_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY orders_mx, line 2: "8998|80|F|147264.16|1993-01-04|5-LOW|Clerk#000000733|0| fluffily pending sauternes cajo"
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY orders_mx, line 4: "9024|1469|F|298241.36|1992-06-03|3-MEDIUM|Clerk#000000901|0|ar the theodolites. fluffily stealthy re..."
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY orders_mx, line 6: "9026|677|O|63256.87|1996-07-24|5-LOW|Clerk#000000320|0|ironic escapades would wake carefully "
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY orders_mx, line 9: "9029|1213|F|78703.86|1992-11-20|3-MEDIUM|Clerk#000000965|0| excuses nag quickly carefully unusual ex..."
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY orders_mx, line 14: "9058|403|F|63464.13|1993-06-29|2-HIGH|Clerk#000000376|0|ealthily special deposits. quickly regular r..."
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY orders_mx, line 16: "9060|463|O|45295.71|1996-06-09|1-URGENT|Clerk#000000438|0|iously. slyly regular dol"
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY orders_mx, line 43: "9159|1135|O|99594.61|1995-07-26|1-URGENT|Clerk#000000892|0|xcuses. quickly ironic deposits wake alon..."
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY orders_mx, line 69: "9281|904|F|173278.28|1992-02-24|1-URGENT|Clerk#000000530|0|eep furiously according to the requests; ..."
+\set nation_data_file :abs_srcdir '/data/nation.data'
+\set client_side_copy_command '\\copy citus_mx_test_schema.nation_hash_replicated FROM ' :'nation_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY nation_hash_replicated, line 1: "0|ALGERIA|0| haggle. carefully final deposits detect slyly agai"
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY nation_hash_replicated, line 2: "1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon"
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY nation_hash_replicated, line 3: "2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forg..."
+NOTICE:  executing the copy locally for shard xxxxx
+CONTEXT:  COPY nation_hash_replicated, line 7: "6|FRANCE|3|refully final requests. regular, ironi"
+-- set it back
+ALTER SYSTEM RESET citus.local_shared_pool_size;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+show citus.local_shared_pool_size;
+ citus.local_shared_pool_size
+---------------------------------------------------------------------
+ 50
+(1 row)
+
+-- These copies were intended to test copying data to single sharded table from
+-- worker nodes, yet in order to remove broadcast logic related codes we change
+-- the table to reference table and copy data from master. Should be updated
+-- when worker nodes gain capability to run dml commands on reference tables.
+\c - - - :master_port
+SET search_path TO public;
+\set customer_1_data_file :abs_srcdir '/data/customer.1.data'
+\set nation_data_file :abs_srcdir '/data/nation.data'
+\set part_data_file :abs_srcdir '/data/part.data'
+\set supplier_data_file :abs_srcdir '/data/supplier.data'
+\set client_side_copy_command '\\copy customer_mx FROM ' :'customer_1_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy nation_mx FROM ' :'nation_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy part_mx FROM ' :'part_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
+\set client_side_copy_command '\\copy supplier_mx FROM ' :'supplier_data_file' ' with delimiter '''|''';'
+:client_side_copy_command
