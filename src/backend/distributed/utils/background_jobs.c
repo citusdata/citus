@@ -44,6 +44,30 @@ static BackgroundWorkerHandle * StartCitusBackgroundJobExecuter(char *database,
 																char *command);
 static void ExecuteSqlString(const char *sql);
 
+static void
+BackgroundTaskUpdatePid(BackgroundTask *task, pid_t *pid)
+{
+	if (pid)
+	{
+		if (!task->pid)
+		{
+			MemoryContext taskContext = GetMemoryChunkContext(task);
+			task->pid = MemoryContextAlloc(taskContext, sizeof(int32));
+		}
+		*task->pid = *pid;
+	}
+	else
+	{
+		/* clear any existing pid */
+		if (task->pid)
+		{
+			pfree(task->pid);
+		}
+		task->pid = NULL;
+	}
+}
+
+
 BackgroundWorkerHandle *
 StartCitusBackgroundTaskMonitorWorker(Oid database, Oid extensionOwner)
 {
@@ -144,14 +168,14 @@ CitusBackgroundTaskMonitorMain(Datum arg)
 		PushActiveSnapshot(GetTransactionSnapshot());
 
 		/*
-		 * We need to load the job into the perTaskContext as we will switch contexts
+		 * We need to load the task into the perTaskContext as we will switch contexts
 		 * later due to the committing and starting of new transactions
 		 */
 		MemoryContext oldContext = MemoryContextSwitchTo(perTaskContext);
-		BackgroundTask *job = GetRunnableBackgroundTask();
+		BackgroundTask *task = GetRunnableBackgroundTask();
 		MemoryContextSwitchTo(oldContext);
 
-		if (!job)
+		if (!task)
 		{
 			PopActiveSnapshot();
 			CommitTransactionCommand();
@@ -167,7 +191,7 @@ CitusBackgroundTaskMonitorMain(Datum arg)
 
 		/* TODO find the actual database and username */
 		BackgroundWorkerHandle *handle =
-			StartCitusBackgroundJobExecuter("postgres", "nilsdijk", job->command);
+			StartCitusBackgroundJobExecuter("postgres", "nilsdijk", task->command);
 
 		if (handle == NULL)
 		{
@@ -178,20 +202,23 @@ CitusBackgroundTaskMonitorMain(Datum arg)
 		pid_t pid = 0;
 		GetBackgroundWorkerPid(handle, &pid);
 
-		ereport(LOG, (errmsg("found job with jobid: %ld", job->taskid)));
+		ereport(LOG, (errmsg("found task with jobid: %ld", task->taskid)));
 
 		StartTransactionCommand();
 		PushActiveSnapshot(GetTransactionSnapshot());
 
-		/* Update job status to indicate it is running */
-		UpdateJobStatus(job->taskid, &pid, BACKGROUND_TASK_STATUS_RUNNING, NULL, NULL);
+		task->status = BACKGROUND_TASK_STATUS_RUNNING;
+		BackgroundTaskUpdatePid(task, &pid);
+
+		/* Update task status to indicate it is running */
+		UpdateBackgroundTask(task);
 
 		PopActiveSnapshot();
 		CommitTransactionCommand();
 
 		MemoryContextSwitchTo(perTaskContext);
 
-		/* TODO keep polling the job */
+		/* TODO keep polling the task */
 		while (GetBackgroundWorkerPid(handle, &pid) != BGWH_STOPPED)
 		{
 			int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
@@ -213,8 +240,10 @@ CitusBackgroundTaskMonitorMain(Datum arg)
 		StartTransactionCommand();
 		PushActiveSnapshot(GetTransactionSnapshot());
 
-		/* TODO job can actually also have failed*/
-		UpdateJobStatus(job->taskid, NULL, BACKGROUND_TASK_STATUS_DONE, NULL, NULL);
+		/* TODO task can actually also have failed*/
+		task->status = BACKGROUND_TASK_STATUS_DONE;
+		BackgroundTaskUpdatePid(task, NULL);
+		UpdateBackgroundTask(task);
 
 		PopActiveSnapshot();
 		CommitTransactionCommand();

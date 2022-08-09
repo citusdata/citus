@@ -341,6 +341,7 @@ extern bool BackgroundTaskHasUmnetDependencies(int64 taskId);
 extern BackgroundTask * GetRunnableBackgroundTask(void);
 extern void ResetRunningBackgroundTasks(void);
 extern BackgroundTask * GetBackgroundTaskByTaskId(int64 taskId);
+extern void UpdateBackgroundTask(BackgroundTask *task);
 extern void UpdateJobStatus(int64 taskId, const pid_t *pid, BackgroundTaskStatus status,
 							const int32 *retry_count, char *message);
 extern bool UpdateJobError(BackgroundTask *job, ErrorData *edata);

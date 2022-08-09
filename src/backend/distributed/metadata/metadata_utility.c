@@ -2546,7 +2546,7 @@ DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor, HeapTuple taskTuple)
 	task->taskid = DatumGetInt64(values[Anum_pg_dist_background_tasks_task_id - 1]);
 	if (!nulls[Anum_pg_dist_background_tasks_pid - 1])
 	{
-		task->pid = palloc0(sizeof(task->pid));
+		task->pid = palloc0(sizeof(int32));
 		*(task->pid) = DatumGetInt32(values[Anum_pg_dist_background_tasks_pid - 1]);
 	}
 	task->status = BackgroundTaskStatusByOid(
@@ -2557,7 +2557,7 @@ DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor, HeapTuple taskTuple)
 
 	if (!nulls[Anum_pg_dist_background_tasks_retry_count - 1])
 	{
-		task->retry_count = palloc0(sizeof(task->retry_count));
+		task->retry_count = palloc0(sizeof(int32));
 		*(task->retry_count) = DatumGetInt32(
 			values[Anum_pg_dist_background_tasks_retry_count - 1]);
 	}
@@ -2718,8 +2718,7 @@ GetBackgroundTaskByTaskId(int64 taskId)
 
 
 void
-UpdateJobStatus(int64 taskId, const pid_t *pid, BackgroundTaskStatus status,
-				const int32 *retry_count, char *message)
+UpdateBackgroundTask(BackgroundTask *task)
 {
 	Relation pgDistBackgroundTasks =
 		table_open(DistBackgroundTasksRelationId(), RowExclusiveLock);
@@ -2729,9 +2728,9 @@ UpdateJobStatus(int64 taskId, const pid_t *pid, BackgroundTaskStatus status,
 	ScanKeyData scanKey[1] = { 0 };
 	const bool indexOK = true;
 
-	/* WHERE task_id = $taskId */
+	/* WHERE task_id = $task->taskid */
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_task_id,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(taskId));
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(task->taskid));
 
 	SysScanDesc scanDescriptor =
 		systable_beginscan(pgDistBackgroundTasks,
@@ -2742,7 +2741,7 @@ UpdateJobStatus(int64 taskId, const pid_t *pid, BackgroundTaskStatus status,
 	if (!HeapTupleIsValid(heapTuple))
 	{
 		ereport(ERROR, (errmsg("could not find background task entry for task_id: "
-							   UINT64_FORMAT, taskId)));
+							   UINT64_FORMAT, task->taskid)));
 	}
 
 	Datum values[Natts_pg_dist_background_tasks] = { 0 };
@@ -2751,37 +2750,40 @@ UpdateJobStatus(int64 taskId, const pid_t *pid, BackgroundTaskStatus status,
 
 	heap_deform_tuple(heapTuple, tupleDescriptor, values, isnull);
 
+	bool updated = false;
+
 #define UPDATE_FIELD(field, newNull, newValue) \
 	replace[(field - 1)] = (((newNull) != isnull[(field - 1)]) \
 							|| (values[(field - 1)] != (newValue))); \
 	isnull[(field - 1)] = (newNull); \
-	values[(field - 1)] = (newValue);
+	values[(field - 1)] = (newValue); \
+	updated |= replace[(field - 1)]
 
-	if (pid)
+	if (task->pid)
 	{
-		UPDATE_FIELD(Anum_pg_dist_background_tasks_pid, false, Int32GetDatum(*pid));
+		UPDATE_FIELD(Anum_pg_dist_background_tasks_pid, false, Int32GetDatum(*task->pid));
 	}
 	else
 	{
 		UPDATE_FIELD(Anum_pg_dist_background_tasks_pid, true, InvalidOid);
 	}
 
-	Oid statusOid = ObjectIdGetDatum(CitusTaskStatusOid(status));
+	Oid statusOid = ObjectIdGetDatum(CitusTaskStatusOid(task->status));
 	UPDATE_FIELD(Anum_pg_dist_background_tasks_status, false, statusOid);
 
-	if (retry_count)
+	if (task->retry_count)
 	{
-		UPDATE_FIELD(Anum_pg_dist_background_tasks_retry_count, false, Int32GetDatum(
-						 *retry_count));
+		UPDATE_FIELD(Anum_pg_dist_background_tasks_retry_count, false,
+					 Int32GetDatum(*task->retry_count));
 	}
 	else
 	{
 		UPDATE_FIELD(Anum_pg_dist_background_tasks_retry_count, true, InvalidOid);
 	}
 
-	if (message)
+	if (task->message)
 	{
-		Oid messageOid = CStringGetTextDatum(message);
+		Oid messageOid = CStringGetTextDatum(task->message);
 		UPDATE_FIELD(Anum_pg_dist_background_tasks_message, false, messageOid);
 	}
 	else
@@ -2791,11 +2793,15 @@ UpdateJobStatus(int64 taskId, const pid_t *pid, BackgroundTaskStatus status,
 
 #undef UPDATE_FIELD
 
-	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+	if (updated)
+	{
+		heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
+									  replace);
 
-	CatalogTupleUpdate(pgDistBackgroundTasks, &heapTuple->t_self, heapTuple);
+		CatalogTupleUpdate(pgDistBackgroundTasks, &heapTuple->t_self, heapTuple);
 
-	CommandCounterIncrement();
+		CommandCounterIncrement();
+	}
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistBackgroundTasks, NoLock);
