@@ -37,7 +37,8 @@ group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock);
 
 
-explain select     s_i_id, sum(s_order_cnt) as ordercount
+explain (costs false)
+select     s_i_id, sum(s_order_cnt) as ordercount
 from     stock s
 group by s_i_id
 having   (select true)
