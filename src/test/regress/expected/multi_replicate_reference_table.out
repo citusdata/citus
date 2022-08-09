@@ -781,7 +781,51 @@ SELECT create_reference_table('ref_table');
 (1 row)
 
 INSERT INTO ref_table SELECT * FROM generate_series(1, 10);
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+-- verify direct call to citus_copy_shard_placement errors if target node is not yet added
+SELECT citus_copy_shard_placement(
+           (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
+           'localhost', :worker_1_port,
+           'localhost', :worker_2_port,
+           do_repair := false,
+           transfer_mode := 'block_writes');
+ERROR:  Copying shards to a non-existing node is not supported
+HINT:  Add the target node via SELECT citus_add_node('localhost', 57638);
+-- verify direct call to citus_copy_shard_placement errors if target node is secondary
+SELECT citus_add_secondary_node('localhost', :worker_2_port, 'localhost', :worker_1_port);
+ citus_add_secondary_node
+---------------------------------------------------------------------
+                  1370012
+(1 row)
+
+SELECT citus_copy_shard_placement(
+           (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
+           'localhost', :worker_1_port,
+           'localhost', :worker_2_port,
+           do_repair := false,
+           transfer_mode := 'block_writes');
+ERROR:  Copying shards to a secondary (e.g., replica) node is not supported
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify direct call to citus_copy_shard_placement errors if target node is inactive
+SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT citus_copy_shard_placement(
+           (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
+           'localhost', :worker_1_port,
+           'localhost', :worker_2_port,
+           do_repair := false,
+           transfer_mode := 'block_writes');
+ERROR:  Copying shards to a non-active node is not supported
+HINT:  Activate the target node via SELECT citus_activate_node('localhost', 57638);
+SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1

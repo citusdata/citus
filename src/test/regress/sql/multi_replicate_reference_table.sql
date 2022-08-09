@@ -509,7 +509,34 @@ CREATE TABLE ref_table(a int);
 SELECT create_reference_table('ref_table');
 INSERT INTO ref_table SELECT * FROM generate_series(1, 10);
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+-- verify direct call to citus_copy_shard_placement errors if target node is not yet added
+SELECT citus_copy_shard_placement(
+           (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
+           'localhost', :worker_1_port,
+           'localhost', :worker_2_port,
+           do_repair := false,
+           transfer_mode := 'block_writes');
+
+-- verify direct call to citus_copy_shard_placement errors if target node is secondary
+SELECT citus_add_secondary_node('localhost', :worker_2_port, 'localhost', :worker_1_port);
+SELECT citus_copy_shard_placement(
+           (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
+           'localhost', :worker_1_port,
+           'localhost', :worker_2_port,
+           do_repair := false,
+           transfer_mode := 'block_writes');
+SELECT citus_remove_node('localhost', :worker_2_port);
+
+-- verify direct call to citus_copy_shard_placement errors if target node is inactive
+SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port);
+SELECT citus_copy_shard_placement(
+           (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
+           'localhost', :worker_1_port,
+           'localhost', :worker_2_port,
+           do_repair := false,
+           transfer_mode := 'block_writes');
+
+SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
 
 -- verify we cannot replicate reference tables in a transaction modifying pg_dist_node
 BEGIN;

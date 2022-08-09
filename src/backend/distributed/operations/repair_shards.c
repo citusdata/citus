@@ -74,6 +74,8 @@ static void VerifyTablesHaveReplicaIdentity(List *colocatedTableList);
 static bool RelationCanPublishAllModifications(Oid relationId);
 static bool CanUseLogicalReplication(Oid relationId, char shardReplicationMode);
 static void ErrorIfTableCannotBeReplicated(Oid relationId);
+static void ErrorIfTargetNodeIsNotSafeToCopyTo(const char *targetNodeName,
+											   int targetNodePort);
 static void RepairShardPlacement(int64 shardId, const char *sourceNodeName,
 								 int32 sourceNodePort, const char *targetNodeName,
 								 int32 targetNodePort);
@@ -183,6 +185,7 @@ citus_copy_shard_placement(PG_FUNCTION_ARGS)
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	ErrorIfTableCannotBeReplicated(shardInterval->relationId);
+	ErrorIfTargetNodeIsNotSafeToCopyTo(targetNodeName, targetNodePort);
 
 	AcquirePlacementColocationLock(shardInterval->relationId, ExclusiveLock,
 								   doRepair ? "repair" : "copy");
@@ -785,6 +788,41 @@ ErrorIfTableCannotBeReplicated(Oid relationId)
 						(errmsg("Table %s is streaming replicated. Shards "
 								"of streaming replicated tables cannot "
 								"be copied", quote_literal_cstr(relationName)))));
+	}
+}
+
+
+/*
+ * ErrorIfTargetNodeIsNotSafeToCopyTo throws an error if the target node is not
+ * eligible for copying shards.
+ */
+static void
+ErrorIfTargetNodeIsNotSafeToCopyTo(const char *targetNodeName, int targetNodePort)
+{
+	WorkerNode *workerNode = FindWorkerNode(targetNodeName, targetNodePort);
+	if (workerNode == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("Copying shards to a non-existing node is not supported"),
+						errhint(
+							"Add the target node via SELECT citus_add_node('%s', %d);",
+							targetNodeName, targetNodePort)));
+	}
+
+	if (!workerNode->isActive)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("Copying shards to a non-active node is not supported"),
+						errhint(
+							"Activate the target node via SELECT citus_activate_node('%s', %d);",
+							targetNodeName, targetNodePort)));
+	}
+
+	if (!NodeIsPrimary(workerNode))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("Copying shards to a secondary (e.g., replica) node is "
+							   "not supported")));
 	}
 }
 
