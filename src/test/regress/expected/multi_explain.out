@@ -301,12 +301,14 @@ Sort
                           Group Key: l_quantity
                           ->  Seq Scan on lineitem_360000 lineitem
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+SELECT public.plan_normalize_memory($Q$
 EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+$Q$);
 Sort (actual rows=50 loops=1)
   Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
-  Sort Method: quicksort  Memory: 27kB
+  Sort Method: quicksort  Memory: xxx
   ->  HashAggregate (actual rows=50 loops=1)
         Group Key: remote_scan.l_quantity
         ->  Custom Scan (Citus Adaptive) (actual rows=100 loops=1)
@@ -369,13 +371,15 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
 END;
 DROP TABLE t1, t2;
 -- Test query text output, with ANALYZE ON
+SELECT public.plan_normalize_memory($Q$
 EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+$Q$);
 Sort (actual rows=50 loops=1)
   Output: remote_scan.l_quantity, (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))
   Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
-  Sort Method: quicksort  Memory: 27kB
+  Sort Method: quicksort  Memory: xxx
   ->  HashAggregate (actual rows=50 loops=1)
         Output: remote_scan.l_quantity, COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)
         Group Key: remote_scan.l_quantity
@@ -1046,12 +1050,14 @@ Custom Scan (Citus Adaptive)
         ->  Delete on lineitem_hash_part_360044 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360044 lineitem_hash_part
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+SELECT public.plan_normalize_memory($Q$
 EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+$Q$);
 Sort (actual rows=50 loops=1)
   Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
-  Sort Method: quicksort  Memory: 27kB
+  Sort Method: quicksort  Memory: xxx
   ->  HashAggregate (actual rows=50 loops=1)
         Group Key: remote_scan.l_quantity
         ->  Custom Scan (Citus Adaptive) (actual rows=100 loops=1)
