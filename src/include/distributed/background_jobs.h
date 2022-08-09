@@ -1,9 +1,9 @@
 #ifndef CITUS_BACKGROUND_JOBS_H
 #define CITUS_BACKGROUND_JOBS_H
 
-#import "postgres.h"
+#include "postgres.h"
 
-#import "postmaster/bgworker.h"
+#include "postmaster/bgworker.h"
 
 extern BackgroundWorkerHandle * StartCitusBackgroundJobWorker(Oid database, Oid
 															  extensionOwner);
