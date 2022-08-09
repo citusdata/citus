@@ -239,7 +239,7 @@ AppendCreateRoleStmt(StringInfo buf, CreateRoleStmt *stmt)
 
 		if (strcmp(option->defname, "sysid") == 0)
 		{
-			appendStringInfo(buf, " SYSID %s", quote_literal_cstr(strVal(option->arg)));
+			/* accepted for backward compatibility but ignored by pg */
 		}
 		else if (strcmp(option->defname, "adminmembers") == 0)
 		{
