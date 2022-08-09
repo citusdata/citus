@@ -6,8 +6,38 @@ USER = "postgres"
 
 
 def psql(pg_path, port, command):
+    return subprocess.run(
+        [
+            os.path.join(pg_path, "psql"),
+            "-U",
+            USER,
+            "-p",
+            str(port),
+            "-c",
+            command,
+            "-P",
+            "pager=off",
+            "--no-psqlrc",
+        ],
+        check=True,
+    )
+
+
+def psql_capture(pg_path, port, command):
     return subprocess.check_output(
-        [os.path.join(pg_path, "psql"), "-U", USER, "-p", str(port), "-c", command],
+        [
+            os.path.join(pg_path, "psql"),
+            "-U",
+            USER,
+            "-p",
+            str(port),
+            "-c",
+            command,
+            "-P",
+            "pager=off",
+            "--no-psqlrc",
+            "--tuples-only",
+        ],
     )
 
 
