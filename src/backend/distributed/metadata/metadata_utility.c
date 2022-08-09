@@ -2508,7 +2508,7 @@ ResetRunningBackgroundTasks(void)
 }
 
 
-static void
+void
 DeepFreeBackgroundTask(BackgroundTask *task)
 {
 	if (task->pid)
@@ -2783,8 +2783,35 @@ UpdateBackgroundTask(BackgroundTask *task)
 
 	if (task->message)
 	{
-		Oid messageOid = CStringGetTextDatum(task->message);
-		UPDATE_FIELD(Anum_pg_dist_background_tasks_message, false, messageOid);
+		/*
+		 * we check if the old message was either a null pointer or different from what we
+		 * currently have, if any we know that the message has changed and we update the
+		 * message
+		 */
+		bool updateMessage = false;
+		if (isnull[Anum_pg_dist_background_tasks_message - 1])
+		{
+			updateMessage = true;
+		}
+		else
+		{
+			text *oldMessageText =
+				DatumGetTextP(values[Anum_pg_dist_background_tasks_message - 1]);
+			char *oldMessage = text_to_cstring(oldMessageText);
+			if (strcmp(oldMessage, task->message) != 0)
+			{
+				updateMessage = true;
+			}
+		}
+
+		if (updateMessage)
+		{
+			values[Anum_pg_dist_background_tasks_message - 1] =
+				CStringGetTextDatum(task->message);
+			isnull[Anum_pg_dist_background_tasks_message - 1] = false;
+			replace[Anum_pg_dist_background_tasks_message - 1] = true;
+			updated |= true;
+		}
 	}
 	else
 	{

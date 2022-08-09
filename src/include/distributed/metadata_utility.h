@@ -340,6 +340,7 @@ extern BackgroundTask * ScheduleBackgroundTask(char *command, int dependingTaskC
 extern bool BackgroundTaskHasUmnetDependencies(int64 taskId);
 extern BackgroundTask * GetRunnableBackgroundTask(void);
 extern void ResetRunningBackgroundTasks(void);
+extern void DeepFreeBackgroundTask(BackgroundTask *task);
 extern BackgroundTask * GetBackgroundTaskByTaskId(int64 taskId);
 extern void UpdateBackgroundTask(BackgroundTask *task);
 extern void UpdateJobStatus(int64 taskId, const pid_t *pid, BackgroundTaskStatus status,
