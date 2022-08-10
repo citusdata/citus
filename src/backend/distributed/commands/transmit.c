@@ -249,7 +249,7 @@ ReceiveCopyData(StringInfo copyData)
 
 	HOLD_CANCEL_INTERRUPTS();
 	elog(WARNING, "before sleep");
-	pg_usleep(1000000000000);
+	pg_usleep(100000);
 	pq_startmsgread();
 	int messageType = pq_getbyte();
 	if (messageType == EOF)
