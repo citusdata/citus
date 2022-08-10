@@ -1171,7 +1171,7 @@ RegisterCitusConfigVariables(void)
 		&EnableUnsafeTriggers,
 		false,
 		PGC_USERSET,
-		GUC_STANDARD,
+		GUC_STANDARD | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
