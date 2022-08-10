@@ -195,6 +195,9 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	/* set shard storage type according to relation type */
 	char shardStorageType = ShardStorageType(distributedTableId);
 
+	/* shard state is active by default */
+	ShardState shardState = SHARD_STATE_ACTIVE;
+
 	for (int64 shardIndex = 0; shardIndex < shardCount; shardIndex++)
 	{
 		uint32 roundRobinNodeIndex = shardIndex % workerNodeCount;
@@ -214,7 +217,7 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 		text *minHashTokenText = IntegerToText(shardMinHashToken);
 		text *maxHashTokenText = IntegerToText(shardMaxHashToken);
 
-		InsertShardRow(distributedTableId, shardId, shardStorageType,
+		InsertShardRow(distributedTableId, shardId, shardStorageType, shardState,
 					   minHashTokenText, maxHashTokenText);
 
 		List *currentInsertedShardPlacements = InsertShardPlacementRows(
@@ -262,6 +265,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 	LockRelationOid(sourceRelationId, AccessShareLock);
 
 	/* prevent placement changes of the source relation until we colocate with them */
+	// TODO(niupre): We should only return ACTIVE shards, not ALL shards.
 	List *sourceShardIntervalList = LoadShardIntervalList(sourceRelationId);
 	LockShardListMetadata(sourceShardIntervalList, ShareLock);
 
@@ -283,6 +287,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 		uint64 sourceShardId = sourceShardInterval->shardId;
 		uint64 newShardId = GetNextShardId();
 
+
 		int32 shardMinValue = DatumGetInt32(sourceShardInterval->minValue);
 		int32 shardMaxValue = DatumGetInt32(sourceShardInterval->maxValue);
 		text *shardMinValueText = IntegerToText(shardMinValue);
@@ -290,14 +295,14 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 		List *sourceShardPlacementList = ShardPlacementListWithoutOrphanedPlacements(
 			sourceShardId);
 
-		InsertShardRow(targetRelationId, newShardId, targetShardStorageType,
+		const ShardState shardState = SHARD_STATE_ACTIVE;
+		InsertShardRow(targetRelationId, newShardId, targetShardStorageType, shardState,
 					   shardMinValueText, shardMaxValueText);
 
 		ShardPlacement *sourcePlacement = NULL;
 		foreach_ptr(sourcePlacement, sourceShardPlacementList)
 		{
 			int32 groupId = sourcePlacement->groupId;
-			const ShardState shardState = SHARD_STATE_ACTIVE;
 			const uint64 shardSize = 0;
 
 			/*
@@ -370,7 +375,10 @@ CreateReferenceTableShard(Oid distributedTableId)
 	/* get the next shard id */
 	uint64 shardId = GetNextShardId();
 
-	InsertShardRow(distributedTableId, shardId, shardStorageType, shardMinValue,
+	/* shard state is active by default */
+	ShardState shardState = SHARD_STATE_ACTIVE;
+
+	InsertShardRow(distributedTableId, shardId, shardStorageType, shardState, shardMinValue,
 				   shardMaxValue);
 
 	List *insertedShardPlacements = InsertShardPlacementRows(distributedTableId, shardId,

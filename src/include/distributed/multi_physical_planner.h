@@ -560,6 +560,7 @@ extern bool ShardIntervalsOverlap(ShardInterval *firstInterval,
 								  ShardInterval *secondInterval);
 extern bool ShardIntervalsOverlapWithParams(Datum firstMin, Datum firstMax,
 											Datum secondMin, Datum secondMax,
+											char firstState, char secondState,
 											FmgrInfo *comparisonFunction,
 											Oid collation);
 extern bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);

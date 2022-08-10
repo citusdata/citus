@@ -72,3 +72,8 @@ DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_
 #include "udfs/worker_copy_table_to_node/11.1-1.sql"
 #include "udfs/worker_split_shard_replication_setup/11.1-1.sql"
 #include "udfs/citus_isolation_test_session_is_blocked/11.1-1.sql"
+
+-- Changes for Shard Split Deferred Drop (default value SHARD_STATE_ACTIVE)
+#include "udfs/citus_internal_add_shard_metadata/11.1-1.sql"
+#include "udfs/citus_internal_update_shard_and_placement_state_metadata/11.1-1.sql"
+ALTER TABLE pg_catalog.pg_dist_shard ADD COLUMN shardstate INT NOT NULL DEFAULT 1;

@@ -224,8 +224,9 @@ create_monolithic_shard_row(PG_FUNCTION_ARGS)
 	text *minInfoText = cstring_to_text(minInfo->data);
 	text *maxInfoText = cstring_to_text(maxInfo->data);
 
-	InsertShardRow(distributedTableId, newShardId, SHARD_STORAGE_TABLE, minInfoText,
-				   maxInfoText);
+	InsertShardRow(distributedTableId, newShardId,
+				   SHARD_STORAGE_TABLE, SHARD_STATE_ACTIVE,
+				   minInfoText, maxInfoText);
 
 	PG_RETURN_INT64(newShardId);
 }

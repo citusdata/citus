@@ -1616,6 +1616,7 @@ List *
 DDLTaskList(Oid relationId, const char *commandString)
 {
 	List *taskList = NIL;
+	// TODO(niupre): This should be all shards?
 	List *shardIntervalList = LoadShardIntervalList(relationId);
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);

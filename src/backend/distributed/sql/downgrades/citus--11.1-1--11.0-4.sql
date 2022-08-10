@@ -89,3 +89,17 @@ DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_
 
 DROP VIEW pg_catalog.citus_locks;
 DROP FUNCTION pg_catalog.citus_locks();
+
+-- Changes for Shard Split Deferred Drop
+CREATE OR REPLACE FUNCTION pg_catalog.citus_internal_add_shard_metadata(
+							relation_id regclass, shard_id bigint,
+							storage_type "char", shard_min_value text,
+							shard_max_value text
+							)
+    RETURNS void
+    LANGUAGE C
+    AS 'MODULE_PATHNAME';
+COMMENT ON FUNCTION pg_catalog.citus_internal_add_shard_metadata(regclass, bigint, "char", text, text) IS
+    'Inserts into pg_dist_shard with user checks';
+ALTER TABLE pg_catalog.pg_dist_shard DROP COLUMN shardstate;
+DROP FUNCTION pg_catalog.citus_internal_update_shard_and_placement_state_metadata(shard_id bigint, shardState integer);

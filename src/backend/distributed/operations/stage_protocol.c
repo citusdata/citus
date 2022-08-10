@@ -168,6 +168,9 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 		attemptableNodeCount = ShardReplicationFactor;
 	}
 
+	/* shard state is active by default */
+	char shardState = SHARD_STATE_ACTIVE;
+
 	/* first retrieve a list of random nodes for shard placements */
 	while (candidateNodeIndex < attemptableNodeCount)
 	{
@@ -184,7 +187,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 		candidateNodeIndex++;
 	}
 
-	InsertShardRow(relationId, shardId, storageType, nullMinValue, nullMaxValue);
+	InsertShardRow(relationId, shardId, storageType, shardState, nullMinValue, nullMaxValue);
 
 	CreateAppendDistributedShardPlacements(relationId, shardId, candidateNodeList,
 										   ShardReplicationFactor);

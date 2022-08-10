@@ -1198,6 +1198,7 @@ CopyShardInterval(ShardInterval *srcInterval)
 	destInterval->type = srcInterval->type;
 	destInterval->relationId = srcInterval->relationId;
 	destInterval->storageType = srcInterval->storageType;
+	destInterval->shardState = srcInterval->shardState;
 	destInterval->valueTypeId = srcInterval->valueTypeId;
 	destInterval->valueTypeLen = srcInterval->valueTypeLen;
 	destInterval->valueByVal = srcInterval->valueByVal;
@@ -1311,6 +1312,17 @@ IsActiveShardPlacement(ShardPlacement *shardPlacement)
 
 	return shardPlacement->shardState == SHARD_STATE_ACTIVE &&
 		   workerNode->isActive;
+}
+
+
+/*
+ * IsActiveShardInterval checks if the shard interval is labelled as
+ * active.
+ */
+bool
+IsActiveShardInterval(ShardInterval *shardInterval)
+{
+	return (shardInterval->shardState == SHARD_STATE_ACTIVE);
 }
 
 
@@ -1633,7 +1645,7 @@ TupleToGroupShardPlacement(TupleDesc tupleDescriptor, HeapTuple heapTuple)
  */
 void
 InsertShardRow(Oid relationId, uint64 shardId, char storageType,
-			   text *shardMinValue, text *shardMaxValue)
+			   int shardState, text *shardMinValue, text *shardMaxValue)
 {
 	Datum values[Natts_pg_dist_shard];
 	bool isNulls[Natts_pg_dist_shard];
@@ -1660,6 +1672,8 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 		isNulls[Anum_pg_dist_shard_shardminvalue - 1] = true;
 		isNulls[Anum_pg_dist_shard_shardmaxvalue - 1] = true;
 	}
+
+	values[Anum_pg_dist_shard_shardstate - 1] = Int32GetDatum(shardState);
 
 	/* open shard relation and insert new tuple */
 	Relation pgDistShard = table_open(DistShardRelationId(), RowExclusiveLock);
@@ -1939,6 +1953,56 @@ DeleteShardPlacementRow(uint64 placementId)
 
 	CommandCounterIncrement();
 	table_close(pgDistPlacement, NoLock);
+}
+
+
+/*
+ * UpdateShardState sets the shardState for the shard identified
+ * by shardId.
+ */
+void
+UpdateShardState(uint64 shardId, char shardState)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOK = true;
+	Datum values[Natts_pg_dist_shard];
+	bool isnull[Natts_pg_dist_shard];
+	bool replace[Natts_pg_dist_shard];
+	bool colIsNull = false;
+
+	Relation pgDistShard = table_open(DistShardRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistShard);
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistShard,
+													DistShardShardidIndexId(), indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for shard "
+							   UINT64_FORMAT, shardId)));
+	}
+
+	memset(replace, 0, sizeof(replace));
+
+	values[Anum_pg_dist_shard_shardstate - 1] = CharGetDatum(shardState);
+	isnull[Anum_pg_dist_shard_shardstate - 1] = false;
+	replace[Anum_pg_dist_shard_shardstate - 1] = true;
+
+	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+	CatalogTupleUpdate(pgDistShard, &heapTuple->t_self, heapTuple);
+
+	Assert(!colIsNull);
+	CitusInvalidateRelcacheByShardId(shardId);
+
+	CommandCounterIncrement();
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistShard, NoLock);
 }
 
 

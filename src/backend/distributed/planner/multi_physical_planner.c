@@ -3942,13 +3942,17 @@ ShardIntervalsOverlap(ShardInterval *firstInterval, ShardInterval *secondInterva
 
 	Datum firstMin = firstInterval->minValue;
 	Datum firstMax = firstInterval->maxValue;
+	char firstState = firstInterval->shardState;
 	Datum secondMin = secondInterval->minValue;
 	Datum secondMax = secondInterval->maxValue;
+	char secondState = secondInterval->shardState;
 
 	FmgrInfo *comparisonFunction = intervalRelation->shardIntervalCompareFunction;
 	Oid collation = intervalRelation->partitionColumn->varcollid;
 
-	return ShardIntervalsOverlapWithParams(firstMin, firstMax, secondMin, secondMax,
+	return ShardIntervalsOverlapWithParams(firstMin, firstMax,
+										   secondMin, secondMax,
+										   firstState, secondState,
 										   comparisonFunction, collation);
 }
 
@@ -3959,8 +3963,10 @@ ShardIntervalsOverlap(ShardInterval *firstInterval, ShardInterval *secondInterva
  * The caller is responsible to ensure the input shard min/max values are not NULL.
  */
 bool
-ShardIntervalsOverlapWithParams(Datum firstMin, Datum firstMax, Datum secondMin,
-								Datum secondMax, FmgrInfo *comparisonFunction,
+ShardIntervalsOverlapWithParams(Datum firstMin, Datum firstMax,
+								Datum secondMin, Datum secondMax,
+								char firstState, char secondState,
+								FmgrInfo *comparisonFunction,
 								Oid collation)
 {
 	/*
@@ -3976,7 +3982,11 @@ ShardIntervalsOverlapWithParams(Datum firstMin, Datum firstMax, Datum secondMin,
 	int firstComparison = DatumGetInt32(firstDatum);
 	int secondComparison = DatumGetInt32(secondDatum);
 
-	if (firstComparison < 0 || secondComparison < 0)
+	// If one of the shards are marked as TO_DELETED, ignore the overlap.
+	bool markedForDelete = (firstState == SHARD_STATE_TO_DELETE ||
+							secondState == SHARD_STATE_TO_DELETE);
+
+	if (firstComparison < 0 || secondComparison < 0 || markedForDelete)
 	{
 		return false;
 	}

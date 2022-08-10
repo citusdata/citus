@@ -1778,7 +1778,9 @@ ErrorIfInconsistentShardIntervals(CitusTableCacheEntry *cacheEntry)
 {
 	/*
 	 * If table is hash-partitioned and has shards, there never should be any
-	 * uninitalized shards.  Historically we've not prevented that for range
+	 * uninitalized shards. An exception to this is shard marked as TO_DELETED
+	 * after split that are pending deletion.
+	 * Historically we've not prevented that for range
 	 * partitioned tables, but it might be a good idea to start doing so.
 	 */
 	if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
@@ -1900,7 +1902,11 @@ HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
 											curShardInterval->minValue);
 		comparisonResult = DatumGetInt32(comparisonDatum);
 
-		if (comparisonResult >= 0)
+		// If one of the shards are marked as TO_DELETED, ignore the overlap.
+		bool markedForDelete = (lastShardInterval->shardState == SHARD_STATE_TO_DELETE ||
+							   curShardInterval->shardState == SHARD_STATE_TO_DELETE);
+
+		if (!markedForDelete && comparisonResult >= 0)
 		{
 			return true;
 		}
@@ -4815,6 +4821,8 @@ DeformedDistShardTupleToShardInterval(Datum *datumArray, bool *isNullArray,
 		maxValueExists = true;
 	}
 
+	char shardState = DatumGetChar(datumArray[Anum_pg_dist_shard_shardstate - 1]);
+
 	ShardInterval *shardInterval = CitusMakeNode(ShardInterval);
 	shardInterval->relationId = relationId;
 	shardInterval->storageType = storageType;
@@ -4826,6 +4834,7 @@ DeformedDistShardTupleToShardInterval(Datum *datumArray, bool *isNullArray,
 	shardInterval->minValue = minValue;
 	shardInterval->maxValue = maxValue;
 	shardInterval->shardId = shardId;
+	shardInterval->shardState = shardState;
 
 	return shardInterval;
 }

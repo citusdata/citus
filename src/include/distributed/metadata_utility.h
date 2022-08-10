@@ -67,6 +67,7 @@ typedef struct ShardInterval
 	Datum maxValue;     /* a shard's typed max value datum */
 	uint64 shardId;
 	int shardIndex;
+	ShardState shardState;
 } ShardInterval;
 
 
@@ -220,6 +221,7 @@ extern ShardInterval * CopyShardInterval(ShardInterval *srcInterval);
 extern uint64 ShardLength(uint64 shardId);
 extern bool NodeGroupHasShardPlacements(int32 groupId,
 										bool onlyConsiderActivePlacements);
+extern bool IsActiveShardInterval(ShardInterval *shardInterval);
 extern bool IsActiveShardPlacement(ShardPlacement *ShardPlacement);
 extern List * FilterShardPlacementList(List *shardPlacementList, bool (*filter)(
 										   ShardPlacement *));
@@ -239,7 +241,7 @@ extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
-						   text *shardMinValue, text *shardMaxValue);
+			   int shardState, text *shardMinValue, text *shardMaxValue);
 extern void DeleteShardRow(uint64 shardId);
 extern uint64 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 									  char shardState, uint64 shardLength,
@@ -250,6 +252,7 @@ extern void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 extern void UpdatePgDistPartitionAutoConverted(Oid citusTableId, bool autoConverted);
 extern void DeletePartitionRow(Oid distributedRelationId);
 extern void DeleteShardRow(uint64 shardId);
+extern void UpdateShardState(uint64 shardId, char shardState);
 extern void UpdateShardPlacementState(uint64 placementId, char shardState);
 extern void UpdatePlacementGroupId(uint64 placementId, int groupId);
 extern void DeleteShardPlacementRow(uint64 placementId);

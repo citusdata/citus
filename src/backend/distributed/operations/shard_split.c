@@ -22,6 +22,7 @@
 #include "distributed/adaptive_executor.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/connection_management.h"
@@ -39,6 +40,7 @@
 #include "distributed/shardsplit_logical_replication.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/shard_rebalancer.h"
+#include "distributed/shard_cleaner.h"
 #include "postmaster/postmaster.h"
 
 /*
@@ -129,7 +131,7 @@ static void AddDummyShardEntryInMap(HTAB *mapOfDummyShards, uint32 targetNodeId,
 static void DropDummyShards(HTAB *mapOfDummyShardToPlacement);
 static void DropDummyShard(MultiConnection *connection, ShardInterval *shardInterval);
 static uint64 GetNextShardIdForSplitChild(void);
-
+static void MarkShardListForDrop(List *shardIntervalList);
 
 /* Customize error message strings based on operation type */
 static const char *const SplitOperationName[] =
@@ -142,6 +144,8 @@ static const char *const SplitTargetName[] =
 	[SHARD_SPLIT_API] = "shard",
 	[ISOLATE_TENANT_TO_NEW_SHARD] = "tenant",
 };
+
+bool DeferShardDeleteOnSplit = false;
 
 /* Function definitions */
 
@@ -550,12 +554,23 @@ BlockingShardSplit(SplitOperation splitOperation,
 		 * going forward are part of the same distributed transaction.
 		 */
 
-		/*
-		 * Drop old shards and delete related metadata. Have to do that before
-		 * creating the new shard metadata, because there's cross-checks
-		 * preventing inconsistent metadata (like overlapping shards).
-		 */
-		DropShardList(sourceColocatedShardIntervalList);
+		if (DeferShardDeleteOnSplit)
+		{
+			/*
+			 * Defer deletion of source shard and only mark
+			 * shard metadata for deletion.
+			 */
+			MarkShardListForDrop(sourceColocatedShardIntervalList);
+		}
+		else
+		{
+			/*
+			* Drop old shards and delete related metadata. Have to do that before
+			* creating the new shard metadata, because there's cross-checks
+			* preventing inconsistent metadata (like overlapping shards).
+			*/
+			DropShardList(sourceColocatedShardIntervalList);
+		}
 
 		/* Insert new shard and placement metdata */
 		InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
@@ -1013,6 +1028,7 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 				shardInterval->relationId,
 				shardInterval->shardId,
 				shardInterval->storageType,
+				shardInterval->shardState,
 				IntegerToText(DatumGetInt32(shardInterval->minValue)),
 				IntegerToText(DatumGetInt32(shardInterval->maxValue)));
 
@@ -1127,6 +1143,43 @@ CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 					workerPlacementNode->workerPort,
 					constraintCommand);
 			}
+		}
+	}
+}
+
+/*
+ * MarkShardListForDrop drops shards and their metadata from both the coordinator and
+ * mx nodes.
+ */
+static void
+MarkShardListForDrop(List *shardIntervalList)
+{
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
+	{
+		uint64 shardId = shardInterval->shardId;
+		ShardState newState = SHARD_STATE_TO_DELETE;
+
+		UpdateShardState(shardId, newState);
+		List *shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
+
+		/* Only single placement allowed (already validated RelationReplicationFactor = 1) */
+		Assert(list_length(shardPlacementList) == 1);
+
+		ShardPlacement *placement = (ShardPlacement *) linitial(shardPlacementList);
+		UpdateShardPlacementState(placement->placementId, newState);
+
+		/* sync metadata with all other worked nodes */
+		bool shouldSyncMetadata = ShouldSyncTableMetadata(shardInterval->relationId);
+		if (shouldSyncMetadata)
+		{
+			StringInfo updateShardCommand = makeStringInfo();
+			appendStringInfo(updateShardCommand,
+							"SELECT citus_internal_update_shard_and_placement_state_metadata(%ld, %d)",
+							shardId,
+							newState);
+
+			SendCommandToWorkersWithMetadata(updateShardCommand->data);
 		}
 	}
 }
@@ -1412,12 +1465,23 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 									 shardIntervalToSplit->shardId));
 		DropShardSplitReplicationSlots(sourceConnection, replicationSlotInfoList);
 
-		/*
-		 * 18) Drop old shards and delete related metadata. Have to do that before
-		 * creating the new shard metadata, because there's cross-checks
-		 * preventing inconsistent metadata (like overlapping shards).
-		 */
-		DropShardList(sourceColocatedShardIntervalList);
+		if (DeferShardDeleteOnSplit)
+		{
+			/*
+			 * Defer deletion of source shard and only mark
+			 * shard metadata for deletion.
+			 */
+			MarkShardListForDrop(sourceColocatedShardIntervalList);
+		}
+		else
+		{
+			/*
+			* Drop old shards and delete related metadata. Have to do that before
+			* creating the new shard metadata, because there's cross-checks
+			* preventing inconsistent metadata (like overlapping shards).
+			*/
+			DropShardList(sourceColocatedShardIntervalList);
+		}
 
 		/* 19) Insert new shard and placement metdata */
 		InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
