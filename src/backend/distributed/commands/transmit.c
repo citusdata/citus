@@ -248,6 +248,8 @@ ReceiveCopyData(StringInfo copyData)
 	const int unlimitedSize = PQ_LARGE_MESSAGE_LIMIT;
 
 	HOLD_CANCEL_INTERRUPTS();
+	elog(WARNING, "before sleep");
+	pg_usleep(1000000000000);
 	pq_startmsgread();
 	int messageType = pq_getbyte();
 	if (messageType == EOF)
