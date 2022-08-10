@@ -1352,11 +1352,9 @@ EnsureRelationHasNoTriggers(Oid relationId)
 		char *relationName = get_rel_name(relationId);
 
 		Assert(relationName != NULL);
-		ereport(ERROR, (errmsg("cannot distribute relation \"%s\" because it has "
-							   "triggers and \"citus.enable_unsafe_triggers\" is "
-							   "set to \"false\"", relationName),
-						errhint("Consider setting \"citus.enable_unsafe_triggers\" "
-								"to \"true\", or drop all the triggers on \"%s\" "
+		ereport(ERROR, (errmsg("cannot distribute relation \"%s\" because it "
+							   "has triggers", relationName),
+						errhint("Consider dropping all the triggers on \"%s\" "
 								"and retry.", relationName)));
 	}
 }
