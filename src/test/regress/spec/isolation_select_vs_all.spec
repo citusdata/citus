@@ -80,6 +80,10 @@ step "s2-table-size" { SELECT citus_total_relation_size('select_append'); }
 step "s2-master-modify-multiple-shards" { DELETE FROM select_append; }
 step "s2-master-drop-all-shards" { SELECT citus_drop_all_shards('select_append'::regclass, 'public', 'append_copy'); }
 step "s2-distribute-table" { SELECT create_distributed_table('select_append', 'id', 'append'); }
+// We use this as a way to wait for s2-ddl-create-index-concurrently to
+// complete. We know it can complete before s1-commit has succeeded, this way
+// we make sure we get consistent output.
+step "s2-empty" {}
 
 // permutations - SELECT vs SELECT
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-router-select" "s1-commit" "s1-select-count"
@@ -101,7 +105,7 @@ permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-truncate" "s1-comm
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-drop" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-ddl-create-index" "s1-commit" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s1-router-select" "s2-ddl-drop-index" "s1-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s1-disable-binary-protocol" "s1-router-select" "s2-ddl-create-index-concurrently" "s1-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s1-disable-binary-protocol" "s1-router-select" "s2-ddl-create-index-concurrently"(*) "s2-empty" "s1-commit" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-ddl-add-column" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-router-select" "s2-ddl-drop-column" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-ddl-rename-column" "s1-commit" "s1-select-count" "s1-show-columns"
@@ -136,7 +140,7 @@ permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-truncate" "s1-c
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-drop" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-ddl-create-index" "s1-commit" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s1-real-time-select" "s2-ddl-drop-index" "s1-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-ddl-create-index-concurrently" "s1-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-ddl-create-index-concurrently"(*) "s2-empty"  "s1-commit" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-ddl-add-column" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-real-time-select" "s2-ddl-drop-column" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-ddl-rename-column" "s1-commit" "s1-select-count" "s1-show-columns"
@@ -169,7 +173,7 @@ permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-truncate" "s1-co
 permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-drop" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-ddl-create-index" "s1-commit" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s1-adaptive-select" "s2-ddl-drop-index" "s1-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-ddl-create-index-concurrently" "s1-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-ddl-create-index-concurrently"(*) "s2-empty"  "s1-commit" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-ddl-add-column" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-adaptive-select" "s2-ddl-drop-column" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-ddl-rename-column" "s1-commit" "s1-select-count" "s1-show-columns"

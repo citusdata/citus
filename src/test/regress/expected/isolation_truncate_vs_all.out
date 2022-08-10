@@ -116,7 +116,7 @@ run_command_on_workers
 (2 rows)
 
 
-starting permutation: s1-initialize s1-begin s1-truncate s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
+starting permutation: s1-initialize s1-begin s1-truncate s2-ddl-create-index-concurrently s1-commit s2-empty s1-select-count s1-show-indexes
 master_create_empty_shard
 ---------------------------------------------------------------------
                   5990340
@@ -128,6 +128,7 @@ step s1-truncate: TRUNCATE truncate_append;
 step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY truncate_append_index ON truncate_append(id); <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-create-index-concurrently: <... completed>
+step s2-empty:
 step s1-select-count: SELECT COUNT(*) FROM truncate_append;
 count
 ---------------------------------------------------------------------

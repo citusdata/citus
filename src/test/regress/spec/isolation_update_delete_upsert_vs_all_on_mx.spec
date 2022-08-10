@@ -82,6 +82,11 @@ step "s2-select-for-update"
 	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id=5 FOR UPDATE');
 }
 
+step "s2-coordinator-create-index-concurrently"
+{
+	CREATE INDEX CONCURRENTLY dist_table_index ON dist_table(id);
+}
+
 step "s2-commit-worker"
 {
         SELECT run_commands_on_session_level_connection_to_node('COMMIT');
@@ -92,6 +97,10 @@ step "s2-stop-connection"
         SELECT stop_session_level_connection_to_node();
 }
 
+// We use this as a way to wait for s2-ddl-create-index-concurrently to
+// complete. We know it can complete after s1-commit has succeeded, this way
+// we make sure we get consistent output.
+step "s2-empty" {}
 
 session "s3"
 
@@ -105,5 +114,4 @@ permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-update"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-delete" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-copy" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-select-count"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-update" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-alter-table" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-select-count"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-update" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-select-for-update" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection"
-//Not able to test the next permutation, until issue with CREATE INDEX CONCURRENTLY's locks is resolved. Issue #2966
-//permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-delete" "s2-coordinator-create-index-concurrently" "s1-commit-worker" "s3-select-count" "s1-stop-connection"
+permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-delete" "s2-coordinator-create-index-concurrently" "s1-commit-worker" "s2-empty" "s3-select-count" "s1-stop-connection"

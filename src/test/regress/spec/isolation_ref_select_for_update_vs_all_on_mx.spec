@@ -107,6 +107,10 @@ step "s2-stop-connection"
         SELECT stop_session_level_connection_to_node();
 }
 
+// We use this as a way to wait for s2-ddl-create-index-concurrently to
+// complete. We know it can complete before s1-commit has succeeded, this way
+// we make sure we get consistent output.
+step "s2-empty" {}
 
 session "s3"
 
@@ -125,4 +129,4 @@ permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-for-update" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-copy" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-select-count"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-for-update" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-alter" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-for-update" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-truncate" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection"
-permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-for-update" "s2-coordinator-create-index-concurrently" "s1-commit-worker" "s1-stop-connection"
+permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-for-update" "s2-coordinator-create-index-concurrently"(*) "s2-empty" "s1-commit-worker" "s1-stop-connection"
