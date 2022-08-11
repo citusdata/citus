@@ -516,7 +516,7 @@ run_command_on_workers
 (2 rows)
 
 
-starting permutation: s1-initialize s1-begin s1-disable-binary-protocol s1-router-select s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
+starting permutation: s1-initialize s1-begin s1-disable-binary-protocol s1-router-select s2-ddl-create-index-concurrently s2-empty s1-commit s1-select-count s1-show-indexes
 master_create_empty_shard
 ---------------------------------------------------------------------
                   6780300
@@ -534,7 +534,9 @@ id|data|int_data
  1| b  |       1
 (1 row)
 
-step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY select_append_index ON select_append(id);
+step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY select_append_index ON select_append(id); <waiting ...>
+step s2-ddl-create-index-concurrently: <... completed>
+step s2-empty:
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
@@ -1363,7 +1365,7 @@ run_command_on_workers
 (2 rows)
 
 
-starting permutation: s1-initialize s1-begin s1-real-time-select s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
+starting permutation: s1-initialize s1-begin s1-real-time-select s2-ddl-create-index-concurrently s2-empty s1-commit s1-select-count s1-show-indexes
 master_create_empty_shard
 ---------------------------------------------------------------------
                   6780300
@@ -1381,7 +1383,9 @@ id|data|int_data
  4| e  |       4
 (5 rows)
 
-step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY select_append_index ON select_append(id);
+step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY select_append_index ON select_append(id); <waiting ...>
+step s2-ddl-create-index-concurrently: <... completed>
+step s2-empty:
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
@@ -2254,7 +2258,7 @@ run_command_on_workers
 (2 rows)
 
 
-starting permutation: s1-initialize s1-begin s1-adaptive-select s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
+starting permutation: s1-initialize s1-begin s1-adaptive-select s2-ddl-create-index-concurrently s2-empty s1-commit s1-select-count s1-show-indexes
 master_create_empty_shard
 ---------------------------------------------------------------------
                   6780300
@@ -2275,7 +2279,9 @@ id|data|int_data|id|data|int_data
  4| e  |       4| 4| e  |       4
 (5 rows)
 
-step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY select_append_index ON select_append(id);
+step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY select_append_index ON select_append(id); <waiting ...>
+step s2-ddl-create-index-concurrently: <... completed>
+step s2-empty:
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count

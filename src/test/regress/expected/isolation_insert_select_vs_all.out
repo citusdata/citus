@@ -180,7 +180,7 @@ run_command_on_workers
 (2 rows)
 
 
-starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-create-index-concurrently-on-inserted s1-commit s1-select-count s1-show-indexes-inserted
+starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-create-index-concurrently-on-inserted s1-commit s2-empty s1-select-count s1-show-indexes-inserted
 create_distributed_table
 ---------------------------------------------------------------------
 
@@ -197,6 +197,7 @@ step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM se
 step s2-ddl-create-index-concurrently-on-inserted: CREATE INDEX CONCURRENTLY insert_of_insert_select_hash_index ON insert_of_insert_select_hash(id); <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-create-index-concurrently-on-inserted: <... completed>
+step s2-empty:
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
 ---------------------------------------------------------------------
@@ -575,7 +576,7 @@ run_command_on_workers
 (2 rows)
 
 
-starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-create-index-concurrently-on-selected s1-commit s1-select-count s1-show-indexes-selected
+starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-create-index-concurrently-on-selected s1-commit s2-empty s1-select-count s1-show-indexes-selected
 create_distributed_table
 ---------------------------------------------------------------------
 
@@ -592,6 +593,7 @@ step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM se
 step s2-ddl-create-index-concurrently-on-selected: CREATE INDEX CONCURRENTLY select_of_insert_select_hash_index ON insert_of_insert_select_hash(id); <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-create-index-concurrently-on-selected: <... completed>
+step s2-empty:
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
 ---------------------------------------------------------------------

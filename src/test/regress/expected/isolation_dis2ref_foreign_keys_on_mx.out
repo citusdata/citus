@@ -689,3 +689,66 @@ id|value
  2|    2
 (1 row)
 
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-update s2-coordinator-create-index-concurrently s1-commit-worker s2-empty s1-stop-connection s3-display
+step s1-start-session-level-connection:
+ SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin-on-worker:
+ SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-update:
+ SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET id=id+2 WHERE id=1');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-coordinator-create-index-concurrently:
+ CREATE INDEX CONCURRENTLY dist_table_index ON dist_table(id);
+ <waiting ...>
+step s1-commit-worker: 
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-coordinator-create-index-concurrently: <... completed>
+step s2-empty:
+step s1-stop-connection:
+ SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s3-display:
+ SELECT * FROM ref_table ORDER BY id, value;
+ SELECT * FROM dist_table ORDER BY id, value;
+
+id|value
+---------------------------------------------------------------------
+ 2|   20
+ 3|   10
+(2 rows)
+
+id|value
+---------------------------------------------------------------------
+ 1|    3
+ 2|    2
+(2 rows)
+
