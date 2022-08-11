@@ -59,6 +59,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
+#include "distributed/resource_lock.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/shard_rebalancer.h"
 #include "distributed/worker_protocol.h"
@@ -471,8 +472,21 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 	/*
 	 * Make sure that existing reference tables have been replicated to all the nodes
 	 * such that we can create foreign keys and joins work immediately after creation.
+	 *
+	 * This will take a lock on the nodes to make sure no nodes are added after we have
+	 * verified and ensured the reference tables are copied everywhere.
+	 * Although copying reference tables here for anything but creating a new colocation
+	 * group, it requires significant refactoring which we don't want to perform now.
 	 */
 	EnsureReferenceTablesExistOnAllNodes();
+
+	/*
+	 * While adding tables to a colocation group we need to make sure no concurrent
+	 * mutations happen on the colocation group with regards to its placements. It is
+	 * important that we have already copied any reference tables before acquiring this
+	 * lock as these are competing operations.
+	 */
+	LockColocationId(colocationId, ShareLock);
 
 	/* we need to calculate these variables before creating distributed metadata */
 	bool localTableEmpty = TableEmpty(relationId);
@@ -513,7 +527,7 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 		 * This function does not expect to create Citus local table, so we blindly
 		 * create reference table when the method is DISTRIBUTE_BY_NONE.
 		 */
-		CreateReferenceTableShard(relationId);
+		CreateReferenceTableShard(relationId, colocatedTableId);
 	}
 
 	if (ShouldSyncTableMetadata(relationId))

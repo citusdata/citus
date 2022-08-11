@@ -326,7 +326,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
  * Also, the shard is replicated to the all active nodes in the cluster.
  */
 void
-CreateReferenceTableShard(Oid distributedTableId)
+CreateReferenceTableShard(Oid distributedTableId, Oid colocatedTableId)
 {
 	int workerStartIndex = 0;
 	text *shardMinValue = NULL;
@@ -365,7 +365,7 @@ CreateReferenceTableShard(Oid distributedTableId)
 	List *nodeList = ReferenceTablePlacementNodeList(ShareLock);
 	nodeList = SortList(nodeList, CompareWorkerNodes);
 
-	int replicationFactor = ReferenceTableReplicationFactor();
+	int replicationFactor = list_length(nodeList);
 
 	/* get the next shard id */
 	uint64 shardId = GetNextShardId();
