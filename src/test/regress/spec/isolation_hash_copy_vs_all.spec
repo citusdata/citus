@@ -75,7 +75,7 @@ step "s2-truncate" { TRUNCATE hash_copy; }
 step "s2-drop" { DROP TABLE hash_copy; }
 step "s2-ddl-create-index" { CREATE INDEX hash_copy_index ON hash_copy(id); }
 step "s2-ddl-drop-index" { DROP INDEX hash_copy_index; }
-step "s2-flaky-ddl-create-index-concurrently" { CREATE INDEX CONCURRENTLY flaky_hash_copy_index ON hash_copy(id); }
+step "s2-ddl-create-index-concurrently" { CREATE INDEX CONCURRENTLY hash_copy_index ON hash_copy(id); }
 step "s2-ddl-add-column" { ALTER TABLE hash_copy ADD new_column int DEFAULT 0; }
 step "s2-ddl-drop-column" { ALTER TABLE hash_copy DROP new_column; }
 step "s2-ddl-rename-column" { ALTER TABLE hash_copy RENAME data TO new_column; }
@@ -83,6 +83,10 @@ step "s2-table-size" { SELECT citus_total_relation_size('hash_copy'); }
 step "s2-master-modify-multiple-shards" { DELETE FROM hash_copy; }
 step "s2-master-drop-all-shards" { SELECT citus_drop_all_shards('hash_copy'::regclass, 'public', 'hash_copy'); }
 step "s2-distribute-table" { SELECT create_distributed_table('hash_copy', 'id'); }
+// We use this as a way to wait for s2-ddl-create-index-concurrently to
+// complete. We know it can complete after s1-commit has succeeded, this way we
+// make sure no other query is run over session s1 before that happens.
+step "s2-empty" {}
 
 // permutations - COPY vs COPY
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-copy" "s1-commit" "s1-select-count"
@@ -99,7 +103,7 @@ permutation "s1-initialize" "s1-begin" "s1-copy" "s2-truncate" "s1-commit" "s1-s
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-drop" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-create-index" "s1-commit" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s1-copy" "s2-ddl-drop-index" "s1-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s1-copy" "s2-flaky-ddl-create-index-concurrently" "s1-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-create-index-concurrently" "s1-commit" "s2-empty" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-add-column" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-copy-additional-column" "s2-ddl-drop-column" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-rename-column" "s1-commit" "s1-select-count" "s1-show-columns"

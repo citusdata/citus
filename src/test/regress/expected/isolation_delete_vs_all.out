@@ -116,7 +116,7 @@ run_command_on_workers
 (2 rows)
 
 
-starting permutation: s1-initialize s1-begin s1-delete s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
+starting permutation: s1-initialize s1-begin s1-delete s2-ddl-create-index-concurrently s1-commit s2-empty s1-select-count s1-show-indexes
 create_distributed_table
 ---------------------------------------------------------------------
 
@@ -128,6 +128,7 @@ step s1-delete: DELETE FROM delete_hash WHERE id = 4;
 step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY delete_hash_index ON delete_hash(id); <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-create-index-concurrently: <... completed>
+step s2-empty:
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
 ---------------------------------------------------------------------

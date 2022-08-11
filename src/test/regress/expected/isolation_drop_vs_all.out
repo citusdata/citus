@@ -108,7 +108,7 @@ run_command_on_workers
 (2 rows)
 
 
-starting permutation: s1-initialize s2-initialize s1-begin s1-drop s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
+starting permutation: s1-initialize s2-initialize s1-begin s1-drop s2-ddl-create-index-concurrently s1-commit s2-empty s1-select-count s1-show-indexes
 create_distributed_table
 ---------------------------------------------------------------------
 
@@ -122,6 +122,7 @@ step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY drop_hash_index
 step s1-commit: COMMIT;
 step s2-ddl-create-index-concurrently: <... completed>
 ERROR:  relation "drop_hash" does not exist
+step s2-empty:
 step s1-select-count: SELECT COUNT(*) FROM drop_hash;
 ERROR:  relation "drop_hash" does not exist
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''drop_hash%''');

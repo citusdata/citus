@@ -88,6 +88,10 @@ step "s2-distribute-table" {
   UPDATE pg_dist_shard SET shardminvalue = '0', shardmaxvalue = '4' WHERE shardid = 3004005;
   UPDATE pg_dist_shard SET shardminvalue = '5', shardmaxvalue = '9' WHERE shardid = 3004006;
  }
+// We use this as a way to wait for s2-ddl-create-index-concurrently to
+// complete. We know it can complete after s1-commit has succeeded, this way we
+// make sure no other query is run over session s1 before that happens.
+step "s2-empty" {}
 
 // permutations - COPY vs COPY
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-copy" "s1-commit" "s1-select-count"
@@ -104,7 +108,7 @@ permutation "s1-initialize" "s1-begin" "s1-copy" "s2-truncate" "s1-commit" "s1-s
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-drop" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-create-index" "s1-commit" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s1-copy" "s2-ddl-drop-index" "s1-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-create-index-concurrently" "s1-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-create-index-concurrently" "s1-commit" "s2-empty" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-add-column" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-copy-additional-column" "s2-ddl-drop-column" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-ddl-rename-column" "s1-commit" "s1-select-count" "s1-show-columns"
