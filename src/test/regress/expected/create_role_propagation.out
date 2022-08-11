@@ -26,6 +26,12 @@ CREATE USER create_user;
 CREATE USER create_user_2;
 CREATE GROUP create_group;
 CREATE GROUP create_group_2;
+-- show that create role fails if sysid option is given as non-int
+CREATE ROLE create_role_sysid SYSID "123";
+ERROR:  syntax error at or near ""123""
+-- show that create role accepts sysid option as int
+CREATE ROLE create_role_sysid SYSID 123;
+NOTICE:  SYSID can no longer be specified
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node
 ---------------------------------------------------------------------
@@ -62,11 +68,12 @@ SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin, r
  create_role"edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
  create_role'edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
  create_role_2               | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
+ create_role_sysid           | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
  create_role_with_everything | t        | t          | t             | t           | t           | t              | t            |          105 | t              | Thu May 04 17:00:00 2045 PDT
  create_role_with_nothing    | f        | f          | f             | f           | f           | f              | f            |            3 | t              | Mon May 04 17:00:00 2015 PDT
  create_user                 | f        | t          | f             | f           | t           | f              | f            |           -1 |                |
  create_user_2               | f        | t          | f             | f           | t           | f              | f            |           -1 |                |
-(10 rows)
+(11 rows)
 
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE 'create\_%' ORDER BY 1, 2;
             role             |           member            | grantor  | admin_option
@@ -91,11 +98,12 @@ SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin, r
  create_role"edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
  create_role'edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
  create_role_2               | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
+ create_role_sysid           | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
  create_role_with_everything | t        | t          | t             | t           | t           | t              | t            |          105 | t              | Thu May 04 17:00:00 2045 PDT
  create_role_with_nothing    | f        | f          | f             | f           | f           | f              | f            |            3 | t              | Mon May 04 17:00:00 2015 PDT
  create_user                 | f        | t          | f             | f           | t           | f              | f            |           -1 |                |
  create_user_2               | f        | t          | f             | f           | t           | f              | f            |           -1 |                |
-(10 rows)
+(11 rows)
 
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE 'create\_%' ORDER BY 1, 2;
             role             |           member            | grantor  | admin_option
@@ -127,11 +135,12 @@ SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin, r
  create_role"edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
  create_role'edge            | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
  create_role_2               | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
+ create_role_sysid           | f        | t          | f             | f           | f           | f              | f            |           -1 |                | infinity
  create_role_with_everything | t        | t          | t             | t           | t           | t              | t            |          105 | t              | Thu May 04 17:00:00 2045 PDT
  create_role_with_nothing    | f        | f          | f             | f           | f           | f              | f            |            3 | t              | Mon May 04 17:00:00 2015 PDT
  create_user                 | f        | t          | f             | f           | t           | f              | f            |           -1 |                | infinity
  create_user_2               | f        | t          | f             | f           | t           | f              | f            |           -1 |                | infinity
-(10 rows)
+(11 rows)
 
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE 'create\_%' ORDER BY 1, 2;
             role             |           member            | grantor  | admin_option
@@ -160,10 +169,11 @@ SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin, r
  create_role"edge         | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
  create_role'edge         | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
  create_role_2            | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
+ create_role_sysid        | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
  create_role_with_nothing | f        | f          | f             | f           | f           | f              | f            |            3 | t              | Mon May 04 17:00:00 2015 PDT
  create_user              | f        | t          | f             | f           | t           | f              | f            |           -1 |                |
  create_user_2            | f        | t          | f             | f           | t           | f              | f            |           -1 |                |
-(9 rows)
+(10 rows)
 
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE 'create\_%' ORDER BY 1, 2;
      role     |    member     | grantor  | admin_option
@@ -181,10 +191,11 @@ SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin, r
  create_role"edge         | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
  create_role'edge         | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
  create_role_2            | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
+ create_role_sysid        | f        | t          | f             | f           | f           | f              | f            |           -1 |                |
  create_role_with_nothing | f        | f          | f             | f           | f           | f              | f            |            3 | t              | Mon May 04 17:00:00 2015 PDT
  create_user              | f        | t          | f             | f           | t           | f              | f            |           -1 |                |
  create_user_2            | f        | t          | f             | f           | t           | f              | f            |           -1 |                |
-(9 rows)
+(10 rows)
 
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE 'create\_%' ORDER BY 1, 2;
      role     |    member     | grantor  | admin_option
@@ -600,7 +611,7 @@ SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::t
 (3 rows)
 
 \c - - - :master_port
-DROP ROLE create_role, create_role_2, create_group, create_group_2, create_user, create_user_2, create_role_with_nothing, "create_role'edge", "create_role""edge";
+DROP ROLE create_role, create_role_2, create_group, create_group_2, create_user, create_user_2, create_role_with_nothing, create_role_sysid, "create_role'edge", "create_role""edge";
 -- test grant non-existing roles
 CREATE ROLE existing_role_1;
 CREATE ROLE existing_role_2;

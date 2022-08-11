@@ -15,6 +15,11 @@ CREATE USER create_user_2;
 CREATE GROUP create_group;
 CREATE GROUP create_group_2;
 
+-- show that create role fails if sysid option is given as non-int
+CREATE ROLE create_role_sysid SYSID "123";
+-- show that create role accepts sysid option as int
+CREATE ROLE create_role_sysid SYSID 123;
+
 SELECT master_remove_node('localhost', :worker_2_port);
 
 CREATE ROLE create_role_with_everything SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 105 PASSWORD 'strong_password123^' VALID UNTIL '2045-05-05 00:00:00.00+00' IN ROLE create_role, create_group ROLE create_user, create_group_2 ADMIN create_role_2, create_user_2;
@@ -236,7 +241,7 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%cascade%' ORDER BY 1;
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%cascade%' ORDER BY 1, 2;
 
 \c - - - :master_port
-DROP ROLE create_role, create_role_2, create_group, create_group_2, create_user, create_user_2, create_role_with_nothing, "create_role'edge", "create_role""edge";
+DROP ROLE create_role, create_role_2, create_group, create_group_2, create_user, create_user_2, create_role_with_nothing, create_role_sysid, "create_role'edge", "create_role""edge";
 
 
 -- test grant non-existing roles
