@@ -107,9 +107,12 @@ step "s2-stop-connection"
         SELECT stop_session_level_connection_to_node();
 }
 
-// We use this as a way to wait for s2-ddl-create-index-concurrently to
-// complete. We know it can complete before s1-commit has succeeded, this way
-// we make sure we get consistent output.
+// We use this as a way to wait for s2-coordinator-create-index-concurrently to
+// complete. We know create-index-concurrently doesn't have to wait for
+// s1-commit-worker, but the isolationtester sometimes detects it temporarily
+// as blocking. To get consistent test output we use a (*) marker to always
+// show create index concurrently as blocking. Then right after we put
+// s2-empty, to wait for it to complete.
 step "s2-empty" {}
 
 session "s3"

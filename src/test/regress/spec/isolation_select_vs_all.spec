@@ -81,8 +81,11 @@ step "s2-master-modify-multiple-shards" { DELETE FROM select_append; }
 step "s2-master-drop-all-shards" { SELECT citus_drop_all_shards('select_append'::regclass, 'public', 'append_copy'); }
 step "s2-distribute-table" { SELECT create_distributed_table('select_append', 'id', 'append'); }
 // We use this as a way to wait for s2-ddl-create-index-concurrently to
-// complete. We know it can complete before s1-commit has succeeded, this way
-// we make sure we get consistent output.
+// complete. We know create-index-concurrently doesn't have to wait for
+// s1-commit, but the isolationtester sometimes detects it temporarily as
+// blocking. To get consistent test output we use a (*) marker to always show
+// create index concurrently as blocking. Then right after we put s2-empty, to
+// wait for it to complete.
 step "s2-empty" {}
 
 // permutations - SELECT vs SELECT

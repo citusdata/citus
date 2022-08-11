@@ -81,6 +81,12 @@ permutation "s1-initialize" "s1-begin" "s2-begin" "s1-table-size" "s2-ddl-create
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-master-modify-multiple-shards" "s2-ddl-create-index" "s1-commit" "s2-commit" "s1-show-indexes"
 permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s2-begin" "s1-distribute-table" "s2-ddl-create-index" "s1-commit" "s2-commit" "s1-show-indexes"
 
+// We use s2-empty slightly differently for this permutation than in the rest
+// of the permutations: We know create-index-concurrently doesn't have to wait
+// for s1-commit here, but the isolationtester sometimes detects it temporarily
+// as blocking. To get consistent test output we use a (*) marker to always
+// show create index concurrently as blocking. Then right after we put
+// s2-empty, to wait for it to complete.
 permutation "s1-initialize" "s1-begin" "s1-table-size" "s2-ddl-create-index-concurrently"(*) "s2-empty" "s1-commit" "s1-show-indexes"
 permutation "s1-initialize" "s1-begin" "s1-master-modify-multiple-shards" "s2-ddl-create-index-concurrently" "s1-commit" "s2-empty" "s1-show-indexes"
 permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s1-distribute-table" "s2-ddl-create-index-concurrently" "s1-commit" "s2-empty" "s1-show-indexes"
