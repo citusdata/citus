@@ -96,6 +96,10 @@ step "s2-table-size-on-selected" { SELECT citus_total_relation_size('select_of_i
 step "s2-master-modify-multiple-shards-on-selected" { DELETE FROM select_of_insert_select_hash; }
 step "s2-master-drop-all-shards-on-selected" { SELECT citus_drop_all_shards('select_of_insert_select_hash'::regclass, 'public', 'select_of_insert_select_hash'); }
 step "s2-distribute-table-on-selected" { SELECT create_distributed_table('select_of_insert_select_hash', 'id'); }
+// We use this as a way to wait for s2-ddl-create-index-concurrently to
+// complete. We know it can complete after s1-commit has succeeded, this way we
+// make sure no other query is run over session s1 before that happens.
+step "s2-empty" {}
 
 // permutations - INSERT/SELECT vs INSERT/SELECT
 permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-insert-select" "s1-commit" "s1-select-count"
@@ -107,7 +111,7 @@ permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-truncate-on-insert
 permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-drop-on-inserted" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-ddl-create-index-on-inserted" "s1-commit" "s1-select-count" "s1-show-indexes-inserted"
 permutation "s1-initialize" "s1-ddl-create-index-on-inserted" "s1-begin" "s1-insert-select" "s2-ddl-drop-index-on-inserted" "s1-commit" "s1-select-count" "s1-show-indexes-inserted"
-permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-ddl-create-index-concurrently-on-inserted" "s1-commit" "s1-select-count" "s1-show-indexes-inserted"
+permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-ddl-create-index-concurrently-on-inserted" "s1-commit" "s2-empty" "s1-select-count" "s1-show-indexes-inserted"
 permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-ddl-add-column-on-inserted" "s1-commit" "s1-select-count" "s1-show-columns-inserted"
 permutation "s1-initialize" "s1-ddl-add-column-on-inserted" "s1-begin" "s1-insert-select" "s2-ddl-drop-column-on-inserted" "s1-commit" "s1-select-count" "s1-show-columns-inserted"
 permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-ddl-rename-column-on-inserted" "s1-commit" "s1-select-count" "s1-show-columns-inserted" "s1-show-columns-inserted"
@@ -123,7 +127,7 @@ permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-truncate-on-select
 permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-drop-on-selected" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-ddl-create-index-on-selected" "s1-commit" "s1-select-count" "s1-show-indexes-selected"
 permutation "s1-initialize" "s1-ddl-create-index-on-selected" "s1-begin" "s1-insert-select" "s2-ddl-drop-index-on-selected" "s1-commit" "s1-select-count" "s1-show-indexes-selected"
-permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-ddl-create-index-concurrently-on-selected" "s1-commit" "s1-select-count" "s1-show-indexes-selected"
+permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-ddl-create-index-concurrently-on-selected" "s1-commit" "s2-empty" "s1-select-count" "s1-show-indexes-selected"
 permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-ddl-add-column-on-selected" "s1-commit" "s1-select-count" "s1-show-columns-selected"
 permutation "s1-initialize" "s1-ddl-add-column-on-selected" "s1-begin" "s1-insert-select" "s2-ddl-drop-column-on-selected" "s1-commit" "s1-select-count" "s1-show-columns-selected"
 permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-ddl-rename-column-on-selected" "s1-commit" "s1-select-count" "s1-show-columns-selected"
