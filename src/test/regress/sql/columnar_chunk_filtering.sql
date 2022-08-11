@@ -410,6 +410,7 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
 SELECT sum(a) FROM pushdown_test where (a > random() and a <= 2000) or (a > 200000-1010);
 SELECT sum(a) FROM pushdown_test where (a > random() and a <= 2000) or (a > 200000-1010);
 
+SET hash_mem_multiplier = 1.0;
 EXPLAIN (analyze on, costs off, timing off, summary off)
 SELECT sum(a) FROM pushdown_test where
 (
@@ -422,6 +423,7 @@ SELECT sum(a) FROM pushdown_test where
 )
 or
 (a > 200000-2010);
+RESET hash_mem_multiplier;
 SELECT sum(a) FROM pushdown_test where
 (
   a > random()
