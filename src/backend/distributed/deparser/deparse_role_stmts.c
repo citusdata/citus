@@ -237,7 +237,7 @@ AppendCreateRoleStmt(StringInfo buf, CreateRoleStmt *stmt)
 
 		if (strcmp(option->defname, "sysid") == 0)
 		{
-			appendStringInfo(buf, " SYSID %s", quote_literal_cstr(strVal(option->arg)));
+			appendStringInfo(buf, " SYSID %d", intVal(option->arg));
 		}
 		else if (strcmp(option->defname, "adminmembers") == 0)
 		{
