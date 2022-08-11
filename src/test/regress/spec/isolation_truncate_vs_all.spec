@@ -55,6 +55,10 @@ step "s2-master-modify-multiple-shards" { DELETE FROM truncate_append; }
 step "s2-master-drop-all-shards" { SELECT citus_drop_all_shards('truncate_append'::regclass, 'public', 'truncate_append'); }
 step "s2-distribute-table" { SELECT create_distributed_table('truncate_append', 'id', 'append'); }
 step "s2-commit" { COMMIT; }
+// We use this as a way to wait for s2-ddl-create-index-concurrently to
+// complete. We know it can complete after s1-commit has succeeded, this way
+// we make sure we get consistent output.
+step "s2-empty" {}
 
 // permutations - TRUNCATE vs TRUNCATE
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-truncate" "s2-truncate" "s1-commit" "s2-commit" "s1-select-count"
@@ -64,7 +68,7 @@ permutation "s1-initialize" "s1-begin" "s2-begin" "s1-truncate" "s2-truncate" "s
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-truncate" "s2-drop" "s1-commit" "s2-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-truncate" "s2-ddl-create-index" "s1-commit" "s2-commit" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s2-begin" "s1-truncate" "s2-ddl-drop-index" "s1-commit" "s2-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s1-truncate" "s2-ddl-create-index-concurrently" "s1-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s1-truncate" "s2-ddl-create-index-concurrently" "s1-commit" "s2-empty" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-truncate" "s2-ddl-add-column" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s2-begin" "s1-truncate" "s2-ddl-drop-column" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-truncate" "s2-ddl-rename-column" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"

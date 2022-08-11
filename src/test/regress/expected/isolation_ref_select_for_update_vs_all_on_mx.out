@@ -626,7 +626,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 
-starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select-for-update s2-coordinator-create-index-concurrently s1-commit-worker s1-stop-connection
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select-for-update s2-coordinator-create-index-concurrently s2-empty s1-commit-worker s1-stop-connection
 create_reference_table
 ---------------------------------------------------------------------
 
@@ -658,7 +658,9 @@ run_commands_on_session_level_connection_to_node
 
 step s2-coordinator-create-index-concurrently:
  CREATE INDEX CONCURRENTLY ref_table_index ON ref_table(id);
-
+ <waiting ...>
+step s2-coordinator-create-index-concurrently: <... completed>
+step s2-empty:
 step s1-commit-worker:
  SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 

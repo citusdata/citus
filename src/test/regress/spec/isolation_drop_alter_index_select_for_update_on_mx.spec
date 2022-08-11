@@ -88,9 +88,9 @@ step "s2-select-for-update"
 	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
 }
 
-step "s2-flaky-coordinator-create-index-concurrently"
+step "s2-coordinator-create-index-concurrently"
 {
-	CREATE INDEX CONCURRENTLY flaky_dist_table_index_conc ON dist_table(id);
+	CREATE INDEX CONCURRENTLY dist_table_index_conc ON dist_table(id);
 }
 
 step "s2-commit-worker"
@@ -103,6 +103,13 @@ step "s2-stop-connection"
         SELECT stop_session_level_connection_to_node();
 }
 
+// We use this as a way to wait for s2-coordinator-create-index-concurrently to
+// complete. We know create-index-concurrently doesn't have to wait for
+// s1-commit-worker, but the isolationtester sometimes detects it temporarily
+// as blocking. To get consistent test output we use a (*) marker to always
+// show create index concurrently as blocking. Then right after we put
+// s2-empty, to wait for it to complete.
+step "s2-empty" {}
 
 session "s3"
 
@@ -116,4 +123,4 @@ step "s3-select-count"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-insert" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-alter" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection" "s3-select-count"
 permutation "s1-begin" "s1-index" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-select-for-update" "s1-commit" "s2-commit-worker" "s2-stop-connection"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-for-update" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-select-for-update" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection"
-permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-for-update" "s2-flaky-coordinator-create-index-concurrently" "s1-commit-worker" "s1-stop-connection"
+permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-select-for-update" "s2-coordinator-create-index-concurrently"(*) "s2-empty" "s1-commit-worker" "s1-stop-connection"
