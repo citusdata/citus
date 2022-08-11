@@ -390,7 +390,7 @@ EXECUTE fast_path_router_with_two_params(('test', 2)::user_data, 14);
 EXECUTE fast_path_router_with_two_params(('test', 2)::user_data, 16);
 
 
-PREPARE fast_path_router_with_only_function AS DELETE FROM user_info_data WHERE get_constant_stable() = 2AND user_id = 3 RETURNING user_id, u_data;
+PREPARE fast_path_router_with_only_function AS DELETE FROM user_info_data WHERE get_constant_stable() = 2 AND user_id = 3 RETURNING user_id, u_data;
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 2)::user_data);
 EXECUTE fast_path_router_with_only_function;
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 2)::user_data);
@@ -526,7 +526,7 @@ EXECUTE router_with_two_params(('test', 2)::user_data, 14);
 EXECUTE router_with_two_params(('test', 2)::user_data, 16);
 
 
-PREPARE router_with_only_function AS DELETE FROM user_info_data WHERE get_constant_stable() = 2AND user_id = 3 RETURNING user_id, u_data;
+PREPARE router_with_only_function AS DELETE FROM user_info_data WHERE get_constant_stable() = 2 AND user_id = 3 RETURNING user_id, u_data;
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 2)::user_data);
 EXECUTE router_with_only_function;
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 2)::user_data);
