@@ -1226,10 +1226,10 @@ GetAttributeTypeOid(Oid relationId, AttrNumber attnum)
  * attribute of the relationId.
  */
 void
-GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
-								  List **dependentSequenceList, AttrNumber attnum)
+GetDependentSequencesWithRelation(Oid relationId, List **seqInfoList,
+								  AttrNumber attnum)
 {
-	Assert(*attnumList == NIL && *dependentSequenceList == NIL);
+	Assert(*seqInfoList == NIL);
 
 	List *attrdefResult = NIL;
 	List *attrdefAttnumResult = NIL;
@@ -1266,8 +1266,25 @@ GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
 			deprec->refobjsubid != 0 &&
 			deprec->deptype == DEPENDENCY_AUTO)
 		{
+			/*
+			 * We are going to generate corresponding SequenceInfo
+			 * in the following loop.
+			 */
 			attrdefResult = lappend_oid(attrdefResult, deprec->objid);
 			attrdefAttnumResult = lappend_int(attrdefAttnumResult, deprec->refobjsubid);
+		}
+		else if (deprec->deptype == DEPENDENCY_AUTO &&
+				 deprec->refobjsubid != 0 &&
+				 deprec->classid == RelationRelationId &&
+				 get_rel_relkind(deprec->objid) == RELKIND_SEQUENCE)
+		{
+			SequenceInfo *seqInfo = (SequenceInfo *) palloc(sizeof(SequenceInfo));
+
+			seqInfo->sequenceOid = deprec->objid;
+			seqInfo->attributeNumber = deprec->refobjsubid;
+			seqInfo->isNextValDefault = false;
+
+			*seqInfoList = lappend(*seqInfoList, seqInfo);
 		}
 	}
 
@@ -1295,9 +1312,13 @@ GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
 
 		if (list_length(sequencesFromAttrDef) == 1)
 		{
-			*dependentSequenceList = list_concat(*dependentSequenceList,
-												 sequencesFromAttrDef);
-			*attnumList = lappend_int(*attnumList, attrdefAttnum);
+			SequenceInfo *seqInfo = (SequenceInfo *) palloc(sizeof(SequenceInfo));
+
+			seqInfo->sequenceOid = linitial_oid(sequencesFromAttrDef);
+			seqInfo->attributeNumber = attrdefAttnum;
+			seqInfo->isNextValDefault = true;
+
+			*seqInfoList = lappend(*seqInfoList, seqInfo);
 		}
 	}
 }

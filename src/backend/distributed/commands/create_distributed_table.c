@@ -114,6 +114,8 @@ static void EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMe
 static bool ShouldLocalTableBeEmpty(Oid relationId, char distributionMethod, bool
 									viaDeprecatedAPI);
 static void EnsureCitusTableCanBeCreated(Oid relationOid);
+static void EnsureDistributedSequencesHaveOneType(Oid relationId,
+												  List *seqInfoList);
 static List * GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId,
 																   int tableTypeFlag);
 static Oid DropFKeysAndUndistributeTable(Oid relationId);
@@ -604,17 +606,23 @@ EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId)
 	Oid citusTableId = InvalidOid;
 	foreach_oid(citusTableId, citusTableIdList)
 	{
-		List *attnumList = NIL;
-		List *dependentSequenceList = NIL;
-		GetDependentSequencesWithRelation(citusTableId, &attnumList,
-										  &dependentSequenceList, 0);
-		ListCell *attnumCell = NULL;
-		ListCell *dependentSequenceCell = NULL;
-		forboth(attnumCell, attnumList, dependentSequenceCell,
-				dependentSequenceList)
+		List *seqInfoList = NIL;
+		GetDependentSequencesWithRelation(citusTableId, &seqInfoList, 0);
+
+		SequenceInfo *seqInfo = NULL;
+		foreach_ptr(seqInfo, seqInfoList)
 		{
-			AttrNumber currentAttnum = lfirst_int(attnumCell);
-			Oid currentSeqOid = lfirst_oid(dependentSequenceCell);
+			AttrNumber currentAttnum = seqInfo->attributeNumber;
+			Oid currentSeqOid = seqInfo->sequenceOid;
+
+			if (!seqInfo->isNextValDefault)
+			{
+				/*
+				 * If a sequence is not on the nextval, we don't need any check.
+				 * This is a dependent sequence via ALTER SEQUENCE .. OWNED BY col
+				 */
+				continue;
+			}
 
 			/*
 			 * If another distributed table is using the same sequence
@@ -702,21 +710,27 @@ MarkSequenceDistributedAndPropagateDependencies(Oid sequenceOid)
  * in which the sequence is used as default is supported for each sequence in input
  * dependentSequenceList, and then alters the sequence type if not the same with the column type.
  */
-void
-EnsureDistributedSequencesHaveOneType(Oid relationId, List *dependentSequenceList,
-									  List *attnumList)
+static void
+EnsureDistributedSequencesHaveOneType(Oid relationId, List *seqInfoList)
 {
-	ListCell *attnumCell = NULL;
-	ListCell *dependentSequenceCell = NULL;
-	forboth(attnumCell, attnumList, dependentSequenceCell, dependentSequenceList)
+	SequenceInfo *seqInfo = NULL;
+	foreach_ptr(seqInfo, seqInfoList)
 	{
-		AttrNumber attnum = lfirst_int(attnumCell);
-		Oid sequenceOid = lfirst_oid(dependentSequenceCell);
+		if (!seqInfo->isNextValDefault)
+		{
+			/*
+			 * If a sequence is not on the nextval, we don't need any check.
+			 * This is a dependent sequence via ALTER SEQUENCE .. OWNED BY col
+			 */
+			continue;
+		}
 
 		/*
 		 * We should make sure that the type of the column that uses
 		 * that sequence is supported
 		 */
+		Oid sequenceOid = seqInfo->sequenceOid;
+		AttrNumber attnum = seqInfo->attributeNumber;
 		Oid attributeTypeId = GetAttributeTypeOid(relationId, attnum);
 		EnsureSequenceTypeSupported(sequenceOid, attributeTypeId);
 

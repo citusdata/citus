@@ -966,6 +966,203 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 
 
 /*
+ * ExpandForPgVanilla only expands only comosite types because other types
+ * will find their dependencies in pg_depend. The method should only be called by
+ * is_citus_depended_object udf.
+ */
+static List *
+ExpandForPgVanilla(ObjectAddressCollector *collector,
+				   ObjectAddress target)
+{
+	/* should only be called if GUC is enabled */
+	Assert(HideCitusDependentObjects == true);
+
+	List *result = NIL;
+
+	if (target.classId == TypeRelationId && get_typtype(target.objectId) ==
+		TYPTYPE_COMPOSITE)
+	{
+		/*
+		 * types depending on other types are not captured in pg_depend, instead
+		 * they are described with their dependencies by the relation that
+		 * describes the composite type.
+		 */
+		Oid typeRelationId = get_typ_typrelid(target.objectId);
+		DependencyDefinition *dependency =
+			CreateObjectAddressDependencyDef(RelationRelationId,
+											 typeRelationId);
+		result = lappend(result, dependency);
+	}
+
+	return result;
+}
+
+
+/*
+ * GetDependentRoleIdsFDW returns a list of role oids that has privileges on the
+ * FDW with the given object id.
+ */
+static List *
+GetDependentRoleIdsFDW(Oid FDWOid)
+{
+	List *roleIds = NIL;
+
+	Acl *aclEntry = GetPrivilegesForFDW(FDWOid);
+
+	if (aclEntry == NULL)
+	{
+		return NIL;
+	}
+
+	AclItem *privileges = ACL_DAT(aclEntry);
+	int numberOfPrivsGranted = ACL_NUM(aclEntry);
+
+	for (int i = 0; i < numberOfPrivsGranted; i++)
+	{
+		roleIds = lappend_oid(roleIds, privileges[i].ai_grantee);
+	}
+
+	return roleIds;
+}
+
+
+/*
+ * ExpandRolesToGroups returns a list of object addresses pointing to roles that roleid
+ * depends on.
+ */
+static List *
+ExpandRolesToGroups(Oid roleid)
+{
+	Relation pgAuthMembers = table_open(AuthMemRelationId, AccessShareLock);
+	HeapTuple tuple = NULL;
+
+	ScanKeyData scanKey[1];
+	const int scanKeyCount = 1;
+
+	/* scan pg_auth_members for member = $1 via index pg_auth_members_member_role_index */
+	ScanKeyInit(&scanKey[0], Anum_pg_auth_members_member, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(roleid));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgAuthMembers, AuthMemMemRoleIndexId,
+													true, NULL, scanKeyCount, scanKey);
+
+	List *roles = NIL;
+	while ((tuple = systable_getnext(scanDescriptor)) != NULL)
+	{
+		Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
+
+		DependencyDefinition *definition = palloc0(sizeof(DependencyDefinition));
+		definition->mode = DependencyObjectAddress;
+		ObjectAddressSet(definition->data.address, AuthIdRelationId, membership->roleid);
+
+		roles = lappend(roles, definition);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgAuthMembers, AccessShareLock);
+
+	return roles;
+}
+
+
+/*
+ * GetViewRuleReferenceDependencyList returns the dependencies of the view's
+ * internal rule dependencies.
+ */
+static List *
+GetViewRuleReferenceDependencyList(Oid viewId)
+{
+	List *dependencyTupleList = GetPgDependTuplesForDependingObjects(RelationRelationId,
+																	 viewId);
+	List *nonInternalDependenciesOfDependingRules = NIL;
+
+	HeapTuple depTup = NULL;
+	foreach_ptr(depTup, dependencyTupleList)
+	{
+		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
+
+		/*
+		 * Dependencies of the internal rule dependency should be handled as the dependency
+		 * of referenced view object.
+		 *
+		 * PG doesn't keep dependency relation between views and dependent objects directly
+		 * but it keeps an internal dependency relation between the view and the rule, then
+		 * keeps the dependent objects of the view as non-internal dependencies of the
+		 * internally dependent rule object.
+		 */
+		if (pg_depend->deptype == DEPENDENCY_INTERNAL && pg_depend->classid ==
+			RewriteRelationId)
+		{
+			ObjectAddress ruleAddress = { 0 };
+			ObjectAddressSet(ruleAddress, RewriteRelationId, pg_depend->objid);
+
+			/* Expand results with the noninternal dependencies of it */
+			List *ruleDependencies = DependencyDefinitionFromPgDepend(ruleAddress);
+
+			DependencyDefinition *dependencyDef = NULL;
+			foreach_ptr(dependencyDef, ruleDependencies)
+			{
+				/*
+				 * Follow all dependencies of the internally dependent rule dependencies
+				 * except it is an internal dependency of view itself.
+				 */
+				if (dependencyDef->data.pg_depend.deptype == DEPENDENCY_INTERNAL ||
+					(dependencyDef->data.pg_depend.refclassid == RelationRelationId &&
+					 dependencyDef->data.pg_depend.refobjid == viewId))
+				{
+					continue;
+				}
+
+				nonInternalDependenciesOfDependingRules =
+					lappend(nonInternalDependenciesOfDependingRules, dependencyDef);
+			}
+		}
+	}
+
+	return nonInternalDependenciesOfDependingRules;
+}
+
+
+/*
+ * GetRelationSequenceDependencyList returns the sequence dependency definition
+ * list for the given relation.
+ */
+static List *
+GetRelationSequenceDependencyList(Oid relationId)
+{
+	List *seqInfoList = NIL;
+	GetDependentSequencesWithRelation(relationId, &seqInfoList, 0);
+
+	List *seqIdList = NIL;
+	SequenceInfo *seqInfo = NULL;
+	foreach_ptr(seqInfo, seqInfoList)
+	{
+		seqIdList = lappend_oid(seqIdList, seqInfo->sequenceOid);
+	}
+
+	List *sequenceDependencyDefList =
+		CreateObjectAddressDependencyDefList(RelationRelationId, seqIdList);
+
+	return sequenceDependencyDefList;
+}
+
+
+/*
+ * GetRelationFunctionDependencyList returns the function dependency definition
+ * list for the given relation.
+ */
+static List *
+GetRelationFunctionDependencyList(Oid relationId)
+{
+	List *dependentFunctionOids = GetDependentFunctionsWithRelation(relationId);
+	List *functionDependencyDefList =
+		CreateObjectAddressDependencyDefList(ProcedureRelationId, dependentFunctionOids);
+
+	return functionDependencyDefList;
+}
+
+
+/*
  * GetRelationStatsSchemaDependencyList returns a list of DependencyDefinition
  * objects for the schemas that statistics' of the relation with relationId depends.
  */

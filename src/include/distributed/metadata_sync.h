@@ -27,6 +27,24 @@ typedef enum
 	METADATA_SYNC_FAILED_SYNC = 2
 } MetadataSyncResult;
 
+/*
+ * Information about dependent sequences. We do not have the
+ * dependent relationId as no caller needs. But, could be added
+ * here if needed.
+ */
+typedef struct SequenceInfo
+{
+	Oid sequenceOid;
+	int attributeNumber;
+
+	/*
+	 * true for nexval(seq) -- which also includes serials
+	 * false when only OWNED BY col
+	 */
+	bool isNextValDefault;
+} SequenceInfo;
+
+
 /* Functions declarations for metadata syncing */
 extern void StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort);
 extern bool ClusterHasKnownMetadataWorkers(void);
@@ -55,9 +73,9 @@ extern bool ShouldInitiateMetadataSync(bool *lockFailure);
 
 extern List * SequenceDDLCommandsForTable(Oid relationId);
 extern List * GetSequencesFromAttrDef(Oid attrdefOid);
-extern void GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
-											  List **dependentSequenceList, AttrNumber
-											  attnum);
+extern void GetDependentSequencesWithRelation(Oid relationId, List **seqInfoList,
+											  AttrNumber attnum);
+extern List * GetDependentFunctionsWithRelation(Oid relationId);
 extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 
 #define DELETE_ALL_NODES "TRUNCATE pg_dist_node CASCADE"
