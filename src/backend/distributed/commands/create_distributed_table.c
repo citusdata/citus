@@ -527,7 +527,7 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 		 * This function does not expect to create Citus local table, so we blindly
 		 * create reference table when the method is DISTRIBUTE_BY_NONE.
 		 */
-		CreateReferenceTableShard(relationId, colocatedTableId);
+		CreateReferenceTableShard(relationId);
 	}
 
 	if (ShouldSyncTableMetadata(relationId))

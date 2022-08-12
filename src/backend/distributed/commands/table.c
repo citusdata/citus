@@ -158,7 +158,10 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 		 * prevent concurrent mutations to the placements of the shard groups.
 		 */
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		LockColocationId(cacheEntry->colocationId, ShareLock);
+		if (cacheEntry->colocationId != INVALID_COLOCATION_ID)
+		{
+			LockColocationId(cacheEntry->colocationId, ShareLock);
+		}
 
 		/* invalidate foreign key cache if the table involved in any foreign key */
 		if ((TableReferenced(relationId) || TableReferencing(relationId)))
