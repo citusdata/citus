@@ -78,7 +78,7 @@ RebuildQueryStrings(Job *workerJob)
 			query = copyObject(originalQuery);
 		}
 
-		if (UpdateOrDeleteQuery(query))
+		if (UpdateOrDeleteOrMergeQuery(query))
 		{
 			List *relationShardList = task->relationShardList;
 
