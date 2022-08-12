@@ -172,42 +172,41 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 		 attributeIndex++)
 	{
 		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
-		if (attributeForm->attisdropped || !attributeForm->atthasdef)
-		{
-			/*
-			 * If this column has already been dropped or it has no DEFAULT
-			 * definition, skip it.
-			 */
-			continue;
-		}
 
-		if (attributeForm->attgenerated == ATTRIBUTE_GENERATED_STORED)
+		if (attributeForm->attisdropped ||
+			attributeForm->attgenerated == ATTRIBUTE_GENERATED_STORED)
 		{
-			/* skip columns with GENERATED AS ALWAYS expressions */
+			/* skip dropped columns and columns with GENERATED AS ALWAYS expressions */
 			continue;
 		}
 
 		char *columnName = NameStr(attributeForm->attname);
-		*columnNameList = lappend(*columnNameList, columnName);
-
 		List *columnOwnedSequences =
 			GetSequencesOwnedByColumn(relationId, attributeIndex + 1);
 
-		Oid ownedSequenceId = InvalidOid;
-		if (list_length(columnOwnedSequences) != 0)
+		if (attributeForm->atthasdef && list_length(columnOwnedSequences) == 0)
 		{
 			/*
-			 * A column might only own one sequence. We intentionally use
-			 * GetSequencesOwnedByColumn macro and pick initial oid from the
-			 * list instead of using getOwnedSequence. This is both because
-			 * getOwnedSequence is removed in pg13 and is also because it
-			 * errors out if column does not have any sequences.
+			 * Even if there are no owned sequences, the code path still
+			 * expects the columnName to be filled such that it can DROP
+			 * DEFAULT for the existing nextval('seq') columns.
 			 */
-			Assert(list_length(columnOwnedSequences) == 1);
-			ownedSequenceId = linitial_oid(columnOwnedSequences);
+			*ownedSequenceIdList = lappend_oid(*ownedSequenceIdList, InvalidOid);
+			*columnNameList = lappend(*columnNameList, columnName);
+
+			continue;
 		}
 
-		*ownedSequenceIdList = lappend_oid(*ownedSequenceIdList, ownedSequenceId);
+		Oid ownedSequenceId = InvalidOid;
+		foreach_oid(ownedSequenceId, columnOwnedSequences)
+		{
+			/*
+			 * A column might have multiple sequences one via OWNED BY one another
+			 * via bigserial/default nextval.
+			 */
+			*ownedSequenceIdList = lappend_oid(*ownedSequenceIdList, ownedSequenceId);
+			*columnNameList = lappend(*columnNameList, columnName);
+		}
 	}
 
 	relation_close(relation, NoLock);
@@ -447,17 +446,15 @@ SequenceUsedInDistributedTable(const ObjectAddress *sequenceAddress)
 	Oid citusTableId = InvalidOid;
 	foreach_oid(citusTableId, citusTableIdList)
 	{
-		List *attnumList = NIL;
-		List *dependentSequenceList = NIL;
-		GetDependentSequencesWithRelation(citusTableId, &attnumList,
-										  &dependentSequenceList, 0);
-		Oid currentSeqOid = InvalidOid;
-		foreach_oid(currentSeqOid, dependentSequenceList)
+		List *seqInfoList = NIL;
+		GetDependentSequencesWithRelation(citusTableId, &seqInfoList, 0);
+		SequenceInfo *seqInfo = NULL;
+		foreach_ptr(seqInfo, seqInfoList)
 		{
 			/*
 			 * This sequence is used in a distributed table
 			 */
-			if (currentSeqOid == sequenceAddress->objectId)
+			if (seqInfo->sequenceOid == sequenceAddress->objectId)
 			{
 				return citusTableId;
 			}

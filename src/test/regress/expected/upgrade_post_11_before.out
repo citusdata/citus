@@ -284,3 +284,13 @@ SELECT create_distributed_table('test_propagate_collate', 'id');
 
 (1 row)
 
+CREATE SEQUENCE "SC1";
+CREATE SEQUENCE "unrelated_sequence";
+CREATE TABLE test(a int, b int default nextval ('"SC1"'));
+ALTER SEQUENCE "unrelated_sequence" OWNED BY test.b;
+SELECT create_distributed_table('test','a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+

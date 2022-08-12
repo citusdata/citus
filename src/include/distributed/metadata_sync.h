@@ -29,6 +29,24 @@ typedef enum
 	NODE_METADATA_SYNC_FAILED_SYNC = 2
 } NodeMetadataSyncResult;
 
+/*
+ * Information about dependent sequences. We do not have the
+ * dependent relationId as no caller needs. But, could be added
+ * here if needed.
+ */
+typedef struct SequenceInfo
+{
+	Oid sequenceOid;
+	int attributeNumber;
+
+	/*
+	 * true for nexval(seq) -- which also includes serials
+	 * false when only OWNED BY col
+	 */
+	bool isNextValDefault;
+} SequenceInfo;
+
+
 /* Functions declarations for metadata syncing */
 extern void SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort);
 extern void SyncCitusTableMetadata(Oid relationId);
@@ -81,9 +99,8 @@ extern List * SequenceDependencyCommandList(Oid relationId);
 
 extern List * DDLCommandsForSequence(Oid sequenceOid, char *ownerName);
 extern List * GetSequencesFromAttrDef(Oid attrdefOid);
-extern void GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
-											  List **dependentSequenceList, AttrNumber
-											  attnum);
+extern void GetDependentSequencesWithRelation(Oid relationId, List **seqInfoList,
+											  AttrNumber attnum);
 extern List * GetDependentFunctionsWithRelation(Oid relationId);
 extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 extern void SetLocalEnableMetadataSync(bool state);
