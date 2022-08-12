@@ -25,6 +25,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/cte_inline.h"
 #include "distributed/function_call_delegation.h"
@@ -74,7 +75,8 @@ static uint64 NextPlanId = 1;
 /* keep track of planner call stack levels */
 int PlannerLevel = 0;
 
-static void ErrorIfQueryHasMergeCommand(Query *queryTree);
+static void ErrorIfQueryHasUnsupportedMergeCommand(Query *queryTree,
+												   List *rangeTableList);
 static bool ContainsMergeCommandWalker(Node *node);
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
@@ -130,7 +132,7 @@ static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext
 static RTEListProperties * GetRTEListProperties(List *rangeTableList);
 static List * TranslatedVars(PlannerInfo *root, int relationIndex);
 static void WarnIfListHasForeignDistributedTable(List *rangeTableList);
-
+static bool AreTablesMergeSqlCommandSupported(List *rangeTableList);
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -202,7 +204,7 @@ distributed_planner(Query *parse,
 			 * Fast path queries cannot have merge command, and we
 			 * prevent the remaining here.
 			 */
-			ErrorIfQueryHasMergeCommand(parse);
+			ErrorIfQueryHasUnsupportedMergeCommand(parse, rangeTableList);
 
 			/*
 			 * When there are partitioned tables (not applicable to fast path),
@@ -303,11 +305,13 @@ distributed_planner(Query *parse,
 
 
 /*
- * ErrorIfQueryHasMergeCommand walks over the query tree and throws error
- * if there are any Merge command (e.g., CMD_MERGE) in the query tree.
+ * ErrorIfQueryHasMergeCommand walks over the query tree and bails out if
+ * there is no Merge command (e.g., CMD_MERGE) in the query tree. For merge,
+ * looks for all supported combinations, throws an exception if any violations 
+ * are seen.
  */
 static void
-ErrorIfQueryHasMergeCommand(Query *queryTree)
+ErrorIfQueryHasUnsupportedMergeCommand(Query *queryTree, List *rangeTableList)
 {
 	/*
 	 * Postgres currently doesn't support Merge queries inside subqueries and
@@ -316,11 +320,29 @@ ErrorIfQueryHasMergeCommand(Query *queryTree)
 	 * We do not call this path for fast-path queries to avoid this additional
 	 * overhead.
 	 */
-	if (ContainsMergeCommandWalker((Node *) queryTree))
+	if (!ContainsMergeCommandWalker((Node *) queryTree))
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("MERGE command is not supported on Citus tables yet")));
+		/* No MERGE found */
+		return;
 	}
+
+
+	/*
+	 * In Citus we have limited support for MERGE, it's allowed
+	 * only if both the target and source relations are Citus-local
+	 * or joined on colocated distributed tables.
+	 */
+
+	/* Check if all MERGE-relation(s)-combinations are supported */
+	if (AreTablesMergeSqlCommandSupported(rangeTableList))
+	{
+		/* supported MERGE scenario */
+		return;
+	}
+
+	ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("MERGE command is not supported on Citus tables yet")));
 }
 
 
@@ -331,7 +353,10 @@ ErrorIfQueryHasMergeCommand(Query *queryTree)
 static bool
 ContainsMergeCommandWalker(Node *node)
 {
-#if PG_VERSION_NUM >= PG_VERSION_15
+	#if PG_VERSION_NUM < PG_VERSION_15
+	return false;
+	#endif
+
 	if (node == NULL)
 	{
 		return false;
@@ -340,7 +365,7 @@ ContainsMergeCommandWalker(Node *node)
 	if (IsA(node, Query))
 	{
 		Query *query = (Query *) node;
-		if (query->commandType == CMD_MERGE)
+		if (IsMergeQuery(query))
 		{
 			return true;
 		}
@@ -349,7 +374,6 @@ ContainsMergeCommandWalker(Node *node)
 	}
 
 	return expression_tree_walker(node, ContainsMergeCommandWalker, NULL);
-#endif
 
 	return false;
 }
@@ -611,7 +635,7 @@ IsModifyCommand(Query *query)
 	CmdType commandType = query->commandType;
 
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
-		commandType == CMD_DELETE)
+		commandType == CMD_DELETE || commandType == CMD_MERGE)
 	{
 		return true;
 	}
@@ -2533,4 +2557,129 @@ WarnIfListHasForeignDistributedTable(List *rangeTableList)
 								   "citus_add_local_table_to_metadata()"))));
 		}
 	}
+}
+
+
+/*
+ * AreTablesMergeSqlCommandSupported returns true if the tables in the MERGE
+ * command are supported, the two scenario supported are
+ * -- All the tables are Citus local
+ * -- All the tables are distributed and co-located
+ * For everything else, simply raise an exception.
+ *
+ * Note: We are deferring the expensive check of whether MERGE joined on the
+ *       distribution column to the push-down planning phase.
+ */
+static bool
+AreTablesMergeSqlCommandSupported(List *rangeTableList)
+{
+	List *localList = NIL;
+	List *distList = NIL;
+	ListCell *tableCell = NULL;
+
+	foreach(tableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(tableCell);
+		Oid relationId = rangeTableEntry->relid;
+
+		/* Regular Postgres tables and Citus local tables are allowed */
+		if (IsCitusTable(relationId) ||
+				IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+		{
+			continue;
+		}
+
+
+		/* Skip CTEs, sub-queries */
+		if (rangeTableEntry->rtekind == RTE_CTE ||
+			rangeTableEntry->rtekind == RTE_SUBQUERY)
+		{
+			continue;
+		}
+
+		if (rangeTableEntry->rtekind != RTE_RELATION)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("Unsupported RTE type for MERGE command")));
+		}
+
+#if 0
+		/* Combination of Citus distributed and local tables is not supported yet */
+		char relKind = get_rel_relkind(relationId);
+		if ((relKind == RELKIND_VIEW || relKind == RELKIND_MATVIEW) &&
+							IsViewDistributed(relationId))
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("MERGE command is not supported with combination "
+							"of Postgres and Citus tables")));
+		}
+#endif
+
+		/* Reference tables are not supported */
+		if (IsCitusTableType(relationId, REFERENCE_TABLE))
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("MERGE command is not supported on Reference tables yet")));
+		}
+
+		if (IsCitusTableType(relationId, DISTRIBUTED_TABLE))
+		{
+			distList = lappend(distList, rangeTableEntry);
+		}
+
+		/* Any other Citus table type missing ? */
+	}
+
+	if (list_length(distList) == 0)
+	{
+		/* All the tables are Citus local, supported */
+		return true;
+	}
+
+	if (list_length(localList) != 0)
+	{
+		/* Combination of local and distributed tables is not supported */
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("MERGE command is not supported on combination "
+						"of Citus local and distributed tables")));
+	}
+
+	/* Check to see if all the distributed tables are indeed colocated */
+	uint32 colocationId = INVALID_COLOCATION_ID;
+
+	foreach(tableCell, distList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(tableCell);
+		Oid relationId = rangeTableEntry->relid;
+
+		uint32 curColocationId = TableColocationId(relationId);
+
+		if (curColocationId == INVALID_COLOCATION_ID)
+		{
+			/* Not supported */
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("For MERGE command all the tables must be colocated")));
+		}
+
+		if (colocationId == INVALID_COLOCATION_ID)
+		{
+			/* Save the first valid one */
+			colocationId = curColocationId;
+		}
+
+		if (curColocationId != colocationId)
+		{
+			/* All distributed tables must be colocated */
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("For MERGE command all the tables must be colocated")));
+		}
+	}
+
+	return true;
 }

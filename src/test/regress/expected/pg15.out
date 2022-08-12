@@ -283,7 +283,7 @@ SELECT citus_add_local_table_to_metadata('tbl1');
 
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
-ERROR:  MERGE command is not supported on Citus tables yet
+ERROR:  MERGE command is not supported with combination of Postgres and Citus tables
 SELECT undistribute_table('tbl1');
 NOTICE:  creating a new table for pg15.tbl1
 NOTICE:  moving the data of pg15.tbl1
@@ -303,7 +303,7 @@ SELECT citus_add_local_table_to_metadata('tbl2');
 
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
-ERROR:  MERGE command is not supported on Citus tables yet
+ERROR:  MERGE command is not supported with combination of Postgres and Citus tables
 -- one table is reference, the other local, not supported
 SELECT create_reference_table('tbl2');
  create_reference_table
@@ -313,7 +313,7 @@ SELECT create_reference_table('tbl2');
 
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
-ERROR:  MERGE command is not supported on Citus tables yet
+ERROR:  MERGE command is not supported with combination of Postgres and Citus tables
 -- now, both are reference, still not supported
 SELECT create_reference_table('tbl1');
  create_reference_table
@@ -323,7 +323,7 @@ SELECT create_reference_table('tbl1');
 
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
-ERROR:  MERGE command is not supported on Citus tables yet
+ERROR:  MERGE command is not supported on Reference tables yet
 -- now, both distributed, not works
 SELECT undistribute_table('tbl1');
 NOTICE:  creating a new table for pg15.tbl1
@@ -365,14 +365,14 @@ SELECT create_distributed_table('tbl2', 'x');
 
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
-ERROR:  MERGE command is not supported on Citus tables yet
+ERROR:  MERGE ON join condition is supported when all distributed tables are co-located and joined on their distribution columns
 -- also, not inside subqueries & ctes
 WITH targq AS (
     SELECT * FROM tbl2
 )
 MERGE INTO tbl1 USING targq ON (true)
 WHEN MATCHED THEN DELETE;
-ERROR:  MERGE command is not supported on Citus tables yet
+ERROR:  MERGE ON join condition is supported when all distributed tables are co-located and joined on their distribution columns
 -- crashes on beta3, fixed on 15 stable
 --WITH foo AS (
 --  MERGE INTO tbl1 USING tbl2 ON (true)
@@ -387,7 +387,7 @@ USING tbl2
 ON (true)
 WHEN MATCHED THEN
     UPDATE SET x = (SELECT count(*) FROM tbl2);
-ERROR:  MERGE command is not supported on Citus tables yet
+ERROR:  MERGE ON join condition is supported when all distributed tables are co-located and joined on their distribution columns
 -- Clean up
 DROP SCHEMA pg15 CASCADE;
 NOTICE:  drop cascades to 9 other objects

@@ -77,7 +77,7 @@ RebuildQueryStrings(Job *workerJob)
 			query = copyObject(originalQuery);
 		}
 
-		if (UpdateOrDeleteQuery(query))
+		if (UpdateOrDeleteOrMergeQuery(query))
 		{
 			/*
 			 * For UPDATE and DELETE queries, we may have subqueries and joins, so

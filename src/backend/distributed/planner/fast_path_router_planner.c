@@ -162,16 +162,11 @@ FastPathRouterQuery(Query *query, Node **distributionKeyValue)
 		return false;
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_15
-	if (query->commandType == CMD_MERGE)
+	if (IsMergeQuery(query))
 	{
-		/*
-		 * Citus doesn't support MERGE command, lets return
-		 * early and explicitly for fast-path queries.
-		 */
+		/* MERGE command is not a fast path query */
 		return false;
 	}
-#endif
 
 	/*
 	 * We want to deal with only very simple queries. Some of the
