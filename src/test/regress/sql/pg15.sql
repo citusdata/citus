@@ -160,7 +160,7 @@ SELECT undistribute_table('generated_stored_ref');
 
 --
 -- In PG15, there is a new command called MERGE
--- It is currently not supported for Citus tables
+-- It is currently not supported for Citus non-local tables
 -- Test the behavior with various commands with Citus table types
 -- Relevant PG Commit: 7103ebb7aae8ab8076b7e85f335ceb8fe799097c
 --
@@ -943,3 +943,5 @@ SELECT run_command_on_workers($$DROP ACCESS METHOD heap2$$);
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
 DROP SCHEMA pg15 CASCADE;
+DROP ROLE rls_tenant_1;
+DROP ROLE rls_tenant_2;

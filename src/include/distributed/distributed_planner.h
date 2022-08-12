@@ -29,6 +29,11 @@
 
 #define CURSOR_OPT_FORCE_DISTRIBUTED 0x080000
 
+/* Hack to compile Citus on pre-MERGE Postgres versions */
+#if PG_VERSION_NUM < PG_VERSION_15
+#define CMD_MERGE CMD_UNKNOWN
+#endif
+
 
 /* level of planner calls */
 extern int PlannerLevel;
@@ -247,5 +252,7 @@ extern struct DistributedPlan * CreateDistributedPlan(uint64 planId, Query *orig
 													  hasUnresolvedParams,
 													  PlannerRestrictionContext *
 													  plannerRestrictionContext);
+
+extern bool IsMergeAllowedOnRelation(Query *parse, RangeTblEntry *rte);
 
 #endif /* DISTRIBUTED_PLANNER_H */

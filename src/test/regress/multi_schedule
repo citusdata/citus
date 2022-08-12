@@ -104,6 +104,10 @@ test: background_task_queue_monitor
 # Causal clock test
 test: clock
 
+# MERGE tests
+test: merge
+test: pgmerge
+
 # ---------
 # test that no tests leaked intermediate results. This should always be last
 # ---------

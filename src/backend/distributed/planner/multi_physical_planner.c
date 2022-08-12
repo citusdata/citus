@@ -2464,7 +2464,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	 * If it is a modify query with sub-select, we need to set result relation shard's id
 	 * as anchor shard id.
 	 */
-	if (UpdateOrDeleteQuery(originalQuery))
+	if (UpdateOrDeleteOrMergeQuery(originalQuery))
 	{
 		resultRangeTable = rt_fetch(originalQuery->resultRelation, originalQuery->rtable);
 		resultRelationOid = resultRangeTable->relid;
@@ -2493,7 +2493,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 				anchorShardId = shardInterval->shardId;
 			}
 		}
-		else if (UpdateOrDeleteQuery(originalQuery))
+		else if (UpdateOrDeleteOrMergeQuery(originalQuery))
 		{
 			shardInterval = cacheEntry->sortedShardIntervalArray[shardIndex];
 			if (!modifyWithSubselect || relationId == resultRelationOid)
