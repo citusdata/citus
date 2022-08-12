@@ -99,13 +99,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	uint64 shardId = INVALID_SHARD_ID;
 	List *newWorkersList = NIL;
 	const char *referenceTableName = NULL;
-	int colocationId = GetReferenceTableColocationId();
-
-	if (colocationId == INVALID_COLOCATION_ID)
-	{
-		/* no colocation for reference tables available */
-		return;
-	}
+	int colocationId = CreateReferenceTableColocationId();
 
 	/*
 	 * Most of the time this function should result in a conclusion where we do not need

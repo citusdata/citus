@@ -326,7 +326,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
  * Also, the shard is replicated to the all active nodes in the cluster.
  */
 void
-CreateReferenceTableShard(Oid distributedTableId, Oid colocatedTableId)
+CreateReferenceTableShard(Oid distributedTableId)
 {
 	int workerStartIndex = 0;
 	text *shardMinValue = NULL;
