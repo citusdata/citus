@@ -1162,7 +1162,10 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	else
 	{
 		/* ... otherwise use standard DDL task list function */
-		ddlJob->taskList = DDLTaskList(leftRelationId, sqlForTaskList);
+
+		/* Propogate latest updates issue on deleted shards to avoid any potential issues */
+		bool includeOrphanedShards = true;
+		ddlJob->taskList = DDLTaskList(leftRelationId, sqlForTaskList, includeOrphanedShards);
 		if (!propagateCommandToWorkers)
 		{
 			ddlJob->taskList = NIL;
@@ -1835,7 +1838,10 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 	QualifyTreeNode((Node *) stmt);
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->metadataSyncCommand = DeparseTreeNode((Node *) stmt);
-	ddlJob->taskList = DDLTaskList(relationId, ddlJob->metadataSyncCommand);
+
+	/* Propogate latest schema on deleted shards to avoid any potential issues */
+	bool includeOrphanedShards = true;
+	ddlJob->taskList = DDLTaskList(relationId, ddlJob->metadataSyncCommand, includeOrphanedShards);
 	return list_make1(ddlJob);
 }
 

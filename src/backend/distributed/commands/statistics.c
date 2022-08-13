@@ -93,7 +93,10 @@ PreprocessCreateStatisticsStmt(Node *node, const char *queryString,
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->startNewTransaction = false;
 	ddlJob->metadataSyncCommand = ddlCommand;
-	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+
+	/* We don't need to do create statistics on deleted shards */
+	bool includeOrphanedShards = false;
+	ddlJob->taskList = DDLTaskList(relationId, ddlCommand, includeOrphanedShards);
 
 	List *ddlJobs = list_make1(ddlJob);
 
@@ -202,7 +205,10 @@ PreprocessDropStatisticsStmt(Node *node, const char *queryString,
 		ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 		ddlJob->startNewTransaction = false;
 		ddlJob->metadataSyncCommand = ddlCommand;
-		ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+
+		/* we don't need to do drop statistics on deleted shards */
+		bool includeOrphanedShards = false;
+		ddlJob->taskList = DDLTaskList(relationId, ddlCommand, includeOrphanedShards);
 
 		ddlJobs = lappend(ddlJobs, ddlJob);
 	}
@@ -268,7 +274,10 @@ PreprocessAlterStatisticsRenameStmt(Node *node, const char *queryString,
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->startNewTransaction = false;
 	ddlJob->metadataSyncCommand = ddlCommand;
-	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+
+	/* we don't need to do ALTER statistics on deleted shards */
+	bool includeOrphanedShards = false;
+	ddlJob->taskList = DDLTaskList(relationId, ddlCommand, includeOrphanedShards);
 
 	List *ddlJobs = list_make1(ddlJob);
 
@@ -306,7 +315,10 @@ PreprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString,
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->startNewTransaction = false;
 	ddlJob->metadataSyncCommand = ddlCommand;
-	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+
+	/* we don't need to do ALTER statistics on deleted shards */
+	bool includeOrphanedShards = false;
+	ddlJob->taskList = DDLTaskList(relationId, ddlCommand, includeOrphanedShards);
 
 	List *ddlJobs = list_make1(ddlJob);
 
@@ -426,7 +438,10 @@ PreprocessAlterStatisticsStmt(Node *node, const char *queryString,
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->startNewTransaction = false;
 	ddlJob->metadataSyncCommand = ddlCommand;
-	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+
+	/* we don't need to do ALTER statistics on deleted shards */
+	bool includeOrphanedShards = false;
+	ddlJob->taskList = DDLTaskList(relationId, ddlCommand, includeOrphanedShards);
 
 	List *ddlJobs = list_make1(ddlJob);
 
@@ -464,7 +479,12 @@ PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString,
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->startNewTransaction = false;
 	ddlJob->metadataSyncCommand = ddlCommand;
-	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+
+	/* Propogate owner changes on deleted shards to avoid any potential issues */
+	// TODO(niupre): Can this cause failure when we try to drop orphaned table?
+	// If this is the case, do we need to allow CREATE STATS as well?
+	bool includeOrphanedShards = true;
+	ddlJob->taskList = DDLTaskList(relationId, ddlCommand, includeOrphanedShards);
 
 	List *ddlJobs = list_make1(ddlJob);
 

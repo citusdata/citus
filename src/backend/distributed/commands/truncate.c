@@ -127,6 +127,7 @@ TruncateTaskList(Oid relationId)
 	char *schemaName = get_namespace_name(schemaId);
 	char *relationName = get_rel_name(relationId);
 
+	/* No need to propoagate Truncate command as shards will be dropped anyways */
 	List *shardIntervalList = LoadShardIntervalList(relationId);
 
 	/* lock metadata before getting placement lists */

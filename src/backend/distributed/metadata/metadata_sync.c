@@ -856,8 +856,12 @@ CitusTableMetadataCreateCommandList(Oid relationId)
 	char *metadataCommand = DistributionCreateCommand(cacheEntry);
 	commandList = lappend(commandList, metadataCommand);
 
-	/* commands to insert pg_dist_shard & pg_dist_placement entries */
-	List *shardIntervalList = LoadShardIntervalList(relationId);
+	/* Commands to insert pg_dist_shard & pg_dist_placement entries
+	 * Propoagate orphaned shards as well to have consistent behavior
+	 * given all workers have the same metadata. The information is not
+	 * strictly neeeded and will be deleted by cleaner anyways.
+	 */
+	List *shardIntervalList = LoadShardIntervalListWithOrphanedShards(relationId);
 	List *shardMetadataInsertCommandList = ShardListInsertCommand(shardIntervalList);
 	commandList = list_concat(commandList, shardMetadataInsertCommandList);
 

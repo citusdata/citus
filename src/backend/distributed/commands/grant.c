@@ -160,7 +160,9 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 		ddlJob->taskList = NIL;
 		if (IsCitusTable(relationId))
 		{
-			ddlJob->taskList = DDLTaskList(relationId, ddlString.data);
+			/* Propogate latest policies issue on deleted shards to avoid any potential issues */
+			bool includeOrphanedShards = true;
+			ddlJob->taskList = DDLTaskList(relationId, ddlString.data, includeOrphanedShards);
 		}
 		ddlJobs = lappend(ddlJobs, ddlJob);
 

@@ -79,7 +79,10 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->metadataSyncCommand = clusterCommand;
-	ddlJob->taskList = DDLTaskList(relationId, clusterCommand);
+
+	/* we don't need to do cluster deleted shards */
+	bool includeOrphanedShards = false;
+	ddlJob->taskList = DDLTaskList(relationId, clusterCommand, includeOrphanedShards);
 
 	return list_make1(ddlJob);
 }

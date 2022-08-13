@@ -719,13 +719,16 @@ CitusCreateTriggerCommandDDLJob(Oid relationId, char *triggerName,
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->metadataSyncCommand = queryString;
 
+	/* we don't need to do CREATE trigger on deleted shards */
+	bool includeOrphanedShards = false;
+
 	if (!triggerName)
 	{
 		/*
 		 * ENABLE/DISABLE TRIGGER ALL/USER commands do not specify trigger
 		 * name.
 		 */
-		ddlJob->taskList = DDLTaskList(relationId, queryString);
+		ddlJob->taskList = DDLTaskList(relationId, queryString, includeOrphanedShards);
 		return list_make1(ddlJob);
 	}
 
@@ -745,7 +748,7 @@ CitusCreateTriggerCommandDDLJob(Oid relationId, char *triggerName,
 	/* we don't have truncate triggers on shard relations */
 	if (!TRIGGER_FOR_TRUNCATE(triggerType))
 	{
-		ddlJob->taskList = DDLTaskList(relationId, queryString);
+		ddlJob->taskList = DDLTaskList(relationId, queryString, includeOrphanedShards);
 	}
 
 	return list_make1(ddlJob);

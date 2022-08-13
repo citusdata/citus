@@ -1613,11 +1613,12 @@ InvalidateForeignKeyGraphForDDL(void)
  * given list of shards.
  */
 List *
-DDLTaskList(Oid relationId, const char *commandString)
+DDLTaskList(Oid relationId, const char *commandString, bool includeOrphanedShards)
 {
 	List *taskList = NIL;
-	// TODO(niupre): This should be all shards?
-	List *shardIntervalList = LoadShardIntervalList(relationId);
+	List *shardIntervalList =
+		(includeOrphanedShards) ? LoadShardIntervalListWithOrphanedShards(relationId)
+								: LoadShardIntervalList(relationId);
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
 	char *escapedSchemaName = quote_literal_cstr(schemaName);

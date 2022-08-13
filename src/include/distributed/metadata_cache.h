@@ -66,8 +66,14 @@ typedef struct
 	bool autoConverted; /* table auto-added to metadata, valid for citus local tables */
 
 	/* pg_dist_shard metadata (variable-length ShardInterval array) for this table */
+	/* The list includes only ACTIVE shards */
 	int shardIntervalArrayLength;
 	ShardInterval **sortedShardIntervalArray;
+
+	/* pg_dist_shard metadata (variable-length ShardInterval array) for this table */
+	/* The list includes only TO_DELETE shards */
+	int orphanedShardIntervalArrayLength;
+	ShardInterval **sortedOrphanedShardIntervalArray;
 
 	/* comparator for partition column's type, NULL if DISTRIBUTE_BY_NONE */
 	FmgrInfo *shardColumnCompareFunction;
@@ -96,6 +102,11 @@ typedef struct
 	/* pg_dist_placement metadata */
 	GroupShardPlacement **arrayOfPlacementArrays;
 	int *arrayOfPlacementArrayLengths;
+
+	/* pg_dist_placement metadata */
+	/* The list includes only TO_DELETE shards */
+	GroupShardPlacement **arrayOfOrphanedPlacementArrays;
+	int *arrayOfOrphanedPlacementArrayLengths;
 } CitusTableCacheEntry;
 
 typedef struct DistObjectCacheEntryKey
@@ -143,7 +154,6 @@ extern List * AllCitusTableIds(void);
 extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
 extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);
-
 extern void SetCreateCitusTransactionLevel(int val);
 extern int GetCitusCreationLevel(void);
 extern bool IsCitusTable(Oid relationId);

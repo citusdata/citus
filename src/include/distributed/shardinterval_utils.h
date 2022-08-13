@@ -47,6 +47,8 @@ extern int CompareRelationShards(const void *leftElement,
 								 const void *rightElement);
 extern int ShardIndex(ShardInterval *shardInterval);
 extern int CalculateUniformHashRangeIndex(int hashedValue, int shardCount);
+
+// TODO(niupre): Review API.
 extern ShardInterval * FindShardInterval(Datum partitionColumnValue,
 										 CitusTableCacheEntry *cacheEntry);
 extern int FindShardIntervalIndex(Datum searchedValue, CitusTableCacheEntry *cacheEntry);
@@ -54,6 +56,7 @@ extern int SearchCachedShardInterval(Datum partitionColumnValue,
 									 ShardInterval **shardIntervalCache,
 									 int shardCount, Oid shardIntervalCollation,
 									 FmgrInfo *compareFunction);
+
 extern bool SingleReplicatedTable(Oid relationId);
 
 

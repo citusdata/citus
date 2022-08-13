@@ -275,7 +275,10 @@ PostprocessCreatePolicyStmt(Node *node, const char *queryString)
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
 	ddlJob->metadataSyncCommand = pstrdup(ddlCommand);
-	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+
+	/* Propogate latest policies issue on deleted shards to avoid any potential issues */
+	bool includeOrphanedShards = true;
+	ddlJob->taskList = DDLTaskList(relationId, ddlCommand, includeOrphanedShards);
 
 	relation_close(relation, NoLock);
 
@@ -408,7 +411,10 @@ PreprocessAlterPolicyStmt(Node *node, const char *queryString,
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relOid);
 	ddlJob->metadataSyncCommand = pstrdup(ddlString.data);
-	ddlJob->taskList = DDLTaskList(relOid, ddlString.data);
+
+	/* Propogate latest policies issue on deleted shards to avoid any potential issues */
+	bool includeOrphanedShards = true;
+	ddlJob->taskList = DDLTaskList(relOid, ddlString.data, includeOrphanedShards);
 
 	relation_close(relation, NoLock);
 
@@ -516,7 +522,10 @@ PreprocessDropPolicyStmt(Node *node, const char *queryString,
 		DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 		ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relOid);
 		ddlJob->metadataSyncCommand = queryString;
-		ddlJob->taskList = DDLTaskList(relOid, queryString);
+
+		/* Propogate latest policies issue on deleted shards to avoid potential issues */
+		bool includeOrphanedShards = true;
+		ddlJob->taskList = DDLTaskList(relOid, queryString, includeOrphanedShards);
 
 		ddlJobs = lappend(ddlJobs, ddlJob);
 	}

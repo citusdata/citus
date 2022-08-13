@@ -179,7 +179,14 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, tableRelationId);
 	ddlJob->metadataSyncCommand = renameCommand;
-	ddlJob->taskList = DDLTaskList(tableRelationId, renameCommand);
+
+	/*
+	 * Rename orphaned shards as well, otherwise the shard's name will be different
+	 * from the distributed table. This will cause shard cleaner to fail as we will
+	 * try to delete the orphaned shard with the wrong (new) name.
+	 */
+	bool includeOrphanedShards = true;
+	ddlJob->taskList = DDLTaskList(tableRelationId, renameCommand, includeOrphanedShards);
 
 	return list_make1(ddlJob);
 }

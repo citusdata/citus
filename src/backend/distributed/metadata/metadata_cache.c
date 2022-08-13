@@ -113,6 +113,15 @@ typedef struct CitusTableCacheEntrySlot
 	bool isValid;
 } CitusTableCacheEntrySlot;
 
+/*
+ * ShardInterval Array Type.
+ */
+typedef enum ShardIntervalArrayType
+{
+	ACTIVE_SHARD_ARRAY,
+
+	TO_DELETE_SHARD_ARRAY
+} ShardIntervalArrayType;
 
 /*
  * ShardIdCacheEntry is the entry type for ShardIdCacheHash.
@@ -126,6 +135,9 @@ typedef struct ShardIdCacheEntry
 
 	/* pointer to the table entry to which this shard currently belongs */
 	CitusTableCacheEntry *tableEntry;
+
+	/* shard interval type */
+	ShardIntervalArrayType arrayType;
 
 	/* index of the shard interval in the sortedShardIntervalArray of the table entry */
 	int shardIndex;
@@ -249,7 +261,9 @@ static void RegisterLocalGroupIdCacheCallbacks(void);
 static void RegisterAuthinfoCacheCallbacks(void);
 static void RegisterCitusTableCacheEntryReleaseCallbacks(void);
 static void ResetCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry);
-static void RemoveStaleShardIdCacheEntries(CitusTableCacheEntry *tableEntry);
+static void RemoveStaleShardIdCacheEntries(CitusTableCacheEntry *tableEntry,
+	ShardInterval **sortedShardIntervalArray,
+	int shardIntervalArrayLength);
 static void CreateDistTableCache(void);
 static void CreateShardIdCache(void);
 static void CreateDistObjectCache(void);
@@ -275,7 +289,7 @@ static void CachedRelationNamespaceLookupExtended(const char *relationName,
 												  bool missing_ok);
 static ShardPlacement * ResolveGroupShardPlacement(
 	GroupShardPlacement *groupShardPlacement, CitusTableCacheEntry *tableEntry,
-	int shardIndex);
+	ShardIntervalArrayType arrayType, int shardIndex);
 static Oid LookupEnumValueId(Oid typeId, char *valueName);
 static void InvalidateCitusTableCacheEntrySlot(CitusTableCacheEntrySlot *cacheSlot);
 static void InvalidateDistTableCache(void);
@@ -284,6 +298,13 @@ static void InitializeTableCacheEntry(int64 shardId);
 static bool IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
 									 CitusTableType tableType);
 static bool RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry);
+static void BuildShardIdCacheAndPlacementList(ShardInterval **shardIntervalArray, int arrayLength,
+				  ShardIntervalArrayType arrayType, CitusTableCacheEntry *cacheEntry);
+static void FreeCitusTableCacheShardAndPlacementEntryFromArray(
+	ShardInterval **shardIntervalArray,
+	int shardIntervalArrayLength,
+	GroupShardPlacement **arrayOfPlacementArrays,
+	int *arrayOfPlacementArrayLengths);
 
 static Oid DistAuthinfoRelationId(void);
 static Oid DistAuthinfoIndexId(void);
@@ -702,12 +723,20 @@ LoadShardInterval(uint64 shardId)
 	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
 	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
 	int shardIndex = shardIdEntry->shardIndex;
+	ShardIntervalArrayType arrayType = shardIdEntry->arrayType;
 
 	/* the offset better be in a valid range */
-	Assert(shardIndex < tableEntry->shardIntervalArrayLength);
-
-	ShardInterval *sourceShardInterval =
-		tableEntry->sortedShardIntervalArray[shardIndex];
+	ShardInterval *sourceShardInterval = NULL;
+	if (arrayType == ACTIVE_SHARD_ARRAY)
+	{
+		Assert(shardIndex < tableEntry->shardIntervalArrayLength);
+		sourceShardInterval = tableEntry->sortedShardIntervalArray[shardIndex];
+	}
+	else
+	{
+		Assert(shardIndex < tableEntry->orphanedShardIntervalArrayLength);
+		sourceShardInterval = tableEntry->sortedOrphanedShardIntervalArray[shardIndex];
+	}
 
 	/* copy value to return */
 	ShardInterval *shardInterval = CopyShardInterval(sourceShardInterval);
@@ -771,14 +800,26 @@ LoadGroupShardPlacement(uint64 shardId, uint64 placementId)
 	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
 	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
 	int shardIndex = shardIdEntry->shardIndex;
+	ShardIntervalArrayType arrayType = shardIdEntry->arrayType;
 
-	/* the offset better be in a valid range */
-	Assert(shardIndex < tableEntry->shardIntervalArrayLength);
-
-	GroupShardPlacement *placementArray =
-		tableEntry->arrayOfPlacementArrays[shardIndex];
-	int numberOfPlacements =
-		tableEntry->arrayOfPlacementArrayLengths[shardIndex];
+	GroupShardPlacement *placementArray = NULL;
+	int numberOfPlacements = 0;
+	if (arrayType == ACTIVE_SHARD_ARRAY)
+	{
+		/* the offset better be in a valid range */
+		Assert(shardIndex < tableEntry->shardIntervalArrayLength);
+		placementArray = tableEntry->arrayOfPlacementArrays[shardIndex];
+		numberOfPlacements =
+				tableEntry->arrayOfPlacementArrayLengths[shardIndex];
+	}
+	else if (arrayType == TO_DELETE_SHARD_ARRAY)
+	{
+		/* the offset better be in a valid range */
+		Assert(shardIndex < tableEntry->orphanedShardIntervalArrayLength);
+		placementArray = tableEntry->arrayOfOrphanedPlacementArrays[shardIndex];
+		numberOfPlacements =
+				tableEntry->arrayOfOrphanedPlacementArrayLengths[shardIndex];
+	}
 
 	for (int i = 0; i < numberOfPlacements; i++)
 	{
@@ -806,9 +847,11 @@ LoadShardPlacement(uint64 shardId, uint64 placementId)
 	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
 	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
 	int shardIndex = shardIdEntry->shardIndex;
+	ShardIntervalArrayType arrayType = shardIdEntry->arrayType;
+
 	GroupShardPlacement *groupPlacement = LoadGroupShardPlacement(shardId, placementId);
 	ShardPlacement *nodePlacement = ResolveGroupShardPlacement(groupPlacement,
-															   tableEntry, shardIndex);
+															   tableEntry, arrayType, shardIndex);
 
 	return nodePlacement;
 }
@@ -829,10 +872,26 @@ ShardPlacementOnGroupIncludingOrphanedPlacements(int32 groupId, uint64 shardId)
 	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
 	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
 	int shardIndex = shardIdEntry->shardIndex;
-	GroupShardPlacement *placementArray =
-		tableEntry->arrayOfPlacementArrays[shardIndex];
-	int numberOfPlacements =
-		tableEntry->arrayOfPlacementArrayLengths[shardIndex];
+	ShardIntervalArrayType arrayType = shardIdEntry->arrayType;
+
+	GroupShardPlacement *placementArray = NULL;
+	int numberOfPlacements = 0;
+	if (arrayType == ACTIVE_SHARD_ARRAY)
+	{
+		/* the offset better be in a valid range */
+		Assert(shardIndex < tableEntry->shardIntervalArrayLength);
+		placementArray = tableEntry->arrayOfPlacementArrays[shardIndex];
+		numberOfPlacements =
+				tableEntry->arrayOfPlacementArrayLengths[shardIndex];
+	}
+	else if (arrayType == TO_DELETE_SHARD_ARRAY)
+	{
+		/* the offset better be in a valid range */
+		Assert(shardIndex < tableEntry->orphanedShardIntervalArrayLength);
+		placementArray = tableEntry->arrayOfOrphanedPlacementArrays[shardIndex];
+		numberOfPlacements =
+				tableEntry->arrayOfOrphanedPlacementArrayLengths[shardIndex];
+	}
 
 	for (int placementIndex = 0; placementIndex < numberOfPlacements; placementIndex++)
 	{
@@ -840,7 +899,7 @@ ShardPlacementOnGroupIncludingOrphanedPlacements(int32 groupId, uint64 shardId)
 		if (placement->groupId == groupId)
 		{
 			placementOnNode = ResolveGroupShardPlacement(placement, tableEntry,
-														 shardIndex);
+														 arrayType, shardIndex);
 			break;
 		}
 	}
@@ -878,9 +937,19 @@ ActiveShardPlacementOnGroup(int32 groupId, uint64 shardId)
 static ShardPlacement *
 ResolveGroupShardPlacement(GroupShardPlacement *groupShardPlacement,
 						   CitusTableCacheEntry *tableEntry,
+						   ShardIntervalArrayType arrayType,
 						   int shardIndex)
 {
-	ShardInterval *shardInterval = tableEntry->sortedShardIntervalArray[shardIndex];
+
+	ShardInterval *shardInterval = NULL;
+	if (arrayType == ACTIVE_SHARD_ARRAY)
+	{
+		shardInterval = tableEntry->sortedShardIntervalArray[shardIndex];
+	}
+	else if (arrayType == TO_DELETE_SHARD_ARRAY)
+	{
+		shardInterval = tableEntry->sortedOrphanedShardIntervalArray[shardIndex];
+	}
 
 	ShardPlacement *shardPlacement = CitusMakeNode(ShardPlacement);
 	int32 groupId = groupShardPlacement->groupId;
@@ -1049,20 +1118,31 @@ ShardPlacementListIncludingOrphanedPlacements(uint64 shardId)
 	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
 	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
 	int shardIndex = shardIdEntry->shardIndex;
+	ShardIntervalArrayType arrayType = shardIdEntry->arrayType;
 
-	/* the offset better be in a valid range */
-	Assert(shardIndex < tableEntry->shardIntervalArrayLength);
-
-	GroupShardPlacement *placementArray =
-		tableEntry->arrayOfPlacementArrays[shardIndex];
-	int numberOfPlacements =
-		tableEntry->arrayOfPlacementArrayLengths[shardIndex];
+	GroupShardPlacement *placementArray = NULL;
+	int numberOfPlacements = 0;
+	if (arrayType == ACTIVE_SHARD_ARRAY)
+	{
+		/* the offset better be in a valid range */
+		Assert(shardIndex < tableEntry->shardIntervalArrayLength);
+		placementArray = tableEntry->arrayOfPlacementArrays[shardIndex];
+		numberOfPlacements = tableEntry->arrayOfPlacementArrayLengths[shardIndex];
+	}
+	else if (arrayType == TO_DELETE_SHARD_ARRAY)
+	{
+		/* the offset better be in a valid range */
+		Assert(shardIndex < tableEntry->orphanedShardIntervalArrayLength);
+		placementArray = tableEntry->arrayOfOrphanedPlacementArrays[shardIndex];
+		numberOfPlacements = tableEntry->arrayOfOrphanedPlacementArrayLengths[shardIndex];
+	}
 
 	for (int i = 0; i < numberOfPlacements; i++)
 	{
 		GroupShardPlacement *groupShardPlacement = &placementArray[i];
 		ShardPlacement *shardPlacement = ResolveGroupShardPlacement(groupShardPlacement,
 																	tableEntry,
+																	arrayType,
 																	shardIndex);
 
 		placementList = lappend(placementList, shardPlacement);
@@ -1540,7 +1620,7 @@ BuildCitusTableCacheEntry(Oid relationId)
 
 		cacheEntry->hashFunction = hashFunction;
 
-		/* check the shard distribution for hash partitioned tables */
+		/* check the shard distribution of ACTIVE shards for hash partitioned tables */
 		cacheEntry->hasUniformHashDistribution =
 			HasUniformHashDistribution(cacheEntry->sortedShardIntervalArray,
 									   cacheEntry->shardIntervalArrayLength);
@@ -1574,8 +1654,11 @@ BuildCitusTableCacheEntry(Oid relationId)
 static void
 BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 {
+	List *shardIntervalList = NULL;
 	ShardInterval **shardIntervalArray = NULL;
+	ShardInterval **shardIntervalToDeleteArray = NULL;
 	ShardInterval **sortedShardIntervalArray = NULL;
+	ShardInterval **sortedOrphanedShardIntervalArray = NULL;
 	FmgrInfo *shardIntervalCompareFunction = NULL;
 	FmgrInfo *shardColumnCompareFunction = NULL;
 	Oid columnTypeId = InvalidOid;
@@ -1592,24 +1675,13 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 
 	List *distShardTupleList = LookupDistShardTuples(cacheEntry->relationId);
 	int shardIntervalArrayLength = list_length(distShardTupleList);
+
+	int activeShardCount = 0;
+	int orphanedShardCount = 0;
 	if (shardIntervalArrayLength > 0)
 	{
 		Relation distShardRelation = table_open(DistShardRelationId(), AccessShareLock);
 		TupleDesc distShardTupleDesc = RelationGetDescr(distShardRelation);
-		int arrayIndex = 0;
-
-		shardIntervalArray = MemoryContextAllocZero(MetadataCacheMemoryContext,
-													shardIntervalArrayLength *
-													sizeof(ShardInterval *));
-
-		cacheEntry->arrayOfPlacementArrays =
-			MemoryContextAllocZero(MetadataCacheMemoryContext,
-								   shardIntervalArrayLength *
-								   sizeof(GroupShardPlacement *));
-		cacheEntry->arrayOfPlacementArrayLengths =
-			MemoryContextAllocZero(MetadataCacheMemoryContext,
-								   shardIntervalArrayLength *
-								   sizeof(int));
 
 		HeapTuple shardTuple = NULL;
 		foreach_ptr(shardTuple, distShardTupleList)
@@ -1618,18 +1690,71 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 																distShardTupleDesc,
 																intervalTypeId,
 																intervalTypeMod);
-			MemoryContext oldContext = MemoryContextSwitchTo(MetadataCacheMemoryContext);
 
-			shardIntervalArray[arrayIndex] = CopyShardInterval(shardInterval);
+			Assert(shardInterval->shardState == SHARD_STATE_ACTIVE ||
+				   shardInterval->shardState == SHARD_STATE_TO_DELETE);
 
-			MemoryContextSwitchTo(oldContext);
+			if (shardInterval->shardState == SHARD_STATE_ACTIVE)
+			{
+				activeShardCount++;
+			}
+			else
+			{
+				orphanedShardCount++;
+			}
+
+			shardIntervalList = lappend(shardIntervalList, shardInterval);
 
 			heap_freetuple(shardTuple);
-
-			arrayIndex++;
 		}
-
 		table_close(distShardRelation, AccessShareLock);
+
+		shardIntervalArray = MemoryContextAllocZero(MetadataCacheMemoryContext,
+												activeShardCount *
+												sizeof(ShardInterval *));
+
+		shardIntervalToDeleteArray = MemoryContextAllocZero(MetadataCacheMemoryContext,
+												orphanedShardCount *
+												sizeof(ShardInterval *));
+
+		cacheEntry->arrayOfPlacementArrays =
+			MemoryContextAllocZero(MetadataCacheMemoryContext,
+									activeShardCount *
+									sizeof(GroupShardPlacement *));
+		cacheEntry->arrayOfPlacementArrayLengths =
+			MemoryContextAllocZero(MetadataCacheMemoryContext,
+									activeShardCount *
+									sizeof(int));
+
+		cacheEntry->arrayOfOrphanedPlacementArrays =
+			MemoryContextAllocZero(MetadataCacheMemoryContext,
+									orphanedShardCount *
+									sizeof(GroupShardPlacement *));
+		cacheEntry->arrayOfOrphanedPlacementArrayLengths =
+			MemoryContextAllocZero(MetadataCacheMemoryContext,
+									orphanedShardCount *
+									sizeof(int));
+	}
+
+	int arrayIndexOne = 0;
+	int arrayIndexTwo = 0;
+	ShardInterval *interval = NULL;
+	foreach_ptr(interval, shardIntervalList)
+	{
+		MemoryContext oldContext = MemoryContextSwitchTo(MetadataCacheMemoryContext);
+		ShardInterval *copiedShardInterval = CopyShardInterval(interval);
+
+		if (interval->shardState == SHARD_STATE_ACTIVE)
+		{
+			shardIntervalArray[arrayIndexOne] = copiedShardInterval;
+			arrayIndexOne++;
+		}
+		else
+		{
+			shardIntervalToDeleteArray[arrayIndexTwo] = copiedShardInterval;
+			arrayIndexTwo++;
+		}
+		MemoryContextSwitchTo(oldContext);
 	}
 
 	/* look up value comparison function */
@@ -1683,12 +1808,19 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 
 		/* since there is a zero or one shard, it is already sorted */
 		sortedShardIntervalArray = shardIntervalArray;
+		sortedOrphanedShardIntervalArray = shardIntervalToDeleteArray;
 	}
 	else
 	{
 		/* sort the interval array */
 		sortedShardIntervalArray = SortShardIntervalArray(shardIntervalArray,
-														  shardIntervalArrayLength,
+														  activeShardCount,
+														  cacheEntry->partitionColumn->
+														  varcollid,
+														  shardIntervalCompareFunction);
+
+		sortedOrphanedShardIntervalArray = SortShardIntervalArray(shardIntervalToDeleteArray,
+														  orphanedShardCount,
 														  cacheEntry->partitionColumn->
 														  varcollid,
 														  shardIntervalCompareFunction);
@@ -1715,12 +1847,35 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 	}
 
 	cacheEntry->sortedShardIntervalArray = sortedShardIntervalArray;
-	cacheEntry->shardIntervalArrayLength = 0;
+	cacheEntry->sortedOrphanedShardIntervalArray = sortedOrphanedShardIntervalArray;
 
+	/* initialize to zero and increment  as we go */
+	cacheEntry->shardIntervalArrayLength = 0;
+	cacheEntry->orphanedShardIntervalArrayLength = 0;
+
+	/* maintain shardId->(table,ShardInterval) cache and placement list. */
+	BuildShardIdCacheAndPlacementList(sortedShardIntervalArray, activeShardCount,
+								      ACTIVE_SHARD_ARRAY, cacheEntry);
+
+	BuildShardIdCacheAndPlacementList(sortedOrphanedShardIntervalArray, orphanedShardCount,
+									  TO_DELETE_SHARD_ARRAY, cacheEntry);
+
+	cacheEntry->shardColumnCompareFunction = shardColumnCompareFunction;
+	cacheEntry->shardIntervalCompareFunction = shardIntervalCompareFunction;
+}
+
+
+/*
+ *  Maintain shardId->(table,ShardInterval) cache and placement list.
+ */
+void
+BuildShardIdCacheAndPlacementList(ShardInterval **shardIntervalArray, int arrayLength,
+				  ShardIntervalArrayType arrayType, CitusTableCacheEntry *cacheEntry)
+{
 	/* maintain shardId->(table,ShardInterval) cache */
-	for (int shardIndex = 0; shardIndex < shardIntervalArrayLength; shardIndex++)
+	for (int shardIndex = 0; shardIndex < arrayLength; shardIndex++)
 	{
-		ShardInterval *shardInterval = sortedShardIntervalArray[shardIndex];
+		ShardInterval *shardInterval = shardIntervalArray[shardIndex];
 		int64 shardId = shardInterval->shardId;
 		int placementOffset = 0;
 
@@ -1733,13 +1888,21 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 
 		shardIdCacheEntry->tableEntry = cacheEntry;
 		shardIdCacheEntry->shardIndex = shardIndex;
+		shardIdCacheEntry->arrayType = arrayType;
 
 		/*
 		 * We should increment this only after we are sure this hasn't already
 		 * been assigned to any other relations. ResetCitusTableCacheEntry()
 		 * depends on this.
 		 */
-		cacheEntry->shardIntervalArrayLength++;
+		if(arrayType == ACTIVE_SHARD_ARRAY)
+		{
+			cacheEntry->shardIntervalArrayLength++;
+		}
+		else if(arrayType == TO_DELETE_SHARD_ARRAY)
+		{
+			cacheEntry->orphanedShardIntervalArrayLength++;
+		}
 
 		/* build list of shard placements */
 		List *placementList = BuildShardPlacementList(shardId);
@@ -1763,9 +1926,6 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 		/* store the shard index in the ShardInterval */
 		shardInterval->shardIndex = shardIndex;
 	}
-
-	cacheEntry->shardColumnCompareFunction = shardColumnCompareFunction;
-	cacheEntry->shardIntervalCompareFunction = shardIntervalCompareFunction;
 }
 
 
@@ -1902,11 +2062,7 @@ HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
 											curShardInterval->minValue);
 		comparisonResult = DatumGetInt32(comparisonDatum);
 
-		// If one of the shards are marked as TO_DELETED, ignore the overlap.
-		bool markedForDelete = (lastShardInterval->shardState == SHARD_STATE_TO_DELETE ||
-							   curShardInterval->shardState == SHARD_STATE_TO_DELETE);
-
-		if (!markedForDelete && comparisonResult >= 0)
+		if (comparisonResult >= 0)
 		{
 			return true;
 		}
@@ -3972,6 +4128,49 @@ RegisterAuthinfoCacheCallbacks(void)
 
 
 /*
+ *
+ */
+static void
+FreeCitusTableCacheShardAndPlacementEntryFromArray(
+	ShardInterval **shardIntervalArray,
+	int shardIntervalArrayLength,
+	GroupShardPlacement **arrayOfPlacementArrays,
+	int *arrayOfPlacementArrayLengths)
+{
+	for (int shardIndex = 0; shardIndex < shardIntervalArrayLength;
+		 shardIndex++)
+	{
+		ShardInterval *shardInterval = shardIntervalArray[shardIndex];
+		GroupShardPlacement *placementArray = arrayOfPlacementArrays[shardIndex];
+		bool valueByVal = shardInterval->valueByVal;
+
+		/* delete the shard's placements */
+		if (placementArray != NULL)
+		{
+			pfree(placementArray);
+		}
+
+		/* delete data pointed to by ShardInterval */
+		if (!valueByVal)
+		{
+			if (shardInterval->minValueExists)
+			{
+				pfree(DatumGetPointer(shardInterval->minValue));
+			}
+
+			if (shardInterval->maxValueExists)
+			{
+				pfree(DatumGetPointer(shardInterval->maxValue));
+			}
+		}
+
+		/* and finally the ShardInterval itself */
+		pfree(shardInterval);
+	}
+}
+
+
+/*
  * ResetCitusTableCacheEntry frees any out-of-band memory used by a cache entry,
  * but does not free the entry itself.
  */
@@ -4008,44 +4207,30 @@ ResetCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry)
 	}
 
 	/* clean up ShardIdCacheHash */
-	RemoveStaleShardIdCacheEntries(cacheEntry);
+	RemoveStaleShardIdCacheEntries(cacheEntry, cacheEntry->sortedShardIntervalArray, cacheEntry->shardIntervalArrayLength);
+	RemoveStaleShardIdCacheEntries(cacheEntry, cacheEntry->sortedOrphanedShardIntervalArray, cacheEntry->orphanedShardIntervalArrayLength);
 
-	for (int shardIndex = 0; shardIndex < cacheEntry->shardIntervalArrayLength;
-		 shardIndex++)
-	{
-		ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[shardIndex];
-		GroupShardPlacement *placementArray =
-			cacheEntry->arrayOfPlacementArrays[shardIndex];
-		bool valueByVal = shardInterval->valueByVal;
+	FreeCitusTableCacheShardAndPlacementEntryFromArray(
+				cacheEntry->sortedShardIntervalArray,
+				cacheEntry->shardIntervalArrayLength,
+				cacheEntry->arrayOfPlacementArrays,
+				cacheEntry->arrayOfPlacementArrayLengths);
 
-		/* delete the shard's placements */
-		if (placementArray != NULL)
-		{
-			pfree(placementArray);
-		}
-
-		/* delete data pointed to by ShardInterval */
-		if (!valueByVal)
-		{
-			if (shardInterval->minValueExists)
-			{
-				pfree(DatumGetPointer(shardInterval->minValue));
-			}
-
-			if (shardInterval->maxValueExists)
-			{
-				pfree(DatumGetPointer(shardInterval->maxValue));
-			}
-		}
-
-		/* and finally the ShardInterval itself */
-		pfree(shardInterval);
-	}
+	FreeCitusTableCacheShardAndPlacementEntryFromArray(
+				cacheEntry->sortedOrphanedShardIntervalArray,
+				cacheEntry->orphanedShardIntervalArrayLength,
+				cacheEntry->arrayOfOrphanedPlacementArrays,
+				cacheEntry->arrayOfOrphanedPlacementArrayLengths);
 
 	if (cacheEntry->sortedShardIntervalArray)
 	{
 		pfree(cacheEntry->sortedShardIntervalArray);
 		cacheEntry->sortedShardIntervalArray = NULL;
+	}
+	if (cacheEntry->sortedOrphanedShardIntervalArray)
+	{
+		pfree(cacheEntry->sortedOrphanedShardIntervalArray);
+		cacheEntry->sortedOrphanedShardIntervalArray = NULL;
 	}
 	if (cacheEntry->arrayOfPlacementArrayLengths)
 	{
@@ -4056,6 +4241,16 @@ ResetCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry)
 	{
 		pfree(cacheEntry->arrayOfPlacementArrays);
 		cacheEntry->arrayOfPlacementArrays = NULL;
+	}
+	if (cacheEntry->arrayOfOrphanedPlacementArrayLengths)
+	{
+		pfree(cacheEntry->arrayOfOrphanedPlacementArrayLengths);
+		cacheEntry->arrayOfOrphanedPlacementArrayLengths = NULL;
+	}
+	if (cacheEntry->arrayOfOrphanedPlacementArrays)
+	{
+		pfree(cacheEntry->arrayOfOrphanedPlacementArrays);
+		cacheEntry->arrayOfOrphanedPlacementArrays = NULL;
 	}
 	if (cacheEntry->referencedRelationsViaForeignKey)
 	{
@@ -4069,6 +4264,7 @@ ResetCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry)
 	}
 
 	cacheEntry->shardIntervalArrayLength = 0;
+	cacheEntry->orphanedShardIntervalArrayLength = 0;
 	cacheEntry->hasUninitializedShardInterval = false;
 	cacheEntry->hasUniformHashDistribution = false;
 	cacheEntry->hasOverlappingShardInterval = false;
@@ -4084,15 +4280,16 @@ ResetCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry)
  * we leave it in place.
  */
 static void
-RemoveStaleShardIdCacheEntries(CitusTableCacheEntry *invalidatedTableEntry)
+RemoveStaleShardIdCacheEntries(
+	CitusTableCacheEntry *invalidatedTableEntry,
+	ShardInterval **sortedShardIntervalArray,
+	int shardIntervalArrayLength)
 {
 	int shardIndex = 0;
-	int shardCount = invalidatedTableEntry->shardIntervalArrayLength;
 
-	for (shardIndex = 0; shardIndex < shardCount; shardIndex++)
+	for (shardIndex = 0; shardIndex < shardIntervalArrayLength; shardIndex++)
 	{
-		ShardInterval *shardInterval =
-			invalidatedTableEntry->sortedShardIntervalArray[shardIndex];
+		ShardInterval *shardInterval = sortedShardIntervalArray[shardIndex];
 		int64 shardId = shardInterval->shardId;
 		bool foundInCache = false;
 

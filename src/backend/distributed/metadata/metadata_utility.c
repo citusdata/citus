@@ -1068,11 +1068,66 @@ LoadShardIntervalList(Oid relationId)
 	return shardList;
 }
 
+/*
+ * LoadShardIntervalListWithOrphanedShards returns a list of shard intervals related for a given
+ * distributed table. This includes both ACTIVE and TO_DELETE shards.
+ * The function returns an empty list if no shards can be found for the given relation.
+ * Since LoadShardIntervalListWithOrphanedShards relies on merging two sorted lists, it returns
+ * list where elements are sorted on shardminvalue. Shard intervals with uninitialized
+ * shard min/max values are placed in the end of the list.
+ */
+List * LoadShardIntervalListWithOrphanedShards(Oid relationId)
+{
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+	List *shardList = NIL;
+
+	int indexOne = 0;
+	int indexTwo = 0;
+	SortShardIntervalContext sortContext = {
+		.comparisonFunction = cacheEntry->shardIntervalCompareFunction,
+		.collation = cacheEntry->partitionColumn->varcollid
+	};
+
+	while(indexOne < cacheEntry->shardIntervalArrayLength && indexTwo < cacheEntry->orphanedShardIntervalArrayLength)
+	{
+		ShardInterval *leftInterval = cacheEntry->sortedShardIntervalArray[indexOne];
+		ShardInterval *rightInterval = cacheEntry->sortedOrphanedShardIntervalArray[indexTwo];
+
+		int cmp = CompareShardIntervals(leftInterval, rightInterval, &sortContext);
+
+		if (cmp <= 0)
+		{
+			shardList = lappend(shardList, leftInterval);
+			indexOne++;
+		}
+		else
+		{
+			shardList = lappend(shardList, rightInterval);
+			indexTwo++;
+		}
+	}
+
+	while (indexOne < cacheEntry->shardIntervalArrayLength)
+	{
+		shardList = lappend(shardList, cacheEntry->sortedShardIntervalArray[indexOne]);
+		indexOne++;
+	}
+
+	while (indexTwo < cacheEntry->orphanedShardIntervalArrayLength)
+	{
+		shardList = lappend(shardList, cacheEntry->sortedOrphanedShardIntervalArray[indexTwo]);
+		indexTwo++;
+	}
+
+	return shardList;
+}
+
 
 /*
  * LoadUnsortedShardIntervalListViaCatalog returns a list of shard intervals related for a
- * given distributed table. The function returns an empty list if no shards can be found
- * for the given relation.
+ * given distributed table.
+ * The function returns both ACTIVE and TO_DELETE (orphaned) shards in the list.
+ * The function returns an empty list if no shards can be found for the given relation.
  *
  * This function does not use CitusTableCache and instead reads from catalog tables
  * directly.
@@ -1121,6 +1176,7 @@ LoadShardIntervalWithLongestShardName(Oid relationId)
 	int maxShardIndex = shardIntervalCount - 1;
 	uint64 largestShardId = INVALID_SHARD_ID;
 
+	/* Given ACTIVE split shards have higher sequence number, we don't need to look into orphaned shards */
 	for (int shardIndex = 0; shardIndex <= maxShardIndex; ++shardIndex)
 	{
 		ShardInterval *currentShardInterval =
@@ -1146,6 +1202,21 @@ ShardIntervalCount(Oid relationId)
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
 	return cacheEntry->shardIntervalArrayLength;
+}
+
+
+/*
+ * ShardIntervalCount returns number of shard intervals for a given distributed table.
+ * This includes both ACTIVE and TO_DELETE shards.
+ * The function returns 0 if no shards can be found for the given relation id.
+ */
+int
+ShardIntervalCountWithOrphanedShards(Oid relationId)
+{
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+
+	return cacheEntry->shardIntervalArrayLength +
+			cacheEntry->orphanedShardIntervalArrayLength;
 }
 
 
