@@ -235,7 +235,7 @@ PrunedShardIdsForTable(Oid distributedTableId, List *whereClauseList)
 
 
 /*
- * SortedShardIntervalArray simply returns the shard interval ids in the sorted shard
+ * SortedShardIntervalArray simply returns active shard interval ids in the sorted shard
  * interval cache as a datum array.
  */
 static ArrayType *

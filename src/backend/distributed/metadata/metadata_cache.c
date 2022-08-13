@@ -816,9 +816,9 @@ LoadGroupShardPlacement(uint64 shardId, uint64 placementId)
 	{
 		/* the offset better be in a valid range */
 		Assert(shardIndex < tableEntry->orphanedShardIntervalArrayLength);
-		placementArray = tableEntry->arrayOfOrphanedPlacementArrays[shardIndex];
+		placementArray = tableEntry->arrayOfOrphanedShardsPlacementArrays[shardIndex];
 		numberOfPlacements =
-				tableEntry->arrayOfOrphanedPlacementArrayLengths[shardIndex];
+				tableEntry->arrayOfOrphanedShardsPlacementArrayLengths[shardIndex];
 	}
 
 	for (int i = 0; i < numberOfPlacements; i++)
@@ -888,9 +888,9 @@ ShardPlacementOnGroupIncludingOrphanedPlacements(int32 groupId, uint64 shardId)
 	{
 		/* the offset better be in a valid range */
 		Assert(shardIndex < tableEntry->orphanedShardIntervalArrayLength);
-		placementArray = tableEntry->arrayOfOrphanedPlacementArrays[shardIndex];
+		placementArray = tableEntry->arrayOfOrphanedShardsPlacementArrays[shardIndex];
 		numberOfPlacements =
-				tableEntry->arrayOfOrphanedPlacementArrayLengths[shardIndex];
+				tableEntry->arrayOfOrphanedShardsPlacementArrayLengths[shardIndex];
 	}
 
 	for (int placementIndex = 0; placementIndex < numberOfPlacements; placementIndex++)
@@ -1133,8 +1133,8 @@ ShardPlacementListIncludingOrphanedPlacements(uint64 shardId)
 	{
 		/* the offset better be in a valid range */
 		Assert(shardIndex < tableEntry->orphanedShardIntervalArrayLength);
-		placementArray = tableEntry->arrayOfOrphanedPlacementArrays[shardIndex];
-		numberOfPlacements = tableEntry->arrayOfOrphanedPlacementArrayLengths[shardIndex];
+		placementArray = tableEntry->arrayOfOrphanedShardsPlacementArrays[shardIndex];
+		numberOfPlacements = tableEntry->arrayOfOrphanedShardsPlacementArrayLengths[shardIndex];
 	}
 
 	for (int i = 0; i < numberOfPlacements; i++)
@@ -1726,11 +1726,11 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 									activeShardCount *
 									sizeof(int));
 
-		cacheEntry->arrayOfOrphanedPlacementArrays =
+		cacheEntry->arrayOfOrphanedShardsPlacementArrays =
 			MemoryContextAllocZero(MetadataCacheMemoryContext,
 									orphanedShardCount *
 									sizeof(GroupShardPlacement *));
-		cacheEntry->arrayOfOrphanedPlacementArrayLengths =
+		cacheEntry->arrayOfOrphanedShardsPlacementArrayLengths =
 			MemoryContextAllocZero(MetadataCacheMemoryContext,
 									orphanedShardCount *
 									sizeof(int));
@@ -1920,8 +1920,16 @@ BuildShardIdCacheAndPlacementList(ShardInterval **shardIntervalArray, int arrayL
 		}
 		MemoryContextSwitchTo(oldContext);
 
-		cacheEntry->arrayOfPlacementArrays[shardIndex] = placementArray;
-		cacheEntry->arrayOfPlacementArrayLengths[shardIndex] = numberOfPlacements;
+		if(arrayType == ACTIVE_SHARD_ARRAY)
+		{
+			cacheEntry->arrayOfPlacementArrays[shardIndex] = placementArray;
+			cacheEntry->arrayOfPlacementArrayLengths[shardIndex] = numberOfPlacements;
+		}
+		else
+		{
+			cacheEntry->arrayOfOrphanedShardsPlacementArrays[shardIndex] = placementArray;
+			cacheEntry->arrayOfOrphanedShardsPlacementArrayLengths[shardIndex] = numberOfPlacements;
+		}
 
 		/* store the shard index in the ShardInterval */
 		shardInterval->shardIndex = shardIndex;
@@ -4219,8 +4227,8 @@ ResetCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry)
 	FreeCitusTableCacheShardAndPlacementEntryFromArray(
 				cacheEntry->sortedOrphanedShardIntervalArray,
 				cacheEntry->orphanedShardIntervalArrayLength,
-				cacheEntry->arrayOfOrphanedPlacementArrays,
-				cacheEntry->arrayOfOrphanedPlacementArrayLengths);
+				cacheEntry->arrayOfOrphanedShardsPlacementArrays,
+				cacheEntry->arrayOfOrphanedShardsPlacementArrayLengths);
 
 	if (cacheEntry->sortedShardIntervalArray)
 	{
@@ -4242,15 +4250,15 @@ ResetCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry)
 		pfree(cacheEntry->arrayOfPlacementArrays);
 		cacheEntry->arrayOfPlacementArrays = NULL;
 	}
-	if (cacheEntry->arrayOfOrphanedPlacementArrayLengths)
+	if (cacheEntry->arrayOfOrphanedShardsPlacementArrayLengths)
 	{
-		pfree(cacheEntry->arrayOfOrphanedPlacementArrayLengths);
-		cacheEntry->arrayOfOrphanedPlacementArrayLengths = NULL;
+		pfree(cacheEntry->arrayOfOrphanedShardsPlacementArrayLengths);
+		cacheEntry->arrayOfOrphanedShardsPlacementArrayLengths = NULL;
 	}
-	if (cacheEntry->arrayOfOrphanedPlacementArrays)
+	if (cacheEntry->arrayOfOrphanedShardsPlacementArrays)
 	{
-		pfree(cacheEntry->arrayOfOrphanedPlacementArrays);
-		cacheEntry->arrayOfOrphanedPlacementArrays = NULL;
+		pfree(cacheEntry->arrayOfOrphanedShardsPlacementArrays);
+		cacheEntry->arrayOfOrphanedShardsPlacementArrays = NULL;
 	}
 	if (cacheEntry->referencedRelationsViaForeignKey)
 	{

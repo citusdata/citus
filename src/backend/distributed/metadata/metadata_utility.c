@@ -631,8 +631,8 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 
 /*
  * GroupShardPlacementsForTableOnGroup accepts a relationId and a group and returns a list
- * of GroupShardPlacement's representing all of the placements for the table which reside
- * on the group.
+ * of GroupShardPlacement's representing all of the active shard's placements for the table
+ * which reside on the group.
  */
 List *
 GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId)
@@ -666,7 +666,7 @@ GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId)
 
 
 /*
- * ShardIntervalsOnWorkerGroup accepts a WorkerNode and returns a list of the shard
+ * ShardIntervalsOnWorkerGroup accepts a WorkerNode and returns a list of active shard
  * intervals of the given table which are placed on the group the node is a part of.
  */
 static List *

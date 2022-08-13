@@ -28,7 +28,7 @@
 
 
 /*
- * SortedShardIntervalArray sorts the input shardIntervalArray. Shard intervals with
+ * SortShardIntervalArray sorts the input shardIntervalArray. Shard intervals with
  * no min/max values are placed at the end of the array.
  */
 ShardInterval **
@@ -251,7 +251,7 @@ ShardIndex(ShardInterval *shardInterval)
 
 
 /*
- * FindShardInterval finds a single shard interval in the cache for the
+ * FindShardInterval finds a single active shard interval in the cache for the
  * given partition column value. Note that reference tables do not have
  * partition columns, thus, pass partitionColumnValue and compareFunction
  * as NULL for them.
@@ -280,7 +280,7 @@ FindShardInterval(Datum partitionColumnValue, CitusTableCacheEntry *cacheEntry)
 
 
 /*
- * FindShardIntervalIndex finds the index of the shard interval which covers
+ * FindShardIntervalIndex finds the index of an active shard interval which covers
  * the searched value. Note that the searched value must be the hashed value
  * of the original value if the distribution method is hash.
  *

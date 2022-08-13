@@ -984,7 +984,7 @@ ColocationGroupTableList(uint32 colocationId, uint32 count)
 
 
 /*
- * ColocatedShardIntervalList function returns list of shard intervals which are
+ * ColocatedShardIntervalList function returns list of active shard intervals which are
  * co-located with given shard. If given shard is belong to append or range distributed
  * table, co-location is not valid for that shard. Therefore such shard is only co-located
  * with itself.
@@ -1045,7 +1045,7 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 
 
 /*
- * ColocatedNonPartitionShardIntervalList function returns list of shard intervals
+ * ColocatedNonPartitionShardIntervalList function returns list of active shard intervals
  * which are co-located with given shard, except partitions. If given shard is belong
  * to append or range distributed table, co-location is not valid for that shard.
  * Therefore such shard is only co-located with itself.
@@ -1187,7 +1187,7 @@ ColocatedTableId(Oid colocationId)
 
 
 /*
- * ColocatedShardIdInRelation returns shardId of the shard from given relation, so that
+ * ColocatedShardIdInRelation returns shardId of an active shard from given relation, so that
  * returned shard is co-located with given shard.
  */
 uint64

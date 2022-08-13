@@ -104,9 +104,9 @@ typedef struct
 	int *arrayOfPlacementArrayLengths;
 
 	/* pg_dist_placement metadata */
-	/* The list includes only TO_DELETE shards */
-	GroupShardPlacement **arrayOfOrphanedPlacementArrays;
-	int *arrayOfOrphanedPlacementArrayLengths;
+	/* The list includes only TO_DELETE shard's placements */
+	GroupShardPlacement **arrayOfOrphanedShardsPlacementArrays;
+	int *arrayOfOrphanedShardsPlacementArrayLengths;
 } CitusTableCacheEntry;
 
 typedef struct DistObjectCacheEntryKey
