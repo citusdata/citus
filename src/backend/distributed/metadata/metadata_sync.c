@@ -3233,11 +3233,13 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 		 * not sane, the user can only affect its own tables. Given that the
 		 * user is owner of the table, we should allow.
 		 */
-		EnsureShardMetadataIsSane(relationId, shardId, storageType, shardState, shardMinValue,
+		EnsureShardMetadataIsSane(relationId, shardId, storageType, shardState,
+								  shardMinValue,
 								  shardMaxValue);
 	}
 
-	InsertShardRow(relationId, shardId, storageType, shardState, shardMinValue, shardMaxValue);
+	InsertShardRow(relationId, shardId, storageType, shardState, shardMinValue,
+				   shardMaxValue);
 
 	PG_RETURN_VOID();
 }
@@ -3632,7 +3634,7 @@ citus_internal_update_shard_and_placement_state_metadata(PG_FUNCTION_ARGS)
 		placement = linitial(shardPlacementList);
 
 		WorkerNode *workerNode = FindNodeWithNodeId(placement->nodeId,
-									false /* missingOk */);
+													false /* missingOk */);
 		if (!workerNode)
 		{
 			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),

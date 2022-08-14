@@ -1618,7 +1618,7 @@ DDLTaskList(Oid relationId, const char *commandString, bool includeOrphanedShard
 	List *taskList = NIL;
 	List *shardIntervalList =
 		(includeOrphanedShards) ? LoadShardIntervalListWithOrphanedShards(relationId)
-								: LoadShardIntervalList(relationId);
+		: LoadShardIntervalList(relationId);
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
 	char *escapedSchemaName = quote_literal_cstr(schemaName);

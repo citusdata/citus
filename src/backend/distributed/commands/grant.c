@@ -162,7 +162,8 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 		{
 			/* Propogate latest policies issue on deleted shards to avoid any potential issues */
 			bool includeOrphanedShards = true;
-			ddlJob->taskList = DDLTaskList(relationId, ddlString.data, includeOrphanedShards);
+			ddlJob->taskList = DDLTaskList(relationId, ddlString.data,
+										   includeOrphanedShards);
 		}
 		ddlJobs = lappend(ddlJobs, ddlJob);
 

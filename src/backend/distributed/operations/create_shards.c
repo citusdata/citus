@@ -265,7 +265,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 	LockRelationOid(sourceRelationId, AccessShareLock);
 
 	/* prevent placement changes of the source relation until we colocate with them */
-	// TODO(niupre): We should only return ACTIVE shards, not ALL shards.
+	/* TODO(niupre): We should only return ACTIVE shards, not ALL shards. */
 	List *sourceShardIntervalList = LoadShardIntervalList(sourceRelationId);
 	LockShardListMetadata(sourceShardIntervalList, ShareLock);
 
@@ -378,7 +378,8 @@ CreateReferenceTableShard(Oid distributedTableId)
 	/* shard state is active by default */
 	ShardState shardState = SHARD_STATE_ACTIVE;
 
-	InsertShardRow(distributedTableId, shardId, shardStorageType, shardState, shardMinValue,
+	InsertShardRow(distributedTableId, shardId, shardStorageType, shardState,
+				   shardMinValue,
 				   shardMaxValue);
 
 	List *insertedShardPlacements = InsertShardPlacementRows(distributedTableId, shardId,

@@ -1165,7 +1165,8 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 
 		/* Propogate latest updates issue on deleted shards to avoid any potential issues */
 		bool includeOrphanedShards = true;
-		ddlJob->taskList = DDLTaskList(leftRelationId, sqlForTaskList, includeOrphanedShards);
+		ddlJob->taskList = DDLTaskList(leftRelationId, sqlForTaskList,
+									   includeOrphanedShards);
 		if (!propagateCommandToWorkers)
 		{
 			ddlJob->taskList = NIL;
@@ -1841,7 +1842,8 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 
 	/* Propogate latest schema on deleted shards to avoid any potential issues */
 	bool includeOrphanedShards = true;
-	ddlJob->taskList = DDLTaskList(relationId, ddlJob->metadataSyncCommand, includeOrphanedShards);
+	ddlJob->taskList = DDLTaskList(relationId, ddlJob->metadataSyncCommand,
+								   includeOrphanedShards);
 	return list_make1(ddlJob);
 }
 

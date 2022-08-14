@@ -1068,6 +1068,7 @@ LoadShardIntervalList(Oid relationId)
 	return shardList;
 }
 
+
 /*
  * LoadShardIntervalListWithOrphanedShards returns a list of shard intervals related for a given
  * distributed table. This includes both ACTIVE and TO_DELETE shards.
@@ -1076,7 +1077,8 @@ LoadShardIntervalList(Oid relationId)
  * list where elements are sorted on shardminvalue. Shard intervals with uninitialized
  * shard min/max values are placed in the end of the list.
  */
-List * LoadShardIntervalListWithOrphanedShards(Oid relationId)
+List *
+LoadShardIntervalListWithOrphanedShards(Oid relationId)
 {
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	List *shardList = NIL;
@@ -1088,10 +1090,12 @@ List * LoadShardIntervalListWithOrphanedShards(Oid relationId)
 		.collation = cacheEntry->partitionColumn->varcollid
 	};
 
-	while(indexOne < cacheEntry->shardIntervalArrayLength && indexTwo < cacheEntry->orphanedShardIntervalArrayLength)
+	while (indexOne < cacheEntry->shardIntervalArrayLength && indexTwo <
+		   cacheEntry->orphanedShardIntervalArrayLength)
 	{
 		ShardInterval *leftInterval = cacheEntry->sortedShardIntervalArray[indexOne];
-		ShardInterval *rightInterval = cacheEntry->sortedOrphanedShardIntervalArray[indexTwo];
+		ShardInterval *rightInterval =
+			cacheEntry->sortedOrphanedShardIntervalArray[indexTwo];
 
 		int cmp = CompareShardIntervals(leftInterval, rightInterval, &sortContext);
 
@@ -1115,7 +1119,8 @@ List * LoadShardIntervalListWithOrphanedShards(Oid relationId)
 
 	while (indexTwo < cacheEntry->orphanedShardIntervalArrayLength)
 	{
-		shardList = lappend(shardList, cacheEntry->sortedOrphanedShardIntervalArray[indexTwo]);
+		shardList = lappend(shardList,
+							cacheEntry->sortedOrphanedShardIntervalArray[indexTwo]);
 		indexTwo++;
 	}
 
@@ -1216,7 +1221,7 @@ ShardIntervalCountWithOrphanedShards(Oid relationId)
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
 	return cacheEntry->shardIntervalArrayLength +
-			cacheEntry->orphanedShardIntervalArrayLength;
+		   cacheEntry->orphanedShardIntervalArrayLength;
 }
 
 

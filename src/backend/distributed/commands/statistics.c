@@ -481,8 +481,8 @@ PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString,
 	ddlJob->metadataSyncCommand = ddlCommand;
 
 	/* Propogate owner changes on deleted shards to avoid any potential issues */
-	// TODO(niupre): Can this cause failure when we try to drop orphaned table?
-	// If this is the case, do we need to allow CREATE STATS as well?
+	/* TODO(niupre): Can this cause failure when we try to drop orphaned table? */
+	/* If this is the case, do we need to allow CREATE STATS as well? */
 	bool includeOrphanedShards = true;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand, includeOrphanedShards);
 

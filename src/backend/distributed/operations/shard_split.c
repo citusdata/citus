@@ -565,10 +565,10 @@ BlockingShardSplit(SplitOperation splitOperation,
 		else
 		{
 			/*
-			* Drop old shards and delete related metadata. Have to do that before
-			* creating the new shard metadata, because there's cross-checks
-			* preventing inconsistent metadata (like overlapping shards).
-			*/
+			 * Drop old shards and delete related metadata. Have to do that before
+			 * creating the new shard metadata, because there's cross-checks
+			 * preventing inconsistent metadata (like overlapping shards).
+			 */
 			DropShardList(sourceColocatedShardIntervalList);
 		}
 
@@ -1147,6 +1147,7 @@ CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 	}
 }
 
+
 /*
  * MarkShardListForDrop drops shards and their metadata from both the coordinator and
  * mx nodes.
@@ -1175,9 +1176,9 @@ MarkShardListForDrop(List *shardIntervalList)
 		{
 			StringInfo updateShardCommand = makeStringInfo();
 			appendStringInfo(updateShardCommand,
-							"SELECT citus_internal_update_shard_and_placement_state_metadata(%ld, %d)",
-							shardId,
-							newState);
+							 "SELECT citus_internal_update_shard_and_placement_state_metadata(%ld, %d)",
+							 shardId,
+							 newState);
 
 			SendCommandToWorkersWithMetadata(updateShardCommand->data);
 		}
@@ -1476,10 +1477,10 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		else
 		{
 			/*
-			* Drop old shards and delete related metadata. Have to do that before
-			* creating the new shard metadata, because there's cross-checks
-			* preventing inconsistent metadata (like overlapping shards).
-			*/
+			 * Drop old shards and delete related metadata. Have to do that before
+			 * creating the new shard metadata, because there's cross-checks
+			 * preventing inconsistent metadata (like overlapping shards).
+			 */
 			DropShardList(sourceColocatedShardIntervalList);
 		}
 

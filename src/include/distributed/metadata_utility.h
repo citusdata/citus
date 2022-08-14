@@ -245,7 +245,7 @@ extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
-			   int shardState, text *shardMinValue, text *shardMaxValue);
+						   int shardState, text *shardMinValue, text *shardMaxValue);
 extern void DeleteShardRow(uint64 shardId);
 extern uint64 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 									  char shardState, uint64 shardLength,

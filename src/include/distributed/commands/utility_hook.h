@@ -94,7 +94,8 @@ extern void ProcessUtilityParseTree(Node *node, const char *queryString,
 									);
 extern void MarkInvalidateForeignKeyGraph(void);
 extern void InvalidateForeignKeyGraphForDDL(void);
-extern List * DDLTaskList(Oid relationId, const char *commandString, bool includeOrphanedShards);
+extern List * DDLTaskList(Oid relationId, const char *commandString, bool
+						  includeOrphanedShards);
 extern List * NodeDDLTaskList(TargetWorkerSet targets, List *commands);
 extern bool AlterTableInProgress(void);
 extern bool DropSchemaOrDBInProgress(void);

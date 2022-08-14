@@ -3982,7 +3982,7 @@ ShardIntervalsOverlapWithParams(Datum firstMin, Datum firstMax,
 	int firstComparison = DatumGetInt32(firstDatum);
 	int secondComparison = DatumGetInt32(secondDatum);
 
-	// If one of the shards are marked as TO_DELETED, ignore the overlap.
+	/* If one of the shards are marked as TO_DELETED, ignore the overlap. */
 	bool markedForDelete = (firstState == SHARD_STATE_TO_DELETE ||
 							secondState == SHARD_STATE_TO_DELETE);
 

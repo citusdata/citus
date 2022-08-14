@@ -358,7 +358,7 @@ QueryTupleShardSearchInfo(ArrayType *minValuesArray, ArrayType *maxValuesArray,
 			[Anum_pg_dist_shard_shardstorage - 1] = SHARD_STORAGE_VIRTUAL,
 			[Anum_pg_dist_shard_shardminvalue - 1] = minValues[partitionIndex],
 			[Anum_pg_dist_shard_shardmaxvalue - 1] = maxValues[partitionIndex],
-			[Anum_pg_dist_shard_shardstate- 1] = SHARD_STATE_INVALID_FIRST
+			[Anum_pg_dist_shard_shardstate - 1] = SHARD_STATE_INVALID_FIRST
 		};
 		bool nullsArray[Natts_pg_dist_shard] = {
 			[Anum_pg_dist_shard_shardminvalue - 1] = minValueNulls[partitionIndex],
