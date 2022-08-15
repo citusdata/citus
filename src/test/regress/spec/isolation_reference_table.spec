@@ -78,3 +78,4 @@ permutation "s1-create" "s2-create" "s1-begin" "s1-drop" "s2-drop" "s1-commit"
 
 // create and drop don't block each other
 permutation "s1-create" "s2-begin" "s2-create" "s1-drop" "s2-commit"
+permutation "s2-create" "s2-begin" "s2-drop" "s1-create" "s2-commit"
