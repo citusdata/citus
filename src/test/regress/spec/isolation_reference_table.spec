@@ -32,11 +32,6 @@ step "s1-drop"
     DROP TABLE reference_table_s1;
 }
 
-step "s1-abort"
-{
-    ABORT;
-}
-
 step "s1-commit"
 {
     COMMIT;
@@ -58,11 +53,6 @@ step "s2-create"
 step "s2-drop"
 {
     DROP TABLE reference_table_s2;
-}
-
-step "s2-abort"
-{
-    ABORT;
 }
 
 step "s2-commit"
