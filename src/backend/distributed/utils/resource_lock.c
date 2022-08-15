@@ -98,6 +98,7 @@ static void LockShardListResourcesOnFirstWorker(LOCKMODE lockmode,
 static bool IsFirstWorkerNode();
 static void CitusRangeVarCallbackForLockTable(const RangeVar *rangeVar, Oid relationId,
 											  Oid oldRelationId, void *arg);
+static void EnsureCanAcquireLock(Oid relationId, LOCKMODE lockMode);
 static AclResult CitusLockTableAclCheck(Oid relationId, LOCKMODE lockmode, Oid userId);
 static void SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag);
 
@@ -624,6 +625,10 @@ LockShardResource(uint64 shardId, LOCKMODE lockmode)
 	const bool sessionLock = false;
 	const bool dontWait = false;
 
+	/*
+	 * We cannot allow underprivileged users to acquire locks on
+	 * the owner tables of the shards.
+	 */
 	EnsureCanAcquireLock(RelationIdForShard(shardId), lockmode);
 
 	SET_LOCKTAG_SHARD_RESOURCE(tag, MyDatabaseId, shardId);
