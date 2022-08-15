@@ -206,24 +206,6 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 	int shardIdCount = ArrayObjectCount(shardIdArrayObject);
 	Datum *shardIdArrayDatum = DeconstructArrayObject(shardIdArrayObject);
 
-	/*
-	 * The executor calls this UDF for modification queries. So, any user
-	 * who has the the rights to modify this table are actually able
-	 * to call the UDF.
-	 *
-	 * So, at this point, we make sure that any malicious user who doesn't
-	 * have modification privileges to call this UDF.
-	 *
-	 * Update/Delete/Truncate commands already acquires ExclusiveLock
-	 * on the executor. However, for INSERTs, the user might have only
-	 * INSERTs granted, so add a special case for it.
-	 */
-	AclMode aclMask = ACL_UPDATE | ACL_DELETE | ACL_TRUNCATE;
-	if (lockMode == RowExclusiveLock)
-	{
-		aclMask |= ACL_INSERT;
-	}
-
 	for (int shardIdIndex = 0; shardIdIndex < shardIdCount; shardIdIndex++)
 	{
 		int64 shardId = DatumGetInt64(shardIdArrayDatum[shardIdIndex]);
@@ -247,8 +229,6 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 			 */
 			continue;
 		}
-
-		EnsureTablePermissions(relationId, aclMask);
 
 		LockShardResource(shardId, lockMode);
 	}
@@ -644,6 +624,8 @@ LockShardResource(uint64 shardId, LOCKMODE lockmode)
 	const bool sessionLock = false;
 	const bool dontWait = false;
 
+	EnsureCanAcquireLock(RelationIdForShard(shardId), lockmode);
+
 	SET_LOCKTAG_SHARD_RESOURCE(tag, MyDatabaseId, shardId);
 
 	(void) LockAcquire(&tag, lockmode, sessionLock, dontWait);
@@ -1028,7 +1010,7 @@ CitusLockTableAclCheck(Oid relationId, LOCKMODE lockmode, Oid userId)
 	AclMode aclMask;
 
 	/* verify adequate privilege */
-	if (lockmode == AccessShareLock)
+	if (lockmode == AccessShareLock || lockmode == ShareLock)
 	{
 		aclMask = ACL_SELECT;
 	}
