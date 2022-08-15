@@ -166,7 +166,6 @@ extern void WaitForShardSubscriptionToCatchUp(MultiConnection *targetConnection,
 											  XLogRecPtr sourcePosition,
 											  Bitmapset *tableOwnerIds,
 											  char *operationPrefix);
-extern HTAB * InitPublicationInfoHash(void);
 extern HTAB * CreateGroupedLogicalRepTargetsHash(List *subscriptionInfoList);
 extern void CreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
 													  char *user,

@@ -163,7 +163,6 @@ static HTAB * CreateShardMovePublicationInfoHash(WorkerNode *targetNode,
 												 List *shardIntervals);
 static List * CreateShardMoveLogicalRepTargetList(HTAB *publicationInfoHash,
 												  List *shardList);
-static HTAB * InitGroupedLogicalRepTargetsHash(void);
 static void WaitForGroupedLogicalRepTargetsToBecomeReady(
 	GroupedLogicalRepTargets *groupedLogicalRepTargets);
 static void WaitForGroupedLogicalRepTargetsToCatchUp(XLogRecPtr sourcePosition,
@@ -376,28 +375,6 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 
 
 /*
- * InitPublicationInfoHash initializes an empty hash map which can be used to
- * store PublicationInfo entries.
- */
-HTAB *
-InitPublicationInfoHash(void)
-{
-	return CreateSimpleHash(NodeAndOwner, PublicationInfo);
-}
-
-
-/*
- * InitGroupedLogicalRepTargetsHash initializes an empty hash map which can be used to
- * store the LogicalRepTarget entries grouped by node.
- */
-static HTAB *
-InitGroupedLogicalRepTargetsHash(void)
-{
-	return CreateSimpleHash(uint32, PublicationInfo);
-}
-
-
-/*
  * CreateGroupedLogicalRepTargetsHash creates a hashmap that groups the subscriptions
  * logicalRepTargetList by node. This is useful for cases where we want to
  * iterate the subscriptions by node, so we can batch certain operations, such
@@ -406,17 +383,17 @@ InitGroupedLogicalRepTargetsHash(void)
 HTAB *
 CreateGroupedLogicalRepTargetsHash(List *logicalRepTargetList)
 {
-	HTAB *publicationInfoHash = InitGroupedLogicalRepTargetsHash();
+	HTAB *logicalRepTargetsHash = CreateSimpleHash(uint32, GroupedLogicalRepTargets);
 	LogicalRepTarget *target = NULL;
 	foreach_ptr(target, logicalRepTargetList)
 	{
 		bool found = false;
 		GroupedLogicalRepTargets *groupedLogicalRepTargets =
-			(GroupedLogicalRepTargets *) hash_search(publicationInfoHash,
-													 &target->replicationSlot->
-													 targetNodeId,
-													 HASH_ENTER,
-													 &found);
+			(GroupedLogicalRepTargets *) hash_search(
+				logicalRepTargetsHash,
+				&target->replicationSlot->targetNodeId,
+				HASH_ENTER,
+				&found);
 		if (!found)
 		{
 			groupedLogicalRepTargets->logicalRepTargetList = NIL;
@@ -425,7 +402,7 @@ CreateGroupedLogicalRepTargetsHash(List *logicalRepTargetList)
 		groupedLogicalRepTargets->logicalRepTargetList =
 			lappend(groupedLogicalRepTargets->logicalRepTargetList, target);
 	}
-	return publicationInfoHash;
+	return logicalRepTargetsHash;
 }
 
 
@@ -439,7 +416,7 @@ CreateGroupedLogicalRepTargetsHash(List *logicalRepTargetList)
 static HTAB *
 CreateShardMovePublicationInfoHash(WorkerNode *targetNode, List *shardIntervals)
 {
-	HTAB *publicationInfoHash = InitPublicationInfoHash();
+	HTAB *publicationInfoHash = CreateSimpleHash(NodeAndOwner, PublicationInfo);
 	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, shardIntervals)
 	{

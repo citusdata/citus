@@ -13,6 +13,7 @@
 #include "miscadmin.h"
 #include "nodes/pg_list.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/shardinterval_utils.h"
@@ -64,7 +65,7 @@ CreateShardSplitInfoMapForPublication(List *sourceColocatedShardIntervalList,
 									  List *shardGroupSplitIntervalListList,
 									  List *destinationWorkerNodesList)
 {
-	ShardInfoHashMapForPublications = InitPublicationInfoHash();
+	ShardInfoHashMapForPublications = CreateSimpleHash(NodeAndOwner, PublicationInfo);
 	ShardInterval *sourceShardIntervalToCopy = NULL;
 	List *splitChildShardIntervalList = NULL;
 	forboth_ptr(sourceShardIntervalToCopy, sourceColocatedShardIntervalList,
