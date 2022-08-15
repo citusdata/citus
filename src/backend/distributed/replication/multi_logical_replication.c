@@ -112,7 +112,7 @@ bool PlacementMovedUsingLogicalReplicationInTX = false;
 static int logicalReplicationProgressReportTimeout = 10 * 1000;
 
 
-static void CreateForeignConstraintsToReferenceTable(List *subscriptionInfoList);
+static void CreateForeignConstraintsToReferenceTable(List *logicalRepTargetList);
 static List * PrepareReplicationSubscriptionList(List *shardList);
 static List * GetReplicaIdentityCommandListForShard(Oid relationId, uint64 shardId);
 static List * GetIndexCommandListForShardBackingReplicaIdentity(Oid relationId,
@@ -141,9 +141,11 @@ static void CreateColocatedForeignKeys(List *shardList, char *targetNodeName,
 									   int targetNodePort);
 static char * escape_param_str(const char *str);
 static XLogRecPtr GetRemoteLSN(MultiConnection *connection, char *command);
-static bool RelationSubscriptionsAreReady(NodeSubscriptions *nodeSubscriptions);
+static bool RelationSubscriptionsAreReady(
+	GroupedLogicalRepTargets *groupedLogicalRepTargets);
 static void WaitForMiliseconds(long timeout);
-static XLogRecPtr GetSubscriptionPosition(NodeSubscriptions *nodeSubscriptions);
+static XLogRecPtr GetSubscriptionPosition(
+	GroupedLogicalRepTargets *groupedLogicalRepTargets);
 static void AcquireLogicalReplicationLock(void);
 static void DropSubscription(MultiConnection *connection,
 							 char *subscriptionName);
@@ -158,14 +160,16 @@ static void DropAllPublications(MultiConnection *connection, LogicalRepType type
 static void DropAllUsers(MultiConnection *connection, LogicalRepType type);
 static HTAB * CreateShardMovePublicationInfoHash(WorkerNode *targetNode,
 												 List *shardIntervals);
-static List * CreateShardMoveSubscriptionInfoList(HTAB *publicationInfoHash,
+static List * CreateShardMoveLogicalRepTargetList(HTAB *publicationInfoHash,
 												  List *shardList);
 static uint32 HashNodeId(const void *key, Size keysize);
 static int CompareNodeId(const void *left, const void *right, Size keysize);
-static HTAB * InitNodeSubscriptionsHash(void);
-static void WaitForNodeSubscriptionsToBecomeReady(NodeSubscriptions *nodeSubscriptions);
-static void WaitForNodeSubscriptionsToCatchUp(XLogRecPtr sourcePosition,
-											  NodeSubscriptions *nodeSubscriptions);
+static HTAB * InitGroupedLogicalRepTargetsHash(void);
+static void WaitForGroupedLogicalRepTargetsToBecomeReady(
+	GroupedLogicalRepTargets *groupedLogicalRepTargets);
+static void WaitForGroupedLogicalRepTargetsToCatchUp(XLogRecPtr sourcePosition,
+													 GroupedLogicalRepTargets *
+													 groupedLogicalRepTargets);
 
 /*
  * LogicallyReplicateShards replicates a list of shards from one node to another
@@ -217,12 +221,14 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 	HTAB *publicationInfoHash = CreateShardMovePublicationInfoHash(
 		targetNode, replicationSubscriptionList);
 
-	List *subscriptionInfoList = CreateShardMoveSubscriptionInfoList(publicationInfoHash,
+	List *logicalRepTargetList = CreateShardMoveLogicalRepTargetList(publicationInfoHash,
 																	 shardList);
 
-	HTAB *nodeSubscriptionsHash = CreateNodeSubscriptionsHash(subscriptionInfoList);
+	HTAB *groupedLogicalRepTargetsHash = CreateGroupedLogicalRepTargetsHash(
+		logicalRepTargetList);
 
-	CreateNodeSubscriptionsConnections(nodeSubscriptionsHash, superUser, databaseName);
+	CreateGroupedLogicalRepTargetsConnections(groupedLogicalRepTargetsHash, superUser,
+											  databaseName);
 
 	PG_TRY();
 	{
@@ -231,13 +237,13 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		char *snapshot = CreateReplicationSlots(
 			sourceConnection,
 			sourceReplicationConnection,
-			subscriptionInfoList,
+			logicalRepTargetList,
 			"pgoutput");
 
 		CreateSubscriptions(
 			sourceConnection,
 			databaseName,
-			subscriptionInfoList);
+			logicalRepTargetList);
 
 		/* only useful for isolation testing, see the function comment for the details */
 		ConflictOnlyWithIsolationTesting();
@@ -264,10 +270,10 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 * incrementally. So this way we create the primary key index in one go
 		 * for all data from the initial COPY.
 		 */
-		CreateReplicaIdentities(subscriptionInfoList);
+		CreateReplicaIdentities(logicalRepTargetList);
 
 		/* Start applying the changes from the replication slots to catch up. */
-		EnableSubscriptions(subscriptionInfoList);
+		EnableSubscriptions(logicalRepTargetList);
 
 		/*
 		 * The following check is a leftover from when used subscriptions with
@@ -279,13 +285,13 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 * the subscription is not in the ready state yet, because so far it
 		 * never had to.
 		 */
-		WaitForAllSubscriptionsToBecomeReady(nodeSubscriptionsHash);
+		WaitForAllSubscriptionsToBecomeReady(groupedLogicalRepTargetsHash);
 
 		/*
-		 * Wait until the subscription is caught up to changes that has happened
-		 * after the initial COPY on the shards.
+		 * Wait until all the subscriptions are caught up to changes that
+		 * happened after the initial COPY on the shards.
 		 */
-		WaitForAllSubscriptionsToCatchUp(sourceConnection, nodeSubscriptionsHash);
+		WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
 
 		/*
 		 * Now lets create the post-load objects, such as the indexes, constraints
@@ -294,11 +300,12 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 */
 		CreatePostLogicalReplicationDataLoadObjects(shardList, targetNodeName,
 													targetNodePort);
-		WaitForAllSubscriptionsToCatchUp(sourceConnection, nodeSubscriptionsHash);
+		WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
 
 		/*
 		 * We're almost done, we'll block the writes to the shards that we're
-		 * replicating and expect the subscription to catch up quickly afterwards.
+		 * replicating and expect all the subscription to catch up quickly
+		 * afterwards.
 		 *
 		 * Notice that although shards in partitioned relation are excluded from
 		 * logical replication, they are still locked against modification, and
@@ -306,7 +313,7 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 */
 		BlockWritesToShardList(shardList);
 
-		WaitForAllSubscriptionsToCatchUp(sourceConnection, nodeSubscriptionsHash);
+		WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
 
 		/*
 		 * We're creating the foreign constraints to reference tables after the
@@ -317,11 +324,11 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 * cascade to the hash distributed tables' shards if we had created
 		 * the constraints earlier.
 		 */
-		CreateForeignConstraintsToReferenceTable(subscriptionInfoList);
+		CreateForeignConstraintsToReferenceTable(logicalRepTargetList);
 
 		/* we're done, cleanup the publication and subscription */
-		DropSubscriptions(subscriptionInfoList);
-		DropReplicationSlots(sourceConnection, subscriptionInfoList);
+		DropSubscriptions(logicalRepTargetList);
+		DropReplicationSlots(sourceConnection, logicalRepTargetList);
 		DropPublications(sourceConnection, publicationInfoHash);
 
 		/*
@@ -330,7 +337,7 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 * these connections instead of the connections that were used to
 		 * grab locks in BlockWritesToShardList.
 		 */
-		CloseNodeSubscriptionsConnections(nodeSubscriptionsHash);
+		CloseGroupedLogicalRepTargetsConnections(groupedLogicalRepTargetsHash);
 		CloseConnection(sourceConnection);
 	}
 	PG_CATCH();
@@ -344,10 +351,10 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 */
 
 		/* reconnect if the connection failed or is waiting for a command */
-		RecreateNodeSubscriptionsConnections(nodeSubscriptionsHash,
-											 superUser, databaseName);
+		RecreateGroupedLogicalRepTargetsConnections(groupedLogicalRepTargetsHash,
+													superUser, databaseName);
 
-		DropSubscriptions(subscriptionInfoList);
+		DropSubscriptions(logicalRepTargetList);
 
 		/* reconnect if the connection failed or is waiting for a command */
 		if (PQstatus(sourceConnection->pgConn) != CONNECTION_OK ||
@@ -358,7 +365,7 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 															 sourceNodePort, superUser,
 															 databaseName);
 		}
-		DropReplicationSlots(sourceConnection, subscriptionInfoList);
+		DropReplicationSlots(sourceConnection, logicalRepTargetList);
 		DropPublications(sourceConnection, publicationInfoHash);
 
 		/* We don't need to UnclaimConnections since we're already erroring out */
@@ -392,30 +399,30 @@ InitPublicationInfoHash(void)
 
 
 /*
- * InitNodeSubscriptionsHash initializes an empty hash map which can be used to
- * store the SubscriptionInfo entries grouped by node.
+ * InitGroupedLogicalRepTargetsHash initializes an empty hash map which can be used to
+ * store the LogicalRepTarget entries grouped by node.
  */
 static HTAB *
-InitNodeSubscriptionsHash(void)
+InitGroupedLogicalRepTargetsHash(void)
 {
 	HASHCTL info;
 	memset(&info, 0, sizeof(info));
 	info.keysize = sizeof(uint32);
-	info.entrysize = sizeof(NodeSubscriptions);
+	info.entrysize = sizeof(GroupedLogicalRepTargets);
 	info.hash = HashNodeId;
 	info.match = CompareNodeId;
 	info.hcxt = CurrentMemoryContext;
 
 	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION | HASH_COMPARE);
 
-	HTAB *publicationInfoHash = hash_create("NodeSubscriptionsHash", 128, &info,
+	HTAB *publicationInfoHash = hash_create("GroupedLogicalRepTargetsHash", 128, &info,
 											hashFlags);
 	return publicationInfoHash;
 }
 
 
 /*
- * SubscriptionInfoNodeIdHash returns hash value by combining hash of node id
+ * LogicalRepTargetNodeIdHash returns hash value by combining hash of node id
  * and tableowner Id.
  */
 static uint32
@@ -482,31 +489,32 @@ CompareNodeAndOwner(const void *left, const void *right, Size keysize)
 
 
 /*
- * CreateNodeSubscriptionsHash creates a hashmap that groups the subscriptions
- * subscriptionInfoList by node. This is useful for cases where we want to
+ * CreateGroupedLogicalRepTargetsHash creates a hashmap that groups the subscriptions
+ * logicalRepTargetList by node. This is useful for cases where we want to
  * iterate the subscriptions by node, so we can batch certain operations, such
  * as checking subscription readiness.
  */
 HTAB *
-CreateNodeSubscriptionsHash(List *subscriptionInfoList)
+CreateGroupedLogicalRepTargetsHash(List *logicalRepTargetList)
 {
-	HTAB *publicationInfoHash = InitNodeSubscriptionsHash();
-	SubscriptionInfo *subscription = NULL;
-	foreach_ptr(subscription, subscriptionInfoList)
+	HTAB *publicationInfoHash = InitGroupedLogicalRepTargetsHash();
+	LogicalRepTarget *target = NULL;
+	foreach_ptr(target, logicalRepTargetList)
 	{
 		bool found = false;
-		NodeSubscriptions *nodeSubscriptions =
-			(NodeSubscriptions *) hash_search(publicationInfoHash,
-											  &subscription->replicationSlot->targetNodeId,
-											  HASH_ENTER,
-											  &found);
+		GroupedLogicalRepTargets *groupedLogicalRepTargets =
+			(GroupedLogicalRepTargets *) hash_search(publicationInfoHash,
+													 &target->replicationSlot->
+													 targetNodeId,
+													 HASH_ENTER,
+													 &found);
 		if (!found)
 		{
-			nodeSubscriptions->subscriptionInfoList = NIL;
-			nodeSubscriptions->targetConnection = NULL;
+			groupedLogicalRepTargets->logicalRepTargetList = NIL;
+			groupedLogicalRepTargets->superuserConnection = NULL;
 		}
-		nodeSubscriptions->subscriptionInfoList =
-			lappend(nodeSubscriptions->subscriptionInfoList, subscription);
+		groupedLogicalRepTargets->logicalRepTargetList =
+			lappend(groupedLogicalRepTargets->logicalRepTargetList, target);
 	}
 	return publicationInfoHash;
 }
@@ -548,14 +556,14 @@ CreateShardMovePublicationInfoHash(WorkerNode *targetNode, List *shardIntervals)
 
 
 /*
- * CreateShardMoveSubscriptionInfoList creates the list containing all the
+ * CreateShardMoveLogicalRepTargetList creates the list containing all the
  * subscriptions that should be connected to the publications in the given
  * publicationHash.
  */
 static List *
-CreateShardMoveSubscriptionInfoList(HTAB *publicationInfoHash, List *shardList)
+CreateShardMoveLogicalRepTargetList(HTAB *publicationInfoHash, List *shardList)
 {
-	List *subscriptionInfoList = NIL;
+	List *logicalRepTargetList = NIL;
 
 	HASH_SEQ_STATUS status;
 	hash_seq_init(&status, publicationInfoHash);
@@ -566,20 +574,20 @@ CreateShardMoveSubscriptionInfoList(HTAB *publicationInfoHash, List *shardList)
 	{
 		Oid ownerId = publication->key.tableOwnerId;
 		nodeId = publication->key.nodeId;
-		SubscriptionInfo *subscription = palloc0(sizeof(SubscriptionInfo));
-		subscription->name = SubscriptionName(SHARD_MOVE, ownerId);
-		subscription->tableOwnerId = ownerId;
-		subscription->publication = publication;
-		publication->subscription = subscription;
-		subscription->newShards = NIL;
-		subscription->temporaryOwnerName = SubscriptionRoleName(SHARD_MOVE, ownerId);
-		subscription->replicationSlot = palloc0(sizeof(ReplicationSlotInfo));
-		subscription->replicationSlot->name = ReplicationSlotName(SHARD_MOVE,
-																  nodeId,
-																  ownerId);
-		subscription->replicationSlot->targetNodeId = nodeId;
-		subscription->replicationSlot->tableOwnerId = ownerId;
-		subscriptionInfoList = lappend(subscriptionInfoList, subscription);
+		LogicalRepTarget *target = palloc0(sizeof(LogicalRepTarget));
+		target->subscriptionName = SubscriptionName(SHARD_MOVE, ownerId);
+		target->tableOwnerId = ownerId;
+		target->publication = publication;
+		publication->target = target;
+		target->newShards = NIL;
+		target->subscriptionOwnerName = SubscriptionRoleName(SHARD_MOVE, ownerId);
+		target->replicationSlot = palloc0(sizeof(ReplicationSlotInfo));
+		target->replicationSlot->name = ReplicationSlotName(SHARD_MOVE,
+															nodeId,
+															ownerId);
+		target->replicationSlot->targetNodeId = nodeId;
+		target->replicationSlot->tableOwnerId = ownerId;
+		logicalRepTargetList = lappend(logicalRepTargetList, target);
 	}
 
 	ShardInterval *shardInterval = NULL;
@@ -599,10 +607,10 @@ CreateShardMoveSubscriptionInfoList(HTAB *publicationInfoHash, List *shardList)
 		{
 			ereport(ERROR, errmsg("Could not find publication matching a split"));
 		}
-		publication->subscription->newShards = lappend(
-			publication->subscription->newShards, shardInterval);
+		publication->target->newShards = lappend(
+			publication->target->newShards, shardInterval);
 	}
-	return subscriptionInfoList;
+	return logicalRepTargetList;
 }
 
 
@@ -724,16 +732,16 @@ PrepareReplicationSubscriptionList(List *shardList)
  * are part of the given subscriptions.
  */
 void
-CreateReplicaIdentities(List *subscriptionInfoList)
+CreateReplicaIdentities(List *logicalRepTargetList)
 {
-	SubscriptionInfo *subscription = NULL;
-	foreach_ptr(subscription, subscriptionInfoList)
+	LogicalRepTarget *target = NULL;
+	foreach_ptr(target, logicalRepTargetList)
 	{
-		MultiConnection *targetConnection = subscription->targetConnection;
+		MultiConnection *superuserConnection = target->superuserConnection;
 		CreateReplicaIdentitiesOnNode(
-			subscription->newShards,
-			targetConnection->hostname,
-			targetConnection->port);
+			target->newShards,
+			superuserConnection->hostname,
+			superuserConnection->port);
 	}
 }
 
@@ -1287,7 +1295,7 @@ CreateColocatedForeignKeys(List *shardList, char *targetNodeName, int targetNode
  * from distributed to reference tables in the newly created shard replicas.
  */
 static void
-CreateForeignConstraintsToReferenceTable(List *subscriptionInfoList)
+CreateForeignConstraintsToReferenceTable(List *logicalRepTargetList)
 {
 	MemoryContext localContext =
 		AllocSetContextCreate(CurrentMemoryContext,
@@ -1299,15 +1307,15 @@ CreateForeignConstraintsToReferenceTable(List *subscriptionInfoList)
 	/*
 	 * Iterate over all the shards in the shard group.
 	 */
-	SubscriptionInfo *subscription = NULL;
-	foreach_ptr(subscription, subscriptionInfoList)
+	LogicalRepTarget *target = NULL;
+	foreach_ptr(target, logicalRepTargetList)
 	{
 		ShardInterval *shardInterval = NULL;
 
 		/*
 		 * Iterate on split shards list for a given shard and create constraints.
 		 */
-		foreach_ptr(shardInterval, subscription->newShards)
+		foreach_ptr(shardInterval, target->newShards)
 		{
 			List *commandList = GetForeignConstraintCommandsToReferenceTable(
 				shardInterval);
@@ -1317,7 +1325,7 @@ CreateForeignConstraintsToReferenceTable(List *subscriptionInfoList)
 			/* iterate over the commands and execute them in the same connection */
 			foreach_ptr(command, commandList)
 			{
-				ExecuteCriticalRemoteCommand(subscription->targetConnection, command);
+				ExecuteCriticalRemoteCommand(target->superuserConnection, command);
 			}
 			MemoryContextReset(localContext);
 		}
@@ -1361,12 +1369,12 @@ ConflictOnlyWithIsolationTesting()
  * over the given connection (if they exist).
  */
 void
-DropReplicationSlots(MultiConnection *sourceConnection, List *subscriptionInfoList)
+DropReplicationSlots(MultiConnection *sourceConnection, List *logicalRepTargetList)
 {
-	SubscriptionInfo *subscription = NULL;
-	foreach_ptr(subscription, subscriptionInfoList)
+	LogicalRepTarget *target = NULL;
+	foreach_ptr(target, logicalRepTargetList)
 	{
-		DropReplicationSlot(sourceConnection, subscription->replicationSlot->name);
+		DropReplicationSlot(sourceConnection, target->replicationSlot->name);
 	}
 }
 
@@ -1608,20 +1616,20 @@ DropAllPublications(MultiConnection *connection, LogicalRepType type)
 
 
 /*
- * DropSubscriptions drops all the subscriptions in the subscriptionInfoList
+ * DropSubscriptions drops all the subscriptions in the logicalRepTargetList
  * from the subscriber node. It also drops the temporary users that are used as
  * owners for of the subscription. This doesn't drop the replication slots on
  * the publisher, these should be dropped using DropReplicationSlots.
  */
 void
-DropSubscriptions(List *subscriptionInfoList)
+DropSubscriptions(List *logicalRepTargetList)
 {
-	SubscriptionInfo *subscription = NULL;
-	foreach_ptr(subscription, subscriptionInfoList)
+	LogicalRepTarget *target = NULL;
+	foreach_ptr(target, logicalRepTargetList)
 	{
-		DropSubscription(subscription->targetConnection,
-						 subscription->name);
-		DropUser(subscription->targetConnection, subscription->temporaryOwnerName);
+		DropSubscription(target->superuserConnection,
+						 target->subscriptionName);
+		DropUser(target->superuserConnection, target->subscriptionOwnerName);
 	}
 }
 
@@ -1808,7 +1816,7 @@ CreateReplicationSlot(MultiConnection *connection, char *slotname, char *outputP
 
 /*
  * CreateReplicationSlots creates the replication slots that the subscriptions
- * in the subscriptionInfoList can use.
+ * in the logicalRepTargetList can use.
  *
  * This function returns the snapshot name of the replication slots that are
  * used by the subscription. When using this snapshot name for other
@@ -1818,15 +1826,15 @@ CreateReplicationSlot(MultiConnection *connection, char *slotname, char *outputP
 char *
 CreateReplicationSlots(MultiConnection *sourceConnection,
 					   MultiConnection *sourceReplicationConnection,
-					   List *subscriptionInfoList,
+					   List *logicalRepTargetList,
 					   char *outputPlugin)
 {
 	ReplicationSlotInfo *firstReplicationSlot = NULL;
 	char *snapshot = NULL;
-	SubscriptionInfo *subscription = NULL;
-	foreach_ptr(subscription, subscriptionInfoList)
+	LogicalRepTarget *target = NULL;
+	foreach_ptr(target, logicalRepTargetList)
 	{
-		ReplicationSlotInfo *replicationSlot = subscription->replicationSlot;
+		ReplicationSlotInfo *replicationSlot = target->replicationSlot;
 
 		if (!firstReplicationSlot)
 		{
@@ -1852,7 +1860,7 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 
 /*
  * CreateSubscriptions creates the subscriptions according to their definition
- * in the subscriptionInfoList. The remote node(s) needs to have appropriate
+ * in the logicalRepTargetList. The remote node(s) needs to have appropriate
  * pg_dist_authinfo rows for the superuser such that the apply process can
  * connect. Because the generated CREATE SUBSCRIPTION statements use the host
  * and port names directly (rather than looking up any relevant
@@ -1866,12 +1874,12 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 void
 CreateSubscriptions(MultiConnection *sourceConnection,
 					char *databaseName,
-					List *subscriptionInfoList)
+					List *logicalRepTargetList)
 {
-	SubscriptionInfo *subscription = NULL;
-	foreach_ptr(subscription, subscriptionInfoList)
+	LogicalRepTarget *target = NULL;
+	foreach_ptr(target, logicalRepTargetList)
 	{
-		int ownerId = subscription->tableOwnerId;
+		int ownerId = target->tableOwnerId;
 
 		/*
 		 * The CREATE USER command should not propagate, so we temporarily
@@ -1882,14 +1890,14 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 		 * This prevents permission escalations.
 		 */
 		SendCommandListToWorkerOutsideTransaction(
-			subscription->targetConnection->hostname,
-			subscription->targetConnection->port,
-			subscription->targetConnection->user,
+			target->superuserConnection->hostname,
+			target->superuserConnection->port,
+			target->superuserConnection->user,
 			list_make2(
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
 					"CREATE USER %s SUPERUSER IN ROLE %s",
-					subscription->temporaryOwnerName,
+					target->subscriptionOwnerName,
 					GetUserNameFromId(ownerId, false)
 					)));
 
@@ -1906,19 +1914,19 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 						 "CREATE SUBSCRIPTION %s CONNECTION %s PUBLICATION %s "
 						 "WITH (citus_use_authinfo=true, create_slot=false, "
 						 " copy_data=false, enabled=false, slot_name=%s)",
-						 quote_identifier(subscription->name),
+						 quote_identifier(target->subscriptionName),
 						 quote_literal_cstr(conninfo->data),
-						 quote_identifier(subscription->publication->name),
-						 quote_identifier(subscription->replicationSlot->name));
+						 quote_identifier(target->publication->name),
+						 quote_identifier(target->replicationSlot->name));
 
-		ExecuteCriticalRemoteCommand(subscription->targetConnection,
+		ExecuteCriticalRemoteCommand(target->superuserConnection,
 									 createSubscriptionCommand->data);
 		pfree(createSubscriptionCommand->data);
 		pfree(createSubscriptionCommand);
-		ExecuteCriticalRemoteCommand(subscription->targetConnection, psprintf(
+		ExecuteCriticalRemoteCommand(target->superuserConnection, psprintf(
 										 "ALTER SUBSCRIPTION %s OWNER TO %s",
-										 subscription->name,
-										 subscription->temporaryOwnerName
+										 target->subscriptionName,
+										 target->subscriptionOwnerName
 										 ));
 
 		/*
@@ -1926,14 +1934,14 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 		 * disable DDL propagation.
 		 */
 		SendCommandListToWorkerOutsideTransaction(
-			subscription->targetConnection->hostname,
-			subscription->targetConnection->port,
-			subscription->targetConnection->user,
+			target->superuserConnection->hostname,
+			target->superuserConnection->port,
+			target->superuserConnection->user,
 			list_make2(
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
 					"ALTER ROLE %s NOSUPERUSER",
-					subscription->temporaryOwnerName
+					target->subscriptionOwnerName
 					)));
 	}
 }
@@ -1941,18 +1949,18 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 
 /*
  * EnableSubscriptions enables all the the subscriptions in the
- * subscriptionInfoList. This means the replication slot will start to be read
+ * logicalRepTargetList. This means the replication slot will start to be read
  * and the catchup phase begins.
  */
 void
-EnableSubscriptions(List *subscriptionInfoList)
+EnableSubscriptions(List *logicalRepTargetList)
 {
-	SubscriptionInfo *subscription = NULL;
-	foreach_ptr(subscription, subscriptionInfoList)
+	LogicalRepTarget *target = NULL;
+	foreach_ptr(target, logicalRepTargetList)
 	{
-		ExecuteCriticalRemoteCommand(subscription->targetConnection, psprintf(
+		ExecuteCriticalRemoteCommand(target->superuserConnection, psprintf(
 										 "ALTER SUBSCRIPTION %s ENABLE",
-										 subscription->name
+										 target->subscriptionName
 										 ));
 	}
 }
@@ -2050,23 +2058,25 @@ GetRemoteLSN(MultiConnection *connection, char *command)
 
 
 /*
- * CreateNodeSubscriptionsConnections creates connections for all of the nodes
- * in the nodeSubscriptionsHash.
+ * CreateGroupedLogicalRepTargetsConnections creates connections for all of the nodes
+ * in the groupedLogicalRepTargetsHash.
  */
 void
-CreateNodeSubscriptionsConnections(HTAB *nodeSubscriptionsHash,
-								   char *user,
-								   char *databaseName)
+CreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
+										  char *user,
+										  char *databaseName)
 {
 	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, nodeSubscriptionsHash);
-	NodeSubscriptions *nodeSubscriptions = NULL;
+	hash_seq_init(&status, groupedLogicalRepTargetsHash);
+	GroupedLogicalRepTargets *groupedLogicalRepTargets = NULL;
 	int connectionFlags = FORCE_NEW_CONNECTION;
-	while ((nodeSubscriptions = (NodeSubscriptions *) hash_seq_search(&status)) != NULL)
+	while ((groupedLogicalRepTargets = (GroupedLogicalRepTargets *) hash_seq_search(
+				&status)) != NULL)
 	{
-		WorkerNode *targetWorkerNode = FindNodeWithNodeId(nodeSubscriptions->nodeId,
-														  false);
-		MultiConnection *targetConnection =
+		WorkerNode *targetWorkerNode = FindNodeWithNodeId(
+			groupedLogicalRepTargets->nodeId,
+			false);
+		MultiConnection *superuserConnection =
 			GetNodeUserDatabaseConnection(connectionFlags, targetWorkerNode->workerName,
 										  targetWorkerNode->workerPort,
 										  user,
@@ -2077,45 +2087,48 @@ CreateNodeSubscriptionsConnections(HTAB *nodeSubscriptionsHash,
 		 * claim the connections exclusively to ensure they do not get used for
 		 * metadata syncing, which does open a transaction block.
 		 */
-		ClaimConnectionExclusively(targetConnection);
+		ClaimConnectionExclusively(superuserConnection);
 
-		nodeSubscriptions->targetConnection = targetConnection;
+		groupedLogicalRepTargets->superuserConnection = superuserConnection;
 
-		SubscriptionInfo *subscription = NULL;
-		foreach_ptr(subscription, nodeSubscriptions->subscriptionInfoList)
+		LogicalRepTarget *target = NULL;
+		foreach_ptr(target, groupedLogicalRepTargets->logicalRepTargetList)
 		{
-			subscription->targetConnection = targetConnection;
+			target->superuserConnection = superuserConnection;
 		}
 	}
 }
 
 
 /*
- * RecreateNodeSubscriptionsConnections recreates connections for all of the
- * nodes in the nodeSubscriptionsHash where the old connection is broken or
+ * RecreateGroupedLogicalRepTargetsConnections recreates connections for all of the
+ * nodes in the groupedLogicalRepTargetsHash where the old connection is broken or
  * currently running a query.
  */
 void
-RecreateNodeSubscriptionsConnections(HTAB *nodeSubscriptionsHash,
-									 char *user,
-									 char *databaseName)
+RecreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
+											char *user,
+											char *databaseName)
 {
 	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, nodeSubscriptionsHash);
-	NodeSubscriptions *nodeSubscriptions = NULL;
+	hash_seq_init(&status, groupedLogicalRepTargetsHash);
+	GroupedLogicalRepTargets *groupedLogicalRepTargets = NULL;
 	int connectionFlags = FORCE_NEW_CONNECTION;
-	while ((nodeSubscriptions = (NodeSubscriptions *) hash_seq_search(&status)) != NULL)
+	while ((groupedLogicalRepTargets = (GroupedLogicalRepTargets *) hash_seq_search(
+				&status)) != NULL)
 	{
-		if (nodeSubscriptions->targetConnection &&
-			PQstatus(nodeSubscriptions->targetConnection->pgConn) == CONNECTION_OK &&
-			!PQisBusy(nodeSubscriptions->targetConnection->pgConn)
+		if (groupedLogicalRepTargets->superuserConnection &&
+			PQstatus(groupedLogicalRepTargets->superuserConnection->pgConn) ==
+			CONNECTION_OK &&
+			!PQisBusy(groupedLogicalRepTargets->superuserConnection->pgConn)
 			)
 		{
 			continue;
 		}
-		WorkerNode *targetWorkerNode = FindNodeWithNodeId(nodeSubscriptions->nodeId,
-														  false);
-		MultiConnection *targetConnection =
+		WorkerNode *targetWorkerNode = FindNodeWithNodeId(
+			groupedLogicalRepTargets->nodeId,
+			false);
+		MultiConnection *superuserConnection =
 			GetNodeUserDatabaseConnection(connectionFlags,
 										  targetWorkerNode->workerName,
 										  targetWorkerNode->workerPort,
@@ -2127,40 +2140,41 @@ RecreateNodeSubscriptionsConnections(HTAB *nodeSubscriptionsHash,
 		 * claim the connections exclusively to ensure they do not get used for
 		 * metadata syncing, which does open a transaction block.
 		 */
-		ClaimConnectionExclusively(targetConnection);
+		ClaimConnectionExclusively(superuserConnection);
 
-		nodeSubscriptions->targetConnection = targetConnection;
+		groupedLogicalRepTargets->superuserConnection = superuserConnection;
 
-		SubscriptionInfo *subscription = NULL;
-		foreach_ptr(subscription, nodeSubscriptions->subscriptionInfoList)
+		LogicalRepTarget *target = NULL;
+		foreach_ptr(target, groupedLogicalRepTargets->logicalRepTargetList)
 		{
-			subscription->targetConnection = targetConnection;
+			target->superuserConnection = superuserConnection;
 		}
 	}
 }
 
 
 /*
- * CreateNodeSubscriptionsConnections closes the  connections for all of the
- * nodes in the nodeSubscriptionsHash.
+ * CreateGroupedLogicalRepTargetsConnections closes the  connections for all of the
+ * nodes in the groupedLogicalRepTargetsHash.
  */
 void
-CloseNodeSubscriptionsConnections(HTAB *nodeSubscriptionsHash)
+CloseGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash)
 {
 	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, nodeSubscriptionsHash);
+	hash_seq_init(&status, groupedLogicalRepTargetsHash);
 
-	NodeSubscriptions *nodeSubscriptions = NULL;
-	while ((nodeSubscriptions = (NodeSubscriptions *) hash_seq_search(&status)) != NULL)
+	GroupedLogicalRepTargets *groupedLogicalRepTargets = NULL;
+	while ((groupedLogicalRepTargets = (GroupedLogicalRepTargets *) hash_seq_search(
+				&status)) != NULL)
 	{
-		CloseConnection(nodeSubscriptions->targetConnection);
+		CloseConnection(groupedLogicalRepTargets->superuserConnection);
 	}
 }
 
 
 /*
  * WaitForRelationSubscriptionsBecomeReady waits until the states of the
- * subsriptions in the nodeSubscriptionsHash becomes ready. This should happen
+ * subsriptions in the groupedLogicalRepTargetsHash becomes ready. This should happen
  * very quickly, because we don't use the COPY logic from the subscriptions. So
  * all that's needed is to start reading from the replication slot.
  *
@@ -2169,14 +2183,15 @@ CloseNodeSubscriptionsConnections(HTAB *nodeSubscriptionsHash)
  * progress every logicalReplicationProgressReportTimeout.
  */
 void
-WaitForAllSubscriptionsToBecomeReady(HTAB *nodeSubscriptionsHash)
+WaitForAllSubscriptionsToBecomeReady(HTAB *groupedLogicalRepTargetsHash)
 {
 	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, nodeSubscriptionsHash);
-	NodeSubscriptions *nodeSubscriptions = NULL;
-	while ((nodeSubscriptions = (NodeSubscriptions *) hash_seq_search(&status)) != NULL)
+	hash_seq_init(&status, groupedLogicalRepTargetsHash);
+	GroupedLogicalRepTargets *groupedLogicalRepTargets = NULL;
+	while ((groupedLogicalRepTargets = (GroupedLogicalRepTargets *) hash_seq_search(
+				&status)) != NULL)
 	{
-		WaitForNodeSubscriptionsToBecomeReady(nodeSubscriptions);
+		WaitForGroupedLogicalRepTargetsToBecomeReady(groupedLogicalRepTargets);
 	}
 	elog(LOG, "The states of all subscriptions have become READY");
 }
@@ -2193,12 +2208,13 @@ WaitForAllSubscriptionsToBecomeReady(HTAB *nodeSubscriptionsHash)
  * every logicalReplicationProgressReportTimeout.
  */
 static void
-WaitForNodeSubscriptionsToBecomeReady(NodeSubscriptions *nodeSubscriptions)
+WaitForGroupedLogicalRepTargetsToBecomeReady(
+	GroupedLogicalRepTargets *groupedLogicalRepTargets)
 {
 	TimestampTz previousSizeChangeTime = GetCurrentTimestamp();
 	TimestampTz previousReportTime = GetCurrentTimestamp();
 
-	MultiConnection *targetConnection = nodeSubscriptions->targetConnection;
+	MultiConnection *superuserConnection = groupedLogicalRepTargets->superuserConnection;
 
 	/*
 	 * We might be in the loop for a while. Since we don't need to preserve
@@ -2216,13 +2232,13 @@ WaitForNodeSubscriptionsToBecomeReady(NodeSubscriptions *nodeSubscriptions)
 	while (true)
 	{
 		/* we're done, all relations are ready */
-		if (RelationSubscriptionsAreReady(nodeSubscriptions))
+		if (RelationSubscriptionsAreReady(groupedLogicalRepTargets))
 		{
 			ereport(LOG, (errmsg("The states of the relations belonging to the "
 								 "subscriptions became READY on the "
 								 "target node %s:%d",
-								 targetConnection->hostname,
-								 targetConnection->port)));
+								 superuserConnection->hostname,
+								 superuserConnection->port)));
 
 			break;
 		}
@@ -2234,8 +2250,8 @@ WaitForNodeSubscriptionsToBecomeReady(NodeSubscriptions *nodeSubscriptions)
 		{
 			ereport(LOG, (errmsg("Not all subscriptions on target node %s:%d "
 								 "are READY yet",
-								 targetConnection->hostname,
-								 targetConnection->port)));
+								 superuserConnection->hostname,
+								 superuserConnection->port)));
 
 			previousReportTime = GetCurrentTimestamp();
 		}
@@ -2250,8 +2266,8 @@ WaitForNodeSubscriptionsToBecomeReady(NodeSubscriptions *nodeSubscriptions)
 								   LogicalReplicationTimeout),
 							errdetail("The subscribed relations haven't become "
 									  "ready on the target node %s:%d",
-									  targetConnection->hostname,
-									  targetConnection->port),
+									  superuserConnection->hostname,
+									  superuserConnection->port),
 							errhint(
 								"Logical replication has failed to initialize "
 								"on the target node. If not, consider using "
@@ -2270,18 +2286,18 @@ WaitForNodeSubscriptionsToBecomeReady(NodeSubscriptions *nodeSubscriptions)
 
 /*
  * SubscriptionNamesValueList returns a SQL value list containing the
- * subscription names from the subscriptionInfoList. This value list can
+ * subscription names from the logicalRepTargetList. This value list can
  * be used in a query by using the IN operator.
  */
 static char *
-SubscriptionNamesValueList(List *subscriptionInfoList)
+SubscriptionNamesValueList(List *logicalRepTargetList)
 {
 	StringInfo subscriptionValueList = makeStringInfo();
 	appendStringInfoString(subscriptionValueList, "(");
 	bool first = true;
 
-	SubscriptionInfo *subscription = NULL;
-	foreach_ptr(subscription, subscriptionInfoList)
+	LogicalRepTarget *target = NULL;
+	foreach_ptr(target, logicalRepTargetList)
 	{
 		if (!first)
 		{
@@ -2292,7 +2308,7 @@ SubscriptionNamesValueList(List *subscriptionInfoList)
 			first = false;
 		}
 		appendStringInfoString(subscriptionValueList, quote_literal_cstr(
-								   subscription->name));
+								   target->subscriptionName));
 	}
 	appendStringInfoString(subscriptionValueList, ")");
 	return subscriptionValueList->data;
@@ -2304,28 +2320,28 @@ SubscriptionNamesValueList(List *subscriptionInfoList)
  * subscriptions and returns false if at least one of them is not ready.
  */
 static bool
-RelationSubscriptionsAreReady(NodeSubscriptions *nodeSubscriptions)
+RelationSubscriptionsAreReady(GroupedLogicalRepTargets *groupedLogicalRepTargets)
 {
 	bool raiseInterrupts = false;
 
-	List *subscriptionInfoList = nodeSubscriptions->subscriptionInfoList;
-	MultiConnection *targetConnection = nodeSubscriptions->targetConnection;
+	List *logicalRepTargetList = groupedLogicalRepTargets->logicalRepTargetList;
+	MultiConnection *superuserConnection = groupedLogicalRepTargets->superuserConnection;
 
-	char *subscriptionValueList = SubscriptionNamesValueList(subscriptionInfoList);
+	char *subscriptionValueList = SubscriptionNamesValueList(logicalRepTargetList);
 	char *query = psprintf(
 		"SELECT count(*) FROM pg_subscription_rel, pg_stat_subscription "
 		"WHERE srsubid = subid AND srsubstate != 'r' AND subname IN %s",
 		subscriptionValueList);
-	int querySent = SendRemoteCommand(targetConnection, query);
+	int querySent = SendRemoteCommand(superuserConnection, query);
 	if (querySent == 0)
 	{
-		ReportConnectionError(targetConnection, ERROR);
+		ReportConnectionError(superuserConnection, ERROR);
 	}
 
-	PGresult *result = GetRemoteCommandResult(targetConnection, raiseInterrupts);
+	PGresult *result = GetRemoteCommandResult(superuserConnection, raiseInterrupts);
 	if (!IsResponseOK(result))
 	{
-		ReportResultError(targetConnection, result, ERROR);
+		ReportResultError(superuserConnection, result, ERROR);
 	}
 
 	int rowCount = PQntuples(result);
@@ -2347,7 +2363,7 @@ RelationSubscriptionsAreReady(NodeSubscriptions *nodeSubscriptions)
 	char *resultString = pstrdup(PQgetvalue(result, rowIndex, columnIndex));
 
 	PQclear(result);
-	ForgetResults(targetConnection);
+	ForgetResults(superuserConnection);
 
 	int64 resultInt = SafeStringToInt64(resultString);
 
@@ -2365,15 +2381,17 @@ RelationSubscriptionsAreReady(NodeSubscriptions *nodeSubscriptions)
  */
 void
 WaitForAllSubscriptionsToCatchUp(MultiConnection *sourceConnection,
-								 HTAB *nodeSubscriptionsHash)
+								 HTAB *groupedLogicalRepTargetsHash)
 {
 	XLogRecPtr sourcePosition = GetRemoteLogPosition(sourceConnection);
 	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, nodeSubscriptionsHash);
-	NodeSubscriptions *nodeSubscriptions = NULL;
-	while ((nodeSubscriptions = (NodeSubscriptions *) hash_seq_search(&status)) != NULL)
+	hash_seq_init(&status, groupedLogicalRepTargetsHash);
+	GroupedLogicalRepTargets *groupedLogicalRepTargets = NULL;
+	while ((groupedLogicalRepTargets = (GroupedLogicalRepTargets *) hash_seq_search(
+				&status)) != NULL)
 	{
-		WaitForNodeSubscriptionsToCatchUp(sourcePosition, nodeSubscriptions);
+		WaitForGroupedLogicalRepTargetsToCatchUp(sourcePosition,
+												 groupedLogicalRepTargets);
 	}
 }
 
@@ -2387,15 +2405,16 @@ WaitForAllSubscriptionsToCatchUp(MultiConnection *sourceConnection,
  * every logicalReplicationProgressReportTimeout.
  */
 static void
-WaitForNodeSubscriptionsToCatchUp(XLogRecPtr sourcePosition,
-								  NodeSubscriptions *nodeSubscriptions)
+WaitForGroupedLogicalRepTargetsToCatchUp(XLogRecPtr sourcePosition,
+										 GroupedLogicalRepTargets *
+										 groupedLogicalRepTargets)
 {
 	XLogRecPtr previousTargetPosition = 0;
 	TimestampTz previousLSNIncrementTime = GetCurrentTimestamp();
 
 	/* report in the first iteration as well */
 	TimestampTz previousReportTime = 0;
-	MultiConnection *targetConnection = nodeSubscriptions->targetConnection;
+	MultiConnection *superuserConnection = groupedLogicalRepTargets->superuserConnection;
 
 
 	/*
@@ -2414,14 +2433,14 @@ WaitForNodeSubscriptionsToCatchUp(XLogRecPtr sourcePosition,
 
 	while (true)
 	{
-		XLogRecPtr targetPosition = GetSubscriptionPosition(nodeSubscriptions);
+		XLogRecPtr targetPosition = GetSubscriptionPosition(groupedLogicalRepTargets);
 		if (targetPosition >= sourcePosition)
 		{
 			ereport(LOG, (errmsg(
 							  "The LSN of the target subscriptions on node %s:%d have "
 							  "caught up with the source LSN ",
-							  targetConnection->hostname,
-							  targetConnection->port)));
+							  superuserConnection->hostname,
+							  superuserConnection->port)));
 
 			break;
 		}
@@ -2447,8 +2466,8 @@ WaitForNodeSubscriptionsToCatchUp(XLogRecPtr sourcePosition,
 				ereport(LOG, (errmsg(
 								  "The LSN of the target subscriptions on node %s:%d have "
 								  "increased from %ld to %ld at %s where the source LSN is %ld  ",
-								  targetConnection->hostname,
-								  targetConnection->port, previousTargetBeforeThisLoop,
+								  superuserConnection->hostname,
+								  superuserConnection->port, previousTargetBeforeThisLoop,
 								  targetPosition,
 								  timestamptz_to_str(previousLSNIncrementTime),
 								  sourcePosition)));
@@ -2467,8 +2486,8 @@ WaitForNodeSubscriptionsToCatchUp(XLogRecPtr sourcePosition,
 									   LogicalReplicationTimeout),
 								errdetail("The LSN on the target subscription hasn't "
 										  "caught up ready on the target node %s:%d",
-										  targetConnection->hostname,
-										  targetConnection->port),
+										  superuserConnection->hostname,
+										  superuserConnection->port),
 								errhint(
 									"There might have occurred problems on the target "
 									"node. If not consider using higher values for "
@@ -2524,11 +2543,11 @@ WaitForMiliseconds(long timeout)
  * node up to which the subscription completed replication.
  */
 static XLogRecPtr
-GetSubscriptionPosition(NodeSubscriptions *nodeSubscriptions)
+GetSubscriptionPosition(GroupedLogicalRepTargets *groupedLogicalRepTargets)
 {
 	char *subscriptionValueList = SubscriptionNamesValueList(
-		nodeSubscriptions->subscriptionInfoList);
-	return GetRemoteLSN(nodeSubscriptions->targetConnection, psprintf(
+		groupedLogicalRepTargets->logicalRepTargetList);
+	return GetRemoteLSN(groupedLogicalRepTargets->superuserConnection, psprintf(
 							"SELECT min(latest_end_lsn) FROM pg_stat_subscription "
 							"WHERE subname IN %s", subscriptionValueList));
 }

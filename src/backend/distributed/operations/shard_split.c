@@ -1316,11 +1316,12 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 
 		/*
 		 * 3) Create replica identities on dummy shards. This needs to be done
-		 * before the subscriptions are created. Oth the subscription creation
-		 * will get stuck waiting for the publication to send a replica
-		 * identity. Since we never actually write data into these dummy shards
-		 * there's no point in creating these indexes after the initial COPY
-		 * phase, like we do for the replica identities on the target shards.
+		 * before the subscriptions are created. Otherwise the subscription
+		 * creation will get stuck waiting for the publication to send a
+		 * replica identity. Since we never actually write data into these
+		 * dummy shards there's no point in creating these indexes after the
+		 * initial COPY phase, like we do for the replica identities on the
+		 * target shards.
 		 */
 		CreateReplicaIdentitiesForDummyShards(mapOfDummyShardToPlacement);
 
@@ -1339,16 +1340,17 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		 * Subscriber flow starts from here.
 		 * Populate 'ShardSplitSubscriberMetadata' for subscription management.
 		 */
-		List *subscriptionInfoList =
+		List *logicalRepTargetList =
 			PopulateShardSplitSubscriptionsMetadataList(
 				publicationInfoHash, replicationSlotInfoList,
 				shardGroupSplitIntervalListList, workersForPlacementList);
 
-		HTAB *nodeSubscriptionsHash = CreateNodeSubscriptionsHash(subscriptionInfoList);
+		HTAB *groupedLogicalRepTargetsHash = CreateGroupedLogicalRepTargetsHash(
+			logicalRepTargetList);
 
 		/* Create connections to the target nodes */
-		CreateNodeSubscriptionsConnections(
-			nodeSubscriptionsHash,
+		CreateGroupedLogicalRepTargetsConnections(
+			groupedLogicalRepTargetsHash,
 			superUser, databaseName);
 
 
@@ -1358,7 +1360,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		char *snapshot = CreateReplicationSlots(
 			sourceConnection,
 			sourceReplicationConnection,
-			subscriptionInfoList,
+			logicalRepTargetList,
 			"citus");
 
 		/*
@@ -1368,7 +1370,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		CreateSubscriptions(
 			sourceConnection,
 			databaseName,
-			subscriptionInfoList);
+			logicalRepTargetList);
 
 		/* 8) Do snapshotted Copy */
 		DoSplitCopy(sourceShardToCopyNode, sourceColocatedShardIntervalList,
@@ -1383,18 +1385,18 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		 * 9) Create replica identities, this needs to be done before enabling
 		 * the subscriptions.
 		 */
-		CreateReplicaIdentities(subscriptionInfoList);
+		CreateReplicaIdentities(logicalRepTargetList);
 
 		/*
 		 * 10) Enable the subscriptions: Start the catchup phase
 		 */
-		EnableSubscriptions(subscriptionInfoList);
+		EnableSubscriptions(logicalRepTargetList);
 
 		/* 11) Wait for subscriptions to be ready */
-		WaitForAllSubscriptionsToBecomeReady(nodeSubscriptionsHash);
+		WaitForAllSubscriptionsToBecomeReady(groupedLogicalRepTargetsHash);
 
 		/* 12) Wait for subscribers to catchup till source LSN */
-		WaitForAllSubscriptionsToCatchUp(sourceConnection, nodeSubscriptionsHash);
+		WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
 
 		/* 13) Create Auxilary structures */
 		CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
@@ -1402,20 +1404,20 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 											   false /* includeReplicaIdentity*/);
 
 		/* 14) Wait for subscribers to catchup till source LSN */
-		WaitForAllSubscriptionsToCatchUp(sourceConnection, nodeSubscriptionsHash);
+		WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
 
 		/* 15) Block writes on source shards */
 		BlockWritesToShardList(sourceColocatedShardIntervalList);
 
 		/* 16) Wait for subscribers to catchup till source LSN */
-		WaitForAllSubscriptionsToCatchUp(sourceConnection, nodeSubscriptionsHash);
+		WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
 
 		/* 17) Drop Subscribers */
-		DropSubscriptions(subscriptionInfoList);
+		DropSubscriptions(logicalRepTargetList);
 
 		/* 18) Drop replication slots
 		 */
-		DropReplicationSlots(sourceConnection, subscriptionInfoList);
+		DropReplicationSlots(sourceConnection, logicalRepTargetList);
 
 		/* 19) Drop Publications */
 		DropPublications(sourceConnection, publicationInfoHash);
@@ -1452,7 +1454,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		CloseConnection(sourceConnection);
 
 		/* 25) Close all subscriber connections */
-		CloseNodeSubscriptionsConnections(nodeSubscriptionsHash);
+		CloseGroupedLogicalRepTargetsConnections(groupedLogicalRepTargetsHash);
 
 		/* 26) Close connection of template replication slot */
 		CloseConnection(sourceReplicationConnection);

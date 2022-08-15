@@ -33,9 +33,9 @@ static HTAB *ShardInfoHashMapForPublications = NULL;
 static void AddPublishableShardEntryInMap(uint32 targetNodeId,
 										  ShardInterval *shardInterval, bool
 										  isChildShardInterval);
-SubscriptionInfo * CreateSubscriptionInfo(Oid tableOwnerId,
-										  uint32 nodeId,
-										  List *replicationSlotInfoList);
+static LogicalRepTarget * CreateLogicalRepTarget(Oid tableOwnerId,
+												 uint32 nodeId,
+												 List *replicationSlotInfoList);
 
 /*
  * CreateShardSplitInfoMapForPublication creates a hashmap that groups
@@ -165,7 +165,7 @@ AddPublishableShardEntryInMap(uint32 targetNodeId, ShardInterval *shardInterval,
 
 
 /*
- * PopulateShardSplitSubscriptionsMetadataList returns a list of 'SubscriptionInfo'
+ * PopulateShardSplitSubscriptionsMetadataList returns a list of 'LogicalRepTarget'
  * structure.
  *
  * shardSplitInfoHashMap - Shards are grouped by <owner, node id> key.
@@ -184,18 +184,18 @@ PopulateShardSplitSubscriptionsMetadataList(HTAB *shardSplitInfoHashMap,
 	hash_seq_init(&status, shardSplitInfoHashMap);
 
 	PublicationInfo *publication = NULL;
-	List *subscriptionInfoList = NIL;
+	List *logicalRepTargetList = NIL;
 	while ((publication = (PublicationInfo *) hash_seq_search(&status)) != NULL)
 	{
 		uint32 nodeId = publication->key.nodeId;
 		uint32 tableOwnerId = publication->key.tableOwnerId;
-		SubscriptionInfo *subscription =
-			CreateSubscriptionInfo(tableOwnerId, nodeId,
+		LogicalRepTarget *target =
+			CreateLogicalRepTarget(tableOwnerId, nodeId,
 								   replicationSlotInfoList);
-		subscription->publication = publication;
-		publication->subscription = subscription;
+		target->publication = publication;
+		publication->target = target;
 
-		subscriptionInfoList = lappend(subscriptionInfoList, subscription);
+		logicalRepTargetList = lappend(logicalRepTargetList, target);
 	}
 
 	List *shardIntervalList = NIL;
@@ -220,31 +220,30 @@ PopulateShardSplitSubscriptionsMetadataList(HTAB *shardSplitInfoHashMap,
 			{
 				ereport(ERROR, errmsg("Could not find publication matching a split"));
 			}
-			publication->subscription->newShards = lappend(
-				publication->subscription->newShards, shardInterval);
+			publication->target->newShards = lappend(
+				publication->target->newShards, shardInterval);
 		}
 	}
 
-	return subscriptionInfoList;
+	return logicalRepTargetList;
 }
 
 
 /*
- * Creates a 'SubscriptionInfo' structure for given table owner, node id.
+ * Creates a 'LogicalRepTarget' structure for given table owner, node id.
  * It scans the list of 'ReplicationSlotInfo' to identify the corresponding slot
  * to be used for given tableOwnerId and nodeId.
  */
-SubscriptionInfo *
-CreateSubscriptionInfo(Oid tableOwnerId, uint32 nodeId,
+static LogicalRepTarget *
+CreateLogicalRepTarget(Oid tableOwnerId, uint32 nodeId,
 					   List *replicationSlotInfoList)
 {
-	SubscriptionInfo *subscription = palloc0(
-		sizeof(SubscriptionInfo));
-	subscription->name = SubscriptionName(SHARD_SPLIT, tableOwnerId);
-	subscription->tableOwnerId = tableOwnerId;
-	subscription->temporaryOwnerName =
+	LogicalRepTarget *target = palloc0(sizeof(LogicalRepTarget));
+	target->subscriptionName = SubscriptionName(SHARD_SPLIT, tableOwnerId);
+	target->tableOwnerId = tableOwnerId;
+	target->subscriptionOwnerName =
 		SubscriptionRoleName(SHARD_SPLIT, tableOwnerId);
-	subscription->targetConnection = NULL;
+	target->superuserConnection = NULL;
 
 	/*
 	 * Each 'ReplicationSlotInfo' belongs to a unique combination of node id and owner.
@@ -257,11 +256,18 @@ CreateSubscriptionInfo(Oid tableOwnerId, uint32 nodeId,
 		if (nodeId == replicationSlot->targetNodeId &&
 			tableOwnerId == replicationSlot->tableOwnerId)
 		{
-			subscription->replicationSlot = replicationSlot;
+			target->replicationSlot = replicationSlot;
 
 			break;
 		}
 	}
 
-	return subscription;
+	if (!target->replicationSlot)
+	{
+		ereport(ERROR, errmsg(
+					"Could not find replication slot matching a subscription %s",
+					target->subscriptionName));
+	}
+
+	return target;
 }

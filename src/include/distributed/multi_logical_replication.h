@@ -54,49 +54,54 @@ typedef struct PublicationInfo
 	NodeAndOwner key;
 	char *name;
 	List *shardIntervals;
-	struct SubscriptionInfo *subscription;
+	struct LogicalRepTarget *target;
 } PublicationInfo;
 
 /*
- * Stores information necesary for creating a subscription
+ * Stores information necesary to create all the th
  */
-typedef struct SubscriptionInfo
+typedef struct LogicalRepTarget
 {
-	char *name;
 	Oid tableOwnerId;
+	char *subscriptionName;
 
 	/*
 	 * The name of the user that's used as the owner of the subscription.
 	 */
-	char *temporaryOwnerName;
+	char *subscriptionOwnerName;
 	ReplicationSlotInfo *replicationSlot;
 	PublicationInfo *publication;
 
 	/*
-	 * The shardIntervals that this subscription is meant to create. For shard
-	 * splits this can be different than the shards that are part of the
-	 * publication, because of the existence of dummy shards.
+	 * The shardIntervals that we want to create on this logical replication
+	 * target. This can be different from the shard intervals that are part of
+	 * the publication for two reasons:
+	 * 1. The publication does not contain partitioned tables, only their
+	 *    children. The partition parent tables ARE part of newShards.
+	 * 2. For shard splits the publication also contains dummy shards, these
+	 *    ARE NOT part of newShards.
 	 */
 	List *newShards;
 
 	/*
-	 * The targetConnection is shared between all SubscriptionInfos that have
+	 * The superuserConnection is shared between all LogicalRepTargets that have
 	 * the same node. This can be initialized easily by using
-	 * CreateNodeSubscriptionsConnections.
+	 * CreateGroupedLogicalRepTargetsConnections.
 	 */
-	MultiConnection *targetConnection;
-} SubscriptionInfo;
+	MultiConnection *superuserConnection;
+} LogicalRepTarget;
 
 /*
- * SubscriptionInfos grouped by node, this is useful because these subscription
- * infos can all use the same conection for management.
+ * GroupedLogicalRepTargets groups LogicalRepTargets by node, this is useful
+ * because these targets can all use the same superuserConection for
+ * management.
  */
-typedef struct NodeSubscriptions
+typedef struct GroupedLogicalRepTargets
 {
 	uint32 nodeId;
-	List *subscriptionInfoList;
-	MultiConnection *targetConnection;
-} NodeSubscriptions;
+	List *logicalRepTargetList;
+	MultiConnection *superuserConnection;
+} GroupedLogicalRepTargets;
 
 
 /*
@@ -144,9 +149,9 @@ extern char * ReplicationSlotName(LogicalRepType type, uint32_t nodeId, Oid owne
 extern char * SubscriptionName(LogicalRepType type, Oid ownerId);
 extern char * SubscriptionRoleName(LogicalRepType type, Oid ownerId);
 
-extern void WaitForAllSubscriptionsToBecomeReady(HTAB *nodeSubscriptionsHash);
+extern void WaitForAllSubscriptionsToBecomeReady(HTAB *groupedLogicalRepTargetsHash);
 extern void WaitForAllSubscriptionsToCatchUp(MultiConnection *sourceConnection,
-											 HTAB *nodeSubscriptionsHash);
+											 HTAB *groupedLogicalRepTargetsHash);
 extern void WaitForShardSubscriptionToCatchUp(MultiConnection *targetConnection,
 											  XLogRecPtr sourcePosition,
 											  Bitmapset *tableOwnerIds,
@@ -154,13 +159,14 @@ extern void WaitForShardSubscriptionToCatchUp(MultiConnection *targetConnection,
 extern HTAB * InitPublicationInfoHash(void);
 extern uint32 HashNodeAndOwner(const void *key, Size keysize);
 extern int CompareNodeAndOwner(const void *left, const void *right, Size keysize);
-extern HTAB * CreateNodeSubscriptionsHash(List *subscriptionInfoList);
-extern void CreateNodeSubscriptionsConnections(HTAB *nodeSubscriptionsHash,
-											   char *user,
-											   char *databaseName);
-extern void RecreateNodeSubscriptionsConnections(HTAB *nodeSubscriptionsHash,
-												 char *user,
-												 char *databaseName);
-extern void CloseNodeSubscriptionsConnections(HTAB *nodeSubscriptionsHash);
+extern HTAB * CreateGroupedLogicalRepTargetsHash(List *subscriptionInfoList);
+extern void CreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
+													  char *user,
+													  char *databaseName);
+extern void RecreateGroupedLogicalRepTargetsConnections(
+	HTAB *groupedLogicalRepTargetsHash,
+	char *user,
+	char *databaseName);
+extern void CloseGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash);
 
 #endif /* MULTI_LOGICAL_REPLICATION_H_ */

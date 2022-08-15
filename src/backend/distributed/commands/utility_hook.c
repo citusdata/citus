@@ -427,6 +427,14 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		parsetree = ProcessCreateSubscriptionStmt(createSubStmt);
 	}
 
+	/*
+	 * For security and reliability reasons we disallow altering and dropping
+	 * subscriptions created by citus by non superusers. We could probably
+	 * disallow this for all subscriptions without issues. But out of an
+	 * abundance of caution for breaking subscription logic created by users
+	 * for other purposes, we only disallow it for the subscriptions that we
+	 * create i.e. ones that start with "citus_".
+	 */
 	if (IsA(parsetree, AlterSubscriptionStmt))
 	{
 		AlterSubscriptionStmt *alterSubStmt = (AlterSubscriptionStmt *) parsetree;
