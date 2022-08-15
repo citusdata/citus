@@ -103,3 +103,37 @@ step s1-drop:
 step s2-commit:
     COMMIT;
 
+
+starting permutation: s2-create s2-begin s2-drop s1-create s2-commit
+create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-create:
+    CREATE TABLE reference_table_s2(a int);
+ 	SELECT create_reference_table('reference_table_s2');
+
+create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-begin:
+    BEGIN;
+
+step s2-drop:
+    DROP TABLE reference_table_s2;
+
+step s1-create:
+    CREATE TABLE reference_table_s1(a int);
+ 	SELECT create_reference_table('reference_table_s1');
+
+create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-commit:
+    COMMIT;
+
