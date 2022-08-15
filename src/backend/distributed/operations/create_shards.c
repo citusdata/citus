@@ -195,6 +195,9 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	/* set shard storage type according to relation type */
 	char shardStorageType = ShardStorageType(distributedTableId);
 
+	/* shard state is active by default */
+	ShardState shardState = SHARD_STATE_ACTIVE;
+
 	for (int64 shardIndex = 0; shardIndex < shardCount; shardIndex++)
 	{
 		uint32 roundRobinNodeIndex = shardIndex % workerNodeCount;
@@ -214,7 +217,8 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 		text *minHashTokenText = IntegerToText(shardMinHashToken);
 		text *maxHashTokenText = IntegerToText(shardMaxHashToken);
 
-		InsertShardRow(distributedTableId, shardId, shardStorageType,
+		InsertShardRow(distributedTableId, shardId,
+					   shardStorageType, shardState,
 					   minHashTokenText, maxHashTokenText);
 
 		List *currentInsertedShardPlacements = InsertShardPlacementRows(
@@ -289,8 +293,10 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 		text *shardMaxValueText = IntegerToText(shardMaxValue);
 		List *sourceShardPlacementList = ShardPlacementListWithoutOrphanedPlacements(
 			sourceShardId);
+		const ShardState targetShardState = SHARD_STATE_ACTIVE;
 
-		InsertShardRow(targetRelationId, newShardId, targetShardStorageType,
+		InsertShardRow(targetRelationId, newShardId,
+					   targetShardStorageType, targetShardState,
 					   shardMinValueText, shardMaxValueText);
 
 		ShardPlacement *sourcePlacement = NULL;
@@ -370,8 +376,12 @@ CreateReferenceTableShard(Oid distributedTableId)
 	/* get the next shard id */
 	uint64 shardId = GetNextShardId();
 
-	InsertShardRow(distributedTableId, shardId, shardStorageType, shardMinValue,
-				   shardMaxValue);
+	/* shard state is active by default */
+	ShardState shardState = SHARD_STATE_ACTIVE;
+
+	InsertShardRow(distributedTableId, shardId,
+				   shardStorageType, shardState,
+				   shardMinValue, shardMaxValue);
 
 	List *insertedShardPlacements = InsertShardPlacementRows(distributedTableId, shardId,
 															 nodeList, workerStartIndex,

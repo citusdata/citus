@@ -55,6 +55,7 @@ extern int SearchCachedShardInterval(Datum partitionColumnValue,
 									 int shardCount, Oid shardIntervalCollation,
 									 FmgrInfo *compareFunction);
 extern bool SingleReplicatedTable(Oid relationId);
+extern List * ShardArrayToList(ShardInterval **shardArray, int length);
 
 
 #endif /* SHARDINTERVAL_UTILS_H_ */

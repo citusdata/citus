@@ -1267,9 +1267,13 @@ InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
 	/* set shard storage type according to relation type */
 	char shardStorageType = ShardStorageType(citusLocalTableId);
 
+	/* Default Shard State is Active */
+	ShardState shardState = SHARD_STATE_ACTIVE;
+
 	text *shardMinValue = NULL;
 	text *shardMaxValue = NULL;
-	InsertShardRow(citusLocalTableId, shardId, shardStorageType,
+	InsertShardRow(citusLocalTableId, shardId,
+				   shardStorageType, shardState,
 				   shardMinValue, shardMaxValue);
 
 	List *nodeList = list_make1(CoordinatorNodeIfAddedAsWorkerOrError());

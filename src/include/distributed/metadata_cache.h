@@ -149,7 +149,7 @@ extern int GetCitusCreationLevel(void);
 extern bool IsCitusTable(Oid relationId);
 extern bool IsCitusTableViaCatalog(Oid relationId);
 extern char PgDistPartitionViaCatalog(Oid relationId);
-extern List * LookupDistShardTuples(Oid relationId);
+extern List * LookupDistShardTuples(Oid relationId, bool activeShardsOnly);
 extern char PartitionMethodViaCatalog(Oid relationId);
 extern Var * PartitionColumnViaCatalog(Oid relationId);
 extern bool IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel);

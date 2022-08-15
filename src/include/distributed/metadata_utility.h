@@ -67,6 +67,7 @@ typedef struct ShardInterval
 	Datum maxValue;     /* a shard's typed max value datum */
 	uint64 shardId;
 	int shardIndex;
+	ShardState shardState;
 } ShardInterval;
 
 
@@ -212,7 +213,8 @@ extern Datum citus_relation_size(PG_FUNCTION_ARGS);
 /* Function declarations to read shard and shard placement data */
 extern uint32 TableShardReplicationFactor(Oid relationId);
 extern List * LoadShardIntervalList(Oid relationId);
-extern List * LoadUnsortedShardIntervalListViaCatalog(Oid relationId);
+extern List * LoadShardIntervalListIncludingOrphansViaCatalog(Oid relationId);
+extern List * LoadUnsortedShardIntervalListIncludingOrphansViaCatalog(Oid relationId);
 extern ShardInterval * LoadShardIntervalWithLongestShardName(Oid relationId);
 extern int ShardIntervalCount(Oid relationId);
 extern List * LoadShardList(Oid relationId);
@@ -238,9 +240,11 @@ extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 
 /* Function declarations to modify shard and shard placement data */
-extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
+extern void InsertShardRow(Oid relationId, uint64 shardId,
+						   char storageType, int shardState,
 						   text *shardMinValue, text *shardMaxValue);
 extern void DeleteShardRow(uint64 shardId);
+extern void UpdateShardState(uint64 shardId, char shardState);
 extern uint64 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 									  char shardState, uint64 shardLength,
 									  int32 groupId);

@@ -92,3 +92,8 @@ DROP FUNCTION pg_catalog.citus_locks();
 
 DROP FUNCTION pg_catalog.replicate_reference_tables(citus.shard_transfer_mode);
 #include "../udfs/replicate_reference_tables/9.3-2.sql"
+
+-- Changes for Shard Split Deferred Drop
+#include "../udfs/citus_internal_add_shard_metadata/10.2-1.sql"
+ALTER TABLE pg_catalog.pg_dist_shard DROP COLUMN shardstate;
+DROP FUNCTION pg_catalog.citus_internal_update_shard_and_placement_state_metadata(shard_id bigint, shardState integer);

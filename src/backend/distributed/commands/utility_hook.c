@@ -1626,7 +1626,7 @@ InvalidateForeignKeyGraphForDDL(void)
  * given list of shards.
  */
 List *
-DDLTaskList(Oid relationId, const char *commandString)
+DDLTaskListExtended(Oid relationId, const char *commandString, bool includeOrphanedShards)
 {
 	List *taskList = NIL;
 	List *shardIntervalList = LoadShardIntervalList(relationId);
@@ -1667,6 +1667,18 @@ DDLTaskList(Oid relationId, const char *commandString)
 	}
 
 	return taskList;
+}
+
+
+/*
+ * DDLTaskList builds a list of tasks to execute a DDL command on a
+ * given list of shards.
+ */
+List *
+DDLTaskList(Oid relationId, const char *commandString)
+{
+	bool includeOrphanedShards = false;
+	return DDLTaskListExtended(relationId, commandString, includeOrphanedShards);
 }
 
 

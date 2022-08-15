@@ -132,9 +132,9 @@ static void EnsurePartitionMetadataIsSane(Oid relationId, char distributionMetho
 										  int colocationId, char replicationModel,
 										  Var *distributionKey);
 static void EnsureCoordinatorInitiatedOperation(void);
-static void EnsureShardMetadataIsSane(Oid relationId, int64 shardId, char storageType,
-									  text *shardMinValue,
-									  text *shardMaxValue);
+static void EnsureShardMetadataIsSane(Oid relationId, int64 shardId,
+									  char storageType, int shardState,
+									  text *shardMinValue, text *shardMaxValue);
 static void EnsureShardPlacementMetadataIsSane(Oid relationId, int64 shardId,
 											   int64 placementId, int32 shardState,
 											   int64 shardLength, int32 groupId);
@@ -162,6 +162,7 @@ PG_FUNCTION_INFO_V1(citus_internal_add_partition_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_shard_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_update_placement_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_update_shard_and_placement_state_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_shard_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_update_relation_colocation);
 PG_FUNCTION_INFO_V1(citus_internal_add_object_metadata);
@@ -1295,7 +1296,7 @@ ShardListInsertCommand(List *shardIntervalList)
 	/* now add shards to insertShardCommand */
 	StringInfo insertShardCommand = makeStringInfo();
 	appendStringInfo(insertShardCommand,
-					 "WITH shard_data(relationname, shardid, storagetype, "
+					 "WITH shard_data(relationname, shardid, storagetype, shardstate, "
 					 "shardminvalue, shardmaxvalue)  AS (VALUES ");
 
 	foreach_ptr(shardInterval, shardIntervalList)
@@ -1328,10 +1329,11 @@ ShardListInsertCommand(List *shardIntervalList)
 		}
 
 		appendStringInfo(insertShardCommand,
-						 "(%s::regclass, %ld, '%c'::\"char\", %s, %s)",
+						 "(%s::regclass, %ld, '%c'::\"char\", %d, %s, %s)",
 						 quote_literal_cstr(qualifiedRelationName),
 						 shardId,
 						 shardInterval->storageType,
+						 shardInterval->shardState,
 						 minHashToken->data,
 						 maxHashToken->data);
 
@@ -1345,7 +1347,7 @@ ShardListInsertCommand(List *shardIntervalList)
 
 	appendStringInfo(insertShardCommand,
 					 "SELECT citus_internal_add_shard_metadata(relationname, shardid, "
-					 "storagetype, shardminvalue, shardmaxvalue) "
+					 "storagetype, shardstate, shardminvalue, shardmaxvalue) "
 					 "FROM shard_data;");
 
 	/*
@@ -3196,16 +3198,19 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 	PG_ENSURE_ARGNOTNULL(2, "storage type");
 	char storageType = PG_GETARG_CHAR(2);
 
+	PG_ENSURE_ARGNOTNULL(3, "shardstate");
+	ShardState shardState = PG_GETARG_INT32(3);
+
 	text *shardMinValue = NULL;
-	if (!PG_ARGISNULL(3))
+	if (!PG_ARGISNULL(4))
 	{
-		shardMinValue = PG_GETARG_TEXT_P(3);
+		shardMinValue = PG_GETARG_TEXT_P(4);
 	}
 
 	text *shardMaxValue = NULL;
-	if (!PG_ARGISNULL(4))
+	if (!PG_ARGISNULL(5))
 	{
-		shardMaxValue = PG_GETARG_TEXT_P(4);
+		shardMaxValue = PG_GETARG_TEXT_P(5);
 	}
 
 	/* only owner of the table (or superuser) is allowed to add the Citus metadata */
@@ -3224,11 +3229,14 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 		 * not sane, the user can only affect its own tables. Given that the
 		 * user is owner of the table, we should allow.
 		 */
-		EnsureShardMetadataIsSane(relationId, shardId, storageType, shardMinValue,
-								  shardMaxValue);
+		EnsureShardMetadataIsSane(relationId, shardId,
+								  storageType, shardState,
+								  shardMinValue, shardMaxValue);
 	}
 
-	InsertShardRow(relationId, shardId, storageType, shardMinValue, shardMaxValue);
+	InsertShardRow(relationId, shardId,
+				   storageType, shardState,
+				   shardMinValue, shardMaxValue);
 
 	PG_RETURN_VOID();
 }
@@ -3262,7 +3270,8 @@ EnsureCoordinatorInitiatedOperation(void)
  * for inserting into pg_dist_shard metadata.
  */
 static void
-EnsureShardMetadataIsSane(Oid relationId, int64 shardId, char storageType,
+EnsureShardMetadataIsSane(Oid relationId, int64 shardId,
+						 char storageType, int shardState,
 						  text *shardMinValue, text *shardMaxValue)
 {
 	if (shardId <= INVALID_SHARD_ID)
@@ -3276,6 +3285,13 @@ EnsureShardMetadataIsSane(Oid relationId, int64 shardId, char storageType,
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("Invalid shard storage type: %c", storageType)));
+	}
+
+	if (!(shardState == SHARD_STATE_ACTIVE ||
+		  shardState == SHARD_STATE_TO_DELETE))
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Invalid shard state type: %c", shardState)));
 	}
 
 	char partitionMethod = PartitionMethodViaCatalog(relationId);
@@ -3296,7 +3312,9 @@ EnsureShardMetadataIsSane(Oid relationId, int64 shardId, char storageType,
 							   "reference and local tables: %c", partitionMethod)));
 	}
 
-	List *distShardTupleList = LookupDistShardTuples(relationId);
+
+	bool activeShardsOnly = true;
+	List *distShardTupleList = LookupDistShardTuples(relationId, activeShardsOnly);
 	if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		if (shardMinValue != NULL || shardMaxValue != NULL)
@@ -3569,6 +3587,84 @@ citus_internal_update_placement_metadata(PG_FUNCTION_ARGS)
 	}
 
 	UpdatePlacementGroupId(placement->placementId, targetGroupId);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_internal_update_shard_and_placement_state_metadata is an internal UDF to
+ * update shardState value for Shards and Placements in pg_dist_shard and pg_dist_placement
+ * catalogs.
+ */
+Datum
+citus_internal_update_shard_and_placement_state_metadata(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	int64 shardId = PG_GETARG_INT64(0);
+	ShardState newState = PG_GETARG_INT32(1);
+
+	ShardPlacement *placement = NULL;
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+
+		if (!ShardExists(shardId))
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("Shard id does not exists: %ld", shardId)));
+		}
+
+		bool missingOk = false;
+		EnsureShardOwner(shardId, missingOk);
+
+		/*
+		 * This function ensures that the source group exists hence we
+		 * call it from this code-block.
+		 */
+		List *shardPlacementList = ActiveShardPlacementList(shardId);
+
+		/* Split is only allowed for shards with a single placement */
+		Assert(list_length(shardPlacementList) == 1);
+		placement = linitial(shardPlacementList);
+
+		WorkerNode *workerNode = FindNodeWithNodeId(placement->nodeId,
+													false /* missingOk */);
+		if (!workerNode)
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("Node with group id %d for shard placement "
+								   "%ld does not exist", workerNode->groupId, shardId)));
+		}
+	}
+	else
+	{
+		/*
+		 * This function ensures that the source group exists hence we
+		 * call it from this code-block.
+		 */
+		List *shardPlacementList = ActiveShardPlacementList(shardId);
+
+		/* Split is only allowed for shards with a single placement */
+		Assert(list_length(shardPlacementList) == 1);
+		placement = linitial(shardPlacementList);
+	}
+
+	/*
+	 * Updating pg_dist_placement ensures that the node with targetGroupId
+	 * exists and this is the only placement on that group.
+	 */
+	if (placement == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Active placement for shard %ld is not "
+							   "found", shardId)));
+	}
+
+	UpdateShardState(shardId, newState);
+	UpdateShardPlacementState(placement->placementId, newState);
 
 	PG_RETURN_VOID();
 }

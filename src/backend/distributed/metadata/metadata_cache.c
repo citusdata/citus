@@ -225,7 +225,7 @@ static int32 LocalNodeId = -1;
 
 /* built first time through in InitializeDistCache */
 static ScanKeyData DistPartitionScanKey[1];
-static ScanKeyData DistShardScanKey[1];
+static ScanKeyData DistShardScanKey[2];
 static ScanKeyData DistObjectScanKey[3];
 
 
@@ -1590,7 +1590,9 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 							  &intervalTypeId,
 							  &intervalTypeMod);
 
-	List *distShardTupleList = LookupDistShardTuples(cacheEntry->relationId);
+	/* Only load Active shards in the cache */
+	bool activeShardsOnly = true;
+	List *distShardTupleList = LookupDistShardTuples(cacheEntry->relationId, activeShardsOnly);
 	int shardIntervalArrayLength = list_length(distShardTupleList);
 	if (shardIntervalArrayLength > 0)
 	{
@@ -3596,6 +3598,14 @@ InitializeDistCache(void)
 	DistShardScanKey[0].sk_collation = InvalidOid;
 	DistShardScanKey[0].sk_attno = Anum_pg_dist_shard_logicalrelid;
 
+	fmgr_info_cxt(F_OIDEQ,
+				  &DistShardScanKey[1].sk_func,
+				  MetadataCacheMemoryContext);
+	DistShardScanKey[1].sk_strategy = BTLessStrategyNumber;
+	DistShardScanKey[1].sk_subtype = InvalidOid;
+	DistShardScanKey[1].sk_collation = InvalidOid;
+	DistShardScanKey[1].sk_attno = Anum_pg_dist_shard_shardstate;
+
 	CreateDistTableCache();
 	CreateShardIdCache();
 
@@ -4539,18 +4549,20 @@ LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId)
  * specified relation.
  */
 List *
-LookupDistShardTuples(Oid relationId)
+LookupDistShardTuples(Oid relationId, bool activeShardsOnly)
 {
 	List *distShardTupleList = NIL;
-	ScanKeyData scanKey[1];
+	ScanKeyData scanKey[2];
 
 	Relation pgDistShard = table_open(DistShardRelationId(), AccessShareLock);
 
 	/* copy scankey to local copy, it will be modified during the scan */
 	scanKey[0] = DistShardScanKey[0];
+	scanKey[1] = DistShardScanKey[1];
 
 	/* set scan arguments */
 	scanKey[0].sk_argument = ObjectIdGetDatum(relationId);
+	scanKey[1].sk_argument = (activeShardsOnly) ? SHARD_STATE_ACTIVE : SHARD_STATE_INVALID_LAST;
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistShard,
 													DistShardLogicalRelidIndexId(), true,
@@ -4815,9 +4827,12 @@ DeformedDistShardTupleToShardInterval(Datum *datumArray, bool *isNullArray,
 		maxValueExists = true;
 	}
 
+	int shardState = DatumGetChar(datumArray[Anum_pg_dist_shard_shardstate - 1]);
+
 	ShardInterval *shardInterval = CitusMakeNode(ShardInterval);
 	shardInterval->relationId = relationId;
 	shardInterval->storageType = storageType;
+	shardInterval->shardState = shardState;
 	shardInterval->valueTypeId = intervalTypeId;
 	shardInterval->valueTypeLen = intervalTypeLen;
 	shardInterval->valueByVal = intervalByVal;

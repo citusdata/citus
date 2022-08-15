@@ -103,6 +103,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	text *nullMinValue = NULL;
 	text *nullMaxValue = NULL;
 	char storageType = SHARD_STORAGE_TABLE;
+	char shardState = SHARD_STATE_ACTIVE;
 
 	Oid relationId = ResolveRelationId(relationNameText, false);
 
@@ -184,7 +185,9 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 		candidateNodeIndex++;
 	}
 
-	InsertShardRow(relationId, shardId, storageType, nullMinValue, nullMaxValue);
+	InsertShardRow(relationId, shardId,
+				   storageType, shardState,
+				   nullMinValue, nullMaxValue);
 
 	CreateAppendDistributedShardPlacements(relationId, shardId, candidateNodeList,
 										   ShardReplicationFactor);

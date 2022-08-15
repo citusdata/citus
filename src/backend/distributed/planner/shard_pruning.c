@@ -263,7 +263,6 @@ static void AddHashRestrictionToInstance(ClauseWalkerContext *context, OpExpr *o
 										 Var *varClause, Const *constantClause);
 static void AddNewConjuction(ClauseWalkerContext *context, PruningTreeNode *node);
 static PruningInstance * CopyPartialPruningInstance(PruningInstance *sourceInstance);
-static List * ShardArrayToList(ShardInterval **shardArray, int length);
 static List * DeepCopyShardIntervalList(List *originalShardIntervalList);
 static int PerformValueCompare(FunctionCallInfo compareFunctionCall, Datum a,
 							   Datum b);
@@ -1358,25 +1357,6 @@ CopyPartialPruningInstance(PruningInstance *sourceInstance)
 	newInstance->isPartial = false;
 
 	return newInstance;
-}
-
-
-/*
- * ShardArrayToList builds a list of out the array of ShardInterval*.
- */
-static List *
-ShardArrayToList(ShardInterval **shardArray, int length)
-{
-	List *shardIntervalList = NIL;
-
-	for (int shardIndex = 0; shardIndex < length; shardIndex++)
-	{
-		ShardInterval *shardInterval =
-			shardArray[shardIndex];
-		shardIntervalList = lappend(shardIntervalList, shardInterval);
-	}
-
-	return shardIntervalList;
 }
 
 

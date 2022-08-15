@@ -55,6 +55,7 @@
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
+#include "distributed/shardinterval_utils.h"
 #include "nodes/makefuncs.h"
 #include "parser/scansup.h"
 #include "storage/lmgr.h"
@@ -1070,7 +1071,48 @@ LoadShardIntervalList(Oid relationId)
 
 
 /*
- * LoadUnsortedShardIntervalListViaCatalog returns a list of shard intervals related for a
+ * LoadShardIntervalListIncludingOrphansViaCatalog returns a list of sorted shard intervals
+ * for a given distributed table. The function returns an empty list if no shards can be found
+ * for the given relation.
+ *
+ * This function does not use CitusTableCache and instead reads from catalog tables
+ * directly.
+ */
+List *
+LoadShardIntervalListIncludingOrphansViaCatalog(Oid relationId)
+{
+	List *shardIntervalList = LoadUnsortedShardIntervalListIncludingOrphansViaCatalog(relationId);
+
+	// Transform into a temporary array to sort.
+	ShardInterval **shardIntervalArray = (ShardInterval **) PointerArrayFromList(shardIntervalList);
+	int shardIntervalArrayLength = list_length(shardIntervalList);
+
+	/*
+	 * Although we are loading intervals from catalog, use cache to
+	 * get the partition column and compare function.
+	 */
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+	ShardInterval **sortedShardIntervalArray = NULL;
+	if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		sortedShardIntervalArray = shardIntervalArray;
+	}
+	else
+	{
+		sortedShardIntervalArray = SortShardIntervalArray(shardIntervalArray,
+														  shardIntervalArrayLength,
+														  cacheEntry->partitionColumn->
+														  varcollid,
+														  cacheEntry->shardIntervalCompareFunction);
+	}
+
+	List *sortedShardIntervalList = ShardArrayToList(sortedShardIntervalArray, shardIntervalArrayLength);
+	return sortedShardIntervalList;
+}
+
+
+/*
+ * LoadUnsortedShardIntervalListIncludingOrphansViaCatalog returns a list of shard intervals related for a
  * given distributed table. The function returns an empty list if no shards can be found
  * for the given relation.
  *
@@ -1078,10 +1120,12 @@ LoadShardIntervalList(Oid relationId)
  * directly.
  */
 List *
-LoadUnsortedShardIntervalListViaCatalog(Oid relationId)
+LoadUnsortedShardIntervalListIncludingOrphansViaCatalog(Oid relationId)
 {
 	List *shardIntervalList = NIL;
-	List *distShardTuples = LookupDistShardTuples(relationId);
+
+	bool activeShardsOnly = false;
+	List *distShardTuples = LookupDistShardTuples(relationId, activeShardsOnly);
 	Relation distShardRelation = table_open(DistShardRelationId(), AccessShareLock);
 	TupleDesc distShardTupleDesc = RelationGetDescr(distShardRelation);
 	Oid intervalTypeId = InvalidOid;
@@ -1198,6 +1242,7 @@ CopyShardInterval(ShardInterval *srcInterval)
 	destInterval->type = srcInterval->type;
 	destInterval->relationId = srcInterval->relationId;
 	destInterval->storageType = srcInterval->storageType;
+	destInterval->shardState = srcInterval->shardState;
 	destInterval->valueTypeId = srcInterval->valueTypeId;
 	destInterval->valueTypeLen = srcInterval->valueTypeLen;
 	destInterval->valueByVal = srcInterval->valueByVal;
@@ -1632,7 +1677,8 @@ TupleToGroupShardPlacement(TupleDesc tupleDescriptor, HeapTuple heapTuple)
  * null min/max values in case they are creating an empty shard.
  */
 void
-InsertShardRow(Oid relationId, uint64 shardId, char storageType,
+InsertShardRow(Oid relationId, uint64 shardId,
+			   char storageType, int shardState,
 			   text *shardMinValue, text *shardMaxValue)
 {
 	Datum values[Natts_pg_dist_shard];
@@ -1660,6 +1706,8 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 		isNulls[Anum_pg_dist_shard_shardminvalue - 1] = true;
 		isNulls[Anum_pg_dist_shard_shardmaxvalue - 1] = true;
 	}
+
+	values[Anum_pg_dist_shard_shardstate - 1] = Int32GetDatum(shardState);
 
 	/* open shard relation and insert new tuple */
 	Relation pgDistShard = table_open(DistShardRelationId(), RowExclusiveLock);
@@ -1939,6 +1987,55 @@ DeleteShardPlacementRow(uint64 placementId)
 
 	CommandCounterIncrement();
 	table_close(pgDistPlacement, NoLock);
+}
+
+
+/*
+ * UpdateShardState sets the shardState for the shard identified by shardId.
+ */
+void
+UpdateShardState(uint64 shardId, char shardState)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOK = true;
+	Datum values[Natts_pg_dist_shard];
+	bool isnull[Natts_pg_dist_shard];
+	bool replace[Natts_pg_dist_shard];
+	bool colIsNull = false;
+
+	Relation pgDistShard = table_open(DistShardRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistShard);
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistShard,
+													DistShardShardidIndexId(), indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for shard "
+							   UINT64_FORMAT, shardId)));
+	}
+
+	memset(replace, 0, sizeof(replace));
+
+	values[Anum_pg_dist_shard_shardstate - 1] = CharGetDatum(shardState);
+	isnull[Anum_pg_dist_shard_shardstate - 1] = false;
+	replace[Anum_pg_dist_shard_shardstate - 1] = true;
+
+	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+	CatalogTupleUpdate(pgDistShard, &heapTuple->t_self, heapTuple);
+
+	Assert(!colIsNull);
+	CitusInvalidateRelcacheByShardId(shardId);
+
+	CommandCounterIncrement();
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistShard, NoLock);
 }
 
 

@@ -30,12 +30,15 @@
  *
  * The numbers assigned per state used for historical reason and should
  * not be changed since they correspond to shardstate in pg_dist_placement.
+ * LookupDistShardTuples also depends on the order of these states.
  */
 typedef enum
 {
 	SHARD_STATE_INVALID_FIRST = 0,
 	SHARD_STATE_ACTIVE = 1,
 	SHARD_STATE_TO_DELETE = 4,
+
+	SHARD_STATE_INVALID_LAST = 5
 } ShardState;
 
 

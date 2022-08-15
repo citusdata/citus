@@ -485,3 +485,21 @@ SingleReplicatedTable(Oid relationId)
 
 	return true;
 }
+
+/*
+ * ShardArrayToList builds a list of out the array of ShardInterval*.
+ */
+List *
+ShardArrayToList(ShardInterval **shardArray, int length)
+{
+	List *shardIntervalList = NIL;
+
+	for (int shardIndex = 0; shardIndex < length; shardIndex++)
+	{
+		ShardInterval *shardInterval =
+			shardArray[shardIndex];
+		shardIntervalList = lappend(shardIntervalList, shardInterval);
+	}
+
+	return shardIntervalList;
+}
