@@ -62,11 +62,19 @@ typedef struct PublicationInfo
  */
 typedef struct LogicalRepTarget
 {
+	/*
+	 * The Oid of the user that owns the shards in newShards. This Oid is the
+	 * Oid of the user on the coordinator, this Oid is likely different than
+	 * the Oid of the user on the logical replication source or target.
+	 */
 	Oid tableOwnerId;
 	char *subscriptionName;
 
 	/*
-	 * The name of the user that's used as the owner of the subscription.
+	 * The name of the user that's used as the owner of the subscription. This
+	 * is not the same as the name of the user that matches tableOwnerId.
+	 * Instead we create a temporary user with the same permissions as that
+	 * user, with its only purpose being owning the subscription.
 	 */
 	char *subscriptionOwnerName;
 	ReplicationSlotInfo *replicationSlot;
@@ -92,9 +100,11 @@ typedef struct LogicalRepTarget
 } LogicalRepTarget;
 
 /*
- * GroupedLogicalRepTargets groups LogicalRepTargets by node, this is useful
+ * GroupedLogicalRepTargets groups LogicalRepTargets by node. This allows to
+ * create a hashmap where we can filter by search by nodeId. Which is useful
  * because these targets can all use the same superuserConection for
- * management.
+ * management, which allows us to batch certain operations such as getting
+ * state of the subscriptions.
  */
 typedef struct GroupedLogicalRepTargets
 {

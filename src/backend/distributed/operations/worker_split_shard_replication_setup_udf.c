@@ -53,6 +53,11 @@ static void PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMH
 static void ReturnReplicationSlotInfo(Tuplestorestate *tupleStore,
 									  TupleDesc tupleDescriptor);
 
+/*
+ * GroupedShardSplitInfos groups all ShardSplitInfos belonging to the same node
+ * and table owner together. This data structure its only purpose is creating a
+ * hashmap that allows us to search ShardSplitInfos by node and owner.
+ */
 typedef struct GroupedShardSplitInfos
 {
 	NodeAndOwner key;
