@@ -33,6 +33,7 @@
 #include "distributed/citus_safe_lib.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -1995,12 +1996,10 @@ CreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
 										  char *user,
 										  char *databaseName)
 {
-	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, groupedLogicalRepTargetsHash);
-	GroupedLogicalRepTargets *groupedLogicalRepTargets = NULL;
 	int connectionFlags = FORCE_NEW_CONNECTION;
-	while ((groupedLogicalRepTargets = (GroupedLogicalRepTargets *) hash_seq_search(
-				&status)) != NULL)
+	HASH_SEQ_STATUS status;
+	GroupedLogicalRepTargets *groupedLogicalRepTargets = NULL;
+	foreach_htab(groupedLogicalRepTargets, &status, groupedLogicalRepTargetsHash)
 	{
 		WorkerNode *targetWorkerNode = FindNodeWithNodeId(
 			groupedLogicalRepTargets->nodeId,
@@ -2039,12 +2038,10 @@ RecreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
 											char *user,
 											char *databaseName)
 {
-	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, groupedLogicalRepTargetsHash);
-	GroupedLogicalRepTargets *groupedLogicalRepTargets = NULL;
 	int connectionFlags = FORCE_NEW_CONNECTION;
-	while ((groupedLogicalRepTargets = (GroupedLogicalRepTargets *) hash_seq_search(
-				&status)) != NULL)
+	HASH_SEQ_STATUS status;
+	GroupedLogicalRepTargets *groupedLogicalRepTargets = NULL;
+	foreach_htab(groupedLogicalRepTargets, &status, groupedLogicalRepTargetsHash)
 	{
 		if (groupedLogicalRepTargets->superuserConnection &&
 			PQstatus(groupedLogicalRepTargets->superuserConnection->pgConn) ==
@@ -2090,11 +2087,8 @@ void
 CloseGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash)
 {
 	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, groupedLogicalRepTargetsHash);
-
 	GroupedLogicalRepTargets *groupedLogicalRepTargets = NULL;
-	while ((groupedLogicalRepTargets = (GroupedLogicalRepTargets *) hash_seq_search(
-				&status)) != NULL)
+	foreach_htab(groupedLogicalRepTargets, &status, groupedLogicalRepTargetsHash)
 	{
 		CloseConnection(groupedLogicalRepTargets->superuserConnection);
 	}
@@ -2115,10 +2109,8 @@ void
 WaitForAllSubscriptionsToBecomeReady(HTAB *groupedLogicalRepTargetsHash)
 {
 	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, groupedLogicalRepTargetsHash);
 	GroupedLogicalRepTargets *groupedLogicalRepTargets = NULL;
-	while ((groupedLogicalRepTargets = (GroupedLogicalRepTargets *) hash_seq_search(
-				&status)) != NULL)
+	foreach_htab(groupedLogicalRepTargets, &status, groupedLogicalRepTargetsHash)
 	{
 		WaitForGroupedLogicalRepTargetsToBecomeReady(groupedLogicalRepTargets);
 	}
@@ -2314,10 +2306,8 @@ WaitForAllSubscriptionsToCatchUp(MultiConnection *sourceConnection,
 {
 	XLogRecPtr sourcePosition = GetRemoteLogPosition(sourceConnection);
 	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, groupedLogicalRepTargetsHash);
 	GroupedLogicalRepTargets *groupedLogicalRepTargets = NULL;
-	while ((groupedLogicalRepTargets = (GroupedLogicalRepTargets *) hash_seq_search(
-				&status)) != NULL)
+	foreach_htab(groupedLogicalRepTargets, &status, groupedLogicalRepTargetsHash)
 	{
 		WaitForGroupedLogicalRepTargetsToCatchUp(sourcePosition,
 												 groupedLogicalRepTargets);
