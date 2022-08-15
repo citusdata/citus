@@ -427,16 +427,24 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		parsetree = ProcessCreateSubscriptionStmt(createSubStmt);
 	}
 
+	/*
+	 * For security and reliability reasons we disallow altering and dropping
+	 * subscriptions created by citus by non superusers. We could probably
+	 * disallow this for all subscriptions without issues. But out of an
+	 * abundance of caution for breaking subscription logic created by users
+	 * for other purposes, we only disallow it for the subscriptions that we
+	 * create i.e. ones that start with "citus_".
+	 */
 	if (IsA(parsetree, AlterSubscriptionStmt))
 	{
 		AlterSubscriptionStmt *alterSubStmt = (AlterSubscriptionStmt *) parsetree;
 		if (!superuser() &&
-			StringStartsWith(alterSubStmt->subname,
-							 SHARD_MOVE_SUBSCRIPTION_PREFIX))
+			StringStartsWith(alterSubStmt->subname, "citus_"))
 		{
 			ereport(ERROR, (
 						errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						errmsg("Only superusers can alter shard move subscriptions")));
+						errmsg(
+							"Only superusers can alter subscriptions that are created by citus")));
 		}
 	}
 
@@ -444,11 +452,12 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	{
 		DropSubscriptionStmt *dropSubStmt = (DropSubscriptionStmt *) parsetree;
 		if (!superuser() &&
-			StringStartsWith(dropSubStmt->subname, SHARD_MOVE_SUBSCRIPTION_PREFIX))
+			StringStartsWith(dropSubStmt->subname, "citus_"))
 		{
 			ereport(ERROR, (
 						errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						errmsg("Only superusers can drop shard move subscriptions")));
+						errmsg(
+							"Only superusers can drop subscriptions that are created by citus")));
 		}
 	}
 

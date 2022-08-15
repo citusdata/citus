@@ -12,86 +12,34 @@
 #ifndef SHARDSPLIT_LOGICAL_REPLICATION_H
 #define SHARDSPLIT_LOGICAL_REPLICATION_H
 
+#include "distributed/metadata_utility.h"
 #include "distributed/multi_logical_replication.h"
+#include "distributed/worker_manager.h"
 
 /*
- * Invocation of 'worker_split_shard_replication_setup' UDF returns set of records
- * of custom datatype 'replication_slot_info'. This information is parsed and stored in
- * the below data structure. The information is used to create a subscriber on target node
- * with corresponding slot name.
+ * GroupedShardSplitInfos groups all ShardSplitInfos belonging to the same node
+ * and table owner together. This data structure its only purpose is creating a
+ * hashmap that allows us to search ShardSplitInfos by node and owner.
  */
-typedef struct ReplicationSlotInfo
+typedef struct GroupedShardSplitInfos
 {
-	uint32 targetNodeId;
-	char *tableOwnerName;
-	char *slotName;
-} ReplicationSlotInfo;
-
-/*
- * Stores information necesary for creating a subscriber on target node.
- * Based on how a shard is split and mapped to target nodes, for each unique combination of
- * <tableOwner, targetNodeId> there is a 'ShardSplitSubscriberMetadata'.
- */
-typedef struct ShardSplitSubscriberMetadata
-{
-	Oid tableOwnerId;
-	ReplicationSlotInfo *slotInfo;
-
-	/*
-	 * Exclusively claimed connection for a subscription.The target node of subscription
-	 * is pointed by ReplicationSlotInfo.
-	 */
-	MultiConnection *targetNodeConnection;
-} ShardSplitSubscriberMetadata;
-
-/* key for NodeShardMappingEntry */
-typedef struct NodeShardMappingKey
-{
-	uint32_t nodeId;
-	Oid tableOwnerId;
-} NodeShardMappingKey;
-
-/* Entry for hash map */
-typedef struct NodeShardMappingEntry
-{
-	NodeShardMappingKey key;
+	NodeAndOwner key;
 	List *shardSplitInfoList;
-} NodeShardMappingEntry;
+} GroupedShardSplitInfos;
 
-extern uint32 NodeShardMappingHash(const void *key, Size keysize);
-extern int NodeShardMappingHashCompare(const void *left, const void *right, Size keysize);
-extern HTAB * SetupHashMapForShardInfo(void);
 
 /* Functions for subscriber metadata management */
 extern List * PopulateShardSplitSubscriptionsMetadataList(HTAB *shardSplitInfoHashMap,
-														  List *replicationSlotInfoList);
+														  List *replicationSlotInfoList,
+														  List *
+														  shardGroupSplitIntervalListList,
+														  List *workersForPlacementList);
 extern HTAB *  CreateShardSplitInfoMapForPublication(
 	List *sourceColocatedShardIntervalList,
 	List *shardGroupSplitIntervalListList,
 	List *destinationWorkerNodesList);
 
-/* Functions for creating publications and subscriptions*/
-extern void AlterShardSplitPublications(MultiConnection *sourceConnection,
-										HTAB *shardInfoHashMapForPublication);
-extern void CreateShardSplitSubscriptions(List *targetNodeConnectionList,
-										  List *shardSplitSubscriberMetadataList,
-										  WorkerNode *sourceWorkerNode, char *superUser,
-										  char *databaseName);
-extern void CreateReplicationSlots(MultiConnection *sourceNodeConnection,
-								   char *templateSlotName,
-								   List *shardSplitSubscriberMetadataList);
-extern List * CreateTargetNodeConnectionsForShardSplit(
-	List *shardSplitSubscribersMetadataList,
-	int
-	connectionFlags, char *user,
-	char *databaseName);
-
 /* Functions to drop publisher-subscriber resources */
-extern void CreateShardSplitPublications(MultiConnection *sourceConnection,
-										 HTAB *shardInfoHashMapForPublication);
-extern char *  CreateTemplateReplicationSlot(ShardInterval *shardIntervalToSplit,
-											 MultiConnection *
-											 sourceConnection);
 extern void DropAllShardSplitLeftOvers(WorkerNode *sourceNode,
 									   HTAB *shardSplitMapOfPublications);
 extern void DropShardSplitPublications(MultiConnection *sourceConnection,
@@ -99,16 +47,4 @@ extern void DropShardSplitPublications(MultiConnection *sourceConnection,
 extern void DropShardSplitSubsriptions(List *shardSplitSubscribersMetadataList);
 extern void DropShardSplitReplicationSlots(MultiConnection *sourceConnection,
 										   List *replicationSlotInfoList);
-extern void DisableAndDropShardSplitSubscription(MultiConnection *connection,
-												 char *subscriptionName);
-
-/* Wrapper functions which wait for a subscriber to be ready and catchup */
-extern void WaitForShardSplitRelationSubscriptionsBecomeReady(
-	List *shardSplitPubSubMetadataList);
-extern void WaitForShardSplitRelationSubscriptionsToBeCaughtUp(XLogRecPtr sourcePosition,
-															   List *
-															   shardSplitPubSubMetadataList);
-
-extern char * ShardSplitTemplateReplicationSlotName(uint64 shardId);
-extern void CloseShardSplitSubscriberConnections(List *shardSplitSubscriberMetadataList);
 #endif /* SHARDSPLIT_LOGICAL_REPLICATION_H */
