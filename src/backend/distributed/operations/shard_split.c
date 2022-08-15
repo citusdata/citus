@@ -1353,6 +1353,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 			groupedLogicalRepTargetsHash,
 			superUser, databaseName);
 
+		char *logicalRepDecoderPlugin = "citus";
 
 		/*
 		 * 6) Create replication slots and keep track of their snapshot.
@@ -1361,7 +1362,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 			sourceConnection,
 			sourceReplicationConnection,
 			logicalRepTargetList,
-			"citus");
+			logicalRepDecoderPlugin);
 
 		/*
 		 * 7) Create subscriptions. This isn't strictly needed yet at this
