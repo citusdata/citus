@@ -2006,7 +2006,6 @@ UpdateShardState(uint64 shardId, char shardState)
 	Datum values[Natts_pg_dist_shard];
 	bool isnull[Natts_pg_dist_shard];
 	bool replace[Natts_pg_dist_shard];
-	bool colIsNull = false;
 
 	Relation pgDistShard = table_open(DistShardRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistShard);
@@ -2033,7 +2032,6 @@ UpdateShardState(uint64 shardId, char shardState)
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
 	CatalogTupleUpdate(pgDistShard, &heapTuple->t_self, heapTuple);
 
-	Assert(!colIsNull);
 	CitusInvalidateRelcacheByShardId(shardId);
 
 	CommandCounterIncrement();
