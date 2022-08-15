@@ -37,12 +37,12 @@ hash_delete_all(HTAB *htab)
 
 
 /*
- * CreateSimpleHashWithName creates a hashmap that hashes its key using
+ * CreateSimpleHashWithNameAndSize creates a hashmap that hashes its key using
  * tag_hash function and stores the entries in the current memory context.
  */
-HTAB
-*
-CreateSimpleHashWithName(Size keySize, Size entrySize, char *name)
+HTAB *
+CreateSimpleHashWithNameAndSizeInternal(Size keySize, Size entrySize,
+										char *name, long nelem)
 {
 	HASHCTL info;
 	memset_struct_0(info);
@@ -50,32 +50,9 @@ CreateSimpleHashWithName(Size keySize, Size entrySize, char *name)
 	info.entrysize = entrySize;
 	info.hcxt = CurrentMemoryContext;
 
-	/*
-	 * uint32_hash does the same as tag_hash for keys of 4 bytes, but it's
-	 * faster.
-	 */
-	if (keySize == sizeof(uint32))
-	{
-		info.hash = uint32_hash;
-	}
-	else
-	{
-		info.hash = tag_hash;
-	}
-
 	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
 
-	/*
-	 * We use 32 as the initial number of elements that fit into this hash
-	 * table. This value seems a reasonable tradeof between two issues:
-	 * 1. An empty hashmap shouldn't take up a lot of space
-	 * 2. Doing a few inserts shouldn't require growing the hashmap
-	 *
-	 * NOTE: No performance testing has been performed when choosing this
-	 * value. If this ever turns out to be a problem, feel free to do some
-	 * performance tests.
-	 */
-	HTAB *publicationInfoHash = hash_create(name, 32, &info, hashFlags);
+	HTAB *publicationInfoHash = hash_create(name, nelem, &info, hashFlags);
 	return publicationInfoHash;
 }
 

@@ -21,7 +21,6 @@ extern List * ReferencedRelationIdList(Oid relationId);
 extern List * ReferencingRelationIdList(Oid relationId);
 extern void SetForeignConstraintRelationshipGraphInvalid(void);
 extern void ClearForeignConstraintRelationshipGraphContext(void);
-extern HTAB * CreateOidVisitedHashSet(void);
 extern bool OidVisited(HTAB *oidVisitedMap, Oid oid);
 extern void VisitOid(HTAB *oidVisitedMap, Oid oid);
 
