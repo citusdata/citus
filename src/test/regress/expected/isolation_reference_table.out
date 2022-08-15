@@ -1,5 +1,3 @@
-unused step name: s1-abort
-unused step name: s2-abort
 Parsed test spec with 2 sessions
 
 starting permutation: s1-begin s1-create s2-create s1-commit
