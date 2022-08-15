@@ -3271,7 +3271,7 @@ EnsureCoordinatorInitiatedOperation(void)
  */
 static void
 EnsureShardMetadataIsSane(Oid relationId, int64 shardId,
-						 char storageType, int shardState,
+						  char storageType, int shardState,
 						  text *shardMinValue, text *shardMaxValue)
 {
 	if (shardId <= INVALID_SHARD_ID)

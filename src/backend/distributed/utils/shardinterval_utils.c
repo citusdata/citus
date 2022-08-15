@@ -486,6 +486,7 @@ SingleReplicatedTable(Oid relationId)
 	return true;
 }
 
+
 /*
  * ShardArrayToList builds a list of out the array of ShardInterval*.
  */

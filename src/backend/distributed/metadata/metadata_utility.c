@@ -1081,10 +1081,12 @@ LoadShardIntervalList(Oid relationId)
 List *
 LoadShardIntervalListIncludingOrphansViaCatalog(Oid relationId)
 {
-	List *shardIntervalList = LoadUnsortedShardIntervalListIncludingOrphansViaCatalog(relationId);
+	List *shardIntervalList = LoadUnsortedShardIntervalListIncludingOrphansViaCatalog(
+		relationId);
 
-	// Transform into a temporary array to sort.
-	ShardInterval **shardIntervalArray = (ShardInterval **) PointerArrayFromList(shardIntervalList);
+	/* Transform into a temporary array to sort. */
+	ShardInterval **shardIntervalArray = (ShardInterval **) PointerArrayFromList(
+		shardIntervalList);
 	int shardIntervalArrayLength = list_length(shardIntervalList);
 
 	/*
@@ -1103,10 +1105,12 @@ LoadShardIntervalListIncludingOrphansViaCatalog(Oid relationId)
 														  shardIntervalArrayLength,
 														  cacheEntry->partitionColumn->
 														  varcollid,
-														  cacheEntry->shardIntervalCompareFunction);
+														  cacheEntry->
+														  shardIntervalCompareFunction);
 	}
 
-	List *sortedShardIntervalList = ShardArrayToList(sortedShardIntervalArray, shardIntervalArrayLength);
+	List *sortedShardIntervalList = ShardArrayToList(sortedShardIntervalArray,
+													 shardIntervalArrayLength);
 	return sortedShardIntervalList;
 }
 

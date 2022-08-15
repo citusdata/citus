@@ -139,7 +139,8 @@ citus_drop_all_shards(PG_FUNCTION_ARGS)
 	 */
 	LockRelationOid(relationId, AccessExclusiveLock);
 
-	List *shardIntervalList = LoadUnsortedShardIntervalListIncludingOrphansViaCatalog(relationId);
+	List *shardIntervalList = LoadUnsortedShardIntervalListIncludingOrphansViaCatalog(
+		relationId);
 	int droppedShardCount = DropShards(relationId, schemaName, relationName,
 									   shardIntervalList, dropShardsMetadataOnly);
 

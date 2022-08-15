@@ -186,7 +186,8 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 	 * try to delete the orphaned shard with the wrong (new) name.
 	 */
 	bool includeOrphanedShards = true;
-	ddlJob->taskList = DDLTaskListExtended(tableRelationId, renameCommand, includeOrphanedShards);
+	ddlJob->taskList = DDLTaskListExtended(tableRelationId, renameCommand,
+										   includeOrphanedShards);
 
 	return list_make1(ddlJob);
 }

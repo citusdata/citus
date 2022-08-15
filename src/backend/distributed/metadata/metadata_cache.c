@@ -1592,7 +1592,8 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 
 	/* Only load Active shards in the cache */
 	bool activeShardsOnly = true;
-	List *distShardTupleList = LookupDistShardTuples(cacheEntry->relationId, activeShardsOnly);
+	List *distShardTupleList = LookupDistShardTuples(cacheEntry->relationId,
+													 activeShardsOnly);
 	int shardIntervalArrayLength = list_length(distShardTupleList);
 	if (shardIntervalArrayLength > 0)
 	{
@@ -4562,7 +4563,8 @@ LookupDistShardTuples(Oid relationId, bool activeShardsOnly)
 
 	/* set scan arguments */
 	scanKey[0].sk_argument = ObjectIdGetDatum(relationId);
-	scanKey[1].sk_argument = (activeShardsOnly) ? SHARD_STATE_ACTIVE : SHARD_STATE_INVALID_LAST;
+	scanKey[1].sk_argument = (activeShardsOnly) ? SHARD_STATE_ACTIVE :
+							 SHARD_STATE_INVALID_LAST;
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistShard,
 													DistShardLogicalRelidIndexId(), true,

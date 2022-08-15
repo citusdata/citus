@@ -576,6 +576,7 @@ BlockingShardSplit(SplitOperation splitOperation,
 			 */
 			DropShardList(sourceColocatedShardIntervalList);
 		}
+
 		/* Insert new shard and placement metdata */
 		InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
 										 workersForPlacementList);
@@ -1188,6 +1189,7 @@ MarkShardListWithPlacementsForDrop(List *shardIntervalList)
 	}
 }
 
+
 /*
  * DropShardList drops shards and their metadata from both the coordinator and
  * mx nodes.
@@ -1492,10 +1494,10 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		else
 		{
 			/*
-			* 18) Drop old shards and delete related metadata. Have to do that before
-			* creating the new shard metadata, because there's cross-checks
-			* preventing inconsistent metadata (like overlapping shards).
-			*/
+			 * 18) Drop old shards and delete related metadata. Have to do that before
+			 * creating the new shard metadata, because there's cross-checks
+			 * preventing inconsistent metadata (like overlapping shards).
+			 */
 			DropShardList(sourceColocatedShardIntervalList);
 		}
 
