@@ -2634,7 +2634,8 @@ ShardPlacementsListToHash(List *shardPlacementList)
 	info.entrysize = sizeof(ShardPlacement);
 	info.hash = PlacementsHashHashCode;
 	info.match = PlacementsHashCompare;
-	int hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_COMPARE);
+	info.hcxt = CurrentMemoryContext;
+	int hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_COMPARE | HASH_CONTEXT);
 
 	HTAB *shardPlacementsHash = hash_create("ActivePlacements Hash",
 											shardPlacementCount, &info, hashFlags);

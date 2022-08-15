@@ -2099,7 +2099,8 @@ GetDependingViews(Oid relationId)
 	info.keysize = sizeof(Oid);
 	info.entrysize = sizeof(ViewDependencyNode);
 	info.hash = oid_hash;
-	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION);
+	info.hcxt = CurrentMemoryContext;
+	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 	HTAB *nodeMap = hash_create("view dependency map (oid)", 32, &info, hashFlags);
 
 	ViewDependencyNode *tableNode = BuildViewDependencyGraph(relationId, nodeMap);

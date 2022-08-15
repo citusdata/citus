@@ -1281,7 +1281,8 @@ ErrorIfUnsupportedCascadeObjects(Oid relationId)
 	info.keysize = sizeof(Oid);
 	info.entrysize = sizeof(Oid);
 	info.hash = oid_hash;
-	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION);
+	info.hcxt = CurrentMemoryContext;
+	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 	HTAB *nodeMap = hash_create("object dependency map (oid)", 64, &info, hashFlags);
 
 	bool unsupportedObjectInDepGraph =
