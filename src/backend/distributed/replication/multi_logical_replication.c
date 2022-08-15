@@ -162,8 +162,6 @@ static HTAB * CreateShardMovePublicationInfoHash(WorkerNode *targetNode,
 												 List *shardIntervals);
 static List * CreateShardMoveLogicalRepTargetList(HTAB *publicationInfoHash,
 												  List *shardList);
-static uint32 HashNodeId(const void *key, Size keysize);
-static int CompareNodeId(const void *left, const void *right, Size keysize);
 static HTAB * InitGroupedLogicalRepTargetsHash(void);
 static void WaitForGroupedLogicalRepTargetsToBecomeReady(
 	GroupedLogicalRepTargets *groupedLogicalRepTargets);
@@ -387,11 +385,10 @@ InitPublicationInfoHash(void)
 	memset(&info, 0, sizeof(info));
 	info.keysize = sizeof(NodeAndOwner);
 	info.entrysize = sizeof(PublicationInfo);
-	info.hash = HashNodeAndOwner;
-	info.match = CompareNodeAndOwner;
+	info.hash = tag_hash;
 	info.hcxt = CurrentMemoryContext;
 
-	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION | HASH_COMPARE);
+	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
 
 	HTAB *publicationInfoHash = hash_create("PublicationInfoHash", 128, &info, hashFlags);
 	return publicationInfoHash;
@@ -409,82 +406,14 @@ InitGroupedLogicalRepTargetsHash(void)
 	memset(&info, 0, sizeof(info));
 	info.keysize = sizeof(uint32);
 	info.entrysize = sizeof(GroupedLogicalRepTargets);
-	info.hash = HashNodeId;
-	info.match = CompareNodeId;
+	info.hash = tag_hash;
 	info.hcxt = CurrentMemoryContext;
 
-	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION | HASH_COMPARE);
+	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
 
 	HTAB *publicationInfoHash = hash_create("GroupedLogicalRepTargetsHash", 128, &info,
 											hashFlags);
 	return publicationInfoHash;
-}
-
-
-/*
- * LogicalRepTargetNodeIdHash returns hash value by combining hash of node id
- * and tableowner Id.
- */
-static uint32
-HashNodeId(const void *key, Size keysize)
-{
-	uint32 *nodeId = (uint32 *) key;
-	return hash_uint32(*nodeId);
-}
-
-
-/*
- * NodeAndOwnerHash returns hash value by combining hash of node id
- * and tableowner Id.
- */
-uint32
-HashNodeAndOwner(const void *key, Size keysize)
-{
-	NodeAndOwner *entry = (NodeAndOwner *) key;
-	uint32 hash = hash_uint32(entry->nodeId);
-	hash = hash_combine(hash, hash_uint32(entry->tableOwnerId));
-	return hash;
-}
-
-
-/*
- * Comparator function for NodeAndOwner hash keys
- */
-static int
-CompareNodeId(const void *left, const void *right, Size keysize)
-{
-	uint32 *leftKey = (uint32 *) left;
-	uint32 *rightKey = (uint32 *) right;
-
-	if (*leftKey != *rightKey)
-	{
-		return 1;
-	}
-	else
-	{
-		return 0;
-	}
-}
-
-
-/*
- * Comparator function for NodeAndOwner hash keys
- */
-int
-CompareNodeAndOwner(const void *left, const void *right, Size keysize)
-{
-	NodeAndOwner *leftKey = (NodeAndOwner *) left;
-	NodeAndOwner *rightKey = (NodeAndOwner *) right;
-
-	if (leftKey->nodeId != rightKey->nodeId ||
-		leftKey->tableOwnerId != rightKey->tableOwnerId)
-	{
-		return 1;
-	}
-	else
-	{
-		return 0;
-	}
 }
 
 

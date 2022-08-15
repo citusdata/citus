@@ -173,11 +173,10 @@ SetupHashMapForShardInfo()
 	memset(&info, 0, sizeof(info));
 	info.keysize = sizeof(NodeAndOwner);
 	info.entrysize = sizeof(GroupedShardSplitInfos);
-	info.hash = HashNodeAndOwner;
-	info.match = CompareNodeAndOwner;
+	info.hash = tag_hash;
 	info.hcxt = CurrentMemoryContext;
 
-	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION | HASH_COMPARE);
+	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
 
 	HTAB *shardInfoMap = hash_create("ShardInfoMap", 128, &info, hashFlags);
 	return shardInfoMap;

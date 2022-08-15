@@ -157,8 +157,6 @@ extern void WaitForShardSubscriptionToCatchUp(MultiConnection *targetConnection,
 											  Bitmapset *tableOwnerIds,
 											  char *operationPrefix);
 extern HTAB * InitPublicationInfoHash(void);
-extern uint32 HashNodeAndOwner(const void *key, Size keysize);
-extern int CompareNodeAndOwner(const void *left, const void *right, Size keysize);
 extern HTAB * CreateGroupedLogicalRepTargetsHash(List *subscriptionInfoList);
 extern void CreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
 													  char *user,
