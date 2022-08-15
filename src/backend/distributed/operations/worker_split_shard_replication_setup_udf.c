@@ -13,6 +13,7 @@
 #include "postmaster/postmaster.h"
 #include "common/hashfn.h"
 #include "distributed/distribution_column.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shard_utils.h"
 #include "distributed/shardsplit_shared_memory.h"
@@ -52,17 +53,6 @@ static void PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMH
 
 static void ReturnReplicationSlotInfo(Tuplestorestate *tupleStore,
 									  TupleDesc tupleDescriptor);
-
-/*
- * GroupedShardSplitInfos groups all ShardSplitInfos belonging to the same node
- * and table owner together. This data structure its only purpose is creating a
- * hashmap that allows us to search ShardSplitInfos by node and owner.
- */
-typedef struct GroupedShardSplitInfos
-{
-	NodeAndOwner key;
-	List *shardSplitInfoList;
-} GroupedShardSplitInfos;
 
 /*
  * worker_split_shard_replication_setup UDF creates in-memory data structures
@@ -115,7 +105,7 @@ worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
 	}
 
 	/* SetupMap */
-	ShardInfoHashMap = SetupHashMapForShardInfo();
+	ShardInfoHashMap = CreateSimpleHash(NodeAndOwner, GroupedShardSplitInfos);
 
 	int shardSplitInfoCount = 0;
 
@@ -162,29 +152,6 @@ worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
 	ReturnReplicationSlotInfo(tupleStore, tupleDescriptor);
 
 	PG_RETURN_VOID();
-}
-
-
-/*
- * SetupHashMapForShardInfo initializes a hash map to store shard split
- * information by grouping them node id wise. The key of the hash table
- * is 'nodeId' and value is a list of ShardSplitInfo that are placed on
- * this particular node.
- */
-HTAB *
-SetupHashMapForShardInfo()
-{
-	HASHCTL info;
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(NodeAndOwner);
-	info.entrysize = sizeof(GroupedShardSplitInfos);
-	info.hash = tag_hash;
-	info.hcxt = CurrentMemoryContext;
-
-	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
-
-	HTAB *shardInfoMap = hash_create("ShardInfoMap", 128, &info, hashFlags);
-	return shardInfoMap;
 }
 
 

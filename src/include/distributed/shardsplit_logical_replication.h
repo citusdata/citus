@@ -16,7 +16,17 @@
 #include "distributed/multi_logical_replication.h"
 #include "distributed/worker_manager.h"
 
-extern HTAB * SetupHashMapForShardInfo(void);
+/*
+ * GroupedShardSplitInfos groups all ShardSplitInfos belonging to the same node
+ * and table owner together. This data structure its only purpose is creating a
+ * hashmap that allows us to search ShardSplitInfos by node and owner.
+ */
+typedef struct GroupedShardSplitInfos
+{
+	NodeAndOwner key;
+	List *shardSplitInfoList;
+} GroupedShardSplitInfos;
+
 
 /* Functions for subscriber metadata management */
 extern List * PopulateShardSplitSubscriptionsMetadataList(HTAB *shardSplitInfoHashMap,

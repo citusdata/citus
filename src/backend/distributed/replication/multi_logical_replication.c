@@ -382,17 +382,7 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 HTAB *
 InitPublicationInfoHash(void)
 {
-	HASHCTL info;
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(NodeAndOwner);
-	info.entrysize = sizeof(PublicationInfo);
-	info.hash = tag_hash;
-	info.hcxt = CurrentMemoryContext;
-
-	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
-
-	HTAB *publicationInfoHash = hash_create("PublicationInfoHash", 128, &info, hashFlags);
-	return publicationInfoHash;
+	return CreateSimpleHash(NodeAndOwner, PublicationInfo);
 }
 
 
@@ -403,18 +393,7 @@ InitPublicationInfoHash(void)
 static HTAB *
 InitGroupedLogicalRepTargetsHash(void)
 {
-	HASHCTL info;
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(uint32);
-	info.entrysize = sizeof(GroupedLogicalRepTargets);
-	info.hash = tag_hash;
-	info.hcxt = CurrentMemoryContext;
-
-	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
-
-	HTAB *publicationInfoHash = hash_create("GroupedLogicalRepTargetsHash", 128, &info,
-											hashFlags);
-	return publicationInfoHash;
+	return CreateSimpleHash(uint32, PublicationInfo);
 }
 
 

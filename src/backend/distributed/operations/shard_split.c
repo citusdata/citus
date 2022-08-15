@@ -21,6 +21,7 @@
 #include "distributed/shared_library_init.h"
 #include "distributed/adaptive_executor.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/coordinator_protocol.h"
@@ -1294,7 +1295,8 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 	HTAB *mapOfShardToPlacementCreatedByWorkflow =
 		CreateEmptyMapForShardsCreatedByWorkflow();
 
-	HTAB *mapOfDummyShardToPlacement = SetupHashMapForShardInfo();
+	HTAB *mapOfDummyShardToPlacement = CreateSimpleHash(NodeAndOwner,
+														GroupedShardSplitInfos);
 	MultiConnection *sourceReplicationConnection =
 		GetReplicationConnection(sourceShardToCopyNode->workerName,
 								 sourceShardToCopyNode->workerPort);

@@ -30,4 +30,8 @@ extern void hash_delete_all(HTAB *htab);
 
 extern void foreach_htab_cleanup(void *var, HASH_SEQ_STATUS *status);
 
+extern HTAB * CreateSimpleHashWithName(Size keysize, Size entrysize, char *name);
+
+#define CreateSimpleHash(keyType, entryType) \
+	CreateSimpleHashWithName(sizeof(keyType), sizeof(entryType), # entryType "Hash")
 #endif
