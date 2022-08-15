@@ -395,6 +395,14 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '10.2-4';
 SELECT * FROM multi_extension.print_extension_changes();
 
+-- Snapshot of state at 10.2-5
+ALTER EXTENSION citus UPDATE TO '10.2-5';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test downgrade to 10.2-4 from 10.2-5
+ALTER EXTENSION citus UPDATE TO '10.2-4';
+ALTER EXTENSION citus UPDATE TO '10.2-5';
+
 -- Make sure that we defined dependencies from all rel objects (tables,
 -- indexes, sequences ..) to columnar table access method ...
 SELECT pg_class.oid INTO columnar_schema_members
