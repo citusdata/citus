@@ -51,6 +51,11 @@ typedef struct ShardCreatedByWorkflowEntry
 	WorkerNode *workerNodeValue;
 } ShardCreatedByWorkflowEntry;
 
+/*
+ * Entry for map that trackes dummy shards.
+ * Key: node + owner
+ * Value: List of dummy shards for that node + owner
+ */
 typedef struct GroupedDummyShards
 {
 	NodeAndOwner key;
