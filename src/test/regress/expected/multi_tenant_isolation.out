@@ -168,12 +168,12 @@ SELECT count(*) FROM orders_streaming WHERE o_orderkey = 103;
 SELECT * FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
-    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue
+    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue | shardstate
 ---------------------------------------------------------------------
- lineitem_streaming | 1230000 | t            | -2147483648   | -1
- orders_streaming   | 1230002 | t            | -2147483648   | -1
- lineitem_streaming | 1230001 | t            | 0             | 2147483647
- orders_streaming   | 1230003 | t            | 0             | 2147483647
+ lineitem_streaming | 1230000 | t            | -2147483648   | -1            |          1
+ orders_streaming   | 1230002 | t            | -2147483648   | -1            |          1
+ lineitem_streaming | 1230001 | t            | 0             | 2147483647    |          1
+ orders_streaming   | 1230003 | t            | 0             | 2147483647    |          1
 (4 rows)
 
 -- check without cascade option
@@ -387,32 +387,32 @@ SELECT count(*) FROM orders_streaming WHERE o_orderkey = 103;
 SELECT * FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
-    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue
+    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue | shardstate
 ---------------------------------------------------------------------
- lineitem_streaming | 1230040 | t            | -2147483648   | -2147483648
- orders_streaming   | 1230042 | t            | -2147483648   | -2147483648
- lineitem_streaming | 1230041 | t            | -2147483647   | -136164586
- orders_streaming   | 1230043 | t            | -2147483647   | -136164586
- lineitem_streaming | 1230035 | t            | -136164585    | -136164585
- orders_streaming   | 1230038 | t            | -136164585    | -136164585
- lineitem_streaming | 1230036 | t            | -136164584    | -85071815
- orders_streaming   | 1230039 | t            | -136164584    | -85071815
- lineitem_streaming | 1230011 | t            | -85071814     | -85071814
- orders_streaming   | 1230014 | t            | -85071814     | -85071814
- lineitem_streaming | 1230012 | t            | -85071813     | -1
- orders_streaming   | 1230015 | t            | -85071813     | -1
- lineitem_streaming | 1230004 | t            | 0             | 108199380
- orders_streaming   | 1230007 | t            | 0             | 108199380
- lineitem_streaming | 1230005 | t            | 108199381     | 108199381
- orders_streaming   | 1230008 | t            | 108199381     | 108199381
- lineitem_streaming | 1230028 | t            | 108199382     | 412880111
- orders_streaming   | 1230031 | t            | 108199382     | 412880111
- lineitem_streaming | 1230029 | t            | 412880112     | 412880112
- orders_streaming   | 1230032 | t            | 412880112     | 412880112
- lineitem_streaming | 1230044 | t            | 412880113     | 2147483646
- orders_streaming   | 1230046 | t            | 412880113     | 2147483646
- lineitem_streaming | 1230045 | t            | 2147483647    | 2147483647
- orders_streaming   | 1230047 | t            | 2147483647    | 2147483647
+ lineitem_streaming | 1230040 | t            | -2147483648   | -2147483648   |          1
+ orders_streaming   | 1230042 | t            | -2147483648   | -2147483648   |          1
+ lineitem_streaming | 1230041 | t            | -2147483647   | -136164586    |          1
+ orders_streaming   | 1230043 | t            | -2147483647   | -136164586    |          1
+ lineitem_streaming | 1230035 | t            | -136164585    | -136164585    |          1
+ orders_streaming   | 1230038 | t            | -136164585    | -136164585    |          1
+ lineitem_streaming | 1230036 | t            | -136164584    | -85071815     |          1
+ orders_streaming   | 1230039 | t            | -136164584    | -85071815     |          1
+ lineitem_streaming | 1230011 | t            | -85071814     | -85071814     |          1
+ orders_streaming   | 1230014 | t            | -85071814     | -85071814     |          1
+ lineitem_streaming | 1230012 | t            | -85071813     | -1            |          1
+ orders_streaming   | 1230015 | t            | -85071813     | -1            |          1
+ lineitem_streaming | 1230004 | t            | 0             | 108199380     |          1
+ orders_streaming   | 1230007 | t            | 0             | 108199380     |          1
+ lineitem_streaming | 1230005 | t            | 108199381     | 108199381     |          1
+ orders_streaming   | 1230008 | t            | 108199381     | 108199381     |          1
+ lineitem_streaming | 1230028 | t            | 108199382     | 412880111     |          1
+ orders_streaming   | 1230031 | t            | 108199382     | 412880111     |          1
+ lineitem_streaming | 1230029 | t            | 412880112     | 412880112     |          1
+ orders_streaming   | 1230032 | t            | 412880112     | 412880112     |          1
+ lineitem_streaming | 1230044 | t            | 412880113     | 2147483646    |          1
+ orders_streaming   | 1230046 | t            | 412880113     | 2147483646    |          1
+ lineitem_streaming | 1230045 | t            | 2147483647    | 2147483647    |          1
+ orders_streaming   | 1230047 | t            | 2147483647    | 2147483647    |          1
 (24 rows)
 
 SELECT * FROM pg_dist_shard_placement WHERE shardid >= 1230000 ORDER BY nodeport, shardid;
@@ -534,32 +534,32 @@ SET search_path to "Tenant Isolation";
 SELECT * FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
-    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue
+    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue | shardstate
 ---------------------------------------------------------------------
- lineitem_streaming | 1230040 | t            | -2147483648   | -2147483648
- orders_streaming   | 1230042 | t            | -2147483648   | -2147483648
- lineitem_streaming | 1230041 | t            | -2147483647   | -136164586
- orders_streaming   | 1230043 | t            | -2147483647   | -136164586
- lineitem_streaming | 1230035 | t            | -136164585    | -136164585
- orders_streaming   | 1230038 | t            | -136164585    | -136164585
- lineitem_streaming | 1230036 | t            | -136164584    | -85071815
- orders_streaming   | 1230039 | t            | -136164584    | -85071815
- lineitem_streaming | 1230011 | t            | -85071814     | -85071814
- orders_streaming   | 1230014 | t            | -85071814     | -85071814
- lineitem_streaming | 1230012 | t            | -85071813     | -1
- orders_streaming   | 1230015 | t            | -85071813     | -1
- lineitem_streaming | 1230004 | t            | 0             | 108199380
- orders_streaming   | 1230007 | t            | 0             | 108199380
- lineitem_streaming | 1230005 | t            | 108199381     | 108199381
- orders_streaming   | 1230008 | t            | 108199381     | 108199381
- lineitem_streaming | 1230028 | t            | 108199382     | 412880111
- orders_streaming   | 1230031 | t            | 108199382     | 412880111
- lineitem_streaming | 1230029 | t            | 412880112     | 412880112
- orders_streaming   | 1230032 | t            | 412880112     | 412880112
- lineitem_streaming | 1230044 | t            | 412880113     | 2147483646
- orders_streaming   | 1230046 | t            | 412880113     | 2147483646
- lineitem_streaming | 1230045 | t            | 2147483647    | 2147483647
- orders_streaming   | 1230047 | t            | 2147483647    | 2147483647
+ lineitem_streaming | 1230040 | t            | -2147483648   | -2147483648   |          1
+ orders_streaming   | 1230042 | t            | -2147483648   | -2147483648   |          1
+ lineitem_streaming | 1230041 | t            | -2147483647   | -136164586    |          1
+ orders_streaming   | 1230043 | t            | -2147483647   | -136164586    |          1
+ lineitem_streaming | 1230035 | t            | -136164585    | -136164585    |          1
+ orders_streaming   | 1230038 | t            | -136164585    | -136164585    |          1
+ lineitem_streaming | 1230036 | t            | -136164584    | -85071815     |          1
+ orders_streaming   | 1230039 | t            | -136164584    | -85071815     |          1
+ lineitem_streaming | 1230011 | t            | -85071814     | -85071814     |          1
+ orders_streaming   | 1230014 | t            | -85071814     | -85071814     |          1
+ lineitem_streaming | 1230012 | t            | -85071813     | -1            |          1
+ orders_streaming   | 1230015 | t            | -85071813     | -1            |          1
+ lineitem_streaming | 1230004 | t            | 0             | 108199380     |          1
+ orders_streaming   | 1230007 | t            | 0             | 108199380     |          1
+ lineitem_streaming | 1230005 | t            | 108199381     | 108199381     |          1
+ orders_streaming   | 1230008 | t            | 108199381     | 108199381     |          1
+ lineitem_streaming | 1230028 | t            | 108199382     | 412880111     |          1
+ orders_streaming   | 1230031 | t            | 108199382     | 412880111     |          1
+ lineitem_streaming | 1230029 | t            | 412880112     | 412880112     |          1
+ orders_streaming   | 1230032 | t            | 412880112     | 412880112     |          1
+ lineitem_streaming | 1230044 | t            | 412880113     | 2147483646    |          1
+ orders_streaming   | 1230046 | t            | 412880113     | 2147483646    |          1
+ lineitem_streaming | 1230045 | t            | 2147483647    | 2147483647    |          1
+ orders_streaming   | 1230047 | t            | 2147483647    | 2147483647    |          1
 (24 rows)
 
 -- return to master node
@@ -685,32 +685,32 @@ ERROR:  cannot isolate tenant because tenant isolation is only support for hash 
 SELECT * FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
-    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue
+    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue | shardstate
 ---------------------------------------------------------------------
- lineitem_streaming | 1230040 | t            | -2147483648   | -2147483648
- orders_streaming   | 1230042 | t            | -2147483648   | -2147483648
- lineitem_streaming | 1230041 | t            | -2147483647   | -136164586
- orders_streaming   | 1230043 | t            | -2147483647   | -136164586
- lineitem_streaming | 1230035 | t            | -136164585    | -136164585
- orders_streaming   | 1230038 | t            | -136164585    | -136164585
- lineitem_streaming | 1230036 | t            | -136164584    | -85071815
- orders_streaming   | 1230039 | t            | -136164584    | -85071815
- lineitem_streaming | 1230011 | t            | -85071814     | -85071814
- orders_streaming   | 1230014 | t            | -85071814     | -85071814
- lineitem_streaming | 1230012 | t            | -85071813     | -1
- orders_streaming   | 1230015 | t            | -85071813     | -1
- lineitem_streaming | 1230004 | t            | 0             | 108199380
- orders_streaming   | 1230007 | t            | 0             | 108199380
- lineitem_streaming | 1230005 | t            | 108199381     | 108199381
- orders_streaming   | 1230008 | t            | 108199381     | 108199381
- lineitem_streaming | 1230028 | t            | 108199382     | 412880111
- orders_streaming   | 1230031 | t            | 108199382     | 412880111
- lineitem_streaming | 1230029 | t            | 412880112     | 412880112
- orders_streaming   | 1230032 | t            | 412880112     | 412880112
- lineitem_streaming | 1230044 | t            | 412880113     | 2147483646
- orders_streaming   | 1230046 | t            | 412880113     | 2147483646
- lineitem_streaming | 1230045 | t            | 2147483647    | 2147483647
- orders_streaming   | 1230047 | t            | 2147483647    | 2147483647
+ lineitem_streaming | 1230040 | t            | -2147483648   | -2147483648   |          1
+ orders_streaming   | 1230042 | t            | -2147483648   | -2147483648   |          1
+ lineitem_streaming | 1230041 | t            | -2147483647   | -136164586    |          1
+ orders_streaming   | 1230043 | t            | -2147483647   | -136164586    |          1
+ lineitem_streaming | 1230035 | t            | -136164585    | -136164585    |          1
+ orders_streaming   | 1230038 | t            | -136164585    | -136164585    |          1
+ lineitem_streaming | 1230036 | t            | -136164584    | -85071815     |          1
+ orders_streaming   | 1230039 | t            | -136164584    | -85071815     |          1
+ lineitem_streaming | 1230011 | t            | -85071814     | -85071814     |          1
+ orders_streaming   | 1230014 | t            | -85071814     | -85071814     |          1
+ lineitem_streaming | 1230012 | t            | -85071813     | -1            |          1
+ orders_streaming   | 1230015 | t            | -85071813     | -1            |          1
+ lineitem_streaming | 1230004 | t            | 0             | 108199380     |          1
+ orders_streaming   | 1230007 | t            | 0             | 108199380     |          1
+ lineitem_streaming | 1230005 | t            | 108199381     | 108199381     |          1
+ orders_streaming   | 1230008 | t            | 108199381     | 108199381     |          1
+ lineitem_streaming | 1230028 | t            | 108199382     | 412880111     |          1
+ orders_streaming   | 1230031 | t            | 108199382     | 412880111     |          1
+ lineitem_streaming | 1230029 | t            | 412880112     | 412880112     |          1
+ orders_streaming   | 1230032 | t            | 412880112     | 412880112     |          1
+ lineitem_streaming | 1230044 | t            | 412880113     | 2147483646    |          1
+ orders_streaming   | 1230046 | t            | 412880113     | 2147483646    |          1
+ lineitem_streaming | 1230045 | t            | 2147483647    | 2147483647    |          1
+ orders_streaming   | 1230047 | t            | 2147483647    | 2147483647    |          1
 (24 rows)
 
 -- test failure scenarios with triggers on workers
@@ -808,32 +808,32 @@ ERROR:  command DROP TABLE is disabled
 SELECT * FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
-    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue
+    logicalrelid    | shardid | shardstorage | shardminvalue | shardmaxvalue | shardstate
 ---------------------------------------------------------------------
- lineitem_streaming | 1230040 | t            | -2147483648   | -2147483648
- orders_streaming   | 1230042 | t            | -2147483648   | -2147483648
- lineitem_streaming | 1230041 | t            | -2147483647   | -136164586
- orders_streaming   | 1230043 | t            | -2147483647   | -136164586
- lineitem_streaming | 1230035 | t            | -136164585    | -136164585
- orders_streaming   | 1230038 | t            | -136164585    | -136164585
- lineitem_streaming | 1230036 | t            | -136164584    | -85071815
- orders_streaming   | 1230039 | t            | -136164584    | -85071815
- lineitem_streaming | 1230011 | t            | -85071814     | -85071814
- orders_streaming   | 1230014 | t            | -85071814     | -85071814
- lineitem_streaming | 1230012 | t            | -85071813     | -1
- orders_streaming   | 1230015 | t            | -85071813     | -1
- lineitem_streaming | 1230004 | t            | 0             | 108199380
- orders_streaming   | 1230007 | t            | 0             | 108199380
- lineitem_streaming | 1230005 | t            | 108199381     | 108199381
- orders_streaming   | 1230008 | t            | 108199381     | 108199381
- lineitem_streaming | 1230028 | t            | 108199382     | 412880111
- orders_streaming   | 1230031 | t            | 108199382     | 412880111
- lineitem_streaming | 1230029 | t            | 412880112     | 412880112
- orders_streaming   | 1230032 | t            | 412880112     | 412880112
- lineitem_streaming | 1230044 | t            | 412880113     | 2147483646
- orders_streaming   | 1230046 | t            | 412880113     | 2147483646
- lineitem_streaming | 1230045 | t            | 2147483647    | 2147483647
- orders_streaming   | 1230047 | t            | 2147483647    | 2147483647
+ lineitem_streaming | 1230040 | t            | -2147483648   | -2147483648   |          1
+ orders_streaming   | 1230042 | t            | -2147483648   | -2147483648   |          1
+ lineitem_streaming | 1230041 | t            | -2147483647   | -136164586    |          1
+ orders_streaming   | 1230043 | t            | -2147483647   | -136164586    |          1
+ lineitem_streaming | 1230035 | t            | -136164585    | -136164585    |          1
+ orders_streaming   | 1230038 | t            | -136164585    | -136164585    |          1
+ lineitem_streaming | 1230036 | t            | -136164584    | -85071815     |          1
+ orders_streaming   | 1230039 | t            | -136164584    | -85071815     |          1
+ lineitem_streaming | 1230011 | t            | -85071814     | -85071814     |          1
+ orders_streaming   | 1230014 | t            | -85071814     | -85071814     |          1
+ lineitem_streaming | 1230012 | t            | -85071813     | -1            |          1
+ orders_streaming   | 1230015 | t            | -85071813     | -1            |          1
+ lineitem_streaming | 1230004 | t            | 0             | 108199380     |          1
+ orders_streaming   | 1230007 | t            | 0             | 108199380     |          1
+ lineitem_streaming | 1230005 | t            | 108199381     | 108199381     |          1
+ orders_streaming   | 1230008 | t            | 108199381     | 108199381     |          1
+ lineitem_streaming | 1230028 | t            | 108199382     | 412880111     |          1
+ orders_streaming   | 1230031 | t            | 108199382     | 412880111     |          1
+ lineitem_streaming | 1230029 | t            | 412880112     | 412880112     |          1
+ orders_streaming   | 1230032 | t            | 412880112     | 412880112     |          1
+ lineitem_streaming | 1230044 | t            | 412880113     | 2147483646    |          1
+ orders_streaming   | 1230046 | t            | 412880113     | 2147483646    |          1
+ lineitem_streaming | 1230045 | t            | 2147483647    | 2147483647    |          1
+ orders_streaming   | 1230047 | t            | 2147483647    | 2147483647    |          1
 (24 rows)
 
 \c - - - :worker_1_port
