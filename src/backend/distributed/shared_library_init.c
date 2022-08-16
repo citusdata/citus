@@ -929,12 +929,14 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomEnumVariable(
 		"citus.cpu_priority_for_logical_replication_senders",
-		gettext_noop("Sets the CPU priority for backends send logical "
-					 "replication changes to other nodes."),
+		gettext_noop("Sets the CPU priority for backends that send logical "
+					 "replication changes to other nodes for online shard "
+					 "moves and splits."),
 		gettext_noop("Lower numbers cause more favorable scheduling, so the "
 					 "backends used to do the shard move will get more CPU "
 					 "resources. 'inherit' is a special value and disables "
-					 "overriding the CPU priority for shard moves."),
+					 "overriding the CPU priority for backends that send "
+					 "logical replication changes."),
 		&CpuPriorityLogicalRepSender,
 		CPU_PRIORITY_INHERIT, cpu_priority_options,
 		PGC_SUSET,
