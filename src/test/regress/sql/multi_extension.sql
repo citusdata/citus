@@ -447,7 +447,7 @@ SELECT
 FROM
 	pg_dist_node_metadata;
 
--- Test downgrade to 10.2-4 from 11.0-1
+-- Test downgrade to 10.2-5 from 11.0-1
 ALTER EXTENSION citus UPDATE TO '11.0-1';
 
 SELECT
@@ -459,7 +459,7 @@ FROM
 DELETE FROM pg_dist_partition WHERE logicalrelid = 'e_transactions'::regclass;
 DROP TABLE e_transactions;
 
-ALTER EXTENSION citus UPDATE TO '10.2-4';
+ALTER EXTENSION citus UPDATE TO '10.2-5';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
 
