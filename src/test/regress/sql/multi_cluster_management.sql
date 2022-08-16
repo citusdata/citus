@@ -188,7 +188,10 @@ CREATE TABLE cluster_management_test_colocated (col_1 text, col_2 int);
 SELECT create_distributed_table('cluster_management_test_colocated', 'col_1', 'hash', colocate_with => 'cluster_management_test');
 
 -- Check that colocated shards don't get created for shards that are to be deleted
-SELECT logicalrelid, shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard ORDER BY shardstate, shardid;
+SELECT logicalrelid, shardid, shardstate, nodename, nodeport
+    FROM pg_dist_shard_placement
+    INNER JOIN pg_dist_shard USING (shardid)
+    ORDER BY shardstate, shardid;
 
 -- clean-up
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);

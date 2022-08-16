@@ -3599,7 +3599,7 @@ InitializeDistCache(void)
 	DistShardScanKey[0].sk_collation = InvalidOid;
 	DistShardScanKey[0].sk_attno = Anum_pg_dist_shard_logicalrelid;
 
-	fmgr_info_cxt(F_OIDEQ,
+	fmgr_info_cxt(F_INT4EQ,
 				  &DistShardScanKey[1].sk_func,
 				  MetadataCacheMemoryContext);
 	DistShardScanKey[1].sk_strategy = BTLessStrategyNumber;
