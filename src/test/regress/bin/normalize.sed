@@ -43,6 +43,11 @@ s/"citus_local_table_([0-9]+)_[0-9]+"/"citus_local_table_\1_xxxxxxx"/g
 # normalize relation oid suffix for the truncate triggers created by citus
 s/truncate_trigger_[0-9]+/truncate_trigger_xxxxxxx/g
 
+# shard move subscription and publication names contain the oid of the
+# table owner, which can change across runs
+s/(citus_shard_(move|split)_subscription_)[0-9]+/\1xxxxxxx/g
+s/(citus_shard_(move|split)_(slot|publication)_)[0-9]+_[0-9]+/\1xxxxxxx_xxxxxxx/g
+
 # In foreign_key_restriction_enforcement, normalize shard names
 s/"(on_update_fkey_table_|fkey_)[0-9]+"/"\1xxxxxxx"/g
 
