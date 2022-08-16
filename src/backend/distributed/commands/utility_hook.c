@@ -202,8 +202,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
 	}
 
-	if (IsA(parsetree, CreateExtensionStmt) && !CitusHasBeenLoaded()
-		)
+	if (IsA(parsetree, CreateExtensionStmt))
 	{
 		/*
 		 * Postgres forbids creating/altering other extensions from within an extension script, so we use a utility hook instead
