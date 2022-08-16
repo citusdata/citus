@@ -27,8 +27,6 @@
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_split_shard_by_split_points);
 
-static SplitMode LookupSplitMode(Oid shardTransferModeOid);
-
 /*
  * citus_split_shard_by_split_points(shard_id bigint, split_points text[], node_ids integer[], shard_transfer_mode citus.shard_transfer_mode)
  * Split source shard into multiple shards using the given split points.
@@ -81,12 +79,13 @@ LookupSplitMode(Oid shardTransferModeOid)
 	{
 		shardSplitMode = BLOCKING_SPLIT;
 	}
-
-	/* TODO(saawaek): Handle this appropriately based on replica identity */
-	else if (strncmp(enumLabel, "auto", NAMEDATALEN) == 0 ||
-			 strncmp(enumLabel, "force_logical", NAMEDATALEN) == 0)
+	else if (strncmp(enumLabel, "force_logical", NAMEDATALEN) == 0)
 	{
 		shardSplitMode = NON_BLOCKING_SPLIT;
+	}
+	else if (strncmp(enumLabel, "auto", NAMEDATALEN) == 0)
+	{
+		shardSplitMode = AUTO_SPLIT;
 	}
 	else
 	{

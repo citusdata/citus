@@ -389,7 +389,7 @@ ORDER BY nodename, nodeport, shardid;
 (4 rows)
 
 -- verify isolate tenant carries grants
-SELECT isolate_tenant_to_new_shard('multiuser_schema.hash_table', 5);
+SELECT isolate_tenant_to_new_shard('multiuser_schema.hash_table', 5, shard_transfer_mode => 'block_writes');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                       109100

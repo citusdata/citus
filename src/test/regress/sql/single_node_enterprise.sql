@@ -177,7 +177,7 @@ CREATE VIEW view_created_before_shard_moves AS
 SELECT * FROM view_created_before_shard_moves;
 
 -- show that tenant isolation works fine
-SELECT isolate_tenant_to_new_shard('test', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('test', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 
 -- in the first iteration, have an
 -- hybrid cluster meaning that

@@ -92,7 +92,7 @@ FROM shard_ranges;
 
 -- UDF fails where source shard cannot be split further i.e min and max range is equal.
 -- Create a Shard where range cannot be split further
-SELECT isolate_tenant_to_new_shard('table_to_split', 1);
+SELECT isolate_tenant_to_new_shard('table_to_split', 1, shard_transfer_mode => 'block_writes');
 SELECT citus_split_shard_by_split_points(
 	49761305,
 	ARRAY['-1073741826'],

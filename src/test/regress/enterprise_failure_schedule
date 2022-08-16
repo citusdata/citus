@@ -9,4 +9,5 @@ test: failure_online_move_shard_placement
 test: failure_on_create_subscription
 test: failure_offline_move_shard_placement
 test: failure_tenant_isolation
+test: failure_tenant_isolation_nonblocking
 test: check_mx

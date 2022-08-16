@@ -232,7 +232,7 @@ SET citus.shard_replication_factor TO 1;
         8999002, -- sensors_old
         ARRAY['-2127770000'],
         ARRAY[:worker_1_node, :worker_2_node],
-        'auto');
+        'force_logical');
 -- END: Split a partition table directly
 
 -- BEGIN: Validate Shard Info and Data

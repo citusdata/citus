@@ -177,19 +177,19 @@ SELECT * FROM pg_dist_shard
 (4 rows)
 
 -- check without cascade option
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, shard_transfer_mode => 'force_logical');
 ERROR:  cannot isolate tenant because "lineitem_streaming" has colocated tables
 HINT:  Use CASCADE option to isolate tenants for the colocated tables too. Example usage: isolate_tenant_to_new_shard('lineitem_streaming', '100', 'CASCADE')
 -- check with an input not castable to bigint
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 'abc', 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 'abc', 'CASCADE', shard_transfer_mode => 'force_logical');
 ERROR:  invalid input syntax for type bigint: "abc"
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE', shard_transfer_mode => 'force_logical');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                      1230005
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 101, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 101, 'CASCADE', shard_transfer_mode => 'force_logical');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                      1230011
@@ -221,53 +221,53 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SET search_path to "Tenant Isolation";
 -- test a failing transaction block
 BEGIN;
-SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE', shard_transfer_mode => 'force_logical');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                      1230020
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 102, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 102, 'CASCADE', shard_transfer_mode => 'force_logical');
 ERROR:  table lineitem_streaming has already been isolated for the given value
 COMMIT;
 -- test a rollback transaction block
 BEGIN;
-SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE', shard_transfer_mode => 'force_logical');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                      1230026
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE', shard_transfer_mode => 'block_writes');
-ERROR:  cannot isolate tenant after other modifications in the same transaction.
+SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE', shard_transfer_mode => 'force_logical');
+ERROR:  multiple shard movements/splits via logical replication in the same transaction is currently not supported
 ROLLBACK;
 -- test a succesfull transaction block
 BEGIN;
-SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE', shard_transfer_mode => 'force_logical');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                      1230032
 (1 row)
 
 COMMIT;
-SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE', shard_transfer_mode => 'force_logical');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                      1230038
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE', shard_transfer_mode => 'force_logical');
 ERROR:  table lineitem_streaming has already been isolated for the given value
-SELECT isolate_tenant_to_new_shard('orders_streaming', 101, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 101, 'CASCADE', shard_transfer_mode => 'force_logical');
 ERROR:  table orders_streaming has already been isolated for the given value
 -- test corner cases: hash(-1995148554) = -2147483648 and hash(-1686493264) = 2147483647
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', -1995148554, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', -1995148554, 'CASCADE', shard_transfer_mode => 'force_logical');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                      1230040
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('orders_streaming', -1686493264, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('orders_streaming', -1686493264, 'CASCADE', shard_transfer_mode => 'force_logical');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                      1230047
@@ -622,11 +622,11 @@ SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1997-08-08';
      1
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('lineitem_date', '1998-05-26', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('lineitem_date', '1998-05-26', shard_transfer_mode => 'force_logical');
 ERROR:  cannot isolate tenants when using shard replication
-SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-07-30', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-07-30', shard_transfer_mode => 'force_logical');
 ERROR:  cannot isolate tenants when using shard replication
-SELECT isolate_tenant_to_new_shard('lineitem_date', '1998-01-15', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('lineitem_date', '1998-01-15', shard_transfer_mode => 'force_logical');
 ERROR:  cannot isolate tenants when using shard replication
 SELECT count(*) FROM lineitem_date;
  count
@@ -662,7 +662,7 @@ SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1997-08-08';
 \c - postgres - :master_port
 SET search_path to "Tenant Isolation";
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE nodeport = :worker_1_port;
-SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-08-08', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-08-08', shard_transfer_mode => 'force_logical');
 ERROR:  cannot split shard because relation "lineitem_date" has an inactive shard placement for the shard xxxxx
 HINT:  Use master_copy_shard_placement UDF to repair the inactive shard placement.
 UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE nodeport = :worker_1_port;
@@ -679,7 +679,7 @@ SELECT create_distributed_table('test_append', 'tenant_id', 'append');
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('test_append', 100, shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('test_append', 100, shard_transfer_mode => 'force_logical');
 ERROR:  cannot isolate tenant because tenant isolation is only support for hash distributed tables
 -- check metadata for comparison
 SELECT * FROM pg_dist_shard
@@ -752,7 +752,7 @@ SET citus.override_table_visibility TO false;
 \c - mx_isolation_role_ent - :master_port
 SET search_path to "Tenant Isolation";
 \set VERBOSITY terse
-SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_transfer_mode => 'force_logical');
 ERROR:  command CREATE TABLE is disabled
 \set VERBOSITY default
 \c - postgres - :worker_1_port
@@ -795,14 +795,14 @@ CREATE EVENT TRIGGER abort_drop ON sql_drop
 \c - mx_isolation_role_ent - :master_port
 SET search_path to "Tenant Isolation";
 \set VERBOSITY terse
-SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_transfer_mode => 'force_logical');
 WARNING:  command DROP TABLE is disabled
 WARNING:  command DROP TABLE is disabled
 WARNING:  command DROP TABLE is disabled
 WARNING:  command DROP TABLE is disabled
 WARNING:  command DROP TABLE is disabled
 WARNING:  command DROP TABLE is disabled
-ERROR:  command DROP TABLE is disabled
+ERROR:  command DROP SUBSCRIPTION is disabled
 \set VERBOSITY default
 -- check if metadata is changed
 SELECT * FROM pg_dist_shard
@@ -1014,7 +1014,7 @@ SELECT create_distributed_table('composite_table', 'composite_key');
 INSERT INTO composite_table VALUES  ('(1, 2)'::test_composite_type);
 INSERT INTO composite_table VALUES  ('(1, 3)'::test_composite_type);
 INSERT INTO composite_table VALUES  ('(1, 4)'::test_composite_type);
-SELECT isolate_tenant_to_new_shard('composite_table', '(1, 3)', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('composite_table', '(1, 3)', shard_transfer_mode => 'force_logical');
 ERROR:  cannot isolate tenants when using shard replication
 SELECT count(*) FROM composite_table WHERE composite_key = '(1, 2)'::test_composite_type;
  count
@@ -1068,14 +1068,29 @@ SELECT create_distributed_table('test_colocated_table_3', 'id', colocate_with =>
 
 (1 row)
 
+CREATE TABLE test_colocated_table_no_rep_identity(id int, value_1 int, FOREIGN KEY(value_1) REFERENCES test_reference_table_fkey(id), FOREIGN KEY(id) REFERENCES test_colocated_table_1(id), FOREIGN KEY(id) REFERENCES test_colocated_table_2(id));
+SELECT create_distributed_table('test_colocated_table_no_rep_identity', 'id', colocate_with => 'test_colocated_table_1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 INSERT INTO test_reference_table_fkey SELECT i FROM generate_series (0, 100) i;
 INSERT INTO test_colocated_table_1 SELECT i, i FROM generate_series (0, 100) i;
 INSERT INTO test_colocated_table_2 SELECT i, i FROM generate_series (0, 100) i;
 INSERT INTO test_colocated_table_3 SELECT i, i FROM generate_series (0, 100) i;
-SELECT isolate_tenant_to_new_shard('test_colocated_table_2', 1, 'CASCADE', shard_transfer_mode => 'block_writes');
+INSERT INTO test_colocated_table_no_rep_identity SELECT i, i FROM generate_series (0, 100) i;
+-- show that we donot support tenant isolation if the table has a colocated table with no replica identity and shard_transfer_mode=auto
+SELECT isolate_tenant_to_new_shard('test_colocated_table_2', 1, 'CASCADE', shard_transfer_mode => 'auto');
+ERROR:  cannot use logical replication to transfer shards of the relation test_colocated_table_no_rep_identity since it doesn't have a REPLICA IDENTITY or PRIMARY KEY
+DETAIL:  UPDATE and DELETE commands on the shard will error out during logical replication unless there is a REPLICA IDENTITY or PRIMARY KEY.
+HINT:  If you wish to continue without a replica identity set the shard_transfer_mode to 'force_logical' or 'block_writes'.
+-- show that we can isolate it after removing the colocated table with no replica identity
+DROP TABLE test_colocated_table_no_rep_identity;
+SELECT isolate_tenant_to_new_shard('test_colocated_table_2', 1, 'CASCADE', shard_transfer_mode => 'auto');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                     1230095
+                     1230103
 (1 row)
 
 SELECT count(*) FROM test_colocated_table_2;
@@ -1097,9 +1112,9 @@ ORDER BY 1, 2;
  test_colocated_table_1_1230069 | test_colocated_table_1_id_fkey_1230069      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230069(id)
  test_colocated_table_1_1230071 | test_colocated_table_1_id_fkey_1230071      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230071(id)
  test_colocated_table_1_1230073 | test_colocated_table_1_id_fkey_1230073      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230073(id)
- test_colocated_table_1_1230091 | test_colocated_table_1_id_fkey_1230091      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230091(id)
- test_colocated_table_1_1230092 | test_colocated_table_1_id_fkey_1230092      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230092(id)
- test_colocated_table_1_1230093 | test_colocated_table_1_id_fkey_1230093      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230093(id)
+ test_colocated_table_1_1230099 | test_colocated_table_1_id_fkey_1230099      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230099(id)
+ test_colocated_table_1_1230100 | test_colocated_table_1_id_fkey_1230100      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230100(id)
+ test_colocated_table_1_1230101 | test_colocated_table_1_id_fkey_1230101      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230101(id)
  test_colocated_table_2         | test_colocated_table_2_id_fkey              | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1(id)
  test_colocated_table_2         | test_colocated_table_2_value_1_fkey         | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey(id)
  test_colocated_table_2_1230077 | test_colocated_table_2_id_fkey_1230077      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230069(id)
@@ -1108,12 +1123,12 @@ ORDER BY 1, 2;
  test_colocated_table_2_1230079 | test_colocated_table_2_value_1_fkey_1230079 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
  test_colocated_table_2_1230081 | test_colocated_table_2_id_fkey_1230081      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230073(id)
  test_colocated_table_2_1230081 | test_colocated_table_2_value_1_fkey_1230081 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
- test_colocated_table_2_1230094 | test_colocated_table_2_id_fkey_1230094      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230091(id)
- test_colocated_table_2_1230094 | test_colocated_table_2_value_1_fkey_1230094 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
- test_colocated_table_2_1230095 | test_colocated_table_2_id_fkey_1230095      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230092(id)
- test_colocated_table_2_1230095 | test_colocated_table_2_value_1_fkey_1230095 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
- test_colocated_table_2_1230096 | test_colocated_table_2_id_fkey_1230096      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230093(id)
- test_colocated_table_2_1230096 | test_colocated_table_2_value_1_fkey_1230096 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
+ test_colocated_table_2_1230102 | test_colocated_table_2_id_fkey_1230102      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230099(id)
+ test_colocated_table_2_1230102 | test_colocated_table_2_value_1_fkey_1230102 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
+ test_colocated_table_2_1230103 | test_colocated_table_2_id_fkey_1230103      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230100(id)
+ test_colocated_table_2_1230103 | test_colocated_table_2_value_1_fkey_1230103 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
+ test_colocated_table_2_1230104 | test_colocated_table_2_id_fkey_1230104      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230101(id)
+ test_colocated_table_2_1230104 | test_colocated_table_2_value_1_fkey_1230104 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
  test_colocated_table_3         | test_colocated_table_3_id_fkey              | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1(id)
  test_colocated_table_3         | test_colocated_table_3_id_fkey1             | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2(id)
  test_colocated_table_3         | test_colocated_table_3_value_1_fkey         | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey(id)
@@ -1126,15 +1141,15 @@ ORDER BY 1, 2;
  test_colocated_table_3_1230089 | test_colocated_table_3_id_fkey1_1230089     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230081(id)
  test_colocated_table_3_1230089 | test_colocated_table_3_id_fkey_1230089      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230073(id)
  test_colocated_table_3_1230089 | test_colocated_table_3_value_1_fkey_1230089 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
- test_colocated_table_3_1230097 | test_colocated_table_3_id_fkey1_1230097     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230094(id)
- test_colocated_table_3_1230097 | test_colocated_table_3_id_fkey_1230097      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230091(id)
- test_colocated_table_3_1230097 | test_colocated_table_3_value_1_fkey_1230097 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
- test_colocated_table_3_1230098 | test_colocated_table_3_id_fkey1_1230098     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230095(id)
- test_colocated_table_3_1230098 | test_colocated_table_3_id_fkey_1230098      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230092(id)
- test_colocated_table_3_1230098 | test_colocated_table_3_value_1_fkey_1230098 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
- test_colocated_table_3_1230099 | test_colocated_table_3_id_fkey1_1230099     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230096(id)
- test_colocated_table_3_1230099 | test_colocated_table_3_id_fkey_1230099      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230093(id)
- test_colocated_table_3_1230099 | test_colocated_table_3_value_1_fkey_1230099 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
+ test_colocated_table_3_1230105 | test_colocated_table_3_id_fkey1_1230105     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230102(id)
+ test_colocated_table_3_1230105 | test_colocated_table_3_id_fkey_1230105      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230099(id)
+ test_colocated_table_3_1230105 | test_colocated_table_3_value_1_fkey_1230105 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
+ test_colocated_table_3_1230106 | test_colocated_table_3_id_fkey1_1230106     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230103(id)
+ test_colocated_table_3_1230106 | test_colocated_table_3_id_fkey_1230106      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230100(id)
+ test_colocated_table_3_1230106 | test_colocated_table_3_value_1_fkey_1230106 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
+ test_colocated_table_3_1230107 | test_colocated_table_3_id_fkey1_1230107     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230104(id)
+ test_colocated_table_3_1230107 | test_colocated_table_3_id_fkey_1230107      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230101(id)
+ test_colocated_table_3_1230107 | test_colocated_table_3_value_1_fkey_1230107 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
 (42 rows)
 
 \c - mx_isolation_role_ent - :master_port
@@ -1193,7 +1208,7 @@ SELECT count(*) FROM partitioning_test;
 (1 row)
 
 -- isolate a value into its own shard
-SELECT 1 FROM isolate_tenant_to_new_shard('partitioning_test', 2, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT 1 FROM isolate_tenant_to_new_shard('partitioning_test', 2, 'CASCADE', shard_transfer_mode => 'force_logical');
  ?column?
 ---------------------------------------------------------------------
         1
@@ -1227,7 +1242,7 @@ SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE lo
 
 \c - mx_isolation_role_ent - :master_port
 SET search_path to "Tenant Isolation";
-SELECT 1 FROM isolate_tenant_to_new_shard('test_colocated_table_2', 2, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT 1 FROM isolate_tenant_to_new_shard('test_colocated_table_2', 2, 'CASCADE', shard_transfer_mode => 'force_logical');
  ?column?
 ---------------------------------------------------------------------
         1
@@ -1284,5 +1299,5 @@ SELECT count(*) FROM pg_catalog.pg_dist_partition WHERE colocationid > 0;
 (1 row)
 
 TRUNCATE TABLE pg_catalog.pg_dist_colocation;
-ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 100;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART :last_placement_id;
