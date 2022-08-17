@@ -785,6 +785,7 @@ EXPLAIN (COSTS FALSE) SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER
                                  Filter: ((value_1 >= 1) AND (value_1 < 3))
 (19 rows)
 
+SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS FALSE) SELECT *
 	FROM (
 		(SELECT user_id FROM recent_users)
@@ -792,32 +793,14 @@ EXPLAIN (COSTS FALSE) SELECT *
 		(SELECT user_id FROM selected_users) ) u
 	WHERE user_id < 4 AND user_id > 1
 	ORDER BY user_id;
-                                                                   QUERY PLAN
+$Q$);
+          coordinator_plan
 ---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.user_id
    ->  Custom Scan (Citus Adaptive)
          Task Count: 4
-         Tasks Shown: One of 4
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  Unique
-                     ->  Sort
-                           Sort Key: recent_users.user_id
-                           ->  Append
-                                 ->  Subquery Scan on recent_users
-                                       ->  Sort
-                                             Sort Key: (max(users_table."time")) DESC
-                                             ->  GroupAggregate
-                                                   Group Key: users_table.user_id
-                                                   Filter: (max(users_table."time") > '2017-11-23 16:20:33.264457'::timestamp without time zone)
-                                                   ->  Sort
-                                                         Sort Key: users_table.user_id
-                                                         ->  Seq Scan on users_table_1400256 users_table
-                                                               Filter: ((user_id < 4) AND (user_id > 1))
-                                 ->  Seq Scan on users_table_1400256 users_table_1
-                                       Filter: ((value_1 >= 1) AND (value_1 < 3) AND (user_id < 4) AND (user_id > 1))
-(23 rows)
+(4 rows)
 
 EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
                                                   QUERY PLAN
