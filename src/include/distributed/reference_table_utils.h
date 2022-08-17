@@ -21,10 +21,10 @@
 extern void EnsureReferenceTablesExistOnAllNodes(void);
 extern void EnsureReferenceTablesExistOnAllNodesExtended(char transferMode);
 extern uint32 CreateReferenceTableColocationId(void);
+extern uint32 GetReferenceTableColocationId(void);
 extern void DeleteAllReplicatedTablePlacementsFromNodeGroup(int32 groupId,
 															bool localOnly);
 extern int CompareOids(const void *leftElement, const void *rightElement);
-extern int ReferenceTableReplicationFactor(void);
 extern void ReplicateAllReferenceTablesToNode(WorkerNode *workerNode);
 
 #endif /* REFERENCE_TABLE_UTILS_H_ */

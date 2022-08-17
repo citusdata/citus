@@ -66,6 +66,7 @@ test: isolation_max_client_connections
 test: isolation_undistribute_table
 test: isolation_fix_partition_shard_index_names
 test: isolation_global_pid
+test: isolation_reference_table
 
 # Rebalancer
 test: isolation_blocking_move_single_shard_commands

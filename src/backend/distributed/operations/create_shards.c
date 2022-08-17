@@ -365,7 +365,7 @@ CreateReferenceTableShard(Oid distributedTableId)
 	List *nodeList = ReferenceTablePlacementNodeList(ShareLock);
 	nodeList = SortList(nodeList, CompareWorkerNodes);
 
-	int replicationFactor = ReferenceTableReplicationFactor();
+	int replicationFactor = list_length(nodeList);
 
 	/* get the next shard id */
 	uint64 shardId = GetNextShardId();
