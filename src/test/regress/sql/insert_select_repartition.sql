@@ -354,7 +354,9 @@ INSERT INTO target_table
   SELECT a, max(b) FROM source_table
   WHERE a BETWEEN 1 AND 2 GROUP BY a;
 
+SELECT public.coordinator_plan($Q$
 EXPLAIN EXECUTE insert_plan;
+$Q$);
 
 SET client_min_messages TO DEBUG1;
 EXECUTE insert_plan;
