@@ -44,7 +44,7 @@ SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \
 SELECT pg_catalog.citus_split_shard_by_split_points(
     8981000,
     ARRAY['-1073741824'],
-    ARRAY[:worker_2_node, :worker_2_node],
+    ARRAY[:worker_1_node, :worker_2_node],
     'force_logical');
 
 
@@ -52,40 +52,14 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 SET search_path TO "citus_split_test_schema";
 SET citus.show_shards_for_app_name_prefixes = '*';
 
--- Dummy shards should be cleaned up. 8981007, 8981008 are dummy shards
--- created at source.
-SELECT count(*) FROM pg_class where relname like '%sensors_8981007%';
-SELECT count(*) FROM pg_class where relname like '%sensors_8981008%';
-
--- Replication slots should be cleanedup at source
-SELECT slot_name FROM pg_replication_slots;
-
--- Publications should be cleaned up on worker1
-SELECT count(*) FROM pg_publication;
+SELECT * FROM pg_replication_slots;
+SELECT * FROM pg_catalog.pg_shard_cleanup;
 
 \c - - - :worker_2_port
 SET search_path TO "citus_split_test_schema";
--- All subscriptions should be cleaned up.
-SELECT count(*) FROM pg_subscription;
+SET citus.show_shards_for_app_name_prefixes = '*';
+SELECT * FROM pg_catalog.pg_shard_cleanup;
 
--- Trigger a 3-way local split.
-\c - - - :master_port
-SET search_path TO "citus_split_test_schema";
-SELECT pg_catalog.citus_split_shard_by_split_points(
-    8981001,
-    ARRAY['536870911', '1610612735'],
-    ARRAY[:worker_2_node, :worker_2_node, :worker_2_node],
-    'force_logical');
-
-\c - - - :worker_2_port
-SET search_path TO "citus_split_test_schema";
--- Replication slots should be cleaned up
-SELECT slot_name FROM pg_replication_slots;
-
--- Publications should be cleanedup
-SELECT count(*) FROM pg_publication;
--- All subscriptions should be cleaned up.
-SELECT count(*) FROM pg_subscription;
 
 --BEGIN : Cleanup
     \c - postgres - :master_port

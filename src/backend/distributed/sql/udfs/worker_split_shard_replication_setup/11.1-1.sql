@@ -23,3 +23,21 @@ COMMENT ON FUNCTION pg_catalog.worker_split_shard_replication_setup(splitShardIn
     IS 'Replication setup for splitting a shard';
 
 REVOKE ALL ON FUNCTION pg_catalog.worker_split_shard_replication_setup(pg_catalog.split_shard_info[]) FROM PUBLIC;
+
+--- Todo(saawasek): Will change the location later by introducing new file
+CREATE TABLE citus.pg_shard_cleanup(
+    workflow_id text,
+    object_type text,
+    object_name text
+);
+ALTER TABLE citus.pg_shard_cleanup SET SCHEMA pg_catalog;
+
+CREATE OR REPLACE FUNCTION pg_catalog.worker_cleanup_artifacts(
+    workflow_id text,
+    operation_name text)
+RETURNS void
+LANGUAGE C STRICT
+AS 'MODULE_PATHNAME', $$worker_cleanup_artifacts$$;
+COMMENT ON FUNCTION pg_catalog.worker_cleanup_artifacts(workflow_id text, operation_name text)
+    IS 'UDF to clean up artifacts';
+REVOKE ALL ON FUNCTION pg_catalog.worker_cleanup_artifacts(workflow_id text, operation_name text) FROM PUBLIC;

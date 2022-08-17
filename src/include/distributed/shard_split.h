@@ -31,6 +31,15 @@ typedef enum SplitOperation
 	ISOLATE_TENANT_TO_NEW_SHARD
 } SplitOperation;
 
+typedef enum SplitArtifactType
+{
+	SPLIT_CHILD_SHARD = 0,
+	SPLIT_DUMMY_SHARD = 1,
+	SPLIT_PUBLICATION = 2,
+	SPLIT_SUBSCRIPTION = 3,
+	SPLIT_REPLICATION_SLOT = 4
+} SplitArtifactType;
+
 
 /*
  * SplitShard API to split a given shard (or shard group) using split mode and
@@ -45,5 +54,6 @@ extern void SplitShard(SplitMode splitMode,
 extern void DropShardList(List *shardIntervalList);
 
 extern SplitMode LookupSplitMode(Oid shardTransferModeOid);
-
+extern StringInfo CreateArtifactEntryCommand(uint32 operationId, SplitArtifactType splitArtifact, char* artifactName);
+extern StringInfo CreateDeleteArtifactCommand(SplitArtifactType splitArtifact, char* artifactName);
 #endif /* SHARDSPLIT_H_ */

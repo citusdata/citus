@@ -642,6 +642,9 @@ CreateSplitShardsForShardGroup(HTAB *mapOfShardToPlacementCreatedByWorkflow,
 				splitShardCreationCommandList,
 				shardInterval->shardId);
 
+			StringInfo insertArtifactCommand = CreateArtifactEntryCommand(0 /*Operation Id*/, SPLIT_CHILD_SHARD, ConstructQualifiedShardName(shardInterval));
+			splitShardCreationCommandList = lappend(splitShardCreationCommandList, insertArtifactCommand->data);	
+
 			/* Create new split child shard on the specified placement list */
 			CreateObjectOnPlacement(splitShardCreationCommandList, workerPlacementNode);
 
@@ -921,7 +924,7 @@ static void
 CreateObjectOnPlacement(List *objectCreationCommandList,
 						WorkerNode *workerPlacementNode)
 {
-	char *currentUser = CurrentUserName();
+	char *currentUser = CitusExtensionOwnerName();
 	SendCommandListToWorkerOutsideTransaction(workerPlacementNode->workerName,
 											  workerPlacementNode->workerPort,
 											  currentUser,
@@ -1018,7 +1021,7 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 	List *shardIntervalList = NIL;
 	List *syncedShardList = NIL;
 
-	/*
+	/*	
 	 * Iterate over all the shards in the shard group.
 	 */
 	foreach_ptr(shardIntervalList, shardGroupSplitIntervalListList)
@@ -1560,6 +1563,9 @@ CreateDummyShardsForShardGroup(HTAB *mapOfDummyShardToPlacement,
 				splitShardCreationCommandList,
 				shardInterval->shardId);
 
+			StringInfo insertShardString = CreateArtifactEntryCommand(0 /*OperationId*/, SPLIT_DUMMY_SHARD, ConstructQualifiedShardName(shardInterval));
+			splitShardCreationCommandList = lappend(splitShardCreationCommandList, insertShardString->data);
+
 			/* Create dummy source shard on the specified placement list */
 			CreateObjectOnPlacement(splitShardCreationCommandList, workerPlacementNode);
 
@@ -1594,6 +1600,9 @@ CreateDummyShardsForShardGroup(HTAB *mapOfDummyShardToPlacement,
 			splitShardCreationCommandList = WorkerApplyShardDDLCommandList(
 				splitShardCreationCommandList,
 				shardInterval->shardId);
+
+			StringInfo insertShardString = CreateArtifactEntryCommand(0 /*OperationId*/, SPLIT_DUMMY_SHARD, ConstructQualifiedShardName(shardInterval));
+			splitShardCreationCommandList = lappend(splitShardCreationCommandList, insertShardString->data);
 
 			/* Create dummy split child shard on source worker node */
 			CreateObjectOnPlacement(splitShardCreationCommandList, sourceWorkerNode);
@@ -1633,6 +1642,44 @@ CreateWorkerForPlacementSet(List *workersForPlacementList)
 	}
 
 	return workerForPlacementSet;
+}
+
+
+/*
+ * CreateTemplateReplicationSlotAndReturnSnapshot creates a replication slot
+ * and returns its snapshot. This slot acts as a 'Template' for creating
+ * replication slot copies used for logical replication.
+ *
+ * The snapshot remains valid till the lifetime of the session that creates it.
+ */
+char *
+CreateTemplateReplicationSlotAndReturnSnapshot(ShardInterval *shardInterval,
+											   WorkerNode *sourceWorkerNode,
+											   MultiConnection **templateSlotConnection)
+{
+	/*Create Template replication slot */
+	int connectionFlags = FORCE_NEW_CONNECTION;
+	connectionFlags |= REQUIRE_REPLICATION_CONNECTION_PARAM;
+
+	MultiConnection *sourceConnection = GetNodeUserDatabaseConnection(connectionFlags,
+																	  sourceWorkerNode->
+																	  workerName,
+																	  sourceWorkerNode->
+																	  workerPort,
+																	  CitusExtensionOwnerName(),
+																	  get_database_name(
+																		  MyDatabaseId));
+	ClaimConnectionExclusively(sourceConnection);
+
+	/*
+	 * Try to drop leftover template replication slot if any from previous operation
+	 * and create new one.
+	 */
+	char *snapShotName = CreateTemplateReplicationSlot(shardInterval,
+													   sourceConnection);
+	*templateSlotConnection = sourceConnection;
+
+	return snapShotName;
 }
 
 
@@ -1873,11 +1920,26 @@ DropDummyShards(HTAB *mapOfDummyShardToPlacement)
 		List *dummyShardIntervalList = entry->shardIntervals;
 		ShardInterval *shardInterval = NULL;
 		foreach_ptr(shardInterval, dummyShardIntervalList)
-		{
-			DropDummyShard(connection, shardInterval);
-		}
+		{	
+			char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
+			StringInfo dropShardQuery = makeStringInfo();
 
-		CloseConnection(connection);
+			/* Caller enforces that foreign tables cannot be split (use DROP_REGULAR_TABLE_COMMAND) */
+			appendStringInfo(dropShardQuery, DROP_REGULAR_TABLE_COMMAND,
+						qualifiedShardName);
+
+			StringInfo deleteMetadataEntry = CreateDeleteArtifactCommand(SPLIT_DUMMY_SHARD, qualifiedShardName);
+
+			List * commandList = NIL;
+			commandList = lappend(commandList, dropShardQuery->data);
+			commandList = lappend(commandList, deleteMetadataEntry->data);
+
+			char *currentUser = CitusExtensionOwnerName();
+			SendCommandListToWorkerOutsideTransaction(shardToBeDroppedNode->workerName,
+											  shardToBeDroppedNode->workerPort,
+											  currentUser,
+											  commandList);
+		}
 	}
 }
 
@@ -1989,4 +2051,30 @@ GetNextShardIdForSplitChild()
 	CloseConnection(connection);
 
 	return shardId;
+}
+
+
+StringInfo CreateArtifactEntryCommand(uint32 operationId, SplitArtifactType splitArtifact, char* artifactName)
+{
+	StringInfo operationIdString = makeStringInfo();
+	appendStringInfo(operationIdString, "%d", operationId);
+
+	StringInfo splitArtifactString = makeStringInfo();
+	appendStringInfo(splitArtifactString, "%d", splitArtifact);
+
+	StringInfo insertArtifactCommand = makeStringInfo();
+	appendStringInfo(insertArtifactCommand, "INSERT INTO pg_catalog.pg_shard_cleanup values (%s, %s, %s);",
+	quote_literal_cstr(operationIdString->data),
+	quote_literal_cstr(splitArtifactString->data),
+	quote_literal_cstr(artifactName));
+
+	return insertArtifactCommand;
+}
+
+
+StringInfo CreateDeleteArtifactCommand(SplitArtifactType splitArtifact, char* artifactName)
+{
+	StringInfo deleteArtifactCommand = makeStringInfo();
+	appendStringInfo(deleteArtifactCommand, "DELETE FROM pg_catalog.pg_shard_cleanup where object_name=%s", quote_literal_cstr(artifactName));
+	return deleteArtifactCommand;
 }
