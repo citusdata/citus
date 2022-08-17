@@ -21,6 +21,7 @@
 #include "catalog/pg_authid.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/function_utils.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/version_compat.h"
@@ -131,8 +132,6 @@ static void CitusQueryStatsEntryDealloc(void);
 static void CitusQueryStatsEntryReset(void);
 static uint32 CitusQuerysStatsHashFn(const void *key, Size keysize);
 static int CitusQuerysStatsMatchFn(const void *key1, const void *key2, Size keysize);
-static uint32 ExistingStatsHashFn(const void *key, Size keysize);
-static int ExistingStatsMatchFn(const void *key1, const void *key2, Size keysize);
 
 static HTAB * BuildExistingQueryIdHash(void);
 static int GetPGStatStatementsMax(void);
@@ -650,42 +649,6 @@ CitusQuerysStatsMatchFn(const void *key1, const void *key2, Size keysize)
 
 
 /*
- * ExistingStatsHashFn calculates and returns hash value for ExistingStatsHashKey
- */
-static uint32
-ExistingStatsHashFn(const void *key, Size keysize)
-{
-	const ExistingStatsHashKey *k = (const ExistingStatsHashKey *) key;
-
-	return hash_uint32((uint32) k->userid) ^
-		   hash_uint32((uint32) k->dbid) ^
-		   hash_any((const unsigned char *) &(k->queryid), sizeof(uint64));
-}
-
-
-/*
- * ExistingStatsMatchFn compares two keys of type ExistingStatsHashKey - zero
- * means match. See definition of HashCompareFunc in hsearch.h for more info.
- */
-static int
-ExistingStatsMatchFn(const void *key1, const void *key2, Size keysize)
-{
-	const ExistingStatsHashKey *k1 = (const ExistingStatsHashKey *) key1;
-	const ExistingStatsHashKey *k2 = (const ExistingStatsHashKey *) key2;
-
-
-	if (k1->userid == k2->userid &&
-		k1->dbid == k2->dbid &&
-		k1->queryid == k2->queryid)
-	{
-		return 0;
-	}
-
-	return 1;
-}
-
-
-/*
  * Reset statistics.
  */
 Datum
@@ -840,7 +803,6 @@ BuildExistingQueryIdHash(void)
 	const int queryIdAttributeNumber = 3;
 #endif
 	Datum commandTypeDatum = (Datum) 0;
-	HASHCTL info;
 	bool missingOK = true;
 
 	Oid pgStatStatementsOid = FunctionOidExtended("public", "pg_stat_statements", 1,
@@ -872,20 +834,15 @@ BuildExistingQueryIdHash(void)
 		statStatementsReturnSet->setDesc,
 		&TTSOpsMinimalTuple);
 
-	info.keysize = sizeof(ExistingStatsHashKey);
-	info.entrysize = sizeof(ExistingStatsHashKey);
-	info.hcxt = CurrentMemoryContext;
-	info.hash = ExistingStatsHashFn;
-	info.match = ExistingStatsMatchFn;
-
-	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_FUNCTION | HASH_COMPARE);
-
 	/*
 	 * Allocate more hash slots (twice as much) than necessary to minimize
 	 * collisions.
 	 */
-	HTAB *queryIdHashTable = hash_create("pg_stats_statements queryId hash",
-										 pgStatStatementsMax * 2, &info, hashFlags);
+	assert_valid_hash_key3(ExistingStatsHashKey, userid, dbid, queryid);
+	HTAB *queryIdHashTable = CreateSimpleHashSetWithNameAndSize(
+		ExistingStatsHashKey,
+		"pg_stats_statements queryId hash",
+		pgStatStatementsMax * 2);
 
 	/* iterate over tuples in tuple store, and add queryIds to hash table */
 	while (true)

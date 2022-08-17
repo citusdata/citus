@@ -20,6 +20,7 @@
 #include "access/table.h"
 #include "catalog/pg_constraint.h"
 #include "distributed/commands.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
@@ -176,7 +177,7 @@ static List *
 GetRelationshipNodesForFKeyConnectedRelations(
 	ForeignConstraintRelationshipNode *relationshipNode)
 {
-	HTAB *oidVisitedMap = CreateOidVisitedHashSet();
+	HTAB *oidVisitedMap = CreateSimpleHashSetWithName(Oid, "oid visited hash set");
 
 	VisitOid(oidVisitedMap, relationshipNode->relationId);
 	List *relationshipNodeList = list_make1(relationshipNode);
@@ -314,8 +315,6 @@ GetRelationshipNodeForRelationId(Oid relationId, bool *isFound)
 static void
 CreateForeignConstraintRelationshipGraph()
 {
-	HASHCTL info;
-
 	/* if we have already created the graph, use it */
 	if (IsForeignConstraintRelationshipGraphValid())
 	{
@@ -338,17 +337,8 @@ CreateForeignConstraintRelationshipGraph()
 		sizeof(ForeignConstraintRelationshipGraph));
 	fConstraintRelationshipGraph->isValid = false;
 
-	/* create (oid) -> [ForeignConstraintRelationshipNode] hash */
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(Oid);
-	info.entrysize = sizeof(ForeignConstraintRelationshipNode);
-	info.hash = oid_hash;
-	info.hcxt = CurrentMemoryContext;
-	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
-
-	fConstraintRelationshipGraph->nodeMap = hash_create(
-		"foreign key relationship map (oid)",
-		32, &info, hashFlags);
+	fConstraintRelationshipGraph->nodeMap = CreateSimpleHash(Oid,
+															 ForeignConstraintRelationshipNode);
 
 	PopulateAdjacencyLists();
 
@@ -400,7 +390,7 @@ SetForeignConstraintRelationshipGraphInvalid()
 static List *
 GetConnectedListHelper(ForeignConstraintRelationshipNode *node, bool isReferencing)
 {
-	HTAB *oidVisitedMap = CreateOidVisitedHashSet();
+	HTAB *oidVisitedMap = CreateSimpleHashSetWithName(Oid, "oid visited hash set");
 
 	List *connectedNodeList = NIL;
 
@@ -441,31 +431,6 @@ GetConnectedListHelper(ForeignConstraintRelationshipNode *node, bool isReferenci
 	/* finally remove yourself from list */
 	connectedNodeList = list_delete_first(connectedNodeList);
 	return connectedNodeList;
-}
-
-
-/*
- * CreateOidVisitedHashSet creates and returns an hash-set object in
- * CurrentMemoryContext to store visited oid's.
- * As hash_create allocates memory in heap, callers are responsible to call
- * hash_destroy when appropriate.
- */
-HTAB *
-CreateOidVisitedHashSet(void)
-{
-	HASHCTL info = { 0 };
-
-	info.keysize = sizeof(Oid);
-	info.hash = oid_hash;
-	info.hcxt = CurrentMemoryContext;
-
-	/* we don't have value field as it's a set */
-	info.entrysize = info.keysize;
-
-	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
-
-	HTAB *oidVisitedMap = hash_create("oid visited hash map", 32, &info, hashFlags);
-	return oidVisitedMap;
 }
 
 

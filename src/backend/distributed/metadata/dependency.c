@@ -39,6 +39,7 @@
 #include "distributed/citus_depended_object.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
@@ -531,18 +532,13 @@ DependencyDefinitionFromPgShDepend(ObjectAddress target)
 static void
 InitObjectAddressCollector(ObjectAddressCollector *collector)
 {
-	HASHCTL info;
-
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(ObjectAddress);
-	info.entrysize = sizeof(ObjectAddress);
-	info.hcxt = CurrentMemoryContext;
-	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
-
-	collector->dependencySet = hash_create("dependency set", 128, &info, hashFlags);
+	assert_valid_hash_key3(ObjectAddress, classId, objectId, objectSubId);
+	collector->dependencySet = CreateSimpleHashSetWithName(ObjectAddress,
+														   "dependency set");
 	collector->dependencyList = NULL;
 
-	collector->visitedObjects = hash_create("visited object set", 128, &info, hashFlags);
+	collector->visitedObjects = CreateSimpleHashSetWithName(ObjectAddress,
+															"visited object set");
 }
 
 
@@ -2094,14 +2090,8 @@ GetPgDependTuplesForDependingObjects(Oid targetObjectClassId, Oid targetObjectId
 List *
 GetDependingViews(Oid relationId)
 {
-	HASHCTL info;
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(Oid);
-	info.entrysize = sizeof(ViewDependencyNode);
-	info.hash = oid_hash;
-	info.hcxt = CurrentMemoryContext;
-	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
-	HTAB *nodeMap = hash_create("view dependency map (oid)", 32, &info, hashFlags);
+	HTAB *nodeMap = CreateSimpleHashWithName(Oid, ViewDependencyNode,
+											 "view dependency map (oid)");
 
 	ViewDependencyNode *tableNode = BuildViewDependencyGraph(relationId, nodeMap);
 

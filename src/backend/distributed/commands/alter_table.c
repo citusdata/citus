@@ -43,6 +43,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/deparser.h"
 #include "distributed/distribution_column.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/metadata/dependency.h"
@@ -1276,14 +1277,7 @@ CreateCitusTableLike(TableConversionState *con)
 static void
 ErrorIfUnsupportedCascadeObjects(Oid relationId)
 {
-	HASHCTL info;
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(Oid);
-	info.entrysize = sizeof(Oid);
-	info.hash = oid_hash;
-	info.hcxt = CurrentMemoryContext;
-	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
-	HTAB *nodeMap = hash_create("object dependency map (oid)", 64, &info, hashFlags);
+	HTAB *nodeMap = CreateSimpleHashSetWithName(Oid, "object dependency map (oid)");
 
 	bool unsupportedObjectInDepGraph =
 		DoesCascadeDropUnsupportedObject(RelationRelationId, relationId, nodeMap);

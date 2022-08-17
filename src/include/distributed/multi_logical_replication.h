@@ -16,6 +16,7 @@
 
 #include "nodes/pg_list.h"
 #include "distributed/connection_management.h"
+#include "distributed/hash_helpers.h"
 
 
 /* Config variables managed via guc.c */
@@ -32,6 +33,7 @@ typedef struct NodeAndOwner
 	uint32_t nodeId;
 	Oid tableOwnerId;
 } NodeAndOwner;
+assert_valid_hash_key2(NodeAndOwner, nodeId, tableOwnerId);
 
 
 /*
