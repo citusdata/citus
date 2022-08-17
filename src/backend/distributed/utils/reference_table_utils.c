@@ -153,7 +153,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 		 * In case of create_reference_table() where we don't want concurrent writes
 		 * to pg_dist_node, we have already acquired ShareLock on pg_dist_node.
 		 */
-		newWorkersList = WorkersWithoutReferenceTablePlacement(shardId, AccessShareLock);
+		newWorkersList = WorkersWithoutReferenceTablePlacement(shardId, ShareLock);
 		if (list_length(newWorkersList) == 0)
 		{
 			/*
