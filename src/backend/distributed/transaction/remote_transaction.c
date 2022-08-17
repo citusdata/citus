@@ -16,6 +16,7 @@
 
 #include "access/xact.h"
 #include "distributed/backend_data.h"
+#include "distributed/causal_clock.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
@@ -841,6 +842,12 @@ CoordinatedRemoteTransactionsPrepare(void)
 	}
 
 	CurrentCoordinatedTransactionState = COORD_TRANS_PREPARED;
+
+	/*
+	 * If "citus.enable_cluster_clock" is enabled, timestamp the transaction
+	 * with the cluster clock and persist its id along with the timestamp.
+	 */
+	PrepareAndSetTransactionClock(connectionList);
 }
 
 

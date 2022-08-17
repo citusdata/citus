@@ -26,6 +26,7 @@
 #include "datatype/timestamp.h"
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
+#include "distributed/function_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/lock_graph.h"
 #include "distributed/metadata_cache.h"
@@ -165,6 +166,33 @@ assign_distributed_transaction_id(PG_FUNCTION_ARGS)
 	SpinLockRelease(&MyBackendData->mutex);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * GetCurrentTransactionString returns the string representation of the
+ * UDF get_current_transaction_id output.
+ *
+ * Note: This routine calls the UDF get_current_transaction_id directly to
+ * keep the output/format coherent, else, any changes in the UDF parameters
+ * or output may diverge from this routine.
+ */
+char *
+GetCurrentTransactionIdString(void)
+{
+	/*
+	 * Call get_current_transaction_id UDF to get the current
+	 * distributed transaction id.
+	 */
+	Oid transactionFuncOid = FunctionOid("pg_catalog", "get_current_transaction_id", 0);
+	Datum transactionIdHeapDatum = OidFunctionCall0(transactionFuncOid);
+
+	/* Now, call the datatype output function on the tuple */
+	FmgrInfo *outputFunction = (FmgrInfo *) palloc0(sizeof(FmgrInfo));
+	Oid outputFunctionId = FunctionOid("pg_catalog", "record_out", 1);
+	fmgr_info(outputFunctionId, outputFunction);
+
+	return (OutputFunctionCall(outputFunction, transactionIdHeapDatum));
 }
 
 

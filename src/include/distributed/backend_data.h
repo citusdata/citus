@@ -80,6 +80,8 @@ extern bool IsRebalancerInternalBackend(void);
 extern bool IsCitusRunCommandBackend(void);
 extern bool IsExternalClientBackend(void);
 extern void ResetCitusBackendType(void);
+extern char * GetCurrentTransactionIdString(void);
+extern Datum get_current_transaction_id(PG_FUNCTION_ARGS);
 
 #define INVALID_CITUS_INTERNAL_BACKEND_GPID 0
 #define GLOBAL_PID_NODE_ID_FOR_NODES_NOT_IN_METADATA 99999999

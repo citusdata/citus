@@ -288,3 +288,9 @@ s/^(WARNING|ERROR)(:  "[a-z\ ]+ .*" has dependency on unsupported object) "schem
 s/^ERROR:  A rebalance is already running as job [0-9]+$/ERROR:  A rebalance is already running as job xxx/g
 s/^NOTICE:  Scheduled ([0-9]+) moves as job [0-9]+$/NOTICE:  Scheduled \1 moves as job xxx/g
 s/^HINT: (.*) job_id = [0-9]+ (.*)$/HINT: \1 job_id = xxx \2/g
+# In clock tests, normalize epoch value(s) and the DEBUG messages printed
+s/^(DEBUG:  |LOG:  )(coordinator|node\([0-9]+:[0-9]+\)|final global|Set) transaction clock [0-9]+.*$/\1\2 transaction clock xxxxxx/g
+s/^(NOTICE:  )(clock).*LC:[0-9]+,.*C:[0-9]+,.*$/\1\2 xxxxxx/g
+/^(DEBUG:  )(adjusting to remote clock logical)\([0-9]+\) counter\([0-9]+\)$/d
+/^DEBUG:  persisting transaction.*counter.*$/d
+/^DEBUG:  both logical clock values are equal\([0-9]+\), pick remote.*$/d

@@ -1,0 +1,325 @@
+CREATE SCHEMA clock;
+SET search_path TO clock;
+SHOW citus.enable_cluster_clock;
+ citus.enable_cluster_clock
+---------------------------------------------------------------------
+ off
+(1 row)
+
+SET citus.enable_cluster_clock to ON;
+SHOW citus.enable_cluster_clock;
+ citus.enable_cluster_clock
+---------------------------------------------------------------------
+ on
+(1 row)
+
+CREATE TABLE clock_test (id int, nonid int);
+SELECT create_distributed_table('clock_test', 'id', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+--
+-- Compare <logical, counter> pairs
+--
+-- Returns true
+SELECT citus_is_clock_after('(5,1)', '(3,6)');
+ citus_is_clock_after
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Returns false
+SELECT citus_is_clock_after('(2,9)', '(3,0)');
+ citus_is_clock_after
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- Returns true
+SELECT citus_is_clock_after('(5,6)', '(5,1)');
+ citus_is_clock_after
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Returns false
+SELECT citus_is_clock_after('(5,6)', '(5,6)');
+ citus_is_clock_after
+---------------------------------------------------------------------
+ f
+(1 row)
+
+--
+-- Check the clock is *monotonically increasing*
+--
+SELECT citus_get_cluster_clock() \gset t1
+SELECT citus_get_cluster_clock() \gset t2
+SELECT citus_get_cluster_clock() \gset t3
+-- Both should return true
+SELECT citus_is_clock_after(:'t2citus_get_cluster_clock', :'t1citus_get_cluster_clock');
+ citus_is_clock_after
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT citus_is_clock_after(:'t3citus_get_cluster_clock', :'t2citus_get_cluster_clock');
+ citus_is_clock_after
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Returns false
+SELECT citus_is_clock_after(:'t1citus_get_cluster_clock', :'t3citus_get_cluster_clock');
+ citus_is_clock_after
+---------------------------------------------------------------------
+ f
+(1 row)
+
+CREATE TABLE cluster_clock_type(cc cluster_clock);
+INSERT INTO cluster_clock_type values('(0, 100)');
+INSERT INTO cluster_clock_type values('(100, 0)');
+INSERT INTO cluster_clock_type values('(100, 1)');
+INSERT INTO cluster_clock_type values('(100, 2)');
+INSERT INTO cluster_clock_type values('(100, 200)');
+INSERT INTO cluster_clock_type values('(100, 100)');
+INSERT INTO cluster_clock_type values('(200, 20)');
+INSERT INTO cluster_clock_type values('(200, 3)');
+INSERT INTO cluster_clock_type values('(200, 400)');
+INSERT INTO cluster_clock_type values('(500, 600)');
+INSERT INTO cluster_clock_type values('(500, 0)');
+SELECT cc FROM cluster_clock_type ORDER BY 1 ASC;
+    cc
+---------------------------------------------------------------------
+ (0,100)
+ (100,0)
+ (100,1)
+ (100,2)
+ (100,100)
+ (100,200)
+ (200,3)
+ (200,20)
+ (200,400)
+ (500,0)
+ (500,600)
+(11 rows)
+
+SELECT cc FROM cluster_clock_type where cc = '(200, 400)';
+    cc
+---------------------------------------------------------------------
+ (200,400)
+(1 row)
+
+SELECT cc FROM cluster_clock_type where cc <> '(500, 600)';
+    cc
+---------------------------------------------------------------------
+ (0,100)
+ (100,0)
+ (100,1)
+ (100,2)
+ (100,200)
+ (100,100)
+ (200,20)
+ (200,3)
+ (200,400)
+ (500,0)
+(10 rows)
+
+SELECT cc FROM cluster_clock_type where cc != '(500, 600)';
+    cc
+---------------------------------------------------------------------
+ (0,100)
+ (100,0)
+ (100,1)
+ (100,2)
+ (100,200)
+ (100,100)
+ (200,20)
+ (200,3)
+ (200,400)
+ (500,0)
+(10 rows)
+
+SELECT cc FROM cluster_clock_type where cc < '(200, 20)' ORDER BY 1 ASC;
+    cc
+---------------------------------------------------------------------
+ (0,100)
+ (100,0)
+ (100,1)
+ (100,2)
+ (100,100)
+ (100,200)
+ (200,3)
+(7 rows)
+
+SELECT cc FROM cluster_clock_type where cc <= '(200, 20)' ORDER BY 1 ASC;
+    cc
+---------------------------------------------------------------------
+ (0,100)
+ (100,0)
+ (100,1)
+ (100,2)
+ (100,100)
+ (100,200)
+ (200,3)
+ (200,20)
+(8 rows)
+
+SELECT cc FROM cluster_clock_type where cc > '(200, 20)' ORDER BY 1 ASC;
+    cc
+---------------------------------------------------------------------
+ (200,400)
+ (500,0)
+ (500,600)
+(3 rows)
+
+SELECT cc FROM cluster_clock_type where cc >= '(200, 20)' ORDER BY 1 ASC;
+    cc
+---------------------------------------------------------------------
+ (200,20)
+ (200,400)
+ (500,0)
+ (500,600)
+(4 rows)
+
+CREATE INDEX cc_idx on cluster_clock_type(cc);
+-- Multiply rows to check index usage
+INSERT INTO cluster_clock_type SELECT a.cc FROM cluster_clock_type a, cluster_clock_type b;
+INSERT INTO cluster_clock_type SELECT a.cc FROM cluster_clock_type a, cluster_clock_type b;
+EXPLAIN SELECT cc FROM cluster_clock_type ORDER BY 1 ASC LIMIT 1;
+                                            QUERY PLAN
+---------------------------------------------------------------------
+ Limit  (cost=0.28..0.92 rows=1 width=12)
+   ->  Index Only Scan using cc_idx on cluster_clock_type  (cost=0.28..667.95 rows=1045 width=12)
+(2 rows)
+
+SELECT cc FROM cluster_clock_type ORDER BY 1 ASC LIMIT 1;
+   cc
+---------------------------------------------------------------------
+ (0,100)
+(1 row)
+
+EXPLAIN SELECT cc FROM cluster_clock_type where cc = '(200, 20)' LIMIT 5;
+                                    QUERY PLAN
+---------------------------------------------------------------------
+ Limit  (cost=4.32..20.94 rows=5 width=12)
+   ->  Bitmap Heap Scan on cluster_clock_type  (cost=4.32..20.94 rows=5 width=12)
+         Recheck Cond: (cc = '(200,20)'::cluster_clock)
+         ->  Bitmap Index Scan on cc_idx  (cost=0.00..4.31 rows=5 width=0)
+               Index Cond: (cc = '(200,20)'::cluster_clock)
+(5 rows)
+
+SELECT cc FROM cluster_clock_type where cc = '(200, 20)' LIMIT 5;
+    cc
+---------------------------------------------------------------------
+ (200,20)
+ (200,20)
+ (200,20)
+ (200,20)
+ (200,20)
+(5 rows)
+
+-- Max limits
+INSERT INTO cluster_clock_type values('(4398046511103, 0)');
+INSERT INTO cluster_clock_type values('(0, 4194303)');
+INSERT INTO cluster_clock_type values('(4398046511103, 4194303)');
+-- Bad input
+INSERT INTO cluster_clock_type values('(-1, 100)');
+ERROR:  invalid input syntax for type cluster_clock: "(-1, 100)"
+INSERT INTO cluster_clock_type values('(100, -1)');
+ERROR:  invalid input syntax for type cluster_clock: "(100, -1)"
+INSERT INTO cluster_clock_type values('(4398046511104, 100)'); -- too big to into 42 bits
+ERROR:  invalid input syntax for type cluster_clock: "(4398046511104, 100)"
+INSERT INTO cluster_clock_type values('(0, 4194304)'); -- too big to into 22 bits
+ERROR:  invalid input syntax for type cluster_clock: "(0, 4194304)"
+DROP TABLE cluster_clock_type;
+CREATE TABLE cluster_clock_type(cc cluster_clock UNIQUE);
+INSERT INTO cluster_clock_type values('(100, 1)');
+INSERT INTO cluster_clock_type values('(100, 1)');
+ERROR:  duplicate key value violates unique constraint "cluster_clock_type_cc_key"
+DETAIL:  Key (cc)=((100,1)) already exists.
+INSERT INTO cluster_clock_type values('(100, 200)');
+INSERT INTO cluster_clock_type values('(100, 200)');
+ERROR:  duplicate key value violates unique constraint "cluster_clock_type_cc_key"
+DETAIL:  Key (cc)=((100,200)) already exists.
+INSERT INTO cluster_clock_type values('(100, 100)');
+INSERT INTO cluster_clock_type values('(100, 100)');
+ERROR:  duplicate key value violates unique constraint "cluster_clock_type_cc_key"
+DETAIL:  Key (cc)=((100,100)) already exists.
+-- Get wall clock epoch in milliseconds
+SELECT (extract(epoch from now()) * 1000)::bigint AS epoch \gset
+-- This should return the epoch value as there is no difference from (0,0)
+SELECT cluster_clock_diff_in_ms('(0,0)') epoch_diff \gset
+-- Returns false
+SELECT (:epoch - :epoch_diff) > 10 as epoch_diff;
+ epoch_diff
+---------------------------------------------------------------------
+ f
+(1 row)
+
+--
+-- Check the value returned by citus_get_cluster_clock is close to epoch in ms
+--
+SELECT citus_get_cluster_clock() AS latest_clock \gset
+-- Returns the clock difference from epoch in ms
+SELECT cluster_clock_diff_in_ms(:'latest_clock') as epoch_diff_in_ms \gset
+-- Returns false
+SELECT :epoch_diff_in_ms > 10 as epoch_diff_in_ms;
+ epoch_diff_in_ms
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- Transaction that accesses multiple nodes
+BEGIN;
+INSERT INTO clock_test SELECT generate_series(1, 10000, 1), 0;
+SELECT get_current_transaction_id() \gset tid
+SET client_min_messages TO DEBUG1;
+COMMIT;
+DEBUG:  node(1:57637) transaction clock xxxxxx
+DEBUG:  node(2:57638) transaction clock xxxxxx
+DEBUG:  node(4:57637) transaction clock xxxxxx
+DEBUG:  node(5:57638) transaction clock xxxxxx
+DEBUG:  node(6:57637) transaction clock xxxxxx
+DEBUG:  node(7:57638) transaction clock xxxxxx
+DEBUG:  node(8:57637) transaction clock xxxxxx
+DEBUG:  node(9:57638) transaction clock xxxxxx
+DEBUG:  node(3:57636) transaction clock xxxxxx
+DEBUG:  final global transaction clock xxxxxx
+--
+-- Check to see if the transaction is indeed persisted in the catalog
+--
+SELECT count(*)
+FROM pg_dist_commit_transaction commit_clock
+WHERE transaction_id = :'tidget_current_transaction_id';
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+BEGIN;
+INSERT INTO clock_test SELECT generate_series(1, 10000, 1), 0;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+SELECT get_current_transaction_id() \gset tid
+SET client_min_messages TO DEBUG1;
+ROLLBACK;
+RESET client_min_messages;
+--
+-- Check that the transaction is not persisted
+--
+SELECT count(*)
+FROM pg_dist_commit_transaction commit_clock
+WHERE transaction_id = :'tidget_current_transaction_id';
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+RESET client_min_messages;
+RESET citus.enable_cluster_clock;
+DROP SCHEMA clock CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table clock_test
+drop cascades to table cluster_clock_type

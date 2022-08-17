@@ -1184,9 +1184,14 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 11.2-1
 ALTER EXTENSION citus UPDATE TO '11.2-1';
 SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
+ previous_object |                              current_object
 ---------------------------------------------------------------------
-(0 rows)
+                 | function citus_get_cluster_clock() cluster_clock
+                 | function citus_internal_adjust_local_clock_to_remote(cluster_clock) void
+                 | function citus_is_clock_after(cluster_clock,cluster_clock) boolean
+                 | table pg_dist_commit_transaction
+                 | type cluster_clock
+(5 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
