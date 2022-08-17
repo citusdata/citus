@@ -220,6 +220,10 @@ FROM
 		USING (key);
 
 -- EXPLAIN should show the differences between MATERIALIZED and NOT MATERIALIZED
+
+\set VERBOSITY terse
+
+SELECT public.coordinator_plan_with_subplans($Q$
 EXPLAIN (COSTS OFF) WITH cte_1 AS (SELECT * FROM test_table)
 SELECT
 	count(*)
@@ -228,6 +232,9 @@ FROM
 		JOIN
 	cte_1 as second_entry
 		USING (key);
+$Q$);
+
+\set VERBOSITY default
 
 EXPLAIN (COSTS OFF) WITH cte_1 AS NOT MATERIALIZED (SELECT * FROM test_table)
 SELECT
