@@ -1,25 +1,4 @@
-Parsed test spec with 4 sessions
-
-starting permutation: add-coordinator-to-metadata
-create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-step add-coordinator-to-metadata:
-    SELECT 1 FROM citus_add_node('localhost', 57636, groupid:=0);
-    SELECT test_assign_global_pid();
-
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
-test_assign_global_pid
----------------------------------------------------------------------
-
-(1 row)
-
+Parsed test spec with 3 sessions
 
 starting permutation: s1-cache-connections s1-begin s2-begin s3-begin s1-alter-table s2-sleep s2-view-dist s3-view-worker s2-rollback s1-commit s3-rollback
 create_distributed_table
@@ -67,16 +46,16 @@ step s3-view-worker:
 
 query                                                                                                      |citus_nodename_for_nodeid|citus_nodeport_for_nodeid|state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
-SELECT worker_apply_shard_ddl_command (1300009, 'public', '
+SELECT worker_apply_shard_ddl_command (1300004, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
 ')|localhost                |                    57636|idle in transaction|Client         |ClientRead|postgres|regression
-SELECT worker_apply_shard_ddl_command (1300008, 'public', '
+SELECT worker_apply_shard_ddl_command (1300003, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
 ')|localhost                |                    57636|idle in transaction|Client         |ClientRead|postgres|regression
-SELECT worker_apply_shard_ddl_command (1300007, 'public', '
+SELECT worker_apply_shard_ddl_command (1300002, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
 ')|localhost                |                    57636|idle in transaction|Client         |ClientRead|postgres|regression
-SELECT worker_apply_shard_ddl_command (1300006, 'public', '
+SELECT worker_apply_shard_ddl_command (1300001, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
 ')|localhost                |                    57636|idle in transaction|Client         |ClientRead|postgres|regression
 (4 rows)
@@ -137,7 +116,7 @@ step s3-view-worker:
 
 query                                                                     |citus_nodename_for_nodeid|citus_nodeport_for_nodeid|state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
-INSERT INTO public.test_table_1300013 (column1, column2) VALUES (100, 100)|localhost                |                    57636|idle in transaction|Client         |ClientRead|postgres|regression
+INSERT INTO public.test_table_1300008 (column1, column2) VALUES (100, 100)|localhost                |                    57636|idle in transaction|Client         |ClientRead|postgres|regression
 (1 row)
 
 step s2-rollback:
@@ -201,10 +180,10 @@ step s3-view-worker:
 
 query                                                                        |citus_nodename_for_nodeid|citus_nodeport_for_nodeid|state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
-SELECT count(*) AS count FROM public.test_table_1300019 test_table WHERE true|localhost                |                    57636|idle in transaction|Client         |ClientRead|postgres|regression
-SELECT count(*) AS count FROM public.test_table_1300018 test_table WHERE true|localhost                |                    57636|idle in transaction|Client         |ClientRead|postgres|regression
-SELECT count(*) AS count FROM public.test_table_1300017 test_table WHERE true|localhost                |                    57636|idle in transaction|Client         |ClientRead|postgres|regression
-SELECT count(*) AS count FROM public.test_table_1300016 test_table WHERE true|localhost                |                    57636|idle in transaction|Client         |ClientRead|postgres|regression
+SELECT count(*) AS count FROM public.test_table_1300014 test_table WHERE true|localhost                |                    57636|idle in transaction|Client         |ClientRead|postgres|regression
+SELECT count(*) AS count FROM public.test_table_1300013 test_table WHERE true|localhost                |                    57636|idle in transaction|Client         |ClientRead|postgres|regression
+SELECT count(*) AS count FROM public.test_table_1300012 test_table WHERE true|localhost                |                    57636|idle in transaction|Client         |ClientRead|postgres|regression
+SELECT count(*) AS count FROM public.test_table_1300011 test_table WHERE true|localhost                |                    57636|idle in transaction|Client         |ClientRead|postgres|regression
 (4 rows)
 
 step s2-rollback:
@@ -268,7 +247,7 @@ step s3-view-worker:
 
 query                                                                                                       |citus_nodename_for_nodeid|citus_nodeport_for_nodeid|state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
-SELECT count(*) AS count FROM public.test_table_1300022 test_table WHERE (column1 OPERATOR(pg_catalog.=) 55)|localhost                |                    57636|idle in transaction|Client         |ClientRead|postgres|regression
+SELECT count(*) AS count FROM public.test_table_1300017 test_table WHERE (column1 OPERATOR(pg_catalog.=) 55)|localhost                |                    57636|idle in transaction|Client         |ClientRead|postgres|regression
 (1 row)
 
 step s2-rollback:
@@ -279,19 +258,4 @@ step s1-commit:
 
 step s3-rollback:
 	ROLLBACK;
-
-
-starting permutation: remove-coordinator-from-metadata
-create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-step remove-coordinator-from-metadata:
-    SELECT citus_remove_node('localhost', 57636);
-
-citus_remove_node
----------------------------------------------------------------------
-
-(1 row)
 
