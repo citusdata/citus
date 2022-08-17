@@ -242,8 +242,7 @@ SET citus.next_shard_id TO 8981041;
 SELECT pg_catalog.citus_split_shard_by_split_points(
     8981031,
     ARRAY['-2120000000'],
-    ARRAY[:worker_1_node, :worker_2_node],
-    'auto');
+    ARRAY[:worker_1_node, :worker_2_node]);
 
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
