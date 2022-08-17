@@ -143,11 +143,14 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 			continue;
 		}
 
-		if (IsCitusTableType(relationId, REFERENCE_TABLE))
+		/*
+		 * While changing the tables that are part of a colocation group we need to
+		 * prevent concurrent mutations to the placements of the shard groups.
+		 */
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+		if (cacheEntry->colocationId != INVALID_COLOCATION_ID)
 		{
-			/* prevent concurrent EnsureReferenceTablesExistOnAllNodes */
-			int colocationId = CreateReferenceTableColocationId();
-			LockColocationId(colocationId, ExclusiveLock);
+			LockColocationId(cacheEntry->colocationId, ShareLock);
 		}
 
 		/* invalidate foreign key cache if the table involved in any foreign key */

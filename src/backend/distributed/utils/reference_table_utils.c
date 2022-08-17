@@ -60,7 +60,15 @@ PG_FUNCTION_INFO_V1(replicate_reference_tables);
 Datum
 replicate_reference_tables(PG_FUNCTION_ARGS)
 {
+	/* to prevent concurrent node additions while copying reference tables */
+	LockRelationOid(DistNodeRelationId(), ShareLock);
 	EnsureReferenceTablesExistOnAllNodes();
+
+	/*
+	 * Given the copying of reference tables and updating metadata have been done via a
+	 * loopback connection we do not have to retain the lock on pg_dist_node anymore.
+	 */
+	UnlockRelationOid(DistNodeRelationId(), ShareLock);
 
 	PG_RETURN_VOID();
 }
@@ -91,56 +99,85 @@ EnsureReferenceTablesExistOnAllNodes(void)
 void
 EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 {
-	/*
-	 * Prevent this function from running concurrently with itself.
-	 *
-	 * It also prevents concurrent DROP TABLE or DROP SCHEMA. We need this
-	 * because through-out this function we assume values in referenceTableIdList
-	 * are still valid.
-	 *
-	 * We don't need to handle other kinds of reference table DML/DDL here, since
-	 * master_copy_shard_placement gets enough locks for that.
-	 *
-	 * We also don't need special handling for concurrent create_refernece_table.
-	 * Since that will trigger a call to this function from another backend,
-	 * which will block until our call is finished.
-	 */
+	List *referenceTableIdList = NIL;
+	uint64 shardId = INVALID_SHARD_ID;
+	List *newWorkersList = NIL;
+	const char *referenceTableName = NULL;
 	int colocationId = CreateReferenceTableColocationId();
-	LockColocationId(colocationId, ExclusiveLock);
-
-	List *referenceTableIdList = CitusTableTypeIdList(REFERENCE_TABLE);
-	if (referenceTableIdList == NIL)
-	{
-		/* no reference tables exist */
-		UnlockColocationId(colocationId, ExclusiveLock);
-		return;
-	}
-
-	Oid referenceTableId = linitial_oid(referenceTableIdList);
-	const char *referenceTableName = get_rel_name(referenceTableId);
-	List *shardIntervalList = LoadShardIntervalList(referenceTableId);
-	if (list_length(shardIntervalList) == 0)
-	{
-		/* check for corrupt metadata */
-		ereport(ERROR, (errmsg("reference table \"%s\" does not have a shard",
-							   referenceTableName)));
-	}
-
-	ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
-	uint64 shardId = shardInterval->shardId;
 
 	/*
-	 * We only take an access share lock, otherwise we'll hold up citus_add_node.
-	 * In case of create_reference_table() where we don't want concurrent writes
-	 * to pg_dist_node, we have already acquired ShareLock on pg_dist_node.
+	 * Most of the time this function should result in a conclusion where we do not need
+	 * to copy any reference tables. To prevent excessive locking the majority of the time
+	 * we run our precondition checks first with a lower lock. If, after checking with the
+	 * lower lock, that we might need to copy reference tables we check with a more
+	 * aggressive and self conflicting lock. It is important to be self conflicting in the
+	 * second run to make sure that two concurrent calls to this routine will actually not
+	 * run concurrently after the initial check.
+	 *
+	 * If after two iterations of precondition checks we still find the need for copying
+	 * reference tables we exit the loop with all locks held. This will prevent concurrent
+	 * DROP TABLE and create_reference_table calls so that the list of reference tables we
+	 * operate on are stable.
+	 *
+	 * Since the changes to the reference table placements are made via loopback
+	 * connections we release the locks held at the end of this function. Due to Citus
+	 * only running transactions in READ COMMITTED mode we can be sure that other
+	 * transactions correctly find the metadata entries.
 	 */
-	List *newWorkersList = WorkersWithoutReferenceTablePlacement(shardId,
-																 AccessShareLock);
-	if (list_length(newWorkersList) == 0)
+	LOCKMODE lockmodes[] = { AccessShareLock, ExclusiveLock };
+	for (int lockmodeIndex = 0; lockmodeIndex < lengthof(lockmodes); lockmodeIndex++)
 	{
-		/* nothing to do, no need for lock */
-		UnlockColocationId(colocationId, ExclusiveLock);
-		return;
+		LockColocationId(colocationId, lockmodes[lockmodeIndex]);
+
+		referenceTableIdList = CitusTableTypeIdList(REFERENCE_TABLE);
+		if (referenceTableIdList == NIL)
+		{
+			/*
+			 * No reference tables exist, make sure that any locks obtained earlier are
+			 * released. It will probably not matter, but we release the locks in the
+			 * reverse order we obtained them in.
+			 */
+			for (int releaseLockmodeIndex = lockmodeIndex; releaseLockmodeIndex >= 0;
+				 releaseLockmodeIndex--)
+			{
+				UnlockColocationId(colocationId, lockmodes[releaseLockmodeIndex]);
+			}
+			return;
+		}
+
+		Oid referenceTableId = linitial_oid(referenceTableIdList);
+		referenceTableName = get_rel_name(referenceTableId);
+		List *shardIntervalList = LoadShardIntervalList(referenceTableId);
+		if (list_length(shardIntervalList) == 0)
+		{
+			/* check for corrupt metadata */
+			ereport(ERROR, (errmsg("reference table \"%s\" does not have a shard",
+								   referenceTableName)));
+		}
+
+		ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
+		shardId = shardInterval->shardId;
+
+		/*
+		 * We only take an access share lock, otherwise we'll hold up citus_add_node.
+		 * In case of create_reference_table() where we don't want concurrent writes
+		 * to pg_dist_node, we have already acquired ShareLock on pg_dist_node.
+		 */
+		newWorkersList = WorkersWithoutReferenceTablePlacement(shardId, AccessShareLock);
+		if (list_length(newWorkersList) == 0)
+		{
+			/*
+			 * All workers alreaddy have a copy of the reference tables, make sure that
+			 * any locks obtained earlier are released. It will probably not matter, but
+			 * we release the locks in the reverse order we obtained them in.
+			 */
+			for (int releaseLockmodeIndex = lockmodeIndex; releaseLockmodeIndex >= 0;
+				 releaseLockmodeIndex--)
+			{
+				UnlockColocationId(colocationId, lockmodes[releaseLockmodeIndex]);
+			}
+			return;
+		}
 	}
 
 	/*
@@ -221,10 +258,17 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	}
 
 	/*
-	 * Unblock other backends, they will probably observe that there are no
-	 * more worker nodes without placements, unless nodes were added concurrently
+	 * Since reference tables have been copied via a loopback connection we do not have to
+	 * retain our locks. Since Citus only runs well in READ COMMITTED mode we can be sure
+	 * that other transactions will find the reference tables copied.
+	 * We have obtained and held multiple locks, here we unlock them all in the reverse
+	 * order we have obtained them in.
 	 */
-	UnlockColocationId(colocationId, ExclusiveLock);
+	for (int releaseLockmodeIndex = lengthof(lockmodes) - 1; releaseLockmodeIndex >= 0;
+		 releaseLockmodeIndex--)
+	{
+		UnlockColocationId(colocationId, lockmodes[releaseLockmodeIndex]);
+	}
 }
 
 
@@ -425,6 +469,28 @@ CreateReferenceTableColocationId()
 }
 
 
+uint32
+GetReferenceTableColocationId()
+{
+	int shardCount = 1;
+	Oid distributionColumnType = InvalidOid;
+	Oid distributionColumnCollation = InvalidOid;
+
+	/*
+	 * We don't maintain replication factor of reference tables anymore and
+	 * just use -1 instead. We don't use this value in any places.
+	 */
+	int replicationFactor = -1;
+
+	/* check for existing colocations */
+	uint32 colocationId =
+		ColocationId(shardCount, replicationFactor, distributionColumnType,
+					 distributionColumnCollation);
+
+	return colocationId;
+}
+
+
 /*
  * DeleteAllReferenceTablePlacementsFromNodeGroup function iterates over list of reference
  * tables and deletes all reference table placements from pg_dist_placement table
@@ -505,19 +571,6 @@ CompareOids(const void *leftElement, const void *rightElement)
 
 
 /*
- * ReferenceTableReplicationFactor returns the replication factor for
- * reference tables.
- */
-int
-ReferenceTableReplicationFactor(void)
-{
-	List *nodeList = ReferenceTablePlacementNodeList(NoLock);
-	int replicationFactor = list_length(nodeList);
-	return replicationFactor;
-}
-
-
-/*
  * ReplicateAllReferenceTablesToNode function finds all reference tables and
  * replicates them to the given worker node. It also modifies pg_dist_colocation
  * table to update the replication factor column when necessary. This function
@@ -527,6 +580,16 @@ ReferenceTableReplicationFactor(void)
 void
 ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 {
+	int colocationId = GetReferenceTableColocationId();
+	if (colocationId == INVALID_COLOCATION_ID)
+	{
+		/* no reference tables in system */
+		return;
+	}
+
+	/* prevent changes in table set while replicating reference tables */
+	LockColocationId(colocationId, RowExclusiveLock);
+
 	List *referenceTableList = CitusTableTypeIdList(REFERENCE_TABLE);
 
 	/* if there is no reference table, we do not need to replicate anything */
