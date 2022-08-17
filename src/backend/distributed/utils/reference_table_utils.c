@@ -112,6 +112,14 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 		return;
 	}
 
+	/*
+	 * Don't let this table dropped, if dropped retry instead of
+	 * erroring out unless we find 1 table.
+	 */
+	if (!ConditionalLockRelationOid(referenceTableId, AccessShareLock))
+	{
+		elog(ERROR, "table droppeed concurrently");
+	}
 
 	/*
 	 * Most of the time this function should result in a conclusion where we do not need
