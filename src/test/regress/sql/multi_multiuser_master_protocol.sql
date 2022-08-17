@@ -43,6 +43,8 @@ CREATE TABLE trivial_postgres (id int);
 SELECT master_create_distributed_table('trivial_postgres', 'id', 'append');
 GRANT ALL ON trivial_postgres TO full_access;
 
+GRANT CREATE ON SCHEMA public TO full_access;
+
 SET ROLE full_access;
 CREATE TABLE trivial_full_access (id int);
 SELECT master_create_distributed_table('trivial_full_access', 'id', 'append');
