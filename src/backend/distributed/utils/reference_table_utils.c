@@ -114,12 +114,36 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 
 	/*
 	 * Don't let this table dropped, if dropped retry instead of
-	 * erroring out unless we find 1 table.
+	 * erroring out unless we find 1 table. Move this logic to
+	 * a function where we can find at least 1 ref table and lock
+	 * it, or return InvalidOid.
+	 *
+	 * If returns InvalidOid, we can consider LockColocationId
+	 * on colocationId, because at that point there is not risk of
+	 * deadlock as there are no reference tables to drop.
 	 */
-	if (!ConditionalLockRelationOid(referenceTableId, AccessShareLock))
+	bool foundOneRefTable = false;
+	foreach_oid(referenceTableId, referenceTableIdList)
 	{
-		elog(ERROR, "table droppeed concurrently");
+		Relation aRefTable = try_relation_open(referenceTableId, AccessShareLock);
+		if (!aRefTable)
+		{
+			/* dropped concurrently*/
+			continue;
+		}
+		else
+		{
+			foundOneRefTable = true;
+			relation_close(aRefTable, NoLock);
+		}
 	}
+
+	if (!foundOneRefTable)
+	{
+		/* no concern for deadlock with DROP ref table as there are no ref tables */
+		LockColocationId(colocationId, ShareLock);
+	}
+
 
 	/*
 	 * Most of the time this function should result in a conclusion where we do not need
