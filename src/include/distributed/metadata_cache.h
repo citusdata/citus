@@ -262,6 +262,7 @@ extern Oid DistCleanupPrimaryKeyIndexId(void);
 /* sequence oids */
 extern Oid DistBackgroundJobJobIdSequenceId(void);
 extern Oid DistBackgroundTaskTaskIdSequenceId(void);
+extern Oid DistClockLogicalSequenceId(void);
 
 /* type oids */
 extern Oid LookupTypeOid(char *schemaNameSting, char *typeNameString);

@@ -19,7 +19,8 @@ WHERE
        oid
 ---------------------------------------------------------------------
  pg_dist_authinfo
-(1 row)
+ pg_dist_clock_logical_seq
+(2 rows)
 
 RESET role;
 DROP USER no_access;

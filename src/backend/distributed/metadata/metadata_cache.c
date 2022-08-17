@@ -212,6 +212,7 @@ typedef struct MetadataCacheData
 	Oid jsonbExtractPathFuncId;
 	Oid jsonbExtractPathTextFuncId;
 	Oid CitusDependentObjectFuncId;
+	Oid distClockLogicalSequenceId;
 	bool databaseNameValid;
 	char databaseName[NAMEDATALEN];
 } MetadataCacheData;
@@ -2595,6 +2596,16 @@ DistBackgroundTaskTaskIdSequenceId(void)
 						 &MetadataCache.distBackgroundTaskTaskIdSequenceId);
 
 	return MetadataCache.distBackgroundTaskTaskIdSequenceId;
+}
+
+
+Oid
+DistClockLogicalSequenceId(void)
+{
+	CachedRelationLookup("pg_dist_clock_logical_seq",
+						 &MetadataCache.distClockLogicalSequenceId);
+
+	return MetadataCache.distClockLogicalSequenceId;
 }
 
 

@@ -420,6 +420,43 @@ ExecuteCriticalRemoteCommand(MultiConnection *connection, const char *command)
 
 
 /*
+ * ExecuteRemoteCommandInConnectionList executes a remote command, on all connections
+ * given in the list, that is critical to the transaction. If the command fails then
+ * the transaction aborts.
+ */
+void
+ExecuteRemoteCommandInConnectionList(List *nodeConnectionList, const char *command)
+{
+	MultiConnection *connection = NULL;
+
+	foreach_ptr(connection, nodeConnectionList)
+	{
+		int querySent = SendRemoteCommand(connection, command);
+
+		if (querySent == 0)
+		{
+			ReportConnectionError(connection, ERROR);
+		}
+	}
+
+	/* Process the result */
+	foreach_ptr(connection, nodeConnectionList)
+	{
+		bool raiseInterrupts = true;
+		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+
+		if (!IsResponseOK(result))
+		{
+			ReportResultError(connection, result, ERROR);
+		}
+
+		PQclear(result);
+		ForgetResults(connection);
+	}
+}
+
+
+/*
  * ExecuteOptionalRemoteCommand executes a remote command. If the command fails a WARNING
  * is emitted but execution continues.
  *
