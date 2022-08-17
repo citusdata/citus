@@ -119,7 +119,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	 * Since the changes to the reference table placements are made via loopback
 	 * connections we release the final lock held at the end of this function.
 	 */
-	LOCKMODE lockmodes[] = { AccessShareLock, ExclusiveLock };
+	LOCKMODE lockmodes[] = { ShareLock, ExclusiveLock };
 	for (int l = 0; l < lengthof(lockmodes); l++)
 	{
 		LockColocationId(colocationId, lockmodes[l]);
