@@ -95,10 +95,20 @@ EnsureReferenceTablesExistOnAllNodes(void)
 void
 EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 {
-	List *referenceTableIdList = NIL;
-	uint64 shardId = INVALID_SHARD_ID;
+	List *referenceTableIdList = CitusTableTypeIdList(REFERENCE_TABLE);
+	Oid referenceTableId = list_length(referenceTableIdList) > 0 ? linitial_oid(
+		referenceTableIdList) : InvalidOid;
+
+	uint64 shardId = referenceTableId == InvalidOid ? InvalidOid : GetFirstShardId(
+		referenceTableId);
 	List *newWorkersList = NIL;
 	const char *referenceTableName = NULL;
+
+	if (referenceTableId == InvalidOid)
+	{
+		return;
+	}
+
 	int colocationId = CreateReferenceTableColocationId();
 
 	/*
@@ -122,44 +132,27 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	LOCKMODE lockmodes[] = { ShareLock, ExclusiveLock };
 	for (int l = 0; l < lengthof(lockmodes); l++)
 	{
-		LockColocationId(colocationId, lockmodes[l]);
-
-		referenceTableIdList = CitusTableTypeIdList(REFERENCE_TABLE);
-		if (referenceTableIdList == NIL)
-		{
-			/* no reference tables exist */
-			for (int ll = l; ll >= 0; ll--)
-			{
-				UnlockColocationId(colocationId, lockmodes[ll]);
-			}
-			return;
-		}
-
-		Oid referenceTableId = linitial_oid(referenceTableIdList);
-		referenceTableName = get_rel_name(referenceTableId);
-		List *shardIntervalList = LoadShardIntervalList(referenceTableId);
-		if (list_length(shardIntervalList) == 0)
-		{
-			/* check for corrupt metadata */
-			ereport(ERROR, (errmsg("reference table \"%s\" does not have a shard",
-								   referenceTableName)));
-		}
-
-		ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
-		shardId = shardInterval->shardId;
-
 		/*
 		 * We only take an access share lock, otherwise we'll hold up citus_add_node.
 		 * In case of create_reference_table() where we don't want concurrent writes
 		 * to pg_dist_node, we have already acquired ShareLock on pg_dist_node.
 		 */
-		newWorkersList = WorkersWithoutReferenceTablePlacement(shardId, ShareLock);
+		newWorkersList = WorkersWithoutReferenceTablePlacement(shardId, AccessShareLock);
 		if (list_length(newWorkersList) == 0)
 		{
 			/*
 			 * nothing to do, no need for lock, however we need to release all earlier
 			 * locks as well.
 			 */
+			return;
+		}
+
+		LockColocationId(colocationId, lockmodes[l]);
+
+		referenceTableIdList = CitusTableTypeIdList(REFERENCE_TABLE);
+		if (referenceTableIdList == NIL)
+		{
+			/* no reference tables exist */
 			for (int ll = l; ll >= 0; ll--)
 			{
 				UnlockColocationId(colocationId, lockmodes[ll]);
