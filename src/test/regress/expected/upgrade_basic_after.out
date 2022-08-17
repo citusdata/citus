@@ -63,6 +63,12 @@ SELECT nextval('pg_dist_background_task_task_id_seq') > COALESCE(MAX(task_id), 0
  t
 (1 row)
 
+SELECT last_value > 0 FROM pg_dist_clock_logical_seq;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- If this query gives output it means we've added a new sequence that should
 -- possibly be restored after upgrades.
 SELECT sequence_name FROM information_schema.sequences
@@ -77,7 +83,8 @@ SELECT sequence_name FROM information_schema.sequences
 	'pg_dist_operationid_seq',
 	'pg_dist_cleanup_recordid_seq',
     'pg_dist_background_job_job_id_seq',
-    'pg_dist_background_task_task_id_seq'
+    'pg_dist_background_task_task_id_seq',
+    'pg_dist_clock_logical_seq'
   );
  sequence_name
 ---------------------------------------------------------------------

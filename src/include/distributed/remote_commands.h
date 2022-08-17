@@ -46,6 +46,8 @@ extern void ExecuteCriticalRemoteCommandList(MultiConnection *connection,
 											 List *commandList);
 extern void ExecuteCriticalRemoteCommand(MultiConnection *connection,
 										 const char *command);
+extern void ExecuteRemoteCommandInConnectionList(List *nodeConnectionList,
+												 const char *command);
 extern int ExecuteOptionalRemoteCommand(MultiConnection *connection,
 										const char *command,
 										PGresult **result);
