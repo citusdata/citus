@@ -33,6 +33,20 @@ BEGIN
   RETURN;
 END; $$ language plpgsql;
 
+-- Create a function to ignore "->  Result" lines for PG15 support
+-- In PG15 there are some extra "->  Result" lines
+CREATE OR REPLACE FUNCTION plan_without_result_lines(explain_command text, out query_plan text)
+RETURNS SETOF TEXT AS $$
+BEGIN
+  FOR query_plan IN execute explain_command LOOP
+    IF (query_plan LIKE '%->  Result%' OR query_plan = 'Result') THEN
+        CONTINUE;
+    END IF;
+    RETURN next;
+  END LOOP;
+  RETURN;
+END; $$ language plpgsql;
+
 -- helper function that returns true if output of given explain has "is not null" (case in-sensitive)
 CREATE OR REPLACE FUNCTION explain_has_is_not_null(explain_command text)
 RETURNS BOOLEAN AS $$
