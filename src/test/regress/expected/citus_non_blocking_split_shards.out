@@ -446,8 +446,7 @@ SET citus.next_shard_id TO 8981041;
 SELECT pg_catalog.citus_split_shard_by_split_points(
     8981031,
     ARRAY['-2120000000'],
-    ARRAY[:worker_1_node, :worker_2_node],
-    'auto');
+    ARRAY[:worker_1_node, :worker_2_node]);
 ERROR:  cannot use logical replication to transfer shards of the relation table_no_rep_id since it doesn't have a REPLICA IDENTITY or PRIMARY KEY
 DETAIL:  UPDATE and DELETE commands on the shard will error out during logical replication unless there is a REPLICA IDENTITY or PRIMARY KEY.
 HINT:  If you wish to continue without a replica identity set the shard_transfer_mode to 'force_logical' or 'block_writes'.
