@@ -500,6 +500,9 @@ ALTER EXTENSION citus UPDATE TO '11.0-4';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
 
+-- Test CREATE EXTENSION when Citus already exists but Citus_Columnar does not. Should skip
+CREATE EXTENSION IF NOT EXISTS citus;
+CREATE EXTENSION citus;
 -- Snapshot of state at 11.1-1
 ALTER EXTENSION citus UPDATE TO '11.1-1';
 SELECT * FROM multi_extension.print_extension_changes();
