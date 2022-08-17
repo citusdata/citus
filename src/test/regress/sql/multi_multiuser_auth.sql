@@ -135,6 +135,8 @@ SELECT COUNT(*) FROM wonderland;
 
 DROP TABLE wonderland;
 
+GRANT CREATE ON SCHEMA public TO bob;
+
 \c :bob_conninfo
 
 -- bob can't change authinfo: not a superuser

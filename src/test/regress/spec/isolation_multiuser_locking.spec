@@ -7,6 +7,8 @@ setup
 
 	CREATE USER test_user_2;
 
+	GRANT CREATE ON SCHEMA public TO test_user_1, test_user_2;
+
 	CREATE TABLE test_table(column1 int, column2 int);
 	ALTER TABLE test_table OWNER TO test_user_1;
 	SELECT create_distributed_table('test_table', 'column1');
@@ -16,6 +18,7 @@ teardown
 {
 	BEGIN;
 	DROP TABLE IF EXISTS test_table;
+	REVOKE CREATE ON SCHEMA public FROM test_user_1, test_user_2;
 	DROP USER test_user_1, test_user_2;
 	COMMIT;
 }
