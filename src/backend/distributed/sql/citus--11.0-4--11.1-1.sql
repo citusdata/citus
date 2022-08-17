@@ -168,3 +168,23 @@ GRANT SELECT ON pg_catalog.pg_dist_background_task_depend TO PUBLIC;
 
 #include "udfs/citus_job_wait/11.1-1.sql"
 #include "udfs/citus_job_cancel/11.1-1.sql"
+
+--
+-- Logical clock
+-- Ticks counter with in the logical clock
+--
+CREATE TYPE citus.cluster_clock AS (logical bigint, counter int);
+ALTER TYPE citus.cluster_clock SET SCHEMA pg_catalog;
+
+CREATE TABLE citus.pg_dist_commit_transaction(
+    transaction_id TEXT NOT NULL CONSTRAINT pg_dist_commit_transactionId_unique_constraint UNIQUE,
+    cluster_clock_value cluster_clock NOT NULL,
+    timestamp BIGINT NOT NULL -- Epoch in milliseconds
+);
+
+ALTER TABLE citus.pg_dist_commit_transaction SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.pg_dist_commit_transaction TO public;
+
+#include "udfs/citus_get_cluster_clock/11.1-1.sql"
+#include "udfs/citus_is_clock_after/11.1-1.sql"
+#include "udfs/citus_internal_adjust_local_clock_to_remote/11.1-1.sql"

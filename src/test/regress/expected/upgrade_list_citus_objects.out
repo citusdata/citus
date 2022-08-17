@@ -53,6 +53,7 @@ ORDER BY 1;
  function citus_finish_citus_upgrade()
  function citus_finish_pg_upgrade()
  function citus_get_active_worker_nodes()
+ function citus_get_cluster_clock()
  function citus_internal.find_groupid_for_node(text,integer)
  function citus_internal.pg_dist_node_trigger_func()
  function citus_internal.pg_dist_rebalance_strategy_trigger_func()
@@ -65,6 +66,7 @@ ORDER BY 1;
  function citus_internal_add_partition_metadata(regclass,"char",text,integer,"char")
  function citus_internal_add_placement_metadata(bigint,integer,bigint,integer,bigint)
  function citus_internal_add_shard_metadata(regclass,bigint,"char",text,text)
+ function citus_internal_adjust_local_clock_to_remote(cluster_clock)
  function citus_internal_delete_colocation_metadata(integer)
  function citus_internal_delete_partition_metadata(regclass)
  function citus_internal_delete_shard_metadata(bigint)
@@ -72,6 +74,7 @@ ORDER BY 1;
  function citus_internal_local_blocked_processes()
  function citus_internal_update_placement_metadata(bigint,integer,integer)
  function citus_internal_update_relation_colocation(oid,integer)
+ function citus_is_clock_after(cluster_clock,cluster_clock)
  function citus_is_coordinator()
  function citus_isolation_test_session_is_blocked(integer,integer[])
  function citus_job_cancel(bigint)
@@ -253,6 +256,7 @@ ORDER BY 1;
  table pg_dist_background_task_depend
  table pg_dist_cleanup
  table pg_dist_colocation
+ table pg_dist_commit_transaction
  table pg_dist_local_group
  table pg_dist_node
  table pg_dist_node_metadata
@@ -268,6 +272,7 @@ ORDER BY 1;
  type citus_copy_format
  type citus_job_status
  type citus_task_status
+ type cluster_clock
  type noderole
  type replication_slot_info
  type split_copy_info
@@ -283,5 +288,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(275 rows)
+(280 rows)
 

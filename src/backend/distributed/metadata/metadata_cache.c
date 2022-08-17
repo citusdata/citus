@@ -187,6 +187,7 @@ typedef struct MetadataCacheData
 	Oid distColocationidIndexId;
 	Oid distPlacementGroupidIndexId;
 	Oid distTransactionRelationId;
+	Oid distCommitTransactionRelationId;
 	Oid distTransactionGroupIndexId;
 	Oid citusCatalogNamespaceId;
 	Oid copyFormatTypeId;
@@ -2869,6 +2870,17 @@ DistTransactionRelationId(void)
 						 &MetadataCache.distTransactionRelationId);
 
 	return MetadataCache.distTransactionRelationId;
+}
+
+
+/* return oid of pg_dist_commit_transaction relation */
+Oid
+DistCommitTransactionRelationId(void)
+{
+	CachedRelationLookup("pg_dist_commit_transaction",
+						 &MetadataCache.distCommitTransactionRelationId);
+
+	return MetadataCache.distCommitTransactionRelationId;
 }
 
 

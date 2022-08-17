@@ -114,3 +114,9 @@ DROP TABLE pg_catalog.pg_dist_background_job;
 DROP TYPE pg_catalog.citus_job_status;
 DROP FUNCTION pg_catalog.citus_copy_shard_placement;
 #include "../udfs/citus_copy_shard_placement/10.0-1.sql"
+
+DROP FUNCTION pg_catalog.citus_get_cluster_clock();
+DROP FUNCTION pg_catalog.citus_internal_adjust_local_clock_to_remote(cluster_clock);
+DROP FUNCTION pg_catalog.citus_is_clock_after(cluster_clock, cluster_clock);
+DROP TYPE pg_catalog.cluster_clock CASCADE;
+DROP TABLE pg_catalog.pg_dist_commit_transaction;

@@ -254,6 +254,7 @@ extern Oid DistPlacementShardidIndexId(void);
 extern Oid DistPlacementPlacementidIndexId(void);
 extern Oid DistColocationIndexId(void);
 extern Oid DistTransactionRelationId(void);
+extern Oid DistCommitTransactionRelationId(void);
 extern Oid DistTransactionGroupIndexId(void);
 extern Oid DistPlacementGroupidIndexId(void);
 extern Oid DistObjectPrimaryKeyIndexId(void);

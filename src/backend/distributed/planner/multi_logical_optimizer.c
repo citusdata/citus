@@ -42,6 +42,7 @@
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/string_utils.h"
 #include "distributed/tdigest_extension.h"
+#include "distributed/type_utils.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
@@ -279,7 +280,6 @@ static Oid CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *a
 static Oid WorkerPartialAggOid(void);
 static Oid CoordCombineAggOid(void);
 static Oid AggregateFunctionOid(const char *functionName, Oid inputType);
-static Oid TypeOid(Oid schemaId, const char *typeName);
 static SortGroupClause * CreateSortGroupClause(Var *column);
 
 /* Local functions forward declarations for count(distinct) approximations */
@@ -3664,21 +3664,6 @@ CoordCombineAggOid()
 	};
 
 	return CitusFunctionOidWithSignature(COORD_COMBINE_AGGREGATE_NAME, 3, argtypes);
-}
-
-
-/*
- * TypeOid looks for a type that has the given name and schema, and returns the
- * corresponding type's oid.
- */
-static Oid
-TypeOid(Oid schemaId, const char *typeName)
-{
-	Oid typeOid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid,
-								  PointerGetDatum(typeName),
-								  ObjectIdGetDatum(schemaId));
-
-	return typeOid;
 }
 
 

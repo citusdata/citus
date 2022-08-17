@@ -1,0 +1,141 @@
+CREATE SCHEMA clock;
+SET search_path TO clock;
+SHOW citus.enable_cluster_clock;
+ citus.enable_cluster_clock
+---------------------------------------------------------------------
+ off
+(1 row)
+
+SET citus.enable_cluster_clock to ON;
+SHOW citus.enable_cluster_clock;
+ citus.enable_cluster_clock
+---------------------------------------------------------------------
+ on
+(1 row)
+
+CREATE TABLE clock_test (id int, nonid int);
+SELECT create_distributed_table('clock_test', 'id', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+--
+-- Compare <logical, counter> pairs
+--
+-- Returns true
+SELECT citus_is_clock_after(ROW(5,1), ROW(3,6));
+ citus_is_clock_after
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Returns false
+SELECT citus_is_clock_after(ROW(2,9), ROW(3,0));
+ citus_is_clock_after
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- Returns true
+SELECT citus_is_clock_after(ROW(5,6), ROW(5,1));
+ citus_is_clock_after
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Returns false
+SELECT citus_is_clock_after(ROW(5,6), ROW(5,6));
+ citus_is_clock_after
+---------------------------------------------------------------------
+ f
+(1 row)
+
+--
+-- Check the clock is *monotonically increasing*
+--
+SELECT citus_get_cluster_clock() \gset t1
+SELECT citus_get_cluster_clock() \gset t2
+SELECT citus_get_cluster_clock() \gset t3
+-- Both should return true
+SELECT citus_is_clock_after(:t2citus_get_cluster_clock, :t1citus_get_cluster_clock);
+ citus_is_clock_after
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT citus_is_clock_after(:'t3citus_get_cluster_clock', :'t2citus_get_cluster_clock');
+ citus_is_clock_after
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Returns false
+SELECT citus_is_clock_after(:'t1citus_get_cluster_clock', :'t3citus_get_cluster_clock');
+ citus_is_clock_after
+---------------------------------------------------------------------
+ f
+(1 row)
+
+--
+-- Check the value returned by citus_get_cluster_clock is close to Epoch in ms
+--
+SELECT (extract(epoch from now()) * 1000)::bigint AS epoch \gset
+SELECT logical FROM citus_get_cluster_clock() \gset
+-- Returns false
+SELECT (:logical - :epoch) > 100 as epoch_drift_in_ms;
+ epoch_drift_in_ms
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- Transaction that accesses multiple nodes
+BEGIN;
+INSERT INTO clock_test SELECT generate_series(1, 10000, 1), 0;
+SELECT get_current_transaction_id() \gset tid
+SET client_min_messages TO DEBUG1;
+COMMIT;
+DEBUG:  coordinator transaction clock xxxxxx
+DEBUG:  node(1:57637) transaction clock xxxxxx
+DEBUG:  node(2:57638) transaction clock xxxxxx
+DEBUG:  node(3:57637) transaction clock xxxxxx
+DEBUG:  node(4:57638) transaction clock xxxxxx
+DEBUG:  node(5:57637) transaction clock xxxxxx
+DEBUG:  node(6:57638) transaction clock xxxxxx
+DEBUG:  node(7:57637) transaction clock xxxxxx
+DEBUG:  node(8:57638) transaction clock xxxxxx
+DEBUG:  final global transaction clock xxxxxx
+--
+-- Check to see if the transaction is indeed persisted in the catalog
+--
+SELECT count(*)
+FROM pg_dist_commit_transaction commit_clock
+WHERE transaction_id = :'tidget_current_transaction_id';
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+BEGIN;
+INSERT INTO clock_test SELECT generate_series(1, 10000, 1), 0;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+SELECT get_current_transaction_id() \gset tid
+SET client_min_messages TO DEBUG1;
+ROLLBACK;
+RESET client_min_messages;
+--
+-- Check that the transaction is not persisted
+--
+SELECT count(*)
+FROM pg_dist_commit_transaction commit_clock
+WHERE transaction_id = :'tidget_current_transaction_id';
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+RESET client_min_messages;
+RESET citus.enable_cluster_clock;
+DROP SCHEMA clock CASCADE;
+NOTICE:  drop cascades to table clock_test
