@@ -56,7 +56,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE tenant_isolation.table_
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on colocated table creation
@@ -66,7 +66,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE tenant_isolation.table_
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  canceling statement due to user request
 -- failure on colocated table population
 SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(302").kill()');
@@ -75,7 +75,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(302").kill()');
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- cancellation on colocated table population
 SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(302").cancel(' || :pid || ')');
@@ -84,7 +84,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(302").cancel(' ||
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  canceling statement due to user request
 -- failure on colocated table constraints
 SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_2 ADD CONSTRAINT").after(1).kill()');
@@ -93,7 +93,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_2
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- cancellation on colocated table constraints
 SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_2 ADD CONSTRAINT").after(2).cancel(' || :pid || ')');
@@ -102,7 +102,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_2
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  canceling statement due to user request
 -- failure on table creation
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE tenant_isolation.table_1").kill()');
@@ -111,7 +111,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE tenant_isolation.table_
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on table creation
@@ -121,7 +121,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE tenant_isolation.table_
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  canceling statement due to user request
 -- failure on table population
 SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(300").kill()');
@@ -130,7 +130,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(300").kill()');
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- cancellation on table population
 SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(300").cancel(' || :pid || ')');
@@ -139,7 +139,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_split_copy\(300").cancel(' ||
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  canceling statement due to user request
 -- failure on table constraints
 SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_1 ADD CONSTRAINT").after(1).kill()');
@@ -148,7 +148,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_1
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- cancellation on table constraints
 SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_1 ADD CONSTRAINT").after(2).cancel(' || :pid || ')');
@@ -157,7 +157,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_1
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  canceling statement due to user request
 -- failure on dropping old colocated shard
 SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS tenant_isolation.table_2").kill()');
@@ -166,7 +166,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS tenant_isolatio
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on dropping old colocated shard
@@ -176,7 +176,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS tenant_isolatio
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  canceling statement due to user request
 -- failure on dropping old shard
 SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS tenant_isolation.table_1").kill()');
@@ -185,7 +185,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS tenant_isolatio
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on dropping old shard
@@ -195,7 +195,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS tenant_isolatio
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  canceling statement due to user request
 -- failure on foreign key creation
 SELECT citus.mitmproxy('conn.onQuery(query="ADD CONSTRAINT table_2_ref_id_fkey FOREIGN KEY").kill()');
@@ -204,7 +204,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="ADD CONSTRAINT table_2_ref_id_fkey F
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- failure on foreign key creation
@@ -214,7 +214,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="ADD CONSTRAINT table_2_ref_id_fkey F
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  canceling statement due to user request
 -- failure on shard split transaction
 SELECT citus.mitmproxy('conn.onQuery(query="BEGIN").kill()');
@@ -223,7 +223,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="BEGIN").kill()');
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  failure on connection marked as essential: localhost:xxxxx
 -- failure on shard split transaction
 SELECT citus.mitmproxy('conn.onQuery(query="BEGIN").cancel(' || :pid || ')');
@@ -232,7 +232,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="BEGIN").cancel(' || :pid || ')');
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  canceling statement due to user request
 -- failure on shard split transaction commit
 SELECT citus.mitmproxy('conn.onQuery(query="COMMIT").kill()');
@@ -241,7 +241,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="COMMIT").kill()');
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  failure on connection marked as essential: localhost:xxxxx
 -- failure on shard split transaction commit
 SELECT citus.mitmproxy('conn.onQuery(query="COMMIT").cancel(' || :pid || ')');
@@ -250,7 +250,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="COMMIT").cancel(' || :pid || ')');
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  canceling statement due to user request
 -- failure on transaction for dropping old tables
 SELECT citus.mitmproxy('conn.after(1).onQuery(query="BEGIN").kill()');
@@ -259,7 +259,7 @@ SELECT citus.mitmproxy('conn.after(1).onQuery(query="BEGIN").kill()');
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  failure on connection marked as essential: localhost:xxxxx
 -- failure on transaction for dropping old tables
 SELECT citus.mitmproxy('conn.after(1).onQuery(query="BEGIN").cancel(' || :pid || ')');
@@ -268,7 +268,7 @@ SELECT citus.mitmproxy('conn.after(1).onQuery(query="BEGIN").cancel(' || :pid ||
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  canceling statement due to user request
 -- failure on transaction for foreign key creation
 SELECT citus.mitmproxy('conn.after(2).onQuery(query="BEGIN").kill()');
@@ -277,7 +277,7 @@ SELECT citus.mitmproxy('conn.after(2).onQuery(query="BEGIN").kill()');
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  failure on connection marked as essential: localhost:xxxxx
 -- failure on transaction for foreign key creation
 SELECT citus.mitmproxy('conn.after(2).onQuery(query="BEGIN").cancel(' || :pid || ')');
@@ -286,7 +286,7 @@ SELECT citus.mitmproxy('conn.after(2).onQuery(query="BEGIN").cancel(' || :pid ||
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  canceling statement due to user request
 -- failure on transaction commit for foreign key creation
 SELECT citus.mitmproxy('conn.after(1).onQuery(query="COMMIT").kill()');
@@ -295,7 +295,7 @@ SELECT citus.mitmproxy('conn.after(1).onQuery(query="COMMIT").kill()');
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  failure on connection marked as essential: localhost:xxxxx
 -- failure on transaction commit for foreign key creation
 SELECT citus.mitmproxy('conn.after(1).onQuery(query="COMMIT").cancel(' || :pid || ')');
@@ -304,7 +304,7 @@ SELECT citus.mitmproxy('conn.after(1).onQuery(query="COMMIT").cancel(' || :pid |
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  canceling statement due to user request
 -- failure on transaction prepare for dropping old tables
 SELECT citus.mitmproxy('conn.onQuery(query="PREPARE TRANSACTION").kill()');
@@ -319,7 +319,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="PREPARE TRANSACTION").kill()');
 DO LANGUAGE plpgsql
 $$
 BEGIN
-	SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+	SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 	EXCEPTION WHEN OTHERS THEN
 	RAISE 'Command failed to execute';
 END;
@@ -333,7 +333,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="PREPARE TRANSACTION").cancel(' || :p
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  canceling statement due to user request
 -- failure on transaction commit for dropping old tables
 SELECT citus.mitmproxy('conn.after(2).onQuery(query="COMMIT").kill()');
@@ -342,7 +342,7 @@ SELECT citus.mitmproxy('conn.after(2).onQuery(query="COMMIT").kill()');
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  failure on connection marked as essential: localhost:xxxxx
 -- failure on transaction commit for dropping old tables
 SELECT citus.mitmproxy('conn.after(2).onQuery(query="COMMIT").cancel(' || :pid || ')');
@@ -351,7 +351,7 @@ SELECT citus.mitmproxy('conn.after(2).onQuery(query="COMMIT").cancel(' || :pid |
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  canceling statement due to user request
 -- verify that the tenant is not isolated
 SELECT * FROM shard_sizes ORDER BY 1;
@@ -371,7 +371,7 @@ SELECT citus.mitmproxy('conn.allow()');
 -- shard sizes after successful tenant isolation
 CREATE TABLE old_shards AS SELECT shardid FROM pg_dist_shard;
 WITH new_shard AS (
-	SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE') AS shardid
+	SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode => 'block_writes') AS shardid
 )
 SELECT row_count
 FROM shard_sizes

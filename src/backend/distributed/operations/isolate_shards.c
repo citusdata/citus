@@ -41,7 +41,6 @@
 #include "utils/lsyscache.h"
 #include "utils/typcache.h"
 
-
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(isolate_tenant_to_new_shard);
 PG_FUNCTION_INFO_V1(worker_hash);
@@ -60,6 +59,7 @@ isolate_tenant_to_new_shard(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 	Datum inputDatum = PG_GETARG_DATUM(1);
 	text *cascadeOptionText = PG_GETARG_TEXT_P(2);
+	Oid shardTransferModeOid = PG_GETARG_OID(3);
 
 	EnsureTableOwner(relationId);
 
@@ -163,7 +163,8 @@ isolate_tenant_to_new_shard(PG_FUNCTION_ARGS)
 		nodeIdsForPlacementList = lappend_int(nodeIdsForPlacementList, sourceNodeId);
 	}
 
-	SplitShard(BLOCKING_SPLIT,
+	SplitMode splitMode = LookupSplitMode(shardTransferModeOid);
+	SplitShard(splitMode,
 			   ISOLATE_TENANT_TO_NEW_SHARD,
 			   sourceShard->shardId,
 			   shardSplitPointsList,

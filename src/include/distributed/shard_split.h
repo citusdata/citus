@@ -16,8 +16,10 @@
 typedef enum SplitMode
 {
 	BLOCKING_SPLIT = 0,
-	NON_BLOCKING_SPLIT = 1
+	NON_BLOCKING_SPLIT = 1,
+	AUTO_SPLIT = 2
 } SplitMode;
+
 
 /*
  * User Scenario calling Split Shard API.
@@ -40,9 +42,8 @@ extern void SplitShard(SplitMode splitMode,
 					   List *shardSplitPointsList,
 					   List *nodeIdsForPlacementList);
 
-/* TODO(niupre): Make all these APIs private when all consumers (Example : ISOLATE_TENANT_TO_NEW_SHARD) directly call 'SplitShard' API. */
-extern void ErrorIfCannotSplitShard(SplitOperation splitOperation,
-									ShardInterval *sourceShard);
 extern void DropShardList(List *shardIntervalList);
+
+extern SplitMode LookupSplitMode(Oid shardTransferModeOid);
 
 #endif /* SHARDSPLIT_H_ */

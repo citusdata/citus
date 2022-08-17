@@ -69,7 +69,7 @@ step "s2-begin"
 
 step "s2-isolate-tenant"
 {
-	SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+	SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'block_writes');
 }
 
 step "s2-add-fkey"

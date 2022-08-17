@@ -70,7 +70,6 @@ typedef struct ShardCommandList
 } ShardCommandList;
 
 /* local function forward declarations */
-static void VerifyTablesHaveReplicaIdentity(List *colocatedTableList);
 static bool RelationCanPublishAllModifications(Oid relationId);
 static bool CanUseLogicalReplication(Oid relationId, char shardReplicationMode);
 static void ErrorIfTableCannotBeReplicated(Oid relationId);
@@ -591,7 +590,7 @@ ErrorIfMoveUnsupportedTableType(Oid relationId)
  * do not have a replica identity, which is required for logical replication
  * to replicate UPDATE and DELETE commands.
  */
-static void
+void
 VerifyTablesHaveReplicaIdentity(List *colocatedTableList)
 {
 	ListCell *colocatedTableCell = NULL;

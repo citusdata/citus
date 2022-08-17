@@ -164,7 +164,7 @@ SELECT * FROM run_command_on_placements('multiuser_schema.another_table', $$ sel
 ORDER BY nodename, nodeport, shardid;
 
 -- verify isolate tenant carries grants
-SELECT isolate_tenant_to_new_shard('multiuser_schema.hash_table', 5);
+SELECT isolate_tenant_to_new_shard('multiuser_schema.hash_table', 5, shard_transfer_mode => 'block_writes');
 SELECT * FROM run_command_on_placements('multiuser_schema.hash_table', $$ select has_table_privilege('read_access', '%s', 'select') $$)
 ORDER BY nodename, nodeport, shardid;
 

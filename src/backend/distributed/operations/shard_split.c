@@ -29,6 +29,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/shard_split.h"
 #include "distributed/reference_table_utils.h"
+#include "distributed/repair_shards.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
@@ -64,6 +65,8 @@ typedef struct GroupedDummyShards
 } GroupedDummyShards;
 
 /* Function declarations */
+static void ErrorIfCannotSplitShard(SplitOperation splitOperation,
+									ShardInterval *sourceShard);
 static void ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 											ShardInterval *shardIntervalToSplit,
 											List *shardSplitPointsList,
@@ -136,7 +139,6 @@ static void DropDummyShards(HTAB *mapOfDummyShardToPlacement);
 static void DropDummyShard(MultiConnection *connection, ShardInterval *shardInterval);
 static uint64 GetNextShardIdForSplitChild(void);
 
-
 /* Customize error message strings based on operation type */
 static const char *const SplitOperationName[] =
 {
@@ -155,7 +157,7 @@ static const char *const SplitTargetName[] =
  * ErrorIfCannotSplitShard checks relation kind and invalid shards. It errors
  * out if we are not able to split the given shard.
  */
-void
+static void
 ErrorIfCannotSplitShard(SplitOperation splitOperation, ShardInterval *sourceShard)
 {
 	Oid relationId = sourceShard->relationId;
@@ -372,9 +374,21 @@ SplitShard(SplitMode splitMode,
 							   SplitOperationName[splitOperation],
 							   SplitTargetName[splitOperation])));
 	}
+	else if (PlacementMovedUsingLogicalReplicationInTX)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("multiple shard movements/splits via logical "
+							   "replication in the same transaction is currently "
+							   "not supported")));
+	}
 
 	ShardInterval *shardIntervalToSplit = LoadShardInterval(shardIdToSplit);
 	List *colocatedTableList = ColocatedTableList(shardIntervalToSplit->relationId);
+
+	if (splitMode == AUTO_SPLIT)
+	{
+		VerifyTablesHaveReplicaIdentity(colocatedTableList);
+	}
 
 	Oid relationId = RelationIdForShard(shardIdToSplit);
 	AcquirePlacementColocationLock(relationId, ExclusiveLock, "split");
@@ -433,6 +447,8 @@ SplitShard(SplitMode splitMode,
 			shardIntervalToSplit,
 			shardSplitPointsList,
 			workersForPlacementList);
+
+		PlacementMovedUsingLogicalReplicationInTX = true;
 	}
 }
 
@@ -1385,10 +1401,6 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 					shardGroupSplitIntervalListList, workersForPlacementList,
 					snapshot);
 
-
-		/* Used for testing */
-		ConflictOnlyWithIsolationTesting();
-
 		/*
 		 * 9) Create replica identities, this needs to be done before enabling
 		 * the subscriptions.
@@ -1413,6 +1425,9 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 
 		/* 14) Wait for subscribers to catchup till source LSN */
 		WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
+
+		/* Used for testing */
+		ConflictOnlyWithIsolationTesting();
 
 		/* 15) Block writes on source shards */
 		BlockWritesToShardList(sourceColocatedShardIntervalList);

@@ -7,6 +7,7 @@ test: multi_cluster_management
 test: multi_test_catalog_views
 test: multi_data_types
 test: multi_tenant_isolation
+test: multi_tenant_isolation_nonblocking
 
 # --------
 # Tests that require adding coordinator to pg_dist_node
