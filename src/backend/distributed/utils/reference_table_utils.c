@@ -95,6 +95,9 @@ EnsureReferenceTablesExistOnAllNodes(void)
 void
 EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 {
+	/* TODO: tests rely on this */
+	int colocationId = CreateReferenceTableColocationId();
+
 	List *referenceTableIdList = CitusTableTypeIdList(REFERENCE_TABLE);
 	Oid referenceTableId = list_length(referenceTableIdList) > 0 ? linitial_oid(
 		referenceTableIdList) : InvalidOid;
@@ -109,7 +112,6 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 		return;
 	}
 
-	int colocationId = CreateReferenceTableColocationId();
 
 	/*
 	 * Most of the time this function should result in a conclusion where we do not need
