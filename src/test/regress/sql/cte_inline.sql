@@ -236,6 +236,19 @@ $Q$);
 
 \set VERBOSITY default
 
+-- enable_group_by_reordering is a new GUC introduced in PG15
+-- it does some optimization of the order of group by keys which results
+-- in a different explain output plan between PG13/14 and PG15
+-- Hence we set that GUC to off.
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
+\gset
+\if :server_version_ge_15
+SET enable_group_by_reordering TO off;
+\endif
+SELECT DISTINCT 1 FROM run_command_on_workers($$ALTER SYSTEM SET enable_group_by_reordering TO off;$$);
+SELECT run_command_on_workers($$SELECT pg_reload_conf()$$);
+
 EXPLAIN (COSTS OFF) WITH cte_1 AS NOT MATERIALIZED (SELECT * FROM test_table)
 SELECT
 	count(*)
@@ -245,6 +258,11 @@ FROM
 	cte_1 as second_entry
 		USING (key);
 
+\if :server_version_ge_15
+RESET enable_group_by_reordering;
+\endif
+SELECT DISTINCT 1 FROM run_command_on_workers($$ALTER SYSTEM RESET enable_group_by_reordering;$$);
+SELECT run_command_on_workers($$SELECT pg_reload_conf()$$);
 
 
 -- ctes with volatile functions are not
