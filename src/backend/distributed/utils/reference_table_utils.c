@@ -64,7 +64,16 @@ replicate_reference_tables(PG_FUNCTION_ARGS)
 {
 	Oid shardReplicationModeOid = PG_GETARG_OID(0);
 	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
+
+	/* to prevent concurrent node additions while copying reference tables */
+	LockRelationOid(DistNodeRelationId(), ShareLock);
 	EnsureReferenceTablesExistOnAllNodesExtended(shardReplicationMode);
+
+	/*
+	 * Given the copying of reference tables and updating metadata have been done via a
+	 * loopback connection we do not have to retain the lock on pg_dist_node anymore.
+	 */
+	UnlockRelationOid(DistNodeRelationId(), ShareLock);
 
 	PG_RETURN_VOID();
 }
@@ -108,29 +117,35 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	 * lower lock, that we might need to copy reference tables we check with a more
 	 * aggressive and self conflicting lock. It is important to be self conflicting in the
 	 * second run to make sure that two concurrent calls to this routine will actually not
-	 * run concurrently after the initial check. That is also the reason why we release
-	 * the lock between the two iterations of precondition checks.
+	 * run concurrently after the initial check.
 	 *
 	 * If after two iterations of precondition checks we still find the need for copying
-	 * reference tables we exit the forloop with the last lock held. This will prevent
-	 * concurrent DROP TABLE and create_reference_table calls so that the list of
-	 * reference tables we operate on are stable.
+	 * reference tables we exit the loop with all locks held. This will prevent concurrent
+	 * DROP TABLE and create_reference_table calls so that the list of reference tables we
+	 * operate on are stable.
 	 *
 	 * Since the changes to the reference table placements are made via loopback
-	 * connections we release the final lock held at the end of this function.
+	 * connections we release the locks held at the end of this function. Due to Citus
+	 * only running transactions in READ COMMITTED mode we can be sure that other
+	 * transactions correctly find the metadata entries.
 	 */
 	LOCKMODE lockmodes[] = { AccessShareLock, ExclusiveLock };
-	for (int l = 0; l < lengthof(lockmodes); l++)
+	for (int lockmodeIndex = 0; lockmodeIndex < lengthof(lockmodes); lockmodeIndex++)
 	{
-		LockColocationId(colocationId, lockmodes[l]);
+		LockColocationId(colocationId, lockmodes[lockmodeIndex]);
 
 		referenceTableIdList = CitusTableTypeIdList(REFERENCE_TABLE);
 		if (referenceTableIdList == NIL)
 		{
-			/* no reference tables exist */
-			for (int ll = l; ll >= 0; ll--)
+			/*
+			 * No reference tables exist, make sure that any locks obtained earlier are
+			 * released. It will probably not matter, but we release the locks in the
+			 * reverse order we obtained them in.
+			 */
+			for (int releaseLockmodeIndex = lockmodeIndex; releaseLockmodeIndex >= 0;
+				 releaseLockmodeIndex--)
 			{
-				UnlockColocationId(colocationId, lockmodes[ll]);
+				UnlockColocationId(colocationId, lockmodes[releaseLockmodeIndex]);
 			}
 			return;
 		}
@@ -157,12 +172,14 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 		if (list_length(newWorkersList) == 0)
 		{
 			/*
-			 * nothing to do, no need for lock, however we need to release all earlier
-			 * locks as well.
+			 * All workers alreaddy have a copy of the reference tables, make sure that
+			 * any locks obtained earlier are released. It will probably not matter, but
+			 * we release the locks in the reverse order we obtained them in.
 			 */
-			for (int ll = l; ll >= 0; ll--)
+			for (int releaseLockmodeIndex = lockmodeIndex; releaseLockmodeIndex >= 0;
+				 releaseLockmodeIndex--)
 			{
-				UnlockColocationId(colocationId, lockmodes[ll]);
+				UnlockColocationId(colocationId, lockmodes[releaseLockmodeIndex]);
 			}
 			return;
 		}
@@ -254,10 +271,17 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 		CloseConnection(connection);
 	}
 
-	/* release all the locks we acquired for the above operations */
-	for (int ll = lengthof(lockmodes) - 1; ll >= 0; ll--)
+	/*
+	 * Since reference tables have been copied via a loopback connection we do not have to
+	 * retain our locks. Since Citus only runs well in READ COMMITTED mode we can be sure
+	 * that other transactions will find the reference tables copied.
+	 * We have obtained and held multiple locks, here we unlock them all in the reverse
+	 * order we have obtained them in.
+	 */
+	for (int releaseLockmodeIndex = lengthof(lockmodes) - 1; releaseLockmodeIndex >= 0;
+		 releaseLockmodeIndex--)
 	{
-		UnlockColocationId(colocationId, lockmodes[ll]);
+		UnlockColocationId(colocationId, lockmodes[releaseLockmodeIndex]);
 	}
 }
 
