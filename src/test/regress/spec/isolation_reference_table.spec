@@ -1,6 +1,17 @@
-// reference tables _do_ lock on the first reference table in the shardgroup due to the lack of shardgroups in the
-// system. When we run the tests we want to make sure the tables we are testing against cannot be the first reference
-// table. For this purpose we create a reference table that we will _not_ interact with during the tests.
+// reference tables _do_ lock on the first reference table in the shardgroup
+// due to the lack of shardgroups in the system. When we run the tests we want
+// to make sure the tables we are testing against cannot be the first reference
+// table. For this purpose we create a reference table that we will _not_
+// interact with during the tests. However, when a VACUUM happens on
+// pg_dist_partition in the middle of the test, to table that we don't use on
+// purpose might not actually be the first in the catalogs. To avoid VACUUM
+// running we run VACUUM FULL on pg_dist_partition before we run this test.
+// This VACUUM is done in a separate setup block because it cannot run in a
+// transaction.
+setup
+{
+	VACUUM FULL pg_dist_partition;
+}
 setup
 {
  	CREATE TABLE first_reference_table(a int);
