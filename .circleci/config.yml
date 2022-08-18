@@ -15,7 +15,7 @@ parameters:
     default: '14.0'
   upgrade_pg_versions:
     type: string
-    default: '13.4-14.0'
+    default: '13.4-14.0-15beta3'
   tools_version_for_style_checker:
     type: string
     default: '0.7.9'
