@@ -867,7 +867,6 @@ AssignDistributedTransactionId(void)
 void
 AssignGlobalPID(void)
 {
-	elog(WARNING, "AssignGlobalPID");
 	uint64 globalPID = INVALID_CITUS_INTERNAL_BACKEND_GPID;
 	bool distributedCommandOriginator = false;
 
@@ -902,7 +901,6 @@ AssignGlobalPID(void)
 void
 SetBackendDataGlobalPID(uint64 globalPID)
 {
-	elog(WARNING, "SetBackendDataGlobalPID");
 	SpinLockAcquire(&MyBackendData->mutex);
 
 	MyBackendData->globalPID = globalPID;
