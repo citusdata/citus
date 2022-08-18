@@ -990,3 +990,58 @@ stop_session_level_connection_to_node
 
 (1 row)
 
+
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert s2-coordinator-create-index-concurrently s1-commit-worker s2-empty s3-select-count s1-stop-connection
+step s1-start-session-level-connection:
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin-on-worker:
+        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-insert:
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO insert_table VALUES(6, 60)');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-coordinator-create-index-concurrently:
+ CREATE INDEX CONCURRENTLY insert_table_index ON insert_table(id);
+ <waiting ...>
+step s1-commit-worker: 
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-coordinator-create-index-concurrently: <... completed>
+step s2-empty:
+step s3-select-count:
+ SELECT COUNT(*) FROM insert_table;
+
+count
+---------------------------------------------------------------------
+    6
+(1 row)
+
+step s1-stop-connection:
+ SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+

@@ -33,6 +33,7 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/foreign_key_relationship.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/lock_graph.h"
 #include "distributed/multi_client_executor.h"
@@ -768,7 +769,8 @@ ReceiveAndUpdateShardsSizes(List *connectionList)
 	 * all the placements. We use a hash table to remember already visited shard ids
 	 * since we update all the different placements of a shard id at once.
 	 */
-	HTAB *alreadyVisitedShardPlacements = CreateOidVisitedHashSet();
+	HTAB *alreadyVisitedShardPlacements = CreateSimpleHashSetWithName(Oid,
+																	  "oid visited hash set");
 
 	MultiConnection *connection = NULL;
 	foreach_ptr(connection, connectionList)

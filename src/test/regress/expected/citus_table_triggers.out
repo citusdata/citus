@@ -106,9 +106,9 @@ AFTER INSERT ON reference_table_1
 FOR EACH ROW EXECUTE FUNCTION update_value();
 -- below two should fail
 SELECT create_distributed_table('distributed_table_1', 'value');
-ERROR:  cannot distribute relation "distributed_table_1" because it has triggers and "citus.enable_unsafe_triggers" is set to "false"
+ERROR:  cannot distribute relation "distributed_table_1" because it has triggers
 SELECT create_reference_table('reference_table_1');
-ERROR:  cannot distribute relation "reference_table_1" because it has triggers and "citus.enable_unsafe_triggers" is set to "false"
+ERROR:  cannot distribute relation "reference_table_1" because it has triggers
 ---------------------------------------------------------------------
 -- test deparse logic for CREATE TRIGGER commands
 -- via master_get_table_ddl_events

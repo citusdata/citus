@@ -9,6 +9,10 @@ Here is a high level overview of test plan:
  6. Trigger Split on both shards of 'sensors'. This will also split co-located tables.
  7. Move one of the split shard to test Split -> ShardMove.
  8. Split an already split shard second time on a different schema.
+ 9. Create a colocated table with no replica identity.
+ 10. Show we do not allow Split with the shard transfer mode 'auto' if any colocated table has no replica identity.
+ 11. Drop the colocated table with no replica identity.
+ 12. Show we allow Split with the shard transfer mode 'auto' if all colocated tables has replica identity.
 */
 CREATE SCHEMA "citus_split_test_schema";
 CREATE ROLE test_shard_split_role WITH LOGIN;
@@ -428,6 +432,102 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 (18 rows)
 
 -- END: Split second time on another schema
+-- BEGIN: Create a co-located table with no replica identity.
+CREATE TABLE table_no_rep_id (measureid integer);
+SELECT create_distributed_table('table_no_rep_id', 'measureid', colocate_with:='sensors');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- END: Create a co-located table with no replica identity.
+-- BEGIN: Split a shard with shard_transfer_mode='auto' and with a colocated table with no replica identity
+SET citus.next_shard_id TO 8981041;
+SELECT pg_catalog.citus_split_shard_by_split_points(
+    8981031,
+    ARRAY['-2120000000'],
+    ARRAY[:worker_1_node, :worker_2_node]);
+ERROR:  cannot use logical replication to transfer shards of the relation table_no_rep_id since it doesn't have a REPLICA IDENTITY or PRIMARY KEY
+DETAIL:  UPDATE and DELETE commands on the shard will error out during logical replication unless there is a REPLICA IDENTITY or PRIMARY KEY.
+HINT:  If you wish to continue without a replica identity set the shard_transfer_mode to 'force_logical' or 'block_writes'.
+SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
+  FROM pg_dist_shard AS shard
+  INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
+  INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
+  INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
+  WHERE node.noderole = 'primary' AND (logicalrelid = 'sensors'::regclass OR logicalrelid = 'colocated_dist_table'::regclass OR logicalrelid = 'table_with_index_rep_identity'::regclass)
+  ORDER BY logicalrelid, shardminvalue::BIGINT;
+ shardid |         logicalrelid          | shardminvalue | shardmaxvalue | nodename  | nodeport
+---------------------------------------------------------------------
+ 8981031 | sensors                       | -2147483648   | -2100000000   | localhost |    57637
+ 8981032 | sensors                       | -2099999999   | -1073741824   | localhost |    57638
+ 8981008 | sensors                       | -1073741823   | -1            | localhost |    57638
+ 8981013 | sensors                       | 0             | 536870911     | localhost |    57637
+ 8981014 | sensors                       | 536870912     | 1610612735    | localhost |    57637
+ 8981015 | sensors                       | 1610612736    | 2147483647    | localhost |    57638
+ 8981033 | colocated_dist_table          | -2147483648   | -2100000000   | localhost |    57637
+ 8981034 | colocated_dist_table          | -2099999999   | -1073741824   | localhost |    57638
+ 8981010 | colocated_dist_table          | -1073741823   | -1            | localhost |    57638
+ 8981016 | colocated_dist_table          | 0             | 536870911     | localhost |    57637
+ 8981017 | colocated_dist_table          | 536870912     | 1610612735    | localhost |    57637
+ 8981018 | colocated_dist_table          | 1610612736    | 2147483647    | localhost |    57638
+ 8981035 | table_with_index_rep_identity | -2147483648   | -2100000000   | localhost |    57637
+ 8981036 | table_with_index_rep_identity | -2099999999   | -1073741824   | localhost |    57638
+ 8981012 | table_with_index_rep_identity | -1073741823   | -1            | localhost |    57638
+ 8981019 | table_with_index_rep_identity | 0             | 536870911     | localhost |    57637
+ 8981020 | table_with_index_rep_identity | 536870912     | 1610612735    | localhost |    57637
+ 8981021 | table_with_index_rep_identity | 1610612736    | 2147483647    | localhost |    57638
+(18 rows)
+
+-- END: Split a shard with shard_transfer_mode='auto' and with a colocated table with no replica identity
+-- BEGIN: Drop the co-located table with no replica identity.
+DROP TABLE table_no_rep_id;
+-- END: Drop the co-located table with no replica identity.
+-- BEGIN: Split a shard with shard_transfer_mode='auto' and with all colocated tables has replica identity
+SET citus.next_shard_id TO 8981041;
+SELECT pg_catalog.citus_split_shard_by_split_points(
+    8981031,
+    ARRAY['-2120000000'],
+    ARRAY[:worker_1_node, :worker_2_node],
+    'auto');
+ citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
+  FROM pg_dist_shard AS shard
+  INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
+  INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
+  INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
+  WHERE node.noderole = 'primary' AND (logicalrelid = 'sensors'::regclass OR logicalrelid = 'colocated_dist_table'::regclass OR logicalrelid = 'table_with_index_rep_identity'::regclass)
+  ORDER BY logicalrelid, shardminvalue::BIGINT;
+ shardid |         logicalrelid          | shardminvalue | shardmaxvalue | nodename  | nodeport
+---------------------------------------------------------------------
+ 8981041 | sensors                       | -2147483648   | -2120000000   | localhost |    57637
+ 8981042 | sensors                       | -2119999999   | -2100000000   | localhost |    57638
+ 8981032 | sensors                       | -2099999999   | -1073741824   | localhost |    57638
+ 8981008 | sensors                       | -1073741823   | -1            | localhost |    57638
+ 8981013 | sensors                       | 0             | 536870911     | localhost |    57637
+ 8981014 | sensors                       | 536870912     | 1610612735    | localhost |    57637
+ 8981015 | sensors                       | 1610612736    | 2147483647    | localhost |    57638
+ 8981043 | colocated_dist_table          | -2147483648   | -2120000000   | localhost |    57637
+ 8981044 | colocated_dist_table          | -2119999999   | -2100000000   | localhost |    57638
+ 8981034 | colocated_dist_table          | -2099999999   | -1073741824   | localhost |    57638
+ 8981010 | colocated_dist_table          | -1073741823   | -1            | localhost |    57638
+ 8981016 | colocated_dist_table          | 0             | 536870911     | localhost |    57637
+ 8981017 | colocated_dist_table          | 536870912     | 1610612735    | localhost |    57637
+ 8981018 | colocated_dist_table          | 1610612736    | 2147483647    | localhost |    57638
+ 8981045 | table_with_index_rep_identity | -2147483648   | -2120000000   | localhost |    57637
+ 8981046 | table_with_index_rep_identity | -2119999999   | -2100000000   | localhost |    57638
+ 8981036 | table_with_index_rep_identity | -2099999999   | -1073741824   | localhost |    57638
+ 8981012 | table_with_index_rep_identity | -1073741823   | -1            | localhost |    57638
+ 8981019 | table_with_index_rep_identity | 0             | 536870911     | localhost |    57637
+ 8981020 | table_with_index_rep_identity | 536870912     | 1610612735    | localhost |    57637
+ 8981021 | table_with_index_rep_identity | 1610612736    | 2147483647    | localhost |    57638
+(21 rows)
+
+-- END: Split a shard with shard_transfer_mode='auto' and with all colocated tables has replica identity
 -- BEGIN: Validate Data Count
 SELECT COUNT(*) FROM sensors;
  count

@@ -10,6 +10,8 @@
 
 #include "postgres.h"
 
+#include "common/hashfn.h"
+#include "distributed/citus_safe_lib.h"
 #include "distributed/hash_helpers.h"
 #include "utils/hsearch.h"
 
@@ -31,6 +33,27 @@ hash_delete_all(HTAB *htab)
 		hash_search(htab, entry, HASH_REMOVE, &found);
 		Assert(found);
 	}
+}
+
+
+/*
+ * CreateSimpleHashWithNameAndSize creates a hashmap that hashes its key using
+ * tag_hash function and stores the entries in the current memory context.
+ */
+HTAB *
+CreateSimpleHashWithNameAndSizeInternal(Size keySize, Size entrySize,
+										char *name, long nelem)
+{
+	HASHCTL info;
+	memset_struct_0(info);
+	info.keysize = keySize;
+	info.entrysize = entrySize;
+	info.hcxt = CurrentMemoryContext;
+
+	int hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+
+	HTAB *publicationInfoHash = hash_create(name, nelem, &info, hashFlags);
+	return publicationInfoHash;
 }
 
 

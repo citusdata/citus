@@ -34,6 +34,8 @@ arbitrary_config_check = $(citus_abs_srcdir)/citus_tests/arbitrary_configs/citus
 template_isolation_files = $(shell find $(citus_abs_srcdir)/spec/ -name '*.spec')
 generated_isolation_files = $(patsubst $(citus_abs_srcdir)/spec/%,$(citus_abs_srcdir)/build/specs/%,$(template_isolation_files))
 
+vanilla_diffs_file = $(citus_abs_srcdir)/pg_vanilla_outputs/$(MAJORVERSION)/regression.diffs
+
 # have make check actually run all tests, but keep check-full as an
 # intermediate, for muscle memory backward compatibility.
 check: check-full check-enterprise-full
@@ -183,8 +185,9 @@ check-isolation-base: all  $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/base_isolation_schedule $(EXTRA_TESTS)
 
+# ci takes regression.diffs output from another location, so copy diffs file at the end.
 check-vanilla:
-	$(pg_regress_multi_check) --vanillatest --vanilla-dev
+	$(pg_regress_multi_check) --vanillatest || (cp $(vanilla_diffs_file) $(citus_abs_srcdir)/regression.diffs)
 
 check-multi-mx: all
 	$(pg_regress_multi_check) --load-extension=citus \

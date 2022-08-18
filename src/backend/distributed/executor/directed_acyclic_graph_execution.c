@@ -26,6 +26,12 @@ typedef struct TaskHashKey
 {
 	uint64 jobId;
 	uint32 taskId;
+
+	/*
+	 * The padding field is needed to make sure the struct contains no
+	 * automatic padding, which is not allowed for hashmap keys.
+	 */
+	uint32 padding;
 }TaskHashKey;
 
 typedef struct TaskHashEntry
@@ -34,14 +40,10 @@ typedef struct TaskHashEntry
 	Task *task;
 }TaskHashEntry;
 
-static HASHCTL InitHashTableInfo(void);
-static HTAB * CreateTaskHashTable(void);
 static bool IsAllDependencyCompleted(Task *task, HTAB *completedTasks);
 static void AddCompletedTasks(List *curCompletedTasks, HTAB *completedTasks);
 static List * FindExecutableTasks(List *allTasks, HTAB *completedTasks);
 static List * RemoveMergeTasks(List *taskList);
-static int TaskHashCompare(const void *key1, const void *key2, Size keysize);
-static uint32 TaskHash(const void *key, Size keysize);
 static bool IsTaskAlreadyCompleted(Task *task, HTAB *completedTasks);
 
 /*
@@ -53,7 +55,8 @@ static bool IsTaskAlreadyCompleted(Task *task, HTAB *completedTasks);
 void
 ExecuteTasksInDependencyOrder(List *allTasks, List *excludedTasks, List *jobIds)
 {
-	HTAB *completedTasks = CreateTaskHashTable();
+	assert_valid_hash_key3(TaskHashKey, jobId, taskId, padding);
+	HTAB *completedTasks = CreateSimpleHash(TaskHashKey, TaskHashEntry);
 
 	/* We only execute depended jobs' tasks, therefore to not execute */
 	/* top level tasks, we add them to the completedTasks. */
@@ -144,19 +147,6 @@ AddCompletedTasks(List *curCompletedTasks, HTAB *completedTasks)
 
 
 /*
- * CreateTaskHashTable creates a HTAB with the necessary initialization.
- */
-static HTAB *
-CreateTaskHashTable()
-{
-	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT | HASH_COMPARE);
-	HASHCTL info = InitHashTableInfo();
-	return hash_create("citus task completed list (jobId, taskId)",
-					   64, &info, hashFlags);
-}
-
-
-/*
  * IsTaskAlreadyCompleted returns true if the given task
  * is found in the completedTasks HTAB.
  */
@@ -192,55 +182,4 @@ IsAllDependencyCompleted(Task *targetTask, HTAB *completedTasks)
 		}
 	}
 	return true;
-}
-
-
-/*
- * InitHashTableInfo returns hash table info, the hash table is
- * configured to be created in the CurrentMemoryContext so that
- * it will be cleaned when this memory context gets freed/reset.
- */
-static HASHCTL
-InitHashTableInfo()
-{
-	HASHCTL info;
-
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(TaskHashKey);
-	info.entrysize = sizeof(TaskHashEntry);
-	info.hash = TaskHash;
-	info.match = TaskHashCompare;
-	info.hcxt = CurrentMemoryContext;
-
-	return info;
-}
-
-
-static uint32
-TaskHash(const void *key, Size keysize)
-{
-	TaskHashKey *taskKey = (TaskHashKey *) key;
-	uint32 hash = 0;
-
-	hash = hash_combine(hash, hash_any((unsigned char *) &taskKey->jobId,
-									   sizeof(int64)));
-	hash = hash_combine(hash, hash_uint32(taskKey->taskId));
-
-	return hash;
-}
-
-
-static int
-TaskHashCompare(const void *key1, const void *key2, Size keysize)
-{
-	TaskHashKey *taskKey1 = (TaskHashKey *) key1;
-	TaskHashKey *taskKey2 = (TaskHashKey *) key2;
-	if (taskKey1->jobId != taskKey2->jobId || taskKey1->taskId != taskKey2->taskId)
-	{
-		return 1;
-	}
-	else
-	{
-		return 0;
-	}
 }

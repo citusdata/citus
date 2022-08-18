@@ -9,6 +9,8 @@ select current_user \gset
 
 create user columnar_user;
 
+GRANT CREATE ON SCHEMA public TO columnar_user;
+
 \c - columnar_user
 
 -- owned by columnar_user

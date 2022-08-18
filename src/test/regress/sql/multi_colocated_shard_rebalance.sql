@@ -7,6 +7,20 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 13000000;
 SET citus.shard_count TO 6;
 SET citus.shard_replication_factor TO 1;
 
+-- this function is dropped in Citus10, added here for tests
+SET citus.enable_metadata_sync TO OFF;
+CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
+                                                                      distribution_column text,
+                                                                      distribution_method citus.distribution_type)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus', $$master_create_distributed_table$$;
+COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
+                                                               distribution_column text,
+                                                               distribution_method citus.distribution_type)
+    IS 'define the table distribution functions';
+RESET citus.enable_metadata_sync;
+
 
 -- create distributed tables
 CREATE TABLE table1_group1 ( id int PRIMARY KEY);
@@ -479,6 +493,11 @@ WHERE logicalrelid::text LIKE 'move_partitions.events%' AND nodeport = :worker_1
 
 DROP TABLE move_partitions.events;
 
--- set back to the defaults and drop the table
+-- set back to the defaults and drop the tables
 SET client_min_messages TO DEFAULT;
 DROP TABLE test_with_pkey;
+DROP TABLE table2_group1;
+DROP TABLE table1_group1;
+DROP TABLE table5_groupX;
+DROP TABLE table6_append;
+DROP TABLE serial_move_test;

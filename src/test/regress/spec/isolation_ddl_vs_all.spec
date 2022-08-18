@@ -43,18 +43,23 @@ step "s2-table-size" { SELECT citus_total_relation_size('ddl_hash'); }
 step "s2-master-modify-multiple-shards" { DELETE FROM ddl_hash; }
 step "s2-distribute-table" { SELECT create_distributed_table('ddl_hash', 'id'); }
 step "s2-commit" { COMMIT; }
+// This s2-empty step is used as a way to wait for the create index
+// concurrently command to complete before running s1-show-xxx. This is only
+// necessary for permutations where we don't run s2-commit, since that one
+// implicitly takes on that same function.
+step "s2-empty" {}
 
 // permutations - DDL vs DDL
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-create-index" "s2-ddl-create-index" "s1-commit" "s2-commit" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s1-ddl-create-index" "s2-ddl-create-index-concurrently" "s1-commit" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s1-ddl-create-index" "s2-ddl-create-index-concurrently" "s1-commit" "s2-empty" "s1-show-indexes"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-create-index" "s2-ddl-add-column" "s1-commit" "s2-commit" "s1-show-indexes" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-create-index" "s2-ddl-rename-column" "s1-commit" "s2-commit" "s1-show-indexes" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-add-column" "s2-ddl-create-index" "s1-commit" "s2-commit" "s1-show-columns" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s1-ddl-add-column" "s2-ddl-create-index-concurrently" "s1-commit" "s1-show-columns" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s1-ddl-add-column" "s2-ddl-create-index-concurrently" "s1-commit" "s2-empty" "s1-show-columns" "s1-show-indexes"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-add-column" "s2-ddl-add-column" "s1-commit" "s2-commit" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-add-column" "s2-ddl-rename-column" "s1-commit" "s2-commit" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-rename-column" "s2-ddl-create-index" "s1-commit" "s2-commit" "s1-show-columns" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s1-ddl-rename-column" "s2-ddl-create-index-concurrently" "s1-commit" "s1-show-columns" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s1-ddl-rename-column" "s2-ddl-create-index-concurrently" "s1-commit" "s2-empty" "s1-show-columns" "s1-show-indexes"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-rename-column" "s2-ddl-add-column" "s1-commit" "s2-commit" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-rename-column" "s2-ddl-rename-column" "s1-commit" "s2-commit" "s1-show-columns"
 
@@ -76,9 +81,15 @@ permutation "s1-initialize" "s1-begin" "s2-begin" "s1-table-size" "s2-ddl-create
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-master-modify-multiple-shards" "s2-ddl-create-index" "s1-commit" "s2-commit" "s1-show-indexes"
 permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s2-begin" "s1-distribute-table" "s2-ddl-create-index" "s1-commit" "s2-commit" "s1-show-indexes"
 
-permutation "s1-initialize" "s1-begin" "s1-table-size" "s2-ddl-create-index-concurrently" "s1-commit" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s1-master-modify-multiple-shards" "s2-ddl-create-index-concurrently" "s1-commit" "s1-show-indexes"
-permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s1-distribute-table" "s2-ddl-create-index-concurrently" "s1-commit" "s1-show-indexes"
+// We use s2-empty slightly differently for this permutation than in the rest
+// of the permutations: We know create-index-concurrently doesn't have to wait
+// for s1-commit here, but the isolationtester sometimes detects it temporarily
+// as blocking. To get consistent test output we use a (*) marker to always
+// show create index concurrently as blocking. Then right after we put
+// s2-empty, to wait for it to complete.
+permutation "s1-initialize" "s1-begin" "s1-table-size" "s2-ddl-create-index-concurrently"(*) "s2-empty" "s1-commit" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s1-master-modify-multiple-shards" "s2-ddl-create-index-concurrently" "s1-commit" "s2-empty" "s1-show-indexes"
+permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s1-distribute-table" "s2-ddl-create-index-concurrently" "s1-commit" "s2-empty" "s1-show-indexes"
 
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-table-size" "s2-ddl-add-column" "s1-commit" "s2-commit" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-master-modify-multiple-shards" "s2-ddl-add-column" "s1-commit" "s2-commit" "s1-show-columns"

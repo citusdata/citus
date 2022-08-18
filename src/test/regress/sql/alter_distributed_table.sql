@@ -201,7 +201,7 @@ SET citus.shard_count TO 23;
 
 CREATE TABLE shard_split_table (a int, b int);
 SELECT create_distributed_table ('shard_split_table', 'a');
-SELECT 1 FROM isolate_tenant_to_new_shard('shard_split_table', 5);
+SELECT 1 FROM isolate_tenant_to_new_shard('shard_split_table', 5, shard_transfer_mode => 'block_writes');
 
 -- show the difference in pg_dist_colocation and citus_tables shard counts
 SELECT

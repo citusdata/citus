@@ -1,4 +1,4 @@
--- citus--10.2-4--11.0-1
+-- citus--10.2-5--11.0-1
 
 -- bump version to 11.0-1
 #include "udfs/citus_disable_node/11.0-1.sql"

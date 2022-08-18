@@ -161,6 +161,7 @@ SELECT master_create_distributed_table('trivial_postgres', 'id', 'append');
 (1 row)
 
 GRANT ALL ON trivial_postgres TO full_access;
+GRANT CREATE ON SCHEMA public TO full_access;
 SET ROLE full_access;
 CREATE TABLE trivial_full_access (id int);
 SELECT master_create_distributed_table('trivial_full_access', 'id', 'append');
@@ -389,7 +390,7 @@ ORDER BY nodename, nodeport, shardid;
 (4 rows)
 
 -- verify isolate tenant carries grants
-SELECT isolate_tenant_to_new_shard('multiuser_schema.hash_table', 5);
+SELECT isolate_tenant_to_new_shard('multiuser_schema.hash_table', 5, shard_transfer_mode => 'block_writes');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                       109100

@@ -30,7 +30,7 @@ step s2-begin:
  BEGIN;
 
 step s2-isolate-tenant:
- SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'block_writes');
 
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
@@ -103,7 +103,7 @@ step s2-begin:
  BEGIN;
 
 step s2-isolate-tenant:
- SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'block_writes');
 
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
@@ -173,7 +173,7 @@ step s2-begin:
  BEGIN;
 
 step s2-isolate-tenant:
- SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'block_writes');
 
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
@@ -242,7 +242,7 @@ step s2-begin:
  BEGIN;
 
 step s2-isolate-tenant:
- SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'block_writes');
 
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
@@ -311,7 +311,7 @@ step s2-begin:
  BEGIN;
 
 step s2-isolate-tenant:
- SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'block_writes');
 
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
@@ -395,7 +395,7 @@ step s2-begin:
  BEGIN;
 
 step s2-isolate-tenant:
- SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'block_writes');
 
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
@@ -465,7 +465,7 @@ step s2-begin:
  BEGIN;
 
 step s2-isolate-tenant:
- SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'block_writes');
 
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
@@ -532,7 +532,7 @@ step s2-begin:
  BEGIN;
 
 step s2-isolate-tenant:
- SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'block_writes');
 
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
@@ -598,7 +598,7 @@ step s2-begin:
  BEGIN;
 
 step s2-isolate-tenant:
- SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'block_writes');
 
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
@@ -664,7 +664,7 @@ step s2-begin:
  BEGIN;
 
 step s2-isolate-tenant:
- SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'block_writes');
 
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
@@ -740,7 +740,7 @@ step s1-begin:
     SET citus.select_opens_transaction_block TO false;
 
 step s1-isolate-tenant:
- SELECT isolate_tenant_to_new_shard('isolation_table', 2);
+ SELECT isolate_tenant_to_new_shard('isolation_table', 2, shard_transfer_mode => 'block_writes');
 
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
@@ -748,7 +748,7 @@ isolate_tenant_to_new_shard
 (1 row)
 
 step s2-isolate-tenant:
- SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'block_writes');
 
 ERROR:  could not acquire the lock required to split public.isolation_table
 step s1-commit:
@@ -795,7 +795,7 @@ step s1-begin:
     SET citus.select_opens_transaction_block TO false;
 
 step s1-isolate-tenant:
- SELECT isolate_tenant_to_new_shard('isolation_table', 2);
+ SELECT isolate_tenant_to_new_shard('isolation_table', 2, shard_transfer_mode => 'block_writes');
 
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
@@ -803,7 +803,7 @@ isolate_tenant_to_new_shard
 (1 row)
 
 step s2-isolate-tenant:
- SELECT isolate_tenant_to_new_shard('isolation_table', 5);
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'block_writes');
 
 ERROR:  could not acquire the lock required to split public.isolation_table
 step s1-commit:

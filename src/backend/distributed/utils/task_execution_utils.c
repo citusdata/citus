@@ -16,6 +16,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_execution_locks.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
@@ -38,8 +39,8 @@
 typedef struct TaskMapKey
 {
 	TaskType taskType;
-	uint64 jobId;
 	uint32 taskId;
+	uint64 jobId;
 } TaskMapKey;
 
 
@@ -53,7 +54,6 @@ typedef struct TaskMapEntry
 	Task *task;
 } TaskMapEntry;
 
-static HTAB * TaskHashCreate(uint32 taskHashSize);
 static Task * TaskHashEnter(HTAB *taskHash, Task *task);
 static Task * TaskHashLookup(HTAB *trackerHash, TaskType taskType, uint64 jobId,
 							 uint32 taskId);
@@ -68,7 +68,8 @@ CreateTaskListForJobTree(List *jobTaskList)
 	List *taskList = NIL;
 	const int topLevelTaskHashSize = 32;
 	int taskHashSize = list_length(jobTaskList) * topLevelTaskHashSize;
-	HTAB *taskHash = TaskHashCreate(taskHashSize);
+	assert_valid_hash_key3(TaskMapKey, taskType, taskId, jobId);
+	HTAB *taskHash = CreateSimpleHashWithSize(TaskMapKey, TaskMapEntry, taskHashSize);
 
 	/*
 	 * We walk over the task tree using breadth-first search. For the search, we
@@ -128,38 +129,6 @@ CreateTaskListForJobTree(List *jobTaskList)
 	}
 
 	return taskList;
-}
-
-
-/*
- * TaskHashCreate allocates memory for a task hash, initializes an
- * empty hash, and returns this hash.
- */
-static HTAB *
-TaskHashCreate(uint32 taskHashSize)
-{
-	HASHCTL info;
-	const char *taskHashName = "Task Hash";
-
-	/*
-	 * Can't create a hashtable of size 0. Normally that shouldn't happen, but
-	 * shard pruning currently can lead to this (Job with 0 Tasks). See #833.
-	 */
-	if (taskHashSize == 0)
-	{
-		taskHashSize = 2;
-	}
-
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(TaskMapKey);
-	info.entrysize = sizeof(TaskMapEntry);
-	info.hash = tag_hash;
-	info.hcxt = CurrentMemoryContext;
-	int hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
-
-	HTAB *taskHash = hash_create(taskHashName, taskHashSize, &info, hashFlags);
-
-	return taskHash;
 }
 
 

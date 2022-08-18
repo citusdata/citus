@@ -9,6 +9,10 @@ Here is a high level overview of test plan:
  6. Trigger Split on both shards of 'sensors'. This will also split co-located tables.
  7. Move one of the split shard to test Split -> ShardMove.
  8. Split an already split shard second time on a different schema.
+ 9. Create a colocated table with no replica identity.
+ 10. Show we do not allow Split with the shard transfer mode 'auto' if any colocated table has no replica identity.
+ 11. Drop the colocated table with no replica identity.
+ 12. Show we allow Split with the shard transfer mode 'auto' if all colocated tables has replica identity.
 */
 
 CREATE SCHEMA "citus_split_test_schema";
@@ -227,6 +231,48 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
   WHERE node.noderole = 'primary' AND (logicalrelid = 'sensors'::regclass OR logicalrelid = 'colocated_dist_table'::regclass OR logicalrelid = 'table_with_index_rep_identity'::regclass)
   ORDER BY logicalrelid, shardminvalue::BIGINT;
 -- END: Split second time on another schema
+
+-- BEGIN: Create a co-located table with no replica identity.
+CREATE TABLE table_no_rep_id (measureid integer);
+SELECT create_distributed_table('table_no_rep_id', 'measureid', colocate_with:='sensors');
+-- END: Create a co-located table with no replica identity.
+
+-- BEGIN: Split a shard with shard_transfer_mode='auto' and with a colocated table with no replica identity
+SET citus.next_shard_id TO 8981041;
+SELECT pg_catalog.citus_split_shard_by_split_points(
+    8981031,
+    ARRAY['-2120000000'],
+    ARRAY[:worker_1_node, :worker_2_node]);
+
+SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
+  FROM pg_dist_shard AS shard
+  INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
+  INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
+  INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
+  WHERE node.noderole = 'primary' AND (logicalrelid = 'sensors'::regclass OR logicalrelid = 'colocated_dist_table'::regclass OR logicalrelid = 'table_with_index_rep_identity'::regclass)
+  ORDER BY logicalrelid, shardminvalue::BIGINT;
+-- END: Split a shard with shard_transfer_mode='auto' and with a colocated table with no replica identity
+
+-- BEGIN: Drop the co-located table with no replica identity.
+DROP TABLE table_no_rep_id;
+-- END: Drop the co-located table with no replica identity.
+
+-- BEGIN: Split a shard with shard_transfer_mode='auto' and with all colocated tables has replica identity
+SET citus.next_shard_id TO 8981041;
+SELECT pg_catalog.citus_split_shard_by_split_points(
+    8981031,
+    ARRAY['-2120000000'],
+    ARRAY[:worker_1_node, :worker_2_node],
+    'auto');
+
+SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
+  FROM pg_dist_shard AS shard
+  INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
+  INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
+  INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
+  WHERE node.noderole = 'primary' AND (logicalrelid = 'sensors'::regclass OR logicalrelid = 'colocated_dist_table'::regclass OR logicalrelid = 'table_with_index_rep_identity'::regclass)
+  ORDER BY logicalrelid, shardminvalue::BIGINT;
+-- END: Split a shard with shard_transfer_mode='auto' and with all colocated tables has replica identity
 
 -- BEGIN: Validate Data Count
 SELECT COUNT(*) FROM sensors;

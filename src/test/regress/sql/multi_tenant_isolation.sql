@@ -136,13 +136,13 @@ SELECT * FROM pg_dist_shard
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
 
 -- check without cascade option
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100);
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, shard_transfer_mode => 'block_writes');
 
 -- check with an input not castable to bigint
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 'abc', 'CASCADE');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 'abc', 'CASCADE', shard_transfer_mode => 'block_writes');
 
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE');
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 101, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 101, 'CASCADE', shard_transfer_mode => 'block_writes');
 
 -- add an explain check to see if we hit the new isolated shard
 EXPLAIN (COSTS false) SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 101;
@@ -156,28 +156,28 @@ SET search_path to "Tenant Isolation";
 
 -- test a failing transaction block
 BEGIN;
-SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE');
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 102, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 102, 'CASCADE', shard_transfer_mode => 'block_writes');
 COMMIT;
 
 -- test a rollback transaction block
 BEGIN;
-SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE');
-SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE', shard_transfer_mode => 'block_writes');
 ROLLBACK;
 
 -- test a succesfull transaction block
 BEGIN;
-SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE', shard_transfer_mode => 'block_writes');
 COMMIT;
 
-SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE');
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE');
-SELECT isolate_tenant_to_new_shard('orders_streaming', 101, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 101, 'CASCADE', shard_transfer_mode => 'block_writes');
 
 -- test corner cases: hash(-1995148554) = -2147483648 and hash(-1686493264) = 2147483647
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', -1995148554, 'CASCADE');
-SELECT isolate_tenant_to_new_shard('orders_streaming', -1686493264, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', -1995148554, 'CASCADE', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('orders_streaming', -1686493264, 'CASCADE', shard_transfer_mode => 'block_writes');
 
 SELECT count(*) FROM orders_streaming WHERE o_orderkey = -1995148554;
 SELECT count(*) FROM orders_streaming WHERE o_orderkey = -1686493264;
@@ -305,9 +305,9 @@ SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1997-07-30';
 SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1998-01-15';
 SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1997-08-08';
 
-SELECT isolate_tenant_to_new_shard('lineitem_date', '1998-05-26');
-SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-07-30');
-SELECT isolate_tenant_to_new_shard('lineitem_date', '1998-01-15');
+SELECT isolate_tenant_to_new_shard('lineitem_date', '1998-05-26', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-07-30', shard_transfer_mode => 'block_writes');
+SELECT isolate_tenant_to_new_shard('lineitem_date', '1998-01-15', shard_transfer_mode => 'block_writes');
 
 SELECT count(*) FROM lineitem_date;
 SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1998-05-26';
@@ -320,7 +320,7 @@ SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1997-08-08';
 SET search_path to "Tenant Isolation";
 
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE nodeport = :worker_1_port;
-SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-08-08');
+SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-08-08', shard_transfer_mode => 'block_writes');
 
 UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE nodeport = :worker_1_port;
 
@@ -334,7 +334,7 @@ CREATE TABLE test_append (
 );
 
 SELECT create_distributed_table('test_append', 'tenant_id', 'append');
-SELECT isolate_tenant_to_new_shard('test_append', 100);
+SELECT isolate_tenant_to_new_shard('test_append', 100, shard_transfer_mode => 'block_writes');
 
 -- check metadata for comparison
 SELECT * FROM pg_dist_shard
@@ -366,7 +366,7 @@ SET citus.override_table_visibility TO false;
 SET search_path to "Tenant Isolation";
 
 \set VERBOSITY terse
-SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_transfer_mode => 'block_writes');
 
 \set VERBOSITY default
 
@@ -397,7 +397,7 @@ CREATE EVENT TRIGGER abort_drop ON sql_drop
 SET search_path to "Tenant Isolation";
 
 \set VERBOSITY terse
-SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_transfer_mode => 'block_writes');
 
 \set VERBOSITY default
 
@@ -502,7 +502,7 @@ INSERT INTO composite_table VALUES  ('(1, 2)'::test_composite_type);
 INSERT INTO composite_table VALUES  ('(1, 3)'::test_composite_type);
 INSERT INTO composite_table VALUES  ('(1, 4)'::test_composite_type);
 
-SELECT isolate_tenant_to_new_shard('composite_table', '(1, 3)');
+SELECT isolate_tenant_to_new_shard('composite_table', '(1, 3)', shard_transfer_mode => 'block_writes');
 
 SELECT count(*) FROM composite_table WHERE composite_key = '(1, 2)'::test_composite_type;
 SELECT count(*) FROM composite_table WHERE composite_key = '(1, 3)'::test_composite_type;
@@ -532,7 +532,7 @@ INSERT INTO test_colocated_table_1 SELECT i, i FROM generate_series (0, 100) i;
 INSERT INTO test_colocated_table_2 SELECT i, i FROM generate_series (0, 100) i;
 INSERT INTO test_colocated_table_3 SELECT i, i FROM generate_series (0, 100) i;
 
-SELECT isolate_tenant_to_new_shard('test_colocated_table_2', 1, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('test_colocated_table_2', 1, 'CASCADE', shard_transfer_mode => 'block_writes');
 
 SELECT count(*) FROM test_colocated_table_2;
 
@@ -585,7 +585,7 @@ SELECT count(*) FROM pg_dist_shard WHERE logicalrelid = 'partitioning_test'::reg
 SELECT count(*) FROM partitioning_test;
 
 -- isolate a value into its own shard
-SELECT 1 FROM isolate_tenant_to_new_shard('partitioning_test', 2, 'CASCADE');
+SELECT 1 FROM isolate_tenant_to_new_shard('partitioning_test', 2, 'CASCADE', shard_transfer_mode => 'block_writes');
 
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid = 'partitioning_test'::regclass;
 SELECT count(*) FROM partitioning_test;
@@ -601,7 +601,7 @@ SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE lo
 \c - mx_isolation_role_ent - :master_port
 SET search_path to "Tenant Isolation";
 
-SELECT 1 FROM isolate_tenant_to_new_shard('test_colocated_table_2', 2, 'CASCADE');
+SELECT 1 FROM isolate_tenant_to_new_shard('test_colocated_table_2', 2, 'CASCADE', shard_transfer_mode => 'block_writes');
 
 SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass;
 
@@ -609,6 +609,8 @@ SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE lo
 SELECT 1 FROM master_remove_node('localhost', :master_port);
 SET client_min_messages TO WARNING;
 DROP SCHEMA "Tenant Isolation" CASCADE;
+REVOKE ALL ON SCHEMA public FROM mx_isolation_role_ent;
+DROP ROLE mx_isolation_role_ent;
 
 -- stop  & resync and stop syncing metadata
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);

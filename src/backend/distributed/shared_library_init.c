@@ -67,6 +67,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
+#include "distributed/priority.h"
 #include "distributed/query_stats.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
@@ -184,6 +185,7 @@ static bool ShowShardsForAppNamePrefixesCheckHook(char **newval, void **extra,
 												  GucSource source);
 static void ShowShardsForAppNamePrefixesAssignHook(const char *newval, void *extra);
 static void ApplicationNameAssignHook(const char *newval, void *extra);
+static void CpuPriorityAssignHook(int newval, void *extra);
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
 static const char * MaxSharedPoolSizeGucShowHook(void);
@@ -287,6 +289,64 @@ static const struct config_enum_entry create_object_propagation_options[] = {
 	{"immediate", CREATE_OBJECT_PROPAGATION_IMMEDIATE, false},
 	{NULL,        0,                                   false}
 };
+
+/*
+ * This used to choose CPU priorities for GUCs. For most other integer options
+ * we use the -1 value as inherit/default/unset. For CPU priorities this isn't
+ * possible, because they can actually have negative values. So we need a value
+ * outside of the range that's valid for priorities. But if this is only one
+ * more or less than the valid values, this can also be quite confusing for
+ * people that don't know the exact range of valid values.
+ *
+ * So, instead we opt for using an enum that contains all valid priority values
+ * as strings, as well as the "inherit" string to indicate that the priority
+ * value should not be changed.
+ */
+static const struct config_enum_entry cpu_priority_options[] = {
+	{ "inherit", CPU_PRIORITY_INHERIT, false },
+	{ "-20", -20, false},
+	{ "-19", -19, false},
+	{ "-18", -18, false},
+	{ "-17", -17, false},
+	{ "-16", -16, false},
+	{ "-15", -15, false},
+	{ "-14", -14, false},
+	{ "-13", -13, false},
+	{ "-12", -12, false},
+	{ "-11", -11, false},
+	{ "-10", -10, false},
+	{ "-9", -9, false},
+	{ "-8", -8, false},
+	{ "-7", -7, false},
+	{ "-6", -6, false},
+	{ "-5", -5, false},
+	{ "-4", -4, false},
+	{ "-3", -3, false},
+	{ "-2", -2, false},
+	{ "-1", -1, false},
+	{ "0", 0, false},
+	{ "1", 1, false},
+	{ "2", 2, false},
+	{ "3", 3, false},
+	{ "4", 4, false},
+	{ "5", 5, false},
+	{ "6", 6, false},
+	{ "7", 7, false},
+	{ "8", 8, false},
+	{ "9", 9, false},
+	{ "10", 10, false},
+	{ "11", 11, false},
+	{ "12", 12, false},
+	{ "13", 13, false},
+	{ "14", 14, false},
+	{ "15", 15, false},
+	{ "16", 16, false},
+	{ "17", 17, false},
+	{ "18", 18, false},
+	{ "19", 19, false},
+	{ NULL, 0, false}
+};
+
 
 /* *INDENT-ON* */
 
@@ -843,6 +903,46 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	/*
+	 * This doesn't use cpu_priority_options on purpose, because we always need
+	 * to know the actual priority value so that `RESET citus.cpu_priority`
+	 * actually changes the priority back.
+	 */
+	DefineCustomIntVariable(
+		"citus.cpu_priority",
+		gettext_noop("Sets the CPU priority of the current backend."),
+		gettext_noop("Lower numbers cause more favorable scheduling, so the "
+					 "queries that this backend runs will be able to use more "
+					 "CPU resources compared to queries from other backends. "
+					 "WARNING: Changing this setting can lead to a pnemomenom "
+					 "called 'priority inversion', due to locks being held "
+					 "between different backends. This means that processes "
+					 "might be scheduled in the exact oposite way of what you "
+					 "want, i.e. processes that you want scheduled a lot, are "
+					 "scheduled very little. So use this setting at your own "
+					 "risk."),
+		&CpuPriority,
+		GetOwnPriority(), -20, 19,
+		PGC_SUSET,
+		GUC_STANDARD,
+		NULL, CpuPriorityAssignHook, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.cpu_priority_for_logical_replication_senders",
+		gettext_noop("Sets the CPU priority for backends that send logical "
+					 "replication changes to other nodes for online shard "
+					 "moves and splits."),
+		gettext_noop("Lower numbers cause more favorable scheduling, so the "
+					 "backends used to do the shard move will get more CPU "
+					 "resources. 'inherit' is a special value and disables "
+					 "overriding the CPU priority for backends that send "
+					 "logical replication changes."),
+		&CpuPriorityLogicalRepSender,
+		CPU_PRIORITY_INHERIT, cpu_priority_options,
+		PGC_SUSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomEnumVariable(
 		"citus.create_object_propagation",
 		gettext_noop("Controls the behavior of CREATE statements in transactions for "
@@ -913,8 +1013,8 @@ RegisterCitusConfigVariables(void)
 		"citus.distributed_deadlock_detection_factor",
 		gettext_noop("Sets the time to wait before checking for distributed "
 					 "deadlocks. Postgres' deadlock_timeout setting is "
-					 "multiplied with the value. If the value is set to"
-					 "1000, distributed deadlock detection is disabled."),
+					 "multiplied with the value. If the value is set to -1, "
+					 "distributed deadlock detection is disabled."),
 		NULL,
 		&DistributedDeadlockDetectionTimeoutFactor,
 		2.0, -1.0, 1000.0,
@@ -1171,7 +1271,7 @@ RegisterCitusConfigVariables(void)
 		&EnableUnsafeTriggers,
 		false,
 		PGC_USERSET,
-		GUC_STANDARD,
+		GUC_STANDARD | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1563,6 +1663,20 @@ RegisterCitusConfigVariables(void)
 		PGC_SUSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.max_high_priority_background_processes",
+		gettext_noop("Sets the maximum number of background processes "
+					 "that can have their CPU priority increased at the same "
+					 "time on a specific node."),
+		gettext_noop("This setting is useful to make sure logical replication "
+					 "senders don't take over the CPU of the entire machine."),
+		&MaxHighPriorityBackgroundProcesess,
+		2, 0, 10000,
+		PGC_SUSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 
 	DefineCustomIntVariable(
 		"citus.max_intermediate_result_size",
@@ -2350,6 +2464,17 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 	}
 
 	return conninfoValid;
+}
+
+
+/*
+ * CpuPriorityAssignHook changes the priority of the current backend to match
+ * the chosen value.
+ */
+static void
+CpuPriorityAssignHook(int newval, void *extra)
+{
+	SetOwnPriority(newval);
 }
 
 

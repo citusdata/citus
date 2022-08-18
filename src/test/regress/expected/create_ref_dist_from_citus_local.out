@@ -346,7 +346,7 @@ BEGIN;
   FOR EACH ROW EXECUTE PROCEDURE update_value();
   -- show that we error out as we don't supprt triggers on distributed tables
   SELECT create_distributed_table('citus_local_table_6', 'col_1');
-ERROR:  cannot distribute relation "citus_local_table_6" because it has triggers and "citus.enable_unsafe_triggers" is set to "false"
+ERROR:  cannot distribute relation "citus_local_table_6" because it has triggers
 ROLLBACK;
 -- make sure that creating append / range distributed tables is also ok
 BEGIN;

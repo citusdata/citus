@@ -17,7 +17,7 @@ CREATE TABLE citus_local_table (a int, b int);
 SELECT citus_add_local_table_to_metadata('citus_local_table');
 
 -- isolate_tenant_to_new_shard is not supported
-SELECT isolate_tenant_to_new_shard('citus_local_table', 100);
+SELECT isolate_tenant_to_new_shard('citus_local_table', 100, shard_transfer_mode => 'block_writes');
 
 -- master_copy_shard_placement is not supported
 SELECT master_copy_shard_placement(shardid, 'localhost', :master_port, 'localhost', :worker_1_port, false)

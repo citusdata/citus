@@ -144,7 +144,7 @@ ORDER BY 1;
  function get_rebalance_progress()
  function get_rebalance_table_shards_plan(regclass,real,integer,bigint[],boolean,name,real)
  function get_shard_id_for_distribution_column(regclass,"any")
- function isolate_tenant_to_new_shard(regclass,"any",text)
+ function isolate_tenant_to_new_shard(regclass,"any",text,citus.shard_transfer_mode)
  function json_cat_agg(json)
  function jsonb_cat_agg(jsonb)
  function lock_relation_if_exists(text,text)

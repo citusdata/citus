@@ -5,8 +5,8 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_split_shard_by_split_points(
     -- Use integer (consistent with other previously defined UDFs that take nodeId as integer) as for all practical purposes it is big enough.
     node_ids integer[],
     -- Three modes to be implemented: block_writes, force_logical and auto.
-    -- Currently, the default / only supported mode is block_writes.
-    shard_transfer_mode citus.shard_transfer_mode default 'block_writes')
+    -- The default mode is auto.
+    shard_transfer_mode citus.shard_transfer_mode default 'auto')
 RETURNS void
 LANGUAGE C STRICT
 AS 'MODULE_PATHNAME', $$citus_split_shard_by_split_points$$;

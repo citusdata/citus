@@ -59,6 +59,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
+#include "distributed/resource_lock.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/shard_rebalancer.h"
 #include "distributed/worker_protocol.h"
@@ -117,8 +118,7 @@ static bool ShouldLocalTableBeEmpty(Oid relationId, char distributionMethod, boo
 									viaDeprecatedAPI);
 static void EnsureCitusTableCanBeCreated(Oid relationOid);
 static void EnsureDistributedSequencesHaveOneType(Oid relationId,
-												  List *dependentSequenceList,
-												  List *attnumList);
+												  List *seqInfoList);
 static List * GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId,
 																   int tableTypeFlag);
 static Oid DropFKeysAndUndistributeTable(Oid relationId);
@@ -471,8 +471,21 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 	/*
 	 * Make sure that existing reference tables have been replicated to all the nodes
 	 * such that we can create foreign keys and joins work immediately after creation.
+	 *
+	 * This will take a lock on the nodes to make sure no nodes are added after we have
+	 * verified and ensured the reference tables are copied everywhere.
+	 * Although copying reference tables here for anything but creating a new colocation
+	 * group, it requires significant refactoring which we don't want to perform now.
 	 */
 	EnsureReferenceTablesExistOnAllNodes();
+
+	/*
+	 * While adding tables to a colocation group we need to make sure no concurrent
+	 * mutations happen on the colocation group with regards to its placements. It is
+	 * important that we have already copied any reference tables before acquiring this
+	 * lock as these are competing operations.
+	 */
+	LockColocationId(colocationId, ShareLock);
 
 	/* we need to calculate these variables before creating distributed metadata */
 	bool localTableEmpty = TableEmpty(relationId);
@@ -588,15 +601,24 @@ EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid ownerRelationId
 	Oid citusTableId = InvalidOid;
 	foreach_oid(citusTableId, citusTableIdList)
 	{
-		List *attnumList = NIL;
-		List *dependentSequenceList = NIL;
-		GetDependentSequencesWithRelation(citusTableId, &attnumList,
-										  &dependentSequenceList, 0);
-		AttrNumber currentAttnum = InvalidAttrNumber;
-		Oid currentSeqOid = InvalidOid;
-		forboth_int_oid(currentAttnum, attnumList, currentSeqOid,
-						dependentSequenceList)
+		List *seqInfoList = NIL;
+		GetDependentSequencesWithRelation(citusTableId, &seqInfoList, 0);
+
+		SequenceInfo *seqInfo = NULL;
+		foreach_ptr(seqInfo, seqInfoList)
 		{
+			AttrNumber currentAttnum = seqInfo->attributeNumber;
+			Oid currentSeqOid = seqInfo->sequenceOid;
+
+			if (!seqInfo->isNextValDefault)
+			{
+				/*
+				 * If a sequence is not on the nextval, we don't need any check.
+				 * This is a dependent sequence via ALTER SEQUENCE .. OWNED BY col
+				 */
+				continue;
+			}
+
 			/*
 			 * If another distributed table is using the same sequence
 			 * in one of its column defaults, make sure the types of the
@@ -655,11 +677,10 @@ AlterSequenceType(Oid seqOid, Oid typeOid)
 void
 EnsureRelationHasCompatibleSequenceTypes(Oid relationId)
 {
-	List *attnumList = NIL;
-	List *dependentSequenceList = NIL;
+	List *seqInfoList = NIL;
 
-	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
-	EnsureDistributedSequencesHaveOneType(relationId, dependentSequenceList, attnumList);
+	GetDependentSequencesWithRelation(relationId, &seqInfoList, 0);
+	EnsureDistributedSequencesHaveOneType(relationId, seqInfoList);
 }
 
 
@@ -669,17 +690,26 @@ EnsureRelationHasCompatibleSequenceTypes(Oid relationId)
  * dependentSequenceList, and then alters the sequence type if not the same with the column type.
  */
 static void
-EnsureDistributedSequencesHaveOneType(Oid relationId, List *dependentSequenceList,
-									  List *attnumList)
+EnsureDistributedSequencesHaveOneType(Oid relationId, List *seqInfoList)
 {
-	AttrNumber attnum = InvalidAttrNumber;
-	Oid sequenceOid = InvalidOid;
-	forboth_int_oid(attnum, attnumList, sequenceOid, dependentSequenceList)
+	SequenceInfo *seqInfo = NULL;
+	foreach_ptr(seqInfo, seqInfoList)
 	{
+		if (!seqInfo->isNextValDefault)
+		{
+			/*
+			 * If a sequence is not on the nextval, we don't need any check.
+			 * This is a dependent sequence via ALTER SEQUENCE .. OWNED BY col
+			 */
+			continue;
+		}
+
 		/*
 		 * We should make sure that the type of the column that uses
 		 * that sequence is supported
 		 */
+		Oid sequenceOid = seqInfo->sequenceOid;
+		AttrNumber attnum = seqInfo->attributeNumber;
 		Oid attributeTypeId = GetAttributeTypeOid(relationId, attnum);
 		EnsureSequenceTypeSupported(sequenceOid, attributeTypeId, relationId);
 
@@ -1352,11 +1382,9 @@ EnsureRelationHasNoTriggers(Oid relationId)
 		char *relationName = get_rel_name(relationId);
 
 		Assert(relationName != NULL);
-		ereport(ERROR, (errmsg("cannot distribute relation \"%s\" because it has "
-							   "triggers and \"citus.enable_unsafe_triggers\" is "
-							   "set to \"false\"", relationName),
-						errhint("Consider setting \"citus.enable_unsafe_triggers\" "
-								"to \"true\", or drop all the triggers on \"%s\" "
+		ereport(ERROR, (errmsg("cannot distribute relation \"%s\" because it "
+							   "has triggers", relationName),
+						errhint("Consider dropping all the triggers on \"%s\" "
 								"and retry.", relationName)));
 	}
 }

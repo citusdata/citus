@@ -972,6 +972,7 @@ DETAIL:  unparameterized; 1 clauses pushed down
  203491455
 (1 row)
 
+SET hash_mem_multiplier = 1.0;
 EXPLAIN (analyze on, costs off, timing off, summary off)
 SELECT sum(a) FROM pushdown_test where
 (
@@ -1006,6 +1007,7 @@ DETAIL:  unparameterized; 1 clauses pushed down
                        Columnar Projected Columns: a
 (11 rows)
 
+RESET hash_mem_multiplier;
 SELECT sum(a) FROM pushdown_test where
 (
   a > random()

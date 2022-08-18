@@ -612,6 +612,7 @@ REFRESH MATERIALIZED VIEW other_schema.mat_view_2;
 REFRESH MATERIALIZED VIEW other_schema.mat_view;
 REFRESH MATERIALIZED VIEW other_schema.mat_view_2;
 \c - some_other_user
+SET search_path TO 'other_schema';
 -- test security definer funcs
 CREATE FUNCTION security_definer_in_files()
 RETURNS BOOLEAN AS $$
@@ -633,6 +634,7 @@ SELECT security_definer_in_files();
 (1 row)
 
 \c - postgres
+SET search_path TO 'other_schema';
 SELECT security_definer_in_files();
  security_definer_in_files
 ---------------------------------------------------------------------

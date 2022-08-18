@@ -60,7 +60,6 @@ my $MASTER_FOLLOWERDIR = 'master-follower';
 # Option parsing
 my $isolationtester = 0;
 my $vanillatest = 0;
-my $vanillaDev = 0;
 my $followercluster = 0;
 my $bindir = "";
 my $libdir = undef;
@@ -98,7 +97,6 @@ if ($Config{osname} eq "MSWin32")
 GetOptions(
     'isolationtester' => \$isolationtester,
     'vanillatest' => \$vanillatest,
-    'vanilla-dev' => \$vanillaDev,
     'follower-cluster' => \$followercluster,
     'bindir=s' => \$bindir,
     'libdir=s' => \$libdir,
@@ -460,6 +458,10 @@ push(@pgOptions, "wal_receiver_status_interval=1");
 # src/backend/replication/logical/launcher.c.
 push(@pgOptions, "wal_retrieve_retry_interval=1000");
 
+push(@pgOptions, "max_logical_replication_workers=50");
+push(@pgOptions, "max_wal_senders=50");
+push(@pgOptions, "max_worker_processes=50");
+
 if ($majorversion >= "14") {
     # disable compute_query_id so that we don't get Query Identifiers
     # in explain outputs
@@ -490,15 +492,8 @@ push(@pgOptions, "citus.show_shards_for_app_name_prefixes='pg_regress'");
 # we disable slow start by default to encourage parallelism within tests
 push(@pgOptions, "citus.executor_slow_start_interval=0ms");
 
-###
 # we set some GUCs to not break postgres vanilla tests
-#
-# NOTE: we do not want to set the option right now because
-# vanilla tests currently fail. We will remove the vanillaDev flag
-# after fully supported pg vanilla tests with citus
-# extension created.
-###
-if(!$vanillaDev && $vanillatest)
+if($vanillatest)
 {
     # we enable hiding the citus dependent objects from pg meta class queries to not break postgres vanilla test behaviour
     push(@pgOptions, "citus.hide_citus_dependent_objects=true");
@@ -945,14 +940,19 @@ if (!$conninfo)
         system(catfile($bindir, "psql"),
             ('-X', '-h', $host, '-p', $port, '-U', $user, "-d", "postgres",
                 '-c', "CREATE DATABASE regression;")) == 0
-            or die "Could not create regression database on worker";
+            or die "Could not create regression database on worker port $port.";
+
+        my $firstLib = `psql -h "$host" -p "$port" -U "$user" -d regression -AXqt \\
+                        -c "SHOW shared_preload_libraries;" | cut -d ',' -f1`;
+        ($firstLib =~ m/^citus$/)
+            or die "Could not find citus as first library in shared_preload_libraries on worker $port.";
 
         for my $extension (@extensions)
         {
             system(catfile($bindir, "psql"),
                 ('-X', '-h', $host, '-p', $port, '-U', $user, "-d", "regression",
                     '-c', "CREATE EXTENSION IF NOT EXISTS $extension;")) == 0
-                or die "Could not create extension on worker";
+                or die "Could not create extension $extension on worker port $port.";
         }
 
         foreach my $function (keys %functions)
@@ -960,7 +960,7 @@ if (!$conninfo)
             system(catfile($bindir, "psql"),
                     ('-X', '-h', $host, '-p', $port, '-U', $user, "-d", "regression",
                     '-c', "CREATE FUNCTION $function RETURNS $functions{$function};")) == 0
-                or die "Could not create FUNCTION $function on worker";
+                or die "Could not create function $function on worker port $port";
         }
 
         foreach my $fdw (keys %fdws)
@@ -968,25 +968,31 @@ if (!$conninfo)
             system(catfile($bindir, "psql"),
                     ('-X', '-h', $host, '-p', $port, '-U', $user, "-d", "regression",
                     '-c', "CREATE FOREIGN DATA WRAPPER $fdw HANDLER $fdws{$fdw};")) == 0
-                or die "Could not create foreign data wrapper $fdw on worker";
+                or die "Could not create foreign data wrapper $fdw on worker port $port";
         }
     }
 }
 else
 {
+    my $citusFirstLibCount = `psql -h "$host" -p "$masterPort" -U "$user" -d "$dbname" -AXqt \\
+                                -c "SELECT run_command_on_workers('SHOW shared_preload_libraries;');" \\
+                                | cut -d ',' -f4 | grep -e '\"citus' | wc -l`;
+    ($workerCount == $citusFirstLibCount)
+        or die "Could not find citus as first library in shared_preload_libraries on workers.";
+
     for my $extension (@extensions)
     {
         system(catfile($bindir, "psql"),
                 ('-X', '-h', $host, '-p', $masterPort, '-U', $user, "-d", $dbname,
                 '-c', "SELECT run_command_on_workers('CREATE EXTENSION IF NOT EXISTS $extension;');")) == 0
-            or die "Could not create extension on worker";
+            or die "Could not create extension $extension on workers";
     }
     foreach my $function (keys %functions)
     {
         system(catfile($bindir, "psql"),
                 ('-X', '-h', $host, '-p', $masterPort, '-U', $user, "-d", $dbname,
                     '-c', "SELECT run_command_on_workers('CREATE FUNCTION $function RETURNS $functions{$function};');")) == 0
-            or die "Could not create FUNCTION $function on worker";
+            or die "Could not create function $function on workers.";
     }
 
     foreach my $fdw (keys %fdws)
@@ -994,7 +1000,7 @@ else
         system(catfile($bindir, "psql"),
                 ('-X', '-h', $host, '-p', $masterPort, '-U', $user, "-d", $dbname,
                     '-c', "SELECT run_command_on_workers('CREATE FOREIGN DATA WRAPPER $fdw HANDLER $fdws{$fdw};');")) == 0
-            or die "Could not create foreign data wrapper $fdw on worker";
+            or die "Could not create foreign data wrapper $fdw on workers.";
     }
 }
 
@@ -1019,21 +1025,19 @@ my $startTime = time();
 
 my $exitcode = 0;
 
-sub PrepForVanillaTest
+sub RunVanillaTests
 {
     ###
     # We want to add is_citus_depended_object function to the default db.
-    # But without use-existing flag, pg_regress drops if exist and creates
-    # the default db. Thus, we set use-existing flag and manually create
-    # the default db, citus extension and the is_citus_depended_object
-    # function.
+    # But without use-existing flag, pg_regress recreates the default db
+    # after dropping it if exists. Thus, we set use-existing flag and
+    # manually create the default db, citus extension and is_citus_depended_object
+    # function. When use-existing flag is set, pg_regress does not drop
+    # default db.
     ###
 
-    my $dbName = shift;
-
-    # prepare tablespace folder
-    rmdir "./testtablespace";
-    mkdir "./testtablespace";
+    $ENV{VANILLATEST} = "1";
+    my $dbName = "regression";
 
     # create default db
     system(catfile($bindir, "psql"),
@@ -1046,11 +1050,6 @@ sub PrepForVanillaTest
             ('-X', '-h', $host, '-p', $masterPort, '-U', $user, "-d", $dbName,
                 '-c', "ALTER DATABASE $dbName SET lc_monetary TO 'C';")) == 0
             or die "Could not create $dbName database on master";
-
-    if ($vanillaDev)
-    {
-        return;
-    }
 
     # create extension citus
     system(catfile($bindir, "psql"),
@@ -1068,40 +1067,45 @@ sub PrepForVanillaTest
                     ('-X', '-h', $host, '-p', $masterPort, '-U', $user, "-d", $dbName,
                     '-c', $citus_depended_object_def)) == 0
                 or die "Could not create FUNCTION is_citus_depended_object on master";
+
+    my $pgregressdir="";
+    if (-f "$vanillaSchedule")
+	{
+	    $pgregressdir=catfile(dirname("$pgxsdir"), "regress");
+	}
+	else
+	{
+	    $pgregressdir=catfile("$postgresSrcdir", "src", "test", "regress");
+	}
+
+    # output dir
+    my $pgregressOutputdir = "$citusAbsSrcdir/pg_vanilla_outputs/$majorversion";
+
+    # prepare output and tablespace folder
+    system("rm", ("-rf", "$pgregressOutputdir")) == 0
+            or die "Could not remove vanilla output dir.";
+    system("mkdir", ("-p", "$pgregressOutputdir/testtablespace")) == 0
+            or die "Could not create vanilla testtablespace dir.";
+    system("mkdir", ("-p", "$pgregressOutputdir/expected")) == 0
+            or die "Could not create vanilla expected dir.";
+    system("mkdir", ("-p", "$pgregressOutputdir/sql")) == 0
+            or die "Could not create vanilla sql dir.";
+
+    $exitcode = system("$plainRegress",
+                        ("--inputdir",  $pgregressdir),
+                        ("--outputdir",  $pgregressOutputdir),
+                        ("--schedule",  catfile("$pgregressdir", "parallel_schedule")),
+                        ("--use-existing"),
+                        ("--host","$host"),
+                        ("--port","$masterPort"),
+                        ("--user","$user"),
+                        ("--dbname", "$dbName"));
 }
 
 # Finally run the tests
 if ($vanillatest)
 {
-	$ENV{VANILLATEST} = "1";
-
-    my $dbName = "regression";
-    PrepForVanillaTest($dbName);
-
-	if (-f "$vanillaSchedule")
-	{
-	    my $pgregressdir=catfile(dirname("$pgxsdir"), "regress");
-	    $exitcode = system("$plainRegress",
-                ("--inputdir",  $pgregressdir),
-                ("--schedule",  catfile("$pgregressdir", "parallel_schedule")),
-                ("--use-existing"),
-                ("--host","$host"),
-                ("--port","$masterPort"),
-                ("--user","$user"),
-                ("--dbname", "$dbName"))
-	}
-	else
-	{
-	    my $pgregressdir=catfile("$postgresSrcdir", "src", "test", "regress");
-        $exitcode = system("$plainRegress",
-                ("--inputdir",  $pgregressdir),
-                ("--schedule",  catfile("$pgregressdir", "parallel_schedule")),
-                ("--use-existing"),
-                ("--host","$host"),
-                ("--port","$masterPort"),
-                ("--user","$user"),
-                ("--dbname", "$dbName"))
-	}
+    RunVanillaTests();
 }
 elsif ($isolationtester)
 {

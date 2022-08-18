@@ -43,6 +43,11 @@ s/"citus_local_table_([0-9]+)_[0-9]+"/"citus_local_table_\1_xxxxxxx"/g
 # normalize relation oid suffix for the truncate triggers created by citus
 s/truncate_trigger_[0-9]+/truncate_trigger_xxxxxxx/g
 
+# shard move subscription and publication names contain the oid of the
+# table owner, which can change across runs
+s/(citus_shard_(move|split)_subscription_)[0-9]+/\1xxxxxxx/g
+s/(citus_shard_(move|split)_(slot|publication)_)[0-9]+_[0-9]+/\1xxxxxxx_xxxxxxx/g
+
 # In foreign_key_restriction_enforcement, normalize shard names
 s/"(on_update_fkey_table_|fkey_)[0-9]+"/"\1xxxxxxx"/g
 
@@ -197,20 +202,6 @@ s/^(ERROR:  child table is missing constraint "\w+)_([0-9])+"/\1_xxxxxx"/g
         s/.*//g
     }
 }
-
-# normalize for random waits for CREATE INDEX CONCURRENTLY isolation tests.
-# <waiting ...> outputs can be in separate lines, or on the same line, and hence
-# we have a slightly more complex pattern.
-# All the flaky tests use a index name that starts with `flaky` so we limit the
-# normalization using that pattern.
-/CREATE INDEX CONCURRENTLY flaky/ {
-	N; s/ <waiting ...>//
-}
-
-# Remove completion lines in isolation tests for CREATE INDEX CONCURRENTLY commands.
-# This is needed because the commands that are executed on the shards can block each other
-# for a small window of time and we may see the completion output in different lines.
-/step s2-flaky.* <... completed>/d
 
 # normalize long table shard name errors for alter_table_set_access_method and alter_distributed_table
 s/^(ERROR:  child table is missing constraint "\w+)_([0-9])+"/\1_xxxxxx"/g

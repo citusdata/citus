@@ -177,19 +177,19 @@ SELECT * FROM pg_dist_shard
 (4 rows)
 
 -- check without cascade option
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100);
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, shard_transfer_mode => 'block_writes');
 ERROR:  cannot isolate tenant because "lineitem_streaming" has colocated tables
 HINT:  Use CASCADE option to isolate tenants for the colocated tables too. Example usage: isolate_tenant_to_new_shard('lineitem_streaming', '100', 'CASCADE')
 -- check with an input not castable to bigint
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 'abc', 'CASCADE');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 'abc', 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  invalid input syntax for type bigint: "abc"
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE', shard_transfer_mode => 'block_writes');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                      1230005
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 101, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 101, 'CASCADE', shard_transfer_mode => 'block_writes');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                      1230011
@@ -221,53 +221,53 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SET search_path to "Tenant Isolation";
 -- test a failing transaction block
 BEGIN;
-SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE', shard_transfer_mode => 'block_writes');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                      1230020
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 102, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 102, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  table lineitem_streaming has already been isolated for the given value
 COMMIT;
 -- test a rollback transaction block
 BEGIN;
-SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE', shard_transfer_mode => 'block_writes');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                      1230026
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  cannot isolate tenant after other modifications in the same transaction.
 ROLLBACK;
 -- test a succesfull transaction block
 BEGIN;
-SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE', shard_transfer_mode => 'block_writes');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                      1230032
 (1 row)
 
 COMMIT;
-SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE', shard_transfer_mode => 'block_writes');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                      1230038
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  table lineitem_streaming has already been isolated for the given value
-SELECT isolate_tenant_to_new_shard('orders_streaming', 101, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 101, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  table orders_streaming has already been isolated for the given value
 -- test corner cases: hash(-1995148554) = -2147483648 and hash(-1686493264) = 2147483647
-SELECT isolate_tenant_to_new_shard('lineitem_streaming', -1995148554, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('lineitem_streaming', -1995148554, 'CASCADE', shard_transfer_mode => 'block_writes');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                      1230040
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('orders_streaming', -1686493264, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('orders_streaming', -1686493264, 'CASCADE', shard_transfer_mode => 'block_writes');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                      1230047
@@ -622,11 +622,11 @@ SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1997-08-08';
      1
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('lineitem_date', '1998-05-26');
+SELECT isolate_tenant_to_new_shard('lineitem_date', '1998-05-26', shard_transfer_mode => 'block_writes');
 ERROR:  cannot isolate tenants when using shard replication
-SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-07-30');
+SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-07-30', shard_transfer_mode => 'block_writes');
 ERROR:  cannot isolate tenants when using shard replication
-SELECT isolate_tenant_to_new_shard('lineitem_date', '1998-01-15');
+SELECT isolate_tenant_to_new_shard('lineitem_date', '1998-01-15', shard_transfer_mode => 'block_writes');
 ERROR:  cannot isolate tenants when using shard replication
 SELECT count(*) FROM lineitem_date;
  count
@@ -662,7 +662,7 @@ SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1997-08-08';
 \c - postgres - :master_port
 SET search_path to "Tenant Isolation";
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE nodeport = :worker_1_port;
-SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-08-08');
+SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-08-08', shard_transfer_mode => 'block_writes');
 ERROR:  cannot split shard because relation "lineitem_date" has an inactive shard placement for the shard xxxxx
 HINT:  Use master_copy_shard_placement UDF to repair the inactive shard placement.
 UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE nodeport = :worker_1_port;
@@ -679,7 +679,7 @@ SELECT create_distributed_table('test_append', 'tenant_id', 'append');
 
 (1 row)
 
-SELECT isolate_tenant_to_new_shard('test_append', 100);
+SELECT isolate_tenant_to_new_shard('test_append', 100, shard_transfer_mode => 'block_writes');
 ERROR:  cannot isolate tenant because tenant isolation is only support for hash distributed tables
 -- check metadata for comparison
 SELECT * FROM pg_dist_shard
@@ -752,7 +752,7 @@ SET citus.override_table_visibility TO false;
 \c - mx_isolation_role_ent - :master_port
 SET search_path to "Tenant Isolation";
 \set VERBOSITY terse
-SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_transfer_mode => 'block_writes');
 ERROR:  command CREATE TABLE is disabled
 \set VERBOSITY default
 \c - postgres - :worker_1_port
@@ -795,7 +795,7 @@ CREATE EVENT TRIGGER abort_drop ON sql_drop
 \c - mx_isolation_role_ent - :master_port
 SET search_path to "Tenant Isolation";
 \set VERBOSITY terse
-SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_transfer_mode => 'block_writes');
 WARNING:  command DROP TABLE is disabled
 WARNING:  command DROP TABLE is disabled
 WARNING:  command DROP TABLE is disabled
@@ -1014,7 +1014,7 @@ SELECT create_distributed_table('composite_table', 'composite_key');
 INSERT INTO composite_table VALUES  ('(1, 2)'::test_composite_type);
 INSERT INTO composite_table VALUES  ('(1, 3)'::test_composite_type);
 INSERT INTO composite_table VALUES  ('(1, 4)'::test_composite_type);
-SELECT isolate_tenant_to_new_shard('composite_table', '(1, 3)');
+SELECT isolate_tenant_to_new_shard('composite_table', '(1, 3)', shard_transfer_mode => 'block_writes');
 ERROR:  cannot isolate tenants when using shard replication
 SELECT count(*) FROM composite_table WHERE composite_key = '(1, 2)'::test_composite_type;
  count
@@ -1072,7 +1072,7 @@ INSERT INTO test_reference_table_fkey SELECT i FROM generate_series (0, 100) i;
 INSERT INTO test_colocated_table_1 SELECT i, i FROM generate_series (0, 100) i;
 INSERT INTO test_colocated_table_2 SELECT i, i FROM generate_series (0, 100) i;
 INSERT INTO test_colocated_table_3 SELECT i, i FROM generate_series (0, 100) i;
-SELECT isolate_tenant_to_new_shard('test_colocated_table_2', 1, 'CASCADE');
+SELECT isolate_tenant_to_new_shard('test_colocated_table_2', 1, 'CASCADE', shard_transfer_mode => 'block_writes');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                      1230095
@@ -1193,7 +1193,7 @@ SELECT count(*) FROM partitioning_test;
 (1 row)
 
 -- isolate a value into its own shard
-SELECT 1 FROM isolate_tenant_to_new_shard('partitioning_test', 2, 'CASCADE');
+SELECT 1 FROM isolate_tenant_to_new_shard('partitioning_test', 2, 'CASCADE', shard_transfer_mode => 'block_writes');
  ?column?
 ---------------------------------------------------------------------
         1
@@ -1227,7 +1227,7 @@ SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE lo
 
 \c - mx_isolation_role_ent - :master_port
 SET search_path to "Tenant Isolation";
-SELECT 1 FROM isolate_tenant_to_new_shard('test_colocated_table_2', 2, 'CASCADE');
+SELECT 1 FROM isolate_tenant_to_new_shard('test_colocated_table_2', 2, 'CASCADE', shard_transfer_mode => 'block_writes');
  ?column?
 ---------------------------------------------------------------------
         1
@@ -1248,6 +1248,8 @@ SELECT 1 FROM master_remove_node('localhost', :master_port);
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA "Tenant Isolation" CASCADE;
+REVOKE ALL ON SCHEMA public FROM mx_isolation_role_ent;
+DROP ROLE mx_isolation_role_ent;
 -- stop  & resync and stop syncing metadata
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node

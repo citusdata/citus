@@ -153,11 +153,14 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 			continue;
 		}
 
-		if (IsCitusTableType(relationId, REFERENCE_TABLE))
+		/*
+		 * While changing the tables that are part of a colocation group we need to
+		 * prevent concurrent mutations to the placements of the shard groups.
+		 */
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+		if (cacheEntry->colocationId != INVALID_COLOCATION_ID)
 		{
-			/* prevent concurrent EnsureReferenceTablesExistOnAllNodes */
-			int colocationId = CreateReferenceTableColocationId();
-			LockColocationId(colocationId, ExclusiveLock);
+			LockColocationId(cacheEntry->colocationId, ShareLock);
 		}
 
 		/* invalidate foreign key cache if the table involved in any foreign key */
@@ -2813,11 +2816,9 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				 * changing the type of the column should not be allowed for now
 				 */
 				AttrNumber attnum = get_attnum(relationId, command->name);
-				List *attnumList = NIL;
-				List *dependentSequenceList = NIL;
-				GetDependentSequencesWithRelation(relationId, &attnumList,
-												  &dependentSequenceList, attnum);
-				if (dependentSequenceList != NIL)
+				List *seqInfoList = NIL;
+				GetDependentSequencesWithRelation(relationId, &seqInfoList, attnum);
+				if (seqInfoList != NIL)
 				{
 					ereport(ERROR, (errmsg("cannot execute ALTER COLUMN TYPE .. command "
 										   "because the column involves a default coming "

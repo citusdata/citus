@@ -156,6 +156,25 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT min\(latest_end_lsn").cancel
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
+-- failure on disabling subscription (right before dropping it)
+SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+-- cancellation on disabling subscription (right before dropping it)
+SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
 -- failure on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").kill()');
  mitmproxy
@@ -164,15 +183,8 @@ SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").kill()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-WARNING:  connection not open
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- cancellation on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").cancel(' || :pid || ')');
  mitmproxy
@@ -209,11 +221,8 @@ SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-WARNING:  connection not open
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -241,11 +250,8 @@ SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-WARNING:  connection not open
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -267,11 +273,8 @@ SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-WARNING:  connection not open
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- Verify that the shard is not moved and the number of rows are still 100k
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
