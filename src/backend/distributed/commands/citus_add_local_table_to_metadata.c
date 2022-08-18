@@ -322,13 +322,16 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 	 * Ensure that the sequences used in column defaults of the table
 	 * have proper types
 	 */
-	List *attnumList = NIL;
+	List *seqInfoList = NIL;
 	List *dependentSequenceList = NIL;
-	GetDependentSequencesWithRelation(shellRelationId, &attnumList,
-									  &dependentSequenceList, 0);
-	EnsureDistributedSequencesHaveOneType(shellRelationId, dependentSequenceList,
-										  attnumList);
+	GetDependentSequencesWithRelation(shellRelationId, &seqInfoList, 0);
+	EnsureDistributedSequencesHaveOneType(shellRelationId, seqInfoList);
 
+	SequenceInfo *seqInfo = NULL;
+	foreach_ptr(seqInfo, seqInfoList)
+	{
+		dependentSequenceList = lappend_oid(dependentSequenceList, seqInfo->sequenceOid);
+	}
 	FinalizeCitusLocalTableCreation(shellRelationId, dependentSequenceList);
 }
 

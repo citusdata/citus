@@ -544,10 +544,16 @@ MetadataCreateCommands(void)
 		/*
 		 * Ensure sequence dependencies and mark them as distributed
 		 */
-		List *attnumList = NIL;
+		List *seqInfoList = NIL;
+		GetDependentSequencesWithRelation(relationId, &seqInfoList, 0);
+
 		List *dependentSequenceList = NIL;
-		GetDependentSequencesWithRelation(relationId, &attnumList,
-										  &dependentSequenceList, 0);
+		SequenceInfo *seqInfo = NULL;
+		foreach_ptr(seqInfo, seqInfoList)
+		{
+			dependentSequenceList = lappend_oid(dependentSequenceList, seqInfo->sequenceOid);
+		}
+
 		MarkSequenceListDistributedAndPropagateDependencies(dependentSequenceList);
 
 		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
@@ -1140,15 +1146,15 @@ SequenceDDLCommandsForTable(Oid relationId)
 {
 	List *sequenceDDLList = NIL;
 
-	List *attnumList = NIL;
-	List *dependentSequenceList = NIL;
-	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
+	List *seqInfoList = NIL;
+	GetDependentSequencesWithRelation(relationId, &seqInfoList, 0);
 
 	char *ownerName = TableOwner(relationId);
 
-	Oid sequenceOid = InvalidOid;
-	foreach_oid(sequenceOid, dependentSequenceList)
+	SequenceInfo *seqInfo = NULL;
+	foreach_ptr(seqInfo, seqInfoList)
 	{
+		Oid sequenceOid = seqInfo->sequenceOid;
 		char *sequenceDef = pg_get_sequencedef_string(sequenceOid);
 		char *escapedSequenceDef = quote_literal_cstr(sequenceDef);
 		StringInfo wrappedSequenceDef = makeStringInfo();

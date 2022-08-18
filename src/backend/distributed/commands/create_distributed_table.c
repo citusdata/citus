@@ -114,8 +114,6 @@ static void EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMe
 static bool ShouldLocalTableBeEmpty(Oid relationId, char distributionMethod, bool
 									viaDeprecatedAPI);
 static void EnsureCitusTableCanBeCreated(Oid relationOid);
-static void EnsureDistributedSequencesHaveOneType(Oid relationId,
-												  List *seqInfoList);
 static List * GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId,
 																   int tableTypeFlag);
 static Oid DropFKeysAndUndistributeTable(Oid relationId);
@@ -492,11 +490,9 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	 * Ensure that the sequences used in column defaults of the table
 	 * have proper types
 	 */
-	List *attnumList = NIL;
-	List *dependentSequenceList = NIL;
-	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
-	EnsureDistributedSequencesHaveOneType(relationId, dependentSequenceList,
-										  attnumList);
+	List *seqInfoList = NIL;
+	GetDependentSequencesWithRelation(relationId, &seqInfoList, 0);
+	EnsureDistributedSequencesHaveOneType(relationId, seqInfoList);
 
 	/* foreign tables do not support TRUNCATE trigger */
 	if (RegularTable(relationId))
@@ -537,6 +533,13 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 			 * Ensure sequence dependencies and mark them as distributed
 			 * before creating table metadata on workers
 			 */
+			List *dependentSequenceList = NIL;
+			SequenceInfo *seqInfo = NULL;
+			foreach_ptr(seqInfo, seqInfoList)
+			{
+				dependentSequenceList = lappend_oid(dependentSequenceList, seqInfo->sequenceOid);
+			}
+
 			MarkSequenceListDistributedAndPropagateDependencies(dependentSequenceList);
 		}
 
@@ -710,7 +713,7 @@ MarkSequenceDistributedAndPropagateDependencies(Oid sequenceOid)
  * in which the sequence is used as default is supported for each sequence in input
  * dependentSequenceList, and then alters the sequence type if not the same with the column type.
  */
-static void
+void
 EnsureDistributedSequencesHaveOneType(Oid relationId, List *seqInfoList)
 {
 	SequenceInfo *seqInfo = NULL;
