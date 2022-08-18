@@ -166,7 +166,7 @@ step "s3-select-distributed-waiting-queries"
 // only works for the coordinator
 step "s3-show-actual-gpids"
 {
-	SELECT global_pid > 0 as gpid_exists, query FROM citus_stat_activity WHERE state = 'active' AND query IN (SELECT blocked_statement FROM citus_lock_waits UNION SELECT current_statement_in_blocking_process FROM citus_lock_waits) ORDER BY 1 DESC;
+	SELECT global_pid > 0 as gpid_exists, global_pid, query FROM citus_stat_activity WHERE state = 'active' AND query IN (SELECT blocked_statement FROM citus_lock_waits UNION SELECT current_statement_in_blocking_process FROM citus_lock_waits) ORDER BY 1 DESC;
 }
 
 // session s1 and s4 executes the commands on the same worker node
