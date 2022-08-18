@@ -34,7 +34,8 @@
 #include "mb/pg_wchar.h"
 #include "parser/parse_type.h"
 
-static void ErrorIfCurrentUserCanNotDistributeObject(ObjectType type,
+static void ErrorIfCurrentUserCanNotDistributeObject(char *textType,
+													 ObjectType type,
 													 ObjectAddress *addr,
 													 Node *node,
 													 Relation *relation);
@@ -372,7 +373,7 @@ PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr)
 											&relation, AccessShareLock, false);
 
 	/* CITUS CODE BEGIN */
-	ErrorIfCurrentUserCanNotDistributeObject(type, &addr, objnode, &relation);
+	ErrorIfCurrentUserCanNotDistributeObject(ttype, type, &addr, objnode, &relation);
 
 	/* CITUS CODE END */
 
@@ -394,14 +395,16 @@ PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr)
  * distribute object, if not errors out.
  */
 static void
-ErrorIfCurrentUserCanNotDistributeObject(ObjectType type, ObjectAddress *addr,
-										 Node *node, Relation *relation)
+ErrorIfCurrentUserCanNotDistributeObject(char *textType, ObjectType type,
+										 ObjectAddress *addr, Node *node,
+										 Relation *relation)
 {
 	Oid userId = GetUserId();
 
 	if (!SupportedDependencyByCitus(addr))
 	{
-		ereport(ERROR, (errmsg("Object type %d can not be distributed by Citus", type)));
+		ereport(ERROR, (errmsg("%s object can not be distributed by Citus", textType),
+						errdetail("Object type id is %d", type)));
 	}
 
 	switch (type)
