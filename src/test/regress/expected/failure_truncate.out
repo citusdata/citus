@@ -266,7 +266,7 @@ SELECT count(*) FROM test_table;
 -- refill the table
 TRUNCATE test_table;
 INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
-SET client_min_messages TO WARNING;
+SET client_min_messages TO ERROR;
 -- now kill just after the worker sends response to
 -- COMMIT command, so we'll have lots of warnings but the command
 -- should have been committed both on the distributed table and the placements
@@ -277,16 +277,6 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT").kill()');
 (1 row)
 
 TRUNCATE test_table;
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -305,7 +295,6 @@ SELECT count(*) FROM test_table;
      0
 (1 row)
 
-SET client_min_messages TO ERROR;
 INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
 -- now cancel just after the worker sends response to
 -- but Postgres doesn't accept interrupts during COMMIT and ROLLBACK

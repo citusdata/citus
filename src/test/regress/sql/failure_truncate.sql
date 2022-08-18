@@ -103,7 +103,7 @@ SELECT count(*) FROM test_table;
 TRUNCATE test_table;
 INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
 
-SET client_min_messages TO WARNING;
+SET client_min_messages TO ERROR;
 -- now kill just after the worker sends response to
 -- COMMIT command, so we'll have lots of warnings but the command
 -- should have been committed both on the distributed table and the placements
@@ -112,7 +112,6 @@ TRUNCATE test_table;
 SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
-SET client_min_messages TO ERROR;
 
 INSERT INTO test_table SELECT x,x FROM generate_series(1,20) as f(x);
 
