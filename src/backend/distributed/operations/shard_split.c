@@ -33,6 +33,7 @@
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/metadata_sync.h"
@@ -531,6 +532,9 @@ BlockingShardSplit(SplitOperation splitOperation,
 				   List *shardSplitPointsList,
 				   List *workersForPlacementList)
 {
+	/* prepare to generate cleanup records */
+	StartOperationRequiringCleanup();
+
 	List *sourceColocatedShardIntervalList = ColocatedShardIntervalList(
 		shardIntervalToSplit);
 
@@ -607,6 +611,13 @@ BlockingShardSplit(SplitOperation splitOperation,
 	}
 	PG_END_TRY();
 
+	/*
+	 * Delete any cleanup records we generated in anticipation of
+	 * successful completion. If we abort, we would still do cleanup
+	 * of the new shards because the deletion would roll back.
+	 */
+	DeleteMyCleanupOnFailureRecords();
+
 	CitusInvalidateRelcacheByRelid(DistShardRelationId());
 }
 
@@ -644,6 +655,12 @@ CreateSplitShardsForShardGroup(HTAB *mapOfShardToPlacementCreatedByWorkflow,
 
 			/* Create new split child shard on the specified placement list */
 			CreateObjectOnPlacement(splitShardCreationCommandList, workerPlacementNode);
+
+			/* in case of rollback, clean up the child shard */
+			char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
+			InsertCleanupRecordInSubtransaction(CLEANUP_SHARD_PLACEMENT,
+												qualifiedShardName,
+												workerPlacementNode->groupId);
 
 			ShardCreatedByWorkflowEntry entry;
 			entry.shardIntervalKey = shardInterval;
@@ -1197,6 +1214,20 @@ DropShardList(List *shardIntervalList)
 			/* get shard name */
 			char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
 
+			if (DeferShardDeleteOnMove)
+			{
+				/*
+				 * In case of deferred drop, we log a cleanup record in the current
+				 * transaction. If the current transaction rolls back, we do not
+				 * generate a record.
+				 */
+
+				InsertCleanupRecordInCurrentTransaction(CLEANUP_SHARD_PLACEMENT,
+														qualifiedShardName,
+														placement->groupId);
+				continue;
+			}
+
 			char storageType = shardInterval->storageType;
 			if (storageType == SHARD_STORAGE_TABLE)
 			{
@@ -1277,6 +1308,9 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 					  List *shardSplitPointsList,
 					  List *workersForPlacementList)
 {
+	/* prepare to generate cleanup records */
+	StartOperationRequiringCleanup();
+
 	char *superUser = CitusExtensionOwnerName();
 	char *databaseName = get_database_name(MyDatabaseId);
 
@@ -1497,6 +1531,13 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+
+	/*
+	 * Delete any cleanup records we generated in anticipation of
+	 * successful completion. If we abort, we would still do cleanup
+	 * of the new shards because the deletion would roll back.
+	 */
+	DeleteMyCleanupOnFailureRecords();
 }
 
 
@@ -1563,6 +1604,12 @@ CreateDummyShardsForShardGroup(HTAB *mapOfDummyShardToPlacement,
 			/* Create dummy source shard on the specified placement list */
 			CreateObjectOnPlacement(splitShardCreationCommandList, workerPlacementNode);
 
+			/* in case of rollback, clean up the dummy shard on target node */
+			char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
+			InsertCleanupRecordInSubtransaction(CLEANUP_SHARD_PLACEMENT,
+												qualifiedShardName,
+												workerPlacementNode->groupId);
+
 			/* Add dummy source shard entry created for placement node in map */
 			AddDummyShardEntryInMap(mapOfDummyShardToPlacement,
 									workerPlacementNode->nodeId,
@@ -1597,6 +1644,13 @@ CreateDummyShardsForShardGroup(HTAB *mapOfDummyShardToPlacement,
 
 			/* Create dummy split child shard on source worker node */
 			CreateObjectOnPlacement(splitShardCreationCommandList, sourceWorkerNode);
+
+			/* in case of rollback, clean up the dummy shard on source node */
+			char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
+			InsertCleanupRecordInSubtransaction(CLEANUP_SHARD_PLACEMENT,
+												qualifiedShardName,
+												sourceWorkerNode->groupId);
+
 
 			/* Add dummy split child shard entry created on source node */
 			AddDummyShardEntryInMap(mapOfDummyShardToPlacement, sourceWorkerNode->nodeId,

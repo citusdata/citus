@@ -1135,11 +1135,14 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                         | function worker_copy_table_to_node(regclass,integer) void
                                                                                         | function worker_split_copy(bigint,split_copy_info[]) void
                                                                                         | function worker_split_shard_replication_setup(split_shard_info[]) SETOF replication_slot_info
+                                                                                        | sequence pg_dist_cleanup_record_record_id_seq
+                                                                                        | sequence pg_dist_operation_id_seq
+                                                                                        | table pg_dist_cleanup_record
                                                                                         | type replication_slot_info
                                                                                         | type split_copy_info
                                                                                         | type split_shard_info
                                                                                         | view citus_locks
-(34 rows)
+(37 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

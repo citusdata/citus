@@ -160,6 +160,8 @@ typedef struct MetadataCacheData
 	Oid distPlacementGroupidIndexId;
 	Oid distTransactionRelationId;
 	Oid distTransactionGroupIndexId;
+	Oid distCleanupRecordRelationId;
+	Oid distCleanupRecordPrimaryKeyIndexId;
 	Oid citusCatalogNamespaceId;
 	Oid copyFormatTypeId;
 	Oid readIntermediateResultFuncId;
@@ -2372,6 +2374,28 @@ DistRebalanceStrategyRelationId(void)
 						 &MetadataCache.distRebalanceStrategyRelationId);
 
 	return MetadataCache.distRebalanceStrategyRelationId;
+}
+
+
+/* return oid of pg_dist_cleanup_record relation */
+Oid
+DistCleanupRecordRelationId(void)
+{
+	CachedRelationLookup("pg_dist_cleanup_record",
+						 &MetadataCache.distCleanupRecordRelationId);
+
+	return MetadataCache.distCleanupRecordRelationId;
+}
+
+
+/* return oid of pg_dist_cleanup_record primary key index */
+Oid
+DistCleanupRecordPrimaryKeyIndexId(void)
+{
+	CachedRelationLookup("pg_dist_cleanup_record_pkey",
+						 &MetadataCache.distCleanupRecordPrimaryKeyIndexId);
+
+	return MetadataCache.distCleanupRecordPrimaryKeyIndexId;
 }
 
 

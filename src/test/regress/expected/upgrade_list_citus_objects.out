@@ -232,12 +232,15 @@ ORDER BY 1;
  function worker_split_shard_replication_setup(split_shard_info[])
  schema citus
  schema citus_internal
+ sequence pg_dist_cleanup_record_record_id_seq
  sequence pg_dist_colocationid_seq
  sequence pg_dist_groupid_seq
  sequence pg_dist_node_nodeid_seq
+ sequence pg_dist_operation_id_seq
  sequence pg_dist_placement_placementid_seq
  sequence pg_dist_shardid_seq
  table pg_dist_authinfo
+ table pg_dist_cleanup_record
  table pg_dist_colocation
  table pg_dist_local_group
  table pg_dist_node
@@ -267,5 +270,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(259 rows)
+(262 rows)
 

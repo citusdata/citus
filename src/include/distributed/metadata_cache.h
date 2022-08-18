@@ -229,6 +229,7 @@ extern Oid DistShardRelationId(void);
 extern Oid DistPlacementRelationId(void);
 extern Oid DistNodeRelationId(void);
 extern Oid DistRebalanceStrategyRelationId(void);
+extern Oid DistCleanupRecordRelationId(void);
 extern Oid DistLocalGroupIdRelationId(void);
 extern Oid DistObjectRelationId(void);
 extern Oid DistEnabledCustomAggregatesId(void);
@@ -246,6 +247,7 @@ extern Oid DistTransactionRelationId(void);
 extern Oid DistTransactionGroupIndexId(void);
 extern Oid DistPlacementGroupidIndexId(void);
 extern Oid DistObjectPrimaryKeyIndexId(void);
+extern Oid DistCleanupRecordPrimaryKeyIndexId(void);
 
 /* type oids */
 extern Oid LookupTypeOid(char *schemaNameSting, char *typeNameString);

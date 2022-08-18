@@ -37,6 +37,7 @@
 #include "distributed/transaction_management.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/version_compat.h"
@@ -600,6 +601,7 @@ ResetGlobalVariables()
 	NodeMetadataSyncOnCommit = false;
 	InTopLevelDelegatedFunctionCall = false;
 	InTableTypeConversionFunctionCall = false;
+	CurrentOperationId = INVALID_OPERATION_ID;
 	ResetWorkerErrorIndication();
 	memset(&AllowedDistributionColumnValue, 0,
 		   sizeof(AllowedDistributionColumn));

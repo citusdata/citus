@@ -508,7 +508,7 @@ LockPlacementCleanup(void)
 	LOCKTAG tag;
 	const bool sessionLock = false;
 	const bool dontWait = false;
-	SET_LOCKTAG_PLACEMENT_CLEANUP(tag);
+	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_CLEANUP);
 	(void) LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
 }
 
@@ -523,7 +523,7 @@ TryLockPlacementCleanup(void)
 	LOCKTAG tag;
 	const bool sessionLock = false;
 	const bool dontWait = true;
-	SET_LOCKTAG_PLACEMENT_CLEANUP(tag);
+	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_CLEANUP);
 	bool lockAcquired = LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
 	return lockAcquired;
 }
