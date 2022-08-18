@@ -6,7 +6,7 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-v5579d00'
+    default: '-v0aadde0'
   pg13_version:
     type: string
     default: '13.4'
@@ -15,7 +15,10 @@ parameters:
     default: '14.0'
   upgrade_pg_versions:
     type: string
-    default: '13.4-14.0'
+    default: '13.4-14.0-15beta3'
+  style_checker_tools_version:
+    type: string
+    default: '0.7.9'
 jobs:
   build:
     description: Build the citus extension
@@ -46,7 +49,7 @@ jobs:
 
   check-style:
     docker:
-      - image: 'citus/stylechecker:latest'
+      - image: 'citus/stylechecker:<< pipeline.parameters.style_checker_tools_version >><< pipeline.parameters.image_suffix >>'
     steps:
       - checkout
       - run:
