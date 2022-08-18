@@ -1796,12 +1796,18 @@ GetViewRuleReferenceDependencyList(Oid viewId)
 static List *
 GetRelationSequenceDependencyList(Oid relationId)
 {
-	List *attnumList = NIL;
-	List *dependentSequenceList = NIL;
+	List *seqInfoList = NIL;
+	GetDependentSequencesWithRelation(relationId, &seqInfoList, 0);
 
-	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
+	List *seqIdList = NIL;
+	SequenceInfo *seqInfo = NULL;
+	foreach_ptr(seqInfo, seqInfoList)
+	{
+		seqIdList = lappend_oid(seqIdList, seqInfo->sequenceOid);
+	}
+
 	List *sequenceDependencyDefList =
-		CreateObjectAddressDependencyDefList(RelationRelationId, dependentSequenceList);
+		CreateObjectAddressDependencyDefList(RelationRelationId, seqIdList);
 
 	return sequenceDependencyDefList;
 }

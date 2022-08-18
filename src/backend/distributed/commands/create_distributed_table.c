@@ -118,8 +118,7 @@ static bool ShouldLocalTableBeEmpty(Oid relationId, char distributionMethod, boo
 									viaDeprecatedAPI);
 static void EnsureCitusTableCanBeCreated(Oid relationOid);
 static void EnsureDistributedSequencesHaveOneType(Oid relationId,
-												  List *dependentSequenceList,
-												  List *attnumList);
+												  List *seqInfoList);
 static List * GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId,
 																   int tableTypeFlag);
 static Oid DropFKeysAndUndistributeTable(Oid relationId);
@@ -602,15 +601,24 @@ EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid ownerRelationId
 	Oid citusTableId = InvalidOid;
 	foreach_oid(citusTableId, citusTableIdList)
 	{
-		List *attnumList = NIL;
-		List *dependentSequenceList = NIL;
-		GetDependentSequencesWithRelation(citusTableId, &attnumList,
-										  &dependentSequenceList, 0);
-		AttrNumber currentAttnum = InvalidAttrNumber;
-		Oid currentSeqOid = InvalidOid;
-		forboth_int_oid(currentAttnum, attnumList, currentSeqOid,
-						dependentSequenceList)
+		List *seqInfoList = NIL;
+		GetDependentSequencesWithRelation(citusTableId, &seqInfoList, 0);
+
+		SequenceInfo *seqInfo = NULL;
+		foreach_ptr(seqInfo, seqInfoList)
 		{
+			AttrNumber currentAttnum = seqInfo->attributeNumber;
+			Oid currentSeqOid = seqInfo->sequenceOid;
+
+			if (!seqInfo->isNextValDefault)
+			{
+				/*
+				 * If a sequence is not on the nextval, we don't need any check.
+				 * This is a dependent sequence via ALTER SEQUENCE .. OWNED BY col
+				 */
+				continue;
+			}
+
 			/*
 			 * If another distributed table is using the same sequence
 			 * in one of its column defaults, make sure the types of the
@@ -669,11 +677,10 @@ AlterSequenceType(Oid seqOid, Oid typeOid)
 void
 EnsureRelationHasCompatibleSequenceTypes(Oid relationId)
 {
-	List *attnumList = NIL;
-	List *dependentSequenceList = NIL;
+	List *seqInfoList = NIL;
 
-	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
-	EnsureDistributedSequencesHaveOneType(relationId, dependentSequenceList, attnumList);
+	GetDependentSequencesWithRelation(relationId, &seqInfoList, 0);
+	EnsureDistributedSequencesHaveOneType(relationId, seqInfoList);
 }
 
 
@@ -683,17 +690,26 @@ EnsureRelationHasCompatibleSequenceTypes(Oid relationId)
  * dependentSequenceList, and then alters the sequence type if not the same with the column type.
  */
 static void
-EnsureDistributedSequencesHaveOneType(Oid relationId, List *dependentSequenceList,
-									  List *attnumList)
+EnsureDistributedSequencesHaveOneType(Oid relationId, List *seqInfoList)
 {
-	AttrNumber attnum = InvalidAttrNumber;
-	Oid sequenceOid = InvalidOid;
-	forboth_int_oid(attnum, attnumList, sequenceOid, dependentSequenceList)
+	SequenceInfo *seqInfo = NULL;
+	foreach_ptr(seqInfo, seqInfoList)
 	{
+		if (!seqInfo->isNextValDefault)
+		{
+			/*
+			 * If a sequence is not on the nextval, we don't need any check.
+			 * This is a dependent sequence via ALTER SEQUENCE .. OWNED BY col
+			 */
+			continue;
+		}
+
 		/*
 		 * We should make sure that the type of the column that uses
 		 * that sequence is supported
 		 */
+		Oid sequenceOid = seqInfo->sequenceOid;
+		AttrNumber attnum = seqInfo->attributeNumber;
 		Oid attributeTypeId = GetAttributeTypeOid(relationId, attnum);
 		EnsureSequenceTypeSupported(sequenceOid, attributeTypeId, relationId);
 

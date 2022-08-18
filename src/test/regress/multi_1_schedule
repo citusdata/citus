@@ -290,6 +290,7 @@ test: auto_undist_citus_local
 test: mx_regular_user
 test: citus_locks
 test: global_cancel
+test: sequencenes_owned_by
 test: remove_coordinator
 
 # ----------
