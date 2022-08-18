@@ -675,7 +675,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
 		AS (VALUES ('publication', ARRAY['publication_test']::text[], ARRAY[]::text[], -1, 0, false))
 	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
-ERROR:  Object type 29 can not be distributed by Citus
+ERROR:  publication object can not be distributed by Citus
 ROLLBACK;
 -- Show that citus_internal_add_object_metadata checks the priviliges
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;

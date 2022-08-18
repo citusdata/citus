@@ -778,7 +778,7 @@ PreprocessCreateExtensionStmtForCitusColumnar(Node *parsetree)
 		}
 
 		/*citus version >= 11.1 requires install citus_columnar first*/
-		if (versionNumber >= 1110)
+		if (versionNumber >= 1110 && !CitusHasBeenLoaded())
 		{
 			if (get_extension_oid("citus_columnar", true) == InvalidOid)
 			{
