@@ -63,7 +63,7 @@ test: tableam drop_column_partitioned_table
 # ----------
 # Miscellaneous tests to check our query planning behavior
 # ----------
-test: multi_deparse_shard_query multi_distributed_transaction_id intermediate_results limit_intermediate_size rollback_to_savepoint
+test: multi_deparse_shard_query multi_distributed_transaction_id intermediate_results limit_intermediate_size
 test: multi_explain hyperscale_tutorial partitioned_intermediate_results distributed_intermediate_results multi_real_time_transaction
 test: multi_basic_queries cross_join multi_complex_expressions multi_subquery multi_subquery_complex_queries multi_subquery_behavioral_analytics
 test: multi_subquery_complex_reference_clause multi_subquery_window_functions multi_view multi_sql_function multi_prepare_sql
