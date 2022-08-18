@@ -36,6 +36,7 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_replication.h"
 #include "distributed/multi_partitioning_utils.h"
+#include "distributed/multi_progress.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
@@ -396,6 +397,17 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	EnsureEnoughDiskSpaceForShardMove(colocatedShardList, sourceNodeName, sourceNodePort,
 									  targetNodeName, targetNodePort);
 
+
+	WorkerNode *sourceNode = FindWorkerNode(sourceNodeName, sourceNodePort);
+	WorkerNode *targetNode = FindWorkerNode(targetNodeName, targetNodePort);
+
+	PlacementUpdateEvent *placementUpdateEvent = palloc0(sizeof(PlacementUpdateEvent));
+	placementUpdateEvent->updateType = PLACEMENT_UPDATE_MOVE;
+	placementUpdateEvent->shardId = shardId;
+	placementUpdateEvent->sourceNode = sourceNode;
+	placementUpdateEvent->targetNode = targetNode;
+	SetupRebalanceMonitor(list_make1(placementUpdateEvent), relationId);
+
 	/*
 	 * At this point of the shard moves, we don't need to block the writes to
 	 * shards when logical replication is used.
@@ -463,6 +475,7 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 												   sourceNodePort, targetNodeName,
 												   targetNodePort);
 
+	FinalizeCurrentProgressMonitor();
 	PG_RETURN_VOID();
 }
 

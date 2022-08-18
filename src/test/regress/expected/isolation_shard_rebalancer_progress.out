@@ -1,34 +1,23 @@
-Parsed test spec with 3 sessions
+Parsed test spec with 7 sessions
 
-starting permutation: s2-lock-1 s2-lock-2 s1-rebalance-c1 s3-progress s2-unlock-1 s3-progress s2-unlock-2 s3-progress s1-commit s3-progress
+starting permutation: s2-lock-1-start s1-rebalance-c1-block-writes s7-get-progress s2-unlock-1-start s1-commit s7-get-progress enable-deferred-drop
 master_set_node_property
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s2-lock-1:
- SELECT pg_advisory_lock(29279, 1);
+step s2-lock-1-start:
+ BEGIN;
+ DELETE FROM colocated1 WHERE test_id = 1;
+ DELETE FROM separate WHERE test_id = 1;
 
-pg_advisory_lock
----------------------------------------------------------------------
-
-(1 row)
-
-step s2-lock-2:
- SELECT pg_advisory_lock(29279, 2);
-
-pg_advisory_lock
----------------------------------------------------------------------
-
-(1 row)
-
-step s1-rebalance-c1:
+step s1-rebalance-c1-block-writes:
  BEGIN;
  SELECT * FROM get_rebalance_table_shards_plan('colocated1');
  SELECT rebalance_table_shards('colocated1', shard_transfer_mode:='block_writes');
  <waiting ...>
-step s3-progress: 
- set client_min_messages=NOTICE;
+step s7-get-progress: 
+ set LOCAL client_min_messages=NOTICE;
  SELECT
   table_name,
   shardid,
@@ -46,50 +35,12 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 ---------------------------------------------------------------------
 colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|                0|       1
 colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|                0|       1
-colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       0
-colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       0
-(4 rows)
+(2 rows)
 
-step s2-unlock-1:
- SELECT pg_advisory_unlock(29279, 1);
+step s2-unlock-1-start:
+ ROLLBACK;
 
-pg_advisory_unlock
----------------------------------------------------------------------
-t
-(1 row)
-
-step s3-progress:
- set client_min_messages=NOTICE;
- SELECT
-  table_name,
-  shardid,
-  shard_size,
-  sourcename,
-  sourceport,
-  source_shard_size,
-  targetname,
-  targetport,
-  target_shard_size,
-  progress
- FROM get_rebalance_progress();
-
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
----------------------------------------------------------------------
-colocated1|1500001|     73728|localhost |     57637|            49152|localhost |     57638|            73728|       2
-colocated2|1500005|    401408|localhost |     57637|           376832|localhost |     57638|           401408|       2
-colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       1
-colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       1
-(4 rows)
-
-step s2-unlock-2:
- SELECT pg_advisory_unlock(29279, 2);
-
-pg_advisory_unlock
----------------------------------------------------------------------
-t
-(1 row)
-
-step s1-rebalance-c1: <... completed>
+step s1-rebalance-c1-block-writes: <... completed>
 table_name|shardid|shard_size|sourcename|sourceport|targetname|targetport
 ---------------------------------------------------------------------
 colocated1|1500001|         0|localhost |     57637|localhost |     57638
@@ -103,8 +54,11 @@ rebalance_table_shards
 
 (1 row)
 
-step s3-progress:
- set client_min_messages=NOTICE;
+step s1-commit:
+ COMMIT;
+
+step s7-get-progress:
+ set LOCAL client_min_messages=NOTICE;
  SELECT
   table_name,
   shardid,
@@ -121,12 +75,69 @@ step s3-progress:
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
 ---------------------------------------------------------------------
 (0 rows)
+
+step enable-deferred-drop:
+ ALTER SYSTEM RESET citus.defer_drop_after_shard_move;
+
+
+starting permutation: s3-lock-2-start s1-rebalance-c1-block-writes s7-get-progress s3-unlock-2-start s1-commit s7-get-progress enable-deferred-drop
+master_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+step s3-lock-2-start:
+ BEGIN;
+ DELETE FROM colocated1 WHERE test_id = 3;
+
+step s1-rebalance-c1-block-writes:
+ BEGIN;
+ SELECT * FROM get_rebalance_table_shards_plan('colocated1');
+ SELECT rebalance_table_shards('colocated1', shard_transfer_mode:='block_writes');
+ <waiting ...>
+step s7-get-progress: 
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       1
+colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       1
+(2 rows)
+
+step s3-unlock-2-start:
+ ROLLBACK;
+
+step s1-rebalance-c1-block-writes: <... completed>
+table_name|shardid|shard_size|sourcename|sourceport|targetname|targetport
+---------------------------------------------------------------------
+colocated1|1500001|         0|localhost |     57637|localhost |     57638
+colocated2|1500005|         0|localhost |     57637|localhost |     57638
+colocated1|1500002|         0|localhost |     57637|localhost |     57638
+colocated2|1500006|         0|localhost |     57637|localhost |     57638
+(4 rows)
+
+rebalance_table_shards
+---------------------------------------------------------------------
+
+(1 row)
 
 step s1-commit:
  COMMIT;
 
-step s3-progress:
- set client_min_messages=NOTICE;
+step s7-get-progress:
+ set LOCAL client_min_messages=NOTICE;
  SELECT
   table_name,
   shardid,
@@ -143,4 +154,763 @@ step s3-progress:
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
 ---------------------------------------------------------------------
 (0 rows)
+
+step enable-deferred-drop:
+ ALTER SYSTEM RESET citus.defer_drop_after_shard_move;
+
+
+starting permutation: s7-grab-lock s1-rebalance-c1-block-writes s7-get-progress s7-release-lock s1-commit s7-get-progress enable-deferred-drop
+master_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+step s7-grab-lock:
+ BEGIN;
+ SET LOCAL citus.max_adaptive_executor_pool_size = 1;
+ SELECT 1 FROM colocated1 LIMIT 1;
+ SELECT 1 FROM separate LIMIT 1;
+
+?column?
+---------------------------------------------------------------------
+       1
+(1 row)
+
+?column?
+---------------------------------------------------------------------
+       1
+(1 row)
+
+step s1-rebalance-c1-block-writes:
+ BEGIN;
+ SELECT * FROM get_rebalance_table_shards_plan('colocated1');
+ SELECT rebalance_table_shards('colocated1', shard_transfer_mode:='block_writes');
+ <waiting ...>
+step s7-get-progress: 
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1
+(2 rows)
+
+step s7-release-lock:
+ COMMIT;
+
+step s1-rebalance-c1-block-writes: <... completed>
+table_name|shardid|shard_size|sourcename|sourceport|targetname|targetport
+---------------------------------------------------------------------
+colocated1|1500001|         0|localhost |     57637|localhost |     57638
+colocated2|1500005|         0|localhost |     57637|localhost |     57638
+colocated1|1500002|         0|localhost |     57637|localhost |     57638
+colocated2|1500006|         0|localhost |     57637|localhost |     57638
+(4 rows)
+
+rebalance_table_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-commit:
+ COMMIT;
+
+step s7-get-progress:
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+(0 rows)
+
+step enable-deferred-drop:
+ ALTER SYSTEM RESET citus.defer_drop_after_shard_move;
+
+
+starting permutation: s6-acquire-advisory-lock s1-rebalance-c1-online s7-get-progress s6-release-advisory-lock s1-commit s7-get-progress enable-deferred-drop
+master_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+step s6-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-rebalance-c1-online:
+ BEGIN;
+ SELECT * FROM get_rebalance_table_shards_plan('colocated1');
+ SELECT rebalance_table_shards('colocated1', shard_transfer_mode:='force_logical');
+ <waiting ...>
+step s7-get-progress: 
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|             8192|       1
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|             8192|       1
+(2 rows)
+
+step s6-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-rebalance-c1-online: <... completed>
+table_name|shardid|shard_size|sourcename|sourceport|targetname|targetport
+---------------------------------------------------------------------
+colocated1|1500001|         0|localhost |     57637|localhost |     57638
+colocated2|1500005|         0|localhost |     57637|localhost |     57638
+colocated1|1500002|         0|localhost |     57637|localhost |     57638
+colocated2|1500006|         0|localhost |     57637|localhost |     57638
+(4 rows)
+
+rebalance_table_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-commit:
+ COMMIT;
+
+step s7-get-progress:
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+(0 rows)
+
+step enable-deferred-drop:
+ ALTER SYSTEM RESET citus.defer_drop_after_shard_move;
+
+
+starting permutation: s7-grab-lock s1-shard-move-c1-online s7-get-progress s7-release-lock s1-commit s7-get-progress enable-deferred-drop
+master_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+step s7-grab-lock:
+ BEGIN;
+ SET LOCAL citus.max_adaptive_executor_pool_size = 1;
+ SELECT 1 FROM colocated1 LIMIT 1;
+ SELECT 1 FROM separate LIMIT 1;
+
+?column?
+---------------------------------------------------------------------
+       1
+(1 row)
+
+?column?
+---------------------------------------------------------------------
+       1
+(1 row)
+
+step s1-shard-move-c1-online:
+ BEGIN;
+ SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='force_logical');
+ <waiting ...>
+step s7-get-progress: 
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1
+(2 rows)
+
+step s7-release-lock:
+ COMMIT;
+
+step s1-shard-move-c1-online: <... completed>
+citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-commit:
+ COMMIT;
+
+step s7-get-progress:
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+(0 rows)
+
+step enable-deferred-drop:
+ ALTER SYSTEM RESET citus.defer_drop_after_shard_move;
+
+
+starting permutation: s2-lock-1-start s1-shard-move-c1-block-writes s7-get-progress s2-unlock-1-start s1-commit s7-get-progress enable-deferred-drop
+master_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-lock-1-start:
+ BEGIN;
+ DELETE FROM colocated1 WHERE test_id = 1;
+ DELETE FROM separate WHERE test_id = 1;
+
+step s1-shard-move-c1-block-writes:
+ BEGIN;
+ SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
+ <waiting ...>
+step s7-get-progress: 
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|                0|       1
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|                0|       1
+(2 rows)
+
+step s2-unlock-1-start:
+ ROLLBACK;
+
+step s1-shard-move-c1-block-writes: <... completed>
+citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-commit:
+ COMMIT;
+
+step s7-get-progress:
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+(0 rows)
+
+step enable-deferred-drop:
+ ALTER SYSTEM RESET citus.defer_drop_after_shard_move;
+
+
+starting permutation: s7-grab-lock s1-shard-move-c1-block-writes s7-get-progress s7-release-lock s1-commit s7-get-progress enable-deferred-drop
+master_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+step s7-grab-lock:
+ BEGIN;
+ SET LOCAL citus.max_adaptive_executor_pool_size = 1;
+ SELECT 1 FROM colocated1 LIMIT 1;
+ SELECT 1 FROM separate LIMIT 1;
+
+?column?
+---------------------------------------------------------------------
+       1
+(1 row)
+
+?column?
+---------------------------------------------------------------------
+       1
+(1 row)
+
+step s1-shard-move-c1-block-writes:
+ BEGIN;
+ SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
+ <waiting ...>
+step s7-get-progress: 
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1
+(2 rows)
+
+step s7-release-lock:
+ COMMIT;
+
+step s1-shard-move-c1-block-writes: <... completed>
+citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-commit:
+ COMMIT;
+
+step s7-get-progress:
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+(0 rows)
+
+step enable-deferred-drop:
+ ALTER SYSTEM RESET citus.defer_drop_after_shard_move;
+
+
+starting permutation: s6-acquire-advisory-lock s1-shard-move-c1-online s7-get-progress s6-release-advisory-lock s1-commit s7-get-progress enable-deferred-drop
+master_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+step s6-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-shard-move-c1-online:
+ BEGIN;
+ SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='force_logical');
+ <waiting ...>
+step s7-get-progress: 
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|             8192|       1
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|             8192|       1
+(2 rows)
+
+step s6-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-shard-move-c1-online: <... completed>
+citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-commit:
+ COMMIT;
+
+step s7-get-progress:
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+(0 rows)
+
+step enable-deferred-drop:
+ ALTER SYSTEM RESET citus.defer_drop_after_shard_move;
+
+
+starting permutation: s7-grab-lock s1-shard-move-c1-online s7-get-progress s7-release-lock s1-commit s7-get-progress enable-deferred-drop
+master_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+step s7-grab-lock:
+ BEGIN;
+ SET LOCAL citus.max_adaptive_executor_pool_size = 1;
+ SELECT 1 FROM colocated1 LIMIT 1;
+ SELECT 1 FROM separate LIMIT 1;
+
+?column?
+---------------------------------------------------------------------
+       1
+(1 row)
+
+?column?
+---------------------------------------------------------------------
+       1
+(1 row)
+
+step s1-shard-move-c1-online:
+ BEGIN;
+ SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='force_logical');
+ <waiting ...>
+step s7-get-progress: 
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1
+(2 rows)
+
+step s7-release-lock:
+ COMMIT;
+
+step s1-shard-move-c1-online: <... completed>
+citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-commit:
+ COMMIT;
+
+step s7-get-progress:
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+(0 rows)
+
+step enable-deferred-drop:
+ ALTER SYSTEM RESET citus.defer_drop_after_shard_move;
+
+
+starting permutation: s2-lock-1-start s1-shard-move-c1-block-writes s4-shard-move-sep-block-writes s7-get-progress s2-unlock-1-start s1-commit s4-commit s7-get-progress enable-deferred-drop
+master_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-lock-1-start:
+ BEGIN;
+ DELETE FROM colocated1 WHERE test_id = 1;
+ DELETE FROM separate WHERE test_id = 1;
+
+step s1-shard-move-c1-block-writes:
+ BEGIN;
+ SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
+ <waiting ...>
+step s4-shard-move-sep-block-writes: 
+ BEGIN;
+ SELECT citus_move_shard_placement(1500009, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
+ <waiting ...>
+step s7-get-progress: 
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|                0|       1
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|                0|       1
+separate  |1500009|    122880|localhost |     57637|           122880|localhost |     57638|                0|       1
+(3 rows)
+
+step s2-unlock-1-start:
+ ROLLBACK;
+
+step s1-shard-move-c1-block-writes: <... completed>
+citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s4-shard-move-sep-block-writes: <... completed>
+citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-commit:
+ COMMIT;
+
+step s4-commit:
+ COMMIT;
+
+step s7-get-progress:
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+(0 rows)
+
+step enable-deferred-drop:
+ ALTER SYSTEM RESET citus.defer_drop_after_shard_move;
+
+
+starting permutation: s7-grab-lock s1-shard-move-c1-block-writes s4-shard-move-sep-block-writes s7-get-progress s7-release-lock s1-commit s4-commit s7-get-progress enable-deferred-drop
+master_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+step s7-grab-lock:
+ BEGIN;
+ SET LOCAL citus.max_adaptive_executor_pool_size = 1;
+ SELECT 1 FROM colocated1 LIMIT 1;
+ SELECT 1 FROM separate LIMIT 1;
+
+?column?
+---------------------------------------------------------------------
+       1
+(1 row)
+
+?column?
+---------------------------------------------------------------------
+       1
+(1 row)
+
+step s1-shard-move-c1-block-writes:
+ BEGIN;
+ SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
+ <waiting ...>
+step s4-shard-move-sep-block-writes: 
+ BEGIN;
+ SELECT citus_move_shard_placement(1500009, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
+ <waiting ...>
+step s7-get-progress: 
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1
+separate  |1500009|    122880|localhost |     57637|           122880|localhost |     57638|           147456|       1
+(3 rows)
+
+step s7-release-lock:
+ COMMIT;
+
+step s1-shard-move-c1-block-writes: <... completed>
+citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s4-shard-move-sep-block-writes: <... completed>
+citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-commit:
+ COMMIT;
+
+step s4-commit:
+ COMMIT;
+
+step s7-get-progress:
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+---------------------------------------------------------------------
+(0 rows)
+
+step enable-deferred-drop:
+ ALTER SYSTEM RESET citus.defer_drop_after_shard_move;
 
