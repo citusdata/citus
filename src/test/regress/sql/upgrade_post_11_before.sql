@@ -243,3 +243,11 @@ SET citus.enable_ddl_propagation TO on;
 
 CREATE TABLE test_propagate_collate(id int, t2 text COLLATE german_phonebook_unpropagated);
 SELECT create_distributed_table('test_propagate_collate', 'id');
+
+
+CREATE SEQUENCE "SC1";
+CREATE SEQUENCE "unrelated_sequence";
+
+CREATE TABLE test(a int, b int default nextval ('"SC1"'));
+ALTER SEQUENCE "unrelated_sequence" OWNED BY test.b;
+SELECT create_distributed_table('test','a');
