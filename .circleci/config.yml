@@ -16,7 +16,7 @@ parameters:
   upgrade_pg_versions:
     type: string
     default: '13.4-14.0-15beta3'
-  tools_version_for_style_checker:
+  style_checker_tools_version:
     type: string
     default: '0.7.9'
 jobs:
@@ -49,7 +49,7 @@ jobs:
 
   check-style:
     docker:
-      - image: 'citus/stylechecker:<< pipeline.parameters.tools_version_for_style_checker >><< pipeline.parameters.image_suffix >>'
+      - image: 'citus/stylechecker:<< pipeline.parameters.style_checker_tools_version >><< pipeline.parameters.image_suffix >>'
     steps:
       - checkout
       - run:
