@@ -49,14 +49,11 @@ step s1-insert:
     INSERT INTO test_vacuum_vs_insert SELECT i, 2 * i FROM generate_series(1, 3) i;
 
 step s2-vacuum-full:
-    VACUUM FULL VERBOSE test_vacuum_vs_insert;
+    VACUUM FULL test_vacuum_vs_insert;
  <waiting ...>
 step s1-commit: 
     COMMIT;
 
-s2: INFO:  vacuuming "public.test_vacuum_vs_insert"
-s2: INFO:  "test_vacuum_vs_insert": found 0 removable, 6 nonremovable row versions in 4 pages
-DETAIL:  0 dead row versions cannot be removed yet.
 step s2-vacuum-full: <... completed>
 step s2-select:
     SELECT * FROM test_vacuum_vs_insert;

@@ -35,7 +35,7 @@ step "s2-vacuum"
 
 step "s2-vacuum-full"
 {
-    VACUUM FULL VERBOSE test_vacuum_vs_insert;
+    VACUUM FULL test_vacuum_vs_insert;
 }
 
 step "s2-select"
