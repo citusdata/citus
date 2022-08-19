@@ -1,6 +1,8 @@
 ### citus v10.2.8 (August 19, 2022) ###
 
-* Fixes a build warning caused by latest upgrade script changes
+* Fixes compilation warning caused by latest upgrade script changes
+
+* Fixes compilation warning on PG13 + OpenSSL 3.0
 
 ### citus v11.0.6 (August 19, 2022) ###
 
