@@ -159,12 +159,11 @@ CitusBackgroundTaskMonitorMain(Datum arg)
 		pg_usleep(30 * 1000 * 1000);
 	}
 
-	MemoryContext perTaskContext =
-		AllocSetContextCreateExtended(CurrentMemoryContext,
-									  "PerTaskContext",
-									  ALLOCSET_DEFAULT_MINSIZE,
-									  ALLOCSET_DEFAULT_INITSIZE,
-									  ALLOCSET_DEFAULT_MAXSIZE);
+	MemoryContext perTaskContext = AllocSetContextCreate(CurrentMemoryContext,
+														 "PerTaskContext",
+														 ALLOCSET_DEFAULT_MINSIZE,
+														 ALLOCSET_DEFAULT_INITSIZE,
+														 ALLOCSET_DEFAULT_MAXSIZE);
 
 	/*
 	 * First we find all jobs that are running, we need to check if they are still running
