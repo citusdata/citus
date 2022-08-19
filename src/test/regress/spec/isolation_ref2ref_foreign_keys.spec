@@ -1,5 +1,6 @@
 setup
 {
+	ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 8429800;
     CREATE TABLE ref_table_1(id int PRIMARY KEY, value int);
 	SELECT create_reference_table('ref_table_1');
 
@@ -73,11 +74,19 @@ step "s1-select-table-3"
 
 step "s1-view-locks"
 {
-    SELECT mode, count(*)
-    FROM pg_locks
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 }
 
 step "s1-rollback"
