@@ -12,6 +12,8 @@
 #ifndef SHARDSPLIT_H_
 #define SHARDSPLIT_H_
 
+#include "distributed/utils/distribution_column_map.h"
+
 /* Split Modes supported by Shard Split API */
 typedef enum SplitMode
 {
@@ -40,14 +42,10 @@ extern void SplitShard(SplitMode splitMode,
 					   SplitOperation splitOperation,
 					   uint64 shardIdToSplit,
 					   List *shardSplitPointsList,
-					   List *nodeIdsForPlacementList);
-extern void NonBlockingShardSplit(SplitOperation splitOperation,
-								  uint64 splitWorkflowId,
-								  List *sourceColocatedShardIntervalList,
-								  List *shardSplitPointsList,
-								  List *workersForPlacementList,
-								  HTAB *partitionColumnOverrides,
-								  uint32 targetColocationId);
+					   List *nodeIdsForPlacementList,
+					   DistributionColumnMap *distributionColumnOverrides,
+					   List *colocatedShardIntervalList,
+					   uint32 targetColocationId);
 
 extern void DropShardList(List *shardIntervalList);
 

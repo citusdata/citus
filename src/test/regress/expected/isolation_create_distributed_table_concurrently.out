@@ -1,0 +1,549 @@
+Parsed test spec with 4 sessions
+
+starting permutation: s1-truncate s3-acquire-advisory-lock s1-settings s2-settings s1-create_distributed_table_concurrently s2-begin s2-insert s2-commit s3-release-advisory-lock s2-print-status
+step s1-truncate:
+ TRUNCATE table_to_distribute;
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-settings:
+ -- session needs to have replication factor set to 1, can't do in setup
+ SET citus.shard_count TO 4;
+ SET citus.shard_replication_factor TO 1;
+
+step s2-settings:
+ -- session needs to have replication factor set to 1, can't do in setup
+ SET citus.shard_count TO 4;
+ SET citus.shard_replication_factor TO 1;
+
+step s1-create_distributed_table_concurrently:
+ SELECT create_distributed_table_concurrently('table_to_distribute', 'id');
+ <waiting ...>
+step s2-begin: 
+ BEGIN;
+
+step s2-insert:
+ INSERT INTO table_to_distribute SELECT s FROM generate_series(1,20) s;
+
+step s2-commit:
+ COMMIT;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-create_distributed_table_concurrently: <... completed>
+create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-print-status:
+ -- sanity check on partitions
+ SELECT * FROM pg_dist_shard
+  WHERE logicalrelid = 'table_to_distribute'::regclass OR logicalrelid = 'table_to_distribute2'::regclass
+  ORDER BY shardminvalue::BIGINT, logicalrelid;
+ -- sanity check on total elements in the table
+ SELECT COUNT(*) FROM table_to_distribute;
+
+logicalrelid       |shardid|shardstorage|shardminvalue|shardmaxvalue
+---------------------------------------------------------------------
+table_to_distribute|1400294|t           |  -2147483648|  -1073741825
+table_to_distribute|1400295|t           |  -1073741824|           -1
+table_to_distribute|1400296|t           |            0|   1073741823
+table_to_distribute|1400297|t           |   1073741824|   2147483647
+(4 rows)
+
+count
+---------------------------------------------------------------------
+   20
+(1 row)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-truncate s3-acquire-advisory-lock s1-create_distributed_table_concurrently s2-begin s2-insert s2-update s2-commit s3-release-advisory-lock s2-print-status
+step s1-truncate:
+ TRUNCATE table_to_distribute;
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-create_distributed_table_concurrently:
+ SELECT create_distributed_table_concurrently('table_to_distribute', 'id');
+ <waiting ...>
+step s2-begin: 
+ BEGIN;
+
+step s2-insert:
+ INSERT INTO table_to_distribute SELECT s FROM generate_series(1,20) s;
+
+step s2-update:
+ UPDATE table_to_distribute SET id = 21 WHERE id = 20;
+
+step s2-commit:
+ COMMIT;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-create_distributed_table_concurrently: <... completed>
+create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-print-status:
+ -- sanity check on partitions
+ SELECT * FROM pg_dist_shard
+  WHERE logicalrelid = 'table_to_distribute'::regclass OR logicalrelid = 'table_to_distribute2'::regclass
+  ORDER BY shardminvalue::BIGINT, logicalrelid;
+ -- sanity check on total elements in the table
+ SELECT COUNT(*) FROM table_to_distribute;
+
+logicalrelid       |shardid|shardstorage|shardminvalue|shardmaxvalue
+---------------------------------------------------------------------
+table_to_distribute|1400299|t           |  -2147483648|  -1073741825
+table_to_distribute|1400300|t           |  -1073741824|           -1
+table_to_distribute|1400301|t           |            0|   1073741823
+table_to_distribute|1400302|t           |   1073741824|   2147483647
+(4 rows)
+
+count
+---------------------------------------------------------------------
+   20
+(1 row)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-truncate s3-acquire-advisory-lock s1-create_distributed_table_concurrently s2-begin s2-insert s2-delete s2-commit s3-release-advisory-lock s2-print-status
+step s1-truncate:
+ TRUNCATE table_to_distribute;
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-create_distributed_table_concurrently:
+ SELECT create_distributed_table_concurrently('table_to_distribute', 'id');
+ <waiting ...>
+step s2-begin: 
+ BEGIN;
+
+step s2-insert:
+ INSERT INTO table_to_distribute SELECT s FROM generate_series(1,20) s;
+
+step s2-delete:
+ DELETE FROM table_to_distribute WHERE id = 11;
+
+step s2-commit:
+ COMMIT;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-create_distributed_table_concurrently: <... completed>
+create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-print-status:
+ -- sanity check on partitions
+ SELECT * FROM pg_dist_shard
+  WHERE logicalrelid = 'table_to_distribute'::regclass OR logicalrelid = 'table_to_distribute2'::regclass
+  ORDER BY shardminvalue::BIGINT, logicalrelid;
+ -- sanity check on total elements in the table
+ SELECT COUNT(*) FROM table_to_distribute;
+
+logicalrelid       |shardid|shardstorage|shardminvalue|shardmaxvalue
+---------------------------------------------------------------------
+table_to_distribute|1400304|t           |  -2147483648|  -1073741825
+table_to_distribute|1400305|t           |  -1073741824|           -1
+table_to_distribute|1400306|t           |            0|   1073741823
+table_to_distribute|1400307|t           |   1073741824|   2147483647
+(4 rows)
+
+count
+---------------------------------------------------------------------
+   19
+(1 row)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-truncate s3-acquire-advisory-lock s1-create_distributed_table_concurrently s2-begin s2-insert s2-copy s2-commit s3-release-advisory-lock s2-print-status
+step s1-truncate:
+ TRUNCATE table_to_distribute;
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-create_distributed_table_concurrently:
+ SELECT create_distributed_table_concurrently('table_to_distribute', 'id');
+ <waiting ...>
+step s2-begin: 
+ BEGIN;
+
+step s2-insert:
+ INSERT INTO table_to_distribute SELECT s FROM generate_series(1,20) s;
+
+step s2-copy:
+ COPY table_to_distribute FROM PROGRAM 'echo 30 && echo 31 && echo 32 && echo 33 && echo 34 && echo 35 && echo 36 && echo 37 && echo 38';
+
+step s2-commit:
+ COMMIT;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-create_distributed_table_concurrently: <... completed>
+create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-print-status:
+ -- sanity check on partitions
+ SELECT * FROM pg_dist_shard
+  WHERE logicalrelid = 'table_to_distribute'::regclass OR logicalrelid = 'table_to_distribute2'::regclass
+  ORDER BY shardminvalue::BIGINT, logicalrelid;
+ -- sanity check on total elements in the table
+ SELECT COUNT(*) FROM table_to_distribute;
+
+logicalrelid       |shardid|shardstorage|shardminvalue|shardmaxvalue
+---------------------------------------------------------------------
+table_to_distribute|1400309|t           |  -2147483648|  -1073741825
+table_to_distribute|1400310|t           |  -1073741824|           -1
+table_to_distribute|1400311|t           |            0|   1073741823
+table_to_distribute|1400312|t           |   1073741824|   2147483647
+(4 rows)
+
+count
+---------------------------------------------------------------------
+   29
+(1 row)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s3-acquire-advisory-lock s1-create_distributed_table_concurrently s2-insert s2-reindex-concurrently s4-print-waiting-locks s3-release-advisory-lock
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-create_distributed_table_concurrently:
+ SELECT create_distributed_table_concurrently('table_to_distribute', 'id');
+ <waiting ...>
+step s2-insert: 
+ INSERT INTO table_to_distribute SELECT s FROM generate_series(1,20) s;
+
+step s2-reindex-concurrently:
+ REINDEX TABLE CONCURRENTLY table_to_distribute;
+ <waiting ...>
+step s4-print-waiting-locks: 
+ SELECT mode, relation::regclass, granted FROM pg_locks
+  WHERE relation = 'table_to_distribute'::regclass OR relation = 'table_to_distribute2'::regclass
+  ORDER BY mode, relation, granted;
+
+mode                    |relation           |granted
+---------------------------------------------------------------------
+AccessShareLock         |table_to_distribute|t
+ShareUpdateExclusiveLock|table_to_distribute|f
+ShareUpdateExclusiveLock|table_to_distribute|t
+(3 rows)
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-create_distributed_table_concurrently: <... completed>
+create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-reindex-concurrently: <... completed>
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s3-acquire-advisory-lock s1-create_distributed_table_concurrently s2-insert s2-reindex s4-print-waiting-locks s3-release-advisory-lock
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-create_distributed_table_concurrently:
+ SELECT create_distributed_table_concurrently('table_to_distribute', 'id');
+ <waiting ...>
+step s2-insert: 
+ INSERT INTO table_to_distribute SELECT s FROM generate_series(1,20) s;
+
+step s2-reindex:
+ REINDEX TABLE table_to_distribute;
+ <waiting ...>
+step s4-print-waiting-locks: 
+ SELECT mode, relation::regclass, granted FROM pg_locks
+  WHERE relation = 'table_to_distribute'::regclass OR relation = 'table_to_distribute2'::regclass
+  ORDER BY mode, relation, granted;
+
+mode                    |relation           |granted
+---------------------------------------------------------------------
+AccessExclusiveLock     |table_to_distribute|f
+AccessShareLock         |table_to_distribute|t
+ShareUpdateExclusiveLock|table_to_distribute|t
+(3 rows)
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-create_distributed_table_concurrently: <... completed>
+create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-reindex: <... completed>
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s2-begin s2-create_distributed_table_concurrently-same s2-commit
+step s2-begin:
+ BEGIN;
+
+step s2-create_distributed_table_concurrently-same:
+ SELECT create_distributed_table_concurrently('table_to_distribute', 'id');
+
+ERROR:  create_distributed_table_concurrently cannot run inside a transaction block
+step s2-commit:
+ COMMIT;
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s3-acquire-advisory-lock s1-create_distributed_table_concurrently s2-create_distributed_table_concurrently-same s3-release-advisory-lock
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-create_distributed_table_concurrently:
+ SELECT create_distributed_table_concurrently('table_to_distribute', 'id');
+ <waiting ...>
+step s2-create_distributed_table_concurrently-same: 
+ SELECT create_distributed_table_concurrently('table_to_distribute', 'id');
+ <waiting ...>
+step s3-release-advisory-lock: 
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-create_distributed_table_concurrently: <... completed>
+create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-create_distributed_table_concurrently-same: <... completed>
+ERROR:  table was concurrently modified
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s3-acquire-advisory-lock s1-create_distributed_table_concurrently s2-create_distributed_table_concurrently-no-same s3-release-advisory-lock
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-create_distributed_table_concurrently:
+ SELECT create_distributed_table_concurrently('table_to_distribute', 'id');
+ <waiting ...>
+step s2-create_distributed_table_concurrently-no-same: 
+ SELECT create_distributed_table_concurrently('table_to_distribute2', 'id');
+
+ERROR:  could not acquire the lock required to split concurrently public.table_to_distribute2.
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-create_distributed_table_concurrently: <... completed>
+create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s3-acquire-advisory-lock s1-create_distributed_table_concurrently s2-create_distributed_table-same s3-release-advisory-lock
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-create_distributed_table_concurrently:
+ SELECT create_distributed_table_concurrently('table_to_distribute', 'id');
+ <waiting ...>
+step s2-create_distributed_table-same: 
+ SELECT create_distributed_table('table_to_distribute', 'id');
+ <waiting ...>
+step s3-release-advisory-lock: 
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-create_distributed_table_concurrently: <... completed>
+create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-create_distributed_table-same: <... completed>
+ERROR:  table "table_to_distribute" is already distributed
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s3-acquire-advisory-lock s1-create_distributed_table_concurrently s2-create_distributed_table-no-same s3-release-advisory-lock
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-create_distributed_table_concurrently:
+ SELECT create_distributed_table_concurrently('table_to_distribute', 'id');
+ <waiting ...>
+step s2-create_distributed_table-no-same: 
+ SELECT create_distributed_table('table_to_distribute2', 'id');
+
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-create_distributed_table_concurrently: <... completed>
+create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+

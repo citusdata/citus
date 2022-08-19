@@ -33,6 +33,7 @@
 #include "distributed/worker_transaction.h"
 #include "distributed/version_compat.h"
 #include "distributed/shard_split.h"
+#include "distributed/utils/distribution_column_map.h"
 #include "nodes/pg_list.h"
 #include "storage/lock.h"
 #include "utils/builtins.h"
@@ -163,12 +164,17 @@ isolate_tenant_to_new_shard(PG_FUNCTION_ARGS)
 		nodeIdsForPlacementList = lappend_int(nodeIdsForPlacementList, sourceNodeId);
 	}
 
+	DistributionColumnMap *distributionColumnOverrides = NULL;
+	List *sourceColocatedShardIntervalList = NIL;
 	SplitMode splitMode = LookupSplitMode(shardTransferModeOid);
 	SplitShard(splitMode,
 			   ISOLATE_TENANT_TO_NEW_SHARD,
 			   sourceShard->shardId,
 			   shardSplitPointsList,
-			   nodeIdsForPlacementList);
+			   nodeIdsForPlacementList,
+			   distributionColumnOverrides,
+			   sourceColocatedShardIntervalList,
+			   INVALID_COLOCATION_ID);
 
 	cacheEntry = GetCitusTableCacheEntry(relationId);
 	ShardInterval *newShard = FindShardInterval(tenantIdDatum, cacheEntry);

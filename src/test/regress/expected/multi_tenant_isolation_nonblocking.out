@@ -239,7 +239,8 @@ SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE', shard_tra
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE', shard_transfer_mode => 'force_logical');
-ERROR:  multiple shard movements/splits via logical replication in the same transaction is currently not supported
+ERROR:  Multiple 'isolate tenant' operations via logical replication in the same transaction is currently not supported.
+HINT:  If you wish to execute multiple 'isolate tenant' operations in a single transaction set the shard_transfer_mode to 'block_writes'.
 ROLLBACK;
 -- test a succesfull transaction block
 BEGIN;
@@ -663,7 +664,7 @@ SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1997-08-08';
 SET search_path to "Tenant Isolation";
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE nodeport = :worker_1_port;
 SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-08-08', shard_transfer_mode => 'force_logical');
-ERROR:  cannot split shard because relation "lineitem_date" has an inactive shard placement for the shard xxxxx
+ERROR:  cannot isolate tenant because relation "lineitem_date" has an inactive shard placement for the shard xxxxx
 HINT:  Use master_copy_shard_placement UDF to repair the inactive shard placement.
 UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE nodeport = :worker_1_port;
 \c - mx_isolation_role_ent - :master_port

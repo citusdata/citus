@@ -8,9 +8,11 @@ create_distributed_table
 
 step s1-load-cache:
  TRUNCATE isolation_table;
+ TRUNCATE isolation_table2;
 
 step s1-insert:
  INSERT INTO isolation_table VALUES (5, 10);
+ INSERT INTO isolation_table2 VALUES (5, 10);
 
 step s3-acquire-advisory-lock:
     SELECT pg_advisory_lock(44000, 55152);
@@ -57,7 +59,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500076
+                    1500078
 (1 row)
 
 step s2-commit:
@@ -76,9 +78,9 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500075|t      |     0
-   57637|1500076|t      |     1
    57637|1500077|t      |     0
+   57637|1500078|t      |     1
+   57637|1500079|t      |     0
    57638|1500074|t      |     0
 (4 rows)
 
@@ -96,9 +98,11 @@ create_distributed_table
 
 step s1-load-cache:
  TRUNCATE isolation_table;
+ TRUNCATE isolation_table2;
 
 step s1-insert:
  INSERT INTO isolation_table VALUES (5, 10);
+ INSERT INTO isolation_table2 VALUES (5, 10);
 
 step s3-acquire-advisory-lock:
     SELECT pg_advisory_lock(44000, 55152);
@@ -145,7 +149,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500082
+                    1500086
 (1 row)
 
 step s2-commit:
@@ -164,10 +168,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500081|t      |     0
-   57637|1500082|t      |     0
-   57637|1500083|t      |     0
-   57638|1500080|t      |     0
+   57637|1500085|t      |     0
+   57637|1500086|t      |     0
+   57637|1500087|t      |     0
+   57638|1500082|t      |     0
 (4 rows)
 
 id|value
@@ -183,6 +187,7 @@ create_distributed_table
 
 step s1-load-cache:
  TRUNCATE isolation_table;
+ TRUNCATE isolation_table2;
 
 step s3-acquire-advisory-lock:
     SELECT pg_advisory_lock(44000, 55152);
@@ -214,6 +219,7 @@ step s2-isolate-tenant:
  <waiting ...>
 step s1-insert: 
  INSERT INTO isolation_table VALUES (5, 10);
+ INSERT INTO isolation_table2 VALUES (5, 10);
 
 step s1-commit:
  COMMIT;
@@ -229,7 +235,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500088
+                    1500094
 (1 row)
 
 step s2-commit:
@@ -248,10 +254,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500087|t      |     0
-   57637|1500088|t      |     1
-   57637|1500089|t      |     0
-   57638|1500086|t      |     0
+   57637|1500093|t      |     0
+   57637|1500094|t      |     1
+   57637|1500095|t      |     0
+   57638|1500090|t      |     0
 (4 rows)
 
 id|value
@@ -268,6 +274,7 @@ create_distributed_table
 
 step s1-load-cache:
  TRUNCATE isolation_table;
+ TRUNCATE isolation_table2;
 
 step s3-acquire-advisory-lock:
     SELECT pg_advisory_lock(44000, 55152);
@@ -314,7 +321,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500094
+                    1500102
 (1 row)
 
 step s2-commit:
@@ -333,10 +340,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500093|t      |     1
-   57637|1500094|t      |     1
-   57637|1500095|t      |     2
-   57638|1500092|t      |     1
+   57637|1500101|t      |     1
+   57637|1500102|t      |     1
+   57637|1500103|t      |     2
+   57638|1500098|t      |     1
 (4 rows)
 
 id|value
@@ -357,6 +364,7 @@ create_distributed_table
 
 step s1-insert:
  INSERT INTO isolation_table VALUES (5, 10);
+ INSERT INTO isolation_table2 VALUES (5, 10);
 
 step s3-acquire-advisory-lock:
     SELECT pg_advisory_lock(44000, 55152);
@@ -403,7 +411,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500100
+                    1500110
 (1 row)
 
 step s2-commit:
@@ -422,10 +430,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500099|t      |     0
-   57637|1500100|t      |     1
-   57637|1500101|t      |     0
-   57638|1500098|t      |     0
+   57637|1500109|t      |     0
+   57637|1500110|t      |     1
+   57637|1500111|t      |     0
+   57638|1500106|t      |     0
 (4 rows)
 
 id|value
@@ -442,6 +450,7 @@ create_distributed_table
 
 step s1-insert:
  INSERT INTO isolation_table VALUES (5, 10);
+ INSERT INTO isolation_table2 VALUES (5, 10);
 
 step s3-acquire-advisory-lock:
     SELECT pg_advisory_lock(44000, 55152);
@@ -488,7 +497,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500106
+                    1500118
 (1 row)
 
 step s2-commit:
@@ -507,10 +516,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500105|t      |     0
-   57637|1500106|t      |     0
-   57637|1500107|t      |     0
-   57638|1500104|t      |     0
+   57637|1500117|t      |     0
+   57637|1500118|t      |     0
+   57637|1500119|t      |     0
+   57638|1500114|t      |     0
 (4 rows)
 
 id|value
@@ -554,6 +563,7 @@ step s2-isolate-tenant:
  <waiting ...>
 step s1-insert: 
  INSERT INTO isolation_table VALUES (5, 10);
+ INSERT INTO isolation_table2 VALUES (5, 10);
 
 step s1-commit:
  COMMIT;
@@ -569,7 +579,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500112
+                    1500126
 (1 row)
 
 step s2-commit:
@@ -588,10 +598,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500111|t      |     0
-   57637|1500112|t      |     1
-   57637|1500113|t      |     0
-   57638|1500110|t      |     0
+   57637|1500125|t      |     0
+   57637|1500126|t      |     1
+   57637|1500127|t      |     0
+   57638|1500122|t      |     0
 (4 rows)
 
 id|value
@@ -651,7 +661,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500118
+                    1500134
 (1 row)
 
 step s2-commit:
@@ -670,10 +680,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500117|t      |     1
-   57637|1500118|t      |     1
-   57637|1500119|t      |     2
-   57638|1500116|t      |     1
+   57637|1500133|t      |     1
+   57637|1500134|t      |     1
+   57637|1500135|t      |     2
+   57638|1500130|t      |     1
 (4 rows)
 
 id|value
@@ -686,7 +696,7 @@ id|value
 (5 rows)
 
 
-starting permutation: s1-load-cache s1-insert s3-acquire-advisory-lock s1-begin s1-isolate-tenant s2-isolate-tenant s3-release-advisory-lock s1-commit s2-print-cluster
+starting permutation: s1-load-cache s1-insert s3-acquire-advisory-lock s2-isolate-tenant s1-isolate-tenant-same-coloc s3-release-advisory-lock s2-print-cluster
 create_distributed_table
 ---------------------------------------------------------------------
 
@@ -694,9 +704,11 @@ create_distributed_table
 
 step s1-load-cache:
  TRUNCATE isolation_table;
+ TRUNCATE isolation_table2;
 
 step s1-insert:
  INSERT INTO isolation_table VALUES (5, 10);
+ INSERT INTO isolation_table2 VALUES (5, 10);
 
 step s3-acquire-advisory-lock:
     SELECT pg_advisory_lock(44000, 55152);
@@ -706,17 +718,11 @@ pg_advisory_lock
 
 (1 row)
 
-step s1-begin:
-    BEGIN;
-    -- the tests are written with the logic where single shard SELECTs
-    -- do not to open transaction blocks
-    SET citus.select_opens_transaction_block TO false;
-
-step s1-isolate-tenant:
- SELECT isolate_tenant_to_new_shard('isolation_table', 2, shard_transfer_mode => 'force_logical');
- <waiting ...>
-step s2-isolate-tenant: 
+step s2-isolate-tenant:
  SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'force_logical');
+ <waiting ...>
+step s1-isolate-tenant-same-coloc: 
+ SELECT isolate_tenant_to_new_shard('isolation_table', 2, shard_transfer_mode => 'force_logical');
 
 ERROR:  could not acquire the lock required to split public.isolation_table
 step s3-release-advisory-lock:
@@ -727,14 +733,11 @@ pg_advisory_unlock
 t
 (1 row)
 
-step s1-isolate-tenant: <... completed>
+step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500124
+                    1500142
 (1 row)
-
-step s1-commit:
- COMMIT;
 
 step s2-print-cluster:
  -- row count per shard
@@ -749,10 +752,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500121|t      |     1
-   57638|1500123|t      |     0
-   57638|1500124|t      |     0
-   57638|1500125|t      |     0
+   57637|1500141|t      |     0
+   57637|1500142|t      |     1
+   57637|1500143|t      |     0
+   57638|1500138|t      |     0
 (4 rows)
 
 id|value
@@ -761,14 +764,19 @@ id|value
 (1 row)
 
 
-starting permutation: s1-insert s3-acquire-advisory-lock s1-begin s1-isolate-tenant s2-isolate-tenant s3-release-advisory-lock s1-commit s2-print-cluster
+starting permutation: s1-load-cache s1-insert s3-acquire-advisory-lock s2-isolate-tenant s1-isolate-tenant-same-coloc-blocking s3-release-advisory-lock s2-print-cluster
 create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
+step s1-load-cache:
+ TRUNCATE isolation_table;
+ TRUNCATE isolation_table2;
+
 step s1-insert:
  INSERT INTO isolation_table VALUES (5, 10);
+ INSERT INTO isolation_table2 VALUES (5, 10);
 
 step s3-acquire-advisory-lock:
     SELECT pg_advisory_lock(44000, 55152);
@@ -778,17 +786,11 @@ pg_advisory_lock
 
 (1 row)
 
-step s1-begin:
-    BEGIN;
-    -- the tests are written with the logic where single shard SELECTs
-    -- do not to open transaction blocks
-    SET citus.select_opens_transaction_block TO false;
-
-step s1-isolate-tenant:
- SELECT isolate_tenant_to_new_shard('isolation_table', 2, shard_transfer_mode => 'force_logical');
- <waiting ...>
-step s2-isolate-tenant: 
+step s2-isolate-tenant:
  SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'force_logical');
+ <waiting ...>
+step s1-isolate-tenant-same-coloc-blocking: 
+ SELECT isolate_tenant_to_new_shard('isolation_table', 2, shard_transfer_mode => 'block_writes');
 
 ERROR:  could not acquire the lock required to split public.isolation_table
 step s3-release-advisory-lock:
@@ -799,13 +801,152 @@ pg_advisory_unlock
 t
 (1 row)
 
-step s1-isolate-tenant: <... completed>
+step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500130
+                    1500150
 (1 row)
 
-step s1-commit:
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('isolation_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500149|t      |     0
+   57637|1500150|t      |     1
+   57637|1500151|t      |     0
+   57638|1500146|t      |     0
+(4 rows)
+
+id|value
+---------------------------------------------------------------------
+ 5|   10
+(1 row)
+
+
+starting permutation: s1-load-cache s1-insert s3-acquire-advisory-lock s2-isolate-tenant s1-isolate-tenant-no-same-coloc s3-release-advisory-lock s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+ TRUNCATE isolation_table;
+ TRUNCATE isolation_table2;
+
+step s1-insert:
+ INSERT INTO isolation_table VALUES (5, 10);
+ INSERT INTO isolation_table2 VALUES (5, 10);
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-isolate-tenant:
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'force_logical');
+ <waiting ...>
+step s1-isolate-tenant-no-same-coloc: 
+ SELECT isolate_tenant_to_new_shard('isolation_table2', 2, shard_transfer_mode => 'force_logical');
+
+ERROR:  could not acquire the lock required to split concurrently public.isolation_table2.
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-isolate-tenant: <... completed>
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500158
+(1 row)
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('isolation_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500157|t      |     0
+   57637|1500158|t      |     1
+   57637|1500159|t      |     0
+   57638|1500154|t      |     0
+(4 rows)
+
+id|value
+---------------------------------------------------------------------
+ 5|   10
+(1 row)
+
+
+starting permutation: s1-load-cache s1-insert s3-acquire-advisory-lock s2-begin s2-isolate-tenant s1-isolate-tenant-no-same-coloc s3-release-advisory-lock s2-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+ TRUNCATE isolation_table;
+ TRUNCATE isolation_table2;
+
+step s1-insert:
+ INSERT INTO isolation_table VALUES (5, 10);
+ INSERT INTO isolation_table2 VALUES (5, 10);
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-begin:
+ BEGIN;
+
+step s2-isolate-tenant:
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'force_logical');
+ <waiting ...>
+step s1-isolate-tenant-no-same-coloc: 
+ SELECT isolate_tenant_to_new_shard('isolation_table2', 2, shard_transfer_mode => 'force_logical');
+
+ERROR:  could not acquire the lock required to split concurrently public.isolation_table2.
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-isolate-tenant: <... completed>
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500166
+(1 row)
+
+step s2-commit:
  COMMIT;
 
 step s2-print-cluster:
@@ -821,10 +962,154 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500127|t      |     1
-   57638|1500129|t      |     0
-   57638|1500130|t      |     0
-   57638|1500131|t      |     0
+   57637|1500165|t      |     0
+   57637|1500166|t      |     1
+   57637|1500167|t      |     0
+   57638|1500162|t      |     0
+(4 rows)
+
+id|value
+---------------------------------------------------------------------
+ 5|   10
+(1 row)
+
+
+starting permutation: s1-load-cache s1-insert s3-acquire-advisory-lock s2-isolate-tenant s1-isolate-tenant-no-same-coloc-blocking s3-release-advisory-lock s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+ TRUNCATE isolation_table;
+ TRUNCATE isolation_table2;
+
+step s1-insert:
+ INSERT INTO isolation_table VALUES (5, 10);
+ INSERT INTO isolation_table2 VALUES (5, 10);
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-isolate-tenant:
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'force_logical');
+ <waiting ...>
+step s1-isolate-tenant-no-same-coloc-blocking: 
+ SELECT isolate_tenant_to_new_shard('isolation_table2', 2, shard_transfer_mode => 'block_writes');
+
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500177
+(1 row)
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-isolate-tenant: <... completed>
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500174
+(1 row)
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('isolation_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500173|t      |     0
+   57637|1500174|t      |     1
+   57637|1500175|t      |     0
+   57638|1500170|t      |     0
+(4 rows)
+
+id|value
+---------------------------------------------------------------------
+ 5|   10
+(1 row)
+
+
+starting permutation: s1-load-cache s1-insert s3-acquire-advisory-lock s2-isolate-tenant s1-isolate-tenant-no-same-coloc-blocking s3-release-advisory-lock s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+ TRUNCATE isolation_table;
+ TRUNCATE isolation_table2;
+
+step s1-insert:
+ INSERT INTO isolation_table VALUES (5, 10);
+ INSERT INTO isolation_table2 VALUES (5, 10);
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-isolate-tenant:
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'force_logical');
+ <waiting ...>
+step s1-isolate-tenant-no-same-coloc-blocking: 
+ SELECT isolate_tenant_to_new_shard('isolation_table2', 2, shard_transfer_mode => 'block_writes');
+
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500188
+(1 row)
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-isolate-tenant: <... completed>
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500185
+(1 row)
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('isolation_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500184|t      |     0
+   57637|1500185|t      |     1
+   57637|1500186|t      |     0
+   57638|1500181|t      |     0
 (4 rows)
 
 id|value

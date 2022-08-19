@@ -42,7 +42,8 @@ typedef enum AdvisoryLocktagClass
 	ADV_LOCKTAG_CLASS_CITUS_OPERATIONS = 9,
 	ADV_LOCKTAG_CLASS_CITUS_PLACEMENT_CLEANUP = 10,
 	ADV_LOCKTAG_CLASS_CITUS_LOGICAL_REPLICATION = 12,
-	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_PLACEMENT_COLOCATION = 13
+	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_PLACEMENT_COLOCATION = 13,
+	ADV_LOCKTAG_CLASS_CITUS_NONBLOCKING_SPLIT = 14
 } AdvisoryLocktagClass;
 
 /* CitusOperations has constants for citus operations */
@@ -124,6 +125,15 @@ typedef enum CitusOperations
 						 (uint32) 0, \
 						 (uint32) 0, \
 						 ADV_LOCKTAG_CLASS_CITUS_LOGICAL_REPLICATION)
+
+/* advisory lock for nonblocking shard splitting, also it has the database hardcoded to MyDatabaseId,
+ * to ensure the locks are local to each database */
+#define SET_LOCKTAG_NONBLOCKING_SPLIT(tag) \
+	SET_LOCKTAG_ADVISORY(tag, \
+						 MyDatabaseId, \
+						 (uint32) 0, \
+						 (uint32) 0, \
+						 ADV_LOCKTAG_CLASS_CITUS_NONBLOCKING_SPLIT)
 
 /*
  * DistLockConfigs are used to configure the locking behaviour of AcquireDistributedLockOnRelations

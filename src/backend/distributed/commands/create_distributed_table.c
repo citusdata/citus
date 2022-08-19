@@ -60,6 +60,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
+#include "distributed/resource_lock.h"
 #include "distributed/shard_rebalancer.h"
 #include "distributed/shard_split.h"
 #include "distributed/shared_library_init.h"
@@ -79,6 +80,7 @@
 #include "parser/parse_node.h"
 #include "parser/parse_relation.h"
 #include "parser/parser.h"
+#include "postmaster/postmaster.h"
 #include "storage/lmgr.h"
 #include "tcop/pquery.h"
 #include "tcop/tcopprot.h"
@@ -145,6 +147,7 @@ static void DoCopyFromLocalTableIntoShards(Relation distributedRelation,
 										   EState *estate);
 static void ErrorIfTemporaryTable(Oid relationId);
 static void ErrorIfForeignTable(Oid relationOid);
+static void SendAddLocalTableToMetadataCommandOutsideTransaction(Oid relationId);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
@@ -320,6 +323,32 @@ create_distributed_table_concurrently(PG_FUNCTION_ARGS)
 
 
 /*
+ * SendAddLocalTableToMetadataCommandOutsideTransaction executes metadata add local
+ * table command locally to avoid deadlock.
+ */
+static void
+SendAddLocalTableToMetadataCommandOutsideTransaction(Oid relationId)
+{
+	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+
+	StringInfo applicationRenameCommand = makeStringInfo();
+	appendStringInfo(applicationRenameCommand, "SET application_name TO %s",
+					 CITUS_REBALANCER_NAME);
+
+	StringInfo addLocalTableToMetadataCommand = makeStringInfo();
+	appendStringInfo(addLocalTableToMetadataCommand,
+					 "SELECT pg_catalog.citus_add_local_table_to_metadata(%s)",
+					 quote_literal_cstr(qualifiedRelationName));
+
+	List *commands = list_make2(applicationRenameCommand->data,
+								addLocalTableToMetadataCommand->data);
+	char *username = GetUserNameFromId(GetUserId(), false);
+	SendCommandListToWorkerOutsideTransaction(LocalHostName, PostPortNumber, username,
+											  commands);
+}
+
+
+/*
  * CreateDistributedTableConcurrently distributes a table by first converting
  * it to a Citus local table and then splitting the shard of the Citus local
  * table.
@@ -374,14 +403,7 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 		 * Before taking locks, convert the table into a Citus local table and commit
 		 * to allow shard split to see the shard.
 		 */
-		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
-
-		StringInfo command = makeStringInfo();
-		appendStringInfo(command,
-						 "SELECT pg_catalog.citus_add_local_table_to_metadata(%s)",
-						 quote_literal_cstr(qualifiedRelationName));
-
-		ExecuteRebalancerCommandInSeparateTransaction(command->data);
+		SendAddLocalTableToMetadataCommandOutsideTransaction(relationId);
 	}
 
 	/*
@@ -505,18 +527,25 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 	AddDistributionColumnForRelation(distributionColumnOverrides, relationId,
 									 distributionColumnName);
 
-	SplitOperation splitOperation = CREATE_DISTRIBUTED_TABLE;
-	uint64 splitWorkflowId = shardToSplit->shardId;
+	/*
+	 * there is no colocation entries yet for local table, so we should
+	 * check if table has any partition and add them to same colocation
+	 * group
+	 */
 	List *sourceColocatedShardIntervalList = ListShardsUnderParentRelation(relationId);
 
-	NonBlockingShardSplit(
+	SplitMode splitMode = NON_BLOCKING_SPLIT;
+	SplitOperation splitOperation = CREATE_DISTRIBUTED_TABLE;
+	SplitShard(
+		splitMode,
 		splitOperation,
-		splitWorkflowId,
-		sourceColocatedShardIntervalList,
+		shardToSplit->shardId,
 		shardSplitPointsList,
 		workersForPlacementList,
 		distributionColumnOverrides,
-		colocationId);
+		sourceColocatedShardIntervalList,
+		colocationId
+		);
 }
 
 
@@ -577,44 +606,42 @@ HashSplitPointsForShardCount(int shardCount)
 
 
 /*
- * WorkerNodesForShardList returns a list of nodes reflecting the locations of
+ * WorkerNodesForShardList returns a list of node ids reflecting the locations of
  * the given list of shards.
  */
 static List *
 WorkerNodesForShardList(List *shardList)
 {
-	List *nodeList = NIL;
+	List *nodeIdList = NIL;
 
 	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, shardList)
 	{
 		WorkerNode *workerNode = ActiveShardPlacementWorkerNode(shardInterval->shardId);
-
-		nodeList = lappend(nodeList, workerNode);
+		nodeIdList = lappend_int(nodeIdList, workerNode->nodeId);
 	}
 
-	return nodeList;
+	return nodeIdList;
 }
 
 
 /*
  * RoundRobinWorkerNodeList round robins over the workers in the worker node list
- * and adds nodes to a list of length listLength.
+ * and adds node ids to a list of length listLength.
  */
 static List *
 RoundRobinWorkerNodeList(List *workerNodeList, int listLength)
 {
-	List *nodeList = NIL;
+	List *nodeIdList = NIL;
 
-	for (int nodeIdIndex = 0; nodeIdIndex < listLength; nodeIdIndex++)
+	for (int idx = 0; idx < listLength; idx++)
 	{
-		int nodeIndex = nodeIdIndex % list_length(workerNodeList);
-		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList, nodeIndex);
-
-		nodeList = lappend(nodeList, workerNode);
+		int nodeIdx = idx % list_length(workerNodeList);
+		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList, nodeIdx);
+		nodeIdList = lappend_int(nodeIdList, workerNode->nodeId);
 	}
 
-	return nodeList;
+	return nodeIdList;
 }
 
 
@@ -1350,19 +1377,7 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 
 		if (colocationId == INVALID_COLOCATION_ID)
 		{
-			/*
-			 * No adding to an existing co-location group, so create a new one.
-			 */
-
-			if (IsColocateWithNone(colocateWithTableName))
-			{
-				/*
-				 * We currently do not insert pg_dist_colocation records for
-				 * colocate_with := 'none'.
-				 */
-				colocationId = GetNextColocationId();
-			}
-			else if (IsColocateWithDefault(colocateWithTableName))
+			if (IsColocateWithDefault(colocateWithTableName))
 			{
 				/*
 				 * Generate a new colocation ID and insert a pg_dist_colocation
@@ -1371,6 +1386,16 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 				colocationId = CreateColocationGroup(shardCount, ShardReplicationFactor,
 													 distributionColumnType,
 													 distributionColumnCollation);
+			}
+			else if (IsColocateWithNone(colocateWithTableName))
+			{
+				/*
+				 * Generate a new colocation ID and insert a pg_dist_colocation
+				 * record.
+				 */
+				colocationId = CreateColocationGroup(shardCount, ShardReplicationFactor,
+												 distributionColumnType,
+												 distributionColumnCollation);
 			}
 
 			createdColocationGroup = true;

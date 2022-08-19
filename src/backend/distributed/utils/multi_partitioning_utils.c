@@ -996,10 +996,19 @@ IsParentTable(Oid relationId)
 	systable_endscan(scan);
 	table_close(pgInherits, AccessShareLock);
 
-	if (tableInherited && PartitionedTable(relationId))
+	Relation relation = try_relation_open(relationId, AccessShareLock);
+	if (relation == NULL)
+	{
+		ereport(ERROR, (errmsg("could not create distributed table: "
+							   "relation does not exist")));
+	}
+
+	if (tableInherited && PartitionedTableNoLock(relationId))
 	{
 		tableInherited = false;
 	}
+
+	relation_close(relation, AccessShareLock);
 
 	return tableInherited;
 }
