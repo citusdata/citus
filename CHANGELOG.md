@@ -1,3 +1,7 @@
+### citus v10.2.8 (August 19, 2022) ###
+
+* Fixes a build warning caused by latest upgrade script changes
+
 ### citus v11.0.6 (August 19, 2022) ###
 
 * Fixes a bug that could cause failures in `CREATE ROLE` statement
