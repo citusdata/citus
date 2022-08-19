@@ -722,6 +722,8 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 
 	appendStringInfo(selectQuery, "SELECT ");
 
+	List *nonPartitionedShardNames = NIL;
+
 	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
@@ -746,25 +748,50 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 		char *shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
 		char *quotedShardName = quote_literal_cstr(shardQualifiedName);
 
+		/* for partitoned tables, call worker_partitioned_... size functions */
 		if (optimizePartitionCalculations && PartitionedTable(shardInterval->relationId))
 		{
 			appendStringInfo(selectQuery, GetWorkerPartitionedSizeUDFNameBySizeQueryType(
 								 sizeQueryType), quotedShardName);
+			appendStringInfo(selectQuery, " + ");
 		}
+		/* for non-partitioned tables, add them into a list and then calculate using a SUM */
 		else
 		{
-			appendStringInfo(selectQuery, GetSizeQueryBySizeQueryType(sizeQueryType),
-							 quotedShardName);
+			nonPartitionedShardNames = lappend(nonPartitionedShardNames, quotedShardName);
 		}
-
-		appendStringInfo(selectQuery, " + ");
 	}
 
-	/*
-	 * Add 0 as a last size, it handles empty list case and makes size control checks
-	 * unnecessary which would have implemented without this line.
-	 */
-	appendStringInfo(selectQuery, "0;");
+	if (list_length(nonPartitionedShardNames) < 1)
+	{
+		/*
+		* Add 0 as a last size, it handles empty list case and makes size control checks
+		* unnecessary which would have implemented without this line.
+		*/
+		appendStringInfo(selectQuery, "0;");
+
+		/* early return if all tables are partitioned */
+		return selectQuery;
+	}
+
+	appendStringInfo(selectQuery, "SUM(");
+	appendStringInfo(selectQuery, GetSizeQueryBySizeQueryType(sizeQueryType), "relid");
+	appendStringInfo(selectQuery, ") FROM (VALUES ");
+
+	bool addComma = false;
+	char *quotedShardName = NULL;
+	foreach_ptr(quotedShardName, nonPartitionedShardNames)
+	{
+		if (addComma)
+		{
+			appendStringInfoString(selectQuery, ", ");
+		}
+		addComma = true;
+
+		appendStringInfo(selectQuery, "(%s)", quotedShardName);
+	}
+
+	appendStringInfoString(selectQuery, ") as q(relid);");
 
 	return selectQuery;
 }
