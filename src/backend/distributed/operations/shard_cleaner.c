@@ -453,7 +453,17 @@ InsertCleanupRecordInSubtransaction(CleanupObjectType objectType, char *objectNa
 					 quote_literal_cstr(objectName),
 					 nodeGroupId);
 
-	ExecuteRebalancerCommandInSeparateTransaction(command->data);
+	int connectionFlag = FORCE_NEW_CONNECTION;
+	char *userName= CitusExtensionOwnerName();
+	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlag,
+																LocalHostName,
+																PostPortNumber,
+																userName,
+																NULL);
+
+	ExecuteCriticalRemoteCommand(connection, command->data);
+	CloseConnection(connection);
+
 }
 
 
