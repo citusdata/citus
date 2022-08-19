@@ -85,32 +85,42 @@ SELECT * FROM target_table ORDER BY a;
 (10 rows)
 
 --
--- kill fetch_intermediate_results
+-- kill the COPY command that's created by fetch_intermediate_results
 -- this fails the fetch into target, so source replication doesn't matter
 -- and both should fail
+-- We don't kill the fetch_intermediate_results query directly, because that
+-- resulted in randomly failing tests on CI. The reason for that is that there
+-- is a race condition, where killing the fetch_intermediate_results query
+-- removes the data files before the fetch_intermediate_results query from the
+-- other node can read them. In theory a similar race condition still exists
+-- when killing the COPY, but CI doesn't hit that race condition in practice.
 --
 TRUNCATE target_table;
-SELECT citus.mitmproxy('conn.onQuery(query="fetch_intermediate_results").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="COPY").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
 INSERT INTO target_table SELECT * FROM source_table;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+while executing command on localhost:xxxxx
 SELECT * FROM target_table ORDER BY a;
  a | b
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT citus.mitmproxy('conn.onQuery(query="fetch_intermediate_results").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="COPY").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
 INSERT INTO target_table SELECT * FROM replicated_source_table;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+while executing command on localhost:xxxxx
 SELECT * FROM target_table ORDER BY a;
  a | b
 ---------------------------------------------------------------------
