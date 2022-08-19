@@ -119,6 +119,7 @@ s/(ERROR: |WARNING: |error:) server closed the connection unexpectedly/\1 connec
 # pg15 changes
 s/is not a PostgreSQL server process/is not a PostgreSQL backend process/g
 s/ AS "\?column\?"//g
+s/".*\.(.*)": (found .* removable)/"\1": \2/g
 
 # intermediate_results
 s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\/xx_x_xxx\/\3.data/g
