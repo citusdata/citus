@@ -6,7 +6,7 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-v0aadde0'
+    default: '-dev-4928b60'
   pg13_version:
     type: string
     default: '13.4'
@@ -18,7 +18,7 @@ parameters:
     default: '13.4-14.0-15beta3'
   style_checker_tools_version:
     type: string
-    default: '0.7.9'
+    default: '0.8.18'
 jobs:
   build:
     description: Build the citus extension
