@@ -1,3 +1,15 @@
+### citus v11.0.6 (August 19, 2022) ###
+
+* Fixes a bug that could cause failures in `CREATE ROLE` statement
+
+* Fixes a bug that could cause failures in `create_distributed_table`
+
+* Fixes a bug that prevents distributing tables that depend on sequences
+
+* Fixes reference table lock contention
+
+* Fixes upgrade paths for 11.0
+
 ### citus v10.2.7 (August 19, 2022) ###
 
 * Fixes a bug that could cause failures in `INSERT INTO .. SELECT`
