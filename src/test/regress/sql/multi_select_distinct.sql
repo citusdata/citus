@@ -3,6 +3,9 @@
 --
 -- Tests select distinct, and select distinct on features.
 --
+-- This test file has an alternative output because some HashAggregate
+-- leverages in PG15 compared to PG13/PG14
+--
 
 ANALYZE lineitem_hash_part;
 
