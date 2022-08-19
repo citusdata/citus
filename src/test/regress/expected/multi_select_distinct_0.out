@@ -767,14 +767,13 @@ EXPLAIN (COSTS FALSE)
                      ->  Task
                            Node: host=localhost port=xxxxx dbname=regression
                            ->  Limit
-                                 ->  Sort
-                                       Sort Key: l_orderkey, l_partkey
-                                       ->  HashAggregate
+                                 ->  Unique
+                                       ->  Group
                                              Group Key: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-                                             ->  HashAggregate
-                                                   Group Key: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+                                             ->  Sort
+                                                   Sort Key: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
                                                    ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
-(18 rows)
+(17 rows)
 
 -- check the plan if the hash aggreate is disabled. We expect to see only one
 -- aggregation node since group by columns guarantees the uniqueness.
@@ -797,14 +796,13 @@ EXPLAIN (COSTS FALSE)
                      ->  Task
                            Node: host=localhost port=xxxxx dbname=regression
                            ->  Limit
-                                 ->  Sort
-                                       Sort Key: l_orderkey, l_partkey
-                                       ->  HashAggregate
+                                 ->  Unique
+                                       ->  Group
                                              Group Key: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-                                             ->  HashAggregate
-                                                   Group Key: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+                                             ->  Sort
+                                                   Sort Key: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
                                                    ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
-(17 rows)
+(16 rows)
 
 SET enable_hashagg TO on;
 -- distinct on count distinct
@@ -977,10 +975,12 @@ EXPLAIN (COSTS FALSE)
                      Tasks Shown: One of 4
                      ->  Task
                            Node: host=localhost port=xxxxx dbname=regression
-                           ->  HashAggregate
+                           ->  GroupAggregate
                                  Group Key: l_orderkey
+                                 ->  Sort
+                                       Sort Key: l_orderkey
                                  ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
-(13 rows)
+(15 rows)
 
 -- check the plan if the hash aggreate is disabled.
 SET enable_hashagg TO off;
@@ -1001,10 +1001,12 @@ EXPLAIN (COSTS FALSE)
                      Tasks Shown: One of 4
                      ->  Task
                            Node: host=localhost port=xxxxx dbname=regression
-                           ->  HashAggregate
+                           ->  GroupAggregate
                                  Group Key: l_orderkey
+                                 ->  Sort
+                                       Sort Key: l_orderkey
                                  ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
-(12 rows)
+(14 rows)
 
 SET enable_hashagg TO on;
 -- distinct on non-partition column with aggregate
