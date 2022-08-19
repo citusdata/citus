@@ -1,3 +1,18 @@
+### citus v10.2.7 (August 19, 2022) ###
+
+* Fixes a bug that could cause failures in `INSERT INTO .. SELECT`
+
+* Fixes a bug that could cause leaking files when materialized views are
+  refreshed
+
+* Fixes an unexpected error for foreign tables when upgrading Postgres
+
+* Fixes columnar freezing/wraparound bug
+
+* Fixes reference table lock contention
+
+* Prevents alter table functions from dropping extensions
+
 ### citus v10.2.5 (March 15, 2022) ###
 
 * Fixes a bug that could cause `worker_save_query_explain_analyze` to fail on
