@@ -73,7 +73,7 @@ INSERT INTO t
  SELECT i, 'last batch', 0 /* no need to record memusage per row */
  FROM generate_series(1, 50000) i;
 
-SELECT 1.0 * TopMemoryContext / :top_post BETWEEN 0.98 AND 1.02 AS top_growth_ok
+SELECT CASE WHEN 1.0 * TopMemoryContext / :top_post BETWEEN 0.98 AND 1.02 THEN 1 ELSE 1.0 * TopMemoryContext / :top_post END AS top_growth
 FROM columnar_test_helpers.columnar_store_memory_stats();
 
 -- before this change, max mem usage while executing inserts was 28MB and
