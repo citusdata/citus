@@ -81,6 +81,18 @@ BEGIN
     RETURN NEXT;
   END LOOP;
 END; $$ language plpgsql;
+-- Create a function to remove arrows from the explain plan
+CREATE OR REPLACE FUNCTION plan_without_arrows(explain_command text, out query_plan text)
+RETURNS SETOF TEXT AS $$
+BEGIN
+  FOR query_plan IN execute explain_command LOOP
+    IF (query_plan LIKE '%->  Result%' OR query_plan = 'Result') THEN
+        CONTINUE;
+    END IF;
+    query_plan := regexp_replace(query_plan, '( )*->  (.*)',  '\2', 'g');
+    RETURN NEXT;
+  END LOOP;
+END; $$ language plpgsql;
 -- helper function that returns true if output of given explain has "is not null" (case in-sensitive)
 CREATE OR REPLACE FUNCTION explain_has_is_not_null(explain_command text)
 RETURNS BOOLEAN AS $$
