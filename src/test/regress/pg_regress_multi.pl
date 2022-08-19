@@ -769,18 +769,17 @@ if ($useMitmproxy)
     die "a file already exists at $mitmFifoPath, delete it before trying again";
   }
 
-  system("lsof -i :$mitmPort");
-  if (! $?) {
-    die "cannot start mitmproxy because a process already exists on port $mitmPort";
-  }
-
   if ($Config{osname} eq "linux")
   {
-    system("netstat --tcp -n | grep $mitmPort");
+    system("netstat --tcp -n | grep :$mitmPort");
   }
   else
   {
-    system("netstat -p tcp -n | grep $mitmPort");
+    system("netstat -p tcp -n | grep :$mitmPort");
+  }
+
+  if (system("lsof -i :$mitmPort") == 0) {
+    die "cannot start mitmproxy because a process already exists on port $mitmPort";
   }
 
   my $childPid = fork();
@@ -993,6 +992,19 @@ push(@arguments, @ARGV);
 my $startTime = time();
 
 my $exitcode = 0;
+
+
+if ($useMitmproxy) {
+    my $tries = 0;
+    until(system("lsof -i :$mitmPort") == 0) {
+        if ($tries > 60) {
+            die("waited for 60 seconds to start the mitmproxy, but it failed")
+        }
+        print("waiting: mitmproxy was not started yet\n");
+        sleep(1);
+        $tries++;
+    }
+}
 
 # Finally run the tests
 if ($vanillatest)
