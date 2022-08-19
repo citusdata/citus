@@ -295,6 +295,7 @@ CREATE TABLE dist (a INT);
 SELECT create_distributed_table ('dist', 'a');
 
 SET citus.log_remote_commands TO ON;
+SET citus.grep_remote_commands = '%ANALYZE%';
 
 -- should propagate to all workers because no table is specified
 ANALYZE;
@@ -321,3 +322,6 @@ SET citus.enable_ddl_propagation TO ON;
 
 -- analyze only specified columns for corresponding tables
 ANALYZE loc(b), dist(a);
+
+RESET citus.log_remote_commands;
+RESET citus.grep_remote_commands;
