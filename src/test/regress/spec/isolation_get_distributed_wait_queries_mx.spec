@@ -277,6 +277,6 @@ permutation "s1-begin" "s1-update-ref-table-from-coordinator" "s2-start-session-
 // such that global_pids have not been assigned
 // in the first permutation, we would normally have s3-show-actual-gpids and it'd show the gpid has NOT been assigned
 // however, as of PG commit 3f323956128ff8589ce4d3a14e8b950837831803, isolation tester sends set application_name command
-// even before we can do anything on the session. That's why we removed s3-show-actual-gpids, but still useful to show waiting queriies
+// even before we can do anything on the session. That's why we removed s3-show-actual-gpids, but still useful to show waiting queries
 permutation "s5-begin" "s5-alter" "s6-select" "s3-select-distributed-waiting-queries" "s5-rollback"
 permutation "s8-begin" "s8-select" "s7-alter" "s3-select-distributed-waiting-queries" "s3-show-actual-gpids" "s8-rollback"
