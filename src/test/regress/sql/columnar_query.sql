@@ -45,6 +45,8 @@ INSERT INTO union_second SELECT a, a FROM generate_series(11, 15) a;
 
 (SELECT a*1, b FROM union_first) union all (SELECT a*1, b FROM union_second);
 
+VACUUM FULL union_first, union_second;
+
 DROP TABLE union_first, union_second;
 
 -- https://github.com/citusdata/citus/issues/4600
@@ -108,6 +110,7 @@ INSERT INTO atest1 SELECT 1, b FROM atest1; -- ok
 
 SELECT * FROM atest2 WHERE ( col1 IN ( SELECT b FROM atest1 ) );
 
+VACUUM FULL atest1, atest2;
 DROP TABLE atest1;
 DROP TABLE atest2;
 set default_table_access_method to default;
@@ -117,6 +120,7 @@ select * from
   (select distinct f1, f2, (select f2 from t1 x where x.f1 = up.f1) as fs
    from t1 up) ss
 group by f1,f2,fs;
+VACUUM FULL t1;
 drop table t1;
 
 CREATE TABLE tbl1(c0 int4range) USING COLUMNAR;
@@ -126,5 +130,6 @@ INSERT INTO tbl1(c0) VALUES('[0,1]'::int4range);
 INSERT INTO tbl1(c0) VALUES('[0,1]'::int4range);
 
 SELECT tbl1.c0 FROM tbl1 JOIN tbl2 ON tbl1.c0=tbl2.c0 WHERE tbl2.c0<=tbl2.c0 ISNULL;
+VACUUM FULL tbl1, tbl2;
 DROP TABLE tbl1;
 DROP TABLE tbl2;
