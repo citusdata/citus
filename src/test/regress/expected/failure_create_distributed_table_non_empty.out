@@ -593,7 +593,7 @@ SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables W
 (2 rows)
 
 -- in the first test, cancel the first connection we sent from the coordinator
-SELECT citus.mitmproxy('conn.cancel(' ||  pg_backend_pid() || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
