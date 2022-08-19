@@ -16,9 +16,13 @@ MAKEFILE_DIR := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
 export PATH := $(MAKEFILE_DIR)/bin:$(PATH)
 export PG_REGRESS_DIFF_OPTS = -dU10 -w
 # Use lower isolation test timeout, the 5 minute default is waaay too long for
-# us so we use 20 seconds instead. We should detect blockages very quickly and
-# the queries we run are also very fast.
-export PGISOLATIONTIMEOUT = 20
+# us so we use 60 seconds instead. We should detect blockages very quickly and
+# most queries that we run are also very fast. So fast even that 60 seconds is
+# usually too long. However, any commands involving logical replication can be
+# quite slow, especially shard splits and especially on CI. So we still keep
+# this value at the pretty high 60 seconds because even those slow commands are
+# definitly stuck when they take longer than that.
+export PGISOLATIONTIMEOUT = 60
 
 ##
 ## Citus regression support
