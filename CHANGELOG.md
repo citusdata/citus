@@ -1,3 +1,9 @@
+### citus v10.2.8 (August 19, 2022) ###
+
+* Fixes compilation warning caused by latest upgrade script changes
+
+* Fixes compilation warning on PG13 + OpenSSL 3.0
+
 ### citus v10.2.7 (August 19, 2022) ###
 
 * Fixes a bug that could cause failures in `INSERT INTO .. SELECT`
