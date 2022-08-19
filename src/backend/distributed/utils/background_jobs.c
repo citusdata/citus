@@ -334,6 +334,7 @@ CitusBackgroundTaskMonitorMain(Datum arg)
 			}
 		}
 		UpdateBackgroundTask(task);
+		UpdateBackgroundJob(task->jobid);
 
 		dsm_detach(seg);
 

@@ -142,6 +142,7 @@ typedef struct MetadataCacheData
 	Oid distShardRelationId;
 	Oid distPlacementRelationId;
 	Oid distBackgroundJobsRelationId;
+	Oid distBackgroundJobsJobIdIndexId;
 	Oid distBackgroundTasksRelationId;
 	Oid distBackgroundTasksTaskIdIndexId;
 	Oid distBackgroundTasksStatusTaskIdIndexId;
@@ -153,6 +154,7 @@ typedef struct MetadataCacheData
 	Oid citusJobStatusFinishedId;
 	Oid citusJobStatusCancelledId;
 	Oid citusJobStatusFailedId;
+	Oid citusJobStatusFailingId;
 	Oid citusTaskStatusScheduledId;
 	Oid citusTaskStatusRunningId;
 	Oid citusTaskStatusDoneId;
@@ -2392,6 +2394,16 @@ DistBackgroundJobsRelationId(void)
 
 
 Oid
+DistBackgroundJobsJobIdIndexId(void)
+{
+	CachedRelationLookup("pg_dist_background_jobs_job_id_index",
+						 &MetadataCache.distBackgroundJobsJobIdIndexId);
+
+	return MetadataCache.distBackgroundJobsJobIdIndexId;
+}
+
+
+Oid
 DistBackgroundTasksRelationId(void)
 {
 	CachedRelationLookup("pg_dist_background_tasks",
@@ -3235,6 +3247,19 @@ CitusJobStatusFailedId(void)
 	}
 
 	return MetadataCache.citusJobStatusFailedId;
+}
+
+
+Oid
+CitusJobStatusFailingId(void)
+{
+	if (!MetadataCache.citusJobStatusFailingId)
+	{
+		MetadataCache.citusJobStatusFailingId =
+			LookupStringEnumValueId("citus_job_status", "failing");
+	}
+
+	return MetadataCache.citusJobStatusFailingId;
 }
 
 
