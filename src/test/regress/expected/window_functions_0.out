@@ -1,6 +1,11 @@
+--
+-- WINDOW_FUNCTIONS
 -- ===================================================================
 -- test top level window functions that are pushdownable
 -- ===================================================================
+-- This test file has an alternative output because of use of
+-- incremental sort in some explain outputs in PG13
+--
 -- a very simple window function with an aggregate and a window function
 -- distribution column is on the partition by clause
 SELECT
