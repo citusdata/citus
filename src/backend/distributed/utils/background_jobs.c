@@ -326,7 +326,7 @@ CitusBackgroundTaskMonitorMain(Datum arg)
 				task->status = BACKGROUND_TASK_STATUS_ERROR;
 
 				/* when we error this task, we need to unschedule all dependant tasks */
-				UnscheduleDependantTasks(task->taskid);
+				UnscheduleDependantTasks(task->jobid, task->taskid);
 			}
 			else
 			{

@@ -1560,7 +1560,14 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 		DirectFunctionCall1(enum_out, shardReplicationModeOid);
 	char *shardTranferModeLabel = DatumGetCString(shardTranferModeLabelDatum);
 
+	if (list_length(placementUpdateList) == 0)
+	{
+		return;
+	}
+
 	/* schedule planned moves */
+	int64 jobId = CreateBackgroundJob("rebalance", "Rebalance colocation group ...");
+
 	PlacementUpdateEvent *move = NULL;
 	StringInfoData buf = { 0 };
 	initStringInfo(&buf);
@@ -1579,9 +1586,9 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 						 move->targetNode->workerPort,
 						 quote_literal_cstr(shardTranferModeLabel));
 
-		BackgroundTask *job = ScheduleBackgroundTask(buf.data, first ? 0 : 1,
-													 &prevJobId);
-		prevJobId = job->taskid;
+		BackgroundTask *task = ScheduleBackgroundTask(jobId, buf.data, first ? 0 : 1,
+													  &prevJobId);
+		prevJobId = task->taskid;
 		first = false;
 	}
 

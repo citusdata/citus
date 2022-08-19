@@ -77,10 +77,25 @@ DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_
 DROP FUNCTION pg_catalog.isolate_tenant_to_new_shard(table_name regclass, tenant_id "any", cascade_option text);
 #include "udfs/isolate_tenant_to_new_shard/11.1-1.sql"
 
+CREATE TYPE citus.citus_job_status AS ENUM ('scheduled', 'running', 'finished', 'cancelled', 'failed');
+ALTER TYPE citus.citus_job_status SET SCHEMA pg_catalog;
+
+CREATE TABLE citus.pg_dist_background_jobs (
+    job_id bigserial NOT NULL,
+    state pg_catalog.citus_job_status DEFAULT 'scheduled' NOT NULL,
+    job_type name,
+    description text,
+    started_at timestamptz,
+    finished_at timestamptz
+);
+ALTER TABLE citus.pg_dist_background_jobs SET SCHEMA pg_catalog;
+CREATE UNIQUE INDEX pg_dist_background_jobs_job_id_index ON pg_catalog.pg_dist_background_jobs using btree(job_id);
+
 CREATE TYPE citus.citus_task_status AS ENUM ('scheduled', 'running', 'done', 'error', 'unscheduled');
 ALTER TYPE citus.citus_task_status SET SCHEMA pg_catalog;
 
 CREATE TABLE citus.pg_dist_background_tasks(
+    job_id bigint NOT NULL REFERENCES pg_catalog.pg_dist_background_jobs(job_id),
     task_id bigserial NOT NULL,
     pid integer,
     status pg_catalog.citus_task_status default 'scheduled' NOT NULL,
@@ -88,20 +103,22 @@ CREATE TABLE citus.pg_dist_background_tasks(
     retry_count integer,
     message text
 );
-
 ALTER TABLE citus.pg_dist_background_tasks SET SCHEMA pg_catalog;
-CREATE UNIQUE INDEX pg_dist_background_tasks_task_id_index ON pg_catalog.pg_dist_background_tasks using btree(task_id);
+CREATE UNIQUE INDEX pg_dist_background_tasks_task_id_index ON pg_catalog.pg_dist_background_tasks using btree(job_id, task_id);
 CREATE INDEX pg_dist_background_tasks_status_task_id_index ON pg_catalog.pg_dist_background_tasks using btree(status, task_id);
 
 CREATE TABLE citus.pg_dist_background_tasks_depend(
-    task_id bigint NOT NULL REFERENCES pg_catalog.pg_dist_background_tasks(task_id) ON DELETE CASCADE,
-    depends_on bigint NOT NULL REFERENCES pg_catalog.pg_dist_background_tasks(task_id) ON DELETE CASCADE,
+    job_id bigint NOT NULL REFERENCES pg_catalog.pg_dist_background_jobs(job_id) ON DELETE CASCADE,
+    task_id bigint NOT NULL,
+    depends_on bigint NOT NULL,
 
-    UNIQUE(task_id, depends_on)
+    UNIQUE(job_id, task_id, depends_on),
+    FOREIGN KEY (job_id, task_id) REFERENCES pg_catalog.pg_dist_background_tasks (job_id, task_id) ON DELETE CASCADE,
+    FOREIGN KEY (job_id, depends_on) REFERENCES pg_catalog.pg_dist_background_tasks (job_id, task_id) ON DELETE CASCADE
 );
 
 ALTER TABLE citus.pg_dist_background_tasks_depend SET SCHEMA pg_catalog;
-CREATE INDEX pg_dist_background_tasks_depend_task_id ON pg_catalog.pg_dist_background_tasks_depend  USING btree(task_id);
-CREATE INDEX pg_dist_background_tasks_depend_depends_on ON pg_catalog.pg_dist_background_tasks_depend USING btree(depends_on);
+CREATE INDEX pg_dist_background_tasks_depend_task_id ON pg_catalog.pg_dist_background_tasks_depend  USING btree(job_id, task_id);
+CREATE INDEX pg_dist_background_tasks_depend_depends_on ON pg_catalog.pg_dist_background_tasks_depend USING btree(job_id, depends_on);
 
-#include "udfs/citus_wait_for_rebalance_job/11.1-1.sql"
+#include "udfs/citus_job_wait/11.1-1.sql"

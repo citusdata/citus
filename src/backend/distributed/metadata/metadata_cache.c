@@ -141,12 +141,18 @@ typedef struct MetadataCacheData
 	bool extensionLoaded;
 	Oid distShardRelationId;
 	Oid distPlacementRelationId;
+	Oid distBackgroundJobsRelationId;
 	Oid distBackgroundTasksRelationId;
 	Oid distBackgroundTasksTaskIdIndexId;
 	Oid distBackgroundTasksStatusTaskIdIndexId;
 	Oid distBackgroundTasksDependRelationId;
 	Oid distBackgroundTasksDependTaskIdIndexId;
 	Oid distBackgroundTasksDependDependsOnIndexId;
+	Oid citusJobStatusScheduledId;
+	Oid citusJobStatusRunningId;
+	Oid citusJobStatusFinishedId;
+	Oid citusJobStatusCancelledId;
+	Oid citusJobStatusFailedId;
 	Oid citusTaskStatusScheduledId;
 	Oid citusTaskStatusRunningId;
 	Oid citusTaskStatusDoneId;
@@ -2376,6 +2382,16 @@ DistLocalGroupIdRelationId(void)
 
 
 Oid
+DistBackgroundJobsRelationId(void)
+{
+	CachedRelationLookup("pg_dist_background_jobs",
+						 &MetadataCache.distBackgroundJobsRelationId);
+
+	return MetadataCache.distBackgroundJobsRelationId;
+}
+
+
+Oid
 DistBackgroundTasksRelationId(void)
 {
 	CachedRelationLookup("pg_dist_background_tasks",
@@ -3154,6 +3170,71 @@ SecondaryNodeRoleId(void)
 	}
 
 	return MetadataCache.secondaryNodeRoleId;
+}
+
+
+Oid
+CitusJobStatusScheduledId(void)
+{
+	if (!MetadataCache.citusJobStatusScheduledId)
+	{
+		MetadataCache.citusJobStatusScheduledId =
+			LookupStringEnumValueId("citus_job_status", "scheduled");
+	}
+
+	return MetadataCache.citusJobStatusScheduledId;
+}
+
+
+Oid
+CitusJobStatusRunningId(void)
+{
+	if (!MetadataCache.citusJobStatusRunningId)
+	{
+		MetadataCache.citusJobStatusRunningId =
+			LookupStringEnumValueId("citus_job_status", "running");
+	}
+
+	return MetadataCache.citusJobStatusRunningId;
+}
+
+
+Oid
+CitusJobStatusFinisehdId(void)
+{
+	if (!MetadataCache.citusJobStatusFinishedId)
+	{
+		MetadataCache.citusJobStatusFinishedId =
+			LookupStringEnumValueId("citus_job_status", "finished");
+	}
+
+	return MetadataCache.citusJobStatusFinishedId;
+}
+
+
+Oid
+CitusJobStatusCancelledId(void)
+{
+	if (!MetadataCache.citusJobStatusCancelledId)
+	{
+		MetadataCache.citusJobStatusCancelledId =
+			LookupStringEnumValueId("citus_job_status", "cancelled");
+	}
+
+	return MetadataCache.citusJobStatusCancelledId;
+}
+
+
+Oid
+CitusJobStatusFailedId(void)
+{
+	if (!MetadataCache.citusJobStatusFailedId)
+	{
+		MetadataCache.citusJobStatusFailedId =
+			LookupStringEnumValueId("citus_job_status", "failed");
+	}
+
+	return MetadataCache.citusJobStatusFailedId;
 }
 
 

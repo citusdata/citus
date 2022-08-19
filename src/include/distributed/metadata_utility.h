@@ -217,6 +217,7 @@ typedef enum BackgroundTaskStatus
 
 typedef struct BackgroundTask
 {
+	int64 jobid;
 	int64 taskid;
 	int32 *pid;
 	BackgroundTaskStatus status;
@@ -334,19 +335,22 @@ extern void EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid
 extern void AlterSequenceType(Oid seqOid, Oid typeOid);
 extern void EnsureRelationHasCompatibleSequenceTypes(Oid relationId);
 extern bool HasScheduledBackgroundTask(void);
+extern int64 GetNextBackgroundJobsJobId(void);
 extern int64 GetNextBackgroundTaskTaskId(void);
-extern BackgroundTask * ScheduleBackgroundTask(char *command, int dependingTaskCount,
+extern int64 CreateBackgroundJob(const char *jobType, const char *description);
+extern BackgroundTask * ScheduleBackgroundTask(int64 jobId, char *command,
+											   int dependingTaskCount,
 											   int64 dependingTaskIds[]);
-extern bool BackgroundTaskHasUmnetDependencies(int64 taskId);
+extern bool BackgroundTaskHasUmnetDependencies(int64 jobId, int64 taskId);
 extern BackgroundTask * GetRunnableBackgroundTask(void);
 extern void ResetRunningBackgroundTasks(void);
 extern void DeepFreeBackgroundTask(BackgroundTask *task);
-extern BackgroundTask * GetBackgroundTaskByTaskId(int64 taskId);
+extern BackgroundTask * GetBackgroundTaskByTaskId(int64 jobId, int64 taskId);
 extern void UpdateBackgroundTask(BackgroundTask *task);
 extern void UpdateJobStatus(int64 taskId, const pid_t *pid, BackgroundTaskStatus status,
 							const int32 *retry_count, char *message);
 extern bool UpdateJobError(BackgroundTask *job, ErrorData *edata);
-extern void UnscheduleDependantTasks(int64 taskId);
+extern void UnscheduleDependantTasks(int64 jobId, int64 taskId);
 extern bool IsCitusTaskStatusTerminal(BackgroundTaskStatus status);
 extern Oid CitusTaskStatusOid(BackgroundTaskStatus status);
 #endif   /* METADATA_UTILITY_H */
