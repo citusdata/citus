@@ -4,8 +4,7 @@ test: multi_test_catalog_views
 
 test: columnar_create
 test: columnar_load
-test: columnar_query
-test: columnar_first_row_number
+test: columnar_query columnar_first_row_number
 test: columnar_analyze
 test: columnar_data_types
 test: columnar_drop
