@@ -927,7 +927,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 	deparse_shard_query(copiedQuery, distributedTableId, shardInterval->shardId,
 						queryString);
 	ereport(DEBUG2, (errmsg("distributed statement: %s",
-							ApplyLogRedaction(queryString->data))));
+							queryString->data)));
 
 	Task *modifyTask = CreateBasicTask(jobId, taskIdIndex, MODIFY_TASK,
 									   queryString->data);

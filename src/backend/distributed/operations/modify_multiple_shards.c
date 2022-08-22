@@ -78,7 +78,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	if (!IsA(queryTreeNode, DeleteStmt) && !IsA(queryTreeNode, UpdateStmt))
 	{
 		ereport(ERROR, (errmsg("query \"%s\" is not a delete or update "
-							   "statement", ApplyLogRedaction(queryString))));
+							   "statement", queryString)));
 	}
 
 	ereport(WARNING, (errmsg("master_modify_multiple_shards is deprecated and will be "

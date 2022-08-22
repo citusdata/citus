@@ -104,7 +104,4 @@ extern void ResetConstraintDropped(void);
 extern void ExecuteDistributedDDLJob(DDLJob *ddlJob);
 extern void ColumnarTableSetOptionsHook(Oid relationId, ColumnarOptions options);
 
-/* forward declarations for sending custom commands to a distributed table */
-extern DDLJob * CreateCustomDDLTaskList(Oid relationId, TableDDLCommand *command);
-
 #endif /* MULTI_UTILITY_H */

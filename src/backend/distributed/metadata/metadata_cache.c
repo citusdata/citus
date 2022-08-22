@@ -2808,42 +2808,6 @@ TextOutFunctionId(void)
 
 
 /*
- * PgTableVisibleFuncId returns oid of the pg_table_is_visible function.
- */
-Oid
-PgTableVisibleFuncId(void)
-{
-	if (MetadataCache.pgTableIsVisibleFuncId == InvalidOid)
-	{
-		const int argCount = 1;
-
-		MetadataCache.pgTableIsVisibleFuncId =
-			FunctionOid("pg_catalog", "pg_table_is_visible", argCount);
-	}
-
-	return MetadataCache.pgTableIsVisibleFuncId;
-}
-
-
-/*
- * CitusTableVisibleFuncId returns oid of the citus_table_is_visible function.
- */
-Oid
-CitusTableVisibleFuncId(void)
-{
-	if (MetadataCache.citusTableIsVisibleFuncId == InvalidOid)
-	{
-		const int argCount = 1;
-
-		MetadataCache.citusTableIsVisibleFuncId =
-			FunctionOid("pg_catalog", "citus_table_is_visible", argCount);
-	}
-
-	return MetadataCache.citusTableIsVisibleFuncId;
-}
-
-
-/*
  * RelationIsAKnownShardFuncId returns oid of the relation_is_a_known_shard function.
  */
 Oid
@@ -4397,17 +4361,6 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 	table_close(pgDistPartition, AccessShareLock);
 
 	return relationIdList;
-}
-
-
-/*
- * ClusterHasReferenceTable returns true if the cluster has
- * any reference table.
- */
-bool
-ClusterHasReferenceTable(void)
-{
-	return list_length(CitusTableTypeIdList(REFERENCE_TABLE)) > 0;
 }
 
 

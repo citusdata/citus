@@ -519,7 +519,7 @@ LogLocalCommand(Task *task)
 	}
 
 	ereport(NOTICE, (errmsg("executing the command locally: %s",
-							ApplyLogRedaction(command))));
+							command)));
 }
 
 

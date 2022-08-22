@@ -18,7 +18,6 @@
 #define PG_JOB_CACHE_DIR "pgsql_job_cache"
 
 
-extern bool CacheDirectoryElement(const char *filename);
 extern void CleanupJobCacheDirectory(void);
 extern void CitusCreateDirectory(StringInfo directoryName);
 extern void CitusRemoveDirectory(const char *filename);

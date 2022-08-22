@@ -746,19 +746,6 @@ GetForeignKeysFromLocalTables(Oid relationId)
 
 
 /*
- * HasForeignKeyToCitusLocalTable returns true if any of the foreign key constraints
- * on the relation with relationId references to a citus local table.
- */
-bool
-HasForeignKeyToCitusLocalTable(Oid relationId)
-{
-	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_CITUS_LOCAL_TABLES;
-	List *foreignKeyOidList = GetForeignKeyOids(relationId, flags);
-	return list_length(foreignKeyOidList) > 0;
-}
-
-
-/*
  * HasForeignKeyToReferenceTable returns true if any of the foreign key
  * constraints on the relation with relationId references to a reference
  * table.
