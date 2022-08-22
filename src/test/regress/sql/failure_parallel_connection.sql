@@ -35,7 +35,7 @@ SET citus.force_max_query_parallelization TO ON;
 BEGIN;
 	SELECT count(*) FROM distributed_table JOIN reference_table USING (key);
 
-	SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).kill()');
+	SELECT citus.mitmproxy('conn.onQuery(query="^SELECT count").after(1).kill()');
 
 	-- this query should not fail because each placement should be acceessed
 	-- over a seperate connection
