@@ -11,7 +11,7 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 10 AS server_version_above_fourteen;
  server_version_above_fourteen
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 -- Test behaviour of repartitioned INSERT ... SELECT in MX setup
@@ -108,8 +108,8 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM multi_mx_i
 NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_4213581_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_4213581_to','SELECT (a OPERATOR(pg_catalog.*) 2) AS a FROM multi_mx_insert_select_repartition.source_table_4213581 source_table WHERE true',0,'hash','{-2147483648,-715827883,715827882}'::text[],'{-715827884,715827881,2147483647}'::text[],true) WHERE rows_written > 0
 NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_4213583_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_4213583_to','SELECT (a OPERATOR(pg_catalog.*) 2) AS a FROM multi_mx_insert_select_repartition.source_table_4213583 source_table WHERE true',0,'hash','{-2147483648,-715827883,715827882}'::text[],'{-715827884,715827881,2147483647}'::text[],true) WHERE rows_written > 0
 NOTICE:  executing the command locally: SELECT bytes FROM fetch_intermediate_results(ARRAY['repartitioned_results_xxxxx_from_4213582_to_0','repartitioned_results_xxxxx_from_4213584_to_0']::text[],'localhost',57638) bytes
-NOTICE:  executing the command locally: INSERT INTO multi_mx_insert_select_repartition.target_table_4213585 AS citus_table_alias (a) SELECT intermediate_result.a FROM read_intermediate_results('{repartitioned_results_xxxxx_from_4213581_to_0,repartitioned_results_xxxxx_from_4213582_to_0,repartitioned_results_xxxxx_from_4213584_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer) RETURNING citus_table_alias.a
-NOTICE:  executing the command locally: INSERT INTO multi_mx_insert_select_repartition.target_table_4213587 AS citus_table_alias (a) SELECT intermediate_result.a FROM read_intermediate_results('{repartitioned_results_xxxxx_from_4213581_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer) RETURNING citus_table_alias.a
+NOTICE:  executing the command locally: INSERT INTO multi_mx_insert_select_repartition.target_table_4213585 AS citus_table_alias (a) SELECT a FROM read_intermediate_results('{repartitioned_results_xxxxx_from_4213581_to_0,repartitioned_results_xxxxx_from_4213582_to_0,repartitioned_results_xxxxx_from_4213584_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer) RETURNING citus_table_alias.a
+NOTICE:  executing the command locally: INSERT INTO multi_mx_insert_select_repartition.target_table_4213587 AS citus_table_alias (a) SELECT a FROM read_intermediate_results('{repartitioned_results_xxxxx_from_4213581_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer) RETURNING citus_table_alias.a
  a
 ---------------------------------------------------------------------
   0

@@ -1,3 +1,13 @@
+--
+-- SINGLE_NODE
+--
+-- This test file has an alternative output because of the change in the
+-- display of SQL-standard function's arguments in INSERT/SELECT in PG15.
+-- The alternative output can be deleted when we drop support for PG14
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 10 AS server_version_above_fourteen;
+
 CREATE SCHEMA single_node;
 SET search_path TO single_node;
 SET citus.shard_count TO 4;
