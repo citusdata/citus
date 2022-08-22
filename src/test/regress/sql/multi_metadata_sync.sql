@@ -1,6 +1,11 @@
 --
 -- MULTI_METADATA_SYNC
 --
+-- this test has different output for PG13/14 compared to PG15
+-- In PG15, public schema is owned by pg_database_owner role
+-- Relevant PG commit: b073c3ccd06e4cb845e121387a43faa8c68a7b62
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 10 AS server_version_above_fourteen;
 
 -- Tests for metadata snapshot functions, metadata syncing functions and propagation of
 -- metadata changes to MX tables.
