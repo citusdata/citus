@@ -657,7 +657,7 @@ LogDistributedDeadlockDebugMessage(const char *errorMessage)
 	}
 
 	ereport(LOG, (errmsg("[%s] %s", timestamptz_to_str(GetCurrentTimestamp()),
-						 ApplyLogRedaction(errorMessage))));
+						 errorMessage)));
 }
 
 

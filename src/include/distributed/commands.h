@@ -264,7 +264,6 @@ extern List * GetForeignConstraintFromDistributedTablesCommands(Oid relationId);
 extern List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
 extern bool AnyForeignKeyDependsOnIndex(Oid indexId);
 extern bool HasForeignKeyWithLocalTable(Oid relationId);
-extern bool HasForeignKeyToCitusLocalTable(Oid relationId);
 extern bool HasForeignKeyToReferenceTable(Oid relationOid);
 extern List * GetForeignKeysFromLocalTables(Oid relationId);
 extern bool TableReferenced(Oid relationOid);

@@ -258,10 +258,6 @@ ReportConnectionError(MultiConnection *connection, int elevel)
 
 	if (messageDetail)
 	{
-		/*
-		 * We don't use ApplyLogRedaction(messageDetail) as we expect any error
-		 * detail that requires log reduction should have done it locally.
-		 */
 		ereport(elevel, (errcode(ERRCODE_CONNECTION_FAILURE),
 						 errmsg("connection to the remote node %s:%d failed with the "
 								"following error: %s", nodeName, nodePort,
@@ -315,7 +311,7 @@ ReportResultError(MultiConnection *connection, PGresult *result, int elevel)
 
 		ereport(elevel, (errcode(sqlState), errmsg("%s", messagePrimary),
 						 messageDetail ?
-						 errdetail("%s", ApplyLogRedaction(messageDetail)) : 0,
+						 errdetail("%s", messageDetail) : 0,
 						 messageHint ? errhint("%s", messageHint) : 0,
 						 messageContext ? errcontext("%s", messageContext) : 0,
 						 errcontext("while executing command on %s:%d",
@@ -349,7 +345,7 @@ LogRemoteCommand(MultiConnection *connection, const char *command)
 		return;
 	}
 
-	ereport(NOTICE, (errmsg("issuing %s", ApplyLogRedaction(command)),
+	ereport(NOTICE, (errmsg("issuing %s", command),
 					 errdetail("on server %s@%s:%d connectionId: %ld", connection->user,
 							   connection->hostname,
 							   connection->port, connection->connectionId)));

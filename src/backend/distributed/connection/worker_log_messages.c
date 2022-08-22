@@ -173,7 +173,7 @@ DefaultCitusNoticeReceiver(void *arg, const PGresult *result)
 
 	ereport(logLevel,
 			(errcode(sqlState),
-			 errmsg("%s", ApplyLogRedaction(trimmedMessage)),
+			 errmsg("%s", trimmedMessage),
 			 errdetail("from %s:%d", nodeName, nodePort)));
 }
 

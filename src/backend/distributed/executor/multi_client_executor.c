@@ -155,9 +155,9 @@ MultiClientSendQuery(int32 connectionId, const char *query)
 		 * we cannot send the queries that Citus itself produced.
 		 */
 		ereport(WARNING, (errmsg("could not send remote query \"%s\"",
-								 ApplyLogRedaction(query)),
+								 query),
 						  errdetail("Client error: %s",
-									ApplyLogRedaction(errorMessage))));
+									errorMessage)));
 
 		success = false;
 	}

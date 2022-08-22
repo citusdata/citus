@@ -44,13 +44,7 @@ static void SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet,
 											   const Oid *parameterTypes,
 											   const char *const *parameterValues);
 static void ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList);
-static List * OpenConnectionsToWorkersInParallel(TargetWorkerSet targetWorkerSet,
-												 const char *user);
-static void GetConnectionsResults(List *connectionList, bool failOnError);
-static void SendCommandToWorkersOutsideTransaction(TargetWorkerSet targetWorkerSet,
-												   const char *command, const char *user,
-												   bool
-												   failOnError);
+
 
 /*
  * SendCommandToWorker sends a command to a particular worker as part of the
@@ -235,129 +229,6 @@ SendCommandToMetadataWorkersParams(const char *command,
 	SendCommandToWorkersParamsInternal(NON_COORDINATOR_METADATA_NODES, command, user,
 									   parameterCount, parameterTypes,
 									   parameterValues);
-}
-
-
-/*
- * SendCommandToWorkersOptionalInParallel sends the given command to workers in parallel.
- * It does error if there is a problem while sending the query, but it doesn't error
- * if there is a problem while executing the query.
- */
-void
-SendCommandToWorkersOptionalInParallel(TargetWorkerSet targetWorkerSet, const
-									   char *command,
-									   const char *user)
-{
-	bool failOnError = false;
-	SendCommandToWorkersOutsideTransaction(targetWorkerSet, command, user,
-										   failOnError);
-}
-
-
-/*
- * SendCommandToWorkersInParallel sends the given command to workers in parallel.
- * It does error if there is a problem while sending the query, it errors if there
- * was any problem when sending/receiving.
- */
-void
-SendCommandToWorkersInParallel(TargetWorkerSet targetWorkerSet, const
-							   char *command,
-							   const char *user)
-{
-	bool failOnError = true;
-	SendCommandToWorkersOutsideTransaction(targetWorkerSet, command, user,
-										   failOnError);
-}
-
-
-/*
- * SendCommandToWorkersOutsideTransaction sends the given command to workers in parallel.
- */
-static void
-SendCommandToWorkersOutsideTransaction(TargetWorkerSet targetWorkerSet, const
-									   char *command, const char *user, bool
-									   failOnError)
-{
-	List *connectionList = OpenConnectionsToWorkersInParallel(targetWorkerSet, user);
-
-	/* finish opening connections */
-	FinishConnectionListEstablishment(connectionList);
-
-	/* send commands in parallel */
-	MultiConnection *connection = NULL;
-	foreach_ptr(connection, connectionList)
-	{
-		int querySent = SendRemoteCommand(connection, command);
-		if (failOnError && querySent == 0)
-		{
-			ReportConnectionError(connection, ERROR);
-		}
-	}
-
-	GetConnectionsResults(connectionList, failOnError);
-}
-
-
-/*
- * OpenConnectionsToWorkersInParallel opens connections to the given target worker set in parallel,
- * as the given user.
- */
-static List *
-OpenConnectionsToWorkersInParallel(TargetWorkerSet targetWorkerSet, const char *user)
-{
-	List *connectionList = NIL;
-
-	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, RowShareLock);
-
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
-	{
-		const char *nodeName = workerNode->workerName;
-		int nodePort = workerNode->workerPort;
-		int32 connectionFlags = OUTSIDE_TRANSACTION;
-
-		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
-																	  nodeName, nodePort,
-																	  user, NULL);
-
-		/*
-		 * connection can only be NULL for optional connections, which we don't
-		 * support in this codepath.
-		 */
-		Assert((connectionFlags & OPTIONAL_CONNECTION) == 0);
-		Assert(connection != NULL);
-		connectionList = lappend(connectionList, connection);
-	}
-	return connectionList;
-}
-
-
-/*
- * GetConnectionsResults gets remote command results
- * for the given connections. It raises any error if failOnError is true.
- */
-static void
-GetConnectionsResults(List *connectionList, bool failOnError)
-{
-	MultiConnection *connection = NULL;
-	foreach_ptr(connection, connectionList)
-	{
-		bool raiseInterrupt = false;
-		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupt);
-
-		bool isResponseOK = result != NULL && IsResponseOK(result);
-		if (failOnError && !isResponseOK)
-		{
-			ReportResultError(connection, result, ERROR);
-		}
-
-		PQclear(result);
-
-		if (isResponseOK)
-		{
-			ForgetResults(connection);
-		}
-	}
 }
 
 

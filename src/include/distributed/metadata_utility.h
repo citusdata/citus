@@ -276,7 +276,6 @@ extern Oid TableOwnerOid(Oid relationId);
 extern char * TableOwner(Oid relationId);
 extern void EnsureTablePermissions(Oid relationId, AclMode mode);
 extern void EnsureTableOwner(Oid relationId);
-extern void EnsureSchemaOwner(Oid schemaId);
 extern void EnsureHashDistributedTable(Oid relationId);
 extern void EnsureFunctionOwner(Oid functionId);
 extern void EnsureSuperUser(void);

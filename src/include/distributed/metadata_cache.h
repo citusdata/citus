@@ -180,7 +180,6 @@ extern void FlushDistTableCache(void);
 extern void InvalidateMetadataSystemCache(void);
 extern List * CitusTableTypeIdList(CitusTableType citusTableType);
 extern Datum DistNodeMetadata(void);
-extern bool ClusterHasReferenceTable(void);
 extern bool HasUniformHashDistribution(ShardInterval **shardIntervalArray,
 									   int shardIntervalArrayLength);
 extern bool HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray,
@@ -258,8 +257,6 @@ extern Oid CitusExtraDataContainerFuncId(void);
 extern Oid CitusAnyValueFunctionId(void);
 extern Oid CitusTextSendAsJsonbFunctionId(void);
 extern Oid TextOutFunctionId(void);
-extern Oid PgTableVisibleFuncId(void);
-extern Oid CitusTableVisibleFuncId(void);
 extern Oid RelationIsAKnownShardFuncId(void);
 extern Oid JsonbExtractPathFuncId(void);
 extern Oid JsonbExtractPathTextFuncId(void);

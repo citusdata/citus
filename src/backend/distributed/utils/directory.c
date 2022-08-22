@@ -23,35 +23,6 @@ static bool FileIsLink(const char *filename, struct stat filestat);
 
 
 /*
- * CacheDirectoryElement takes in a filename, and checks if this name lives in
- * the directory path that is used for job, task, table etc. files.
- */
-bool
-CacheDirectoryElement(const char *filename)
-{
-	bool directoryElement = false;
-
-	StringInfo directoryPath = makeStringInfo();
-	appendStringInfo(directoryPath, "base/%s/", PG_JOB_CACHE_DIR);
-
-	char *directoryPathFound = strstr(filename, directoryPath->data);
-
-	/*
-	 * If directoryPath occurs at the beginning of the filename, then the
-	 * pointers should now be equal.
-	 */
-	if (directoryPathFound == filename)
-	{
-		directoryElement = true;
-	}
-
-	pfree(directoryPath);
-
-	return directoryElement;
-}
-
-
-/*
  * CitusCreateDirectory creates a new directory with the given directory name.
  */
 void

@@ -137,7 +137,7 @@ RebuildQueryStrings(Job *workerJob)
 		ereport(DEBUG4, (errmsg("query before rebuilding: %s",
 								!isQueryObjectOrText
 								? "(null)"
-								: ApplyLogRedaction(TaskQueryString(task)))));
+								: TaskQueryString(task))));
 
 		UpdateTaskQueryString(query, task);
 
@@ -148,7 +148,7 @@ RebuildQueryStrings(Job *workerJob)
 		task->parametersInQueryStringResolved = workerJob->parametersInJobQueryResolved;
 
 		ereport(DEBUG4, (errmsg("query after rebuilding:  %s",
-								ApplyLogRedaction(TaskQueryString(task)))));
+								TaskQueryString(task))));
 	}
 }
 

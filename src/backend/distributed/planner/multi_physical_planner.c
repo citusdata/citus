@@ -2566,7 +2566,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	{
 		pg_get_query_def(taskQuery, queryString);
 		ereport(DEBUG4, (errmsg("distributed statement: %s",
-								ApplyLogRedaction(queryString->data))));
+								queryString->data)));
 		SetTaskQueryString(subqueryTask, queryString->data);
 	}
 
@@ -2721,7 +2721,7 @@ SqlTaskList(Job *job)
 		/* log the query string we generated */
 		ereport(DEBUG4, (errmsg("generated sql query for task %d", sqlTask->taskId),
 						 errdetail("query string: \"%s\"",
-								   ApplyLogRedaction(sqlQueryString->data))));
+								   sqlQueryString->data)));
 
 		sqlTask->anchorShardId = INVALID_SHARD_ID;
 		if (anchorRangeTableBasedAssignment)
@@ -3232,45 +3232,6 @@ BinaryOpExpression(Expr *clause, Node **leftOperand, Node **rightOperand)
 		Assert(*rightOperand != NULL);
 		*rightOperand = strip_implicit_coercions(*rightOperand);
 	}
-	return true;
-}
-
-
-/*
- * SimpleOpExpression checks that given expression is a simple operator
- * expression. A simple operator expression is a binary operator expression with
- * operands of a var and a non-null constant.
- */
-bool
-SimpleOpExpression(Expr *clause)
-{
-	Const *constantClause = NULL;
-
-	Node *leftOperand;
-	Node *rightOperand;
-	if (!BinaryOpExpression(clause, &leftOperand, &rightOperand))
-	{
-		return false;
-	}
-
-	if (IsA(rightOperand, Const) && IsA(leftOperand, Var))
-	{
-		constantClause = (Const *) rightOperand;
-	}
-	else if (IsA(leftOperand, Const) && IsA(rightOperand, Var))
-	{
-		constantClause = (Const *) leftOperand;
-	}
-	else
-	{
-		return false;
-	}
-
-	if (constantClause->constisnull)
-	{
-		return false;
-	}
-
 	return true;
 }
 

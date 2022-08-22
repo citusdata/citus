@@ -217,15 +217,6 @@ struct CopyShardState
 	List *placementStateList;
 };
 
-/* ShardConnections represents a set of connections for each placement of a shard */
-typedef struct ShardConnections
-{
-	int64 shardId;
-
-	/* list of MultiConnection structs */
-	List *connectionList;
-} ShardConnections;
-
 
 /*
  * Represents the state for allowing copy via local
@@ -1195,7 +1186,7 @@ ReportCopyError(MultiConnection *connection, PGresult *result)
 		bool haveDetail = remoteDetail != NULL;
 
 		ereport(ERROR, (errmsg("%s", remoteMessage),
-						haveDetail ? errdetail("%s", ApplyLogRedaction(remoteDetail)) :
+						haveDetail ? errdetail("%s", remoteDetail) :
 						0));
 	}
 	else
@@ -1206,7 +1197,7 @@ ReportCopyError(MultiConnection *connection, PGresult *result)
 		ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
 						errmsg("failed to complete COPY on %s:%d", connection->hostname,
 							   connection->port),
-						errdetail("%s", ApplyLogRedaction(remoteMessage))));
+						errdetail("%s", remoteMessage)));
 	}
 }
 
