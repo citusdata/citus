@@ -47,7 +47,7 @@ BEGIN;
      0
 (1 row)
 
-	SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).kill()');
+	SELECT citus.mitmproxy('conn.onQuery(query="^SELECT count").after(1).kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
