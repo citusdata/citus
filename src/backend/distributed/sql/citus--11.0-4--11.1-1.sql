@@ -121,4 +121,17 @@ ALTER TABLE citus.pg_dist_background_tasks_depend SET SCHEMA pg_catalog;
 CREATE INDEX pg_dist_background_tasks_depend_task_id ON pg_catalog.pg_dist_background_tasks_depend  USING btree(job_id, task_id);
 CREATE INDEX pg_dist_background_tasks_depend_depends_on ON pg_catalog.pg_dist_background_tasks_depend USING btree(job_id, depends_on);
 
+CREATE TABLE citus.pg_dist_rebalance_task_details(
+    job_id bigint NOT NULL,
+    task_id bigint NOT NULL,
+    source_node integer NOT NULL,
+    target_node integer NOT NULL,
+    shard_id bigint NOT NULL,
+    details jsonb NOT NULL DEFAULT '{}',
+
+    UNIQUE(job_id, task_id),
+    FOREIGN KEY (job_id, task_id) REFERENCES pg_catalog.pg_dist_background_tasks (job_id, task_id) ON DELETE CASCADE
+);
+ALTER TABLE citus.pg_dist_rebalance_task_details SET SCHEMA pg_catalog;
+
 #include "udfs/citus_job_wait/11.1-1.sql"

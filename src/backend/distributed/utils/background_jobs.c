@@ -217,7 +217,7 @@ CitusBackgroundTaskMonitorMain(Datum arg)
 		/* TODO find the actual database and username */
 		dsm_segment *seg = NULL;
 		BackgroundWorkerHandle *handle =
-			StartCitusBackgroundJobExecuter("postgres", "nilsdijk", task->command,
+			StartCitusBackgroundJobExecuter("postgres", "jelte", task->command,
 											&seg);
 
 		if (handle == NULL)

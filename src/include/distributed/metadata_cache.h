@@ -230,6 +230,7 @@ extern Oid DistNodeRelationId(void);
 extern Oid DistBackgroundJobsRelationId(void);
 extern Oid DistBackgroundTasksRelationId(void);
 extern Oid DistRebalanceStrategyRelationId(void);
+extern Oid DistRebalanceTaskDetailsRelationId(void);
 extern Oid DistLocalGroupIdRelationId(void);
 extern Oid DistObjectRelationId(void);
 extern Oid DistEnabledCustomAggregatesId(void);

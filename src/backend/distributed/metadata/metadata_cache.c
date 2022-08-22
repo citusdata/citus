@@ -161,6 +161,7 @@ typedef struct MetadataCacheData
 	Oid citusTaskStatusErrorId;
 	Oid citusTaskStatusSnscheduledId;
 	Oid distRebalanceStrategyRelationId;
+	Oid distRebalanceTaskDetailsRelationId;
 	Oid distNodeRelationId;
 	Oid distNodeNodeIdIndexId;
 	Oid distLocalGroupRelationId;
@@ -2471,6 +2472,16 @@ DistRebalanceStrategyRelationId(void)
 						 &MetadataCache.distRebalanceStrategyRelationId);
 
 	return MetadataCache.distRebalanceStrategyRelationId;
+}
+
+
+Oid
+DistRebalanceTaskDetailsRelationId(void)
+{
+	CachedRelationLookup("pg_dist_rebalance_task_details",
+						 &MetadataCache.distRebalanceTaskDetailsRelationId);
+
+	return MetadataCache.distRebalanceTaskDetailsRelationId;
 }
 
 

@@ -41,6 +41,7 @@
 #include "distributed/multi_progress.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_rebalance_strategy.h"
+#include "distributed/pg_dist_rebalance_task_details.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/repair_shards.h"
@@ -1521,6 +1522,45 @@ NonColocatedDistRelationIdList(void)
 }
 
 
+static void
+CreateRebalanceTaskDetails(int64 jobId,
+						   int64 taskId,
+						   WorkerNode *sourceNode,
+						   WorkerNode *targetNode,
+						   uint64 shardId)
+{
+	Relation pgDistRebalanceTaskDetails =
+		table_open(DistRebalanceTaskDetailsRelationId(), RowExclusiveLock);
+
+	/* insert new job */
+	Datum values[Natts_pg_dist_rebalance_task_details] = { 0 };
+	bool nulls[Natts_pg_dist_rebalance_task_details] = { 0 };
+
+	memset(nulls, true, sizeof(nulls));
+
+	values[Anum_pg_dist_rebalance_task_details_job_id - 1] = Int64GetDatum(jobId);
+	nulls[Anum_pg_dist_rebalance_task_details_job_id - 1] = false;
+	values[Anum_pg_dist_rebalance_task_details_task_id - 1] = Int64GetDatum(taskId);
+	nulls[Anum_pg_dist_rebalance_task_details_task_id - 1] = false;
+	values[Anum_pg_dist_rebalance_task_details_source_node - 1] = Int64GetDatum(
+		sourceNode->nodeId);
+	nulls[Anum_pg_dist_rebalance_task_details_source_node - 1] = false;
+	values[Anum_pg_dist_rebalance_task_details_target_node - 1] = Int64GetDatum(
+		targetNode->nodeId);
+	nulls[Anum_pg_dist_rebalance_task_details_target_node - 1] = false;
+	values[Anum_pg_dist_rebalance_task_details_shard_id - 1] = Int64GetDatum(shardId);
+	nulls[Anum_pg_dist_rebalance_task_details_shard_id - 1] = false;
+	values[Anum_pg_dist_rebalance_task_details_details - 1] = DirectFunctionCall1(
+		jsonb_in, CStringGetDatum("{}"));
+	nulls[Anum_pg_dist_rebalance_task_details_details - 1] = false;
+	HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistRebalanceTaskDetails),
+										 values, nulls);
+	CatalogTupleInsert(pgDistRebalanceTaskDetails, newTuple);
+
+	table_close(pgDistRebalanceTaskDetails, NoLock);
+}
+
+
 /*
  * RebalanceTableShards rebalances the shards for the relations inside the
  * relationIdList across the different workers.
@@ -1588,6 +1628,8 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, buf.data, first ? 0 : 1,
 													  &prevJobId);
+		CreateRebalanceTaskDetails(jobId, task->taskid, move->sourceNode,
+								   move->targetNode, move->shardId);
 		prevJobId = task->taskid;
 		first = false;
 	}
