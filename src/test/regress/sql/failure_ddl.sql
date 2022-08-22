@@ -89,12 +89,10 @@ ALTER TABLE test_table DROP COLUMN new_column;
 -- but now kill just after the worker sends response to
 -- COMMIT command, so we'll have lots of warnings but the command
 -- should have been committed both on the distributed table and the placements
-SET client_min_messages TO WARNING;
+SET client_min_messages TO ERROR;
 SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT").kill()');
 ALTER TABLE test_table ADD COLUMN new_column INT;
 SELECT citus.mitmproxy('conn.allow()');
-
-SET client_min_messages TO ERROR;
 
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;

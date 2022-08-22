@@ -378,6 +378,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
 
 (1 row)
 
+SET client_min_messages TO ERROR;
 BEGIN;
 DELETE FROM dml_test WHERE id = 1;
 DELETE FROM dml_test WHERE id = 2;
@@ -385,11 +386,7 @@ INSERT INTO dml_test VALUES (5, 'Epsilon');
 UPDATE dml_test SET name = 'alpha' WHERE id = 1;
 UPDATE dml_test SET name = 'gamma' WHERE id = 3;
 COMMIT;
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
+RESET client_min_messages;
 -- all changes should be committed because we injected
 -- the failure on the COMMIT time. And, we should not
 -- mark any placements as INVALID

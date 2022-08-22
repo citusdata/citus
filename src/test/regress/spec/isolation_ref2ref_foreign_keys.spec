@@ -74,6 +74,9 @@ step "s1-select-table-3"
 
 step "s1-view-locks"
 {
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
     SELECT classid,
         objid,
         objsubid,

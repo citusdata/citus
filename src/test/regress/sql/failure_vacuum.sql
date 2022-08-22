@@ -20,8 +20,10 @@ VACUUM vacuum_test;
 SELECT citus.mitmproxy('conn.onQuery(query="^ANALYZE").kill()');
 ANALYZE vacuum_test;
 
+SET client_min_messages TO ERROR;
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
 ANALYZE vacuum_test;
+RESET client_min_messages;
 
 SELECT citus.mitmproxy('conn.allow()');
 SELECT recover_prepared_transactions();
