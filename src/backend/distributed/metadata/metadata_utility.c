@@ -2817,7 +2817,7 @@ JobTasksStatusCount(int64 jobId, int *scheduled, int *running, int *done, int *e
 	CLEAR_OPTIONAL_COUNTER(error);
 	CLEAR_OPTIONAL_COUNTER(unscheduled);
 
-#undef CLEAR_OPTIONAL_COUNTER;
+#undef CLEAR_OPTIONAL_COUNTER
 
 	Relation pgDistBackgroundTasks =
 		table_open(DistBackgroundTasksRelationId(), RowExclusiveLock);
@@ -2851,7 +2851,7 @@ JobTasksStatusCount(int64 jobId, int *scheduled, int *running, int *done, int *e
 #define INCREMENT_OPTIONAL_COUNTER(counter) \
 	if (counter) \
 	{ \
-		*counter = (*counter)++; \
+		(*counter)++; \
 	}
 
 		switch (status)

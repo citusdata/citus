@@ -487,8 +487,7 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, BackgroundTask *task, bool *ha
 				{
 					*hadError = true;
 				}
-
-				/* fall-through */
+				__attribute__((fallthrough));
 			}
 
 			case 'N': /* NOTICE */
