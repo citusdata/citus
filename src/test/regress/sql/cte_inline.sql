@@ -1,3 +1,13 @@
+--
+-- CTE_INLINE
+--
+-- This test file has an alternative output because of the change in the
+-- display of SQL-standard function's arguments in INSERT/SELECT in PG15.
+-- The alternative output can be deleted when we drop support for PG14
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15;
+
 CREATE SCHEMA cte_inline;
 SET search_path TO cte_inline;
 SET citus.next_shard_id TO 1960000;
