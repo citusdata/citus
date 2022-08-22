@@ -49,7 +49,9 @@ INSERT INTO r1 (id, name) VALUES
 
 SELECT create_reference_table('r1');
 
-SELECT placementid, p.shardid, logicalrelid, groupid FROM pg_dist_placement p JOIN pg_dist_shard s ON p.shardid = s.shardid;
+SELECT placementid, p.shardid, logicalrelid, LEAST(2, groupid) groupid
+FROM pg_dist_placement p JOIN pg_dist_shard s ON p.shardid = s.shardid
+ORDER BY placementid;
 
 
 SELECT citus.clear_network_traffic();
