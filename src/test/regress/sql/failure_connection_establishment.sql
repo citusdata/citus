@@ -31,8 +31,8 @@ ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(name);
 
 -- we will insert a connection delay here as this query was the cause for an investigation
 -- into connection establishment problems
-SET citus.node_connection_timeout TO 400;
-SELECT citus.mitmproxy('conn.delay(500)');
+SET citus.node_connection_timeout TO 1400;
+SELECT citus.mitmproxy('conn.delay(1500)');
 
 ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
 
@@ -55,7 +55,7 @@ ORDER BY placementid;
 
 
 SELECT citus.clear_network_traffic();
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.delay(1500)');
 
 SET citus.task_assignment_policy TO 'round-robin';
 SET citus.task_assignment_round_robin_index TO 0;
@@ -71,7 +71,7 @@ SELECT citus.mitmproxy('conn.allow()');
 -- distributed table instead of a reference table
 -- and with citus.force_max_query_parallelization is set
 SET citus.force_max_query_parallelization TO ON;
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.delay(1500)');
 SELECT count(*) FROM products;
 
 SELECT citus.mitmproxy('conn.allow()');
@@ -82,7 +82,7 @@ SELECT create_distributed_table('single_replicatated', 'key');
 -- this time the table is single replicated and we're still using the
 -- the max parallelization flag, so the query should fail
 SET citus.force_max_query_parallelization TO ON;
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.delay(1500)');
 SELECT count(*) FROM single_replicatated;
 
 SET citus.force_max_query_parallelization TO OFF;
@@ -99,7 +99,7 @@ FROM
 WHERE
 	shardstate = 3 AND
 	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'single_replicatated'::regclass);
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.delay(1500)');
 INSERT INTO single_replicatated VALUES (100);
 COMMIT;
 SELECT
@@ -148,7 +148,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="SELECT 1").cancel(' || p
 SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
 
 -- verify that the checks are not successful when timeouts happen on a connection
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.delay(1500)');
 SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
 
 -- tests for citus_check_cluster_node_health
