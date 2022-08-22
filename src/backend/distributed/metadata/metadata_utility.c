@@ -755,6 +755,7 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 								 sizeQueryType), quotedShardName);
 			appendStringInfo(selectQuery, " + ");
 		}
+
 		/* for non-partitioned tables, add them into a list and then calculate using a SUM */
 		else
 		{
