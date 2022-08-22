@@ -791,6 +791,8 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 
 	appendStringInfoString(selectQuery, ") as q(relid);");
 
+	elog(DEBUG4, "Size Query: %s", selectQuery->data);
+
 	return selectQuery;
 }
 
