@@ -49,24 +49,19 @@ INSERT INTO r1 (id, name) VALUES
 
 SELECT create_reference_table('r1');
 
+SELECT placementid, p.shardid, logicalrelid, groupid FROM pg_dist_placement p JOIN pg_dist_shard s ON p.shardid = s.shardid;
+
+
 SELECT citus.clear_network_traffic();
 SELECT citus.mitmproxy('conn.delay(500)');
 
--- we cannot control which replica of the reference table will be queried and there is
--- only one specific client we can control the connection for.
--- by using round-robin task_assignment_policy we can force to hit both machines.
--- and in the end, dumping the network traffic shows that the connection establishment
--- is initiated to the node behind the proxy
-SET client_min_messages TO ERROR;
 SET citus.task_assignment_policy TO 'round-robin';
--- suppress the warning since we can't control which shard is chose first. Failure of this
--- test would be if one of the queries does not return the result but an error.
-SELECT name FROM r1 WHERE id = 2;
+SET citus.task_assignment_round_robin_index TO 0;
 SELECT name FROM r1 WHERE id = 2;
 
 -- verify a connection attempt was made to the intercepted node, this would have cause the
 -- connection to have been delayed and thus caused a timeout
-SELECT * FROM citus.dump_network_traffic() WHERE conn=0;
+SELECT * FROM citus.dump_network_traffic() WHERE conn=0 AND source = 'coordinator';
 
 SELECT citus.mitmproxy('conn.allow()');
 
@@ -75,9 +70,6 @@ SELECT citus.mitmproxy('conn.allow()');
 -- and with citus.force_max_query_parallelization is set
 SET citus.force_max_query_parallelization TO ON;
 SELECT citus.mitmproxy('conn.delay(500)');
--- suppress the warning since we can't control which shard is chose first. Failure of this
--- test would be if one of the queries does not return the result but an error.
-SELECT count(*) FROM products;
 SELECT count(*) FROM products;
 
 SELECT citus.mitmproxy('conn.allow()');

@@ -527,6 +527,7 @@ typedef List *(*ReorderFunction)(List *);
 
 /* Config variable managed via guc.c */
 extern int TaskAssignmentPolicy;
+extern int TaskAssignmentRoundRobinIndex;
 extern bool EnableUniqueJobIds;
 
 

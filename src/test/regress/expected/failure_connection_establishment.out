@@ -70,6 +70,21 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 
 (1 row)
 
+SELECT placementid, p.shardid, logicalrelid, groupid FROM pg_dist_placement p JOIN pg_dist_shard s ON p.shardid = s.shardid;
+ placementid | shardid | logicalrelid | groupid
+---------------------------------------------------------------------
+     1450000 | 1450000 | products     |       2
+     1450001 | 1450000 | products     |       1
+     1450002 | 1450001 | products     |       1
+     1450003 | 1450001 | products     |       2
+     1450004 | 1450002 | products     |       2
+     1450005 | 1450002 | products     |       1
+     1450006 | 1450003 | products     |       1
+     1450007 | 1450003 | products     |       2
+     1450008 | 1450004 | r1           |       2
+     1450009 | 1450004 | r1           |       1
+(10 rows)
+
 SELECT citus.clear_network_traffic();
  clear_network_traffic
 ---------------------------------------------------------------------
@@ -82,22 +97,10 @@ SELECT citus.mitmproxy('conn.delay(500)');
 
 (1 row)
 
--- we cannot control which replica of the reference table will be queried and there is
--- only one specific client we can control the connection for.
--- by using round-robin task_assignment_policy we can force to hit both machines.
--- and in the end, dumping the network traffic shows that the connection establishment
--- is initiated to the node behind the proxy
-SET client_min_messages TO ERROR;
 SET citus.task_assignment_policy TO 'round-robin';
--- suppress the warning since we can't control which shard is chose first. Failure of this
--- test would be if one of the queries does not return the result but an error.
+SET citus.task_assignment_round_robin_index TO 0;
 SELECT name FROM r1 WHERE id = 2;
- name
----------------------------------------------------------------------
- bar
-(1 row)
-
-SELECT name FROM r1 WHERE id = 2;
+WARNING:  could not establish any connections to the node localhost:xxxxx after 400 ms
  name
 ---------------------------------------------------------------------
  bar
@@ -105,7 +108,7 @@ SELECT name FROM r1 WHERE id = 2;
 
 -- verify a connection attempt was made to the intercepted node, this would have cause the
 -- connection to have been delayed and thus caused a timeout
-SELECT * FROM citus.dump_network_traffic() WHERE conn=0;
+SELECT * FROM citus.dump_network_traffic() WHERE conn=0 AND source = 'coordinator';
  conn |   source    |      message
 ---------------------------------------------------------------------
     0 | coordinator | [initial message]
@@ -127,15 +130,8 @@ SELECT citus.mitmproxy('conn.delay(500)');
 
 (1 row)
 
--- suppress the warning since we can't control which shard is chose first. Failure of this
--- test would be if one of the queries does not return the result but an error.
 SELECT count(*) FROM products;
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
-SELECT count(*) FROM products;
+WARNING:  could not establish any connections to the node localhost:xxxxx after 400 ms
  count
 ---------------------------------------------------------------------
      0
