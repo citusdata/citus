@@ -762,12 +762,9 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 		}
 	}
 
-	if (list_length(nonPartitionedShardNames) < 1)
+	if (list_length(nonPartitionedShardNames) == 0)
 	{
-		/*
-		* Add 0 as a last size, it handles empty list case and makes size control checks
-		* unnecessary which would have implemented without this line.
-		*/
+		/* add 0 as a last size, it handles empty list case. */
 		appendStringInfo(selectQuery, "0;");
 
 		/* early return if all tables are partitioned */
