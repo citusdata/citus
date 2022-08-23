@@ -57,12 +57,8 @@ SELECT citus.mitmproxy('conn.allow()');
 
 -- Make sure that we fall back to a working node for reads, even if it's not
 -- the first choice in our task assignment policy.
--- This sometimes adds an extra warning line like this (without a cause after
--- the error):
--- WARNING:  connection to the remote node localhost:9060 failed with the following error:
--- So because of that we have two output files
 SET citus.node_connection_timeout TO 900;
-SELECT citus.mitmproxy('conn.connect_delay(1000)');
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
 -- tests for connectivity checks
 SELECT name FROM r1 WHERE id = 2;
 RESET citus.node_connection_timeout;
@@ -72,7 +68,7 @@ SELECT citus.mitmproxy('conn.allow()');
 -- a reference table and with citus.force_max_query_parallelization is set
 SET citus.force_max_query_parallelization TO ON;
 SET citus.node_connection_timeout TO 900;
-SELECT citus.mitmproxy('conn.connect_delay(1000)');
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
 SELECT count(*) FROM products;
 RESET citus.node_connection_timeout;
 SELECT citus.mitmproxy('conn.allow()');
@@ -85,7 +81,7 @@ SELECT create_distributed_table('single_replicatated', 'key');
 -- the max parallelization flag, so the query should fail
 SET citus.force_max_query_parallelization TO ON;
 SET citus.node_connection_timeout TO 900;
-SELECT citus.mitmproxy('conn.connect_delay(1000)');
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
 SELECT count(*) FROM single_replicatated;
 RESET citus.force_max_query_parallelization;
 RESET citus.node_connection_timeout;
@@ -104,7 +100,7 @@ WHERE
 	shardstate = 3 AND
 	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'single_replicatated'::regclass);
 SET citus.node_connection_timeout TO 900;
-SELECT citus.mitmproxy('conn.connect_delay(1000)');
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
 INSERT INTO single_replicatated VALUES (100);
 COMMIT;
 RESET citus.node_connection_timeout;
@@ -154,7 +150,7 @@ SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
 
 -- verify that the checks are not successful when timeouts happen on a connection
 SET citus.node_connection_timeout TO 900;
-SELECT citus.mitmproxy('conn.connect_delay(1000)');
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
 SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
 RESET citus.node_connection_timeout;
 SELECT citus.mitmproxy('conn.allow()');

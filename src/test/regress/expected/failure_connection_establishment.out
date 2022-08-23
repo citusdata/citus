@@ -94,12 +94,8 @@ SELECT citus.mitmproxy('conn.allow()');
 
 -- Make sure that we fall back to a working node for reads, even if it's not
 -- the first choice in our task assignment policy.
--- This sometimes adds an extra warning line like this (without a cause after
--- the error):
--- WARNING:  connection to the remote node localhost:xxxxx failed with the following error:
--- So because of that we have two output files
 SET citus.node_connection_timeout TO 900;
-SELECT citus.mitmproxy('conn.connect_delay(1000)');
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -124,7 +120,7 @@ SELECT citus.mitmproxy('conn.allow()');
 -- a reference table and with citus.force_max_query_parallelization is set
 SET citus.force_max_query_parallelization TO ON;
 SET citus.node_connection_timeout TO 900;
-SELECT citus.mitmproxy('conn.connect_delay(1000)');
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -156,7 +152,7 @@ SELECT create_distributed_table('single_replicatated', 'key');
 -- the max parallelization flag, so the query should fail
 SET citus.force_max_query_parallelization TO ON;
 SET citus.node_connection_timeout TO 900;
-SELECT citus.mitmproxy('conn.connect_delay(1000)');
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -189,7 +185,7 @@ WHERE
 (1 row)
 
 SET citus.node_connection_timeout TO 900;
-SELECT citus.mitmproxy('conn.connect_delay(1000)');
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -300,7 +296,7 @@ SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
 -- verify that the checks are not successful when timeouts happen on a connection
 SET citus.node_connection_timeout TO 900;
-SELECT citus.mitmproxy('conn.connect_delay(1000)');
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
  mitmproxy
 ---------------------------------------------------------------------
 
