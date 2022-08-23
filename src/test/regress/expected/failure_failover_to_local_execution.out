@@ -36,7 +36,7 @@ INSERT INTO failover_to_local SELECT i, i::text FROM generate_series(0,20)i;
 -- even if the connection establishment fails, Citus can
 -- failover to local exection
 SET citus.node_connection_timeout TO 400;
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.connect_delay(500)');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -68,7 +68,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 -- if the local execution is disabled, Citus does
 -- not try to fallback to local execution
 SET citus.enable_local_execution TO false;
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.connect_delay(500)');
  mitmproxy
 ---------------------------------------------------------------------
 

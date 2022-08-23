@@ -115,7 +115,7 @@ class ActionsMixin:
         return self.next
 
     def connect_delay(self, timeMs):
-        self.next = DelayHandler(self.root, timeMs)
+        self.next = ConnectDelayHandler(self.root, timeMs)
         return self.next
 
 class AcceptHandler(Handler):
@@ -174,8 +174,8 @@ class CancelHandler(Handler):
         time.sleep(0.1)
         return 'done'
 
-class DelayHandler(Handler):
-    'Delay a packet by sleeping before deciding what to do'
+class ConnectDelayHandler(Handler):
+    'Delay the initial packet by sleeping before deciding what to do'
     def __init__(self, root, timeMs):
         super().__init__(root)
         self.timeMs = timeMs
