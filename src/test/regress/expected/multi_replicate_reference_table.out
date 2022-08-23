@@ -774,6 +774,7 @@ SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
 (1 row)
 
 CREATE TABLE ref_table(a int);
+CREATE INDEX ON ref_table (a);
 SELECT create_reference_table('ref_table');
  create_reference_table
 ---------------------------------------------------------------------
@@ -1037,6 +1038,25 @@ WHERE nodeport=:worker_1_port;
  ?column?
 ---------------------------------------------------------------------
         0
+(1 row)
+
+-- test that we can use non-blocking rebalance
+SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT rebalance_table_shards(shard_transfer_mode := 'force_logical');
+ rebalance_table_shards
+---------------------------------------------------------------------
+
 (1 row)
 
 -- test that metadata is synced on replicate_reference_tables
