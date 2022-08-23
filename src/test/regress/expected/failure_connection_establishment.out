@@ -34,24 +34,6 @@ SELECT create_distributed_table('products', 'product_no');
 ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(name);
 ERROR:  cannot create constraint on "products"
 DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
--- we will insert a connection delay here as this query was the cause for an investigation
--- into connection establishment problems
-SET citus.node_connection_timeout TO 400;
-SELECT citus.mitmproxy('conn.delay(500)');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
-WARNING:  could not establish connection after 400 ms
-ERROR:  connection to the remote node localhost:xxxxx failed
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
 CREATE TABLE r1 (
     id int PRIMARY KEY,
     name text
@@ -70,77 +52,88 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 
 (1 row)
 
-SELECT citus.clear_network_traffic();
- clear_network_traffic
+-- Confirm that the first placement for both tables is on the second worker
+-- node. This is necessary so  we can use the first-replica task assignment
+-- policy to first hit the node that we generate timeouts for.
+SELECT placementid, p.shardid, logicalrelid, LEAST(2, groupid) groupid
+FROM pg_dist_placement p JOIN pg_dist_shard s ON p.shardid = s.shardid
+ORDER BY placementid;
+ placementid | shardid | logicalrelid | groupid
 ---------------------------------------------------------------------
+     1450000 | 1450000 | products     |       2
+     1450001 | 1450000 | products     |       1
+     1450002 | 1450001 | products     |       1
+     1450003 | 1450001 | products     |       2
+     1450004 | 1450002 | products     |       2
+     1450005 | 1450002 | products     |       1
+     1450006 | 1450003 | products     |       1
+     1450007 | 1450003 | products     |       2
+     1450008 | 1450004 | r1           |       2
+     1450009 | 1450004 | r1           |       1
+(10 rows)
 
-(1 row)
-
-SELECT citus.mitmproxy('conn.delay(500)');
+SET citus.task_assignment_policy TO 'first-replica';
+-- we will insert a connection delay here as this query was the cause for an
+-- investigation into connection establishment problems
+SET citus.node_connection_timeout TO 900;
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
--- we cannot control which replica of the reference table will be queried and there is
--- only one specific client we can control the connection for.
--- by using round-robin task_assignment_policy we can force to hit both machines.
--- and in the end, dumping the network traffic shows that the connection establishment
--- is initiated to the node behind the proxy
-SET client_min_messages TO ERROR;
-SET citus.task_assignment_policy TO 'round-robin';
--- suppress the warning since we can't control which shard is chose first. Failure of this
--- test would be if one of the queries does not return the result but an error.
-SELECT name FROM r1 WHERE id = 2;
- name
----------------------------------------------------------------------
- bar
-(1 row)
-
-SELECT name FROM r1 WHERE id = 2;
- name
----------------------------------------------------------------------
- bar
-(1 row)
-
--- verify a connection attempt was made to the intercepted node, this would have cause the
--- connection to have been delayed and thus caused a timeout
-SELECT * FROM citus.dump_network_traffic() WHERE conn=0;
- conn |   source    |      message
----------------------------------------------------------------------
-    0 | coordinator | [initial message]
-(1 row)
-
+ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
+WARNING:  could not establish connection after 900 ms
+ERROR:  connection to the remote node localhost:xxxxx failed
+RESET citus.node_connection_timeout;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
--- similar test with the above but this time on a
--- distributed table instead of a reference table
--- and with citus.force_max_query_parallelization is set
-SET citus.force_max_query_parallelization TO ON;
-SELECT citus.mitmproxy('conn.delay(500)');
+-- Make sure that we fall back to a working node for reads, even if it's not
+-- the first choice in our task assignment policy.
+SET citus.node_connection_timeout TO 900;
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
--- suppress the warning since we can't control which shard is chose first. Failure of this
--- test would be if one of the queries does not return the result but an error.
+-- tests for connectivity checks
+SELECT name FROM r1 WHERE id = 2;
+WARNING:  could not establish any connections to the node localhost:xxxxx after 900 ms
+ name
+---------------------------------------------------------------------
+ bar
+(1 row)
+
+RESET citus.node_connection_timeout;
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+-- similar test with the above but this time on a distributed table instead of
+-- a reference table and with citus.force_max_query_parallelization is set
+SET citus.force_max_query_parallelization TO ON;
+SET citus.node_connection_timeout TO 900;
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT count(*) FROM products;
+WARNING:  could not establish any connections to the node localhost:xxxxx after 900 ms
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
-SELECT count(*) FROM products;
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
+RESET citus.node_connection_timeout;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -158,24 +151,26 @@ SELECT create_distributed_table('single_replicatated', 'key');
 -- this time the table is single replicated and we're still using the
 -- the max parallelization flag, so the query should fail
 SET citus.force_max_query_parallelization TO ON;
-SELECT citus.mitmproxy('conn.delay(500)');
+SET citus.node_connection_timeout TO 900;
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT count(*) FROM single_replicatated;
-ERROR:  could not establish any connections to the node localhost:xxxxx after 400 ms
-SET citus.force_max_query_parallelization TO OFF;
--- one similar test, and this time on modification queries
--- to see that connection establishement failures could
--- fail the transaction (but not mark any placements as INVALID)
+ERROR:  could not establish any connections to the node localhost:xxxxx after 900 ms
+RESET citus.force_max_query_parallelization;
+RESET citus.node_connection_timeout;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
+-- one similar test, and this time on modification queries
+-- to see that connection establishement failures could
+-- fail the transaction (but not mark any placements as INVALID)
 BEGIN;
 SELECT
 	count(*) as invalid_placement_count
@@ -189,15 +184,23 @@ WHERE
                        0
 (1 row)
 
-SELECT citus.mitmproxy('conn.delay(500)');
+SET citus.node_connection_timeout TO 900;
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
 INSERT INTO single_replicatated VALUES (100);
-ERROR:  could not establish any connections to the node localhost:xxxxx after 400 ms
+ERROR:  could not establish any connections to the node localhost:xxxxx after 900 ms
 COMMIT;
+RESET citus.node_connection_timeout;
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT
 	count(*) as invalid_placement_count
 FROM
@@ -208,13 +211,6 @@ WHERE
  invalid_placement_count
 ---------------------------------------------------------------------
                        0
-(1 row)
-
--- show that INSERT failed
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy
----------------------------------------------------------------------
-
 (1 row)
 
 SELECT count(*) FROM single_replicatated WHERE key = 100;
@@ -299,7 +295,8 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="SELECT 1").cancel(' || p
 SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
 -- verify that the checks are not successful when timeouts happen on a connection
-SELECT citus.mitmproxy('conn.delay(500)');
+SET citus.node_connection_timeout TO 900;
+SELECT citus.mitmproxy('conn.connect_delay(1400)');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -309,6 +306,13 @@ SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
  citus_check_connection_to_node
 ---------------------------------------------------------------------
  f
+(1 row)
+
+RESET citus.node_connection_timeout;
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
 (1 row)
 
 -- tests for citus_check_cluster_node_health
@@ -427,13 +431,13 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT 1$").cancel(' || pg_backend_
 SELECT * FROM citus_check_cluster_node_health();
 ERROR:  canceling statement due to user request
 RESET client_min_messages;
+RESET citus.node_connection_timeout;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
-SET citus.node_connection_timeout TO DEFAULT;
 DROP SCHEMA fail_connect CASCADE;
 NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table products
