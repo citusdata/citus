@@ -2135,18 +2135,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomIntVariable(
-		"citus.task_assignment_round_robin_index",
-		gettext_noop("Sets the shifting which should be used when using round robin"),
-		gettext_noop("This is only meant to be used during tests to get consistent "
-					 "output and consistently trigger certain failure scenarios."),
-		&TaskAssignmentRoundRobinIndex,
-		-1, -1, INT_MAX,
-		PGC_SUSET,
-		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-
 	DefineCustomEnumVariable(
 		"citus.task_executor_type",
 		gettext_noop("Sets the executor type to be used for distributed queries."),

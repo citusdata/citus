@@ -28,17 +28,6 @@ SELECT create_distributed_table('products', 'product_no');
 -- Command below should error out since 'name' is not a distribution column
 ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(name);
 
-
--- we will insert a connection delay here as this query was the cause for an investigation
--- into connection establishment problems
-SET citus.node_connection_timeout TO 400;
-SELECT citus.mitmproxy('conn.delay(500)');
-
-ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
-
-RESET citus.node_connection_timeout;
-SELECT citus.mitmproxy('conn.allow()');
-
 CREATE TABLE r1 (
     id int PRIMARY KEY,
     name text
@@ -50,29 +39,30 @@ INSERT INTO r1 (id, name) VALUES
 
 SELECT create_reference_table('r1');
 
+-- Confirm that the first placement for both tables is on the second worker
+-- node. This is necessary so  we can use the first-replica task assignment
+-- policy to first hit the node that we generate timeouts for.
 SELECT placementid, p.shardid, logicalrelid, LEAST(2, groupid) groupid
 FROM pg_dist_placement p JOIN pg_dist_shard s ON p.shardid = s.shardid
 ORDER BY placementid;
+SET citus.task_assignment_policy TO 'first-replica';
 
-
-SELECT citus.clear_network_traffic();
+-- we will insert a connection delay here as this query was the cause for an
+-- investigation into connection establishment problems
 SET citus.node_connection_timeout TO 400;
 SELECT citus.mitmproxy('conn.delay(500)');
 
-SET citus.task_assignment_policy TO 'round-robin';
-SET citus.task_assignment_round_robin_index TO 0;
+ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
+
+-- Make sure that we fall back to a working node for reads, even if it's not
+-- the first choice in our task assignment policy.
+SET citus.node_connection_timeout TO 400;
+SELECT citus.mitmproxy('conn.delay(500)');
+
 SELECT name FROM r1 WHERE id = 2;
 
--- verify a connection attempt was made to the intercepted node, this would have cause the
--- connection to have been delayed and thus caused a timeout
-SELECT * FROM citus.dump_network_traffic() WHERE conn=0 AND source = 'coordinator';
-
-RESET citus.node_connection_timeout;
-SELECT citus.mitmproxy('conn.allow()');
-
--- similar test with the above but this time on a
--- distributed table instead of a reference table
--- and with citus.force_max_query_parallelization is set
+-- similar test with the above but this time on a distributed table instead of
+-- a reference table and with citus.force_max_query_parallelization is set
 SET citus.force_max_query_parallelization TO ON;
 SET citus.node_connection_timeout TO 400;
 SELECT citus.mitmproxy('conn.delay(500)');

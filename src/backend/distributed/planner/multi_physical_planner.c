@@ -86,7 +86,6 @@ int RepartitionJoinBucketCountPerNode = 8;
 
 /* Policy to use when assigning tasks to worker nodes */
 int TaskAssignmentPolicy = TASK_ASSIGNMENT_GREEDY;
-int TaskAssignmentRoundRobinIndex = -1;
 bool EnableUniqueJobIds = true;
 
 
@@ -5220,12 +5219,6 @@ RoundRobinReorder(List *placementList)
 	TransactionId transactionId = GetMyProcLocalTransactionId();
 	uint32 activePlacementCount = list_length(placementList);
 	uint32 roundRobinIndex = (transactionId % activePlacementCount);
-
-	if (TaskAssignmentRoundRobinIndex != -1 &&
-		TaskAssignmentRoundRobinIndex < activePlacementCount)
-	{
-		roundRobinIndex = TaskAssignmentRoundRobinIndex;
-	}
 
 	placementList = LeftRotateList(placementList, roundRobinIndex);
 
