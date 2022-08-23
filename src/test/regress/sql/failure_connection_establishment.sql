@@ -13,12 +13,6 @@ SET search_path TO 'fail_connect';
 
 SET citus.shard_count TO 4;
 SET citus.max_cached_conns_per_worker TO 0;
--- We make sure the maintenance daemon doesn't send queries to the workers,
--- because we use dump_network_traffic and thus the maintenance daemon queries
--- would randomly show up there otherwise.
-ALTER SYSTEM SET citus.distributed_deadlock_detection_factor TO -1;
-ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
-SELECT pg_reload_conf();
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1450000;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 1450000;
 
@@ -61,24 +55,18 @@ ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
 RESET citus.node_connection_timeout;
 SELECT citus.mitmproxy('conn.allow()');
 
-SELECT citus.clear_network_traffic();
-
 -- Make sure that we fall back to a working node for reads, even if it's not
 -- the first choice in our task assignment policy.
---
--- Instead of looking at the warning we use dump_network_traffic to confirm
--- that
+-- This sometimes adds an extra warning line like this (without a cause after
+-- the error):
 -- WARNING:  connection to the remote node localhost:9060 failed with the following error:
+-- So because of that we have two output files
 SET citus.node_connection_timeout TO 900;
 SELECT citus.mitmproxy('conn.connect_delay(1000)');
 -- tests for connectivity checks
 SELECT name FROM r1 WHERE id = 2;
 RESET citus.node_connection_timeout;
 SELECT citus.mitmproxy('conn.allow()');
-
--- verify a connection attempt was made to the intercepted node, this would
--- have cause the connection to have been delayed and thus caused a timeout
-SELECT * FROM citus.dump_network_traffic() WHERE conn=0 AND source = 'coordinator';
 
 -- similar test with the above but this time on a distributed table instead of
 -- a reference table and with citus.force_max_query_parallelization is set
@@ -213,8 +201,5 @@ SELECT * FROM citus_check_cluster_node_health();
 RESET client_min_messages;
 RESET citus.node_connection_timeout;
 SELECT citus.mitmproxy('conn.allow()');
-ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
-ALTER SYSTEM RESET citus.recover_2pc_interval;
-SELECT pg_reload_conf();
 DROP SCHEMA fail_connect CASCADE;
 SET search_path TO default;

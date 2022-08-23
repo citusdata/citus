@@ -15,17 +15,6 @@ CREATE SCHEMA fail_connect;
 SET search_path TO 'fail_connect';
 SET citus.shard_count TO 4;
 SET citus.max_cached_conns_per_worker TO 0;
--- We make sure the maintenance daemon doesn't send queries to the workers,
--- because we use dump_network_traffic and thus the maintenance daemon queries
--- would randomly show up there otherwise.
-ALTER SYSTEM SET citus.distributed_deadlock_detection_factor TO -1;
-ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
-SELECT pg_reload_conf();
- pg_reload_conf
----------------------------------------------------------------------
- t
-(1 row)
-
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1450000;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 1450000;
 CREATE TABLE products (
@@ -103,18 +92,12 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
-SELECT citus.clear_network_traffic();
- clear_network_traffic
----------------------------------------------------------------------
-
-(1 row)
-
 -- Make sure that we fall back to a working node for reads, even if it's not
 -- the first choice in our task assignment policy.
---
--- Instead of looking at the warning we use dump_network_traffic to confirm
--- that
+-- This sometimes adds an extra warning line like this (without a cause after
+-- the error):
 -- WARNING:  connection to the remote node localhost:xxxxx failed with the following error:
+-- So because of that we have two output files
 SET citus.node_connection_timeout TO 900;
 SELECT citus.mitmproxy('conn.connect_delay(1000)');
  mitmproxy
@@ -135,14 +118,6 @@ SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
 
-(1 row)
-
--- verify a connection attempt was made to the intercepted node, this would
--- have cause the connection to have been delayed and thus caused a timeout
-SELECT * FROM citus.dump_network_traffic() WHERE conn=0 AND source = 'coordinator';
- conn |   source    |      message
----------------------------------------------------------------------
-    0 | coordinator | [initial message]
 (1 row)
 
 -- similar test with the above but this time on a distributed table instead of
@@ -465,14 +440,6 @@ SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
 
-(1 row)
-
-ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
-ALTER SYSTEM RESET citus.recover_2pc_interval;
-SELECT pg_reload_conf();
- pg_reload_conf
----------------------------------------------------------------------
- t
 (1 row)
 
 DROP SCHEMA fail_connect CASCADE;
