@@ -36,15 +36,15 @@ ERROR:  cannot create constraint on "products"
 DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 -- we will insert a connection delay here as this query was the cause for an investigation
 -- into connection establishment problems
-SET citus.node_connection_timeout TO 1400;
-SELECT citus.mitmproxy('conn.delay(1500)');
+SET citus.node_connection_timeout TO 400;
+SELECT citus.mitmproxy('conn.delay(500)');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
 ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
-WARNING:  could not establish connection after 1400 ms
+WARNING:  could not establish connection after 400 ms
 ERROR:  connection to the remote node localhost:xxxxx failed
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -93,7 +93,7 @@ SELECT citus.clear_network_traffic();
 
 (1 row)
 
-SELECT citus.mitmproxy('conn.delay(1500)');
+SELECT citus.mitmproxy('conn.delay(500)');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -102,7 +102,7 @@ SELECT citus.mitmproxy('conn.delay(1500)');
 SET citus.task_assignment_policy TO 'round-robin';
 SET citus.task_assignment_round_robin_index TO 0;
 SELECT name FROM r1 WHERE id = 2;
-WARNING:  could not establish any connections to the node localhost:xxxxx after 1400 ms
+WARNING:  could not establish any connections to the node localhost:xxxxx after 400 ms
  name
 ---------------------------------------------------------------------
  bar
@@ -126,14 +126,14 @@ SELECT citus.mitmproxy('conn.allow()');
 -- distributed table instead of a reference table
 -- and with citus.force_max_query_parallelization is set
 SET citus.force_max_query_parallelization TO ON;
-SELECT citus.mitmproxy('conn.delay(1500)');
+SELECT citus.mitmproxy('conn.delay(500)');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT count(*) FROM products;
-WARNING:  could not establish any connections to the node localhost:xxxxx after 1400 ms
+WARNING:  could not establish any connections to the node localhost:xxxxx after 400 ms
  count
 ---------------------------------------------------------------------
      0
@@ -147,6 +147,7 @@ SELECT citus.mitmproxy('conn.allow()');
 
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE single_replicatated(key int);
+RESET citus.node_connection_timeout; -- speed up test and make it less flaky in CI
 SELECT create_distributed_table('single_replicatated', 'key');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -155,15 +156,16 @@ SELECT create_distributed_table('single_replicatated', 'key');
 
 -- this time the table is single replicated and we're still using the
 -- the max parallelization flag, so the query should fail
+SET citus.node_connection_timeout TO 400;
 SET citus.force_max_query_parallelization TO ON;
-SELECT citus.mitmproxy('conn.delay(1500)');
+SELECT citus.mitmproxy('conn.delay(500)');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT count(*) FROM single_replicatated;
-ERROR:  could not establish any connections to the node localhost:xxxxx after 1400 ms
+ERROR:  could not establish any connections to the node localhost:xxxxx after 400 ms
 SET citus.force_max_query_parallelization TO OFF;
 -- one similar test, and this time on modification queries
 -- to see that connection establishement failures could
@@ -187,14 +189,14 @@ WHERE
                        0
 (1 row)
 
-SELECT citus.mitmproxy('conn.delay(1500)');
+SELECT citus.mitmproxy('conn.delay(500)');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
 INSERT INTO single_replicatated VALUES (100);
-ERROR:  could not establish any connections to the node localhost:xxxxx after 1400 ms
+ERROR:  could not establish any connections to the node localhost:xxxxx after 400 ms
 COMMIT;
 SELECT
 	count(*) as invalid_placement_count
@@ -297,7 +299,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="SELECT 1").cancel(' || p
 SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
 -- verify that the checks are not successful when timeouts happen on a connection
-SELECT citus.mitmproxy('conn.delay(1500)');
+SELECT citus.mitmproxy('conn.delay(500)');
  mitmproxy
 ---------------------------------------------------------------------
 
