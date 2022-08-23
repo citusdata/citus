@@ -35,8 +35,8 @@ SET citus.max_cached_conns_per_worker to 0;
 INSERT INTO failover_to_local SELECT i, i::text FROM generate_series(0,20)i;
 -- even if the connection establishment fails, Citus can
 -- failover to local exection
-SET citus.node_connection_timeout TO 400;
-SELECT citus.mitmproxy('conn.connect_delay(500)');
+SET citus.node_connection_timeout TO 900;
+SELECT citus.mitmproxy('conn.connect_delay(1000)');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -45,7 +45,7 @@ SELECT citus.mitmproxy('conn.connect_delay(500)');
 SET citus.log_local_commands TO ON;
 SET client_min_messages TO DEBUG1;
 SELECT count(*) FROM failover_to_local;
-DEBUG:  could not establish any connections to the node localhost:xxxxx after 400 ms
+DEBUG:  could not establish any connections to the node localhost:xxxxx after 900 ms
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM failure_failover_to_local_execution.failover_to_local_1980000 failover_to_local WHERE true
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM failure_failover_to_local_execution.failover_to_local_1980002 failover_to_local WHERE true
  count
@@ -68,7 +68,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 -- if the local execution is disabled, Citus does
 -- not try to fallback to local execution
 SET citus.enable_local_execution TO false;
-SELECT citus.mitmproxy('conn.connect_delay(500)');
+SELECT citus.mitmproxy('conn.connect_delay(1000)');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -76,7 +76,7 @@ SELECT citus.mitmproxy('conn.connect_delay(500)');
 
 SET citus.log_local_commands TO ON;
 SELECT count(*) FROM failover_to_local;
-ERROR:  could not establish any connections to the node localhost:xxxxx after 400 ms
+ERROR:  could not establish any connections to the node localhost:xxxxx after 900 ms
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------

@@ -755,3 +755,115 @@ workflows:
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-failure
           requires: [build-14]
+      - test-citus:
+          name: 'test-13b_check-failure'
+          pg_major: 13
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-failure
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13b_check-failure-1'
+          pg_major: 13
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-failure
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13b_check-failure-2'
+          pg_major: 13
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-failure
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13b_check-failure-3'
+          pg_major: 13
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-failure
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13b_check-failure-4'
+          pg_major: 13
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-failure
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13b_check-failure-5'
+          pg_major: 13
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-failure
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13b_check-failure-6'
+          pg_major: 13
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-failure
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13b_check-failure-7'
+          pg_major: 13
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-failure
+          requires: [build-13]
+      - test-citus:
+          name: 'test-14b_check-failure'
+          pg_major: 14
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-failure
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14b_check-failure-1'
+          pg_major: 14
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-failure
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14b_check-failure-2'
+          pg_major: 14
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-failure
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14b_check-failure-3'
+          pg_major: 14
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-failure
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14b_check-failure-4'
+          pg_major: 14
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-failure
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14b_check-failure-5'
+          pg_major: 14
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-failure
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14b_check-failure-6'
+          pg_major: 14
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-failure
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14b_check-failure-7'
+          pg_major: 14
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-failure
+          requires: [build-14]
