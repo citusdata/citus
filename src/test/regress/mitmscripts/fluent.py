@@ -114,7 +114,7 @@ class ActionsMixin:
         self.next = CancelHandler(self.root, pid)
         return self.next
 
-    def delay(self, timeMs):
+    def connect_delay(self, timeMs):
         self.next = DelayHandler(self.root, timeMs)
         return self.next
 
@@ -180,7 +180,8 @@ class DelayHandler(Handler):
         super().__init__(root)
         self.timeMs = timeMs
     def _handle(self, flow, message):
-        time.sleep(self.timeMs/1000.0)
+        if message.is_initial:
+            time.sleep(self.timeMs/1000.0)
         return 'done'
 
 class Contains(Handler, ActionsMixin, FilterableMixin):

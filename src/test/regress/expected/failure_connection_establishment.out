@@ -76,7 +76,7 @@ SET citus.task_assignment_policy TO 'first-replica';
 -- we will insert a connection delay here as this query was the cause for an
 -- investigation into connection establishment problems
 SET citus.node_connection_timeout TO 400;
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.connect_delay(500)');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -88,7 +88,7 @@ ERROR:  connection to the remote node localhost:xxxxx failed
 -- Make sure that we fall back to a working node for reads, even if it's not
 -- the first choice in our task assignment policy.
 SET citus.node_connection_timeout TO 400;
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.connect_delay(500)');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -105,7 +105,7 @@ WARNING:  could not establish any connections to the node localhost:xxxxx after 
 -- a reference table and with citus.force_max_query_parallelization is set
 SET citus.force_max_query_parallelization TO ON;
 SET citus.node_connection_timeout TO 400;
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.connect_delay(500)');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -137,7 +137,7 @@ SELECT create_distributed_table('single_replicatated', 'key');
 -- the max parallelization flag, so the query should fail
 SET citus.force_max_query_parallelization TO ON;
 SET citus.node_connection_timeout TO 400;
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.connect_delay(500)');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -170,7 +170,7 @@ WHERE
 (1 row)
 
 SET citus.node_connection_timeout TO 400;
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.connect_delay(500)');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -282,7 +282,7 @@ SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
 -- verify that the checks are not successful when timeouts happen on a connection
 SET citus.node_connection_timeout TO 400;
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.connect_delay(500)');
  mitmproxy
 ---------------------------------------------------------------------
 

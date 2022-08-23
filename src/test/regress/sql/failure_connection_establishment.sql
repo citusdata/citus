@@ -50,14 +50,14 @@ SET citus.task_assignment_policy TO 'first-replica';
 -- we will insert a connection delay here as this query was the cause for an
 -- investigation into connection establishment problems
 SET citus.node_connection_timeout TO 400;
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.connect_delay(500)');
 
 ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
 
 -- Make sure that we fall back to a working node for reads, even if it's not
 -- the first choice in our task assignment policy.
 SET citus.node_connection_timeout TO 400;
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.connect_delay(500)');
 
 SELECT name FROM r1 WHERE id = 2;
 
@@ -65,7 +65,7 @@ SELECT name FROM r1 WHERE id = 2;
 -- a reference table and with citus.force_max_query_parallelization is set
 SET citus.force_max_query_parallelization TO ON;
 SET citus.node_connection_timeout TO 400;
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.connect_delay(500)');
 SELECT count(*) FROM products;
 
 RESET citus.node_connection_timeout;
@@ -78,7 +78,7 @@ SELECT create_distributed_table('single_replicatated', 'key');
 -- the max parallelization flag, so the query should fail
 SET citus.force_max_query_parallelization TO ON;
 SET citus.node_connection_timeout TO 400;
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.connect_delay(500)');
 SELECT count(*) FROM single_replicatated;
 
 SET citus.force_max_query_parallelization TO OFF;
@@ -97,7 +97,7 @@ WHERE
 	shardstate = 3 AND
 	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'single_replicatated'::regclass);
 SET citus.node_connection_timeout TO 400;
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.connect_delay(500)');
 INSERT INTO single_replicatated VALUES (100);
 COMMIT;
 SELECT
@@ -148,7 +148,7 @@ SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
 
 -- verify that the checks are not successful when timeouts happen on a connection
 SET citus.node_connection_timeout TO 400;
-SELECT citus.mitmproxy('conn.delay(500)');
+SELECT citus.mitmproxy('conn.connect_delay(500)');
 SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
 
 -- tests for citus_check_cluster_node_health
