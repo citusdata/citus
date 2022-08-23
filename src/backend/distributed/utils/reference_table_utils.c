@@ -244,6 +244,16 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 				CopyShardPlacementToWorkerNodeQuery(sourceShardPlacement,
 													newWorkerNode,
 													transferMode);
+
+			/*
+			 * The placement copy command uses distributed execution to create
+			 * indexes. This is allowed when indicating that the backend is a
+			 * rebalancer backend.
+			 */
+			ExecuteCriticalRemoteCommand(connection,
+										 "SET LOCAL application_name TO "
+										 CITUS_REBALANCER_NAME);
+
 			ExecuteCriticalRemoteCommand(connection, placementCopyCommand->data);
 			RemoteTransactionCommit(connection);
 		}
