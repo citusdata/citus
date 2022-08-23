@@ -754,11 +754,6 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 
 		ErrorIfUnsupportedDropIndexStmt(dropIndexStatement);
 
-		if (AnyForeignKeyDependsOnIndex(distributedIndexId))
-		{
-			MarkInvalidateForeignKeyGraph();
-		}
-
 		ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId,
 						 distributedRelationId);
 

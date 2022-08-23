@@ -1514,16 +1514,6 @@ static void
 PostStandardProcessUtility(Node *parsetree)
 {
 	DecrementUtilityHookCountersIfNecessary(parsetree);
-
-	/*
-	 * Re-forming the foreign key graph relies on the command being executed
-	 * on the local table first. However, in order to decide whether the
-	 * command leads to an invalidation, we need to check before the command
-	 * is being executed since we read pg_constraint table. Thus, we maintain a
-	 * local flag and do the invalidation after multi_ProcessUtility,
-	 * before ExecuteDistributedDDLJob().
-	 */
-	InvalidateForeignKeyGraphForDDL();
 }
 
 
@@ -1555,22 +1545,6 @@ void
 MarkInvalidateForeignKeyGraph()
 {
 	shouldInvalidateForeignKeyGraph = true;
-}
-
-
-/*
- * InvalidateForeignKeyGraphForDDL simply keeps track of whether
- * the foreign key graph should be invalidated due to a DDL.
- */
-void
-InvalidateForeignKeyGraphForDDL(void)
-{
-	if (shouldInvalidateForeignKeyGraph)
-	{
-		InvalidateForeignKeyGraph();
-
-		shouldInvalidateForeignKeyGraph = false;
-	}
 }
 
 

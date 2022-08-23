@@ -90,7 +90,6 @@ static List * GetRangeVarListFromFKeyConstraintList(List *fKeyConstraintList);
 static List * GetRelationIdListFromRangeVarList(List *rangeVarList, LOCKMODE lockmode,
 												bool missingOk);
 static bool AlterTableCommandTypeIsTrigger(AlterTableType alterTableType);
-static bool AlterTableDropsForeignKey(AlterTableStmt *alterTableStatement);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
 static List * InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 									const char *commandString);
@@ -161,12 +160,6 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 		if (cacheEntry->colocationId != INVALID_COLOCATION_ID)
 		{
 			LockColocationId(cacheEntry->colocationId, ShareLock);
-		}
-
-		/* invalidate foreign key cache if the table involved in any foreign key */
-		if ((TableReferenced(relationId) || TableReferencing(relationId)))
-		{
-			MarkInvalidateForeignKeyGraph();
 		}
 
 		/* we're only interested in partitioned and mx tables */
@@ -794,18 +787,6 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		 * on shell table relation id.
 		 */
 		return PreprocessAlterTableStmt(node, alterTableCommand, processUtilityContext);
-	}
-
-	if (AlterTableDropsForeignKey(alterTableStatement))
-	{
-		/*
-		 * The foreign key graph keeps track of the foreign keys including local tables.
-		 * So, even if a foreign key on a local table is dropped, we should invalidate
-		 * the graph so that the next commands can see the graph up-to-date.
-		 * We are aware that utility hook would still invalidate foreign key graph
-		 * even when command fails, but currently we are ok with that.
-		 */
-		MarkInvalidateForeignKeyGraph();
 	}
 
 	bool referencingIsLocalTable = !IsCitusTable(leftRelationId);
@@ -1660,99 +1641,6 @@ ConstrTypeUsesIndex(ConstrType constrType)
 	return constrType == CONSTR_PRIMARY ||
 		   constrType == CONSTR_UNIQUE ||
 		   constrType == CONSTR_EXCLUSION;
-}
-
-
-/*
- * AlterTableDropsForeignKey returns true if the given AlterTableStmt drops
- * a foreign key. False otherwise.
- */
-static bool
-AlterTableDropsForeignKey(AlterTableStmt *alterTableStatement)
-{
-	LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
-	Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
-
-	AlterTableCmd *command = NULL;
-	foreach_ptr(command, alterTableStatement->cmds)
-	{
-		AlterTableType alterTableType = command->subtype;
-
-		if (alterTableType == AT_DropColumn)
-		{
-			char *columnName = command->name;
-			if (ColumnAppearsInForeignKey(columnName, relationId))
-			{
-				/* dropping a column in the either side of the fkey will drop the fkey */
-				return true;
-			}
-		}
-
-		/*
-		 * In order to drop the foreign key, other than DROP COLUMN, the command must be
-		 * DROP CONSTRAINT command.
-		 */
-		if (alterTableType != AT_DropConstraint)
-		{
-			continue;
-		}
-
-		char *constraintName = command->name;
-		if (ConstraintIsAForeignKey(constraintName, relationId))
-		{
-			return true;
-		}
-		else if (ConstraintIsAUniquenessConstraint(constraintName, relationId))
-		{
-			/*
-			 * If the uniqueness constraint of the column that the foreign key depends on
-			 * is getting dropped, then the foreign key will also be dropped.
-			 */
-			bool missingOk = false;
-			Oid uniquenessConstraintId =
-				get_relation_constraint_oid(relationId, constraintName, missingOk);
-			Oid indexId = get_constraint_index(uniquenessConstraintId);
-			if (AnyForeignKeyDependsOnIndex(indexId))
-			{
-				return true;
-			}
-		}
-	}
-
-	return false;
-}
-
-
-/*
- * AnyForeignKeyDependsOnIndex scans pg_depend and returns true if given index
- * is valid and any foreign key depends on it.
- */
-bool
-AnyForeignKeyDependsOnIndex(Oid indexId)
-{
-	Oid dependentObjectClassId = RelationRelationId;
-	Oid dependentObjectId = indexId;
-	List *dependencyTupleList =
-		GetPgDependTuplesForDependingObjects(dependentObjectClassId, dependentObjectId);
-
-	HeapTuple dependencyTuple = NULL;
-	foreach_ptr(dependencyTuple, dependencyTupleList)
-	{
-		Form_pg_depend dependencyForm = (Form_pg_depend) GETSTRUCT(dependencyTuple);
-		Oid dependingClassId = dependencyForm->classid;
-		if (dependingClassId != ConstraintRelationId)
-		{
-			continue;
-		}
-
-		Oid dependingObjectId = dependencyForm->objid;
-		if (ConstraintWithIdIsOfType(dependingObjectId, CONSTRAINT_FOREIGN))
-		{
-			return true;
-		}
-	}
-
-	return false;
 }
 
 
@@ -2974,7 +2862,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			case AT_ForceRowSecurity:
 			case AT_NoForceRowSecurity:
 			case AT_ValidateConstraint:
-			case AT_DropConstraint: /* we do the check for invalidation in AlterTableDropsForeignKey */
+			case AT_DropConstraint:
 #if PG_VERSION_NUM >= PG_VERSION_14
 			case AT_SetCompression:
 #endif

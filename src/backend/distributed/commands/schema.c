@@ -112,7 +112,6 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString,
 	{
 		if (SchemaHasDistributedTableWithFKey(strVal(schemaVal)))
 		{
-			MarkInvalidateForeignKeyGraph();
 			break;
 		}
 	}
