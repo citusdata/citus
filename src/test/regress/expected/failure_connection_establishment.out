@@ -85,6 +85,19 @@ SELECT citus.mitmproxy('conn.connect_delay(1000)');
 ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
 WARNING:  could not establish connection after 900 ms
 ERROR:  connection to the remote node localhost:xxxxx failed
+RESET citus.node_connection_timeout;
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus.clear_network_traffic();
+ clear_network_traffic
+---------------------------------------------------------------------
+
+(1 row)
+
 -- Make sure that we fall back to a working node for reads, even if it's not
 -- the first choice in our task assignment policy.
 SET citus.node_connection_timeout TO 900;
@@ -94,11 +107,27 @@ SELECT citus.mitmproxy('conn.connect_delay(1000)');
 
 (1 row)
 
+-- tests for connectivity checks
 SELECT name FROM r1 WHERE id = 2;
 WARNING:  could not establish any connections to the node localhost:xxxxx after 900 ms
  name
 ---------------------------------------------------------------------
  bar
+(1 row)
+
+RESET citus.node_connection_timeout;
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify a connection attempt was made to the intercepted node, this would
+-- have cause the connection to have been delayed and thus caused a timeout
+SELECT * FROM citus.dump_network_traffic() WHERE conn=0 AND source = 'coordinator';
+ conn |   source    |      message
+---------------------------------------------------------------------
+    0 | coordinator | [initial message]
 (1 row)
 
 -- similar test with the above but this time on a distributed table instead of
@@ -145,10 +174,7 @@ SELECT citus.mitmproxy('conn.connect_delay(1000)');
 
 SELECT count(*) FROM single_replicatated;
 ERROR:  could not establish any connections to the node localhost:xxxxx after 900 ms
-SET citus.force_max_query_parallelization TO OFF;
--- one similar test, and this time on modification queries
--- to see that connection establishement failures could
--- fail the transaction (but not mark any placements as INVALID)
+RESET citus.force_max_query_parallelization;
 RESET citus.node_connection_timeout;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -156,6 +182,9 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
+-- one similar test, and this time on modification queries
+-- to see that connection establishement failures could
+-- fail the transaction (but not mark any placements as INVALID)
 BEGIN;
 SELECT
 	count(*) as invalid_placement_count
@@ -179,6 +208,13 @@ SELECT citus.mitmproxy('conn.connect_delay(1000)');
 INSERT INTO single_replicatated VALUES (100);
 ERROR:  could not establish any connections to the node localhost:xxxxx after 900 ms
 COMMIT;
+RESET citus.node_connection_timeout;
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT
 	count(*) as invalid_placement_count
 FROM
@@ -189,14 +225,6 @@ WHERE
  invalid_placement_count
 ---------------------------------------------------------------------
                        0
-(1 row)
-
--- show that INSERT failed
-RESET citus.node_connection_timeout;
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy
----------------------------------------------------------------------
-
 (1 row)
 
 SELECT count(*) FROM single_replicatated WHERE key = 100;
@@ -292,6 +320,13 @@ SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
  citus_check_connection_to_node
 ---------------------------------------------------------------------
  f
+(1 row)
+
+RESET citus.node_connection_timeout;
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
 (1 row)
 
 -- tests for citus_check_cluster_node_health
