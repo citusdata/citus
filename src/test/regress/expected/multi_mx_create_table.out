@@ -2,6 +2,7 @@
 -- MULTI_MX_CREATE_TABLE
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1220000;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1220000;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -406,29 +407,29 @@ FROM pg_dist_partition NATURAL JOIN shard_counts
 ORDER BY colocationid, logicalrelid;
                       logicalrelid                      | colocationid | shard_count | partmethod | repmodel
 ---------------------------------------------------------------------
- customer_mx                                            |      1390001 |           1 | n          | t
- nation_mx                                              |      1390001 |           1 | n          | t
- part_mx                                                |      1390001 |           1 | n          | t
- supplier_mx                                            |      1390001 |           1 | n          | t
- citus_mx_test_schema_join_1.nation_hash                |      1390003 |           4 | h          | s
- citus_mx_test_schema_join_1.nation_hash_2              |      1390003 |           4 | h          | s
- citus_mx_test_schema_join_2.nation_hash                |      1390003 |           4 | h          | s
- citus_mx_test_schema.nation_hash_collation_search_path |      1390003 |           4 | h          | s
- citus_mx_test_schema.nation_hash_composite_types       |      1390003 |           4 | h          | s
- mx_ddl_table                                           |      1390003 |           4 | h          | s
- app_analytics_events_mx                                |      1390003 |           4 | h          | s
- company_employees_mx                                   |      1390003 |           4 | h          | s
- nation_hash                                            |      1390006 |          16 | h          | s
- citus_mx_test_schema.nation_hash                       |      1390006 |          16 | h          | s
- lineitem_mx                                            |      1390007 |          16 | h          | s
- orders_mx                                              |      1390007 |          16 | h          | s
- limit_orders_mx                                        |      1390008 |           2 | h          | s
- articles_hash_mx                                       |      1390008 |           2 | h          | s
- multiple_hash_mx                                       |      1390009 |           2 | h          | s
- researchers_mx                                         |      1390010 |           2 | h          | s
- labs_mx                                                |      1390011 |           1 | h          | s
- objects_mx                                             |      1390011 |           1 | h          | s
- articles_single_shard_hash_mx                          |      1390011 |           1 | h          | s
+ nation_hash                                            |      1220000 |          16 | h          | s
+ citus_mx_test_schema.nation_hash                       |      1220000 |          16 | h          | s
+ citus_mx_test_schema_join_1.nation_hash                |      1220001 |           4 | h          | s
+ citus_mx_test_schema_join_1.nation_hash_2              |      1220001 |           4 | h          | s
+ citus_mx_test_schema_join_2.nation_hash                |      1220001 |           4 | h          | s
+ citus_mx_test_schema.nation_hash_collation_search_path |      1220001 |           4 | h          | s
+ citus_mx_test_schema.nation_hash_composite_types       |      1220001 |           4 | h          | s
+ mx_ddl_table                                           |      1220001 |           4 | h          | s
+ app_analytics_events_mx                                |      1220001 |           4 | h          | s
+ company_employees_mx                                   |      1220001 |           4 | h          | s
+ lineitem_mx                                            |      1220002 |          16 | h          | s
+ orders_mx                                              |      1220002 |          16 | h          | s
+ customer_mx                                            |      1220003 |           1 | n          | t
+ nation_mx                                              |      1220003 |           1 | n          | t
+ part_mx                                                |      1220003 |           1 | n          | t
+ supplier_mx                                            |      1220003 |           1 | n          | t
+ limit_orders_mx                                        |      1220004 |           2 | h          | s
+ articles_hash_mx                                       |      1220004 |           2 | h          | s
+ multiple_hash_mx                                       |      1220005 |           2 | h          | s
+ researchers_mx                                         |      1220006 |           2 | h          | s
+ labs_mx                                                |      1220007 |           1 | h          | s
+ objects_mx                                             |      1220007 |           1 | h          | s
+ articles_single_shard_hash_mx                          |      1220007 |           1 | h          | s
 (23 rows)
 
 -- check the citus_tables view
