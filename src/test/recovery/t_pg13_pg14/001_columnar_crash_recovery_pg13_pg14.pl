@@ -1,12 +1,12 @@
 # Minimal test testing streaming replication
 use strict;
 use warnings;
-use PostgreSQL::Test::Cluster;
-use PostgreSQL::Test::Utils;
+use PostgresNode;
+use TestLib;
 use Test::More tests => 6;
 
 # Initialize single node
-my $node_one = PostgreSQL::Test::Cluster->new('node_one');
+my $node_one = get_new_node('node_one');
 $node_one->init();
 $node_one->start;
 
