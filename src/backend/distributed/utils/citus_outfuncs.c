@@ -401,7 +401,6 @@ OutMapMergeJob(OUTFUNC_ARGS)
 	WRITE_NODE_TYPE("MAPMERGEJOB");
 
 	OutJobFields(str, (Job *) node);
-	WRITE_NODE_FIELD(reduceQuery);
 	WRITE_ENUM_FIELD(partitionType, PartitionType);
 	WRITE_NODE_FIELD(partitionColumn);
 	WRITE_UINT_FIELD(partitionCount);

@@ -160,7 +160,6 @@ typedef struct Job
 typedef struct MapMergeJob
 {
 	Job job;
-	Query *reduceQuery;
 	PartitionType partitionType;
 	Var *partitionColumn;
 	uint32 partitionCount;
