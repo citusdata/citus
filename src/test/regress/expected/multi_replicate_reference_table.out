@@ -773,7 +773,7 @@ SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
         1
 (1 row)
 
-CREATE TABLE ref_table(a int);
+CREATE TABLE ref_table(id bigserial PRIMARY KEY, a int);
 CREATE INDEX ON ref_table (a);
 SELECT create_reference_table('ref_table');
  create_reference_table
@@ -781,7 +781,7 @@ SELECT create_reference_table('ref_table');
 
 (1 row)
 
-INSERT INTO ref_table SELECT * FROM generate_series(1, 10);
+INSERT INTO ref_table(a) SELECT * FROM generate_series(1, 10);
 -- verify direct call to citus_copy_shard_placement errors if target node is not yet added
 SELECT citus_copy_shard_placement(
            (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
@@ -877,7 +877,7 @@ SELECT replicate_reference_tables('block_writes');
 
 (1 row)
 
-INSERT INTO ref_table VALUES (11);
+INSERT INTO ref_table(a) VALUES (11);
 SELECT count(*), sum(a) FROM ref_table;
  count | sum
 ---------------------------------------------------------------------
@@ -1105,7 +1105,7 @@ SELECT create_distributed_table('dist_table', 'a');
 
 INSERT INTO dist_table SELECT i, i * i FROM generate_series(1, 20) i;
 TRUNCATE ref_table;
-INSERT INTO ref_table SELECT 2 * i FROM generate_series(1, 5) i;
+INSERT INTO ref_table(a) SELECT 2 * i FROM generate_series(1, 5) i;
 \c - - - :worker_1_port
 SET search_path TO replicate_reference_table;
 SELECT array_agg(dist_table.b ORDER BY ref_table.a)
