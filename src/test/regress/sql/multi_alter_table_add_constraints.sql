@@ -239,6 +239,17 @@ SELECT create_distributed_table('products', 'product_no');
 -- Command below should error out since 'name' is not a distribution column
 ALTER TABLE products ADD CONSTRAINT exc_name EXCLUDE USING btree (name with =);
 
+-- check that we can disable the constraint check for EXCLUDE
+BEGIN;
+SET LOCAL citus.allow_unsafe_constraints TO on;
+ALTER TABLE products ADD CONSTRAINT exc_name EXCLUDE USING btree (name with =);
+-- not enforced across shards
+INSERT INTO products  VALUES (1,'boat',10.0);
+INSERT INTO products  VALUES (2,'boat',11.0);
+-- enforced within the shard
+INSERT INTO products  VALUES (1,'boat',12.0);
+ROLLBACK;
+
 -- We can add composite exclusion
 ALTER TABLE products ADD CONSTRAINT exc_pno_name EXCLUDE USING btree (product_no with =, name with =);
 
@@ -397,6 +408,40 @@ INSERT INTO products VALUES(1,'product_1', 5);
 
 -- DDL should pick the right connections after a single INSERT
 ALTER TABLE products ADD CONSTRAINT unn_pno UNIQUE(product_no);
+ROLLBACK;
+
+-- check that we can disable the constraint check for CREATE UNIQUE INDEX
+BEGIN;
+SET LOCAL citus.allow_unsafe_constraints TO on;
+CREATE UNIQUE INDEX ON products (name, price);
+-- not enforced across shards
+INSERT INTO products  VALUES (1,'boat',10.0);
+INSERT INTO products  VALUES (2,'boat',11.0);
+-- enforced within the shard
+INSERT INTO products  VALUES (1,'boat',10.0);
+ROLLBACK;
+
+-- check that we can disable the constraint check for CREATE UNIQUE INDEX CONCURRENTLY
+SET citus.allow_unsafe_constraints TO on;
+CREATE UNIQUE INDEX CONCURRENTLY product_idx ON products (name, price);
+-- not enforced across shards
+INSERT INTO products  VALUES (1,'boat',10.0);
+INSERT INTO products  VALUES (2,'boat',11.0);
+-- enforced within the shard
+INSERT INTO products  VALUES (1,'boat',10.0);
+DROP INDEX product_idx;
+TRUNCATE products;
+RESET citus.allow_unsafe_constraints;
+
+-- check that we can disable the constraint check for ADD CONSTRAINT .. PRIMARY KEY
+BEGIN;
+SET LOCAL citus.allow_unsafe_constraints TO on;
+ALTER TABLE products ADD CONSTRAINT products_pk PRIMARY KEY (name, price);
+-- not enforced across shards
+INSERT INTO products  VALUES (1,'boat',10.0);
+INSERT INTO products  VALUES (2,'boat',11.0);
+-- enforced within the shard
+INSERT INTO products  VALUES (1,'boat',10.0);
 ROLLBACK;
 
 BEGIN;

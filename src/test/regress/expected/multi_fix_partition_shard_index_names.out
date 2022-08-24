@@ -521,9 +521,9 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
                  tablename                 |                        indexname
 ---------------------------------------------------------------------
  date_partitioned_citus_local_table        | date_partitioned_citus_local_table_measureid_idx
- date_partitioned_citus_local_table_361377 | date_partitioned_citus_local_table_measureid_idx_361377
+ date_partitioned_citus_local_table_361369 | date_partitioned_citus_local_table_measureid_idx_361369
  partition_local_table                     | partition_local_table_measureid_idx
- partition_local_table_361378              | partition_local_table_measureid_idx_361378
+ partition_local_table_361370              | partition_local_table_measureid_idx_361370
 (4 rows)
 
 -- creating a single object should only need to trigger fixing the single object
@@ -699,9 +699,9 @@ NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_internal_add_partition_metadata ('fix_idx_names.p2'::regclass, 'h', 'dist_col', 1370000, 's')
+NOTICE:  issuing SELECT citus_internal_add_partition_metadata ('fix_idx_names.p2'::regclass, 'h', 'dist_col', 1370001, 's')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT citus_internal_add_partition_metadata ('fix_idx_names.p2'::regclass, 'h', 'dist_col', 1370000, 's')
+NOTICE:  issuing SELECT citus_internal_add_partition_metadata ('fix_idx_names.p2'::regclass, 'h', 'dist_col', 1370001, 's')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('fix_idx_names.p2'::regclass, 915002, 't'::"char", '-2147483648', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -753,7 +753,7 @@ DETAIL:  drop cascades to table not_partitioned
 drop cascades to table not_distributed
 drop cascades to table fk_table
 drop cascades to table p
-drop cascades to table date_partitioned_citus_local_table_361377
+drop cascades to table date_partitioned_citus_local_table_361369
 drop cascades to table date_partitioned_citus_local_table
 drop cascades to table parent_table
 SELECT citus_remove_node('localhost', :master_port);
