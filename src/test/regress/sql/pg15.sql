@@ -153,5 +153,78 @@ BEGIN;
   SELECT * FROM generated_stored_REF ORDER BY 1;
 ROLLBACK;
 
+CREATE TABLE tbl1
+(
+   x INT
+);
+
+CREATE TABLE tbl2
+(
+    x INT
+);
+
+-- on local tables works fine
+MERGE INTO tbl1 USING tbl2 ON (true)
+WHEN MATCHED THEN DELETE;
+
+SELECT citus_add_local_table_to_metadata('tbl1');
+
+-- one table is Citus local table, fails
+MERGE INTO tbl1 USING tbl2 ON (true)
+WHEN MATCHED THEN DELETE;
+
+SELECT undistribute_table('tbl1');
+SELECT citus_add_local_table_to_metadata('tbl2');
+
+-- the other table is Citus local table, fails
+MERGE INTO tbl1 USING tbl2 ON (true)
+WHEN MATCHED THEN DELETE;
+
+-- one table is reference, the other local, not supported
+SELECT create_reference_table('tbl2');
+MERGE INTO tbl1 USING tbl2 ON (true)
+WHEN MATCHED THEN DELETE;
+
+-- now, both are reference, still not supported
+SELECT create_reference_table('tbl1');
+MERGE INTO tbl1 USING tbl2 ON (true)
+WHEN MATCHED THEN DELETE;
+
+-- now, both distributed, not works
+SELECT undistribute_table('tbl1');
+SELECT undistribute_table('tbl2');
+
+SELECT create_distributed_table('tbl1', 'x');
+SELECT create_distributed_table('tbl2', 'x');
+
+MERGE INTO tbl1 USING tbl2 ON (true)
+WHEN MATCHED THEN DELETE;
+
+
+-- also, not inside subqueries & ctes
+WITH targq AS (
+    SELECT * FROM tbl2
+)
+MERGE INTO tbl1 USING targq ON (true)
+WHEN MATCHED THEN DELETE;
+
+-- crashes on beta3, fixed on 15 stable
+--WITH foo AS (
+--  MERGE INTO tbl1 USING tbl2 ON (true)
+--  WHEN MATCHED THEN DELETE
+--) SELECT * FROM foo;
+
+--COPY (
+--  MERGE INTO tbl1 USING tbl2 ON (true)
+--  WHEN MATCHED THEN DELETE
+--) TO stdout;
+
+
+MERGE INTO tbl1 t
+USING tbl2
+ON (true)
+WHEN MATCHED THEN
+    UPDATE SET x = (SELECT count(*) FROM tbl2);
+
 -- Clean up
 DROP SCHEMA pg15 CASCADE;
