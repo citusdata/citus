@@ -146,6 +146,7 @@ DEFINE_COLUMNAR_PASSTHROUGH_FUNC(test_columnar_storage_write_new_page)
 #define DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE 9999999
 static char *CitusVersion = CITUS_VERSION;
 static char *DeprecatedEmptyString = "";
+static char *MitmfifoEmptyString = "";
 
 /* deprecated GUC value that should not be used anywhere outside this file */
 static int ReplicationModel = REPLICATION_MODEL_STREAMING;
@@ -1765,6 +1766,24 @@ RegisterCitusConfigVariables(void)
 		5 * MS_PER_SECOND, 1, 7 * MS_PER_DAY,
 		PGC_SIGHUP,
 		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	/*
+	 * Previously we setting this configuration parameter
+	 * in the fly for failure tests schedule.
+	 * However, PG15 doesn't allow that anymore: reserved prefixes
+	 * like "citus" cannot be used to set non-existing GUCs.
+	 * Relevant PG commit: 88103567cb8fa5be46dc9fac3e3b8774951a2be7
+	 */
+
+	DefineCustomStringVariable(
+		"citus.mitmfifo",
+		gettext_noop("Sets the citus mitm fifo path for failure tests"),
+		gettext_noop("This GUC is only used for testing."),
+		&MitmfifoEmptyString,
+		"",
+		PGC_SUSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(

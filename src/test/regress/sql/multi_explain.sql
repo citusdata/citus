@@ -122,9 +122,11 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+SELECT public.plan_normalize_memory($Q$
 EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+$Q$);
 
 -- EXPLAIN ANALYZE doesn't show worker tasks for repartition joins yet
 SET citus.shard_count TO 3;
@@ -142,9 +144,11 @@ END;
 DROP TABLE t1, t2;
 
 -- Test query text output, with ANALYZE ON
+SELECT public.plan_normalize_memory($Q$
 EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+$Q$);
 
 -- Test query text output, with ANALYZE OFF
 EXPLAIN (COSTS FALSE, ANALYZE FALSE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE)
@@ -250,6 +254,20 @@ FROM
 		user_id) AS subquery;
 
 -- Union and left join subquery pushdown
+
+-- enable_group_by_reordering is a new GUC introduced in PG15
+-- it does some optimization of the order of group by keys which results
+-- in a different explain output plan between PG13/14 and PG15
+-- Hence we set that GUC to off.
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
+\gset
+\if :server_version_ge_15
+SET enable_group_by_reordering TO off;
+\endif
+SELECT DISTINCT 1 FROM run_command_on_workers($$ALTER SYSTEM SET enable_group_by_reordering TO off;$$);
+SELECT run_command_on_workers($$SELECT pg_reload_conf()$$);
+
 EXPLAIN (COSTS OFF)
 SELECT
 	avg(array_length(events, 1)) AS event_average,
@@ -385,6 +403,12 @@ GROUP BY
 ORDER BY
 	count_pay;
 
+\if :server_version_ge_15
+RESET enable_group_by_reordering;
+\endif
+SELECT DISTINCT 1 FROM run_command_on_workers($$ALTER SYSTEM RESET enable_group_by_reordering;$$);
+SELECT run_command_on_workers($$SELECT pg_reload_conf()$$);
+
 -- Lateral join subquery pushdown
 -- set subquery_pushdown due to limit in the query
 SET citus.subquery_pushdown to ON;
@@ -468,9 +492,11 @@ EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem_hash_part;
 
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+SELECT public.plan_normalize_memory($Q$
 EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+$Q$);
 
 SET citus.explain_all_tasks TO off;
 

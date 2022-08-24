@@ -1,0 +1,1165 @@
+--
+-- CITUS_LOCAL_TABLES_QUERIES
+--
+-- This test file has an alternative output because of the change in the
+-- display of SQL-standard function's arguments in INSERT/SELECT in PG15.
+-- The alternative output can be deleted when we drop support for PG14
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15;
+ server_version_ge_15
+---------------------------------------------------------------------
+ f
+(1 row)
+
+\set VERBOSITY terse
+SET citus.next_shard_id TO 1509000;
+SET citus.shard_replication_factor TO 1;
+SET citus.enable_local_execution TO ON;
+SET citus.log_local_commands TO ON;
+CREATE SCHEMA citus_local_table_queries;
+SET search_path TO citus_local_table_queries;
+-- ensure that coordinator is added to pg_dist_node
+SET client_min_messages to ERROR;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+RESET client_min_messages;
+CREATE TABLE dummy_reference_table(a int unique, b int);
+SELECT create_reference_table('dummy_reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE citus_local_table(a int, b int);
+ALTER TABLE citus_local_table ADD CONSTRAINT fkey_to_dummy_1 FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1509001, 'citus_local_table_queries', 1509000, 'citus_local_table_queries', 'ALTER TABLE citus_local_table ADD CONSTRAINT fkey_to_dummy_1 FOREIGN KEY (a) REFERENCES dummy_reference_table(a);')
+CREATE TABLE citus_local_table_2(a int, b int);
+ALTER TABLE citus_local_table_2 ADD CONSTRAINT fkey_to_dummy_2 FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1509002, 'citus_local_table_queries', 1509000, 'citus_local_table_queries', 'ALTER TABLE citus_local_table_2 ADD CONSTRAINT fkey_to_dummy_2 FOREIGN KEY (a) REFERENCES dummy_reference_table(a);')
+CREATE TABLE reference_table(a int, b int);
+SELECT create_reference_table('reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE distributed_table(a int, b int);
+SELECT create_distributed_table('distributed_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE postgres_local_table(a int, b int);
+-- Define a helper function to truncate & insert some data into our test tables
+-- We should call this function at some places in this test file to prevent
+-- test to take a long time.
+-- We shouldn't use LIMIT in INSERT SELECT queries to make the test faster as
+-- LIMIT would force planner to wrap SELECT query in an intermediate result and
+-- this might reduce the coverage of the test cases.
+CREATE FUNCTION clear_and_init_test_tables() RETURNS void AS $$
+    BEGIN
+		SET client_min_messages to ERROR;
+
+		TRUNCATE postgres_local_table, citus_local_table, reference_table, distributed_table, dummy_reference_table, citus_local_table_2;
+
+		INSERT INTO dummy_reference_table SELECT i, i FROM generate_series(0, 5) i;
+		INSERT INTO citus_local_table SELECT i, i FROM generate_series(0, 5) i;
+		INSERT INTO citus_local_table_2 SELECT i, i FROM generate_series(0, 5) i;
+		INSERT INTO postgres_local_table SELECT i, i FROM generate_series(0, 5) i;
+		INSERT INTO distributed_table SELECT i, i FROM generate_series(0, 5) i;
+		INSERT INTO reference_table SELECT i, i FROM generate_series(0, 5) i;
+
+		RESET client_min_messages;
+    END;
+$$ LANGUAGE plpgsql;
+---------------------------------------------------------------------
+---- SELECT ----
+---------------------------------------------------------------------
+SELECT clear_and_init_test_tables();
+ clear_and_init_test_tables
+---------------------------------------------------------------------
+
+(1 row)
+
+-- join between citus local tables and reference tables would succeed
+SELECT count(*) FROM citus_local_table, reference_table WHERE citus_local_table.a = reference_table.a;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table, citus_local_table_queries.reference_table_1509003 reference_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+SELECT * FROM citus_local_table, reference_table WHERE citus_local_table.a = reference_table.a ORDER BY 1,2,3,4 FOR UPDATE;
+NOTICE:  executing the command locally: SELECT citus_local_table.a, citus_local_table.b, reference_table.a, reference_table.b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table, citus_local_table_queries.reference_table_1509003 reference_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a) ORDER BY citus_local_table.a, citus_local_table.b, reference_table.a, reference_table.b FOR UPDATE OF citus_local_table FOR UPDATE OF reference_table
+ a | b | a | b
+---------------------------------------------------------------------
+ 0 | 0 | 0 | 0
+ 1 | 1 | 1 | 1
+ 2 | 2 | 2 | 2
+ 3 | 3 | 3 | 3
+ 4 | 4 | 4 | 4
+ 5 | 5 | 5 | 5
+(6 rows)
+
+-- should work
+WITH cte_1 AS
+	(SELECT * FROM citus_local_table, reference_table WHERE citus_local_table.a = reference_table.a ORDER BY 1,2,3,4 FOR UPDATE)
+SELECT count(*) FROM cte_1;
+NOTICE:  executing the command locally: WITH cte_1 AS (SELECT citus_local_table.a, citus_local_table.b, reference_table.a, reference_table.b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table, citus_local_table_queries.reference_table_1509003 reference_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a) ORDER BY citus_local_table.a, citus_local_table.b, reference_table.a, reference_table.b FOR UPDATE OF citus_local_table FOR UPDATE OF reference_table) SELECT count(*) AS count FROM cte_1 cte_1(a, b, a_1, b_1)
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+-- should work as joins are between ctes
+WITH cte_citus_local_table AS
+	(SELECT * FROM citus_local_table),
+cte_postgres_local_table AS
+	(SELECT * FROM postgres_local_table),
+cte_distributed_table AS
+	(SELECT * FROM distributed_table)
+SELECT count(*) FROM cte_distributed_table, cte_citus_local_table, cte_postgres_local_table
+WHERE  cte_citus_local_table.a = 1 AND cte_distributed_table.a = 1;
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+-- should fail as we don't support direct joins between distributed/local tables
+SELECT count(*) FROM distributed_table d1, distributed_table d2, citus_local_table;
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+-- local table inside subquery should just work
+SELECT count(*) FROM
+(
+	SELECT * FROM (SELECT * FROM citus_local_table) as subquery_inner
+) as subquery_top;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT subquery_inner.a, subquery_inner.b FROM (SELECT citus_local_table.a, citus_local_table.b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table) subquery_inner) subquery_top
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+SELECT clear_and_init_test_tables();
+ clear_and_init_test_tables
+---------------------------------------------------------------------
+
+(1 row)
+
+-- join between citus/postgres local tables should just work
+SELECT count(*) FROM
+(
+	SELECT * FROM (SELECT count(*) FROM citus_local_table, postgres_local_table) as subquery_inner
+) as subquery_top;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT subquery_inner.count FROM (SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table, citus_local_table_queries.postgres_local_table) subquery_inner) subquery_top
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- should fail as we don't support direct joins between distributed/local tables
+SELECT count(*) FROM
+(
+	SELECT *, random() FROM (SELECT *, random() FROM citus_local_table, distributed_table) as subquery_inner
+) as subquery_top;
+NOTICE:  executing the command locally: SELECT NULL::integer AS "dummy-1" FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE true
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
+-- should fail as we don't support direct joins between distributed/local tables
+SELECT count(*) FROM
+(
+	SELECT *, random()
+		FROM (
+				WITH cte_1 AS (SELECT *, random() FROM citus_local_table, distributed_table) SELECT * FROM cte_1) as subquery_inner
+) as subquery_top;
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT subquery_inner.a, subquery_inner.b, subquery_inner.a_1 AS a, subquery_inner.b_1 AS b, subquery_inner.random, random() AS random FROM (SELECT cte_1.a, cte_1.b, cte_1.a_1 AS a, cte_1.b_1 AS b, cte_1.random FROM (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.a_1 AS a, intermediate_result.b_1 AS b, intermediate_result.random FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, a_1 integer, b_1 integer, random double precision)) cte_1(a, b, a_1, b_1, random)) subquery_inner(a, b, a_1, b_1, random)) subquery_top(a, b, a_1, b_1, random, random_1)
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
+-- should be  fine
+SELECT count(*) FROM
+(
+	SELECT *, random()
+		FROM (
+				WITH cte_1 AS (SELECT *, random() FROM citus_local_table), cte_2  AS (SELECT * FROM distributed_table) SELECT count(*) FROM cte_1, cte_2
+				) as subquery_inner
+) as subquery_top;
+NOTICE:  executing the command locally: SELECT a, b, random() AS random FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT subquery_inner.count, random() AS random FROM (SELECT intermediate_result.count FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) subquery_inner) subquery_top
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT clear_and_init_test_tables();
+ clear_and_init_test_tables
+---------------------------------------------------------------------
+
+(1 row)
+
+-- prepared statement
+PREPARE citus_local_only AS SELECT count(*) FROM citus_local_table;
+-- execute 6 times, local tables without params
+EXECUTE citus_local_only;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+EXECUTE citus_local_only;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+EXECUTE citus_local_only;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+EXECUTE citus_local_only;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+EXECUTE citus_local_only;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+EXECUTE citus_local_only;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+-- execute 6 times, with param
+PREPARE citus_local_only_p(int) AS SELECT count(*) FROM citus_local_table WHERE a = $1;
+EXECUTE citus_local_only_p(1);
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) $1)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+EXECUTE citus_local_only_p(1);
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) $1)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+EXECUTE citus_local_only_p(1);
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) $1)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+EXECUTE citus_local_only_p(1);
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) $1)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+EXECUTE citus_local_only_p(1);
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) $1)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+EXECUTE citus_local_only_p(1);
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) $1)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- do not evalute the function
+-- show the logs
+EXECUTE citus_local_only_p(random());
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) $1)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+EXECUTE citus_local_only_p(random());
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) $1)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+PREPARE mixed_query(int,  int, int) AS
+	WITH cte_citus_local_table AS
+		(SELECT * FROM citus_local_table WHERE a = $1),
+	cte_postgres_local_table AS
+		(SELECT * FROM postgres_local_table WHERE a = $2),
+	cte_distributed_table AS
+		(SELECT * FROM distributed_table WHERE a = $3),
+	cte_mixes AS (SELECT * FROM cte_distributed_table, cte_citus_local_table, cte_postgres_local_table)
+	SELECT count(*) FROM cte_mixes;
+EXECUTE mixed_query(1,2,3);
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+EXECUTE mixed_query(1,2,3);
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+EXECUTE mixed_query(1,2,3);
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+EXECUTE mixed_query(1,2,3);
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+EXECUTE mixed_query(1,2,3);
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+EXECUTE mixed_query(1,2,3);
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+EXECUTE mixed_query(1,2,3);
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT clear_and_init_test_tables();
+ clear_and_init_test_tables
+---------------------------------------------------------------------
+
+(1 row)
+
+-- anonymous columns
+WITH a AS (SELECT a, '' FROM citus_local_table GROUP BY a) SELECT a.a FROM a ORDER BY 1 LIMIT 5;
+NOTICE:  executing the command locally: SELECT a FROM (SELECT citus_local_table.a, ''::text FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table GROUP BY citus_local_table.a) a(a, "?column?") ORDER BY a LIMIT 5
+ a
+---------------------------------------------------------------------
+ 0
+ 1
+ 2
+ 3
+ 4
+(5 rows)
+
+WITH a AS (SELECT b, '' FROM citus_local_table WHERE a = 1) SELECT * FROM a, a b ORDER BY 1 LIMIT 5;
+NOTICE:  executing the command locally: WITH a AS (SELECT citus_local_table.b, ''::text FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) 1)) SELECT a.b, a."?column?", b.b, b."?column?" FROM a a(b, "?column?"), a b(b, "?column?") ORDER BY a.b LIMIT 5
+ b | ?column? | b | ?column?
+---------------------------------------------------------------------
+ 1 |          | 1 |
+(1 row)
+
+-- weird expression on citus/pg table joins should be fine
+SELECT * FROM citus_local_table,  postgres_local_table
+WHERE citus_local_table.a - postgres_local_table.a = 0
+ORDER BY 1,2,3,4
+LIMIT 10;
+NOTICE:  executing the command locally: SELECT citus_local_table.a, citus_local_table.b, postgres_local_table.a, postgres_local_table.b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table, citus_local_table_queries.postgres_local_table WHERE ((citus_local_table.a OPERATOR(pg_catalog.-) postgres_local_table.a) OPERATOR(pg_catalog.=) 0) ORDER BY citus_local_table.a, citus_local_table.b, postgres_local_table.a, postgres_local_table.b LIMIT 10
+ a | b | a | b
+---------------------------------------------------------------------
+ 0 | 0 | 0 | 0
+ 1 | 1 | 1 | 1
+ 2 | 2 | 2 | 2
+ 3 | 3 | 3 | 3
+ 4 | 4 | 4 | 4
+ 5 | 5 | 5 | 5
+(6 rows)
+
+-- set operations should just work
+SELECT * FROM citus_local_table UNION SELECT * FROM postgres_local_table UNION SELECT * FROM distributed_table ORDER BY 1,2;
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
+NOTICE:  executing the command locally: SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) UNION SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) UNION SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ORDER BY 1, 2
+ a | b
+---------------------------------------------------------------------
+ 0 | 0
+ 1 | 1
+ 2 | 2
+ 3 | 3
+ 4 | 4
+ 5 | 5
+(6 rows)
+
+(SELECT * FROM citus_local_table ORDER BY 1,2 LIMIT 5) INTERSECT (SELECT i, i FROM generate_series(0, 100) i) ORDER BY 1, 2;
+NOTICE:  executing the command locally: (SELECT citus_local_table.a, citus_local_table.b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table ORDER BY citus_local_table.a, citus_local_table.b LIMIT 5) INTERSECT SELECT i.i, i.i FROM generate_series(0, 100) i(i) ORDER BY 1, 2
+ a | b
+---------------------------------------------------------------------
+ 0 | 0
+ 1 | 1
+ 2 | 2
+ 3 | 3
+ 4 | 4
+(5 rows)
+
+-- should just work as recursive planner kicks in
+SELECT count(*) FROM distributed_table WHERE a IN (SELECT a FROM citus_local_table);
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+SELECT count(*) FROM citus_local_table  WHERE a IN (SELECT a FROM distributed_table);
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)))
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+SELECT count(*) FROM reference_table WHERE a IN (SELECT a FROM citus_local_table);
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.reference_table_1509003 reference_table WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT citus_local_table.a FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table))
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+SELECT count(*) FROM citus_local_table  WHERE a IN (SELECT a FROM reference_table);
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT reference_table.a FROM citus_local_table_queries.reference_table_1509003 reference_table))
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+--  nested recursive queries should just work
+SELECT count(*)  FROM citus_local_table
+	WHERE a IN
+	(SELECT a FROM distributed_table WHERE a IN
+	 (SELECT b FROM citus_local_table WHERE b IN (SELECT b FROM postgres_local_table)));
+NOTICE:  executing the command locally: SELECT b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (b OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)))
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.a FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(a integer)))
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+-- local outer joins
+SELECT count(*) FROM citus_local_table LEFT JOIN reference_table ON (true);
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (citus_local_table_queries.citus_local_table_1509001 citus_local_table LEFT JOIN citus_local_table_queries.reference_table_1509003 reference_table ON (true))
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
+SELECT count(*) FROM reference_table
+  LEFT JOIN citus_local_table ON (true)
+  LEFT JOIN postgres_local_table ON (true)
+  LEFT JOIN reference_table r2 ON (true);
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (((citus_local_table_queries.reference_table_1509003 reference_table LEFT JOIN citus_local_table_queries.citus_local_table_1509001 citus_local_table ON (true)) LEFT JOIN citus_local_table_queries.postgres_local_table ON (true)) LEFT JOIN citus_local_table_queries.reference_table_1509003 r2 ON (true))
+ count
+---------------------------------------------------------------------
+  1296
+(1 row)
+
+-- not supported direct outer join
+SELECT count(*) FROM citus_local_table LEFT JOIN distributed_table ON (true);
+ERROR:  cannot pushdown the subquery
+-- distinct in subquery on CTE
+WITH one_row AS (
+	SELECT a from citus_local_table WHERE b = 1
+)
+SELECT
+  *
+FROM
+  distributed_table
+WHERE
+  b IN (SELECT DISTINCT a FROM one_row)
+ORDER BY
+  1, 2
+LIMIT
+  1;
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (b OPERATOR(pg_catalog.=) 1)
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+(1 row)
+
+WITH one_row_2 AS (
+	SELECT a from distributed_table WHERE b = 1
+)
+SELECT
+  *
+FROM
+  citus_local_table
+WHERE
+  b IN (SELECT DISTINCT a FROM one_row_2)
+ORDER BY
+  1 ,2
+LIMIT
+  1;
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (b OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer))) ORDER BY a, b LIMIT 1
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+(1 row)
+
+-- join between citus local tables and distributed tables would fail
+SELECT count(*) FROM citus_local_table, distributed_table;
+NOTICE:  executing the command locally: SELECT NULL::integer AS "dummy-1" FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE true
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
+SELECT * FROM citus_local_table, distributed_table ORDER BY 1,2,3,4 FOR UPDATE;
+ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
+-- join between citus local tables and postgres local tables are okey
+SELECT count(citus_local_table.b), count(postgres_local_table.a)
+FROM citus_local_table, postgres_local_table
+WHERE citus_local_table.a = postgres_local_table.b;
+NOTICE:  executing the command locally: SELECT count(citus_local_table.b) AS count, count(postgres_local_table.a) AS count FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table, citus_local_table_queries.postgres_local_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) postgres_local_table.b)
+ count | count
+---------------------------------------------------------------------
+     6 |     6
+(1 row)
+
+-- select for update is just OK
+SELECT * FROM citus_local_table  ORDER BY 1,2 FOR UPDATE;
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table ORDER BY a, b FOR UPDATE OF citus_local_table
+ a | b
+---------------------------------------------------------------------
+ 0 | 0
+ 1 | 1
+ 2 | 2
+ 3 | 3
+ 4 | 4
+ 5 | 5
+(6 rows)
+
+---------------------------------------------------------------------
+----- INSERT SELECT -----
+---------------------------------------------------------------------
+-- simple INSERT SELECT is OK
+SELECT clear_and_init_test_tables();
+ clear_and_init_test_tables
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO citus_local_table
+SELECT * from reference_table;
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.citus_local_table_1509001 AS citus_table_alias (a, b) SELECT a, b FROM citus_local_table_queries.reference_table_1509003 reference_table
+INSERT INTO reference_table
+SELECT * from citus_local_table;
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
+NOTICE:  executing the copy locally for shard xxxxx
+INSERT INTO citus_local_table
+SELECT * from distributed_table;
+NOTICE:  executing the copy locally for shard xxxxx
+INSERT INTO distributed_table
+SELECT * from citus_local_table;
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
+INSERT INTO citus_local_table
+SELECT * from citus_local_table_2;
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.citus_local_table_1509001 AS citus_table_alias (a, b) SELECT a, b FROM citus_local_table_queries.citus_local_table_2_1509002 citus_local_table_2
+INSERT INTO citus_local_table
+SELECT * from citus_local_table_2
+ORDER BY 1,2
+LIMIT 10;
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_2_1509002 citus_local_table_2 ORDER BY a, b LIMIT 10
+NOTICE:  executing the copy locally for shard xxxxx
+INSERT INTO citus_local_table
+SELECT * from postgres_local_table;
+NOTICE:  executing the copy locally for shard xxxxx
+INSERT INTO postgres_local_table
+SELECT * from citus_local_table;
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
+-- INSERT SELECT with local joins are OK
+SELECT clear_and_init_test_tables();
+ clear_and_init_test_tables
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO citus_local_table
+SELECT reference_table.* FROM reference_table
+JOIN citus_local_table ON (true);
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.citus_local_table_1509001 AS citus_table_alias (a, b) SELECT reference_table.a, reference_table.b FROM (citus_local_table_queries.reference_table_1509003 reference_table JOIN citus_local_table_queries.citus_local_table_1509001 citus_local_table ON (true))
+INSERT INTO reference_table
+SELECT reference_table.* FROM reference_table
+JOIN citus_local_table ON (true);
+NOTICE:  executing the command locally: SELECT reference_table.a, reference_table.b FROM (citus_local_table_queries.reference_table_1509003 reference_table JOIN citus_local_table_queries.citus_local_table_1509001 citus_local_table ON (true))
+NOTICE:  executing the copy locally for shard xxxxx
+INSERT INTO reference_table
+SELECT reference_table.* FROM reference_table, postgres_local_table
+JOIN citus_local_table ON (true);
+NOTICE:  executing the command locally: SELECT reference_table.a, reference_table.b FROM citus_local_table_queries.reference_table_1509003 reference_table, (citus_local_table_queries.postgres_local_table JOIN citus_local_table_queries.citus_local_table_1509001 citus_local_table ON (true))
+NOTICE:  executing the copy locally for shard xxxxx
+SELECT clear_and_init_test_tables();
+ clear_and_init_test_tables
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO distributed_table
+SELECT reference_table.* FROM reference_table
+JOIN citus_local_table ON (true);
+NOTICE:  executing the command locally: SELECT reference_table.a, reference_table.b FROM (citus_local_table_queries.reference_table_1509003 reference_table JOIN citus_local_table_queries.citus_local_table_1509001 citus_local_table ON (true))
+INSERT INTO distributed_table
+SELECT reference_table.* FROM reference_table, postgres_local_table
+JOIN citus_local_table ON (true);
+NOTICE:  executing the command locally: SELECT reference_table.a, reference_table.b FROM citus_local_table_queries.reference_table_1509003 reference_table, (citus_local_table_queries.postgres_local_table JOIN citus_local_table_queries.citus_local_table_1509001 citus_local_table ON (true))
+INSERT INTO postgres_local_table
+SELECT reference_table.* FROM reference_table
+JOIN citus_local_table ON (true);
+NOTICE:  executing the command locally: SELECT reference_table.a, reference_table.b FROM (citus_local_table_queries.reference_table_1509003 reference_table JOIN citus_local_table_queries.citus_local_table_1509001 citus_local_table ON (true))
+-- INSERT SELECT that joins reference and distributed tables is also OK
+SELECT clear_and_init_test_tables();
+ clear_and_init_test_tables
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO citus_local_table
+SELECT reference_table.* FROM reference_table
+JOIN distributed_table ON (true);
+NOTICE:  executing the copy locally for shard xxxxx
+INSERT INTO citus_local_table
+SELECT reference_table.*
+FROM reference_table, distributed_table;
+NOTICE:  executing the copy locally for shard xxxxx
+-- INSERT SELECT that joins citus local and distributed table directly will fail ..
+INSERT INTO citus_local_table
+SELECT distributed_table.* FROM distributed_table
+JOIN citus_local_table ON (true);
+NOTICE:  executing the command locally: SELECT NULL::integer AS "dummy-1" FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE true
+NOTICE:  executing the copy locally for shard xxxxx
+-- .. but when wrapped into a CTE, join works fine
+INSERT INTO citus_local_table
+SELECT distributed_table.* FROM distributed_table
+JOIN (WITH cte AS (SELECT * FROM citus_local_table) SELECT * FROM cte) as foo ON (true);
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
+NOTICE:  executing the copy locally for shard xxxxx
+-- multi row insert is OK
+INSERT INTO citus_local_table VALUES (1, 2), (3, 4);
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.citus_local_table_1509001 AS citus_table_alias (a, b) VALUES (1,2), (3,4)
+---------------------------------------------------------------------
+----- DELETE / UPDATE -----
+---------------------------------------------------------------------
+-- modifications using citus local tables and postgres local tables
+-- are not supported, see below four tests
+SELECT clear_and_init_test_tables();
+ clear_and_init_test_tables
+---------------------------------------------------------------------
+
+(1 row)
+
+DELETE FROM citus_local_table
+USING postgres_local_table
+WHERE citus_local_table.b = postgres_local_table.b;
+NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table USING citus_local_table_queries.postgres_local_table WHERE (citus_local_table.b OPERATOR(pg_catalog.=) postgres_local_table.b)
+UPDATE citus_local_table
+SET b = 5
+FROM postgres_local_table
+WHERE citus_local_table.a = 3 AND citus_local_table.b = postgres_local_table.b;
+NOTICE:  executing the command locally: UPDATE citus_local_table_queries.citus_local_table_1509001 citus_local_table SET b = 5 FROM citus_local_table_queries.postgres_local_table WHERE ((citus_local_table.a OPERATOR(pg_catalog.=) 3) AND (citus_local_table.b OPERATOR(pg_catalog.=) postgres_local_table.b))
+DELETE FROM postgres_local_table
+USING citus_local_table
+WHERE citus_local_table.b = postgres_local_table.b;
+NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.postgres_local_table USING citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (citus_local_table.b OPERATOR(pg_catalog.=) postgres_local_table.b)
+UPDATE postgres_local_table
+SET b = 5
+FROM citus_local_table
+WHERE citus_local_table.a = 3 AND citus_local_table.b = postgres_local_table.b;
+NOTICE:  executing the command locally: UPDATE citus_local_table_queries.postgres_local_table SET b = 5 FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE ((citus_local_table.a OPERATOR(pg_catalog.=) 3) AND (citus_local_table.b OPERATOR(pg_catalog.=) postgres_local_table.b))
+-- no direct joins supported
+UPDATE distributed_table
+SET b = 6
+FROM citus_local_table
+WHERE citus_local_table.a = distributed_table.a;
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE true
+UPDATE reference_table
+SET b = 6
+FROM citus_local_table
+WHERE citus_local_table.a = reference_table.a;
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE true
+NOTICE:  executing the command locally: UPDATE citus_local_table_queries.reference_table_1509003 reference_table SET b = 6 FROM (SELECT citus_local_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_1) citus_local_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
+-- should not work, add HINT use CTEs
+UPDATE citus_local_table
+SET b = 6
+FROM distributed_table
+WHERE citus_local_table.a = distributed_table.a;
+NOTICE:  executing the command locally: UPDATE citus_local_table_queries.citus_local_table_1509001 citus_local_table SET b = 6 FROM (SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) distributed_table.a)
+-- should work, add HINT use CTEs
+UPDATE citus_local_table
+SET b = 6
+FROM reference_table
+WHERE citus_local_table.a = reference_table.a;
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.reference_table_1509003 reference_table WHERE true
+NOTICE:  executing the command locally: UPDATE citus_local_table_queries.citus_local_table_1509001 citus_local_table SET b = 6 FROM (SELECT reference_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) reference_table_1) reference_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
+-- should not work, add HINT use CTEs
+DELETE FROM distributed_table
+USING citus_local_table
+WHERE citus_local_table.a = distributed_table.a;
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE true
+-- should not work, add HINT use CTEs
+DELETE FROM citus_local_table
+USING distributed_table
+WHERE citus_local_table.a = distributed_table.a;
+NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table USING (SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) distributed_table.a)
+DELETE FROM reference_table
+USING citus_local_table
+WHERE citus_local_table.a = reference_table.a;
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE true
+NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.reference_table_1509003 reference_table USING (SELECT citus_local_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_1) citus_local_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
+-- should work, add HINT use CTEs
+DELETE FROM citus_local_table
+USING reference_table
+WHERE citus_local_table.a = reference_table.a;
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.reference_table_1509003 reference_table WHERE true
+NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table USING (SELECT reference_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) reference_table_1) reference_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
+-- just works
+DELETE FROM citus_local_table
+WHERE citus_local_table.a IN (SELECT a FROM distributed_table);
+NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)))
+-- just works
+DELETE FROM citus_local_table
+WHERE citus_local_table.a IN (SELECT a FROM reference_table);
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.reference_table_1509003 reference_table
+NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)))
+-- just works
+WITH distributed_table_cte AS (SELECT * FROM distributed_table)
+UPDATE citus_local_table
+SET b = 6
+FROM distributed_table_cte
+WHERE citus_local_table.a = distributed_table_cte.a;
+NOTICE:  executing the command locally: UPDATE citus_local_table_queries.citus_local_table_1509001 citus_local_table SET b = 6 FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) distributed_table_cte WHERE (citus_local_table.a OPERATOR(pg_catalog.=) distributed_table_cte.a)
+SET citus.log_local_commands to off;
+-- just works
+WITH reference_table_cte AS (SELECT * FROM reference_table)
+UPDATE citus_local_table
+SET b = 6
+FROM reference_table_cte
+WHERE citus_local_table.a = reference_table_cte.a;
+set citus.log_local_commands to on;
+---------------------------------------------------------------------
+----- VIEW QUERIES -----
+---------------------------------------------------------------------
+CREATE MATERIALIZED VIEW mat_view_4 AS
+SELECT count(*)
+FROM citus_local_table
+JOIN reference_table
+USING (a);
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (citus_local_table_queries.citus_local_table_1509001 citus_local_table(a, b) JOIN citus_local_table_queries.reference_table_1509003 reference_table(a, b) USING (a))
+-- ok
+SELECT count(*) FROM mat_view_4;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- should work
+SELECT count(*) FROM distributed_table WHERE b in
+(SELECT count FROM mat_view_4);
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+CREATE VIEW view_2 AS
+SELECT count(*)
+FROM citus_local_table
+JOIN citus_local_table_2 USING (a)
+JOIN distributed_table USING (a);
+-- should fail as view contains direct local dist join
+SELECT count(*) FROM view_2;
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE true
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.citus_local_table_2_1509002 citus_local_table_2 WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT intermediate_result.count FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) view_2
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+CREATE VIEW view_3
+AS SELECT count(*)
+FROM citus_local_table_2
+JOIN reference_table
+USING (a);
+-- ok
+SELECT count(*) FROM view_3;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT count(*) AS count FROM (citus_local_table_queries.citus_local_table_2_1509002 citus_local_table_2(a, b) JOIN citus_local_table_queries.reference_table_1509003 reference_table(a, b) USING (a))) view_3
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- view treated as subquery, so should work
+SELECT count(*) FROM view_3, distributed_table;
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.citus_local_table_2_1509002 citus_local_table_2 WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM ((SELECT citus_local_table_2_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_2_1) citus_local_table_2 JOIN citus_local_table_queries.reference_table_1509003 reference_table(a, b) USING (a))
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+---------------------------------------------------------------------
+-- Some other tests with subqueries & CTE's --
+---------------------------------------------------------------------
+SELECT clear_and_init_test_tables();
+ clear_and_init_test_tables
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) AS a, count(*) AS b
+FROM reference_table
+JOIN (SELECT count(*) as a, count(*) as b
+      FROM citus_local_table_2
+      JOIN (SELECT count(*) as a, count(*) as b
+            FROM postgres_local_table
+            JOIN (SELECT count(*) as a, count(*) as b
+                  FROM reference_table as table_4677) subquery5108
+            USING (a)) subquery7132
+      USING (b)) subquery7294
+USING (a);
+NOTICE:  executing the command locally: SELECT count(*) AS a, count(*) AS b FROM (citus_local_table_queries.reference_table_1509003 reference_table(a, b) JOIN (SELECT count(*) AS a, count(*) AS b FROM (citus_local_table_queries.citus_local_table_2_1509002 citus_local_table_2(a, b) JOIN (SELECT count(*) AS a, count(*) AS b FROM (citus_local_table_queries.postgres_local_table JOIN (SELECT count(*) AS a, count(*) AS b FROM citus_local_table_queries.reference_table_1509003 table_4677) subquery5108 USING (a))) subquery7132 USING (b))) subquery7294 USING (a))
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+(1 row)
+
+-- direct join inside CTE not supported
+WITH cte AS (
+UPDATE citus_local_table lt SET a = mt.a
+FROM distributed_table mt WHERE mt.b = lt.b
+RETURNING lt.b, lt.a
+) SELECT * FROM cte JOIN distributed_table mt ON mt.b = cte.b ORDER BY 1,2,3,4;
+NOTICE:  executing the command locally: UPDATE citus_local_table_queries.citus_local_table_1509001 lt SET a = mt.a FROM (SELECT mt_1.a, mt_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) mt_1) mt WHERE (mt.b OPERATOR(pg_catalog.=) lt.b) RETURNING lt.b, lt.a
+ b | a | a | b
+---------------------------------------------------------------------
+ 0 | 0 | 0 | 0
+ 1 | 1 | 1 | 1
+ 2 | 2 | 2 | 2
+ 3 | 3 | 3 | 3
+ 4 | 4 | 4 | 4
+ 5 | 5 | 5 | 5
+(6 rows)
+
+-- join with CTE just works
+UPDATE citus_local_table
+SET a=5
+FROM (SELECT avg(distributed_table.b) as avg_b
+      FROM distributed_table) as foo
+WHERE
+foo.avg_b = citus_local_table.b;
+NOTICE:  executing the command locally: UPDATE citus_local_table_queries.citus_local_table_1509001 citus_local_table SET a = 5 FROM (SELECT intermediate_result.avg_b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(avg_b numeric)) foo WHERE (foo.avg_b OPERATOR(pg_catalog.=) (citus_local_table.b)::numeric)
+-- should work
+UPDATE distributed_table
+SET b = avg_a
+FROM (SELECT avg(citus_local_table.a) as avg_a FROM citus_local_table) as foo
+WHERE foo.avg_a = distributed_table.a
+RETURNING distributed_table.*;
+NOTICE:  executing the command locally: SELECT avg(a) AS avg_a FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+-- it is unfortunate that recursive planner cannot detect this
+-- but expected to not work
+UPDATE citus_local_table
+SET a=5
+FROM (SELECT b FROM distributed_table) AS foo
+WHERE foo.b = citus_local_table.b;
+ERROR:  local table citus_local_table cannot be joined with these distributed tables
+---------------------------------------------------------------------
+-- test different execution paths --
+---------------------------------------------------------------------
+-- a bit different explain output than for postgres local tables
+EXPLAIN (COSTS FALSE)
+INSERT INTO citus_local_table
+SELECT * FROM distributed_table
+ORDER BY distributed_table.*
+LIMIT 10;
+                                            QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  Limit
+         ->  Sort
+               Sort Key: remote_scan.worker_column_3
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+                     Tasks Shown: One of 4
+                     ->  Task
+                           Node: host=localhost port=xxxxx dbname=regression
+                           ->  Limit
+                                 ->  Sort
+                                       Sort Key: distributed_table.*
+                                       ->  Seq Scan on distributed_table_1509004 distributed_table
+(14 rows)
+
+-- show that we do not pull to coordinator
+EXPLAIN (COSTS FALSE)
+INSERT INTO citus_local_table
+SELECT * FROM citus_local_table;
+                                QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Insert on citus_local_table_1509001 citus_table_alias
+               ->  Seq Scan on citus_local_table_1509001 citus_local_table
+(7 rows)
+
+EXPLAIN (COSTS FALSE)
+INSERT INTO citus_local_table
+SELECT reference_table.* FROM reference_table;
+                              QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Insert on citus_local_table_1509001 citus_table_alias
+               ->  Seq Scan on reference_table_1509003 reference_table
+(7 rows)
+
+EXPLAIN (COSTS FALSE)
+INSERT INTO citus_local_table
+SELECT reference_table.* FROM reference_table, postgres_local_table;
+                                 QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 1
+         Tasks Shown: All
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Nested Loop
+                     ->  Seq Scan on reference_table_1509003 reference_table
+                     ->  Materialize
+                           ->  Seq Scan on postgres_local_table
+(11 rows)
+
+-- show that we pull to coordinator when a distributed table is involved
+EXPLAIN (COSTS FALSE)
+INSERT INTO citus_local_table
+SELECT reference_table.* FROM reference_table, distributed_table;
+                                    QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Nested Loop
+                     ->  Seq Scan on distributed_table_1509004 distributed_table
+                     ->  Materialize
+                           ->  Seq Scan on reference_table_1509003 reference_table
+(11 rows)
+
+-- truncate tables & add unique constraints to be able to define foreign keys
+TRUNCATE reference_table, citus_local_table, distributed_table;
+NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_table_queries.reference_table_xxxxx CASCADE
+NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_table_queries.citus_local_table_xxxxx CASCADE
+ALTER TABLE reference_table ADD CONSTRAINT pkey_ref PRIMARY KEY (a);
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1509003, 'citus_local_table_queries', 'ALTER TABLE reference_table ADD CONSTRAINT pkey_ref PRIMARY KEY (a);')
+ALTER TABLE citus_local_table ADD CONSTRAINT pkey_c PRIMARY KEY (a);
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1509001, 'citus_local_table_queries', 'ALTER TABLE citus_local_table ADD CONSTRAINT pkey_c PRIMARY KEY (a);')
+-- define a foreign key chain distributed table -> reference table -> citus local table
+-- to test sequential execution
+ALTER TABLE distributed_table ADD CONSTRAINT fkey_dist_to_ref FOREIGN KEY(a) REFERENCES reference_table(a) ON DELETE RESTRICT;
+ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(a) REFERENCES citus_local_table(a) ON DELETE RESTRICT;
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1509003, 'citus_local_table_queries', 1509001, 'citus_local_table_queries', 'ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(a) REFERENCES citus_local_table(a) ON DELETE RESTRICT;')
+INSERT INTO citus_local_table VALUES (1);
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.citus_local_table_1509001 (a) VALUES (1)
+INSERT INTO reference_table VALUES (1);
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.reference_table_1509003 (a) VALUES (1)
+BEGIN;
+    INSERT INTO citus_local_table VALUES (1) ON CONFLICT (a) DO NOTHING;
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.citus_local_table_1509001 AS citus_table_alias (a) VALUES (1) ON CONFLICT(a) DO NOTHING
+    INSERT INTO distributed_table VALUES (1);
+    -- should show sequential as first inserting into citus local table
+	-- would force the xact block to use sequential execution
+    show citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ sequential
+(1 row)
+
+ROLLBACK;
+BEGIN;
+	TRUNCATE distributed_table;
+	-- should error out as we truncated distributed_table via parallel execution
+	TRUNCATE citus_local_table  CASCADE;
+NOTICE:  truncate cascades to table "reference_table"
+NOTICE:  truncate cascades to table "distributed_table"
+NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_table_queries.citus_local_table_xxxxx CASCADE
+ERROR:  cannot execute DDL on table "citus_local_table" because there was a parallel DDL access to distributed table "distributed_table" in the same transaction
+ROLLBACK;
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	TRUNCATE distributed_table;
+	-- should work fine as we already switched to sequential execution
+	-- before parallel truncate
+	TRUNCATE citus_local_table  CASCADE;
+NOTICE:  truncate cascades to table "reference_table"
+NOTICE:  truncate cascades to table "distributed_table"
+NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_table_queries.citus_local_table_xxxxx CASCADE
+NOTICE:  truncate cascades to table "reference_table_xxxxx"
+NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_table_queries.reference_table_xxxxx CASCADE
+ROLLBACK;
+ALTER TABLE distributed_table DROP CONSTRAINT fkey_dist_to_ref;
+BEGIN;
+    INSERT INTO citus_local_table VALUES (1) ON CONFLICT (a) DO NOTHING;
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.citus_local_table_1509001 AS citus_table_alias (a) VALUES (1) ON CONFLICT(a) DO NOTHING
+    show citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ sequential
+(1 row)
+
+ROLLBACK;
+-- remove uniqueness constraint and dependent foreign key constraint for next tests
+ALTER TABLE reference_table DROP CONSTRAINT fkey_ref_to_local;
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1509003, 'citus_local_table_queries', 1509001, 'citus_local_table_queries', 'ALTER TABLE reference_table DROP CONSTRAINT fkey_ref_to_local;')
+ALTER TABLE citus_local_table DROP CONSTRAINT pkey_c;
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1509001, 'citus_local_table_queries', 'ALTER TABLE citus_local_table DROP CONSTRAINT pkey_c;')
+COPY  citus_local_table(a) FROM  PROGRAM 'seq 1';
+-- should use local execution
+BEGIN;
+	COPY  citus_local_table(a) FROM  PROGRAM 'seq 1';
+NOTICE:  executing the copy locally for shard xxxxx
+	COPY  citus_local_table(a) FROM  PROGRAM 'seq 1';
+NOTICE:  executing the copy locally for shard xxxxx
+COMMIT;
+COPY citus_local_table TO STDOUT;
+1	\N
+1	\N
+1	\N
+1	\N
+COPY (SELECT * FROM citus_local_table) TO STDOUT;
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
+1	\N
+1	\N
+1	\N
+1	\N
+BEGIN;
+  COPY citus_local_table TO STDOUT;
+1	\N
+1	\N
+1	\N
+1	\N
+COMMIT;
+BEGIN;
+  COPY (SELECT * FROM citus_local_table) TO STDOUT;
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table
+1	\N
+1	\N
+1	\N
+1	\N
+COMMIT;
+-- truncate test tables for next test
+TRUNCATE citus_local_table, reference_table, distributed_table;
+NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_table_queries.citus_local_table_xxxxx CASCADE
+NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_table_queries.reference_table_xxxxx CASCADE
+BEGIN;
+	INSERT INTO citus_local_table VALUES (1), (2);
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.citus_local_table_1509001 AS citus_table_alias (a) VALUES (1), (2)
+	SAVEPOINT sp1;
+	INSERT INTO citus_local_table VALUES (3), (4);
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.citus_local_table_1509001 AS citus_table_alias (a) VALUES (3), (4)
+	ROLLBACK TO SAVEPOINT sp1;
+	SELECT * FROM citus_local_table ORDER BY 1,2;
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table ORDER BY a, b
+ a | b
+---------------------------------------------------------------------
+ 1 |
+ 2 |
+(2 rows)
+
+	SAVEPOINT sp2;
+	INSERT INTO citus_local_table VALUES (3), (4);
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.citus_local_table_1509001 AS citus_table_alias (a) VALUES (3), (4)
+	INSERT INTO distributed_table VALUES (3), (4);
+	ROLLBACK TO SAVEPOINT sp2;
+	SELECT * FROM citus_local_table ORDER BY 1,2;
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table ORDER BY a, b
+ a | b
+---------------------------------------------------------------------
+ 1 |
+ 2 |
+(2 rows)
+
+	SELECT * FROM distributed_table ORDER BY 1,2;
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+	SAVEPOINT sp3;
+	INSERT INTO citus_local_table VALUES (3), (2);
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.citus_local_table_1509001 AS citus_table_alias (a) VALUES (3), (2)
+	INSERT INTO reference_table VALUES (3), (2);
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_queries.reference_table_1509003 AS citus_table_alias (a) VALUES (3), (2)
+	ROLLBACK TO SAVEPOINT sp3;
+	SELECT * FROM citus_local_table ORDER BY 1,2;
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table ORDER BY a, b
+ a | b
+---------------------------------------------------------------------
+ 1 |
+ 2 |
+(2 rows)
+
+	SELECT * FROM reference_table ORDER BY 1,2;
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.reference_table_1509003 reference_table ORDER BY a, b
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+COMMIT;
+-- cleanup at exit
+DROP SCHEMA citus_local_table_queries CASCADE;
+NOTICE:  drop cascades to 14 other objects
