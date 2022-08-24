@@ -505,10 +505,10 @@ ORDER BY 1,4,5;
 
 SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
 
-CREATE TABLE ref_table(a int);
+CREATE TABLE ref_table(id bigserial PRIMARY KEY, a int);
 CREATE INDEX ON ref_table (a);
 SELECT create_reference_table('ref_table');
-INSERT INTO ref_table SELECT * FROM generate_series(1, 10);
+INSERT INTO ref_table(a) SELECT * FROM generate_series(1, 10);
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
@@ -542,7 +542,7 @@ ROLLBACK;
 BEGIN;
 SELECT count(*) FROM ref_table;
 SELECT replicate_reference_tables();
-INSERT INTO ref_table VALUES (11);
+INSERT INTO ref_table(a) VALUES (11);
 SELECT count(*), sum(a) FROM ref_table;
 UPDATE ref_table SET a = a + 1;
 SELECT sum(a) FROM ref_table;
@@ -637,7 +637,7 @@ SELECT create_distributed_table('dist_table', 'a');
 INSERT INTO dist_table SELECT i, i * i FROM generate_series(1, 20) i;
 
 TRUNCATE ref_table;
-INSERT INTO ref_table SELECT 2 * i FROM generate_series(1, 5) i;
+INSERT INTO ref_table(a) SELECT 2 * i FROM generate_series(1, 5) i;
 
 \c - - - :worker_1_port
 
