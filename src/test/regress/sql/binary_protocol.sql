@@ -1,4 +1,5 @@
 SET citus.shard_count = 2;
+SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 4754000;
 CREATE SCHEMA binary_protocol;
 SET search_path TO binary_protocol, public;
@@ -63,6 +64,8 @@ SELECT ARRAY[(col, col)::nested_composite_type] FROM composite_type_table;
 SELECT ARRAY[(col, col)::nested_composite_type_domain] FROM composite_type_table;
 
 
+-- Confirm that aclitem doesn't have receive and send functions
+SELECT typreceive, typsend FROM pg_type WHERE typname = 'aclitem';
 CREATE TABLE binaryless_builtin (
 col1 aclitem NOT NULL,
 col2 character varying(255) NOT NULL

@@ -3,8 +3,8 @@ setup
 	SET citus.shard_count to 2;
 	SET citus.shard_replication_factor to 1;
 	SELECT setval('pg_dist_shardid_seq',
-		CASE WHEN nextval('pg_dist_shardid_seq') > 1599999 OR nextval('pg_dist_shardid_seq') < 1500000
-			THEN 1500000
+		CASE WHEN nextval('pg_dist_shardid_seq') > 1599999 OR nextval('pg_dist_shardid_seq') < 1500072
+			THEN 1500072
 			ELSE nextval('pg_dist_shardid_seq')-2
 		END);
 

@@ -763,6 +763,22 @@ WITH (
 );
 SELECT create_distributed_table('compression_and_generated_col', 'rev', colocate_with:='none');
 
+-- See that it's enabling the binary option for logical replication
+BEGIN;
+SET LOCAL citus.log_remote_commands TO ON;
+SET LOCAL citus.grep_remote_commands = '%CREATE SUBSCRIPTION%';
+SELECT citus_move_shard_placement(980042, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode := 'force_logical');
+ROLLBACK;
+
+-- See that it doesn't enable the binary option for logical replication if we
+-- disable binary protocol.
+BEGIN;
+SET LOCAL citus.log_remote_commands TO ON;
+SET LOCAL citus.grep_remote_commands = '%CREATE SUBSCRIPTION%';
+SET LOCAL citus.enable_binary_protocol = FALSE;
+SELECT citus_move_shard_placement(980042, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode := 'force_logical');
+ROLLBACK;
+
 DROP TABLE compression_and_defaults, compression_and_generated_col;
 
 -- cleanup

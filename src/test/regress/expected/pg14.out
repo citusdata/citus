@@ -1467,6 +1467,34 @@ SELECT create_distributed_table('compression_and_generated_col', 'rev', colocate
 
 (1 row)
 
+-- See that it's enabling the binary option for logical replication
+BEGIN;
+SET LOCAL citus.log_remote_commands TO ON;
+SET LOCAL citus.grep_remote_commands = '%CREATE SUBSCRIPTION%';
+SELECT citus_move_shard_placement(980042, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode := 'force_logical');
+NOTICE:  issuing CREATE SUBSCRIPTION citus_shard_move_subscription_xxxxxxx CONNECTION 'host=''localhost'' port=xxxxx user=''postgres'' dbname=''regression'' connect_timeout=20' PUBLICATION citus_shard_move_publication_xxxxxxx_xxxxxxx WITH (citus_use_authinfo=true, create_slot=false, copy_data=false, enabled=false, slot_name=citus_shard_move_slot_xxxxxxx_xxxxxxx, binary=true)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+ROLLBACK;
+-- See that it doesn't enable the binary option for logical replication if we
+-- disable binary protocol.
+BEGIN;
+SET LOCAL citus.log_remote_commands TO ON;
+SET LOCAL citus.grep_remote_commands = '%CREATE SUBSCRIPTION%';
+SET LOCAL citus.enable_binary_protocol = FALSE;
+SELECT citus_move_shard_placement(980042, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode := 'force_logical');
+NOTICE:  issuing CREATE SUBSCRIPTION citus_shard_move_subscription_xxxxxxx CONNECTION 'host=''localhost'' port=xxxxx user=''postgres'' dbname=''regression'' connect_timeout=20' PUBLICATION citus_shard_move_publication_xxxxxxx_xxxxxxx WITH (citus_use_authinfo=true, create_slot=false, copy_data=false, enabled=false, slot_name=citus_shard_move_slot_xxxxxxx_xxxxxxx)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+ROLLBACK;
 DROP TABLE compression_and_defaults, compression_and_generated_col;
 -- cleanup
 set client_min_messages to error;

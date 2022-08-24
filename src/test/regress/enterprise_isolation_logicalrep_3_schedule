@@ -6,3 +6,4 @@ test: isolation_setup
 test: isolation_cluster_management
 
 test: isolation_logical_replication_with_partitioning
+test: isolation_logical_replication_binaryless

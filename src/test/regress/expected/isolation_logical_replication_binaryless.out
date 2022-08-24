@@ -1,0 +1,48 @@
+Parsed test spec with 3 sessions
+
+starting permutation: s3-acquire-advisory-lock s1-move-placement s2-insert s3-release-advisory-lock s1-select
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-move-placement:
+ SELECT citus_move_shard_placement(45076800, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='force_logical');
+ <waiting ...>
+step s2-insert: 
+ INSERT INTO t_nonbinary (SELECT i, 'user postgres=r/postgres' FROM generate_series(6, 10) i);
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-move-placement: <... completed>
+citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-select:
+  SELECT * FROM t_nonbinary order by id;
+
+id|nonbinary
+---------------------------------------------------------------------
+ 1|postgres=r/postgres
+ 2|postgres=r/postgres
+ 3|postgres=r/postgres
+ 4|postgres=r/postgres
+ 5|postgres=r/postgres
+ 6|postgres=r/postgres
+ 7|postgres=r/postgres
+ 8|postgres=r/postgres
+ 9|postgres=r/postgres
+10|postgres=r/postgres
+(10 rows)
+

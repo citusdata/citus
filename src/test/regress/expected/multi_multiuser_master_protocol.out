@@ -449,10 +449,12 @@ ORDER BY nodename, nodeport, shardid;
  nodename  | nodeport | shardid | success | result
 ---------------------------------------------------------------------
  localhost |    57637 |  109102 | t       | t
+ localhost |    57637 |  109103 | t       | t
  localhost |    57637 |  109104 | t       | t
- localhost |    57638 |  109103 | t       | t
+ localhost |    57637 |  109106 | t       | t
  localhost |    57638 |  109105 | t       | t
-(4 rows)
+ localhost |    57638 |  109107 | t       | t
+(6 rows)
 
 -- revoke from multiple schemas, verify result
 REVOKE SELECT ON ALL TABLES IN SCHEMA multiuser_schema, multiuser_second_schema FROM read_access;
@@ -473,10 +475,12 @@ ORDER BY nodename, nodeport, shardid;
  nodename  | nodeport | shardid | success | result
 ---------------------------------------------------------------------
  localhost |    57637 |  109102 | t       | f
+ localhost |    57637 |  109103 | t       | f
  localhost |    57637 |  109104 | t       | f
- localhost |    57638 |  109103 | t       | f
+ localhost |    57637 |  109106 | t       | f
  localhost |    57638 |  109105 | t       | f
-(4 rows)
+ localhost |    57638 |  109107 | t       | f
+(6 rows)
 
 DROP SCHEMA multiuser_schema CASCADE;
 NOTICE:  drop cascades to 3 other objects

@@ -451,12 +451,12 @@ push(@pgOptions, "wal_level='logical'");
 
 # Faster logical replication status update so tests with logical replication
 # run faster
-push(@pgOptions, "wal_receiver_status_interval=1");
+push(@pgOptions, "wal_receiver_status_interval=0");
 
 # Faster logical replication apply worker launch so tests with logical
 # replication run faster. This is used in ApplyLauncherMain in
 # src/backend/replication/logical/launcher.c.
-push(@pgOptions, "wal_retrieve_retry_interval=1000");
+push(@pgOptions, "wal_retrieve_retry_interval=250");
 
 push(@pgOptions, "max_logical_replication_workers=50");
 push(@pgOptions, "max_wal_senders=50");
