@@ -420,6 +420,62 @@ SELECT * FROM numeric_negative_scale ORDER BY 1,2;
             120 |        115
 (5 rows)
 
+-- test new regex functions
+-- print order comments that contain the word `fluffily` at least twice
+SELECT o_comment FROM public.orders WHERE regexp_count(o_comment, 'FluFFily', 1, 'i')>=2 ORDER BY 1;
+                                 o_comment
+---------------------------------------------------------------------
+ al, bold deposits cajole fluffily fluffily final foxes. pending ideas beli
+ ly regular packages are fluffily even ideas. fluffily final
+ ng instructions integrate fluffily among the fluffily silent accounts. bli
+ ructions wake fluffily fluffily final gifts! furiou
+ s boost blithely fluffily idle ideas? fluffily even pin
+(5 rows)
+
+-- print the same items using a different regexp function
+SELECT o_comment FROM public.orders WHERE regexp_like(o_comment, 'fluffily.*fluffily') ORDER BY 1;
+                                 o_comment
+---------------------------------------------------------------------
+ al, bold deposits cajole fluffily fluffily final foxes. pending ideas beli
+ ly regular packages are fluffily even ideas. fluffily final
+ ng instructions integrate fluffily among the fluffily silent accounts. bli
+ ructions wake fluffily fluffily final gifts! furiou
+ s boost blithely fluffily idle ideas? fluffily even pin
+(5 rows)
+
+-- print the position where we find the second fluffily in the comment
+SELECT o_comment, regexp_instr(o_comment, 'fluffily.*(fluffily)') FROM public.orders ORDER BY 2 desc LIMIT 5;
+                                 o_comment                                  | regexp_instr
+---------------------------------------------------------------------
+ ng instructions integrate fluffily among the fluffily silent accounts. bli |           27
+ al, bold deposits cajole fluffily fluffily final foxes. pending ideas beli |           26
+ ly regular packages are fluffily even ideas. fluffily final                |           25
+ s boost blithely fluffily idle ideas? fluffily even pin                    |           18
+ ructions wake fluffily fluffily final gifts! furiou                        |           15
+(5 rows)
+
+-- print the substrings between two `fluffily`
+SELECT regexp_substr(o_comment, 'fluffily.*fluffily') FROM public.orders ORDER BY 1 LIMIT 5;
+         regexp_substr
+---------------------------------------------------------------------
+ fluffily among the fluffily
+ fluffily even ideas. fluffily
+ fluffily fluffily
+ fluffily fluffily
+ fluffily idle ideas? fluffily
+(5 rows)
+
+-- replace second `fluffily` with `silkily`
+SELECT regexp_replace(o_comment, 'fluffily', 'silkily', 1, 2) FROM public.orders WHERE regexp_like(o_comment, 'fluffily.*fluffily') ORDER BY 1 desc;
+                              regexp_replace
+---------------------------------------------------------------------
+ s boost blithely fluffily idle ideas? silkily even pin
+ ructions wake fluffily silkily final gifts! furiou
+ ng instructions integrate fluffily among the silkily silent accounts. bli
+ ly regular packages are fluffily even ideas. silkily final
+ al, bold deposits cajole fluffily silkily final foxes. pending ideas beli
+(5 rows)
+
 -- Clean up
 DROP SCHEMA pg15 CASCADE;
 NOTICE:  drop cascades to 10 other objects
