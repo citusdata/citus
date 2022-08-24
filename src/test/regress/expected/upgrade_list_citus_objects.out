@@ -230,7 +230,7 @@ ORDER BY 1;
  function worker_partitioned_table_size(regclass)
  function worker_record_sequence_dependency(regclass,regclass,name)
  function worker_save_query_explain_analyze(text,jsonb)
- function worker_split_copy(bigint,split_copy_info[])
+ function worker_split_copy(bigint,text,split_copy_info[])
  function worker_split_shard_release_dsm()
  function worker_split_shard_replication_setup(split_shard_info[])
  schema citus
@@ -270,6 +270,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-=======
 (262 rows)
 

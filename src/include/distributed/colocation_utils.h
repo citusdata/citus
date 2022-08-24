@@ -54,5 +54,10 @@ extern uint32 FindColocateWithColocationId(Oid relationId, char replicationModel
 										   Oid distributionColumnCollation,
 										   int shardCount, bool shardCountIsStrict,
 										   char *colocateWithTableName);
+extern void EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
+										  Oid distributionColumnType,
+										  Oid sourceRelationId);
+extern void AcquireColocationDefaultLock(void);
+extern void ReleaseColocationDefaultLock(void);
 
 #endif /* COLOCATION_UTILS_H_ */

@@ -239,8 +239,7 @@ SELECT isolate_tenant_to_new_shard('orders_streaming', 102, 'CASCADE', shard_tra
 (1 row)
 
 SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE', shard_transfer_mode => 'force_logical');
-ERROR:  Multiple 'isolate tenant' operations via logical replication in the same transaction is currently not supported.
-HINT:  If you wish to execute multiple 'isolate tenant' operations in a single transaction set the shard_transfer_mode to 'block_writes'.
+ERROR:  multiple shard movements/splits via logical replication in the same transaction is currently not supported
 ROLLBACK;
 -- test a succesfull transaction block
 BEGIN;

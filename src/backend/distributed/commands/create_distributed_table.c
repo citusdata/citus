@@ -60,6 +60,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
+#include "distributed/repair_shards.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_rebalancer.h"
 #include "distributed/shard_split.h"
@@ -148,6 +149,12 @@ static void DoCopyFromLocalTableIntoShards(Relation distributedRelation,
 static void ErrorIfTemporaryTable(Oid relationId);
 static void ErrorIfForeignTable(Oid relationOid);
 static void SendAddLocalTableToMetadataCommandOutsideTransaction(Oid relationId);
+static void EnsureDistributableTable(Oid relationId);
+static void EnsureForeignKeysForDistributedTableConcurrently(Oid relationId);
+static void EnsureColocateWithTableIsValid(Oid relationId, char distributionMethod,
+										   char *distributionColumnName,
+										   char *colocateWithTableName);
+static void WarnIfTableHaveNoReplicaIdentity(Oid relationId);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
@@ -323,32 +330,6 @@ create_distributed_table_concurrently(PG_FUNCTION_ARGS)
 
 
 /*
- * SendAddLocalTableToMetadataCommandOutsideTransaction executes metadata add local
- * table command locally to avoid deadlock.
- */
-static void
-SendAddLocalTableToMetadataCommandOutsideTransaction(Oid relationId)
-{
-	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
-
-	StringInfo applicationRenameCommand = makeStringInfo();
-	appendStringInfo(applicationRenameCommand, "SET application_name TO %s",
-					 CITUS_REBALANCER_NAME);
-
-	StringInfo addLocalTableToMetadataCommand = makeStringInfo();
-	appendStringInfo(addLocalTableToMetadataCommand,
-					 "SELECT pg_catalog.citus_add_local_table_to_metadata(%s)",
-					 quote_literal_cstr(qualifiedRelationName));
-
-	List *commands = list_make2(applicationRenameCommand->data,
-								addLocalTableToMetadataCommand->data);
-	char *username = GetUserNameFromId(GetUserId(), false);
-	SendCommandListToWorkerOutsideTransaction(LocalHostName, PostPortNumber, username,
-											  commands);
-}
-
-
-/*
  * CreateDistributedTableConcurrently distributes a table by first converting
  * it to a Citus local table and then splitting the shard of the Citus local
  * table.
@@ -370,6 +351,16 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 	 */
 	PreventInTransactionBlock(true, "create_distributed_table_concurrently");
 
+	/*
+	 * do not allow multiple create_distributed_table_concurrently in the same
+	 * transaction. We should do that check just here because concurrent local table
+	 * conversion can cause issues.
+	 */
+	ErrorIfMultipleNonblockingMoveSplitInTheSameTransaction();
+
+	/* do not allow concurrent CreateDistributedTableConcurrently operations */
+	AcquireCreateDistributedTableConcurrentlyLock(relationId);
+
 	if (distributionMethod != DISTRIBUTE_BY_HASH)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -386,6 +377,41 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 	EnsureCoordinatorIsInMetadata();
 	EnsureCitusTableCanBeCreated(relationId);
 
+	EnsureValidDistributionColumn(relationId, distributionColumnName);
+
+	/*
+	 * Ensure table type is valid to be distributed. It should be either regular or citus local table.
+	 */
+	EnsureDistributableTable(relationId);
+
+	/*
+	 * we rely on citus_add_local_table_to_metadata, so it can generate irrelevant messages.
+	 * we want to error with a user friendly message if foreign keys are not supported.
+	 * We can miss foreign key violations because we are not holding locks, so relation
+	 * can be modified until we acquire the lock for the relation, but we do as much as we can
+	 * to be user friendly on foreign key violation messages.
+	 */
+
+	EnsureForeignKeysForDistributedTableConcurrently(relationId);
+
+	bool viaDeprecatedAPI = false;
+	char replicationModel = DecideReplicationModel(distributionMethod,
+												   colocateWithTableName,
+												   viaDeprecatedAPI);
+
+	/*
+	 * we fail transaction before local table conversion if the table could not be colocated with
+	 * given table. We should make those checks after local table conversion by acquiring locks to
+	 * the relation because the distribution column can be modified in that period.
+	 */
+	if (!IsColocateWithDefault(colocateWithTableName) && !IsColocateWithNone(
+			colocateWithTableName))
+	{
+		EnsureColocateWithTableIsValid(relationId, distributionMethod,
+									   distributionColumnName,
+									   colocateWithTableName);
+	}
+
 	/*
 	 * Get name of the table before possibly replacing it in
 	 * citus_add_local_table_to_metadata.
@@ -395,10 +421,9 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 	char *schemaName = get_namespace_name(schemaId);
 	RangeVar *rangeVar = makeRangeVar(schemaName, tableName, -1);
 
-	if (!IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	/* If table is a regular table, then we need to add it into metadata. */
+	if (!IsCitusTable(relationId))
 	{
-		EnsureTableNotDistributed(relationId);
-
 		/*
 		 * Before taking locks, convert the table into a Citus local table and commit
 		 * to allow shard split to see the shard.
@@ -415,11 +440,13 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 	bool missingOK = false;
 	relationId = RangeVarGetRelid(rangeVar, ShareUpdateExclusiveLock, missingOK);
 
-	if (PartitionedTable(relationId))
+	if (PartitionedTableNoLock(relationId))
 	{
 		/* also lock partitions */
 		LockPartitionRelations(relationId, ShareUpdateExclusiveLock);
 	}
+
+	WarnIfTableHaveNoReplicaIdentity(relationId);
 
 	List *shardList = LoadShardIntervalList(relationId);
 
@@ -443,17 +470,22 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 
 	PropagatePrerequisiteObjectsForDistributedTable(relationId);
 
-	bool viaDeprecatedAPI = false;
-	char replicationModel = DecideReplicationModel(distributionMethod,
-												   colocateWithTableName,
-												   viaDeprecatedAPI);
-
+	/*
+	 * we should re-evaluate distribution column values. It may have changed,
+	 * because we did not lock the relation at the previous check before local
+	 * table conversion.
+	 */
 	Var *distributionColumn = BuildDistributionKeyFromColumnName(relationId,
 																 distributionColumnName,
 																 NoLock);
-
 	Oid distributionColumnType = distributionColumn->vartype;
 	Oid distributionColumnCollation = distributionColumn->varcollid;
+
+	/* get an advisory lock to serialize concurrent default group creations */
+	if (IsColocateWithDefault(colocateWithTableName))
+	{
+		AcquireColocationDefaultLock();
+	}
 
 	/*
 	 * At this stage, we only want to check for an existing co-location group.
@@ -468,16 +500,19 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 													   shardCountIsStrict,
 													   colocateWithTableName);
 
+	if (IsColocateWithDefault(colocateWithTableName) && (colocationId !=
+														 INVALID_COLOCATION_ID))
+	{
+		/*
+		 * we can release advisory lock if there is already a default entry for given params;
+		 * else, we should keep it to prevent different default coloc entry creation by
+		 * concurrent operations.
+		 */
+		ReleaseColocationDefaultLock();
+	}
+
 	EnsureRelationCanBeDistributed(relationId, distributionColumn, distributionMethod,
 								   colocationId, replicationModel, viaDeprecatedAPI);
-
-	/*
-	 * Make sure that existing reference tables have been replicated to all the nodes
-	 * such that we can create foreign keys and joins work immediately after creation.
-	 * We do this after applying all essential checks to error out early in case of
-	 * user error.
-	 */
-	EnsureReferenceTablesExistOnAllNodes();
 
 	Oid colocatedTableId = InvalidOid;
 	if (colocationId != INVALID_COLOCATION_ID)
@@ -517,6 +552,14 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 	}
 
 	/*
+	 * Make sure that existing reference tables have been replicated to all the nodes
+	 * such that we can create foreign keys and joins work immediately after creation.
+	 * We do this after applying all essential checks to error out early in case of
+	 * user error.
+	 */
+	EnsureReferenceTablesExistOnAllNodes();
+
+	/*
 	 * At this point, the table is a Citus local table, which means it does
 	 * not have a partition column in the metadata. However, we cannot update
 	 * the metadata here because that would prevent us from creating a replication
@@ -546,6 +589,177 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 		sourceColocatedShardIntervalList,
 		colocationId
 		);
+}
+
+
+/*
+ * EnsureForeignKeysForDistributedTableConcurrently ensures that referenced and referencing foreign
+ * keys for the given table are supported.
+ *
+ * We allow distributed -> reference
+ *          distributed -> citus local
+ *
+ * We disallow reference   -> distributed
+ *             citus local -> distributed
+ *             regular     -> distributed
+ *
+ * Normally regular		-> distributed is allowed but it is not allowed when we create the
+ * distributed table concurrently because we rely on conversion of regular table to citus local table,
+ * which errors with an unfriendly message.
+ */
+static void
+EnsureForeignKeysForDistributedTableConcurrently(Oid relationId)
+{
+	/*
+	 * disallow citus local -> distributed fkeys.
+	 * disallow reference   -> distributed fkeys.
+	 * disallow regular     -> distributed fkeys.
+	 */
+	EnsureNoFKeyFromTableType(relationId, INCLUDE_CITUS_LOCAL_TABLES |
+							  INCLUDE_REFERENCE_TABLES | INCLUDE_LOCAL_TABLES);
+
+	/*
+	 * disallow distributed -> regular fkeys.
+	 */
+	EnsureNoFKeyToTableType(relationId, INCLUDE_LOCAL_TABLES);
+}
+
+
+/*
+ * EnsureColocateWithTableIsValid ensures given relation can be colocated with the table of given name.
+ */
+static void
+EnsureColocateWithTableIsValid(Oid relationId, char distributionMethod,
+							   char *distributionColumnName, char *colocateWithTableName)
+{
+	bool viaDeprecatedAPI = false;
+	char replicationModel = DecideReplicationModel(distributionMethod,
+												   colocateWithTableName,
+												   viaDeprecatedAPI);
+
+	/*
+	 * we fail transaction before local table conversion if the table could not be colocated with
+	 * given table. We should make those checks after local table conversion by acquiring locks to
+	 * the relation because the distribution column can be modified in that period.
+	 */
+	Oid distributionColumnType = ColumnTypeIdForRelationColumnName(relationId,
+																   distributionColumnName);
+
+	text *colocateWithTableNameText = cstring_to_text(colocateWithTableName);
+	Oid colocateWithTableId = ResolveRelationId(colocateWithTableNameText, false);
+	EnsureTableCanBeColocatedWith(relationId, replicationModel,
+								  distributionColumnType, colocateWithTableId);
+}
+
+
+/*
+ * AcquireCreateDistributedTableConcurrentlyLock does not allow concurrent create_distributed_table_concurrently
+ * operations.
+ */
+void
+AcquireCreateDistributedTableConcurrentlyLock(Oid relationId)
+{
+	LOCKTAG tag;
+	const bool sessionLock = false;
+	const bool dontWait = true;
+
+	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_CREATE_DISTRIBUTED_TABLE_CONCURRENTLY);
+
+	LockAcquireResult lockAcquired = LockAcquire(&tag, ExclusiveLock, sessionLock,
+												 dontWait);
+	if (!lockAcquired)
+	{
+		ereport(ERROR, (errmsg("another create_distributed_table_concurrently "
+							   "operation is in progress"),
+						errhint("Make sure that the concurrent operation has "
+								"finished and re-run the command")));
+	}
+}
+
+
+/*
+ * SendAddLocalTableToMetadataCommandOutsideTransaction executes metadata add local
+ * table command locally to avoid deadlock.
+ */
+static void
+SendAddLocalTableToMetadataCommandOutsideTransaction(Oid relationId)
+{
+	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+
+	/*
+	 * we need to allow nested distributed execution, because we start a new distributed
+	 * execution inside the pushed-down UDF citus_add_local_table_to_metadata. Normally
+	 * citus does not allow that because it cannot guarantee correctness.
+	 */
+	StringInfo allowNestedDistributionCommand = makeStringInfo();
+	appendStringInfo(allowNestedDistributionCommand,
+					 "SET LOCAL citus.allow_nested_distributed_execution to ON");
+
+	StringInfo addLocalTableToMetadataCommand = makeStringInfo();
+	appendStringInfo(addLocalTableToMetadataCommand,
+					 "SELECT pg_catalog.citus_add_local_table_to_metadata(%s)",
+					 quote_literal_cstr(qualifiedRelationName));
+
+	List *commands = list_make2(allowNestedDistributionCommand->data,
+								addLocalTableToMetadataCommand->data);
+	char *username = NULL;
+	SendCommandListToWorkerOutsideTransaction(LocalHostName, PostPortNumber, username,
+											  commands);
+}
+
+
+/*
+ * WarnIfTableHaveNoReplicaIdentity notices user if the given table or its partitions (if any)
+ * do not have a replica identity which is required for logical replication to replicate
+ * UPDATE and DELETE commands during create_distributed_table_concurrently.
+ */
+void
+WarnIfTableHaveNoReplicaIdentity(Oid relationId)
+{
+	bool foundRelationWithNoReplicaIdentity = false;
+
+	/*
+	 * Check for source relation's partitions if any. We do not need to check for the source relation
+	 * because we can replicate partitioned table even if it does not have replica identity.
+	 * Source table will have no data if it has partitions.
+	 */
+	if (PartitionedTable(relationId))
+	{
+		List *partitionList = PartitionList(relationId);
+		ListCell *partitionCell = NULL;
+
+		foreach(partitionCell, partitionList)
+		{
+			Oid partitionTableId = lfirst_oid(partitionCell);
+
+			if (!RelationCanPublishAllModifications(partitionTableId))
+			{
+				foundRelationWithNoReplicaIdentity = true;
+				break;
+			}
+		}
+	}
+	/* check for source relation if it is not partitioned */
+	else
+	{
+		if (!RelationCanPublishAllModifications(relationId))
+		{
+			foundRelationWithNoReplicaIdentity = true;
+		}
+	}
+
+	if (foundRelationWithNoReplicaIdentity)
+	{
+		char *relationName = get_rel_name(relationId);
+
+		ereport(NOTICE, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("relation %s does not have a REPLICA "
+								"IDENTITY or PRIMARY KEY", relationName),
+						 errdetail("UPDATE and DELETE commands on the relation will "
+								   "error out during create_distributed_table_concurrently unless "
+								   "there is a REPLICA IDENTITY or PRIMARY KEY. "
+								   "INSERT commands will still work.")));
+	}
 }
 
 
@@ -785,7 +999,6 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 																 INCLUDE_ALL_TABLE_TYPES);
 		relationId = DropFKeysAndUndistributeTable(relationId);
 	}
-
 	/*
 	 * To support foreign keys between reference tables and local tables,
 	 * we drop & re-define foreign keys at the end of this function so
@@ -1360,10 +1573,14 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 		 */
 		Assert(distributionMethod == DISTRIBUTE_BY_HASH);
 
-		Relation pgDistColocation = table_open(DistColocationRelationId(), ExclusiveLock);
-
 		Oid distributionColumnType = distributionColumn->vartype;
 		Oid distributionColumnCollation = get_typcollation(distributionColumnType);
+
+		/* get an advisory lock to serialize concurrent default group creations */
+		if (IsColocateWithDefault(colocateWithTableName))
+		{
+			AcquireColocationDefaultLock();
+		}
 
 		colocationId = FindColocateWithColocationId(relationId,
 													replicationModel,
@@ -1373,7 +1590,16 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 													shardCountIsStrict,
 													colocateWithTableName);
 
-		bool createdColocationGroup = false;
+		if (IsColocateWithDefault(colocateWithTableName) && (colocationId !=
+															 INVALID_COLOCATION_ID))
+		{
+			/*
+			 * we can release advisory lock if there is already a default entry for given params;
+			 * else, we should keep it to prevent different default coloc entry creation by
+			 * concurrent operations.
+			 */
+			ReleaseColocationDefaultLock();
+		}
 
 		if (colocationId == INVALID_COLOCATION_ID)
 		{
@@ -1394,28 +1620,9 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 				 * record.
 				 */
 				colocationId = CreateColocationGroup(shardCount, ShardReplicationFactor,
-												 distributionColumnType,
-												 distributionColumnCollation);
+													 distributionColumnType,
+													 distributionColumnCollation);
 			}
-
-			createdColocationGroup = true;
-		}
-
-		/*
-		 * If we created a new colocation group then we need to keep the lock to
-		 * prevent a concurrent create_distributed_table call from creating another
-		 * colocation group with the same parameters. If we're using an existing
-		 * colocation group then other transactions will use the same one.
-		 */
-		if (createdColocationGroup)
-		{
-			/* keep the exclusive lock */
-			table_close(pgDistColocation, NoLock);
-		}
-		else
-		{
-			/* release the exclusive lock */
-			table_close(pgDistColocation, ExclusiveLock);
 		}
 	}
 
@@ -1514,13 +1721,13 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 		}
 	}
 
-	if (PartitionTable(relationId))
+	if (PartitionTableNoLock(relationId))
 	{
 		parentRelationId = PartitionParentOid(relationId);
 	}
 
 	/* partitions cannot be distributed if their parent is not distributed */
-	if (PartitionTable(relationId) && !IsCitusTable(parentRelationId))
+	if (PartitionTableNoLock(relationId) && !IsCitusTable(parentRelationId))
 	{
 		char *parentRelationName = get_rel_name(parentRelationId);
 
@@ -1538,7 +1745,7 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	 * reach this point because, we call CreateDistributedTable for partitions if their
 	 * parent table is distributed.
 	 */
-	if (PartitionedTable(relationId))
+	if (PartitionedTableNoLock(relationId))
 	{
 		/* we cannot distribute partitioned tables with master_create_distributed_table */
 		if (viaDeprecatedAPI)
@@ -1557,7 +1764,7 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 		}
 
 		/* we don't support distributing tables with multi-level partitioning */
-		if (PartitionTable(relationId))
+		if (PartitionTableNoLock(relationId))
 		{
 			char *parentRelationName = get_rel_name(parentRelationId);
 
@@ -1680,6 +1887,27 @@ EnsureLocalTableEmpty(Oid relationId)
 						errmsg("cannot distribute relation \"%s\"", relationName),
 						errdetail("Relation \"%s\" contains data.", relationName),
 						errhint("Empty your table before distributing it.")));
+	}
+}
+
+
+/*
+ * EnsureDistributableTable ensures the given table type is appropriate to
+ * be distributed. Table type should be regular or citus local table.
+ */
+static void
+EnsureDistributableTable(Oid relationId)
+{
+	bool isLocalTable = IsCitusTableType(relationId, CITUS_LOCAL_TABLE);
+	bool isRegularTable = !IsCitusTableType(relationId, ANY_CITUS_TABLE_TYPE);
+
+	if (!isLocalTable && !isRegularTable)
+	{
+		char *relationName = get_rel_name(relationId);
+
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+						errmsg("table \"%s\" is already distributed",
+							   relationName)));
 	}
 }
 

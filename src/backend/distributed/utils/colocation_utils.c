@@ -52,9 +52,6 @@ static int CompareShardPlacementsByNode(const void *leftElement,
 static void DeleteColocationGroup(uint32 colocationId);
 static uint32 CreateColocationGroupForRelation(Oid sourceRelationId);
 static void BreakColocation(Oid sourceRelationId);
-static void EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
-										  Oid distributionColumnType,
-										  Oid sourceRelationId);
 
 
 /* exports for SQL callable functions */
@@ -580,6 +577,39 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType, 
 
 
 /*
+ * AcquireColocationDefaultLock serializes concurrent creation of a colocation entry
+ * for default group.
+ */
+void
+AcquireColocationDefaultLock(void)
+{
+	LOCKTAG tag;
+	const bool sessionLock = false;
+	const bool dontWait = false;
+
+	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_CREATE_COLOCATION_DEFAULT);
+
+	(void) LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
+}
+
+
+/*
+ * ReleaseColocationDefaultLock releases the lock for concurrent creation of a colocation entry
+ * for default group.
+ */
+void
+ReleaseColocationDefaultLock(void)
+{
+	LOCKTAG tag;
+	const bool sessionLock = false;
+
+	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_CREATE_COLOCATION_DEFAULT);
+
+	LockRelease(&tag, ExclusiveLock, sessionLock);
+}
+
+
+/*
  * CreateColocationGroup creates a new colocation id and writes it into
  * pg_dist_colocation with the given configuration. It also returns the created
  * colocation id.
@@ -634,7 +664,7 @@ InsertColocationGroupLocally(uint32 colocationId, int shardCount, int replicatio
 
 	/* increment the counter so that next command can see the row */
 	CommandCounterIncrement();
-	table_close(pgDistColocation, RowExclusiveLock);
+	table_close(pgDistColocation, NoLock);
 }
 
 
@@ -1286,7 +1316,7 @@ DeleteColocationGroupLocally(uint32 colocationId)
 	}
 
 	systable_endscan(scanDescriptor);
-	table_close(pgDistColocation, RowExclusiveLock);
+	table_close(pgDistColocation, NoLock);
 }
 
 
@@ -1353,7 +1383,7 @@ FindColocateWithColocationId(Oid relationId, char replicationModel,
  *
  * We only pass relationId to provide meaningful error messages.
  */
-static void
+void
 EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 							  Oid distributionColumnType, Oid sourceRelationId)
 {

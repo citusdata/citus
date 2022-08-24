@@ -75,8 +75,6 @@ static void ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 											List *nodeIdsForPlacementList);
 static void ErrorIfModificationAndSplitInTheSameTransaction(SplitOperation
 															splitOperation);
-static void ErrorIfMultipleNonblockingSplitInTheSameTransaction(SplitOperation
-																splitOperation);
 static void CreateSplitShardsForShardGroup(HTAB *mapOfShardToPlacementCreatedByWorkflow,
 										   List *shardGroupSplitIntervalListList,
 										   List *workersForPlacementList);
@@ -147,14 +145,15 @@ static List * ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 												   List *sourceColocatedShardIntervalList,
 												   List *shardGroupSplitIntervalListList,
 												   List *destinationWorkerNodesList,
-												   DistributionColumnMap *distributionColumnOverrides);
+												   DistributionColumnMap *
+												   distributionColumnOverrides);
 static void ExecuteSplitShardReleaseSharedMemory(WorkerNode *sourceWorkerNode);
 static void AddDummyShardEntryInMap(HTAB *mapOfDummyShards, uint32 targetNodeId,
 									ShardInterval *shardInterval);
 static void DropDummyShards(HTAB *mapOfDummyShardToPlacement);
 static void DropDummyShard(MultiConnection *connection, ShardInterval *shardInterval);
 static uint64 GetNextShardIdForSplitChild(void);
-static void AcquireNonblockingSplitLock(Oid relationId, SplitMode splitMode);
+static void AcquireNonblockingSplitLock(Oid relationId);
 static List * GetWorkerNodesFromWorkerIds(List *nodeIdsForPlacementList);
 
 /* Customize error message strings based on operation type */
@@ -395,25 +394,18 @@ ErrorIfModificationAndSplitInTheSameTransaction(SplitOperation splitOperation)
 
 
 /*
- * ErrorIfMultipleNonblockingSplitInTheSameTransaction will error if we detect multiple
- * nonblocking split operation in the same transaction.
+ * ErrorIfMultipleNonblockingMoveSplitInTheSameTransaction will error if we detect multiple
+ * nonblocking shard movements/splits in the same transaction.
  */
-static void
-ErrorIfMultipleNonblockingSplitInTheSameTransaction(SplitOperation splitOperation)
+void
+ErrorIfMultipleNonblockingMoveSplitInTheSameTransaction(void)
 {
 	if (PlacementMovedUsingLogicalReplicationInTX)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("Multiple '%s %s' operations via logical "
+						errmsg("multiple shard movements/splits via logical "
 							   "replication in the same transaction is currently "
-							   "not supported.",
-							   SplitOperationName[splitOperation],
-							   SplitTargetName[splitOperation]),
-						errhint("If you wish to execute multiple '%s %s' operations "
-								"in a single transaction set the shard_transfer_mode "
-								"to 'block_writes'.",
-								SplitOperationName[splitOperation],
-								SplitTargetName[splitOperation])));
+							   "not supported")));
 	}
 }
 
@@ -426,10 +418,10 @@ static List *
 GetWorkerNodesFromWorkerIds(List *nodeIdsForPlacementList)
 {
 	List *workersForPlacementList = NIL;
-	Datum nodeId;
+	int32 nodeId;
 	foreach_int(nodeId, nodeIdsForPlacementList)
 	{
-		uint32 nodeIdValue = DatumGetUInt32(nodeId);
+		uint32 nodeIdValue = (uint32) nodeId;
 		WorkerNode *workerNode = LookupNodeByNodeId(nodeIdValue);
 
 		/* NodeId in Citus are unsigned and range from [1, 4294967296]. */
@@ -474,7 +466,6 @@ SplitShard(SplitMode splitMode,
 		   uint32 targetColocationId)
 {
 	ErrorIfModificationAndSplitInTheSameTransaction(splitOperation);
-	ErrorIfMultipleNonblockingSplitInTheSameTransaction(splitOperation);
 
 	ShardInterval *shardIntervalToSplit = LoadShardInterval(shardIdToSplit);
 	List *colocatedTableList = ColocatedTableList(shardIntervalToSplit->relationId);
@@ -487,9 +478,6 @@ SplitShard(SplitMode splitMode,
 	/* Acquire global lock to prevent concurrent split on the same colocation group or relation */
 	Oid relationId = RelationIdForShard(shardIdToSplit);
 	AcquirePlacementColocationLock(relationId, ExclusiveLock, "split");
-
-	/* Acquire global lock to prevent concurrent nonblocking splits */
-	AcquireNonblockingSplitLock(relationId, splitMode);
 
 	/* sort the tables to avoid deadlocks */
 	colocatedTableList = SortList(colocatedTableList, CompareOids);
@@ -514,7 +502,7 @@ SplitShard(SplitMode splitMode,
 	List *workersForPlacementList = GetWorkerNodesFromWorkerIds(nodeIdsForPlacementList);
 
 	List *sourceColocatedShardIntervalList = NIL;
-	if (splitOperation != CREATE_DISTRIBUTED_TABLE)
+	if (colocatedShardIntervalList == NIL)
 	{
 		sourceColocatedShardIntervalList = ColocatedShardIntervalList(
 			shardIntervalToSplit);
@@ -1419,18 +1407,16 @@ TryDropSplitShardsOnFailure(HTAB *mapOfShardToPlacementCreatedByWorkflow)
  * replication slots.
  */
 static void
-AcquireNonblockingSplitLock(Oid relationId, SplitMode splitMode)
+AcquireNonblockingSplitLock(Oid relationId)
 {
-	/* we should not be preventing concurrent blocking and nonblocking splits */
-	if (splitMode == BLOCKING_SPLIT)
-	{
-		return;
-	}
-
 	LOCKTAG tag;
-	SET_LOCKTAG_NONBLOCKING_SPLIT(tag);
+	const bool sessionLock = false;
+	const bool dontWait = true;
 
-	LockAcquireResult lockAcquired = LockAcquire(&tag, ExclusiveLock, false, true);
+	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_NONBLOCKING_SPLIT);
+
+	LockAcquireResult lockAcquired = LockAcquire(&tag, ExclusiveLock, sessionLock,
+												 dontWait);
 	if (!lockAcquired)
 	{
 		ereport(ERROR, (errmsg("could not acquire the lock required to split "
@@ -1467,6 +1453,8 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 					  DistributionColumnMap *distributionColumnOverrides,
 					  uint32 targetColocationId)
 {
+	ErrorIfMultipleNonblockingMoveSplitInTheSameTransaction();
+
 	char *superUser = CitusExtensionOwnerName();
 	char *databaseName = get_database_name(MyDatabaseId);
 
@@ -1476,6 +1464,10 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		shardSplitPointsList);
 
 	ShardInterval *firstShard = linitial(sourceColocatedShardIntervalList);
+
+	/* Acquire global lock to prevent concurrent nonblocking splits */
+	AcquireNonblockingSplitLock(firstShard->relationId);
+
 	WorkerNode *sourceShardToCopyNode =
 		ActiveShardPlacementWorkerNode(firstShard->shardId);
 

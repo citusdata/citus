@@ -32,6 +32,8 @@ begin;
 select create_distributed_table_concurrently('test','key');
 rollback;
 
+select create_distributed_table_concurrently('test','key'), create_distributed_table_concurrently('test','key');
+
 select create_distributed_table_concurrently('nocolo','x');
 select create_distributed_table_concurrently('test','key', colocate_with := 'nocolo');
 select create_distributed_table_concurrently('test','key', colocate_with := 'noexists');
@@ -69,6 +71,71 @@ select id, y from test join test2 on (key = x) where key = '1';
 
 -- verify co-locaed foreign keys work
 alter table test add constraint fk foreign key (key) references test2 (x);
+
+-------foreign key tests among different table types--------
+-- verify we do not allow foreign keys from reference table to distributed table concurrently
+create table ref_table1(id int);
+create table dist_table1(id int primary key);
+select create_reference_table('ref_table1');
+alter table ref_table1 add constraint fkey foreign key (id) references dist_table1(id);
+select create_distributed_table_concurrently('dist_table1', 'id');
+
+-- verify we do not allow foreign keys from citus local table to distributed table concurrently
+create table citus_local_table1(id int);
+select citus_add_local_table_to_metadata('citus_local_table1');
+create table dist_table2(id int primary key);
+alter table citus_local_table1 add constraint fkey foreign key (id) references dist_table2(id);
+select create_distributed_table_concurrently('dist_table2', 'id');
+
+-- verify we do not allow foreign keys from regular table to distributed table concurrently
+create table local_table1(id int);
+create table dist_table3(id int primary key);
+alter table local_table1 add constraint fkey foreign key (id) references dist_table3(id);
+select create_distributed_table_concurrently('dist_table3', 'id');
+
+-- verify we allow foreign keys from distributed table to reference table concurrently
+create table ref_table2(id int primary key);
+select create_reference_table('ref_table2');
+create table dist_table4(id int references ref_table2(id));
+select create_distributed_table_concurrently('dist_table4', 'id');
+
+insert into ref_table2 select s from generate_series(1,100) s;
+insert into dist_table4 select s from generate_series(1,100) s;
+select count(*) as total from dist_table4;
+
+-- verify we do not allow foreign keys from distributed table to citus local table concurrently
+create table citus_local_table2(id int primary key);
+select citus_add_local_table_to_metadata('citus_local_table2');
+create table dist_table5(id int references citus_local_table2(id));
+select create_distributed_table_concurrently('dist_table5', 'id');
+
+-- verify we do not allow foreign keys from distributed table to regular table concurrently
+create table local_table2(id int primary key);
+create table dist_table6(id int references local_table2(id));
+select create_distributed_table_concurrently('dist_table6', 'id');
+-------foreign key tests among different table types--------
+
+-- columnar tests --
+
+-- create table with partitions
+create table test_columnar (id int) partition by range (id);
+create table test_columnar_1 partition of test_columnar for values from (1) to (51);
+create table test_columnar_2 partition of test_columnar for values from (51) to (101) using columnar;
+
+-- load some data
+insert into test_columnar (id) select s from generate_series(1,100) s;
+
+-- distribute table
+select create_distributed_table_concurrently('test_columnar','id');
+
+-- verify queries still work
+select count(*) from test_columnar;
+select id from test_columnar where id = 1;
+select id from test_columnar where id = 51;
+select count(*) from test_columnar_1;
+select count(*) from test_columnar_2;
+
+-- columnar tests --
 
 set client_min_messages to warning;
 drop schema create_distributed_table_concurrently cascade;

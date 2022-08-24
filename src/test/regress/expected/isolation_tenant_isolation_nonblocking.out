@@ -943,7 +943,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500166
+                    1500169
 (1 row)
 
 step s2-commit:
@@ -962,10 +962,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500165|t      |     0
-   57637|1500166|t      |     1
-   57637|1500167|t      |     0
-   57638|1500162|t      |     0
+   57637|1500168|t      |     0
+   57637|1500169|t      |     1
+   57637|1500170|t      |     0
+   57638|1500165|t      |     0
 (4 rows)
 
 id|value
@@ -1004,7 +1004,7 @@ step s1-isolate-tenant-no-same-coloc-blocking:
 
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500177
+                    1500183
 (1 row)
 
 step s3-release-advisory-lock:
@@ -1018,7 +1018,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500174
+                    1500180
 (1 row)
 
 step s2-print-cluster:
@@ -1034,10 +1034,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500173|t      |     0
-   57637|1500174|t      |     1
-   57637|1500175|t      |     0
-   57638|1500170|t      |     0
+   57637|1500179|t      |     0
+   57637|1500180|t      |     1
+   57637|1500181|t      |     0
+   57638|1500176|t      |     0
 (4 rows)
 
 id|value
@@ -1076,7 +1076,7 @@ step s1-isolate-tenant-no-same-coloc-blocking:
 
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500188
+                    1500194
 (1 row)
 
 step s3-release-advisory-lock:
@@ -1090,7 +1090,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500185
+                    1500191
 (1 row)
 
 step s2-print-cluster:
@@ -1106,10 +1106,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500184|t      |     0
-   57637|1500185|t      |     1
-   57637|1500186|t      |     0
-   57638|1500181|t      |     0
+   57637|1500190|t      |     0
+   57637|1500191|t      |     1
+   57637|1500192|t      |     0
+   57638|1500187|t      |     0
 (4 rows)
 
 id|value

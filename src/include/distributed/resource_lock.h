@@ -42,14 +42,16 @@ typedef enum AdvisoryLocktagClass
 	ADV_LOCKTAG_CLASS_CITUS_OPERATIONS = 9,
 	ADV_LOCKTAG_CLASS_CITUS_PLACEMENT_CLEANUP = 10,
 	ADV_LOCKTAG_CLASS_CITUS_LOGICAL_REPLICATION = 12,
-	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_PLACEMENT_COLOCATION = 13,
-	ADV_LOCKTAG_CLASS_CITUS_NONBLOCKING_SPLIT = 14
+	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_PLACEMENT_COLOCATION = 13
 } AdvisoryLocktagClass;
 
 /* CitusOperations has constants for citus operations */
 typedef enum CitusOperations
 {
-	CITUS_TRANSACTION_RECOVERY = 0
+	CITUS_TRANSACTION_RECOVERY = 0,
+	CITUS_NONBLOCKING_SPLIT = 1,
+	CITUS_CREATE_DISTRIBUTED_TABLE_CONCURRENTLY = 2,
+	CITUS_CREATE_COLOCATION_DEFAULT = 3
 } CitusOperations;
 
 /* reuse advisory lock, but with different, unused field 4 (4)*/
@@ -126,15 +128,6 @@ typedef enum CitusOperations
 						 (uint32) 0, \
 						 ADV_LOCKTAG_CLASS_CITUS_LOGICAL_REPLICATION)
 
-/* advisory lock for nonblocking shard splitting, also it has the database hardcoded to MyDatabaseId,
- * to ensure the locks are local to each database */
-#define SET_LOCKTAG_NONBLOCKING_SPLIT(tag) \
-	SET_LOCKTAG_ADVISORY(tag, \
-						 MyDatabaseId, \
-						 (uint32) 0, \
-						 (uint32) 0, \
-						 ADV_LOCKTAG_CLASS_CITUS_NONBLOCKING_SPLIT)
-
 /*
  * DistLockConfigs are used to configure the locking behaviour of AcquireDistributedLockOnRelations
  */
@@ -186,6 +179,8 @@ extern void LockTransactionRecovery(LOCKMODE lockMode);
 extern void SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode);
 extern void LockRelationShardResources(List *relationShardList, LOCKMODE lockMode);
 extern List * GetSortedReferenceShardIntervals(List *relationList);
+
+void AcquireCreateDistributedTableConcurrentlyLock(Oid relationId);
 
 /* Lock parent table's colocated shard resource */
 extern void LockParentShardResourceIfPartition(List *shardIntervalList,

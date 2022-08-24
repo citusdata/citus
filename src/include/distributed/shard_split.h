@@ -51,4 +51,6 @@ extern void DropShardList(List *shardIntervalList);
 
 extern SplitMode LookupSplitMode(Oid shardTransferModeOid);
 
+extern void ErrorIfMultipleNonblockingMoveSplitInTheSameTransaction(void);
+
 #endif /* SHARDSPLIT_H_ */

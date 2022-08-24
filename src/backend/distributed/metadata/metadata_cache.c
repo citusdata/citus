@@ -494,6 +494,49 @@ IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
 
 
 /*
+ * GetTableTypeName returns string representation of the table type.
+ */
+char *
+GetTableTypeName(Oid tableId)
+{
+	bool regularTable = false;
+	char partitionMethod = ' ';
+	char replicationModel = ' ';
+	if (IsCitusTable(tableId))
+	{
+		CitusTableCacheEntry *referencingCacheEntry = GetCitusTableCacheEntry(tableId);
+		partitionMethod = referencingCacheEntry->partitionMethod;
+		replicationModel = referencingCacheEntry->replicationModel;
+	}
+	else
+	{
+		regularTable = true;
+	}
+
+	if (regularTable)
+	{
+		return "regular table";
+	}
+	else if (partitionMethod == 'h')
+	{
+		return "distributed table";
+	}
+	else if (partitionMethod == 'n' && replicationModel == 't')
+	{
+		return "reference table";
+	}
+	else if (partitionMethod == 'n' && replicationModel != 't')
+	{
+		return "citus local table";
+	}
+	else
+	{
+		return "unknown table";
+	}
+}
+
+
+/*
  * IsCitusTable returns whether relationId is a distributed relation or
  * not.
  */

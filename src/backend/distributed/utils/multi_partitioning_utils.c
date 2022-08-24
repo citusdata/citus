@@ -999,8 +999,7 @@ IsParentTable(Oid relationId)
 	Relation relation = try_relation_open(relationId, AccessShareLock);
 	if (relation == NULL)
 	{
-		ereport(ERROR, (errmsg("could not create distributed table: "
-							   "relation does not exist")));
+		ereport(ERROR, (errmsg("relation with OID %u does not exist", relationId)));
 	}
 
 	if (tableInherited && PartitionedTableNoLock(relationId))
