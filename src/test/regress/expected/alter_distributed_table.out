@@ -340,7 +340,7 @@ SELECT create_distributed_table('foo_bar','x');
 
 (1 row)
 
-SELECT COUNT(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid::regclass::text LIKE 'foo%';
+SELECT COUNT(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid::regclass::text in ('foo', 'foo_1', 'foo_2', 'foo_bar', 'foo_bar_1', 'foo_bar_2');
  count
 ---------------------------------------------------------------------
      1
@@ -364,7 +364,7 @@ NOTICE:  renaming the new table to alter_distributed_table.foo
 
 (1 row)
 
-SELECT COUNT(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid::regclass::text LIKE 'foo%';
+SELECT COUNT(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid::regclass::text in ('foo', 'foo_1', 'foo_2', 'foo_bar', 'foo_bar_1', 'foo_bar_2');
  count
 ---------------------------------------------------------------------
      2

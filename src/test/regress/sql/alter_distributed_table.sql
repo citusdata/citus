@@ -97,11 +97,11 @@ CREATE TABLE foo_bar_2 PARTITION of foo_bar for VALUES FROM ('2023-01-01') TO ('
 
 SELECT create_distributed_table('foo_bar','x');
 
-SELECT COUNT(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid::regclass::text LIKE 'foo%';
+SELECT COUNT(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid::regclass::text in ('foo', 'foo_1', 'foo_2', 'foo_bar', 'foo_bar_1', 'foo_bar_2');
 
 SELECT alter_distributed_table('foo', colocate_with => 'none');
 
-SELECT COUNT(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid::regclass::text LIKE 'foo%';
+SELECT COUNT(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid::regclass::text in ('foo', 'foo_1', 'foo_2', 'foo_bar', 'foo_bar_1', 'foo_bar_2');
 
 -- test references
 CREATE TABLE referenced_dist_table (a INT UNIQUE);
