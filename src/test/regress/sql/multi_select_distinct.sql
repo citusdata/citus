@@ -282,22 +282,26 @@ SELECT DISTINCT *
 
 -- explain the query to see actual plan. We expect to see only one aggregation
 -- node since group by columns guarantees the uniqueness.
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT *
 		FROM lineitem_hash_part
 		GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
 		ORDER BY 1,2
 		LIMIT 10;
+$Q$);
 
 -- check the plan if the hash aggreate is disabled. We expect to see only one
 -- aggregation node since group by columns guarantees the uniqueness.
 SET enable_hashagg TO off;
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT *
 		FROM lineitem_hash_part
 		GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
 		ORDER BY 1,2
 		LIMIT 10;
+$Q$);
 
 SET enable_hashagg TO on;
 
@@ -352,21 +356,25 @@ $Q$);
 SET enable_hashagg TO on;
 
 -- explain the query to see actual plan with array_agg aggregation.
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT array_agg(l_linenumber), array_length(array_agg(l_linenumber), 1)
 		FROM lineitem_hash_part
 		GROUP BY l_orderkey
 		ORDER BY 2
 		LIMIT 15;
+$Q$);
 
 -- check the plan if the hash aggreate is disabled.
 SET enable_hashagg TO off;
+SELECT coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT array_agg(l_linenumber), array_length(array_agg(l_linenumber), 1)
 		FROM lineitem_hash_part
 		GROUP BY l_orderkey
 		ORDER BY 2
 		LIMIT 15;
+$Q$);
 
 SET enable_hashagg TO on;
 
