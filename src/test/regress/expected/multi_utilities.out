@@ -353,18 +353,20 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 insert into local_vacuum_table select i from generate_series(1,1000000) i;
 delete from local_vacuum_table;
 VACUUM local_vacuum_table;
-SELECT pg_size_pretty( pg_total_relation_size('local_vacuum_table') );
- pg_size_pretty
+SELECT CASE WHEN s BETWEEN 20000000 AND 25000000 THEN 22500000 ELSE s END
+FROM pg_total_relation_size('local_vacuum_table') s ;
+    s
 ---------------------------------------------------------------------
- 21 MB
+ 22500000
 (1 row)
 
 -- vacuum full deallocates pages of dead tuples whereas normal vacuum only marks dead tuples on visibility map
 VACUUM FULL local_vacuum_table;
-SELECT pg_size_pretty( pg_total_relation_size('local_vacuum_table') );
- pg_size_pretty
+SELECT CASE WHEN s BETWEEN 0 AND 50000 THEN 25000 ELSE s END size
+FROM pg_total_relation_size('local_vacuum_table') s ;
+ size
 ---------------------------------------------------------------------
- 16 kB
+ 25000
 (1 row)
 
 -- should propagate to all workers because table is reference table
@@ -398,19 +400,21 @@ VACUUM (DISABLE_PAGE_SKIPPING false) local_vacuum_table;
 insert into local_vacuum_table select i from generate_series(1,1000000) i;
 delete from local_vacuum_table;
 VACUUM (INDEX_CLEANUP OFF, PARALLEL 1) local_vacuum_table;
-SELECT pg_size_pretty( pg_total_relation_size('local_vacuum_table') );
- pg_size_pretty
+SELECT CASE WHEN s BETWEEN 50000000 AND 70000000 THEN 60000000 ELSE s END size
+FROM pg_total_relation_size('local_vacuum_table') s ;
+   size
 ---------------------------------------------------------------------
- 56 MB
+ 60000000
 (1 row)
 
 insert into local_vacuum_table select i from generate_series(1,1000000) i;
 delete from local_vacuum_table;
 VACUUM (INDEX_CLEANUP ON, PARALLEL 1) local_vacuum_table;
-SELECT pg_size_pretty( pg_total_relation_size('local_vacuum_table') );
- pg_size_pretty
+SELECT CASE WHEN s BETWEEN 20000000 AND 25000000 THEN 22500000 ELSE s END size
+FROM pg_total_relation_size('local_vacuum_table') s ;
+   size
 ---------------------------------------------------------------------
- 21 MB
+ 22500000
 (1 row)
 
 -- vacuum (truncate false) should not attempt to truncate off any empty pages at the end of the table (default is true)

@@ -229,11 +229,13 @@ VACUUM;
 insert into local_vacuum_table select i from generate_series(1,1000000) i;
 delete from local_vacuum_table;
 VACUUM local_vacuum_table;
-SELECT pg_size_pretty( pg_total_relation_size('local_vacuum_table') );
+SELECT CASE WHEN s BETWEEN 20000000 AND 25000000 THEN 22500000 ELSE s END
+FROM pg_total_relation_size('local_vacuum_table') s ;
 
 -- vacuum full deallocates pages of dead tuples whereas normal vacuum only marks dead tuples on visibility map
 VACUUM FULL local_vacuum_table;
-SELECT pg_size_pretty( pg_total_relation_size('local_vacuum_table') );
+SELECT CASE WHEN s BETWEEN 0 AND 50000 THEN 25000 ELSE s END size
+FROM pg_total_relation_size('local_vacuum_table') s ;
 
 -- should propagate to all workers because table is reference table
 VACUUM reference_vacuum_table;
@@ -255,12 +257,14 @@ VACUUM (DISABLE_PAGE_SKIPPING false) local_vacuum_table;
 insert into local_vacuum_table select i from generate_series(1,1000000) i;
 delete from local_vacuum_table;
 VACUUM (INDEX_CLEANUP OFF, PARALLEL 1) local_vacuum_table;
-SELECT pg_size_pretty( pg_total_relation_size('local_vacuum_table') );
+SELECT CASE WHEN s BETWEEN 50000000 AND 70000000 THEN 60000000 ELSE s END size
+FROM pg_total_relation_size('local_vacuum_table') s ;
 
 insert into local_vacuum_table select i from generate_series(1,1000000) i;
 delete from local_vacuum_table;
 VACUUM (INDEX_CLEANUP ON, PARALLEL 1) local_vacuum_table;
-SELECT pg_size_pretty( pg_total_relation_size('local_vacuum_table') );
+SELECT CASE WHEN s BETWEEN 20000000 AND 25000000 THEN 22500000 ELSE s END size
+FROM pg_total_relation_size('local_vacuum_table') s ;
 
 -- vacuum (truncate false) should not attempt to truncate off any empty pages at the end of the table (default is true)
 insert into local_vacuum_table select i from generate_series(1,1000000) i;
