@@ -76,3 +76,21 @@ DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_
 
 DROP FUNCTION pg_catalog.isolate_tenant_to_new_shard(table_name regclass, tenant_id "any", cascade_option text);
 #include "udfs/isolate_tenant_to_new_shard/11.1-1.sql"
+
+-- Table of records to:
+-- 1) Cleanup leftover resources after a failure
+-- 2) Deferred drop of old shard placements after a split.
+CREATE TABLE citus.pg_dist_cleanup (
+    record_id bigserial primary key,
+    operation_id bigint not null,
+    object_type int not null,
+    object_name text not null,
+    node_group_id int not null,
+    policy_type int not null
+);
+ALTER TABLE citus.pg_dist_cleanup SET SCHEMA pg_catalog;
+
+
+-- Sequence used to generate an operation ID for use in pg_dist_cleanup_record.
+CREATE SEQUENCE citus.pg_dist_operation_id_seq;
+ALTER SEQUENCE citus.pg_dist_operation_id_seq SET SCHEMA pg_catalog;

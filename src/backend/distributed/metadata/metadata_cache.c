@@ -147,6 +147,8 @@ typedef struct MetadataCacheData
 	Oid distLocalGroupRelationId;
 	Oid distObjectRelationId;
 	Oid distObjectPrimaryKeyIndexId;
+	Oid distCleanupRelationId;
+	Oid distCleanupPrimaryKeyIndexId;
 	Oid distColocationRelationId;
 	Oid distColocationConfigurationIndexId;
 	Oid distPartitionRelationId;
@@ -2462,6 +2464,28 @@ DistObjectPrimaryKeyIndexId(void)
 	}
 
 	return MetadataCache.distObjectPrimaryKeyIndexId;
+}
+
+
+/* return oid of pg_dist_cleanup relation */
+Oid
+DistCleanupRelationId(void)
+{
+	CachedRelationLookup("pg_dist_cleanup",
+						 &MetadataCache.distCleanupRelationId);
+
+	return MetadataCache.distCleanupRelationId;
+}
+
+
+/* return oid of pg_dist_cleanup primary key index */
+Oid
+DistCleanupPrimaryKeyIndexId(void)
+{
+	CachedRelationLookup("pg_dist_cleanup_pkey",
+						 &MetadataCache.distCleanupPrimaryKeyIndexId);
+
+	return MetadataCache.distCleanupPrimaryKeyIndexId;
 }
 
 

@@ -33,6 +33,7 @@
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/metadata_sync.h"
@@ -42,6 +43,9 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/shard_rebalancer.h"
 #include "postmaster/postmaster.h"
+
+/* declarations for dynamic loading */
+bool DeferShardDeleteOnSplit = true;
 
 /*
  * Entry for map that tracks ShardInterval -> Placement Node
@@ -72,15 +76,13 @@ static void ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 											List *shardSplitPointsList,
 											List *nodeIdsForPlacementList);
 static void CreateAndCopySplitShardsForShardGroup(
-	HTAB *mapOfShardToPlacementCreatedByWorkflow,
 	WorkerNode *sourceShardNode,
 	List *sourceColocatedShardIntervalList,
 	List *shardGroupSplitIntervalListList,
 	List *workersForPlacementList);
-static void CreateSplitShardsForShardGroup(HTAB *mapOfShardToPlacementCreatedByWorkflow,
-										   List *shardGroupSplitIntervalListList,
+static void CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 										   List *workersForPlacementList);
-static void CreateDummyShardsForShardGroup(HTAB *mapOfDummyShardToPlacement,
+static void CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 										   List *sourceColocatedShardIntervalList,
 										   List *shardGroupSplitIntervalListList,
 										   WorkerNode *sourceWorkerNode,
@@ -89,7 +91,7 @@ static HTAB * CreateWorkerForPlacementSet(List *workersForPlacementList);
 static void CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
 												   List *workersForPlacementList,
 												   bool includeReplicaIdentity);
-static void CreateReplicaIdentitiesForDummyShards(HTAB *mapOfDummyShardToPlacement);
+static void CreateReplicaIdentitiesForDummyShards(HTAB *mapOfPlacementToDummyShardList);
 static void CreateObjectOnPlacement(List *objectCreationCommandList,
 									WorkerNode *workerNode);
 static List *    CreateSplitIntervalsForShardGroup(List *sourceColocatedShardList,
@@ -121,8 +123,6 @@ static void CreatePartitioningHierarchy(List *shardGroupSplitIntervalListList,
 										List *workersForPlacementList);
 static void CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 										List *workersForPlacementList);
-static void TryDropSplitShardsOnFailure(HTAB *mapOfShardToPlacementCreatedByWorkflow);
-static HTAB * CreateEmptyMapForShardsCreatedByWorkflow();
 static Task * CreateTaskForDDLCommandList(List *ddlCommandList, WorkerNode *workerNode);
 static StringInfo CreateSplitShardReplicationSetupUDF(
 	List *sourceColocatedShardIntervalList, List *shardGroupSplitIntervalListList,
@@ -133,10 +133,8 @@ static List * ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 												   List *sourceColocatedShardIntervalList,
 												   List *shardGroupSplitIntervalListList,
 												   List *destinationWorkerNodesList);
-static void AddDummyShardEntryInMap(HTAB *mapOfDummyShards, uint32 targetNodeId,
+static void AddDummyShardEntryInMap(HTAB *mapOfPlacementToDummyShardList, uint32 targetNodeId,
 									ShardInterval *shardInterval);
-static void DropDummyShards(HTAB *mapOfDummyShardToPlacement);
-static void DropDummyShard(MultiConnection *connection, ShardInterval *shardInterval);
 static uint64 GetNextShardIdForSplitChild(void);
 
 /* Customize error message strings based on operation type */
@@ -431,6 +429,9 @@ SplitShard(SplitMode splitMode,
 			lappend(workersForPlacementList, (void *) workerNode);
 	}
 
+	/* Start operation to prepare for generating cleanup records */
+	StartNewOperationNeedingCleanup();
+
 	if (splitMode == BLOCKING_SPLIT)
 	{
 		EnsureReferenceTablesExistOnAllNodesExtended(TRANSFER_MODE_BLOCK_WRITES);
@@ -450,70 +451,9 @@ SplitShard(SplitMode splitMode,
 
 		PlacementMovedUsingLogicalReplicationInTX = true;
 	}
-}
 
-
-/*
- * ShardIntervalHashCode computes the hash code for a Shardinterval using
- * shardId.
- */
-static uint32
-ShardIntervalHashCode(const void *key, Size keySize)
-{
-	const ShardInterval *shardInterval = (const ShardInterval *) key;
-	const uint64 *shardId = &(shardInterval->shardId);
-
-	/* standard hash function outlined in Effective Java, Item 8 */
-	uint32 result = 17;
-	result = 37 * result + tag_hash(shardId, sizeof(uint64));
-
-	return result;
-}
-
-
-/*
- * ShardIntervalHashCompare compares two shard intervals using shard id.
- */
-static int
-ShardIntervalHashCompare(const void *lhsKey, const void *rhsKey, Size keySize)
-{
-	const ShardInterval *intervalLhs = (const ShardInterval *) lhsKey;
-	const ShardInterval *intervalRhs = (const ShardInterval *) rhsKey;
-
-	int shardIdCompare = 0;
-
-	/* first, compare by shard id */
-	if (intervalLhs->shardId < intervalRhs->shardId)
-	{
-		shardIdCompare = -1;
-	}
-	else if (intervalLhs->shardId > intervalRhs->shardId)
-	{
-		shardIdCompare = 1;
-	}
-
-	return shardIdCompare;
-}
-
-
-/* Create an empty map that tracks ShardInterval -> Placement Node as created by workflow */
-static HTAB *
-CreateEmptyMapForShardsCreatedByWorkflow()
-{
-	HASHCTL info = { 0 };
-	info.keysize = sizeof(ShardInterval);
-	info.entrysize = sizeof(ShardCreatedByWorkflowEntry);
-	info.hash = ShardIntervalHashCode;
-	info.match = ShardIntervalHashCompare;
-	info.hcxt = CurrentMemoryContext;
-
-	/* we don't have value field as it's a set */
-	info.entrysize = info.keysize;
-	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
-
-	HTAB *splitChildrenCreatedByWorkflow = hash_create("Shard id to Node Placement Map",
-													   32, &info, hashFlags);
-	return splitChildrenCreatedByWorkflow;
+	bool isSuccess = true;
+	CompleteNewOperationNeedingCleanup(isSuccess);
 }
 
 
@@ -549,9 +489,6 @@ BlockingShardSplit(SplitOperation splitOperation,
 	WorkerNode *sourceShardToCopyNode = FindNodeWithNodeId(sourceShardPlacement->nodeId,
 														   false /* missingOk */);
 
-
-	HTAB *mapOfShardToPlacementCreatedByWorkflow =
-		CreateEmptyMapForShardsCreatedByWorkflow();
 	PG_TRY();
 	{
 		/*
@@ -560,7 +497,6 @@ BlockingShardSplit(SplitOperation splitOperation,
 		 * Foreign key constraints are created after Metadata changes (see CreateForeignKeyConstraints).
 		 */
 		CreateAndCopySplitShardsForShardGroup(
-			mapOfShardToPlacementCreatedByWorkflow,
 			sourceShardToCopyNode,
 			sourceColocatedShardIntervalList,
 			shardGroupSplitIntervalListList,
@@ -601,7 +537,8 @@ BlockingShardSplit(SplitOperation splitOperation,
 		ShutdownAllConnections();
 
 		/* Do a best effort cleanup of shards created on workers in the above block */
-		TryDropSplitShardsOnFailure(mapOfShardToPlacementCreatedByWorkflow);
+		bool isSuccess = false;
+		CompleteNewOperationNeedingCleanup(isSuccess);
 
 		PG_RE_THROW();
 	}
@@ -613,8 +550,7 @@ BlockingShardSplit(SplitOperation splitOperation,
 
 /* Create ShardGroup split children on a list of corresponding workers. */
 static void
-CreateSplitShardsForShardGroup(HTAB *mapOfShardToPlacementCreatedByWorkflow,
-							   List *shardGroupSplitIntervalListList,
+CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 							   List *workersForPlacementList)
 {
 	/*
@@ -642,16 +578,15 @@ CreateSplitShardsForShardGroup(HTAB *mapOfShardToPlacementCreatedByWorkflow,
 				splitShardCreationCommandList,
 				shardInterval->shardId);
 
+			/* Log resource for cleanup in case of failure only. */
+			CleanupPolicy policy = CLEANUP_ON_FAILURE;
+			InsertCleanupRecordInSubtransaction(CLEANUP_SHARD_PLACEMENT,
+												ConstructQualifiedShardName(shardInterval),
+												workerPlacementNode->groupId,
+												policy);
+
 			/* Create new split child shard on the specified placement list */
 			CreateObjectOnPlacement(splitShardCreationCommandList, workerPlacementNode);
-
-			ShardCreatedByWorkflowEntry entry;
-			entry.shardIntervalKey = shardInterval;
-			entry.workerNodeValue = workerPlacementNode;
-			bool found = false;
-			hash_search(mapOfShardToPlacementCreatedByWorkflow, &entry, HASH_ENTER,
-						&found);
-			Assert(!found);
 		}
 	}
 }
@@ -735,14 +670,12 @@ CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
  * on a list of corresponding workers.
  */
 static void
-CreateAndCopySplitShardsForShardGroup(HTAB *mapOfShardToPlacementCreatedByWorkflow,
-									  WorkerNode *sourceShardNode,
+CreateAndCopySplitShardsForShardGroup(WorkerNode *sourceShardNode,
 									  List *sourceColocatedShardIntervalList,
 									  List *shardGroupSplitIntervalListList,
 									  List *workersForPlacementList)
 {
-	CreateSplitShardsForShardGroup(mapOfShardToPlacementCreatedByWorkflow,
-								   shardGroupSplitIntervalListList,
+	CreateSplitShardsForShardGroup(shardGroupSplitIntervalListList,
 								   workersForPlacementList);
 
 	/* For Blocking split, copy isn't snapshotted */
@@ -1197,68 +1130,42 @@ DropShardList(List *shardIntervalList)
 			/* get shard name */
 			char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
 
-			char storageType = shardInterval->storageType;
-			if (storageType == SHARD_STORAGE_TABLE)
+			if (DeferShardDeleteOnSplit)
 			{
-				appendStringInfo(dropQuery, DROP_REGULAR_TABLE_COMMAND,
-								 qualifiedShardName);
-			}
-			else if (storageType == SHARD_STORAGE_FOREIGN)
-			{
-				appendStringInfo(dropQuery, DROP_FOREIGN_TABLE_COMMAND,
-								 qualifiedShardName);
-			}
 
-			/* drop old shard */
-			SendCommandToWorker(workerName, workerPort, dropQuery->data);
+				/* Log shard in pg_dist_cleanup.
+				 * Parent shards are to be dropped only on sucess after split workflow is complete,
+				 * so mark the policy as 'CLEANUP_DEFERRED_ON_SUCCESS'.
+				 * We also log cleanup record in the current transaction. If the current transaction rolls back,
+				 * we do not generate a record at all.
+				 */
+				CleanupPolicy policy = CLEANUP_DEFERRED_ON_SUCCESS;
+				InsertCleanupRecordInCurrentTransaction(CLEANUP_SHARD_PLACEMENT,
+														qualifiedShardName,
+														placement->groupId,
+														policy);
+			}
+			else
+			{
+				char storageType = shardInterval->storageType;
+				if (storageType == SHARD_STORAGE_TABLE)
+				{
+					appendStringInfo(dropQuery, DROP_REGULAR_TABLE_COMMAND,
+									qualifiedShardName);
+				}
+				else if (storageType == SHARD_STORAGE_FOREIGN)
+				{
+					appendStringInfo(dropQuery, DROP_FOREIGN_TABLE_COMMAND,
+									qualifiedShardName);
+				}
+
+				/* drop old shard */
+				SendCommandToWorker(workerName, workerPort, dropQuery->data);
+			}
 		}
 
 		/* delete shard row */
 		DeleteShardRow(oldShardId);
-	}
-}
-
-
-/*
- * In case of failure, TryDropSplitShardsOnFailure drops in-progress shard placements from both the
- * coordinator and mx nodes.
- */
-static void
-TryDropSplitShardsOnFailure(HTAB *mapOfShardToPlacementCreatedByWorkflow)
-{
-	HASH_SEQ_STATUS status;
-	ShardCreatedByWorkflowEntry *entry;
-
-	hash_seq_init(&status, mapOfShardToPlacementCreatedByWorkflow);
-	while ((entry = (ShardCreatedByWorkflowEntry *) hash_seq_search(&status)) != 0)
-	{
-		ShardInterval *shardInterval = entry->shardIntervalKey;
-		WorkerNode *workerPlacementNode = entry->workerNodeValue;
-
-		char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
-		StringInfo dropShardQuery = makeStringInfo();
-
-		/* Caller enforces that foreign tables cannot be split (use DROP_REGULAR_TABLE_COMMAND) */
-		appendStringInfo(dropShardQuery, DROP_REGULAR_TABLE_COMMAND,
-						 qualifiedShardName);
-
-		int connectionFlags = FOR_DDL;
-		connectionFlags |= OUTSIDE_TRANSACTION;
-		MultiConnection *connnection = GetNodeUserDatabaseConnection(
-			connectionFlags,
-			workerPlacementNode->workerName,
-			workerPlacementNode->workerPort,
-			CurrentUserName(),
-			NULL /* databaseName */);
-
-		/*
-		 * Perform a drop in best effort manner.
-		 * The shard may or may not exist and the connection could have died.
-		 */
-		ExecuteOptionalRemoteCommand(
-			connnection,
-			dropShardQuery->data,
-			NULL /* pgResult */);
 	}
 }
 
@@ -1308,11 +1215,6 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		databaseName);
 	ClaimConnectionExclusively(sourceConnection);
 
-	HTAB *mapOfShardToPlacementCreatedByWorkflow =
-		CreateEmptyMapForShardsCreatedByWorkflow();
-
-	HTAB *mapOfDummyShardToPlacement = CreateSimpleHash(NodeAndOwner,
-														GroupedShardSplitInfos);
 	MultiConnection *sourceReplicationConnection =
 		GetReplicationConnection(sourceShardToCopyNode->workerName,
 								 sourceShardToCopyNode->workerPort);
@@ -1321,8 +1223,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 	PG_TRY();
 	{
 		/* 1) Physically create split children. */
-		CreateSplitShardsForShardGroup(mapOfShardToPlacementCreatedByWorkflow,
-									   shardGroupSplitIntervalListList,
+		CreateSplitShardsForShardGroup(shardGroupSplitIntervalListList,
 									   workersForPlacementList);
 
 		/*
@@ -1330,8 +1231,10 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		 *    Refer to the comment section of 'CreateDummyShardsForShardGroup' for indepth
 		 *    information.
 		 */
+		HTAB *mapOfPlacementToDummyShardList = CreateSimpleHash(NodeAndOwner,
+														GroupedShardSplitInfos);
 		CreateDummyShardsForShardGroup(
-			mapOfDummyShardToPlacement,
+			mapOfPlacementToDummyShardList,
 			sourceColocatedShardIntervalList,
 			shardGroupSplitIntervalListList,
 			sourceShardToCopyNode,
@@ -1346,7 +1249,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		 * initial COPY phase, like we do for the replica identities on the
 		 * target shards.
 		 */
-		CreateReplicaIdentitiesForDummyShards(mapOfDummyShardToPlacement);
+		CreateReplicaIdentitiesForDummyShards(mapOfPlacementToDummyShardList);
 
 		/* 4) Create Publications. */
 		CreatePublications(sourceConnection, publicationInfoHash);
@@ -1468,11 +1371,6 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		CreateForeignKeyConstraints(shardGroupSplitIntervalListList,
 									workersForPlacementList);
 
-		/*
-		 * 23) Drop dummy shards.
-		 */
-		DropDummyShards(mapOfDummyShardToPlacement);
-
 		/* 24) Close source connection */
 		CloseConnection(sourceConnection);
 
@@ -1487,12 +1385,14 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		/* end ongoing transactions to enable us to clean up */
 		ShutdownAllConnections();
 
-		/* Do a best effort cleanup of shards created on workers in the above block */
-		TryDropSplitShardsOnFailure(mapOfShardToPlacementCreatedByWorkflow);
-
+		/* Do a best effort cleanup of shards created on workers in the above block
+		 * TODO(niupre): We don't need to do this once shard cleaner can clean replication
+		 * artifacts.
+		 */
 		DropAllLogicalReplicationLeftovers(SHARD_SPLIT);
 
-		DropDummyShards(mapOfDummyShardToPlacement);
+		bool isSuccess = false;
+		CompleteNewOperationNeedingCleanup(isSuccess);
 
 		PG_RE_THROW();
 	}
@@ -1523,7 +1423,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
  * Note 2 : Given there is an overlap of source and destination in Worker0, Shard1_1 and Shard2_1 need not be created.
  */
 static void
-CreateDummyShardsForShardGroup(HTAB *mapOfDummyShardToPlacement,
+CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 							   List *sourceColocatedShardIntervalList,
 							   List *shardGroupSplitIntervalListList,
 							   WorkerNode *sourceWorkerNode,
@@ -1560,11 +1460,20 @@ CreateDummyShardsForShardGroup(HTAB *mapOfDummyShardToPlacement,
 				splitShardCreationCommandList,
 				shardInterval->shardId);
 
+			/* Log shard in pg_dist_cleanup. Given dummy shards are transient resources,
+			 * we want to cleanup irrespective of operation success or failure.
+			 */
+			CleanupPolicy policy = CLEANUP_ALWAYS;
+			InsertCleanupRecordInSubtransaction(CLEANUP_SHARD_PLACEMENT,
+												ConstructQualifiedShardName(shardInterval),
+												workerPlacementNode->groupId,
+												policy);
+
 			/* Create dummy source shard on the specified placement list */
 			CreateObjectOnPlacement(splitShardCreationCommandList, workerPlacementNode);
 
 			/* Add dummy source shard entry created for placement node in map */
-			AddDummyShardEntryInMap(mapOfDummyShardToPlacement,
+			AddDummyShardEntryInMap(mapOfPlacementToDummyShardList,
 									workerPlacementNode->nodeId,
 									shardInterval);
 		}
@@ -1595,12 +1504,17 @@ CreateDummyShardsForShardGroup(HTAB *mapOfDummyShardToPlacement,
 				splitShardCreationCommandList,
 				shardInterval->shardId);
 
+			/* Log shard in pg_dist_cleanup. Given dummy shards are transient resources,
+			 * we want to cleanup irrespective of operation success or failure.
+			 */
+			CleanupPolicy policy = CLEANUP_ALWAYS;
+			InsertCleanupRecordInSubtransaction(CLEANUP_SHARD_PLACEMENT,
+												ConstructQualifiedShardName(shardInterval),
+												workerPlacementNode->groupId,
+												policy);
+
 			/* Create dummy split child shard on source worker node */
 			CreateObjectOnPlacement(splitShardCreationCommandList, sourceWorkerNode);
-
-			/* Add dummy split child shard entry created on source node */
-			AddDummyShardEntryInMap(mapOfDummyShardToPlacement, sourceWorkerNode->nodeId,
-									shardInterval);
 		}
 	}
 }
@@ -1822,7 +1736,8 @@ ParseReplicationSlotInfoFromResult(PGresult *result)
  * of logical replication. We cautiously delete only the dummy shards added in the DummyShardHashMap.
  */
 static void
-AddDummyShardEntryInMap(HTAB *mapOfDummyShardToPlacement, uint32 targetNodeId,
+AddDummyShardEntryInMap(HTAB *mapOfPlacementToDummyShardList,
+						uint32 targetNodeId,
 						ShardInterval *shardInterval)
 {
 	NodeAndOwner key;
@@ -1831,7 +1746,8 @@ AddDummyShardEntryInMap(HTAB *mapOfDummyShardToPlacement, uint32 targetNodeId,
 
 	bool found = false;
 	GroupedDummyShards *nodeMappingEntry =
-		(GroupedDummyShards *) hash_search(mapOfDummyShardToPlacement, &key,
+		(GroupedDummyShards *) hash_search(mapOfPlacementToDummyShardList,
+										   &key,
 										   HASH_ENTER,
 										   &found);
 	if (!found)
@@ -1841,68 +1757,6 @@ AddDummyShardEntryInMap(HTAB *mapOfDummyShardToPlacement, uint32 targetNodeId,
 
 	nodeMappingEntry->shardIntervals =
 		lappend(nodeMappingEntry->shardIntervals, shardInterval);
-}
-
-
-/*
- * DropDummyShards traverses the dummy shard map and drops shard at given node.
- * It fails if the shard cannot be dropped.
- */
-static void
-DropDummyShards(HTAB *mapOfDummyShardToPlacement)
-{
-	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, mapOfDummyShardToPlacement);
-
-	GroupedDummyShards *entry = NULL;
-	while ((entry = (GroupedDummyShards *) hash_seq_search(&status)) != NULL)
-	{
-		uint32 nodeId = entry->key.nodeId;
-		WorkerNode *shardToBeDroppedNode = FindNodeWithNodeId(nodeId,
-															  false /* missingOk */);
-
-		int connectionFlags = FOR_DDL;
-		connectionFlags |= OUTSIDE_TRANSACTION;
-		MultiConnection *connection = GetNodeUserDatabaseConnection(
-			connectionFlags,
-			shardToBeDroppedNode->workerName,
-			shardToBeDroppedNode->workerPort,
-			CurrentUserName(),
-			NULL /* databaseName */);
-
-		List *dummyShardIntervalList = entry->shardIntervals;
-		ShardInterval *shardInterval = NULL;
-		foreach_ptr(shardInterval, dummyShardIntervalList)
-		{
-			DropDummyShard(connection, shardInterval);
-		}
-
-		CloseConnection(connection);
-	}
-}
-
-
-/*
- * DropDummyShard drops a given shard on the node connection.
- * It fails if the shard cannot be dropped.
- */
-static void
-DropDummyShard(MultiConnection *connection, ShardInterval *shardInterval)
-{
-	char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
-	StringInfo dropShardQuery = makeStringInfo();
-
-	/* Caller enforces that foreign tables cannot be split (use DROP_REGULAR_TABLE_COMMAND) */
-	appendStringInfo(dropShardQuery, DROP_REGULAR_TABLE_COMMAND,
-					 qualifiedShardName);
-
-	/*
-	 * Since the dummy shard is expected to be present on the given node,
-	 * fail if it cannot be dropped during cleanup.
-	 */
-	ExecuteCriticalRemoteCommand(
-		connection,
-		dropShardQuery->data);
 }
 
 

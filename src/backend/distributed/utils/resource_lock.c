@@ -508,7 +508,11 @@ LockPlacementCleanup(void)
 	LOCKTAG tag;
 	const bool sessionLock = false;
 	const bool dontWait = false;
-	SET_LOCKTAG_PLACEMENT_CLEANUP(tag);
+
+	/* Moves acquire lock with a constant operation id CITUS_SHARD_MOVE.
+	 * This will change as we add support for parallel moves.
+	 */
+	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_SHARD_MOVE);
 	(void) LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
 }
 
@@ -523,7 +527,11 @@ TryLockPlacementCleanup(void)
 	LOCKTAG tag;
 	const bool sessionLock = false;
 	const bool dontWait = true;
-	SET_LOCKTAG_PLACEMENT_CLEANUP(tag);
+
+	/* Moves acquire lock with a constant operation id CITUS_SHARD_MOVE.
+	 * This will change as we add support for parallel moves.
+	 */
+	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_SHARD_MOVE);
 	bool lockAcquired = LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
 	return lockAcquired;
 }
