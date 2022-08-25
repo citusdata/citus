@@ -704,7 +704,7 @@ if (!$conninfo)
     # Create new data directories, copy workers for speed
     # --allow-group-access is used to ensure we set permissions on private keys
     # correctly
-    system(catfile("$bindir", "initdb"), ("--no-sync", "--allow-group-access", "-U", $user, "--encoding", "UTF8", catfile($TMP_CHECKDIR, $MASTERDIR, "data"))) == 0
+    system(catfile("$bindir", "initdb"), ("--no-sync", "--allow-group-access", "-U", $user, "--encoding", "UTF8", "--locale", "C.UTF-8", catfile($TMP_CHECKDIR, $MASTERDIR, "data"))) == 0
         or die "Could not create $MASTERDIR data directory";
 
 	generate_hba("master");
