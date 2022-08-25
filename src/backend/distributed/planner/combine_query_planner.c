@@ -136,6 +136,12 @@ CreateCitusCustomScanPath(PlannerInfo *root, RelOptInfo *relOptInfo,
 	path->custom_path.path.pathtarget = relOptInfo->reltarget;
 	path->custom_path.path.parent = relOptInfo;
 
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+
+	/* necessary to avoid extra Result node in PG15 */
+	path->custom_path.flags = CUSTOMPATH_SUPPORT_PROJECTION;
+#endif
+
 	/*
 	 * The 100k rows we put on the cost of the path is kind of arbitrary and could be
 	 * improved in accuracy to produce better plans.

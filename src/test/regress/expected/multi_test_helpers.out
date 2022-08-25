@@ -17,15 +17,10 @@ BEGIN
 END;
 $$LANGUAGE plpgsql;
 -- Create a function to ignore worker plans in explain output
--- Also remove extra "->  Result" lines for PG15 support
 CREATE OR REPLACE FUNCTION coordinator_plan(explain_command text, out query_plan text)
 RETURNS SETOF TEXT AS $$
 BEGIN
   FOR query_plan IN execute explain_command LOOP
-    IF (query_plan LIKE '%->  Result%' OR query_plan = 'Result')
-    THEN
-        CONTINUE;
-    END IF;
     RETURN next;
     IF query_plan LIKE '%Task Count:%'
     THEN
@@ -36,16 +31,12 @@ BEGIN
 END; $$ language plpgsql;
 -- Create a function to ignore worker plans in explain output
 -- It also shows task count for plan and subplans
--- Also remove extra "->  Result" lines for PG15 support
 CREATE OR REPLACE FUNCTION coordinator_plan_with_subplans(explain_command text, out query_plan text)
 RETURNS SETOF TEXT AS $$
 DECLARE
     task_count_line_reached boolean := false;
 BEGIN
   FOR query_plan IN execute explain_command LOOP
-    IF (query_plan LIKE '%->  Result%' OR query_plan = 'Result') THEN
-        CONTINUE;
-    END IF;
     IF NOT task_count_line_reached THEN
         RETURN next;
     END IF;
@@ -59,37 +50,12 @@ BEGIN
   END LOOP;
   RETURN;
 END; $$ language plpgsql;
--- Create a function to ignore "->  Result" lines for PG15 support
--- In PG15 there are some extra "->  Result" lines
-CREATE OR REPLACE FUNCTION plan_without_result_lines(explain_command text, out query_plan text)
-RETURNS SETOF TEXT AS $$
-BEGIN
-  FOR query_plan IN execute explain_command LOOP
-    IF (query_plan LIKE '%->  Result%' OR query_plan = 'Result') THEN
-        CONTINUE;
-    END IF;
-    RETURN next;
-  END LOOP;
-  RETURN;
-END; $$ language plpgsql;
 -- Create a function to normalize Memory Usage, Buckets, Batches
 CREATE OR REPLACE FUNCTION plan_normalize_memory(explain_command text, out query_plan text)
 RETURNS SETOF TEXT AS $$
 BEGIN
   FOR query_plan IN execute explain_command LOOP
     query_plan := regexp_replace(query_plan, '(Memory( Usage)?|Buckets|Batches): \S*',  '\1: xxx', 'g');
-    RETURN NEXT;
-  END LOOP;
-END; $$ language plpgsql;
--- Create a function to remove arrows from the explain plan
-CREATE OR REPLACE FUNCTION plan_without_arrows(explain_command text, out query_plan text)
-RETURNS SETOF TEXT AS $$
-BEGIN
-  FOR query_plan IN execute explain_command LOOP
-    IF (query_plan LIKE '%->  Result%' OR query_plan = 'Result') THEN
-        CONTINUE;
-    END IF;
-    query_plan := regexp_replace(query_plan, '( )*->  (.*)',  '\2', 'g');
     RETURN NEXT;
   END LOOP;
 END; $$ language plpgsql;
