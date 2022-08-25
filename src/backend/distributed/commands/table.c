@@ -54,6 +54,12 @@
 /* controlled via GUC, should be accessed via GetEnableLocalReferenceForeignKeys() */
 bool EnableLocalReferenceForeignKeys = true;
 
+/*
+ * GUC that controls whether to allow unique/exclude constraints without
+ * distribution column.
+ */
+bool AllowUnsafeConstraints = false;
+
 /* Local functions forward declarations for unsupported command checks */
 static void PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement);
 static void PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement,
@@ -2547,6 +2553,16 @@ ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 										"and PRIMARY KEYs on "
 										"append-partitioned tables cannot be enforced."),
 							  errhint("Consider using hash partitioning.")));
+		}
+
+		if (AllowUnsafeConstraints)
+		{
+			/*
+			 * The user explicitly wants to allow the constraint without
+			 * distribution column.
+			 */
+			index_close(indexDesc, NoLock);
+			continue;
 		}
 
 		int attributeCount = indexInfo->ii_NumIndexAttrs;

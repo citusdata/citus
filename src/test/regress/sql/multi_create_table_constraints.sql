@@ -31,6 +31,17 @@ CREATE TABLE pk_on_non_part_col
 );
 SELECT create_distributed_table('pk_on_non_part_col', 'partition_col', 'hash');
 
+-- check that we can disable the constraint check
+BEGIN;
+SET LOCAL citus.allow_unsafe_constraints TO on;
+SELECT create_distributed_table('pk_on_non_part_col', 'partition_col', 'hash');
+-- not enforced across shards
+INSERT INTO pk_on_non_part_col VALUES (1,1);
+INSERT INTO pk_on_non_part_col VALUES (2,1);
+-- enforced within shard
+INSERT INTO pk_on_non_part_col VALUES (1,1);
+END;
+
 CREATE TABLE uq_on_non_part_col
 (
 	partition_col integer,
@@ -45,6 +56,17 @@ CREATE TABLE ex_on_non_part_col
 	EXCLUDE (other_col WITH =)
 );
 SELECT create_distributed_table('ex_on_non_part_col', 'partition_col', 'hash');
+
+-- check that we can disable the constraint check
+BEGIN;
+SET LOCAL citus.allow_unsafe_constraints TO on;
+SELECT create_distributed_table('ex_on_non_part_col', 'partition_col', 'hash');
+-- not enforced across shards
+INSERT INTO ex_on_non_part_col VALUES (1,1);
+INSERT INTO ex_on_non_part_col VALUES (2,1);
+-- enforced within shard
+INSERT INTO ex_on_non_part_col VALUES (1,1);
+END;
 
 -- now show that Citus can distribute unique and EXCLUDE constraints that
 -- include the partition column for hash-partitioned tables.
@@ -75,6 +97,26 @@ CREATE TABLE uq_two_columns
 SELECT create_distributed_table('uq_two_columns', 'partition_col', 'hash');
 INSERT INTO uq_two_columns (partition_col, other_col) VALUES (1,1);
 INSERT INTO uq_two_columns (partition_col, other_col) VALUES (1,1);
+
+CREATE TABLE pk_on_two_non_part_cols
+(
+	partition_col integer,
+	other_col integer,
+	other_col_2 text,
+	PRIMARY KEY (other_col, other_col_2)
+);
+SELECT create_distributed_table('pk_on_two_non_part_cols', 'partition_col', 'hash');
+
+-- check that we can disable the constraint check
+BEGIN;
+SET LOCAL citus.allow_unsafe_constraints TO on;
+SELECT create_distributed_table('pk_on_two_non_part_cols', 'partition_col', 'hash');
+-- not enforced across shards
+INSERT INTO pk_on_two_non_part_cols VALUES (1,1,1);
+INSERT INTO pk_on_two_non_part_cols VALUES (2,1,1);
+-- enforced within shard
+INSERT INTO pk_on_two_non_part_cols VALUES (1,1,1);
+END;
 
 CREATE TABLE ex_on_part_col
 (
@@ -226,8 +268,8 @@ CREATE TABLE check_example
 SELECT create_distributed_table('check_example', 'partition_col', 'hash');
 \c - - :public_worker_1_host :worker_1_port
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
-    relid = 'check_example_partition_col_key_365056'::regclass;
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.check_example_365056'::regclass;
+    relid = 'check_example_partition_col_key_365068'::regclass;
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.check_example_365068'::regclass;
 \c - - :master_host :master_port
 
 -- Index-based constraints are created with shard-extended names, but others

@@ -279,6 +279,19 @@ SELECT create_distributed_table('products', 'product_no');
 ALTER TABLE products ADD CONSTRAINT exc_name EXCLUDE USING btree (name with =);
 ERROR:  cannot create constraint on "products"
 DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
+-- check that we can disable the constraint check for EXCLUDE
+BEGIN;
+SET LOCAL citus.allow_unsafe_constraints TO on;
+ALTER TABLE products ADD CONSTRAINT exc_name EXCLUDE USING btree (name with =);
+-- not enforced across shards
+INSERT INTO products  VALUES (1,'boat',10.0);
+INSERT INTO products  VALUES (2,'boat',11.0);
+-- enforced within the shard
+INSERT INTO products  VALUES (1,'boat',12.0);
+ERROR:  conflicting key value violates exclusion constraint "exc_name_1450103"
+DETAIL:  Key (name)=(boat) conflicts with existing key (name)=(boat).
+CONTEXT:  while executing command on localhost:xxxxx
+ROLLBACK;
 -- We can add composite exclusion
 ALTER TABLE products ADD CONSTRAINT exc_pno_name EXCLUDE USING btree (product_no with =, name with =);
 -- 4th command will error out since it conflicts with exc_pno_name constraint
@@ -452,6 +465,46 @@ BEGIN;
 INSERT INTO products VALUES(1,'product_1', 5);
 -- DDL should pick the right connections after a single INSERT
 ALTER TABLE products ADD CONSTRAINT unn_pno UNIQUE(product_no);
+ROLLBACK;
+-- check that we can disable the constraint check for CREATE UNIQUE INDEX
+BEGIN;
+SET LOCAL citus.allow_unsafe_constraints TO on;
+CREATE UNIQUE INDEX ON products (name, price);
+-- not enforced across shards
+INSERT INTO products  VALUES (1,'boat',10.0);
+INSERT INTO products  VALUES (2,'boat',11.0);
+-- enforced within the shard
+INSERT INTO products  VALUES (1,'boat',10.0);
+ERROR:  duplicate key value violates unique constraint "products_name_price_idx_1450203"
+DETAIL:  Key (name, price)=(boat, 10.0) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
+ROLLBACK;
+-- check that we can disable the constraint check for CREATE UNIQUE INDEX CONCURRENTLY
+SET citus.allow_unsafe_constraints TO on;
+CREATE UNIQUE INDEX CONCURRENTLY product_idx ON products (name, price);
+-- not enforced across shards
+INSERT INTO products  VALUES (1,'boat',10.0);
+INSERT INTO products  VALUES (2,'boat',11.0);
+-- enforced within the shard
+INSERT INTO products  VALUES (1,'boat',10.0);
+ERROR:  duplicate key value violates unique constraint "product_idx_1450203"
+DETAIL:  Key (name, price)=(boat, 10.0) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
+DROP INDEX product_idx;
+TRUNCATE products;
+RESET citus.allow_unsafe_constraints;
+-- check that we can disable the constraint check for ADD CONSTRAINT .. PRIMARY KEY
+BEGIN;
+SET LOCAL citus.allow_unsafe_constraints TO on;
+ALTER TABLE products ADD CONSTRAINT products_pk PRIMARY KEY (name, price);
+-- not enforced across shards
+INSERT INTO products  VALUES (1,'boat',10.0);
+INSERT INTO products  VALUES (2,'boat',11.0);
+-- enforced within the shard
+INSERT INTO products  VALUES (1,'boat',10.0);
+ERROR:  duplicate key value violates unique constraint "products_pk_1450203"
+DETAIL:  Key (name, price)=(boat, 10.0) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
 ROLLBACK;
 BEGIN;
 -- Add constraints

@@ -1149,6 +1149,15 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 								   "is currently unsupported")));
 		}
 
+		if (AllowUnsafeConstraints)
+		{
+			/*
+			 * The user explicitly wants to allow the constraint without
+			 * distribution column.
+			 */
+			return;
+		}
+
 		Var *partitionKey = DistPartitionKeyOrError(relationId);
 		List *indexParameterList = createIndexStatement->indexParams;
 		IndexElem *indexElement = NULL;
