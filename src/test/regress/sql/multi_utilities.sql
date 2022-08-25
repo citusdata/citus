@@ -7,6 +7,9 @@ SET citus.next_shard_id TO 990000;
 SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 1;
 
+CREATE SCHEMA multi_utilities;
+SET search_path TO multi_utilities, public;
+
 CREATE TABLE sharded_table ( name text, id bigint );
 SELECT create_distributed_table('sharded_table', 'id', 'hash');
 
@@ -129,6 +132,7 @@ SELECT master_create_worker_shards('second_dustbunnies', 1, 2);
 
 -- run VACUUM and ANALYZE against the table on the master
 \c - - :master_host :master_port
+SET search_path TO multi_utilities, public;
 VACUUM dustbunnies;
 ANALYZE dustbunnies;
 
@@ -138,6 +142,7 @@ VACUUM (FULL) dustbunnies;
 VACUUM ANALYZE dustbunnies;
 
 \c - - :public_worker_1_host :worker_1_port
+SET search_path TO multi_utilities, public;
 -- disable auto-VACUUM for next test
 ALTER TABLE dustbunnies_990002 SET (autovacuum_enabled = false);
 SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid='dustbunnies_990002'::regclass
@@ -145,11 +150,13 @@ SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid='dustbunnies_990002'::r
 
 -- send a VACUUM FREEZE after adding a new row
 \c - - :master_host :master_port
+SET search_path TO multi_utilities, public;
 INSERT INTO dustbunnies VALUES (5, 'peter');
 VACUUM (FREEZE) dustbunnies;
 
 -- verify that relfrozenxid increased
 \c - - :public_worker_1_host :worker_1_port
+SET search_path TO multi_utilities, public;
 SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
 WHERE oid='dustbunnies_990002'::regclass;
 
@@ -159,15 +166,18 @@ WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
 
 -- add NULL values, then perform column-specific ANALYZE
 \c - - :master_host :master_port
+SET search_path TO multi_utilities, public;
 INSERT INTO dustbunnies VALUES (6, NULL, NULL);
 ANALYZE dustbunnies (name);
 
 -- verify that name's NULL ratio is updated but age's is not
 \c - - :public_worker_1_host :worker_1_port
+SET search_path TO multi_utilities, public;
 SELECT attname, null_frac FROM pg_stats
 WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
 
 \c - - :master_host :master_port
+SET search_path TO multi_utilities, public;
 SET citus.log_remote_commands TO ON;
 
 -- check for multiple table vacuum
@@ -325,3 +335,5 @@ ANALYZE loc(b), dist(a);
 
 RESET citus.log_remote_commands;
 RESET citus.grep_remote_commands;
+SET client_min_messages TO WARNING;
+DROP SCHEMA multi_utilities CASCADE;
