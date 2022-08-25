@@ -61,6 +61,8 @@ typedef struct CleanupRecord
 	CleanupPolicy policy;
 } CleanupRecord;
 
+/* operation ID set by StartNewOperationNeedingCleanup */
+OperationId CurrentOperationId = INVALID_OPERATION_ID;
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_cleanup_orphaned_shards);
@@ -189,6 +191,12 @@ TryDropOrphanedShards(bool waitForLocks)
 static int
 DropOrphanedShardsForCleanup()
 {
+	/* Only runs on Coordinator */
+	if (!IsCoordinator())
+	{
+		return 0;
+	}
+
 	List *cleanupRecordList = ListCleanupRecords();
 
 	int removedShardCountForCleanup = 0;
@@ -543,7 +551,7 @@ static bool
 TryDropShardOutsideTransaction(char *qualifiedTableName, char *nodeName, int nodePort)
 {
 	ereport(LOG, (errmsg("dropping shard placement %s "
-						 "on %s:%d after it was moved away",
+						 "on %s:%d",
 						 qualifiedTableName, nodeName, nodePort)));
 
 	/* prepare sql query to execute to drop the shard */

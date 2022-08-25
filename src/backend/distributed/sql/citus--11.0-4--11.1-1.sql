@@ -92,5 +92,8 @@ ALTER TABLE citus.pg_dist_cleanup SET SCHEMA pg_catalog;
 
 
 -- Sequence used to generate an operation ID for use in pg_dist_cleanup_record.
-CREATE SEQUENCE citus.pg_dist_operation_id_seq;
-ALTER SEQUENCE citus.pg_dist_operation_id_seq SET SCHEMA pg_catalog;
+CREATE SEQUENCE citus.pg_dist_operationid_seq;
+ALTER SEQUENCE citus.pg_dist_operationid_seq SET SCHEMA pg_catalog;
+
+CREATE SEQUENCE citus.pg_dist_cleanup_recordid_seq;
+ALTER SEQUENCE citus.pg_dist_cleanup_recordid_seq SET SCHEMA pg_catalog;

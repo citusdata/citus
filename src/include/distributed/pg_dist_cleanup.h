@@ -28,7 +28,7 @@
 #define PG_CATALOG "pg_catalog"
 #define PG_DIST_CLEANUP "pg_dist_cleanup"
 #define OPERATIONID_SEQUENCE_NAME "pg_dist_operationid_seq"
-#define CLEANUPRECORDID_SEQUENCE_NAME "pg_dist_cleanup_record_id_seq"
+#define CLEANUPRECORDID_SEQUENCE_NAME "pg_dist_cleanup_recordid_seq"
 
 #endif /* PG_DIST_CLEANUP_H */
 
