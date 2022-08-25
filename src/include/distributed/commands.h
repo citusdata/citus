@@ -27,6 +27,12 @@ extern bool AddAllLocalTablesToMetadata;
 /* controlled via GUC, should be accessed via EnableLocalReferenceForeignKeys() */
 extern bool EnableLocalReferenceForeignKeys;
 
+/*
+ * GUC that controls whether to allow unique/exclude constraints without
+ * distribution column.
+ */
+extern bool AllowUnsafeConstraints;
+
 extern bool EnableUnsafeTriggers;
 
 extern int MaxMatViewSizeToAutoRecreate;

@@ -822,6 +822,26 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.allow_unsafe_constraints",
+		gettext_noop("Enables unique constraints and exclusion constraints "
+					 "that do not include a distribution column."),
+		gettext_noop("To enforce global uniqueness, Citus normally requires "
+					 "that unique constraints and exclusion constraints contain "
+					 "the distribution column. If the tuple does not include the "
+					 "distribution column, Citus cannot ensure that the same value "
+					 "is not present in another shard. However, in some cases the "
+					 "index creator knows that uniqueness within the shard implies "
+					 "global uniqueness (e.g. when indexing an expression derived "
+					 "from the distribution column) and adding the distribution column "
+					 "separately may not be desirable. This setting can then be used "
+					 "to disable the check."),
+		&AllowUnsafeConstraints,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.allow_unsafe_locks_from_workers",
 		gettext_noop("Enables acquiring a distributed lock from a worker "
 					 "when the coordinator is not in the metadata"),
