@@ -1,0 +1,783 @@
+-- The test excercises below failure scenarios
+--1. Failure while creating publications
+--2. Failure while creating template replication slot
+--3. Failure while creating replication slots
+--4. Failure while enabling subscription
+--5. Failure on polling subscription state
+--6. Failure on polling last write-ahead log location reported to origin WAL sender
+--7. Failure on disabling subscription (right before dropping it)
+--8. Failure on dropping subscription
+CREATE SCHEMA "citus_split_test_schema";
+CREATE ROLE test_split_role WITH LOGIN;
+GRANT USAGE, CREATE ON SCHEMA "citus_split_test_schema" TO test_split_role;
+SET ROLE test_split_role;
+SET search_path TO "citus_split_test_schema";
+SET citus.next_shard_id TO 8981000;
+SET citus.next_placement_id TO 8610000;
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 1;
+SELECT pg_backend_pid() as pid \gset
+-- Connections on the proxy port(worker_2) are monitored
+SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
+SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port \gset
+CREATE TABLE table_to_split(id int PRIMARY KEY, int_data int, data text);
+SELECT create_distributed_table('table_to_split', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - postgres - :master_port
+-- Create a method to execute TryDropOrphanShards
+CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
+RETURNS VOID
+AS 'citus'
+LANGUAGE C STRICT VOLATILE;
+-- failure while creating publications
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE PUBLICATION .* FOR TABLE").killall()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT pg_catalog.citus_split_shard_by_split_points(
+    8981000,
+    ARRAY['-100000'],
+    ARRAY[:worker_2_node, :worker_2_node],
+    'force_logical');
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- we need to allow connection so that we can connect to proxy
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_proxy_port
+SET search_path TO "citus_split_test_schema", public, pg_catalog;
+SET citus.show_shards_for_app_name_prefixes = '*';
+-- Left over child shards
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+ table_to_split_102008
+ table_to_split_102009
+(3 rows)
+
+-- Left over publications
+SELECT pubname FROM pg_publication;
+ pubname
+---------------------------------------------------------------------
+(0 rows)
+
+-- Left over replication slots
+SELECT slot_name FROM pg_replication_slots;
+ slot_name
+---------------------------------------------------------------------
+(0 rows)
+
+-- Left over subscriptions
+SELECT subname FROM pg_subscription;
+ subname
+---------------------------------------------------------------------
+(0 rows)
+
+\c - postgres - :master_port
+SELECT run_try_drop_marked_shards();
+ run_try_drop_marked_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_proxy_port
+SET search_path TO "citus_split_test_schema", public, pg_catalog;
+SET citus.show_shards_for_app_name_prefixes = '*';
+-- Empty child shards after cleanup
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+-- Empty publications
+SELECT pubname FROM pg_publication;
+ pubname
+---------------------------------------------------------------------
+(0 rows)
+
+-- Empty replication slot table
+SELECT slot_name FROM pg_replication_slots;
+ slot_name
+---------------------------------------------------------------------
+(0 rows)
+
+-- Empty subscriptions
+SELECT subname FROM pg_subscription;
+ subname
+---------------------------------------------------------------------
+(0 rows)
+
+-- failure while setting shared memory segment
+\c - postgres - :master_port
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT \* FROM pg_catalog.worker_split_shard_replication_setup\(.*").killall()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT pg_catalog.citus_split_shard_by_split_points(
+    8981000,
+    ARRAY['-100000'],
+    ARRAY[:worker_2_node, :worker_2_node],
+    'force_logical');
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- we need to allow connection so that we can connect to proxy
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_proxy_port
+SET search_path TO "citus_split_test_schema", public, pg_catalog;
+SET citus.show_shards_for_app_name_prefixes = '*';
+-- Left over child shards
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+ table_to_split_102010
+ table_to_split_102011
+(3 rows)
+
+-- Left over publications
+SELECT pubname FROM pg_publication;
+                pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Left over replication slots
+SELECT slot_name FROM pg_replication_slots;
+ slot_name
+---------------------------------------------------------------------
+(0 rows)
+
+-- Left over subscriptions
+SELECT subname FROM pg_subscription;
+ subname
+---------------------------------------------------------------------
+(0 rows)
+
+\c - postgres - :master_port
+SELECT run_try_drop_marked_shards();
+ run_try_drop_marked_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_proxy_port
+SET search_path TO "citus_split_test_schema", public, pg_catalog;
+SET citus.show_shards_for_app_name_prefixes = '*';
+-- Empty child shards after cleanup
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+-- Empty publications
+SELECT pubname FROM pg_publication;
+                pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Empty replication slot table
+SELECT slot_name FROM pg_replication_slots;
+ slot_name
+---------------------------------------------------------------------
+(0 rows)
+
+-- Empty subscriptions
+SELECT subname FROM pg_subscription;
+ subname
+---------------------------------------------------------------------
+(0 rows)
+
+-- failure while executing 'CREATE_REPLICATION_SLOT' for Snapshot
+\c - postgres - :master_port
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE_REPLICATION_SLOT .* LOGICAL .* EXPORT_SNAPSHOT.*").killall()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT pg_catalog.citus_split_shard_by_split_points(
+    8981000,
+    ARRAY['-100000'],
+    ARRAY[:worker_2_node, :worker_2_node],
+    'force_logical');
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- we need to allow connection so that we can connect to proxy
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_proxy_port
+SET search_path TO "citus_split_test_schema", public, pg_catalog;
+SET citus.show_shards_for_app_name_prefixes = '*';
+-- Left over child shards
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+ table_to_split_102012
+ table_to_split_102013
+(3 rows)
+
+-- Left over publications
+SELECT pubname FROM pg_publication;
+                pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Left over replication slots
+SELECT slot_name FROM pg_replication_slots;
+ slot_name
+---------------------------------------------------------------------
+(0 rows)
+
+-- Left over subscriptions
+SELECT subname FROM pg_subscription;
+ subname
+---------------------------------------------------------------------
+(0 rows)
+
+\c - postgres - :master_port
+SELECT run_try_drop_marked_shards();
+ run_try_drop_marked_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_proxy_port
+SET search_path TO "citus_split_test_schema", public, pg_catalog;
+SET citus.show_shards_for_app_name_prefixes = '*';
+-- Empty child shards after cleanup
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+-- Empty publications
+SELECT pubname FROM pg_publication;
+                pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Empty replication slot table
+SELECT slot_name FROM pg_replication_slots;
+ slot_name
+---------------------------------------------------------------------
+(0 rows)
+
+-- Empty subscriptions
+SELECT subname FROM pg_subscription;
+ subname
+---------------------------------------------------------------------
+(0 rows)
+
+-- failure while creating replication slots
+--SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_catalog.pg_copy_logical_replication_slot\(.*").killall()');
+-- failure while enabling subscription
+\c - postgres - :master_port
+SELECT citus.mitmproxy('conn.onQuery(query="ALTER SUBSCRIPTION .* ENABLE").killall()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT pg_catalog.citus_split_shard_by_split_points(
+    8981000,
+    ARRAY['-100000'],
+    ARRAY[:worker_2_node, :worker_2_node],
+    'force_logical');
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- we need to allow connection so that we can connect to proxy
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_proxy_port
+SET search_path TO "citus_split_test_schema", public, pg_catalog;
+SET citus.show_shards_for_app_name_prefixes = '*';
+-- Left over child shards
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+ table_to_split_102015
+ table_to_split_102014
+(3 rows)
+
+-- Left over publications
+SELECT pubname FROM pg_publication;
+                pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Left over replication slots
+SELECT slot_name FROM pg_replication_slots;
+           slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Left over subscriptions
+SELECT subname FROM pg_subscription;
+               subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
+\c - postgres - :master_port
+SELECT run_try_drop_marked_shards();
+ run_try_drop_marked_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_proxy_port
+SET search_path TO "citus_split_test_schema", public, pg_catalog;
+SET citus.show_shards_for_app_name_prefixes = '*';
+-- Empty child shards after cleanup
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+-- Empty publications
+SELECT pubname FROM pg_publication;
+                pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Empty replication slot table
+SELECT slot_name FROM pg_replication_slots;
+           slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Empty subscriptions
+SELECT subname FROM pg_subscription;
+               subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
+-- failure on polling subscription state
+\c - postgres - :master_port
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT count\(\*\) FROM pg_subscription_rel").killall()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT pg_catalog.citus_split_shard_by_split_points(
+    8981000,
+    ARRAY['-100000'],
+    ARRAY[:worker_2_node, :worker_2_node],
+    'force_logical');
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- we need to allow connection so that we can connect to proxy
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_proxy_port
+SET search_path TO "citus_split_test_schema", public, pg_catalog;
+SET citus.show_shards_for_app_name_prefixes = '*';
+-- Left over child shards
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+ table_to_split_102016
+ table_to_split_102017
+(3 rows)
+
+-- Left over publications
+SELECT pubname FROM pg_publication;
+                pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Left over replication slots
+SELECT slot_name FROM pg_replication_slots;
+           slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Left over subscriptions
+SELECT subname FROM pg_subscription;
+               subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
+\c - postgres - :master_port
+SELECT run_try_drop_marked_shards();
+ run_try_drop_marked_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_proxy_port
+SET search_path TO "citus_split_test_schema", public, pg_catalog;
+SET citus.show_shards_for_app_name_prefixes = '*';
+-- Empty child shards after cleanup
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+-- Empty publications
+SELECT pubname FROM pg_publication;
+                pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Empty replication slot table
+SELECT slot_name FROM pg_replication_slots;
+           slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Empty subscriptions
+SELECT subname FROM pg_subscription;
+               subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
+-- failure on polling last write-ahead log location reported to origin WAL sender
+\c - postgres - :master_port
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT min\(latest_end_lsn").killall()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT pg_catalog.citus_split_shard_by_split_points(
+    8981000,
+    ARRAY['-100000'],
+    ARRAY[:worker_2_node, :worker_2_node],
+    'force_logical');
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+-- we need to allow connection so that we can connect to proxy
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_proxy_port
+SET search_path TO "citus_split_test_schema", public, pg_catalog;
+SET citus.show_shards_for_app_name_prefixes = '*';
+-- Left over child shards
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+ table_to_split_102018
+ table_to_split_102019
+(3 rows)
+
+-- Left over publications
+SELECT pubname FROM pg_publication;
+                pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Left over replication slots
+SELECT slot_name FROM pg_replication_slots;
+           slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Left over subscriptions
+SELECT subname FROM pg_subscription;
+               subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
+\c - postgres - :master_port
+SELECT run_try_drop_marked_shards();
+ run_try_drop_marked_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_proxy_port
+SET search_path TO "citus_split_test_schema", public, pg_catalog;
+SET citus.show_shards_for_app_name_prefixes = '*';
+-- Empty child shards after cleanup
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+-- Empty publications
+SELECT pubname FROM pg_publication;
+                pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Empty replication slot table
+SELECT slot_name FROM pg_replication_slots;
+           slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Empty subscriptions
+SELECT subname FROM pg_subscription;
+               subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
+-- failure on disabling subscription (right before dropping it)
+\c - postgres - :master_port
+SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").killall()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT pg_catalog.citus_split_shard_by_split_points(
+    8981000,
+    ARRAY['-100000'],
+    ARRAY[:worker_2_node, :worker_2_node],
+    'force_logical');
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+-- we need to allow connection so that we can connect to proxy
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_proxy_port
+SET search_path TO "citus_split_test_schema", public, pg_catalog;
+SET citus.show_shards_for_app_name_prefixes = '*';
+-- Left over child shards
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+-- Left over publications
+SELECT pubname FROM pg_publication;
+                pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Left over replication slots
+SELECT slot_name FROM pg_replication_slots;
+           slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Left over subscriptions
+SELECT subname FROM pg_subscription;
+               subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
+\c - postgres - :master_port
+SELECT run_try_drop_marked_shards();
+ run_try_drop_marked_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_proxy_port
+SET search_path TO "citus_split_test_schema", public, pg_catalog;
+SET citus.show_shards_for_app_name_prefixes = '*';
+-- Empty child shards after cleanup
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+-- Empty publications
+SELECT pubname FROM pg_publication;
+                pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Empty replication slot table
+SELECT slot_name FROM pg_replication_slots;
+           slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Empty subscriptions
+SELECT subname FROM pg_subscription;
+               subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
+-- failure on dropping subscription
+\c - postgres - :master_port
+SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").killall()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT pg_catalog.citus_split_shard_by_split_points(
+    8981000,
+    ARRAY['-100000'],
+    ARRAY[:worker_2_node, :worker_2_node],
+    'force_logical');
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+ relname
+---------------------------------------------------------------------
+(0 rows)
+
+-- we need to allow connection so that we can connect to proxy
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_proxy_port
+SET search_path TO "citus_split_test_schema", public, pg_catalog;
+SET citus.show_shards_for_app_name_prefixes = '*';
+-- Left over child shards
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+-- Left over publications
+SELECT pubname FROM pg_publication;
+                pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Left over replication slots
+SELECT slot_name FROM pg_replication_slots;
+           slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Left over subscriptions
+SELECT subname FROM pg_subscription;
+               subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
+\c - postgres - :master_port
+SELECT run_try_drop_marked_shards();
+ run_try_drop_marked_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_proxy_port
+SET search_path TO "citus_split_test_schema", public, pg_catalog;
+SET citus.show_shards_for_app_name_prefixes = '*';
+-- Empty child shards after cleanup
+SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+-- Empty publications
+SELECT pubname FROM pg_publication;
+                pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Empty replication slot table
+SELECT slot_name FROM pg_replication_slots;
+           slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(1 row)
+
+-- Empty subscriptions
+SELECT subname FROM pg_subscription;
+               subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
