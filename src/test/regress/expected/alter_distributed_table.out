@@ -329,6 +329,55 @@ SELECT * FROM partitioned_table_6_10 ORDER BY 1, 2;
   7 | 2
 (1 row)
 
+-- test altering partitioned table colocate_with:none
+CREATE TABLE foo (x int, y int, t timestamptz default now()) PARTITION BY RANGE (t);
+CREATE TABLE foo_1 PARTITION of foo for VALUES FROM ('2022-01-01') TO ('2022-12-31');
+CREATE TABLE foo_2 PARTITION of foo for VALUES FROM ('2023-01-01') TO ('2023-12-31');
+SELECT create_distributed_table('foo','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE foo_bar (x int, y int, t timestamptz default now()) PARTITION BY RANGE (t);
+CREATE TABLE foo_bar_1 PARTITION of foo_bar for VALUES FROM ('2022-01-01') TO ('2022-12-31');
+CREATE TABLE foo_bar_2 PARTITION of foo_bar for VALUES FROM ('2023-01-01') TO ('2023-12-31');
+SELECT create_distributed_table('foo_bar','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT COUNT(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid::regclass::text in ('foo', 'foo_1', 'foo_2', 'foo_bar', 'foo_bar_1', 'foo_bar_2');
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT alter_distributed_table('foo', colocate_with => 'none');
+NOTICE:  converting the partitions of alter_distributed_table.foo
+NOTICE:  creating a new table for alter_distributed_table.foo_1
+NOTICE:  moving the data of alter_distributed_table.foo_1
+NOTICE:  dropping the old alter_distributed_table.foo_1
+NOTICE:  renaming the new table to alter_distributed_table.foo_1
+NOTICE:  creating a new table for alter_distributed_table.foo_2
+NOTICE:  moving the data of alter_distributed_table.foo_2
+NOTICE:  dropping the old alter_distributed_table.foo_2
+NOTICE:  renaming the new table to alter_distributed_table.foo_2
+NOTICE:  creating a new table for alter_distributed_table.foo
+NOTICE:  dropping the old alter_distributed_table.foo
+NOTICE:  renaming the new table to alter_distributed_table.foo
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT COUNT(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid::regclass::text in ('foo', 'foo_1', 'foo_2', 'foo_bar', 'foo_bar_1', 'foo_bar_2');
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
 -- test references
 CREATE TABLE referenced_dist_table (a INT UNIQUE);
 CREATE TABLE referenced_ref_table (a INT UNIQUE);
