@@ -162,6 +162,13 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 			LockColocationId(cacheEntry->colocationId, ShareLock);
 		}
 
+		/*
+		 * Invalidate foreign key cache if the table involved in any foreign key. We'd normally  */
+		if ((TableReferenced(relationId) || TableReferencing(relationId)))
+		{
+			MarkInvalidateForeignKeyGraph();
+		}
+
 		/* we're only interested in partitioned and mx tables */
 		if (!ShouldSyncTableMetadata(relationId) || !PartitionedTable(relationId))
 		{
