@@ -1,6 +1,16 @@
 --
 -- MULTI_METADATA_SYNC
 --
+-- this test has different output for PG13/14 compared to PG15
+-- In PG15, public schema is owned by pg_database_owner role
+-- Relevant PG commit: b073c3ccd06e4cb845e121387a43faa8c68a7b62
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15;
+ server_version_ge_15
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- Tests for metadata snapshot functions, metadata syncing functions and propagation of
 -- metadata changes to MX tables.
 -- Turn metadata sync off at first
@@ -63,7 +73,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
                                                                                                                                                                                                                                                        unnest
 ---------------------------------------------------------------------
  ALTER DATABASE regression OWNER TO postgres;
- CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
+ CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION pg_database_owner
  DELETE FROM pg_catalog.pg_dist_colocation
  DELETE FROM pg_catalog.pg_dist_object
  DELETE FROM pg_dist_node
@@ -71,9 +81,9 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  DELETE FROM pg_dist_placement
  DELETE FROM pg_dist_shard
  GRANT CREATE ON SCHEMA public TO PUBLIC;
- GRANT CREATE ON SCHEMA public TO postgres;
+ GRANT CREATE ON SCHEMA public TO pg_database_owner;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
- GRANT USAGE ON SCHEMA public TO postgres;
+ GRANT USAGE ON SCHEMA public TO pg_database_owner;
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(2, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
  RESET ROLE
  RESET ROLE
@@ -81,8 +91,8 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT pg_catalog.worker_drop_sequence_dependency(logicalrelid::regclass::text) FROM pg_dist_partition
  SELECT worker_create_or_alter_role('postgres', 'CREATE ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''', 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
- SET ROLE postgres
- SET ROLE postgres
+ SET ROLE pg_database_owner
+ SET ROLE pg_database_owner
  SET citus.enable_ddl_propagation TO 'off'
  SET citus.enable_ddl_propagation TO 'off'
  SET citus.enable_ddl_propagation TO 'off'
@@ -131,7 +141,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  ALTER SEQUENCE public.user_defined_seq OWNER TO postgres
  ALTER TABLE public.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
  ALTER TABLE public.mx_test_table OWNER TO postgres
- CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
+ CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION pg_database_owner
  CREATE TABLE public.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('public.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
  DELETE FROM pg_catalog.pg_dist_colocation
  DELETE FROM pg_catalog.pg_dist_object
@@ -140,9 +150,9 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  DELETE FROM pg_dist_placement
  DELETE FROM pg_dist_shard
  GRANT CREATE ON SCHEMA public TO PUBLIC;
- GRANT CREATE ON SCHEMA public TO postgres;
+ GRANT CREATE ON SCHEMA public TO pg_database_owner;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
- GRANT USAGE ON SCHEMA public TO postgres;
+ GRANT USAGE ON SCHEMA public TO pg_database_owner;
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(2, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
  RESET ROLE
  RESET ROLE
@@ -155,8 +165,8 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT worker_create_or_alter_role('postgres', 'CREATE ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''', 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('public.mx_test_table')
  SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
- SET ROLE postgres
- SET ROLE postgres
+ SET ROLE pg_database_owner
+ SET ROLE pg_database_owner
  SET citus.enable_ddl_propagation TO 'off'
  SET citus.enable_ddl_propagation TO 'off'
  SET citus.enable_ddl_propagation TO 'off'
@@ -181,7 +191,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  ALTER TABLE public.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
  ALTER TABLE public.mx_test_table OWNER TO postgres
  CREATE INDEX mx_index ON public.mx_test_table USING btree (col_2)
- CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
+ CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION pg_database_owner
  CREATE TABLE public.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('public.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
  DELETE FROM pg_catalog.pg_dist_colocation
  DELETE FROM pg_catalog.pg_dist_object
@@ -190,9 +200,9 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  DELETE FROM pg_dist_placement
  DELETE FROM pg_dist_shard
  GRANT CREATE ON SCHEMA public TO PUBLIC;
- GRANT CREATE ON SCHEMA public TO postgres;
+ GRANT CREATE ON SCHEMA public TO pg_database_owner;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
- GRANT USAGE ON SCHEMA public TO postgres;
+ GRANT USAGE ON SCHEMA public TO pg_database_owner;
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(2, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
  RESET ROLE
  RESET ROLE
@@ -205,8 +215,8 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT worker_create_or_alter_role('postgres', 'CREATE ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''', 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('public.mx_test_table')
  SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
- SET ROLE postgres
- SET ROLE postgres
+ SET ROLE pg_database_owner
+ SET ROLE pg_database_owner
  SET citus.enable_ddl_propagation TO 'off'
  SET citus.enable_ddl_propagation TO 'off'
  SET citus.enable_ddl_propagation TO 'off'
@@ -233,7 +243,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
  CREATE INDEX mx_index ON mx_testing_schema.mx_test_table USING btree (col_2)
  CREATE SCHEMA IF NOT EXISTS mx_testing_schema AUTHORIZATION postgres
- CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
+ CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION pg_database_owner
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
  DELETE FROM pg_catalog.pg_dist_colocation
  DELETE FROM pg_catalog.pg_dist_object
@@ -242,9 +252,9 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  DELETE FROM pg_dist_placement
  DELETE FROM pg_dist_shard
  GRANT CREATE ON SCHEMA public TO PUBLIC;
- GRANT CREATE ON SCHEMA public TO postgres;
+ GRANT CREATE ON SCHEMA public TO pg_database_owner;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
- GRANT USAGE ON SCHEMA public TO postgres;
+ GRANT USAGE ON SCHEMA public TO pg_database_owner;
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(2, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
  RESET ROLE
  RESET ROLE
@@ -257,8 +267,8 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT worker_create_or_alter_role('postgres', 'CREATE ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''', 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
  SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
- SET ROLE postgres
- SET ROLE postgres
+ SET ROLE pg_database_owner
+ SET ROLE pg_database_owner
  SET citus.enable_ddl_propagation TO 'off'
  SET citus.enable_ddl_propagation TO 'off'
  SET citus.enable_ddl_propagation TO 'off'
@@ -291,7 +301,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
  CREATE INDEX mx_index ON mx_testing_schema.mx_test_table USING btree (col_2)
  CREATE SCHEMA IF NOT EXISTS mx_testing_schema AUTHORIZATION postgres
- CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
+ CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION pg_database_owner
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
  DELETE FROM pg_catalog.pg_dist_colocation
  DELETE FROM pg_catalog.pg_dist_object
@@ -300,9 +310,9 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  DELETE FROM pg_dist_placement
  DELETE FROM pg_dist_shard
  GRANT CREATE ON SCHEMA public TO PUBLIC;
- GRANT CREATE ON SCHEMA public TO postgres;
+ GRANT CREATE ON SCHEMA public TO pg_database_owner;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
- GRANT USAGE ON SCHEMA public TO postgres;
+ GRANT USAGE ON SCHEMA public TO pg_database_owner;
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(2, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
  RESET ROLE
  RESET ROLE
@@ -315,8 +325,8 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT worker_create_or_alter_role('postgres', 'CREATE ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''', 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
  SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
- SET ROLE postgres
- SET ROLE postgres
+ SET ROLE pg_database_owner
+ SET ROLE pg_database_owner
  SET citus.enable_ddl_propagation TO 'off'
  SET citus.enable_ddl_propagation TO 'off'
  SET citus.enable_ddl_propagation TO 'off'
@@ -342,7 +352,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
  CREATE INDEX mx_index ON mx_testing_schema.mx_test_table USING btree (col_2)
  CREATE SCHEMA IF NOT EXISTS mx_testing_schema AUTHORIZATION postgres
- CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
+ CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION pg_database_owner
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
  DELETE FROM pg_catalog.pg_dist_colocation
  DELETE FROM pg_catalog.pg_dist_object
@@ -351,9 +361,9 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  DELETE FROM pg_dist_placement
  DELETE FROM pg_dist_shard
  GRANT CREATE ON SCHEMA public TO PUBLIC;
- GRANT CREATE ON SCHEMA public TO postgres;
+ GRANT CREATE ON SCHEMA public TO pg_database_owner;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
- GRANT USAGE ON SCHEMA public TO postgres;
+ GRANT USAGE ON SCHEMA public TO pg_database_owner;
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(2, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
  RESET ROLE
  RESET ROLE
@@ -366,8 +376,8 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT worker_create_or_alter_role('postgres', 'CREATE ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''', 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
  SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
- SET ROLE postgres
- SET ROLE postgres
+ SET ROLE pg_database_owner
+ SET ROLE pg_database_owner
  SET citus.enable_ddl_propagation TO 'off'
  SET citus.enable_ddl_propagation TO 'off'
  SET citus.enable_ddl_propagation TO 'off'
@@ -1867,7 +1877,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE SCHEMA IF NOT EXISTS mx_test_schema_2 AUTHORIZATION postgres
  CREATE SCHEMA IF NOT EXISTS mx_testing_schema AUTHORIZATION postgres
  CREATE SCHEMA IF NOT EXISTS mx_testing_schema_2 AUTHORIZATION postgres
- CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
+ CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION pg_database_owner
  CREATE TABLE mx_test_schema_1.mx_table_1 (col1 integer, col2 text, col3 integer)
  CREATE TABLE mx_test_schema_2.mx_table_2 (col1 integer, col2 text)
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
@@ -1881,9 +1891,9 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  DELETE FROM pg_dist_placement
  DELETE FROM pg_dist_shard
  GRANT CREATE ON SCHEMA public TO PUBLIC;
- GRANT CREATE ON SCHEMA public TO postgres;
+ GRANT CREATE ON SCHEMA public TO pg_database_owner;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
- GRANT USAGE ON SCHEMA public TO postgres;
+ GRANT USAGE ON SCHEMA public TO pg_database_owner;
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (4, 1, 'localhost', 8888, 'default', FALSE, FALSE, TRUE, 'secondary'::noderole, 'default', TRUE),(5, 1, 'localhost', 8889, 'default', FALSE, FALSE, TRUE, 'secondary'::noderole, 'second-cluster', TRUE),(1, 1, 'localhost', 57637, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', TRUE),(7, 5, 'localhost', 57638, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', TRUE)
  RESET ROLE
  RESET ROLE
@@ -1908,8 +1918,8 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT worker_create_truncate_trigger('public.mx_ref')
  SELECT worker_create_truncate_trigger('public.test_table')
  SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
- SET ROLE postgres
- SET ROLE postgres
+ SET ROLE pg_database_owner
+ SET ROLE pg_database_owner
  SET citus.enable_ddl_propagation TO 'off'
  SET citus.enable_ddl_propagation TO 'off'
  SET citus.enable_ddl_propagation TO 'off'

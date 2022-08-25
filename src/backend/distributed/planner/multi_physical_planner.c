@@ -490,6 +490,10 @@ RangePartitionJoinBaseRelationId(MultiJoin *joinNode)
 	{
 		partitionNode = (MultiPartition *) rightChildNode;
 	}
+	else
+	{
+		Assert(false);
+	}
 
 	Index baseTableId = partitionNode->splitPointTableId;
 	MultiTable *baseTable = FindTableNode((MultiNode *) joinNode, baseTableId);
@@ -575,12 +579,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 		Job *job = (Job *) linitial(dependentJobList);
 		if (CitusIsA(job, MapMergeJob))
 		{
-			MapMergeJob *mapMergeJob = (MapMergeJob *) job;
 			isRepartitionJoin = true;
-			if (mapMergeJob->reduceQuery)
-			{
-				updateColumnAttributes = false;
-			}
 		}
 	}
 
@@ -4671,18 +4670,13 @@ MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList, uint32 taskIdIndex)
 	for (uint32 partitionId = initialPartitionId; partitionId < partitionCount;
 		 partitionId++)
 	{
-		Task *mergeTask = NULL;
 		List *mapOutputFetchTaskList = NIL;
 		ListCell *mapTaskCell = NULL;
 		uint32 mergeTaskId = taskIdIndex;
 
-		Query *reduceQuery = mapMergeJob->reduceQuery;
-		if (reduceQuery == NULL)
-		{
-			/* create logical merge task (not executed, but useful for bookkeeping) */
-			mergeTask = CreateBasicTask(jobId, mergeTaskId, MERGE_TASK,
-										"<merge>");
-		}
+		/* create logical merge task (not executed, but useful for bookkeeping) */
+		Task *mergeTask = CreateBasicTask(jobId, mergeTaskId, MERGE_TASK,
+										  "<merge>");
 		mergeTask->partitionId = partitionId;
 		taskIdIndex++;
 

@@ -1,6 +1,6 @@
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 13 AS server_version_above_thirteen
+SELECT substring(:'server_version', '\d+')::int >= 14 AS server_version_ge_14
 \gset
-\if :server_version_above_thirteen
+\if :server_version_ge_14
 \else
 \q

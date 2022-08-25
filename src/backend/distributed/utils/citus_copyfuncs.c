@@ -198,7 +198,6 @@ CopyNodeMapMergeJob(COPYFUNC_ARGS)
 
 	copyJobInfo(&newnode->job, &from->job);
 
-	COPY_NODE_FIELD(reduceQuery);
 	COPY_SCALAR_FIELD(partitionType);
 	COPY_NODE_FIELD(partitionColumn);
 	COPY_SCALAR_FIELD(partitionCount);

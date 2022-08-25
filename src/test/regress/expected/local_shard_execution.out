@@ -1,3 +1,17 @@
+--
+-- LOCAL_SHARD_EXECUTION
+--
+-- This test file has an alternative output because of the change in the
+-- display of SQL-standard function's arguments in INSERT/SELECT in PG15.
+-- The alternative output can be deleted when we drop support for PG14
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15;
+ server_version_ge_15
+---------------------------------------------------------------------
+ t
+(1 row)
+
 CREATE SCHEMA local_shard_execution;
 SET search_path TO local_shard_execution;
 SET citus.shard_count TO 4;
@@ -288,7 +302,7 @@ RETURNING *;
 INSERT INTO distributed_table SELECT * FROM distributed_table WHERE key = 1 OFFSET 0 ON CONFLICT DO NOTHING;
 NOTICE:  executing the command locally: SELECT key, value, age FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) 1) OFFSET 0
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
-NOTICE:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) SELECT key, value, age FROM read_intermediate_result('insert_select_XXX_1470001'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, age bigint) ON CONFLICT DO NOTHING
+NOTICE:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key, value, age) SELECT intermediate_result.key, intermediate_result.value, intermediate_result.age FROM read_intermediate_result('insert_select_XXX_1470001'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, age bigint) ON CONFLICT DO NOTHING
 INSERT INTO distributed_table SELECT 1, '1',15 FROM distributed_table WHERE key = 2 LIMIT 1 ON CONFLICT DO NOTHING;
 -- sanity check: multi-shard INSERT..SELECT pushdown goes through distributed execution
 INSERT INTO distributed_table SELECT * FROM distributed_table ON CONFLICT DO NOTHING;
@@ -800,7 +814,7 @@ NOTICE:  executing the copy locally for shard xxxxx
 	INSERT INTO distributed_table (key) SELECT -key FROM distributed_table;
 NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_1470001_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_1470001_to','SELECT (OPERATOR(pg_catalog.-) key) AS key FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
 NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_1470003_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_1470003_to','SELECT (OPERATOR(pg_catalog.-) key) AS key FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
-NOTICE:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key) SELECT key FROM read_intermediate_results('{repartitioned_results_xxxxx_from_1470003_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(key integer)
+NOTICE:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 AS citus_table_alias (key) SELECT intermediate_result.key FROM read_intermediate_results('{repartitioned_results_xxxxx_from_1470003_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(key integer)
 	SELECT count(*) FROM distributed_table WHERE key = -6;
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE (key OPERATOR(pg_catalog.=) '-6'::integer)
  count
