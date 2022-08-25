@@ -153,6 +153,15 @@ BEGIN;
   SELECT * FROM generated_stored_REF ORDER BY 1;
 ROLLBACK;
 
+SELECT undistribute_table('generated_stored_ref');
+
+--
+-- In PG15, there is a new command called MERGE
+-- It is currently not supported for Citus tables
+-- Test the behavior with various commands with Citus table types
+-- Relevant PG Commit: 7103ebb7aae8ab8076b7e85f335ceb8fe799097c
+--
+
 CREATE TABLE tbl1
 (
    x INT
@@ -167,39 +176,47 @@ CREATE TABLE tbl2
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
 
-SELECT citus_add_local_table_to_metadata('tbl1');
+-- add coordinator node as a worker
+SET client_min_messages to ERROR;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+RESET client_min_messages;
 
 -- one table is Citus local table, fails
+SELECT citus_add_local_table_to_metadata('tbl1');
+
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
 
 SELECT undistribute_table('tbl1');
-SELECT citus_add_local_table_to_metadata('tbl2');
 
 -- the other table is Citus local table, fails
+SELECT citus_add_local_table_to_metadata('tbl2');
+
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
 
 -- one table is reference, the other local, not supported
 SELECT create_reference_table('tbl2');
+
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
 
 -- now, both are reference, still not supported
 SELECT create_reference_table('tbl1');
+
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
 
 -- now, both distributed, not works
 SELECT undistribute_table('tbl1');
 SELECT undistribute_table('tbl2');
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
 
 SELECT create_distributed_table('tbl1', 'x');
 SELECT create_distributed_table('tbl2', 'x');
 
 MERGE INTO tbl1 USING tbl2 ON (true)
 WHEN MATCHED THEN DELETE;
-
 
 -- also, not inside subqueries & ctes
 WITH targq AS (
@@ -218,7 +235,6 @@ WHEN MATCHED THEN DELETE;
 --  MERGE INTO tbl1 USING tbl2 ON (true)
 --  WHEN MATCHED THEN DELETE
 --) TO stdout;
-
 
 MERGE INTO tbl1 t
 USING tbl2

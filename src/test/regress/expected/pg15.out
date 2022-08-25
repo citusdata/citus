@@ -238,9 +238,159 @@ NOTICE:  renaming the new table to pg15.generated_stored_ref
 (5 rows)
 
 ROLLBACK;
+SELECT undistribute_table('generated_stored_ref');
+NOTICE:  creating a new table for pg15.generated_stored_ref
+NOTICE:  moving the data of pg15.generated_stored_ref
+NOTICE:  dropping the old pg15.generated_stored_ref
+NOTICE:  renaming the new table to pg15.generated_stored_ref
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+--
+-- In PG15, there is a new command called MERGE
+-- It is currently not supported for Citus tables
+-- Test the behavior with various commands with Citus table types
+-- Relevant PG Commit: 7103ebb7aae8ab8076b7e85f335ceb8fe799097c
+--
+CREATE TABLE tbl1
+(
+   x INT
+);
+CREATE TABLE tbl2
+(
+    x INT
+);
+-- on local tables works fine
+MERGE INTO tbl1 USING tbl2 ON (true)
+WHEN MATCHED THEN DELETE;
+-- add coordinator node as a worker
+SET client_min_messages to ERROR;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+RESET client_min_messages;
+-- one table is Citus local table, fails
+SELECT citus_add_local_table_to_metadata('tbl1');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+MERGE INTO tbl1 USING tbl2 ON (true)
+WHEN MATCHED THEN DELETE;
+ERROR:  MERGE command is not supported on Citus tables yet
+SELECT undistribute_table('tbl1');
+NOTICE:  creating a new table for pg15.tbl1
+NOTICE:  moving the data of pg15.tbl1
+NOTICE:  dropping the old pg15.tbl1
+NOTICE:  renaming the new table to pg15.tbl1
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- the other table is Citus local table, fails
+SELECT citus_add_local_table_to_metadata('tbl2');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+MERGE INTO tbl1 USING tbl2 ON (true)
+WHEN MATCHED THEN DELETE;
+ERROR:  MERGE command is not supported on Citus tables yet
+-- one table is reference, the other local, not supported
+SELECT create_reference_table('tbl2');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+MERGE INTO tbl1 USING tbl2 ON (true)
+WHEN MATCHED THEN DELETE;
+ERROR:  MERGE command is not supported on Citus tables yet
+-- now, both are reference, still not supported
+SELECT create_reference_table('tbl1');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+MERGE INTO tbl1 USING tbl2 ON (true)
+WHEN MATCHED THEN DELETE;
+ERROR:  MERGE command is not supported on Citus tables yet
+-- now, both distributed, not works
+SELECT undistribute_table('tbl1');
+NOTICE:  creating a new table for pg15.tbl1
+NOTICE:  moving the data of pg15.tbl1
+NOTICE:  dropping the old pg15.tbl1
+NOTICE:  renaming the new table to pg15.tbl1
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT undistribute_table('tbl2');
+NOTICE:  creating a new table for pg15.tbl2
+NOTICE:  moving the data of pg15.tbl2
+NOTICE:  dropping the old pg15.tbl2
+NOTICE:  renaming the new table to pg15.tbl2
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT create_distributed_table('tbl1', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('tbl2', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+MERGE INTO tbl1 USING tbl2 ON (true)
+WHEN MATCHED THEN DELETE;
+ERROR:  MERGE command is not supported on Citus tables yet
+-- also, not inside subqueries & ctes
+WITH targq AS (
+    SELECT * FROM tbl2
+)
+MERGE INTO tbl1 USING targq ON (true)
+WHEN MATCHED THEN DELETE;
+ERROR:  MERGE command is not supported on Citus tables yet
+-- crashes on beta3, fixed on 15 stable
+--WITH foo AS (
+--  MERGE INTO tbl1 USING tbl2 ON (true)
+--  WHEN MATCHED THEN DELETE
+--) SELECT * FROM foo;
+--COPY (
+--  MERGE INTO tbl1 USING tbl2 ON (true)
+--  WHEN MATCHED THEN DELETE
+--) TO stdout;
+MERGE INTO tbl1 t
+USING tbl2
+ON (true)
+WHEN MATCHED THEN
+    UPDATE SET x = (SELECT count(*) FROM tbl2);
+ERROR:  MERGE command is not supported on Citus tables yet
 -- Clean up
 DROP SCHEMA pg15 CASCADE;
-NOTICE:  drop cascades to 7 other objects
+NOTICE:  drop cascades to 9 other objects
 DETAIL:  drop cascades to collation german_phonebook_test
 drop cascades to collation default_provider
 drop cascades to table sale
@@ -248,3 +398,5 @@ drop cascades to table record_sale
 drop cascades to function record_sale()
 drop cascades to view sale_triggers
 drop cascades to table generated_stored_ref
+drop cascades to table tbl1
+drop cascades to table tbl2

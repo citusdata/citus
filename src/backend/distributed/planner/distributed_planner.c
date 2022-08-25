@@ -319,7 +319,7 @@ ErrorIfQueryHasMergeCommand(Query *queryTree)
 	if (ContainsMergeCommandWalker((Node *) queryTree))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("MERGE command is not supported on Citus tables yet")));
+						errmsg("MERGE command is not supported on Citus tables yet")));
 	}
 }
 
@@ -353,7 +353,6 @@ ContainsMergeCommandWalker(Node *node)
 
 	return false;
 }
-
 
 
 /*
