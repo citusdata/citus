@@ -99,11 +99,7 @@ extern void InsertCleanupRecordInSubtransaction(CleanupObject objectType,
 
 /*
  * CompleteNewOperationNeedingCleanup is be called by an operation to signal
- * completion. This will trigger cleanup of resources that were registered for:
- *
- * 1) CLEANUP_ALWAYS: resources that are transient and always need clean up.
- * 2) CLEANUP_ON_FAILURE: resources that are cleanup only on failure, if
- * isSuccess is false.
+ * completion. This will trigger cleanup of appropriate resources.
  */
 extern void CompleteNewOperationNeedingCleanup(bool isSuccess);
 

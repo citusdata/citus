@@ -1348,7 +1348,6 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		/* 19) Drop Publications */
 		DropPublications(sourceConnection, publicationInfoHash);
 
-
 		/*
 		 * 20) Drop old shards and delete related metadata. Have to do that before
 		 * creating the new shard metadata, because there's cross-checks
@@ -1512,11 +1511,16 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			InsertCleanupRecordInSubtransaction(CLEANUP_SHARD_PLACEMENT,
 												ConstructQualifiedShardName(
 													shardInterval),
-												workerPlacementNode->groupId,
+												sourceWorkerNode->groupId,
 												policy);
 
 			/* Create dummy split child shard on source worker node */
 			CreateObjectOnPlacement(splitShardCreationCommandList, sourceWorkerNode);
+
+			/* Add dummy split child shard entry created on source node */
+			AddDummyShardEntryInMap(mapOfPlacementToDummyShardList,
+									sourceWorkerNode->nodeId,
+									shardInterval);
 		}
 	}
 }

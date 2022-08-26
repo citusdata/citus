@@ -42,22 +42,22 @@ int NextCleanupRecordId = 0;
  */
 typedef struct CleanupRecord
 {
-	/* unique identifier of the record (for deletes) */
+	/* unique identifier of the record */
 	uint64 recordId;
 
-	/* identifier of the operation that generated the record (must not be in progress) */
+	/* identifier of the operation that generated the record */
 	OperationId operationId;
 
-	/* type of the object (e.g. shard placement) */
+	/* type of the object (e.g. shard) */
 	CleanupObject objectType;
 
 	/* fully qualified name of the object */
 	char *objectName;
 
-	/* node grou ID on which the object is located */
+	/* node group ID on which the object is located */
 	int nodeGroupId;
 
-	/* cleanup policy */
+	/* cleanup policy that determines when object is cleaned */
 	CleanupPolicy policy;
 } CleanupRecord;
 
@@ -157,8 +157,9 @@ DropOrphanedShardsInSeparateTransaction(void)
 
 
 /*
- * TryDropOrphanedShards is a wrapper around DropOrphanedShardsForMove that catches
- * any errors to make it safe to use in the maintenance daemon.
+ * TryDropOrphanedShards is a wrapper around DropOrphanedShardsForMove and
+ * DropOrphanedShardsForCleanup that catches any errors to make it safe to
+ * use in the maintenance daemon.
  *
  * If dropping any of the shards failed this function returns -1, otherwise it
  * returns the number of dropped shards.
@@ -206,7 +207,7 @@ DropOrphanedShardsForCleanup()
 
 	foreach_ptr(record, cleanupRecordList)
 	{
-		/* We only supporting cleaning shards right now */
+		/* We only support one resource type at the moment */
 		if (record->objectType != CLEANUP_SHARD_PLACEMENT)
 		{
 			ereport(WARNING, (errmsg("Invalid object type %d for cleanup record ",
@@ -214,6 +215,7 @@ DropOrphanedShardsForCleanup()
 			continue;
 		}
 
+		/* Advisory locks are reentrant */
 		if (!TryLockOperationId(record->operationId))
 		{
 			/* operation that the cleanup record is part of is still running */
@@ -222,12 +224,14 @@ DropOrphanedShardsForCleanup()
 
 		char *qualifiedTableName = record->objectName;
 		WorkerNode *workerNode = LookupNodeForGroup(record->nodeGroupId);
+
+		/*
+		 * Now that we have the lock, check if record exists.
+		 * The operation could have completed successfully just after we called
+		 * ListCleanupRecords in which case the record will be now gone.
+		 */
 		if (!CleanupRecordExists(record->recordId))
 		{
-			/*
-			 * The operation completed successfully just after we called
-			 * ListCleanupRecords in which case the record is now gone.
-			 */
 			continue;
 		}
 
@@ -345,6 +349,10 @@ DropOrphanedShardsForMove(bool waitForLocks)
 }
 
 
+/*
+ * StartNewOperationNeedingCleanup is be called by an operation to register
+ * for cleanup.
+ */
 OperationId
 StartNewOperationNeedingCleanup(void)
 {
@@ -356,6 +364,10 @@ StartNewOperationNeedingCleanup(void)
 }
 
 
+/*
+ * CompleteNewOperationNeedingCleanup is be called by an operation to signal
+ * completion. This will trigger cleanup of appropriate resources.
+ */
 void
 CompleteNewOperationNeedingCleanup(bool isSuccess)
 {
@@ -517,6 +529,9 @@ InsertCleanupRecordInSubtransaction(CleanupObject objectType,
 }
 
 
+/*
+ * DeleteCleanupRecordByRecordId deletes a cleanup record by record id.
+ */
 static void
 DeleteCleanupRecordByRecordIdOutsideTransaction(uint64 recordId)
 {
@@ -669,17 +684,23 @@ ListCleanupRecords(void)
 
 
 /*
- * ListCleanupRecordsForCurrentOperation lists all the current cleanup records.
+ * ListCleanupRecordsForCurrentOperation lists all the cleanup records for
+ * current operation.
  */
 static List *
 ListCleanupRecordsForCurrentOperation(void)
 {
+	/* We must have a valid OperationId. Any operation requring cleanup
+	 * will call StartNewOperationNeedingCleanup.
+	 */
+	Assert(CurrentOperationId != INVALID_OPERATION_ID);
+
 	Relation pgDistCleanup = table_open(DistCleanupRelationId(), AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistCleanup);
 
 	ScanKeyData scanKey[1];
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_cleanup_operation_id, BTEqualStrategyNumber,
-				F_OIDEQ, CurrentOperationId);
+				F_INT8EQ, UInt64GetDatum(CurrentOperationId));
 
 	int scanKeyCount = 1;
 	Oid scanIndexId = InvalidOid;
@@ -841,6 +862,10 @@ GetNextCleanupRecordId(void)
 }
 
 
+/*
+ * LockOperationId takes an exclusive lock to ensure that only one process
+ * can cleanup operationId resources at the same time.
+ */
 static void
 LockOperationId(OperationId operationId)
 {
@@ -852,6 +877,10 @@ LockOperationId(OperationId operationId)
 }
 
 
+/*
+ * TryLockOperationId takes an exclusive lock (with dontWait = true) to ensure that
+ * only one process can cleanup operationId resources at the same time.
+ */
 static bool
 TryLockOperationId(OperationId operationId)
 {
@@ -859,6 +888,7 @@ TryLockOperationId(OperationId operationId)
 	const bool sessionLock = false;
 	const bool dontWait = true;
 	SET_LOCKTAG_CLEANUP_OPERATION_ID(tag, operationId);
-	bool lockAcquired = LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
-	return lockAcquired;
+	LockAcquireResult lockResult = LockAcquire(&tag, ExclusiveLock, sessionLock,
+											   dontWait);
+	return (lockResult != LOCKACQUIRE_NOT_AVAIL);
 }
