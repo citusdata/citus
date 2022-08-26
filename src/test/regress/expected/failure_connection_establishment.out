@@ -396,15 +396,6 @@ SELECT * FROM citus_check_cluster_node_health();
  localhost     |         57637 | localhost   |       57637 | t
 (4 rows)
 
--- cancel all connections to this node
-SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' || pg_backend_pid() || ')');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT * FROM citus_check_cluster_node_health();
-ERROR:  canceling statement due to user request
 -- kill connection checks to this node
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT 1$").kill()');
  mitmproxy
