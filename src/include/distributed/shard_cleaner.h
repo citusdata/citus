@@ -37,6 +37,9 @@ typedef enum CleanupObject
 	CLEANUP_SHARD_PLACEMENT = 1
 } CleanupObject;
 
+/*
+ * CleanupPolicy represents the policy type for cleanup records.
+ */
 typedef enum CleanupPolicy
 {
 	/*
@@ -52,25 +55,56 @@ typedef enum CleanupPolicy
 	CLEANUP_ON_FAILURE = 1,
 
 	/*
-	 * Resources that are to be deferred cleanup only on success.
+	 * Resources that need 'deferred' clean up only on success .
      * (Example: Parent child being split for Blocking/Non-Blocking splits)
 	 */
 	CLEANUP_DEFERRED_ON_SUCCESS = 2,
 } CleanupPolicy;
 
+/* Global Constants */
 #define INVALID_OPERATION_ID 0
 #define INVALID_CLEANUP_RECORD_ID 0
 
 /* APIs for cleanup infrastructure */
+
+/*
+ * StartNewOperationNeedingCleanup is be called by an operation to register
+ * for cleanup.
+ */
 extern OperationId StartNewOperationNeedingCleanup(void);
+
+/*
+ * InsertCleanupRecordInCurrentTransaction inserts a new pg_dist_cleanup entry
+ * as part of the current transaction.
+ *
+ * This is primarily useful for deferred cleanup (CLEANUP_DEFERRED_ON_SUCCESS)
+ * scenarios, since the records would roll back in case of failure.
+ */
 extern void InsertCleanupRecordInCurrentTransaction(CleanupObject objectType,
 													char *objectName,
 													int nodeGroupId,
 													CleanupPolicy policy);
+
+/*
+ * InsertCleanupRecordInSeparateTransaction inserts a new pg_dist_cleanup entry
+ * in a separate transaction to ensure the record persists after rollback.
+ *
+ * This is used in scenarios where we need to cleanup resources on operation
+ * completion (CLEANUP_ALWAYS) or on failure (CLEANUP_ON_FAILURE).
+ */
 extern void InsertCleanupRecordInSubtransaction(CleanupObject objectType,
 												char *objectName,
 												int nodeGroupId,
 												CleanupPolicy policy);
+
+/*
+ * CompleteNewOperationNeedingCleanup is be called by an operation to signal
+ * completion. This will trigger cleanup of resources that were registered for:
+ *
+ * 1) CLEANUP_ALWAYS: resources that are transient and always need clean up.
+ * 2) CLEANUP_ON_FAILURE: resources that are cleanup only on failure, if
+ * isSuccess is false.
+ */
 extern void CompleteNewOperationNeedingCleanup(bool isSuccess);
 
 #endif /*CITUS_SHARD_CLEANER_H */

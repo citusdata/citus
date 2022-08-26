@@ -375,13 +375,13 @@ CompleteNewOperationNeedingCleanup(bool isSuccess)
 	 */
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
 
-	List *recordList = ListCleanupRecordsForCurrentOperation();
+	List *currentOperationRecordList = ListCleanupRecordsForCurrentOperation();
 
 	int removedShardCountOnComplete = 0;
 	int failedShardCountOnComplete = 0;
 
 	CleanupRecord *record = NULL;
-	foreach_ptr(record, recordList)
+	foreach_ptr(record, currentOperationRecordList)
 	{
 		/* We only supporting cleaning shards right now */
 		if (record->objectType != CLEANUP_SHARD_PLACEMENT)
@@ -411,6 +411,18 @@ CompleteNewOperationNeedingCleanup(bool isSuccess)
 		else if (record->policy == CLEANUP_ON_FAILURE && isSuccess)
 		{
 			DeleteCleanupRecordByRecordId(record->recordId);
+		}
+	}
+
+	if (list_length(currentOperationRecordList) > 0)
+	{
+		ereport(LOG, (errmsg("Removed %d orphaned shards out of %d",
+							 removedShardCountOnComplete, list_length(currentOperationRecordList))));
+
+		if (failedShardCountOnComplete > 0)
+		{
+			ereport(WARNING, (errmsg("Failed to drop %d cleanup shards out of %d",
+								 failedShardCountOnComplete, list_length(currentOperationRecordList))));
 		}
 	}
 }

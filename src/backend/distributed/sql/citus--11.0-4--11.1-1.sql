@@ -89,10 +89,13 @@ CREATE TABLE citus.pg_dist_cleanup (
     policy_type int not null
 );
 ALTER TABLE citus.pg_dist_cleanup SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.pg_dist_cleanup TO public;
 
 
 -- Sequence used to generate an operation ID for use in pg_dist_cleanup_record.
-CREATE SEQUENCE citus.pg_dist_operationid_seq;
+-- Right now, move is hardcoded to 1 (this will change with parallel moves), so
+-- start with a higher number.
+CREATE SEQUENCE citus.pg_dist_operationid_seq MINVALUE 101;
 ALTER SEQUENCE citus.pg_dist_operationid_seq SET SCHEMA pg_catalog;
 
 CREATE SEQUENCE citus.pg_dist_cleanup_recordid_seq;
