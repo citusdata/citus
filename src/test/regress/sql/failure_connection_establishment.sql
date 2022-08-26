@@ -181,10 +181,6 @@ SELECT * FROM citus_check_cluster_node_health();
 SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
 SELECT * FROM citus_check_cluster_node_health();
 
--- cancel all connections to this node
-SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' || pg_backend_pid() || ')');
-SELECT * FROM citus_check_cluster_node_health();
-
 -- kill connection checks to this node
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT 1$").kill()');
 SELECT * FROM citus_check_cluster_node_health();
