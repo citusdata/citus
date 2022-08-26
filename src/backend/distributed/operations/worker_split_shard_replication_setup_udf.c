@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * worker_split_shard_replication_setup.c
+ * worker_split_shard_replication_setup_udf.c
  *    This file contains functions to setup information about list of shards
  *    that are being split.
  *

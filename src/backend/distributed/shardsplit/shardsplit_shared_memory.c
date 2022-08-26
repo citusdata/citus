@@ -173,6 +173,11 @@ ReleaseSharedMemoryOfShardSplitInfo()
 	/* Get handle of dynamic shared memory segment*/
 	dsm_handle dsmHandle = GetShardSplitSharedMemoryHandle();
 
+	if (dsmHandle == DSM_HANDLE_INVALID)
+	{
+		return;
+	}
+
 	/*
 	 * Unpin the dynamic shared memory segment. 'dsm_pin_segment' was
 	 * called previously by 'AllocateSharedMemoryForShardSplitInfo'.
@@ -266,8 +271,10 @@ StoreShardSplitSharedMemoryHandle(dsm_handle dsmHandle)
 	 * before the current function is called.
 	 * If this handle is still valid, it means cleanup of previous split shard
 	 * workflow failed. Log a waring and continue the current shard split operation.
+	 * Skip warning if new handle to be stored is invalid. We store invalid handle
+	 * when shared memory is released by calling worker_split_shard_release_dsm.
 	 */
-	if (smData->dsmHandle != DSM_HANDLE_INVALID)
+	if (smData->dsmHandle != DSM_HANDLE_INVALID && dsmHandle != DSM_HANDLE_INVALID)
 	{
 		ereport(WARNING,
 				errmsg(

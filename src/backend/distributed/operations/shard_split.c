@@ -133,6 +133,7 @@ static List * ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 												   List *sourceColocatedShardIntervalList,
 												   List *shardGroupSplitIntervalListList,
 												   List *destinationWorkerNodesList);
+static void ExecuteSplitShardReleaseSharedMemory(WorkerNode *sourceWorkerNode);
 static void AddDummyShardEntryInMap(HTAB *mapOfDummyShards, uint32 targetNodeId,
 									ShardInterval *shardInterval);
 static void DropDummyShards(HTAB *mapOfDummyShardToPlacement);
@@ -1473,13 +1474,19 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		 */
 		DropDummyShards(mapOfDummyShardToPlacement);
 
-		/* 24) Close source connection */
+		/*
+		 * 24) Release shared memory allocated by worker_split_shard_replication_setup udf
+		 * at source node.
+		 */
+		ExecuteSplitShardReleaseSharedMemory(sourceShardToCopyNode);
+
+		/* 25) Close source connection */
 		CloseConnection(sourceConnection);
 
-		/* 25) Close all subscriber connections */
+		/* 26) Close all subscriber connections */
 		CloseGroupedLogicalRepTargetsConnections(groupedLogicalRepTargetsHash);
 
-		/* 26) Close connection of template replication slot */
+		/* 27) Close connection of template replication slot */
 		CloseConnection(sourceReplicationConnection);
 	}
 	PG_CATCH();
@@ -1493,6 +1500,8 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		DropAllLogicalReplicationLeftovers(SHARD_SPLIT);
 
 		DropDummyShards(mapOfDummyShardToPlacement);
+
+		ExecuteSplitShardReleaseSharedMemory(sourceShardToCopyNode);
 
 		PG_RE_THROW();
 	}
@@ -1695,6 +1704,33 @@ ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 
 	CloseConnection(sourceConnection);
 	return replicationSlotInfoList;
+}
+
+
+/*
+ * ExecuteSplitShardReleaseSharedMemory releases dynamic shared memory
+ * at source node.
+ * As a part of non-blocking split workflow, worker_split_shard_replication_setup allocates
+ * shared memory to store split information. This has to be released after split completes(or fails).
+ */
+static void
+ExecuteSplitShardReleaseSharedMemory(WorkerNode *sourceWorkerNode)
+{
+	char *superUser = CitusExtensionOwnerName();
+	char *databaseName = get_database_name(MyDatabaseId);
+
+	int connectionFlag = FORCE_NEW_CONNECTION;
+	MultiConnection *sourceConnection = GetNodeUserDatabaseConnection(
+		connectionFlag,
+		sourceWorkerNode->workerName,
+		sourceWorkerNode->workerPort,
+		superUser,
+		databaseName);
+
+	StringInfo splitShardReleaseMemoryUDF = makeStringInfo();
+	appendStringInfo(splitShardReleaseMemoryUDF,
+					 "SELECT pg_catalog.worker_split_shard_release_dsm();");
+	ExecuteCriticalRemoteCommand(sourceConnection, splitShardReleaseMemoryUDF->data);
 }
 
 
