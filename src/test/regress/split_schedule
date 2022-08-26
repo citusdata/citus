@@ -11,6 +11,7 @@ test: split_shard_replication_setup
 test: split_shard_replication_setup_remote_local
 test: split_shard_replication_setup_local
 test: split_shard_replication_colocated_setup
+test: split_shard_release_dsm
 test: worker_split_copy_test
 test: worker_split_binary_copy_test
 test: worker_split_text_copy_test
