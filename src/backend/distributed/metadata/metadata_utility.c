@@ -81,7 +81,8 @@ static bool DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 										 uint64 *tableSize);
 static List * ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId);
 static char * GenerateShardStatisticsQueryForShardList(List *shardIntervalList);
-static char * GenerateSizeQueryForRelationNameList(List *quotedShardNames, char *sizeFunction);
+static char * GenerateSizeQueryForRelationNameList(List *quotedShardNames,
+												   char *sizeFunction);
 static char * GetWorkerPartitionedSizeUDFNameBySizeQueryType(SizeQueryType sizeQueryType);
 static char * GetSizeQueryBySizeQueryType(SizeQueryType sizeQueryType);
 static char * GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode,
@@ -753,7 +754,6 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 		{
 			partitionedShardNames = lappend(partitionedShardNames, quotedShardName);
 		}
-
 		/* for non-partitioned tables, we will use Postgres' size functions */
 		else
 		{
@@ -764,15 +764,16 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 	/* SELECT SUM(worker_partitioned_...) FROM VALUES (...) */
 	char *subqueryForPartitionedShards =
 		GenerateSizeQueryForRelationNameList(partitionedShardNames,
-			GetWorkerPartitionedSizeUDFNameBySizeQueryType(sizeQueryType));
+											 GetWorkerPartitionedSizeUDFNameBySizeQueryType(
+												 sizeQueryType));
 
 	/* SELECT SUM(pg_..._size) FROM VALUES (...) */
 	char *subqueryForNonPartitionedShards =
 		GenerateSizeQueryForRelationNameList(nonPartitionedShardNames,
-			GetSizeQueryBySizeQueryType(sizeQueryType));
+											 GetSizeQueryBySizeQueryType(sizeQueryType));
 
 	appendStringInfo(selectQuery, "SELECT (%s) + (%s);",
-		subqueryForPartitionedShards, subqueryForNonPartitionedShards);
+					 subqueryForPartitionedShards, subqueryForNonPartitionedShards);
 
 	elog(DEBUG4, "Size Query: %s", selectQuery->data);
 
