@@ -352,7 +352,10 @@ SELECT recover_prepared_transactions();
                              0
 (1 row)
 
-SELECT shardid INTO selected_shard FROM pg_dist_shard WHERE logicalrelid='test_2pcskip'::regclass LIMIT 1;
+SELECT shardid INTO selected_shard
+FROM citus_shards
+WHERE table_name='test_2pcskip'::regclass AND nodeport = :worker_1_port
+LIMIT 1;
 SELECT COUNT(*) FROM pg_dist_transaction;
  count
 ---------------------------------------------------------------------
