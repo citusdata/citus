@@ -81,7 +81,7 @@ DROP FUNCTION pg_catalog.isolate_tenant_to_new_shard(table_name regclass, tenant
 -- 1) Cleanup leftover resources after a failure
 -- 2) Deferred drop of old shard placements after a split.
 CREATE TABLE citus.pg_dist_cleanup (
-    record_id bigserial primary key,
+    record_id bigint primary key,
     operation_id bigint not null,
     object_type int not null,
     object_name text not null,

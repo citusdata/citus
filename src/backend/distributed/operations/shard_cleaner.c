@@ -512,10 +512,11 @@ InsertCleanupRecordInSubtransaction(CleanupObject objectType,
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
 					 "INSERT INTO %s.%s "
-					 " (operation_id, object_type, object_name, node_group_id, policy_type) "
-					 " VALUES (" UINT64_FORMAT ", %d, %s, %d, %d)",
+					 " (record_id, operation_id, object_type, object_name, node_group_id, policy_type) "
+					 " VALUES ( nextval('%s'), " UINT64_FORMAT ", %d, %s, %d, %d)",
 					 PG_CATALOG,
 					 PG_DIST_CLEANUP,
+					 CLEANUPRECORDID_SEQUENCE_NAME,
 					 CurrentOperationId,
 					 objectType,
 					 quote_literal_cstr(objectName),
