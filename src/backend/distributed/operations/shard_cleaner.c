@@ -647,7 +647,7 @@ GetNextOperationId()
 	bool missingOK = false;
 	Oid sequenceId = RangeVarGetRelid(sequenceName, NoLock, missingOK);
 
-	bool checkPermissions = true;
+	bool checkPermissions = false;
 	operationdId = nextval_internal(sequenceId, checkPermissions);
 
 	return operationdId;
@@ -858,7 +858,7 @@ GetNextCleanupRecordId(void)
 
 	bool missingOK = false;
 	Oid sequenceId = RangeVarGetRelid(sequenceName, NoLock, missingOK);
-	bool checkPermissions = true;
+	bool checkPermissions = false;
 	return nextval_internal(sequenceId, checkPermissions);
 }
 
