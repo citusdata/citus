@@ -66,10 +66,10 @@ def citus_finish_pg_upgrade(pg_path, node_ports):
 
 def stop_all_databases(old_bindir, new_bindir, old_datadir, new_datadir, config):
     common.stop_databases(
-        old_bindir, old_datadir, config.node_name_to_ports, config.name
+        old_bindir, old_datadir, config.node_name_to_ports, config.name, no_output=True, parallel=False,
     )
     common.stop_databases(
-        new_bindir, new_datadir, config.node_name_to_ports, config.name
+        new_bindir, new_datadir, config.node_name_to_ports, config.name, no_output=True, parallel=False,
     )
 
 
