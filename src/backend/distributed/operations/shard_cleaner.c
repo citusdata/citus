@@ -69,7 +69,8 @@ PG_FUNCTION_INFO_V1(citus_cleanup_orphaned_shards);
 PG_FUNCTION_INFO_V1(isolation_cleanup_orphaned_shards);
 
 static int DropOrphanedShardsForMove(bool waitForLocks);
-static bool TryDropShardOutsideTransaction(char *qualifiedTableName, char *nodeName, int nodePort);
+static bool TryDropShardOutsideTransaction(char *qualifiedTableName, char *nodeName, int
+										   nodePort);
 static bool TryLockRelationAndPlacementCleanup(Oid relationId, LOCKMODE lockmode);
 
 /* Functions for cleanup infrastructure */
@@ -209,7 +210,7 @@ DropOrphanedShardsForCleanup()
 		if (record->objectType != CLEANUP_SHARD_PLACEMENT)
 		{
 			ereport(WARNING, (errmsg("Invalid object type %d for cleanup record ",
-								record->objectType)));
+									 record->objectType)));
 			continue;
 		}
 
@@ -231,7 +232,7 @@ DropOrphanedShardsForCleanup()
 		}
 
 		if (TryDropShardOutsideTransaction(qualifiedTableName, workerNode->workerName,
-						 workerNode->workerPort))
+										   workerNode->workerPort))
 		{
 			/* delete the cleanup record */
 			DeleteCleanupRecordByRecordId(record->recordId);
@@ -246,7 +247,8 @@ DropOrphanedShardsForCleanup()
 	if (failedShardCountForCleanup > 0)
 	{
 		ereport(WARNING, (errmsg("Failed to drop %d cleanup shards out of %d",
-								 failedShardCountForCleanup, list_length(cleanupRecordList))));
+								 failedShardCountForCleanup, list_length(
+									 cleanupRecordList))));
 	}
 
 	return removedShardCountForCleanup;
@@ -321,7 +323,7 @@ DropOrphanedShardsForMove(bool waitForLocks)
 		char *qualifiedTableName = ConstructQualifiedShardName(shardInterval);
 
 		if (TryDropShardOutsideTransaction(qualifiedTableName, shardPlacement->nodeName,
-						 shardPlacement->nodePort))
+										   shardPlacement->nodePort))
 		{
 			/* delete the actual placement */
 			DeleteShardPlacementRow(placement->placementId);
@@ -359,13 +361,13 @@ CompleteNewOperationNeedingCleanup(bool isSuccess)
 {
 	/*
 	 * As part of operation completion:
-     * 1. Drop all resources of CurrentOperationId that are marked with 'CLEANUP_ALWAYS' policy and
+	 * 1. Drop all resources of CurrentOperationId that are marked with 'CLEANUP_ALWAYS' policy and
 	 *     the respective cleanup records in seperate transaction.
 	 *
 	 * 2. For all resources of CurrentOperationId that are marked with 'CLEANUP_ON_FAILURE':
 	 *    a) If isSuccess = true, drop cleanup records as operation is nearing completion.
 	 *       As the operation is nearing successful completion. This is done as part of the
-	 * 		 same transaction so will rollback in case of potential failure later.
+	 *       same transaction so will rollback in case of potential failure later.
 	 *
 	 *    b) If isSuccess = false, drop resource and cleanup records in a seperate transaction.
 	 */
@@ -387,18 +389,18 @@ CompleteNewOperationNeedingCleanup(bool isSuccess)
 		if (record->objectType != CLEANUP_SHARD_PLACEMENT)
 		{
 			ereport(WARNING, (errmsg("Invalid object type %d for cleanup record ",
-								record->objectType)));
+									 record->objectType)));
 			continue;
 		}
 
 		if (record->policy == CLEANUP_ALWAYS ||
-				(record->policy == CLEANUP_ON_FAILURE && !isSuccess))
+			(record->policy == CLEANUP_ON_FAILURE && !isSuccess))
 		{
 			char *qualifiedTableName = record->objectName;
 			WorkerNode *workerNode = LookupNodeForGroup(record->nodeGroupId);
 
 			if (TryDropShardOutsideTransaction(qualifiedTableName, workerNode->workerName,
-							workerNode->workerPort))
+											   workerNode->workerPort))
 			{
 				DeleteCleanupRecordByRecordIdOutsideTransaction(record->recordId);
 				removedShardCountOnComplete++;
@@ -417,12 +419,14 @@ CompleteNewOperationNeedingCleanup(bool isSuccess)
 	if (list_length(currentOperationRecordList) > 0)
 	{
 		ereport(LOG, (errmsg("Removed %d orphaned shards out of %d",
-							 removedShardCountOnComplete, list_length(currentOperationRecordList))));
+							 removedShardCountOnComplete, list_length(
+								 currentOperationRecordList))));
 
 		if (failedShardCountOnComplete > 0)
 		{
 			ereport(WARNING, (errmsg("Failed to drop %d cleanup shards out of %d",
-								 failedShardCountOnComplete, list_length(currentOperationRecordList))));
+									 failedShardCountOnComplete, list_length(
+										 currentOperationRecordList))));
 		}
 	}
 }
@@ -459,7 +463,7 @@ InsertCleanupRecordInCurrentTransaction(CleanupObject objectType,
 	values[Anum_pg_dist_cleanup_object_type - 1] = Int32GetDatum(objectType);
 	values[Anum_pg_dist_cleanup_object_name - 1] = CStringGetTextDatum(objectName);
 	values[Anum_pg_dist_cleanup_node_group_id - 1] = Int32GetDatum(nodeGroupId);
-	values[Anum_pg_dist_cleanup_policy_type -1] = Int32GetDatum(policy);
+	values[Anum_pg_dist_cleanup_policy_type - 1] = Int32GetDatum(policy);
 
 	/* open cleanup relation and insert new tuple */
 	Oid relationId = DistCleanupRelationId();
@@ -507,9 +511,9 @@ InsertCleanupRecordInSubtransaction(CleanupObject objectType,
 					 policy);
 
 	SendCommandListToWorkerOutsideTransaction(LocalHostName,
-					PostPortNumber,
-					CitusExtensionOwnerName(),
-					list_make1(command->data));
+											  PostPortNumber,
+											  CitusExtensionOwnerName(),
+											  list_make1(command->data));
 }
 
 
@@ -525,9 +529,9 @@ DeleteCleanupRecordByRecordIdOutsideTransaction(uint64 recordId)
 					 recordId);
 
 	SendCommandListToWorkerOutsideTransaction(LocalHostName,
-					PostPortNumber,
-					CitusExtensionOwnerName(),
-					list_make1(command->data));
+											  PostPortNumber,
+											  CitusExtensionOwnerName(),
+											  list_make1(command->data));
 }
 
 
@@ -621,8 +625,8 @@ GetNextOperationId()
 	/* token location, or -1 if unknown */
 	const int location = -1;
 	RangeVar *sequenceName = makeRangeVar(PG_CATALOG,
-								OPERATIONID_SEQUENCE_NAME,
-								location);
+										  OPERATIONID_SEQUENCE_NAME,
+										  location);
 
 	bool missingOK = false;
 	Oid sequenceId = RangeVarGetRelid(sequenceName, NoLock, missingOK);
@@ -680,7 +684,8 @@ ListCleanupRecordsForCurrentOperation(void)
 	int scanKeyCount = 1;
 	Oid scanIndexId = InvalidOid;
 	bool useIndex = false;
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistCleanup, scanIndexId, useIndex, NULL,
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistCleanup, scanIndexId, useIndex,
+													NULL,
 													scanKeyCount, scanKey);
 
 	HeapTuple heapTuple = NULL;
@@ -696,6 +701,7 @@ ListCleanupRecordsForCurrentOperation(void)
 
 	return recordList;
 }
+
 
 /*
  * TupleToCleanupRecord converts a pg_dist_cleanup record tuple into a CleanupRecord struct.
@@ -736,7 +742,7 @@ static bool
 CleanupRecordExists(uint64 recordId)
 {
 	Relation pgDistCleanup = table_open(DistCleanupRelationId(),
-											  AccessShareLock);
+										AccessShareLock);
 
 	const int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
@@ -769,7 +775,7 @@ static void
 DeleteCleanupRecordByRecordId(uint64 recordId)
 {
 	Relation pgDistCleanup = table_open(DistCleanupRelationId(),
-											  RowExclusiveLock);
+										RowExclusiveLock);
 
 	const int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
@@ -808,6 +814,7 @@ static uint64
 GetNextCleanupRecordId(void)
 {
 	uint64 recordId = INVALID_CLEANUP_RECORD_ID;
+
 	/*
 	 * In regression tests, we would like to generate record IDs consistently
 	 * even if the tests run in parallel. Instead of the sequence, we can use
@@ -843,6 +850,7 @@ LockOperationId(OperationId operationId)
 	SET_LOCKTAG_CLEANUP_OPERATION_ID(tag, operationId);
 	(void) LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
 }
+
 
 static bool
 TryLockOperationId(OperationId operationId)

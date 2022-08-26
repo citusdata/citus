@@ -50,13 +50,13 @@ typedef enum CleanupPolicy
 
 	/*
 	 * Resources that are cleanup only on failure.
-     * (Example: Split Children for Blocking/Non-Blocking splits)
+	 * (Example: Split Children for Blocking/Non-Blocking splits)
 	 */
 	CLEANUP_ON_FAILURE = 1,
 
 	/*
 	 * Resources that need 'deferred' clean up only on success .
-     * (Example: Parent child being split for Blocking/Non-Blocking splits)
+	 * (Example: Parent child being split for Blocking/Non-Blocking splits)
 	 */
 	CLEANUP_DEFERRED_ON_SUCCESS = 2,
 } CleanupPolicy;

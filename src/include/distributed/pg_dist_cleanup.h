@@ -31,4 +31,3 @@
 #define CLEANUPRECORDID_SEQUENCE_NAME "pg_dist_cleanup_recordid_seq"
 
 #endif /* PG_DIST_CLEANUP_H */
-

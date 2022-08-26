@@ -75,11 +75,10 @@ static void ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 											ShardInterval *shardIntervalToSplit,
 											List *shardSplitPointsList,
 											List *nodeIdsForPlacementList);
-static void CreateAndCopySplitShardsForShardGroup(
-	WorkerNode *sourceShardNode,
-	List *sourceColocatedShardIntervalList,
-	List *shardGroupSplitIntervalListList,
-	List *workersForPlacementList);
+static void CreateAndCopySplitShardsForShardGroup(WorkerNode *sourceShardNode,
+												  List *sourceColocatedShardIntervalList,
+												  List *shardGroupSplitIntervalListList,
+												  List *workersForPlacementList);
 static void CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 										   List *workersForPlacementList);
 static void CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
@@ -133,7 +132,8 @@ static List * ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 												   List *sourceColocatedShardIntervalList,
 												   List *shardGroupSplitIntervalListList,
 												   List *destinationWorkerNodesList);
-static void AddDummyShardEntryInMap(HTAB *mapOfPlacementToDummyShardList, uint32 targetNodeId,
+static void AddDummyShardEntryInMap(HTAB *mapOfPlacementToDummyShardList, uint32
+									targetNodeId,
 									ShardInterval *shardInterval);
 static uint64 GetNextShardIdForSplitChild(void);
 
@@ -581,7 +581,8 @@ CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 			/* Log resource for cleanup in case of failure only. */
 			CleanupPolicy policy = CLEANUP_ON_FAILURE;
 			InsertCleanupRecordInSubtransaction(CLEANUP_SHARD_PLACEMENT,
-												ConstructQualifiedShardName(shardInterval),
+												ConstructQualifiedShardName(
+													shardInterval),
 												workerPlacementNode->groupId,
 												policy);
 
@@ -1132,7 +1133,6 @@ DropShardList(List *shardIntervalList)
 
 			if (DeferShardDeleteOnSplit)
 			{
-
 				/* Log shard in pg_dist_cleanup.
 				 * Parent shards are to be dropped only on sucess after split workflow is complete,
 				 * so mark the policy as 'CLEANUP_DEFERRED_ON_SUCCESS'.
@@ -1151,12 +1151,12 @@ DropShardList(List *shardIntervalList)
 				if (storageType == SHARD_STORAGE_TABLE)
 				{
 					appendStringInfo(dropQuery, DROP_REGULAR_TABLE_COMMAND,
-									qualifiedShardName);
+									 qualifiedShardName);
 				}
 				else if (storageType == SHARD_STORAGE_FOREIGN)
 				{
 					appendStringInfo(dropQuery, DROP_FOREIGN_TABLE_COMMAND,
-									qualifiedShardName);
+									 qualifiedShardName);
 				}
 
 				/* drop old shard */
@@ -1232,7 +1232,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		 *    information.
 		 */
 		HTAB *mapOfPlacementToDummyShardList = CreateSimpleHash(NodeAndOwner,
-														GroupedShardSplitInfos);
+																GroupedShardSplitInfos);
 		CreateDummyShardsForShardGroup(
 			mapOfPlacementToDummyShardList,
 			sourceColocatedShardIntervalList,
@@ -1465,7 +1465,8 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			 */
 			CleanupPolicy policy = CLEANUP_ALWAYS;
 			InsertCleanupRecordInSubtransaction(CLEANUP_SHARD_PLACEMENT,
-												ConstructQualifiedShardName(shardInterval),
+												ConstructQualifiedShardName(
+													shardInterval),
 												workerPlacementNode->groupId,
 												policy);
 
@@ -1509,7 +1510,8 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			 */
 			CleanupPolicy policy = CLEANUP_ALWAYS;
 			InsertCleanupRecordInSubtransaction(CLEANUP_SHARD_PLACEMENT,
-												ConstructQualifiedShardName(shardInterval),
+												ConstructQualifiedShardName(
+													shardInterval),
 												workerPlacementNode->groupId,
 												policy);
 
