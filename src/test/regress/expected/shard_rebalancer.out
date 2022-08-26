@@ -2474,3 +2474,52 @@ SELECT rebalance_table_shards('test_with_all_shards_excluded', excluded_shard_li
 (1 row)
 
 DROP TABLE test_with_all_shards_excluded;
+SET citus.shard_count TO 2;
+CREATE TABLE "events.Energy Added" (user_id int, time timestamp with time zone, data jsonb, PRIMARY KEY (user_id, time )) PARTITION BY RANGE ("time");
+CREATE INDEX idx_btree_hobbies ON "events.Energy Added" USING BTREE ((data->>'location'));
+SELECT create_distributed_table('"events.Energy Added"', 'user_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE "Energy Added_17634"  PARTITION OF "events.Energy Added" FOR VALUES  FROM ('2018-04-13 00:00:00+00') TO ('2018-04-14 00:00:00+00');
+CREATE TABLE "Energy Added_17635"  PARTITION OF "events.Energy Added" FOR VALUES  FROM ('2018-04-14 00:00:00+00') TO ('2018-04-15 00:00:00+00');
+create table colocated_t1 (a int);
+select create_distributed_table('colocated_t1','a',colocate_with=>'"events.Energy Added"');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+create table colocated_t2 (a int);
+select create_distributed_table('colocated_t2','a',colocate_with=>'"events.Energy Added"');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+create table colocated_t3 (a int);
+select create_distributed_table('colocated_t3','a',colocate_with=>'"events.Energy Added"');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET client_min_messages TO DEBUG4;
+SELECT * FROM get_rebalance_table_shards_plan('colocated_t1', rebalance_strategy := 'by_disk_size');
+DEBUG:  skipping child tables for relation named: colocated_t1
+DEBUG:  Size Query: SELECT (SELECT SUM(worker_partitioned_relation_total_size(relid)) FROM (VALUES ('public."events.Energy Added_433508"')) as q(relid)) + (SELECT SUM(pg_total_relation_size(relid)) FROM (VALUES ('public.colocated_t1_433514'), ('public.colocated_t2_433516'), ('public.colocated_t3_433518')) as q(relid));
+DEBUG:  skipping child tables for relation named: colocated_t1
+DEBUG:  Size Query: SELECT (SELECT SUM(worker_partitioned_relation_total_size(relid)) FROM (VALUES ('public."events.Energy Added_433508"')) as q(relid)) + (SELECT SUM(pg_total_relation_size(relid)) FROM (VALUES ('public.colocated_t1_433514'), ('public.colocated_t2_433516'), ('public.colocated_t3_433518')) as q(relid));
+DEBUG:  skipping child tables for relation named: colocated_t1
+DEBUG:  Size Query: SELECT (SELECT SUM(worker_partitioned_relation_total_size(relid)) FROM (VALUES ('public."events.Energy Added_433509"')) as q(relid)) + (SELECT SUM(pg_total_relation_size(relid)) FROM (VALUES ('public.colocated_t1_433515'), ('public.colocated_t2_433517'), ('public.colocated_t3_433519')) as q(relid));
+DEBUG:  skipping child tables for relation named: colocated_t1
+DEBUG:  Size Query: SELECT (SELECT SUM(worker_partitioned_relation_total_size(relid)) FROM (VALUES ('public."events.Energy Added_433509"')) as q(relid)) + (SELECT SUM(pg_total_relation_size(relid)) FROM (VALUES ('public.colocated_t1_433515'), ('public.colocated_t2_433517'), ('public.colocated_t3_433519')) as q(relid));
+ table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport
+---------------------------------------------------------------------
+(0 rows)
+
+RESET client_min_messages;
+DROP TABLE "events.Energy Added", colocated_t1, colocated_t2, colocated_t3;
+RESET citus.shard_count;
