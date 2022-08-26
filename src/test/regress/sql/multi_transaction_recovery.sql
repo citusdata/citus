@@ -193,7 +193,11 @@ SELECT create_distributed_table('test_2pcskip', 'a');
 INSERT INTO test_2pcskip SELECT i FROM generate_series(0, 5)i;
 SELECT recover_prepared_transactions();
 
-SELECT shardid INTO selected_shard FROM pg_dist_shard WHERE logicalrelid='test_2pcskip'::regclass LIMIT 1;
+SELECT shardid INTO selected_shard
+FROM citus_shards
+WHERE table_name='test_2pcskip'::regclass AND nodeport = :worker_1_port
+LIMIT 1;
+
 SELECT COUNT(*) FROM pg_dist_transaction;
 BEGIN;
 SET LOCAL citus.defer_drop_after_shard_move TO OFF;
