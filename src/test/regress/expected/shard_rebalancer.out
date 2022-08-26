@@ -2509,13 +2509,13 @@ select create_distributed_table('colocated_t3','a',colocate_with=>'"events.Energ
 SET client_min_messages TO DEBUG4;
 SELECT * FROM get_rebalance_table_shards_plan('colocated_t1', rebalance_strategy := 'by_disk_size');
 DEBUG:  skipping child tables for relation named: colocated_t1
-DEBUG:  Size Query: SELECT worker_partitioned_relation_total_size('public."events.Energy Added_433508"') + SUM(pg_total_relation_size(relid)) FROM (VALUES ('public.colocated_t1_433514'), ('public.colocated_t2_433516'), ('public.colocated_t3_433518')) as q(relid);
+DEBUG:  Size Query: SELECT (SELECT SUM(worker_partitioned_relation_total_size(relid)) FROM (VALUES ('public."events.Energy Added_433508"')) as q(relid)) + (SELECT SUM(pg_total_relation_size(relid)) FROM (VALUES ('public.colocated_t1_433514'), ('public.colocated_t2_433516'), ('public.colocated_t3_433518')) as q(relid));
 DEBUG:  skipping child tables for relation named: colocated_t1
-DEBUG:  Size Query: SELECT worker_partitioned_relation_total_size('public."events.Energy Added_433508"') + SUM(pg_total_relation_size(relid)) FROM (VALUES ('public.colocated_t1_433514'), ('public.colocated_t2_433516'), ('public.colocated_t3_433518')) as q(relid);
+DEBUG:  Size Query: SELECT (SELECT SUM(worker_partitioned_relation_total_size(relid)) FROM (VALUES ('public."events.Energy Added_433508"')) as q(relid)) + (SELECT SUM(pg_total_relation_size(relid)) FROM (VALUES ('public.colocated_t1_433514'), ('public.colocated_t2_433516'), ('public.colocated_t3_433518')) as q(relid));
 DEBUG:  skipping child tables for relation named: colocated_t1
-DEBUG:  Size Query: SELECT worker_partitioned_relation_total_size('public."events.Energy Added_433509"') + SUM(pg_total_relation_size(relid)) FROM (VALUES ('public.colocated_t1_433515'), ('public.colocated_t2_433517'), ('public.colocated_t3_433519')) as q(relid);
+DEBUG:  Size Query: SELECT (SELECT SUM(worker_partitioned_relation_total_size(relid)) FROM (VALUES ('public."events.Energy Added_433509"')) as q(relid)) + (SELECT SUM(pg_total_relation_size(relid)) FROM (VALUES ('public.colocated_t1_433515'), ('public.colocated_t2_433517'), ('public.colocated_t3_433519')) as q(relid));
 DEBUG:  skipping child tables for relation named: colocated_t1
-DEBUG:  Size Query: SELECT worker_partitioned_relation_total_size('public."events.Energy Added_433509"') + SUM(pg_total_relation_size(relid)) FROM (VALUES ('public.colocated_t1_433515'), ('public.colocated_t2_433517'), ('public.colocated_t3_433519')) as q(relid);
+DEBUG:  Size Query: SELECT (SELECT SUM(worker_partitioned_relation_total_size(relid)) FROM (VALUES ('public."events.Energy Added_433509"')) as q(relid)) + (SELECT SUM(pg_total_relation_size(relid)) FROM (VALUES ('public.colocated_t1_433515'), ('public.colocated_t2_433517'), ('public.colocated_t3_433519')) as q(relid));
  table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport
 ---------------------------------------------------------------------
 (0 rows)

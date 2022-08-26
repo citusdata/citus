@@ -754,6 +754,7 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 		{
 			partitionedShardNames = lappend(partitionedShardNames, quotedShardName);
 		}
+
 		/* for non-partitioned tables, we will use Postgres' size functions */
 		else
 		{
