@@ -141,7 +141,7 @@ step s2-commit:
   COMMIT;
 
 
-starting permutation: s1-begin s2-begin s1-update-1 s2-update-2 s1-update-2 deadlock-checker-call s2-upsert-select-all deadlock-checker-call s1-commit s2-commit
+starting permutation: s1-begin s2-begin s1-update-1 s2-update-2 s1-update-2 deadlock-checker-call s2-upsert-select-all deadlock-checker-call s2-commit s1-commit
 step s1-begin:
   BEGIN;
 
@@ -179,14 +179,14 @@ t
 step s1-update-2: <... completed>
 step s2-upsert-select-all: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s1-commit:
-  COMMIT;
-
 step s2-commit:
   COMMIT;
 
+step s1-commit:
+  COMMIT;
 
-starting permutation: s1-begin s2-begin s1-update-1 s2-update-2 s1-update-2 deadlock-checker-call s2-ddl deadlock-checker-call s1-commit s2-commit
+
+starting permutation: s1-begin s2-begin s1-update-1 s2-update-2 s1-update-2 deadlock-checker-call s2-ddl deadlock-checker-call s2-commit s1-commit
 step s1-begin:
   BEGIN;
 
@@ -224,10 +224,10 @@ t
 step s1-update-2: <... completed>
 step s2-ddl: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s1-commit:
+step s2-commit:
   COMMIT;
 
-step s2-commit:
+step s1-commit:
   COMMIT;
 
 
@@ -268,7 +268,7 @@ step s2-commit:
   COMMIT;
 
 
-starting permutation: s1-begin s2-begin s2-insert-ref-10 s1-insert-ref-11 s1-insert-ref-10 s2-insert-ref-11 deadlock-checker-call s1-commit s2-commit
+starting permutation: s1-begin s2-begin s2-insert-ref-10 s1-insert-ref-11 s1-insert-ref-10 s2-insert-ref-11 deadlock-checker-call s2-commit s1-commit
 step s1-begin:
   BEGIN;
 
@@ -298,10 +298,10 @@ t
 step s1-insert-ref-10: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
 step s2-insert-ref-11: <... completed>
-step s1-commit:
+step s2-commit:
   COMMIT;
 
-step s2-commit:
+step s1-commit:
   COMMIT;
 
 
@@ -408,7 +408,7 @@ step s1-commit:
   COMMIT;
 
 
-starting permutation: s1-begin s2-begin s3-begin s2-update-1 s1-update-1 s2-update-2 s3-update-3 s3-update-2 deadlock-checker-call s2-update-3 deadlock-checker-call s3-commit s2-commit s1-commit
+starting permutation: s1-begin s2-begin s3-begin s2-update-1 s1-update-1 s2-update-2 s3-update-3 s3-update-2 deadlock-checker-call s2-update-3 deadlock-checker-call s2-commit s3-commit s1-commit
 step s1-begin:
   BEGIN;
 
@@ -455,18 +455,18 @@ t
 step s3-update-2: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
 step s2-update-3: <... completed>
-step s3-commit:
-  COMMIT;
-
 step s2-commit:
   COMMIT;
 
 step s1-update-1: <... completed>
+step s3-commit:
+  COMMIT;
+
 step s1-commit:
   COMMIT;
 
 
-starting permutation: s1-begin s2-begin s3-begin s4-begin s1-update-1 s2-update-2 s3-update-3 s3-update-2 deadlock-checker-call s4-update-4 s2-update-3 deadlock-checker-call s3-commit s2-commit s1-commit s4-commit
+starting permutation: s1-begin s2-begin s3-begin s4-begin s1-update-1 s2-update-2 s3-update-3 s3-update-2 deadlock-checker-call s4-update-4 s2-update-3 deadlock-checker-call s2-commit s3-commit s1-commit s4-commit
 step s1-begin:
   BEGIN;
 
@@ -516,10 +516,10 @@ t
 step s3-update-2: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
 step s2-update-3: <... completed>
-step s3-commit:
+step s2-commit:
   COMMIT;
 
-step s2-commit:
+step s3-commit:
   COMMIT;
 
 step s1-commit:
@@ -665,7 +665,7 @@ step s3-commit:
   COMMIT;
 
 
-starting permutation: s1-begin s2-begin s3-begin s4-begin s5-begin s6-begin s1-update-1 s5-update-5 s3-update-2 s2-update-3 s4-update-4 s3-update-4 deadlock-checker-call s6-update-6 s4-update-6 s1-update-5 s5-update-1 deadlock-checker-call s1-commit s5-commit s6-commit s4-commit s3-commit s2-commit
+starting permutation: s1-begin s2-begin s3-begin s4-begin s5-begin s6-begin s1-update-1 s5-update-5 s3-update-2 s2-update-3 s4-update-4 s3-update-4 deadlock-checker-call s6-update-6 s4-update-6 s1-update-5 s5-update-1 deadlock-checker-call s5-commit s1-commit s6-commit s4-commit s3-commit s2-commit
 step s1-begin:
   BEGIN;
 
@@ -733,10 +733,10 @@ t
 step s1-update-5: <... completed>
 step s5-update-1: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
-step s1-commit:
+step s5-commit:
   COMMIT;
 
-step s5-commit:
+step s1-commit:
   COMMIT;
 
 step s6-commit:
@@ -754,7 +754,7 @@ step s2-commit:
   COMMIT;
 
 
-starting permutation: s1-begin s2-begin s3-begin s4-begin s5-begin s6-begin s6-update-6 s5-update-5 s5-update-6 s4-update-4 s1-update-4 s4-update-5 deadlock-checker-call s2-update-3 s3-update-2 s2-update-2 s3-update-3 deadlock-checker-call s6-commit s5-commit s4-commit s1-commit s3-commit s2-commit
+starting permutation: s1-begin s2-begin s3-begin s4-begin s5-begin s6-begin s6-update-6 s5-update-5 s5-update-6 s4-update-4 s1-update-4 s4-update-5 deadlock-checker-call s2-update-3 s3-update-2 s2-update-2 s3-update-3 deadlock-checker-call s3-commit s6-commit s5-commit s4-commit s1-commit s2-commit
 step s1-begin:
   BEGIN;
 
@@ -822,6 +822,9 @@ t
 step s2-update-2: <... completed>
 step s3-update-3: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
+step s3-commit:
+  COMMIT;
+
 step s6-commit:
   COMMIT;
 
@@ -837,17 +840,11 @@ step s1-update-4: <... completed>
 step s1-commit:
   COMMIT;
 
-step s3-commit:
-  COMMIT;
-
 step s2-commit:
   COMMIT;
 
 
-starting permutation: s1-begin s2-begin s3-begin s4-begin s5-begin s6-begin s5-update-5 s3-update-2 s2-update-2 s4-update-4 s3-update-4 s4-update-5 s1-update-4 deadlock-checker-call s6-update-6 s5-update-6 s6-update-5 deadlock-checker-call s5-commit s6-commit s4-commit s3-commit s1-commit s2-commit
-step s1-begin:
-  BEGIN;
-
+starting permutation: s2-begin s3-begin s4-begin s5-begin s6-begin s5-update-5 s3-update-2 s2-update-2 s4-update-4 s3-update-4 s4-update-5 deadlock-checker-call s6-update-6 s5-update-6 s6-update-5 deadlock-checker-call s6-commit s5-commit s4-commit s3-commit s2-commit
 step s2-begin:
   BEGIN;
 
@@ -881,9 +878,6 @@ step s3-update-4:
 step s4-update-5: 
   UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 5;
  <waiting ...>
-step s1-update-4: 
-  UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 4;
- <waiting ...>
 step deadlock-checker-call: 
   SELECT check_distributed_deadlocks();
 
@@ -912,13 +906,13 @@ t
 step s5-update-6: <... completed>
 step s6-update-5: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
+step s6-commit:
+  COMMIT;
+
 step s5-commit:
   COMMIT;
 
 step s4-update-5: <... completed>
-step s6-commit:
-  COMMIT;
-
 step s4-commit:
   COMMIT;
 
@@ -927,10 +921,6 @@ step s3-commit:
   COMMIT;
 
 step s2-update-2: <... completed>
-step s1-update-4: <... completed>
-step s1-commit:
-  COMMIT;
-
 step s2-commit:
   COMMIT;
 
