@@ -268,5 +268,23 @@ SELECT regexp_substr(o_comment, 'fluffily.*fluffily') FROM public.orders ORDER B
 -- replace second `fluffily` with `silkily`
 SELECT regexp_replace(o_comment, 'fluffily', 'silkily', 1, 2) FROM public.orders WHERE regexp_like(o_comment, 'fluffily.*fluffily') ORDER BY 1 desc;
 
+-- test new COPY features
+-- COPY TO statements with text format and headers
+CREATE TABLE copy_test(id int, data int);
+SELECT create_distributed_table('copy_test', 'id');
+INSERT INTO copy_test SELECT x, x FROM generate_series(1,100) x;
+COPY copy_test TO :'temp_dir''copy_test.txt' WITH ( HEADER true, FORMAT text);
+
+-- Create another distributed table with different column names and test COPY FROM with header match
+CREATE TABLE copy_test2(id int, data_ int);
+SELECT create_distributed_table('copy_test2', 'id');
+COPY copy_test2 FROM :'temp_dir''copy_test.txt' WITH ( HEADER match, FORMAT text);
+
+-- verify that the command works if we rename the column
+ALTER TABLE copy_test2 RENAME COLUMN data_ TO data;
+COPY copy_test2 FROM :'temp_dir''copy_test.txt' WITH ( HEADER match, FORMAT text);
+SELECT count(*)=100 FROM copy_test2;
+
 -- Clean up
+\set VERBOSITY terse
 DROP SCHEMA pg15 CASCADE;

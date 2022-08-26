@@ -476,16 +476,38 @@ SELECT regexp_replace(o_comment, 'fluffily', 'silkily', 1, 2) FROM public.orders
  al, bold deposits cajole fluffily silkily final foxes. pending ideas beli
 (5 rows)
 
+-- test new COPY features
+-- COPY TO statements with text format and headers
+CREATE TABLE copy_test(id int, data int);
+SELECT create_distributed_table('copy_test', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO copy_test SELECT x, x FROM generate_series(1,100) x;
+COPY copy_test TO :'temp_dir''copy_test.txt' WITH ( HEADER true, FORMAT text);
+-- Create another distributed table with different column names and test COPY FROM with header match
+CREATE TABLE copy_test2(id int, data_ int);
+SELECT create_distributed_table('copy_test2', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+COPY copy_test2 FROM :'temp_dir''copy_test.txt' WITH ( HEADER match, FORMAT text);
+ERROR:  column name mismatch in header line field 2: got "data", expected "data_"
+CONTEXT:  COPY copy_test2, line 1: "id	data"
+-- verify that the command works if we rename the column
+ALTER TABLE copy_test2 RENAME COLUMN data_ TO data;
+COPY copy_test2 FROM :'temp_dir''copy_test.txt' WITH ( HEADER match, FORMAT text);
+SELECT count(*)=100 FROM copy_test2;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- Clean up
+\set VERBOSITY terse
 DROP SCHEMA pg15 CASCADE;
-NOTICE:  drop cascades to 10 other objects
-DETAIL:  drop cascades to collation german_phonebook_test
-drop cascades to collation default_provider
-drop cascades to table sale
-drop cascades to table record_sale
-drop cascades to function record_sale()
-drop cascades to view sale_triggers
-drop cascades to table generated_stored_ref
-drop cascades to table tbl1
-drop cascades to table tbl2
-drop cascades to table numeric_negative_scale
+NOTICE:  drop cascades to 11 other objects
