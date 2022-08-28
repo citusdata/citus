@@ -393,7 +393,7 @@ RESET citus.enable_metadata_sync;
 CREATE EVENT TRIGGER abort_drop ON sql_drop
    EXECUTE PROCEDURE abort_drop_command();
 
-\c :master_port
+\c - postgres - :master_port
 -- Disable deferred drop otherwise we will skip the drop and operation will succeed instead of failing.
 ALTER SYSTEM SET citus.defer_drop_after_shard_split TO false;
 SELECT pg_reload_conf();
