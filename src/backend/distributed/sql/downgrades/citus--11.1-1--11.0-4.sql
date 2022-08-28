@@ -95,3 +95,7 @@ DROP FUNCTION pg_catalog.replicate_reference_tables(citus.shard_transfer_mode);
 
 DROP FUNCTION pg_catalog.isolate_tenant_to_new_shard(table_name regclass, tenant_id "any", cascade_option text, shard_transfer_mode citus.shard_transfer_mode);
 #include "../udfs/isolate_tenant_to_new_shard/8.0-1.sql"
+
+DROP TABLE pg_catalog.pg_dist_cleanup;
+DROP SEQUENCE pg_catalog.pg_dist_operationid_seq;
+DROP SEQUENCE pg_catalog.pg_dist_cleanup_recordid_seq;
