@@ -42,11 +42,13 @@ SELECT nextval('pg_dist_colocationid_seq') = MAX(colocationid)+1 FROM pg_dist_co
 SELECT nextval('pg_dist_operationid_seq') = MAX(operation_id)+1 FROM pg_dist_cleanup;
  ?column?
 ---------------------------------------------------------------------
+ 
 (1 row)
 
 SELECT nextval('pg_dist_cleanup_recordid_seq') = MAX(record_id)+1 FROM pg_dist_cleanup;
  ?column?
 ---------------------------------------------------------------------
+ 
 (1 row)
 
 -- If this query gives output it means we've added a new sequence that should
