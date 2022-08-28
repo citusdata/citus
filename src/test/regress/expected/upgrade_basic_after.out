@@ -39,6 +39,18 @@ SELECT nextval('pg_dist_colocationid_seq') = MAX(colocationid)+1 FROM pg_dist_co
  t
 (1 row)
 
+SELECT nextval('pg_dist_operationid_seq') = MAX(operation_id)+1 FROM pg_dist_cleanup;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT nextval('pg_dist_cleanup_recordid_seq') = MAX(record_id)+1 FROM pg_dist_cleanup;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- If this query gives output it means we've added a new sequence that should
 -- possibly be restored after upgrades.
 SELECT sequence_name FROM information_schema.sequences
@@ -49,7 +61,9 @@ SELECT sequence_name FROM information_schema.sequences
     'pg_dist_placement_placementid_seq',
     'pg_dist_groupid_seq',
     'pg_dist_node_nodeid_seq',
-    'pg_dist_colocationid_seq'
+    'pg_dist_colocationid_seq',
+	'pg_dist_operationid_seq',
+	'pg_dist_cleanup_recordid_seq'
   );
  sequence_name
 ---------------------------------------------------------------------
