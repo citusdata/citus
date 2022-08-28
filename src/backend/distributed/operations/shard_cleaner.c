@@ -582,9 +582,13 @@ TryLockRelationAndPlacementCleanup(Oid relationId, LOCKMODE lockmode)
 static bool
 TryDropShardOutsideTransaction(char *qualifiedTableName, char *nodeName, int nodePort)
 {
-	ereport(LOG, (errmsg("dropping shard placement %s "
+	char *operation = (CurrentOperationId == INVALID_OPERATION_ID) ? "move" : "cleanup";
+	ereport(LOG, (errmsg("dropping shard %s for %s "
 						 "on %s:%d",
-						 qualifiedTableName, nodeName, nodePort)));
+						 qualifiedTableName,
+						 operation,
+						 nodeName,
+						 nodePort)));
 
 	/* prepare sql query to execute to drop the shard */
 	StringInfo dropQuery = makeStringInfo();
@@ -603,8 +607,7 @@ TryDropShardOutsideTransaction(char *qualifiedTableName, char *nodeName, int nod
 									   dropQuery->data);
 
 	/* remove the shard from the node */
-	bool success = true;
-	SendOptionalCommandListToWorkerOutsideTransaction(nodeName,
+	bool success = SendOptionalCommandListToWorkerOutsideTransaction(nodeName,
 													  nodePort,
 													  NULL,
 													  dropCommandList);
