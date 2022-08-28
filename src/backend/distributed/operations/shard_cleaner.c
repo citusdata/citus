@@ -608,9 +608,9 @@ TryDropShardOutsideTransaction(char *qualifiedTableName, char *nodeName, int nod
 
 	/* remove the shard from the node */
 	bool success = SendOptionalCommandListToWorkerOutsideTransaction(nodeName,
-													  nodePort,
-													  NULL,
-													  dropCommandList);
+																	 nodePort,
+																	 NULL,
+																	 dropCommandList);
 
 	return success;
 }
