@@ -158,7 +158,8 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection not open
-invalid socket
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
@@ -272,7 +273,6 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection not open
-invalid socket
 CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
