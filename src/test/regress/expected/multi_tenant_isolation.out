@@ -866,6 +866,15 @@ SELECT * FROM pg_dist_shard
  orders_streaming   | 1230047 | t            | 2147483647    | 2147483647
 (24 rows)
 
+\c - postgres - :master_port
+-- Reenable deferred drop.
+ALTER SYSTEM SET citus.defer_drop_after_shard_split TO true;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
 \c - - - :worker_1_port
 SET search_path to "Tenant Isolation";
 -- however, new tables are already created
@@ -1130,6 +1139,7 @@ ORDER BY 1, 2;
             relname             |                 Constraint                  |                                        Definition
 ---------------------------------------------------------------------
  test_colocated_table_1         | test_colocated_table_1_id_fkey              | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1(id)
+ test_colocated_table_1_1230067 | test_colocated_table_1_id_fkey_1230067      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230067(id)
  test_colocated_table_1_1230069 | test_colocated_table_1_id_fkey_1230069      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230069(id)
  test_colocated_table_1_1230071 | test_colocated_table_1_id_fkey_1230071      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230071(id)
  test_colocated_table_1_1230073 | test_colocated_table_1_id_fkey_1230073      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230073(id)
@@ -1138,6 +1148,8 @@ ORDER BY 1, 2;
  test_colocated_table_1_1230093 | test_colocated_table_1_id_fkey_1230093      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230093(id)
  test_colocated_table_2         | test_colocated_table_2_id_fkey              | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1(id)
  test_colocated_table_2         | test_colocated_table_2_value_1_fkey         | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey(id)
+ test_colocated_table_2_1230075 | test_colocated_table_2_id_fkey_1230075      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230067(id)
+ test_colocated_table_2_1230075 | test_colocated_table_2_value_1_fkey_1230075 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
  test_colocated_table_2_1230077 | test_colocated_table_2_id_fkey_1230077      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230069(id)
  test_colocated_table_2_1230077 | test_colocated_table_2_value_1_fkey_1230077 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
  test_colocated_table_2_1230079 | test_colocated_table_2_id_fkey_1230079      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230071(id)
@@ -1153,6 +1165,9 @@ ORDER BY 1, 2;
  test_colocated_table_3         | test_colocated_table_3_id_fkey              | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1(id)
  test_colocated_table_3         | test_colocated_table_3_id_fkey1             | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2(id)
  test_colocated_table_3         | test_colocated_table_3_value_1_fkey         | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey(id)
+ test_colocated_table_3_1230083 | test_colocated_table_3_id_fkey1_1230083     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230075(id)
+ test_colocated_table_3_1230083 | test_colocated_table_3_id_fkey_1230083      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230067(id)
+ test_colocated_table_3_1230083 | test_colocated_table_3_value_1_fkey_1230083 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
  test_colocated_table_3_1230085 | test_colocated_table_3_id_fkey1_1230085     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230077(id)
  test_colocated_table_3_1230085 | test_colocated_table_3_id_fkey_1230085      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230069(id)
  test_colocated_table_3_1230085 | test_colocated_table_3_value_1_fkey_1230085 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
@@ -1171,7 +1186,7 @@ ORDER BY 1, 2;
  test_colocated_table_3_1230099 | test_colocated_table_3_id_fkey1_1230099     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230096(id)
  test_colocated_table_3_1230099 | test_colocated_table_3_id_fkey_1230099      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230093(id)
  test_colocated_table_3_1230099 | test_colocated_table_3_value_1_fkey_1230099 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230066(id)
-(42 rows)
+(48 rows)
 
 \c - mx_isolation_role_ent - :master_port
 SET search_path to "Tenant Isolation";
