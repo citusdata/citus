@@ -410,6 +410,11 @@ SELECT * FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
 
+\c - postgres - :master_port
+-- Reenable deferred drop.
+ALTER SYSTEM SET citus.defer_drop_after_shard_split TO true;
+SELECT pg_reload_conf();
+
 \c - - - :worker_1_port
 SET search_path to "Tenant Isolation";
 
