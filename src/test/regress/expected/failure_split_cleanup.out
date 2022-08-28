@@ -20,8 +20,8 @@ SET citus.next_cleanup_record_id TO 11;
 SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 1;
 SELECT pg_backend_pid() as pid \gset
--- Set a very long(10mins) time interval to stop auto cleanup for test purposes.
-ALTER SYSTEM SET citus.defer_shard_delete_interval TO 600000;
+-- Disable defer shard delete to stop auto cleanup.
+ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
 SELECT pg_reload_conf();
  pg_reload_conf
 ---------------------------------------------------------------------
@@ -51,13 +51,14 @@ SELECT create_distributed_table('table_to_split', 'id');
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
-    SELECT * FROM pg_dist_cleanup;
- record_id | operation_id | object_type |                        object_name                        | node_group_id | policy_type
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type |                        object_name                        | node_group_id | policy_type
 ---------------------------------------------------------------------
-         1 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
-         2 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
-         3 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
-         4 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
 (4 rows)
 
     -- we need to allow connection so that we can connect to proxy
@@ -71,12 +72,12 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Left over child shards
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
         relname
 ---------------------------------------------------------------------
  table_to_split_8981000
- table_to_split_8981003
  table_to_split_8981002
+ table_to_split_8981003
 (3 rows)
 
     -- Left over publications
@@ -104,8 +105,9 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
 
 (1 row)
 
-    SELECT * FROM pg_dist_cleanup;
- record_id | operation_id | object_type | object_name | node_group_id | policy_type
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type | object_name | node_group_id | policy_type
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -113,7 +115,7 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Empty child shards after cleanup
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
         relname
 ---------------------------------------------------------------------
  table_to_split_8981000
@@ -159,13 +161,14 @@ WARNING:  connection not open
 invalid socket
 CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
-    SELECT * FROM pg_dist_cleanup;
- record_id | operation_id | object_type |                        object_name                        | node_group_id | policy_type
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type |                        object_name                        | node_group_id | policy_type
 ---------------------------------------------------------------------
-         5 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
-         6 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
-         7 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
-         8 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
 (4 rows)
 
     -- we need to allow connection so that we can connect to proxy
@@ -179,12 +182,12 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Left over child shards
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
         relname
 ---------------------------------------------------------------------
  table_to_split_8981000
- table_to_split_8981003
  table_to_split_8981002
+ table_to_split_8981003
 (3 rows)
 
     -- Left over publications
@@ -214,8 +217,9 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
 
 (1 row)
 
-    SELECT * FROM pg_dist_cleanup;
- record_id | operation_id | object_type | object_name | node_group_id | policy_type
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type | object_name | node_group_id | policy_type
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -223,7 +227,7 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Empty child shards after cleanup
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
         relname
 ---------------------------------------------------------------------
  table_to_split_8981000
@@ -271,13 +275,14 @@ WARNING:  connection not open
 invalid socket
 CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
-    SELECT * FROM pg_dist_cleanup;
- record_id | operation_id | object_type |                        object_name                        | node_group_id | policy_type
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type |                        object_name                        | node_group_id | policy_type
 ---------------------------------------------------------------------
-         9 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
-        10 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
-        11 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
-        12 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
 (4 rows)
 
     -- we need to allow connection so that we can connect to proxy
@@ -291,12 +296,12 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Left over child shards
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
         relname
 ---------------------------------------------------------------------
  table_to_split_8981000
- table_to_split_8981003
  table_to_split_8981002
+ table_to_split_8981003
 (3 rows)
 
     -- Left over publications
@@ -326,8 +331,9 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
 
 (1 row)
 
-    SELECT * FROM pg_dist_cleanup;
- record_id | operation_id | object_type | object_name | node_group_id | policy_type
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type | object_name | node_group_id | policy_type
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -335,7 +341,7 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Empty child shards after cleanup
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
         relname
 ---------------------------------------------------------------------
  table_to_split_8981000
@@ -378,13 +384,14 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
-    SELECT * FROM pg_dist_cleanup;
- record_id | operation_id | object_type |                        object_name                        | node_group_id | policy_type
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type |                        object_name                        | node_group_id | policy_type
 ---------------------------------------------------------------------
-        13 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
-        14 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
-        15 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
-        16 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
 (4 rows)
 
     -- we need to allow connection so that we can connect to proxy
@@ -398,12 +405,12 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Left over child shards
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
         relname
 ---------------------------------------------------------------------
  table_to_split_8981000
- table_to_split_8981003
  table_to_split_8981002
+ table_to_split_8981003
 (3 rows)
 
     -- Left over publications
@@ -436,8 +443,9 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
 
 (1 row)
 
-    SELECT * FROM pg_dist_cleanup;
- record_id | operation_id | object_type | object_name | node_group_id | policy_type
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type | object_name | node_group_id | policy_type
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -445,7 +453,7 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Empty child shards after cleanup
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
         relname
 ---------------------------------------------------------------------
  table_to_split_8981000
@@ -491,13 +499,14 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
-    SELECT * FROM pg_dist_cleanup;
- record_id | operation_id | object_type |                        object_name                        | node_group_id | policy_type
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type |                        object_name                        | node_group_id | policy_type
 ---------------------------------------------------------------------
-        17 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
-        18 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
-        19 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
-        20 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
 (4 rows)
 
     -- we need to allow connection so that we can connect to proxy
@@ -511,12 +520,12 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Left over child shards
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
         relname
 ---------------------------------------------------------------------
  table_to_split_8981000
- table_to_split_8981003
  table_to_split_8981002
+ table_to_split_8981003
 (3 rows)
 
     -- Left over publications
@@ -549,8 +558,9 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
 
 (1 row)
 
-    SELECT * FROM pg_dist_cleanup;
- record_id | operation_id | object_type | object_name | node_group_id | policy_type
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type | object_name | node_group_id | policy_type
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -558,7 +568,7 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Empty child shards after cleanup
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
         relname
 ---------------------------------------------------------------------
  table_to_split_8981000
@@ -604,13 +614,14 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
-    SELECT * FROM pg_dist_cleanup;
- record_id | operation_id | object_type |                        object_name                        | node_group_id | policy_type
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type |                        object_name                        | node_group_id | policy_type
 ---------------------------------------------------------------------
-        21 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
-        22 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
-        23 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
-        24 |          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
 (4 rows)
 
     -- we need to allow connection so that we can connect to proxy
@@ -624,12 +635,12 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Left over child shards
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
         relname
 ---------------------------------------------------------------------
  table_to_split_8981000
- table_to_split_8981003
  table_to_split_8981002
+ table_to_split_8981003
 (3 rows)
 
     -- Left over publications
@@ -662,8 +673,9 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
 
 (1 row)
 
-    SELECT * FROM pg_dist_cleanup;
- record_id | operation_id | object_type | object_name | node_group_id | policy_type
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type | object_name | node_group_id | policy_type
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -671,7 +683,7 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Empty child shards after cleanup
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
         relname
 ---------------------------------------------------------------------
  table_to_split_8981000
@@ -720,12 +732,13 @@ ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
     -- NO records expected as we fail at 'DropAllLogicalReplicationLeftovers' before creating
     -- any resources.
-    SELECT * FROM pg_dist_cleanup;
- record_id | operation_id | object_type | object_name | node_group_id | policy_type
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type | object_name | node_group_id | policy_type
 ---------------------------------------------------------------------
 (0 rows)
 
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
  relname
 ---------------------------------------------------------------------
 (0 rows)
@@ -741,7 +754,7 @@ CONTEXT:  while executing command on localhost:xxxxx
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Left over child shards
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
         relname
 ---------------------------------------------------------------------
  table_to_split_8981000
@@ -777,8 +790,9 @@ CONTEXT:  while executing command on localhost:xxxxx
 
 (1 row)
 
-    SELECT * FROM pg_dist_cleanup;
- record_id | operation_id | object_type | object_name | node_group_id | policy_type
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type | object_name | node_group_id | policy_type
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -786,7 +800,7 @@ CONTEXT:  while executing command on localhost:xxxxx
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Empty child shards after cleanup
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
         relname
 ---------------------------------------------------------------------
  table_to_split_8981000

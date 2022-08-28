@@ -24,8 +24,8 @@ SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 1;
 SELECT pg_backend_pid() as pid \gset
 
--- Set a very long(10mins) time interval to stop auto cleanup for test purposes.
-ALTER SYSTEM SET citus.defer_shard_delete_interval TO 600000;
+-- Disable defer shard delete to stop auto cleanup.
+ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
 SELECT pg_reload_conf();
 
 -- Connections on the proxy port(worker_2) are monitored
@@ -42,7 +42,8 @@ SELECT create_distributed_table('table_to_split', 'id');
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
-    SELECT * FROM pg_dist_cleanup where operation_id = 777;
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
 
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
@@ -51,7 +52,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Left over child shards
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
     -- Left over publications
     SELECT pubname FROM pg_publication;
     -- Left over replication slots
@@ -61,13 +62,14 @@ SELECT create_distributed_table('table_to_split', 'id');
 
     \c - postgres - :master_port
     SELECT run_try_drop_marked_shards();
-    SELECT * FROM pg_dist_cleanup where operation_id = 777;
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Empty child shards after cleanup
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
     -- Empty publications
     SELECT pubname FROM pg_publication;
     -- Empty replication slot table
@@ -87,7 +89,8 @@ SELECT create_distributed_table('table_to_split', 'id');
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
-    SELECT * FROM pg_dist_cleanup where operation_id = 777;
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
 
@@ -95,7 +98,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Left over child shards
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
     -- Left over publications
     SELECT pubname FROM pg_publication;
     -- Left over replication slots
@@ -105,13 +108,14 @@ SELECT create_distributed_table('table_to_split', 'id');
 
     \c - postgres - :master_port
     SELECT run_try_drop_marked_shards();
-    SELECT * FROM pg_dist_cleanup where operation_id = 777;
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Empty child shards after cleanup
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
     -- Empty publications
     SELECT pubname FROM pg_publication;
     -- Empty replication slot table
@@ -131,7 +135,8 @@ SELECT create_distributed_table('table_to_split', 'id');
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
-    SELECT * FROM pg_dist_cleanup where operation_id = 777;
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
 
@@ -139,7 +144,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Left over child shards
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
     -- Left over publications
     SELECT pubname FROM pg_publication;
     -- Left over replication slots
@@ -149,13 +154,14 @@ SELECT create_distributed_table('table_to_split', 'id');
 
     \c - postgres - :master_port
     SELECT run_try_drop_marked_shards();
-    SELECT * FROM pg_dist_cleanup where operation_id = 777;
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Empty child shards after cleanup
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
     -- Empty publications
     SELECT pubname FROM pg_publication;
     -- Empty replication slot table
@@ -175,7 +181,8 @@ SELECT create_distributed_table('table_to_split', 'id');
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
-    SELECT * FROM pg_dist_cleanup where operation_id = 777;
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
 
@@ -183,7 +190,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Left over child shards
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
     -- Left over publications
     SELECT pubname FROM pg_publication;
     -- Left over replication slots
@@ -193,13 +200,14 @@ SELECT create_distributed_table('table_to_split', 'id');
 
     \c - postgres - :master_port
     SELECT run_try_drop_marked_shards();
-    SELECT * FROM pg_dist_cleanup where operation_id = 777;
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Empty child shards after cleanup
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
     -- Empty publications
     SELECT pubname FROM pg_publication;
     -- Empty replication slot table
@@ -219,7 +227,8 @@ SELECT create_distributed_table('table_to_split', 'id');
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
-    SELECT * FROM pg_dist_cleanup where operation_id = 777;
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
 
@@ -227,7 +236,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Left over child shards
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
     -- Left over publications
     SELECT pubname FROM pg_publication;
     -- Left over replication slots
@@ -237,13 +246,14 @@ SELECT create_distributed_table('table_to_split', 'id');
 
     \c - postgres - :master_port
     SELECT run_try_drop_marked_shards();
-    SELECT * FROM pg_dist_cleanup where operation_id = 777;
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Empty child shards after cleanup
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
     -- Empty publications
     SELECT pubname FROM pg_publication;
     -- Empty replication slot table
@@ -263,7 +273,8 @@ SELECT create_distributed_table('table_to_split', 'id');
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
-    SELECT * FROM pg_dist_cleanup where operation_id = 777;
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
 
@@ -271,7 +282,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Left over child shards
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
     -- Left over publications
     SELECT pubname FROM pg_publication;
     -- Left over replication slots
@@ -281,13 +292,14 @@ SELECT create_distributed_table('table_to_split', 'id');
 
     \c - postgres - :master_port
     SELECT run_try_drop_marked_shards();
-    SELECT * FROM pg_dist_cleanup where operation_id = 777;
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Empty child shards after cleanup
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
     -- Empty publications
     SELECT pubname FROM pg_publication;
     -- Empty replication slot table
@@ -309,8 +321,9 @@ SELECT create_distributed_table('table_to_split', 'id');
         'force_logical');
     -- NO records expected as we fail at 'DropAllLogicalReplicationLeftovers' before creating
     -- any resources.
-    SELECT * FROM pg_dist_cleanup where operation_id = 777;
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
 
@@ -318,7 +331,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Left over child shards
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
     -- Left over publications
     SELECT pubname FROM pg_publication;
     -- Left over replication slots
@@ -328,13 +341,14 @@ SELECT create_distributed_table('table_to_split', 'id');
 
     \c - postgres - :master_port
     SELECT run_try_drop_marked_shards();
-    SELECT * FROM pg_dist_cleanup where operation_id = 777;
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     -- Empty child shards after cleanup
-    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
     -- Empty publications
     SELECT pubname FROM pg_publication;
     -- Empty replication slot table
