@@ -4,6 +4,13 @@ setup
 	SET citus.shard_replication_factor to 1;
     SELECT setval('pg_dist_shardid_seq', 1500000);
 
+	-- Cleanup any orphan shards that might be left over from a previous run.
+	CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
+	RETURNS VOID
+	AS 'citus'
+	LANGUAGE C STRICT VOLATILE;
+	SELECT run_try_drop_marked_shards();
+
 	CREATE TABLE to_split_table (id int, value int);
 	SELECT create_distributed_table('to_split_table', 'id');
 }

@@ -10,6 +10,13 @@ setup
     SET citus.shard_count to 2;
 	SET citus.shard_replication_factor to 1;
 
+	-- Cleanup any orphan shards that might be left over from a previous run.
+	CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
+	RETURNS VOID
+	AS 'citus'
+	LANGUAGE C STRICT VOLATILE;
+	SELECT run_try_drop_marked_shards();
+
 	CREATE TABLE reference_table (id int PRIMARY KEY, value int);
 	SELECT create_reference_table('reference_table');
 
