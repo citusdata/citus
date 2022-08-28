@@ -42,7 +42,7 @@ SELECT create_distributed_table('table_to_split', 'id');
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
-    SELECT * FROM pg_dist_cleanup;
+    SELECT * FROM pg_dist_cleanup where operation_id = 777;
 
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
@@ -61,7 +61,7 @@ SELECT create_distributed_table('table_to_split', 'id');
 
     \c - postgres - :master_port
     SELECT run_try_drop_marked_shards();
-    SELECT * FROM pg_dist_cleanup;
+    SELECT * FROM pg_dist_cleanup where operation_id = 777;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
@@ -87,7 +87,7 @@ SELECT create_distributed_table('table_to_split', 'id');
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
-    SELECT * FROM pg_dist_cleanup;
+    SELECT * FROM pg_dist_cleanup where operation_id = 777;
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
 
@@ -105,7 +105,7 @@ SELECT create_distributed_table('table_to_split', 'id');
 
     \c - postgres - :master_port
     SELECT run_try_drop_marked_shards();
-    SELECT * FROM pg_dist_cleanup;
+    SELECT * FROM pg_dist_cleanup where operation_id = 777;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
@@ -131,7 +131,7 @@ SELECT create_distributed_table('table_to_split', 'id');
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
-    SELECT * FROM pg_dist_cleanup;
+    SELECT * FROM pg_dist_cleanup where operation_id = 777;
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
 
@@ -149,7 +149,7 @@ SELECT create_distributed_table('table_to_split', 'id');
 
     \c - postgres - :master_port
     SELECT run_try_drop_marked_shards();
-    SELECT * FROM pg_dist_cleanup;
+    SELECT * FROM pg_dist_cleanup where operation_id = 777;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
@@ -175,7 +175,7 @@ SELECT create_distributed_table('table_to_split', 'id');
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
-    SELECT * FROM pg_dist_cleanup;
+    SELECT * FROM pg_dist_cleanup where operation_id = 777;
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
 
@@ -193,7 +193,7 @@ SELECT create_distributed_table('table_to_split', 'id');
 
     \c - postgres - :master_port
     SELECT run_try_drop_marked_shards();
-    SELECT * FROM pg_dist_cleanup;
+    SELECT * FROM pg_dist_cleanup where operation_id = 777;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
@@ -219,7 +219,7 @@ SELECT create_distributed_table('table_to_split', 'id');
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
-    SELECT * FROM pg_dist_cleanup;
+    SELECT * FROM pg_dist_cleanup where operation_id = 777;
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
 
@@ -237,7 +237,7 @@ SELECT create_distributed_table('table_to_split', 'id');
 
     \c - postgres - :master_port
     SELECT run_try_drop_marked_shards();
-    SELECT * FROM pg_dist_cleanup;
+    SELECT * FROM pg_dist_cleanup where operation_id = 777;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
@@ -263,7 +263,7 @@ SELECT create_distributed_table('table_to_split', 'id');
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
-    SELECT * FROM pg_dist_cleanup;
+    SELECT * FROM pg_dist_cleanup where operation_id = 777;
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
 
@@ -281,7 +281,7 @@ SELECT create_distributed_table('table_to_split', 'id');
 
     \c - postgres - :master_port
     SELECT run_try_drop_marked_shards();
-    SELECT * FROM pg_dist_cleanup;
+    SELECT * FROM pg_dist_cleanup where operation_id = 777;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
@@ -309,7 +309,7 @@ SELECT create_distributed_table('table_to_split', 'id');
         'force_logical');
     -- NO records expected as we fail at 'DropAllLogicalReplicationLeftovers' before creating
     -- any resources.
-    SELECT * FROM pg_dist_cleanup;
+    SELECT * FROM pg_dist_cleanup where operation_id = 777;
     SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
@@ -328,7 +328,7 @@ SELECT create_distributed_table('table_to_split', 'id');
 
     \c - postgres - :master_port
     SELECT run_try_drop_marked_shards();
-    SELECT * FROM pg_dist_cleanup;
+    SELECT * FROM pg_dist_cleanup where operation_id = 777;
 
     \c - - - :worker_2_proxy_port
     SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
