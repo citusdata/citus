@@ -95,7 +95,7 @@ GRANT SELECT ON pg_catalog.pg_dist_cleanup TO public;
 -- Sequence used to generate an operation ID for use in pg_dist_cleanup_record.
 -- Right now, move is hardcoded to 1 (this will change with parallel moves), so
 -- start with a higher number.
-CREATE SEQUENCE citus.pg_dist_operationid_seq MINVALUE 101;
+CREATE SEQUENCE citus.pg_dist_operationid_seq;
 ALTER SEQUENCE citus.pg_dist_operationid_seq SET SCHEMA pg_catalog;
 
 CREATE SEQUENCE citus.pg_dist_cleanup_recordid_seq;

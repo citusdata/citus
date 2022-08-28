@@ -724,7 +724,7 @@ DETAIL:  from localhost:xxxxx
 (1 row)
 
 CALL citus_cleanup_orphaned_shards();
-LOG:  dropping shard placement xxxxx of shard xxxxx on localhost:xxxxx after it was moved away
+LOG:  dropping shard public.test_with_pkey_13000042 for move on localhost:xxxxx
 NOTICE:  cleaned up 1 orphaned shards
 SET client_min_messages TO DEFAULT;
 -- we don't support multiple shard moves in a single transaction
