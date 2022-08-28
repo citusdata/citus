@@ -97,6 +97,8 @@ GRANT SELECT ON pg_catalog.pg_dist_cleanup TO public;
 -- start with a higher number.
 CREATE SEQUENCE citus.pg_dist_operationid_seq;
 ALTER SEQUENCE citus.pg_dist_operationid_seq SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.pg_dist_operationid_seq TO public;
 
 CREATE SEQUENCE citus.pg_dist_cleanup_recordid_seq;
 ALTER SEQUENCE citus.pg_dist_cleanup_recordid_seq SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.pg_dist_cleanup_recordid_seq TO public;

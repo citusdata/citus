@@ -158,6 +158,11 @@ SELECT citus.mitmproxy('conn.onQuery(query="select pg_drop_replication_slot").ca
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode := 'force_logical');
 
 -- failure on dropping old shard
+-- failure on dropping old colocated shard
+-- Disable deferred drop otherwise we will skip the drop and operation will succeed instead of failing.
+ALTER SYSTEM SET citus.defer_drop_after_shard_split TO false;
+SELECT pg_reload_conf();
+
 SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS tenant_isolation.table_1").kill()');
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode := 'force_logical');
 
@@ -172,6 +177,10 @@ SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode 
 -- cancellation on dropping old colocated shard
 SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS tenant_isolation.table_2").cancel(' || :pid || ')');
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode := 'force_logical');
+
+-- Re-enable deferred drop for rest of the tests.
+ALTER SYSTEM SET citus.defer_drop_after_shard_split TO true;
+SELECT pg_reload_conf();
 
 -- failure on foreign key creation
 SELECT citus.mitmproxy('conn.onQuery(query="ADD CONSTRAINT table_2_ref_id_fkey FOREIGN KEY").kill()');
