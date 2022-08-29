@@ -52,7 +52,7 @@ def initialize_db_for_cluster(pg_path, rel_data_path, settings, node_names):
             "--encoding",
             "UTF8",
             "--locale",
-            "C.UTF-8",
+            "POSIX"
         ]
         subprocess.run(command, check=True)
         add_settings(abs_data_path, settings)
