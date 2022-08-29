@@ -671,13 +671,17 @@ TotalProcCount(void)
  * the Citus extension is present, and after any subsequent invalidation of
  * pg_dist_partition (see InvalidateMetadataSystemCache()).
  *
- * We only need to initialise MyBackendData once. The only goal here is to make
+ * We only need to initialise MyBackendData once. The main goal here is to make
  * sure that we don't use the backend data from a previous backend with the same
  * pgprocno. Resetting the backend data after a distributed transaction happens
  * on COMMIT/ABORT through transaction callbacks.
+ *
+ * We do also initialize the distributedCommandOriginator and globalPID values
+ * based on these values. This is to make sure that once the backend date is
+ * initialized this backend can be correctly shown in citus_lock_waits.
  */
 void
-InitializeBackendData(void)
+InitializeBackendData(uint64 globalPID)
 {
 	if (MyBackendData != NULL)
 	{
@@ -695,9 +699,26 @@ InitializeBackendData(void)
 
 	LockBackendSharedMemory(LW_EXCLUSIVE);
 
-	/* zero out the backend data */
+	/* zero out the backend its transaction id */
 	UnSetDistributedTransactionId();
 	UnSetGlobalPID();
+
+	SpinLockAcquire(&MyBackendData->mutex);
+
+	/*
+	 * Use the given globalPID to initialize
+	 */
+	if (globalPID == INVALID_CITUS_INTERNAL_BACKEND_GPID)
+	{
+		MyBackendData->distributedCommandOriginator =
+			true;
+	}
+	else
+	{
+		MyBackendData->globalPID = globalPID;
+		MyBackendData->distributedCommandOriginator = false;
+	}
+	SpinLockRelease(&MyBackendData->mutex);
 
 	/*
 	 * Signal that this backend is active and should show up
@@ -888,23 +909,6 @@ AssignGlobalPID(void)
 	MyBackendData->distributedCommandOriginator = distributedCommandOriginator;
 	MyBackendData->databaseId = MyDatabaseId;
 	MyBackendData->userId = userId;
-
-	SpinLockRelease(&MyBackendData->mutex);
-}
-
-
-/*
- * SetBackendDataGlobalPID sets the global PID. This specifically does not read
- * from catalog tables, because it should be safe to run from our
- * authentication hook.
- */
-void
-SetBackendDataGlobalPID(uint64 globalPID)
-{
-	SpinLockAcquire(&MyBackendData->mutex);
-
-	MyBackendData->globalPID = globalPID;
-	MyBackendData->distributedCommandOriginator = false;
 
 	SpinLockRelease(&MyBackendData->mutex);
 }

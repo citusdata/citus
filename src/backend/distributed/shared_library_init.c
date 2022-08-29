@@ -654,9 +654,17 @@ void
 StartupCitusBackend(void)
 {
 	InitializeMaintenanceDaemonBackend();
-	InitializeBackendData();
-	RegisterConnectionCleanup();
+
+	/*
+	 * For queries this will be a no-op. But for background daemons we might
+	 * still need to initialize the backend data. For those backaground daemons
+	 * it doesn't really matter that we temporarily assign
+	 * INVALID_CITUS_INTERNAL_BACKEND_GPID, since we override it again two
+	 * lines below.
+	 */
+	InitializeBackendData(INVALID_CITUS_INTERNAL_BACKEND_GPID);
 	AssignGlobalPID();
+	RegisterConnectionCleanup();
 }
 
 
@@ -728,8 +736,8 @@ CitusCleanupConnectionsAtExit(int code, Datum arg)
 	DeallocateReservedConnections();
 
 	/* we don't want any monitoring view/udf to show already exited backends */
-	UnSetGlobalPID();
 	SetActiveMyBackend(false);
+	UnSetGlobalPID();
 }
 
 
@@ -2669,36 +2677,28 @@ CitusAuthHook(Port *port, int status)
 									  "regular client connections",
 									  MaxClientConnections)));
 		}
+	}
 
-		/*
-		 * Right after this, before we assign global pid, this backend
-		 * might get blocked by a DDL as that happens during parsing.
-		 *
-		 * That's why, lets mark the backend as an external backend
-		 * which is likely to execute a distributed command.
-		 *
-		 * We do this so that this backend gets the chance to show
-		 * up in citus_lock_waits.
-		 *
-		 * We cannot assign a new global PID yet here, because that
-		 * would require reading from catalogs, but that's not allowed
-		 * this early in the connection startup (because no database
-		 * has been assigned yet).
-		 */
-		InitializeBackendData();
-		SetBackendDataDistributedCommandOriginator(true);
-	}
-	else
-	{
-		/*
-		 * We set the global PID in the backend data here already to be able to
-		 * do blocked process detection on connections that are opened over a
-		 * replication connection. A replication connection backend will never
-		 * call StartupCitusBackend, which normally sets up the global PID.
-		 */
-		InitializeBackendData();
-		SetBackendDataGlobalPID(gpid);
-	}
+	/*
+	 * Right after this, but before we assign global pid, this backend might
+	 * get blocked by a DDL as that happens during parsing.
+	 *
+	 * That's why, we now initialize its backend data, with the gpid.
+	 *
+	 * We do this so that this backend gets the chance to show up in
+	 * citus_lock_waits.
+	 *
+	 * We cannot assign a new global PID yet here, because that would require
+	 * reading from catalogs, but that's not allowed this early in the
+	 * connection startup (because no database has been assigned yet).
+	 *
+	 * A second reason is for backends that never call StartupCitusBackend. For
+	 * those we already set the global PID in the backend data here to be able
+	 * to do blocked process detection on connections that are opened over a
+	 * replication connection. A replication connection backend will never call
+	 * StartupCitusBackend, which normally sets up the global PID.
+	 */
+	InitializeBackendData(gpid);
 
 	/* let other authentication hooks to kick in first */
 	if (original_client_auth_hook)
