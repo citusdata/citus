@@ -89,7 +89,7 @@ SET citus.shard_replication_factor TO 1;
     INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
     INNER JOIN pg_catalog.pg_namespace ns  ON cls.relnamespace = ns.oid
     WHERE node.noderole = 'primary' AND ns.nspname = 'citus_split_test_schema_columnar_partitioned'
-    ORDER BY logicalrelid, shardminvalue::BIGINT;
+    ORDER BY logicalrelid, shardminvalue::BIGINT, nodeport;
  shardid |              logicalrelid              | shardminvalue | shardmaxvalue | nodename  | nodeport
 ---------------------------------------------------------------------
  8970000 | sensors                                | -2147483648   | 2147483647    | localhost |    57637
@@ -273,7 +273,7 @@ SET citus.shard_replication_factor TO 1;
     INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
     INNER JOIN pg_catalog.pg_namespace ns  ON cls.relnamespace = ns.oid
     WHERE node.noderole = 'primary' AND ns.nspname = 'citus_split_test_schema_columnar_partitioned'
-    ORDER BY logicalrelid, shardminvalue::BIGINT;
+    ORDER BY logicalrelid, shardminvalue::BIGINT, nodeport;
  shardid |              logicalrelid              | shardminvalue | shardmaxvalue | nodename  | nodeport
 ---------------------------------------------------------------------
  8999000 | sensors                                | -2147483648   | -2120000000   | localhost |    57637
@@ -520,7 +520,7 @@ SET citus.shard_replication_factor TO 1;
     INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
     INNER JOIN pg_catalog.pg_namespace ns  ON cls.relnamespace = ns.oid
     WHERE node.noderole = 'primary' AND ns.nspname = 'citus_split_test_schema_columnar_partitioned'
-    ORDER BY logicalrelid, shardminvalue::BIGINT;
+    ORDER BY logicalrelid, shardminvalue::BIGINT, nodeport;
  shardid |              logicalrelid              | shardminvalue | shardmaxvalue | nodename  | nodeport
 ---------------------------------------------------------------------
  8999100 | sensors                                | -2147483648   | -2127770000   | localhost |    57637
