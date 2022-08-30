@@ -58,9 +58,13 @@ static int ConnectionHashCompare(const void *a, const void *b, Size keysize);
 static void StartConnectionEstablishment(MultiConnection *connectionn,
 										 ConnectionHashKey *key);
 static MultiConnection * FindAvailableConnection(List *connections, uint32 flags);
-static List * EnsureAndGetHealthyConnections(dlist_head *connections, bool
-											 checkTransactionState);
+static List * EnsureTxStateAndGetHealthyConnections(dlist_head *connections,
+													bool checkTransactionState);
 static bool RemoteSocketClosed(MultiConnection *connection);
+#if PG_VERSION_NUM >= PG_VERSION_15
+static bool ProcessWaitEventsForSocketClose(WaitEvent *events, int eventCount,
+											bool *socketClosed);
+#endif
 static void ErrorIfMultipleMetadataConnectionExists(List *connections);
 static void FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry);
 static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
@@ -338,7 +342,8 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	{
 		bool checkTransactionState = !(flags & OUTSIDE_TRANSACTION);
 		List *healthyConnections =
-			EnsureAndGetHealthyConnections(entry->connections, checkTransactionState);
+			EnsureTxStateAndGetHealthyConnections(entry->connections,
+												  checkTransactionState);
 
 		/* check connection cache for a connection that's not already in use */
 		MultiConnection *connection = FindAvailableConnection(healthyConnections, flags);
@@ -530,18 +535,19 @@ FindAvailableConnection(List *connections, uint32 flags)
 
 
 /*
- * EnsureAndGetHealthyConnections is a helper function that goes over the
- * input connections, and:
- *  - Errors for the connections that are not healthy but still part of a
- *    remote transaction when checkTransactionState=true
- *  - Skips connections that are not healthy, marks them to be closed
+ * EnsureTxStateAndGetHealthyConnections is a helper function that goes
+ * over the input connections, and:
+ *  - Errors for the connections whose remote transaction is broken
+ *    when checkTransactionState=true
+ *  - Skips connections that are not healthy, marks those to be closed
  *    at the end of the transaction such that they do not linger around
  *
  * And, finally returns the list (unless already errored out) of connections
- * that can be reused.
+ * that can are healthy and can be reused.
  */
 static List *
-EnsureAndGetHealthyConnections(dlist_head *connections, bool checkTransactionState)
+EnsureTxStateAndGetHealthyConnections(dlist_head *connections,
+									  bool checkTransactionState)
 {
 	List *healthyConnections = NIL;
 
@@ -550,16 +556,6 @@ EnsureAndGetHealthyConnections(dlist_head *connections, bool checkTransactionSta
 	{
 		MultiConnection *connection =
 			dlist_container(MultiConnection, connectionNode, iter.cur);
-		bool healthyConnection = true;
-
-		if (connection->pgConn == NULL || PQsocket(connection->pgConn) == -1 ||
-			PQstatus(connection->pgConn) != CONNECTION_OK ||
-			connection->connectionState != MULTI_CONNECTION_CONNECTED ||
-			RemoteSocketClosed(connection))
-		{
-			/* connection is not healthy */
-			healthyConnection = false;
-		}
 
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 		bool inRemoteTrasaction =
@@ -574,30 +570,34 @@ EnsureAndGetHealthyConnections(dlist_head *connections, bool checkTransactionSta
 			{
 				transaction->transactionFailed = true;
 			}
+
+			if (transaction->transactionFailed &&
+				(transaction->transactionCritical ||
+				 !dlist_is_empty(&connection->referencedPlacements)))
+			{
+				/*
+				 * If a connection is executing a critical transaction or accessed any
+				 * placements, we should not continue the execution.
+				 */
+				ReportConnectionError(connection, ERROR);
+			}
 		}
 
-		if (healthyConnection)
-		{
-			healthyConnections = lappend(healthyConnections, connection);
-		}
-		else if (checkTransactionState && inRemoteTrasaction &&
-				 transaction->transactionFailed &&
-				 (transaction->transactionCritical ||
-				  !dlist_is_empty(&connection->referencedPlacements)))
-		{
-			/*
-			 * If a connection is executing a critical transaction or accessed any
-			 * placements, we should not continue the execution.
-			 */
-			ReportConnectionError(connection, ERROR);
-		}
-		else
+		if (connection->pgConn == NULL || PQsocket(connection->pgConn) == -1 ||
+			PQstatus(connection->pgConn) == CONNECTION_BAD ||
+			connection->connectionState == MULTI_CONNECTION_FAILED ||
+			RemoteSocketClosed(connection))
 		{
 			/*
 			 * If a connection is not usable and we do not need to throw an error,
 			 * close at the end of the transaction.
 			 */
 			connection->forceCloseAtTransactionEnd = true;
+		}
+		else
+		{
+			/* connection is healthy */
+			healthyConnections = lappend(healthyConnections, connection);
 		}
 	}
 
@@ -623,9 +623,7 @@ RemoteSocketClosed(MultiConnection *connection)
 		return false;
 	}
 
-	int eventCount = 0;
 	WaitEvent events[3];
-
 	WaitEventSet *waitEventSet =
 		CreateWaitEventSet(CurrentMemoryContext, 3);
 	int sock = PQsocket(connection->pgConn);
@@ -656,13 +654,45 @@ RemoteSocketClosed(MultiConnection *connection)
 	CitusAddWaitEventSetToSet(waitEventSet, WL_LATCH_SET, PGINVALID_SOCKET, MyLatch,
 							  NULL);
 
-	long timeout = 0; /* do not wait at all */
-	int eventIndex = 0;
+	bool retry = false;
+	do {
+		long timeout = 0; /* do not wait at all */
+		int eventCount =
+			WaitEventSetWait(waitEventSet, timeout, events,
+							 3, WAIT_EVENT_CLIENT_READ);
 
-retry:
-	eventCount =
-		WaitEventSetWait(waitEventSet, timeout, events,
-						 3, WAIT_EVENT_CLIENT_READ);
+		retry = ProcessWaitEventsForSocketClose(events, eventCount, &socketClosed);
+		if (socketClosed)
+		{
+			/* socket is closed, no further information needed */
+			break;
+		}
+	} while (retry);
+
+
+	FreeWaitEventSet(waitEventSet);
+#endif
+
+	return socketClosed;
+}
+
+
+#if PG_VERSION_NUM >= PG_VERSION_15
+
+/*
+ * ProcessWaitEventsForSocketClose goes over the events and mainly looks for
+ * WL_SOCKET_CLOSED event. When found, socketClosed is set to true.
+ *
+ * The function also returns true if we are required to re-check the events. We
+ * might need to re-check if latch is set. A latch event might be preventing
+ * other events from being reported. Poll and check again.
+ */
+static bool
+ProcessWaitEventsForSocketClose(WaitEvent *events, int eventCount, bool *socketClosed)
+{
+	*socketClosed = false;
+
+	int eventIndex = 0;
 	for (; eventIndex < eventCount; eventIndex++)
 	{
 		WaitEvent *event = &events[eventIndex];
@@ -674,32 +704,26 @@ retry:
 
 		if (event->events & WL_SOCKET_CLOSED)
 		{
-			socketClosed = true;
+			*socketClosed = true;
 
 			/* we found what we are searching for */
-			break;
+			return false;
 		}
 
 		if (event->events & WL_LATCH_SET)
 		{
-			/*
-			 * A latch event might be preventing other events from being
-			 * reported.  Reset it and poll again.  No need to restore it
-			 * because no code should expect latches to survive across
-			 * CHECK_FOR_INTERRUPTS().
-			 */
 			ResetLatch(MyLatch);
 
-			goto retry;
+			/* the caller should retry */
+			return true;
 		}
 	}
 
-	FreeWaitEventSet(waitEventSet);
-#endif
-
-	return socketClosed;
+	return false;
 }
 
+
+#endif
 
 /*
  * ErrorIfMultipleMetadataConnectionExists throws an error if the
@@ -790,7 +814,7 @@ ConnectionAvailableToNode(char *hostName, int nodePort, const char *userName,
 
 	bool checkTransactionState = true;
 	List *healthyConnections =
-		EnsureAndGetHealthyConnections(entry->connections, checkTransactionState);
+		EnsureTxStateAndGetHealthyConnections(entry->connections, checkTransactionState);
 
 	int flags = 0;
 	MultiConnection *connection = FindAvailableConnection(healthyConnections, flags);
@@ -1026,7 +1050,8 @@ WaitEventSetFromMultiConnectionStates(List *connections, int *waitCount)
 		*waitCount = 0;
 	}
 
-	WaitEventSet *waitEventSet = CreateWaitEventSet(CurrentMemoryContext, eventSetSize);
+	WaitEventSet *waitEventSet = CreateWaitEventSet(CurrentMemoryContext,
+													eventSetSize);
 	EnsureReleaseResource((MemoryContextCallbackFunction) (&FreeWaitEventSet),
 						  waitEventSet);
 
@@ -1034,7 +1059,8 @@ WaitEventSetFromMultiConnectionStates(List *connections, int *waitCount)
 	 * Put the wait events for the signal latch and postmaster death at the end such that
 	 * event index + pendingConnectionsStartIndex = the connection index in the array.
 	 */
-	AddWaitEventToSet(waitEventSet, WL_POSTMASTER_DEATH, PGINVALID_SOCKET, NULL, NULL);
+	AddWaitEventToSet(waitEventSet, WL_POSTMASTER_DEATH, PGINVALID_SOCKET, NULL,
+					  NULL);
 	AddWaitEventToSet(waitEventSet, WL_LATCH_SET, PGINVALID_SOCKET, MyLatch, NULL);
 	numEventsAdded += 2;
 
@@ -1066,8 +1092,9 @@ WaitEventSetFromMultiConnectionStates(List *connections, int *waitCount)
 							errmsg("connection establishment for node %s:%d failed",
 								   connectionState->connection->hostname,
 								   connectionState->connection->port),
-							errhint("Check both the local and remote server logs for the "
-									"connection establishment errors.")));
+							errhint(
+								"Check both the local and remote server logs for the "
+								"connection establishment errors.")));
 		}
 
 		numEventsAdded++;
@@ -1225,12 +1252,14 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 					if (!success)
 					{
 						ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-										errmsg("connection establishment for node %s:%d "
-											   "failed", connection->hostname,
-											   connection->port),
-										errhint("Check both the local and remote server "
-												"logs for the connection establishment "
-												"errors.")));
+										errmsg(
+											"connection establishment for node %s:%d "
+											"failed", connection->hostname,
+											connection->port),
+										errhint(
+											"Check both the local and remote server "
+											"logs for the connection establishment "
+											"errors.")));
 					}
 				}
 
@@ -1515,7 +1544,8 @@ FindOrCreateConnParamsEntry(ConnectionHashKey *key)
 		}
 
 		/* if not found or not valid, compute them from GUC, runtime, etc. */
-		GetConnParams(key, &entry->keywords, &entry->values, &entry->runtimeParamStart,
+		GetConnParams(key, &entry->keywords, &entry->values,
+					  &entry->runtimeParamStart,
 					  ConnectionContext);
 
 		entry->isValid = true;
