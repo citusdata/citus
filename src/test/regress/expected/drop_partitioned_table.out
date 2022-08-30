@@ -326,6 +326,7 @@ SET search_path = drop_partitioned_table;
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 727000;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1344400;
 DROP EVENT TRIGGER new_trigger_for_drops;
 -- Case 1 - we should skip
 CREATE TABLE parent (x text, t timestamptz DEFAULT now()) PARTITION BY RANGE (t);
@@ -353,8 +354,8 @@ NOTICE:  issuing SELECT worker_drop_distributed_table('drop_partitioned_table.pa
 NOTICE:  issuing DROP TABLE IF EXISTS drop_partitioned_table.parent_xxxxx CASCADE
 NOTICE:  issuing SELECT worker_drop_distributed_table('drop_partitioned_table.child1')
 NOTICE:  issuing SELECT worker_drop_distributed_table('drop_partitioned_table.child1')
-NOTICE:  issuing SELECT pg_catalog.citus_internal_delete_colocation_metadata(100047)
-NOTICE:  issuing SELECT pg_catalog.citus_internal_delete_colocation_metadata(100047)
+NOTICE:  issuing SELECT pg_catalog.citus_internal_delete_colocation_metadata(1344400)
+NOTICE:  issuing SELECT pg_catalog.citus_internal_delete_colocation_metadata(1344400)
 ROLLBACK;
 NOTICE:  issuing ROLLBACK
 NOTICE:  issuing ROLLBACK
@@ -376,8 +377,8 @@ NOTICE:  issuing DROP TABLE IF EXISTS drop_partitioned_table.parent_xxxxx CASCAD
 NOTICE:  issuing SELECT worker_drop_distributed_table('drop_partitioned_table.child1')
 NOTICE:  issuing SELECT worker_drop_distributed_table('drop_partitioned_table.child1')
 NOTICE:  issuing DROP TABLE IF EXISTS drop_partitioned_table.child1_xxxxx CASCADE
-NOTICE:  issuing SELECT pg_catalog.citus_internal_delete_colocation_metadata(100047)
-NOTICE:  issuing SELECT pg_catalog.citus_internal_delete_colocation_metadata(100047)
+NOTICE:  issuing SELECT pg_catalog.citus_internal_delete_colocation_metadata(1344400)
+NOTICE:  issuing SELECT pg_catalog.citus_internal_delete_colocation_metadata(1344400)
 ROLLBACK;
 NOTICE:  issuing ROLLBACK
 NOTICE:  issuing ROLLBACK

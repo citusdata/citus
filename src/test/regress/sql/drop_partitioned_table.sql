@@ -204,6 +204,7 @@ SET search_path = drop_partitioned_table;
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 727000;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1344400;
 DROP EVENT TRIGGER new_trigger_for_drops;
 
 -- Case 1 - we should skip
