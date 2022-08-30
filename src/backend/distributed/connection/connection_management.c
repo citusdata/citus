@@ -1654,8 +1654,7 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 		   connection->requiresReplication ||
 		   (MaxCachedConnectionLifetime >= 0 &&
 			MillisecondsToTimeout(connection->connectionEstablishmentStart,
-								  MaxCachedConnectionLifetime) <= 0) ||
-		   RemoteSocketClosed(connection);
+								  MaxCachedConnectionLifetime) <= 0);
 }
 
 
