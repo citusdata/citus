@@ -169,16 +169,32 @@ TryDropOrphanedShards(bool waitForLocks)
 {
 	int droppedShardCount = 0;
 	MemoryContext savedContext = CurrentMemoryContext;
+
+	/*
+	 * Start a subtransaction so we can rollback database's state to it in case
+	 * of error.
+	 */
+	BeginInternalSubTransaction(NULL);
+
 	PG_TRY();
 	{
 		droppedShardCount = DropOrphanedShardsForMove(waitForLocks);
 		droppedShardCount += DropOrphanedShardsForCleanup();
+
+		/*
+		 * Releasing a subtransaction doesn't free its memory context, since the
+		 * data it contains will be needed at upper commit. See the comments for
+		 * AtSubCommit_Memory() at postgres/src/backend/access/transam/xact.c.
+		 */
+		ReleaseCurrentSubTransaction();
 	}
 	PG_CATCH();
 	{
 		MemoryContextSwitchTo(savedContext);
 		ErrorData *edata = CopyErrorData();
 		FlushErrorState();
+
+		RollbackAndReleaseCurrentSubTransaction();
 
 		/* rethrow as WARNING */
 		edata->elevel = WARNING;

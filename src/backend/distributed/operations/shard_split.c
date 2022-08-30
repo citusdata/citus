@@ -80,7 +80,7 @@ static void CreateAndCopySplitShardsForShardGroup(WorkerNode *sourceShardNode,
 												  List *shardGroupSplitIntervalListList,
 												  List *workersForPlacementList);
 static bool CheckIfRelationWithSameNameExists(ShardInterval *shardInterval,
-										   WorkerNode *workerNode);
+											  WorkerNode *workerNode);
 static void CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 										   List *workersForPlacementList);
 static void CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
@@ -635,7 +635,7 @@ CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 			 * old shard. We don't want that.
 			 */
 			bool relationExists = CheckIfRelationWithSameNameExists(shardInterval,
-															  workerPlacementNode);
+																	workerPlacementNode);
 
 			if (relationExists)
 			{
@@ -1535,7 +1535,7 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			 * old shard. We don't want that.
 			 */
 			bool relationExists = CheckIfRelationWithSameNameExists(shardInterval,
-															  workerPlacementNode);
+																	workerPlacementNode);
 
 			if (relationExists)
 			{
@@ -1600,7 +1600,7 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			 * old shard. We don't want that.
 			 */
 			bool relationExists = CheckIfRelationWithSameNameExists(shardInterval,
-															  sourceWorkerNode);
+																	sourceWorkerNode);
 
 			if (relationExists)
 			{
