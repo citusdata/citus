@@ -30,6 +30,7 @@
 #include "distributed/shard_split.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/repair_shards.h"
+#include "distributed/resource_lock.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
@@ -37,6 +38,7 @@
 #include "distributed/pg_dist_shard.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/utils/distribution_column_map.h"
 #include "commands/dbcommands.h"
 #include "distributed/shardsplit_logical_replication.h"
 #include "distributed/deparse_shard_query.h"
@@ -71,12 +73,8 @@ static void ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 											ShardInterval *shardIntervalToSplit,
 											List *shardSplitPointsList,
 											List *nodeIdsForPlacementList);
-static void CreateAndCopySplitShardsForShardGroup(
-	HTAB *mapOfShardToPlacementCreatedByWorkflow,
-	WorkerNode *sourceShardNode,
-	List *sourceColocatedShardIntervalList,
-	List *shardGroupSplitIntervalListList,
-	List *workersForPlacementList);
+static void ErrorIfModificationAndSplitInTheSameTransaction(SplitOperation
+															splitOperation);
 static void CreateSplitShardsForShardGroup(HTAB *mapOfShardToPlacementCreatedByWorkflow,
 										   List *shardGroupSplitIntervalListList,
 										   List *workersForPlacementList);
@@ -98,23 +96,35 @@ static void CreateSplitIntervalsForShard(ShardInterval *sourceShard,
 										 List *splitPointsForShard,
 										 List **shardSplitChildrenIntervalList);
 static void BlockingShardSplit(SplitOperation splitOperation,
-							   ShardInterval *shardIntervalToSplit,
+							   uint64 splitWorkflowId,
+							   List *sourceColocatedShardIntervalList,
 							   List *shardSplitPointsList,
-							   List *workersForPlacementList);
+							   List *workersForPlacementList,
+							   DistributionColumnMap *distributionColumnOverrides);
 static void NonBlockingShardSplit(SplitOperation splitOperation,
-								  ShardInterval *shardIntervalToSplit,
+								  uint64 splitWorkflowId,
+								  List *sourceColocatedShardIntervalList,
 								  List *shardSplitPointsList,
-								  List *workersForPlacementList);
+								  List *workersForPlacementList,
+								  DistributionColumnMap *distributionColumnOverrides,
+								  uint32 targetColocationId);
 static void DoSplitCopy(WorkerNode *sourceShardNode,
 						List *sourceColocatedShardIntervalList,
 						List *shardGroupSplitIntervalListList,
 						List *workersForPlacementList,
-						char *snapShotName);
+						char *snapShotName,
+						DistributionColumnMap *distributionColumnOverrides);
 static StringInfo CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
+										 char *distributionColumnName,
 										 List *splitChildrenShardIntervalList,
 										 List *workersForPlacementList);
 static Task * CreateSplitCopyTask(StringInfo splitCopyUdfCommand, char *snapshotName, int
 								  taskId, uint64 jobId);
+static void UpdateDistributionColumnsForShardGroup(List *colocatedShardList,
+												   DistributionColumnMap *distCols,
+												   char distributionMethod,
+												   int shardCount,
+												   uint32 colocationId);
 static void InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 											 List *workersForPlacementList);
 static void CreatePartitioningHierarchy(List *shardGroupSplitIntervalListList,
@@ -126,30 +136,38 @@ static HTAB * CreateEmptyMapForShardsCreatedByWorkflow();
 static Task * CreateTaskForDDLCommandList(List *ddlCommandList, WorkerNode *workerNode);
 static StringInfo CreateSplitShardReplicationSetupUDF(
 	List *sourceColocatedShardIntervalList, List *shardGroupSplitIntervalListList,
-	List *destinationWorkerNodesList);
+	List *destinationWorkerNodesList,
+	DistributionColumnMap *
+	distributionColumnOverrides);
 static List * ParseReplicationSlotInfoFromResult(PGresult *result);
 
 static List * ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 												   List *sourceColocatedShardIntervalList,
 												   List *shardGroupSplitIntervalListList,
-												   List *destinationWorkerNodesList);
+												   List *destinationWorkerNodesList,
+												   DistributionColumnMap *
+												   distributionColumnOverrides);
 static void ExecuteSplitShardReleaseSharedMemory(WorkerNode *sourceWorkerNode);
 static void AddDummyShardEntryInMap(HTAB *mapOfDummyShards, uint32 targetNodeId,
 									ShardInterval *shardInterval);
 static void DropDummyShards(HTAB *mapOfDummyShardToPlacement);
 static void DropDummyShard(MultiConnection *connection, ShardInterval *shardInterval);
 static uint64 GetNextShardIdForSplitChild(void);
+static void AcquireNonblockingSplitLock(Oid relationId);
+static List * GetWorkerNodesFromWorkerIds(List *nodeIdsForPlacementList);
 
 /* Customize error message strings based on operation type */
 static const char *const SplitOperationName[] =
 {
 	[SHARD_SPLIT_API] = "split",
 	[ISOLATE_TENANT_TO_NEW_SHARD] = "isolate",
+	[CREATE_DISTRIBUTED_TABLE] = "create"
 };
 static const char *const SplitTargetName[] =
 {
 	[SHARD_SPLIT_API] = "shard",
 	[ISOLATE_TENANT_TO_NEW_SHARD] = "tenant",
+	[CREATE_DISTRIBUTED_TABLE] = "distributed table"
 };
 
 /* Function definitions */
@@ -230,6 +248,12 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 								List *shardSplitPointsList,
 								List *nodeIdsForPlacementList)
 {
+	/* we should not perform checks for create distributed table operation */
+	if (splitOperation == CREATE_DISTRIBUTED_TABLE)
+	{
+		return;
+	}
+
 	CitusTableCacheEntry *cachedTableEntry = GetCitusTableCacheEntry(
 		shardIntervalToSplit->relationId);
 
@@ -352,20 +376,11 @@ ErrorIfCannotSplitShardExtended(SplitOperation splitOperation,
 
 
 /*
- * SplitShard API to split a given shard (or shard group) based on specified split points
- * to a set of destination nodes.
- * 'splitMode'					: Mode of split operation.
- * 'splitOperation'             : Customer operation that triggered split.
- * 'shardInterval'              : Source shard interval to be split.
- * 'shardSplitPointsList'		: Split Points list for the source 'shardInterval'.
- * 'nodeIdsForPlacementList'	: Placement list corresponding to split children.
+ * ErrorIfModificationAndSplitInTheSameTransaction will error if we detect split operation
+ * in the same transaction which has modification before.
  */
-void
-SplitShard(SplitMode splitMode,
-		   SplitOperation splitOperation,
-		   uint64 shardIdToSplit,
-		   List *shardSplitPointsList,
-		   List *nodeIdsForPlacementList)
+static void
+ErrorIfModificationAndSplitInTheSameTransaction(SplitOperation splitOperation)
 {
 	if (XactModificationLevel > XACT_MODIFICATION_NONE)
 	{
@@ -375,13 +390,82 @@ SplitShard(SplitMode splitMode,
 							   SplitOperationName[splitOperation],
 							   SplitTargetName[splitOperation])));
 	}
-	else if (PlacementMovedUsingLogicalReplicationInTX)
+}
+
+
+/*
+ * ErrorIfMultipleNonblockingMoveSplitInTheSameTransaction will error if we detect multiple
+ * nonblocking shard movements/splits in the same transaction.
+ */
+void
+ErrorIfMultipleNonblockingMoveSplitInTheSameTransaction(void)
+{
+	if (PlacementMovedUsingLogicalReplicationInTX)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("multiple shard movements/splits via logical "
 							   "replication in the same transaction is currently "
 							   "not supported")));
 	}
+}
+
+
+/*
+ * GetWorkerNodesFromWorkerIds returns list of worker nodes given a list
+ * of worker ids. It will error if any node id is invalid.
+ */
+static List *
+GetWorkerNodesFromWorkerIds(List *nodeIdsForPlacementList)
+{
+	List *workersForPlacementList = NIL;
+	int32 nodeId;
+	foreach_int(nodeId, nodeIdsForPlacementList)
+	{
+		uint32 nodeIdValue = (uint32) nodeId;
+		WorkerNode *workerNode = LookupNodeByNodeId(nodeIdValue);
+
+		/* NodeId in Citus are unsigned and range from [1, 4294967296]. */
+		if (nodeIdValue < 1 || workerNode == NULL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+							errmsg("Invalid Node Id '%u'.", nodeIdValue)));
+		}
+
+		workersForPlacementList =
+			lappend(workersForPlacementList, (void *) workerNode);
+	}
+
+	return workersForPlacementList;
+}
+
+
+/*
+ * SplitShard API to split a given shard (or shard group) based on specified split points
+ * to a set of destination nodes.
+ * 'splitMode'					: Mode of split operation.
+ * 'splitOperation'             : Customer operation that triggered split.
+ * 'shardInterval'              : Source shard interval to be split.
+ * 'shardSplitPointsList'		: Split Points list for the source 'shardInterval'.
+ * 'nodeIdsForPlacementList'	: Placement list corresponding to split children.
+ * 'distributionColumnList'     : Maps relation IDs to distribution columns.
+ *                                If not specified, the distribution column is read
+ *                                from the metadata.
+ * 'colocatedShardIntervalList' : Shard interval list for colocation group. (only used for
+ *                                create_distributed_table_concurrently).
+ * 'targetColocationId'         : Specifies the colocation ID (only used for
+ *                                create_distributed_table_concurrently).
+ */
+void
+SplitShard(SplitMode splitMode,
+		   SplitOperation splitOperation,
+		   uint64 shardIdToSplit,
+		   List *shardSplitPointsList,
+		   List *nodeIdsForPlacementList,
+		   DistributionColumnMap *distributionColumnOverrides,
+		   List *colocatedShardIntervalList,
+		   uint32 targetColocationId)
+{
+	ErrorIfModificationAndSplitInTheSameTransaction(splitOperation);
 
 	ShardInterval *shardIntervalToSplit = LoadShardInterval(shardIdToSplit);
 	List *colocatedTableList = ColocatedTableList(shardIntervalToSplit->relationId);
@@ -391,6 +475,7 @@ SplitShard(SplitMode splitMode,
 		VerifyTablesHaveReplicaIdentity(colocatedTableList);
 	}
 
+	/* Acquire global lock to prevent concurrent split on the same colocation group or relation */
 	Oid relationId = RelationIdForShard(shardIdToSplit);
 	AcquirePlacementColocationLock(relationId, ExclusiveLock, "split");
 
@@ -407,47 +492,50 @@ SplitShard(SplitMode splitMode,
 		LockRelationOid(colocatedTableId, ShareUpdateExclusiveLock);
 	}
 
-	ErrorIfCannotSplitShard(SHARD_SPLIT_API, shardIntervalToSplit);
+	ErrorIfCannotSplitShard(splitOperation, shardIntervalToSplit);
 	ErrorIfCannotSplitShardExtended(
-		SHARD_SPLIT_API,
+		splitOperation,
 		shardIntervalToSplit,
 		shardSplitPointsList,
 		nodeIdsForPlacementList);
 
-	List *workersForPlacementList = NIL;
-	Datum nodeId;
-	foreach_int(nodeId, nodeIdsForPlacementList)
+	List *workersForPlacementList = GetWorkerNodesFromWorkerIds(nodeIdsForPlacementList);
+
+	List *sourceColocatedShardIntervalList = NIL;
+	if (colocatedShardIntervalList == NIL)
 	{
-		uint32 nodeIdValue = DatumGetUInt32(nodeId);
-		WorkerNode *workerNode = LookupNodeByNodeId(nodeIdValue);
-
-		/* NodeId in Citus are unsigned and range from [1, 4294967296]. */
-		if (nodeIdValue < 1 || workerNode == NULL)
-		{
-			ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-							errmsg("Invalid Node Id '%u'.", nodeIdValue)));
-		}
-
-		workersForPlacementList =
-			lappend(workersForPlacementList, (void *) workerNode);
+		sourceColocatedShardIntervalList = ColocatedShardIntervalList(
+			shardIntervalToSplit);
 	}
+	else
+	{
+		sourceColocatedShardIntervalList = colocatedShardIntervalList;
+	}
+
+	/* use the user-specified shard ID as the split workflow ID */
+	uint64 splitWorkflowId = shardIntervalToSplit->shardId;
 
 	if (splitMode == BLOCKING_SPLIT)
 	{
 		EnsureReferenceTablesExistOnAllNodesExtended(TRANSFER_MODE_BLOCK_WRITES);
 		BlockingShardSplit(
 			splitOperation,
-			shardIntervalToSplit,
+			splitWorkflowId,
+			sourceColocatedShardIntervalList,
 			shardSplitPointsList,
-			workersForPlacementList);
+			workersForPlacementList,
+			distributionColumnOverrides);
 	}
 	else
 	{
 		NonBlockingShardSplit(
 			splitOperation,
-			shardIntervalToSplit,
+			splitWorkflowId,
+			sourceColocatedShardIntervalList,
 			shardSplitPointsList,
-			workersForPlacementList);
+			workersForPlacementList,
+			distributionColumnOverrides,
+			targetColocationId);
 
 		PlacementMovedUsingLogicalReplicationInTX = true;
 	}
@@ -521,20 +609,20 @@ CreateEmptyMapForShardsCreatedByWorkflow()
 /*
  * SplitShard API to split a given shard (or shard group) in blocking fashion
  * based on specified split points to a set of destination nodes.
- * 'splitOperation'             : Customer operation that triggered split.
- * 'shardIntervalToSplit'       : Source shard interval to be split.
- * 'shardSplitPointsList'		: Split Points list for the source 'shardInterval'.
- * 'workersForPlacementList'	: Placement list corresponding to split children.
+ * splitOperation                   : Customer operation that triggered split.
+ * splitWorkflowId                  : Number used to identify split workflow in names.
+ * sourceColocatedShardIntervalList : Source shard group to be split.
+ * shardSplitPointsList             : Split Points list for the source 'shardInterval'.
+ * workersForPlacementList          : Placement list corresponding to split children.
  */
 static void
 BlockingShardSplit(SplitOperation splitOperation,
-				   ShardInterval *shardIntervalToSplit,
+				   uint64 splitWorkflowId,
+				   List *sourceColocatedShardIntervalList,
 				   List *shardSplitPointsList,
-				   List *workersForPlacementList)
+				   List *workersForPlacementList,
+				   DistributionColumnMap *distributionColumnOverrides)
 {
-	List *sourceColocatedShardIntervalList = ColocatedShardIntervalList(
-		shardIntervalToSplit);
-
 	BlockWritesToShardList(sourceColocatedShardIntervalList);
 
 	/* First create shard interval metadata for split children */
@@ -543,29 +631,29 @@ BlockingShardSplit(SplitOperation splitOperation,
 		shardSplitPointsList);
 
 	/* Only single placement allowed (already validated RelationReplicationFactor = 1) */
-	List *sourcePlacementList = ActiveShardPlacementList(shardIntervalToSplit->shardId);
-	Assert(sourcePlacementList->length == 1);
-	ShardPlacement *sourceShardPlacement = (ShardPlacement *) linitial(
-		sourcePlacementList);
-	WorkerNode *sourceShardToCopyNode = FindNodeWithNodeId(sourceShardPlacement->nodeId,
-														   false /* missingOk */);
-
+	ShardInterval *firstShard = linitial(sourceColocatedShardIntervalList);
+	WorkerNode *sourceShardNode =
+		ActiveShardPlacementWorkerNode(firstShard->shardId);
 
 	HTAB *mapOfShardToPlacementCreatedByWorkflow =
 		CreateEmptyMapForShardsCreatedByWorkflow();
 	PG_TRY();
 	{
-		/*
-		 * Physically create split children, perform split copy and create auxiliary structures.
-		 * This includes: indexes, replicaIdentity. triggers and statistics.
-		 * Foreign key constraints are created after Metadata changes (see CreateForeignKeyConstraints).
-		 */
-		CreateAndCopySplitShardsForShardGroup(
-			mapOfShardToPlacementCreatedByWorkflow,
-			sourceShardToCopyNode,
-			sourceColocatedShardIntervalList,
-			shardGroupSplitIntervalListList,
-			workersForPlacementList);
+		/* Physically create split children. */
+		CreateSplitShardsForShardGroup(mapOfShardToPlacementCreatedByWorkflow,
+									   shardGroupSplitIntervalListList,
+									   workersForPlacementList);
+
+		/* For Blocking split, copy isn't snapshotted */
+		char *snapshotName = NULL;
+		DoSplitCopy(sourceShardNode, sourceColocatedShardIntervalList,
+					shardGroupSplitIntervalListList, workersForPlacementList,
+					snapshotName, distributionColumnOverrides);
+
+		/* Create auxiliary structures (indexes, stats, replicaindentities, triggers) */
+		CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
+											   workersForPlacementList,
+											   true /* includeReplicaIdentity*/);
 
 		/*
 		 * Up to this point, we performed various subtransactions that may
@@ -607,6 +695,7 @@ BlockingShardSplit(SplitOperation splitOperation,
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+
 
 	CitusInvalidateRelcacheByRelid(DistShardRelationId());
 }
@@ -732,33 +821,6 @@ CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitIntervalListList,
 
 
 /*
- * Create ShardGroup split children, perform copy and create auxiliary structures
- * on a list of corresponding workers.
- */
-static void
-CreateAndCopySplitShardsForShardGroup(HTAB *mapOfShardToPlacementCreatedByWorkflow,
-									  WorkerNode *sourceShardNode,
-									  List *sourceColocatedShardIntervalList,
-									  List *shardGroupSplitIntervalListList,
-									  List *workersForPlacementList)
-{
-	CreateSplitShardsForShardGroup(mapOfShardToPlacementCreatedByWorkflow,
-								   shardGroupSplitIntervalListList,
-								   workersForPlacementList);
-
-	/* For Blocking split, copy isn't snapshotted */
-	char *snapshotName = NULL;
-	DoSplitCopy(sourceShardNode, sourceColocatedShardIntervalList,
-				shardGroupSplitIntervalListList, workersForPlacementList, snapshotName);
-
-	/* Create auxiliary structures (indexes, stats, replicaindentities, triggers) */
-	CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
-										   workersForPlacementList,
-										   true /* includeReplicaIdentity*/);
-}
-
-
-/*
  * Perform Split Copy from source shard(s) to split children.
  * 'sourceShardNode'					: Source shard worker node.
  * 'sourceColocatedShardIntervalList'	: List of source shard intervals from shard group.
@@ -768,7 +830,7 @@ CreateAndCopySplitShardsForShardGroup(HTAB *mapOfShardToPlacementCreatedByWorkfl
 static void
 DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 			List *shardGroupSplitIntervalListList, List *destinationWorkerNodesList,
-			char *snapShotName)
+			char *snapShotName, DistributionColumnMap *distributionColumnOverrides)
 {
 	ShardInterval *sourceShardIntervalToCopy = NULL;
 	List *splitShardIntervalList = NIL;
@@ -783,25 +845,40 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
 		 * data themselves. Their partitions do contain data, but those are
 		 * different colocated shards that will be copied seperately.
 		 */
-		if (!PartitionedTable(sourceShardIntervalToCopy->relationId))
+		if (PartitionedTable(sourceShardIntervalToCopy->relationId))
 		{
-			StringInfo splitCopyUdfCommand = CreateSplitCopyCommand(
-				sourceShardIntervalToCopy,
-				splitShardIntervalList,
-				destinationWorkerNodesList);
-
-			/* Create copy task. Snapshot name is required for nonblocking splits */
-			Task *splitCopyTask = CreateSplitCopyTask(splitCopyUdfCommand, snapShotName,
-													  taskId,
-													  sourceShardIntervalToCopy->shardId);
-
-			ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
-			SetPlacementNodeMetadata(taskPlacement, sourceShardNode);
-			splitCopyTask->taskPlacementList = list_make1(taskPlacement);
-
-			splitCopyTaskList = lappend(splitCopyTaskList, splitCopyTask);
-			taskId++;
+			continue;
 		}
+
+		Oid relationId = sourceShardIntervalToCopy->relationId;
+
+		Var *distributionColumn =
+			GetDistributionColumnWithOverrides(relationId,
+											   distributionColumnOverrides);
+		Assert(distributionColumn != NULL);
+
+		bool missingOK = false;
+		char *distributionColumnName = get_attname(relationId,
+												   distributionColumn->varattno,
+												   missingOK);
+
+		StringInfo splitCopyUdfCommand = CreateSplitCopyCommand(
+			sourceShardIntervalToCopy,
+			distributionColumnName,
+			splitShardIntervalList,
+			destinationWorkerNodesList);
+
+		/* Create copy task. Snapshot name is required for nonblocking splits */
+		Task *splitCopyTask = CreateSplitCopyTask(splitCopyUdfCommand, snapShotName,
+												  taskId,
+												  sourceShardIntervalToCopy->shardId);
+
+		ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
+		SetPlacementNodeMetadata(taskPlacement, sourceShardNode);
+		splitCopyTask->taskPlacementList = list_make1(taskPlacement);
+
+		splitCopyTaskList = lappend(splitCopyTaskList, splitCopyTask);
+		taskId++;
 	}
 
 	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, splitCopyTaskList,
@@ -834,6 +911,7 @@ DoSplitCopy(WorkerNode *sourceShardNode, List *sourceColocatedShardIntervalList,
  */
 static StringInfo
 CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
+					   char *distributionColumnName,
 					   List *splitChildrenShardIntervalList,
 					   List *destinationWorkerNodesList)
 {
@@ -865,8 +943,9 @@ CreateSplitCopyCommand(ShardInterval *sourceShardSplitInterval,
 	appendStringInfo(splitCopyInfoArray, "]");
 
 	StringInfo splitCopyUdf = makeStringInfo();
-	appendStringInfo(splitCopyUdf, "SELECT pg_catalog.worker_split_copy(%lu, %s);",
+	appendStringInfo(splitCopyUdf, "SELECT pg_catalog.worker_split_copy(%lu, %s, %s);",
 					 sourceShardSplitInterval->shardId,
+					 quote_literal_cstr(distributionColumnName),
 					 splitCopyInfoArray->data);
 
 	return splitCopyUdf;
@@ -976,8 +1055,19 @@ CreateSplitIntervalsForShard(ShardInterval *sourceShard,
 	int shardIntervalCount = list_length(splitPointsForShard) + 1;
 	ListCell *splitPointCell = list_head(splitPointsForShard);
 	int32 splitParentMaxValue = DatumGetInt32(sourceShard->maxValue);
-
 	int32 currentSplitChildMinValue = DatumGetInt32(sourceShard->minValue);
+
+	/* if we are splitting a Citus local table, assume whole shard range */
+	if (!sourceShard->maxValueExists)
+	{
+		splitParentMaxValue = PG_INT32_MAX;
+	}
+
+	if (!sourceShard->minValueExists)
+	{
+		currentSplitChildMinValue = PG_INT32_MIN;
+	}
+
 	for (int index = 0; index < shardIntervalCount; index++)
 	{
 		ShardInterval *splitChildShardInterval = CopyShardInterval(sourceShard);
@@ -1004,6 +1094,54 @@ CreateSplitIntervalsForShard(ShardInterval *sourceShard,
 		currentSplitChildMinValue = splitChildShardInterval->maxValue + 1;
 		*shardSplitChildrenIntervalList = lappend(*shardSplitChildrenIntervalList,
 												  splitChildShardInterval);
+	}
+}
+
+
+/*
+ * UpdateDistributionColumnsForShardGroup globally updates the pg_dist_partition metadata
+ * for each relation that has a shard in colocatedShardList.
+ *
+ * This is used primarily for Citus local -> distributed table conversion
+ * in create_distributed_table_concurrently.
+ *
+ * It would be nicer to keep this separate from shard split, but we need to do the
+ * update at exactly the right point in the shard split process, namely after
+ * replication slot creation and before inserting shard metadata, which itself
+ * needs to happen before foreign key creation (mainly because the foreign key
+ * functions depend on metadata).
+ */
+static void
+UpdateDistributionColumnsForShardGroup(List *colocatedShardList,
+									   DistributionColumnMap *distributionColumnMap,
+									   char distributionMethod,
+									   int shardCount,
+									   uint32 colocationId)
+{
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, colocatedShardList)
+	{
+		Oid relationId = shardInterval->relationId;
+		Var *distributionColumn = GetDistributionColumnFromMap(distributionColumnMap,
+															   relationId);
+
+		/* we should have an entry for every relation ID in the colocation group */
+		Assert(distributionColumn != NULL);
+
+		if (colocationId == INVALID_COLOCATION_ID)
+		{
+			/*
+			 * Getting here with an invalid co-location ID means that no
+			 * appropriate co-location group exists yet.
+			 */
+			colocationId = CreateColocationGroup(shardCount,
+												 ShardReplicationFactor,
+												 distributionColumn->vartype,
+												 distributionColumn->varcollid);
+		}
+
+		UpdateDistributionColumnGlobally(relationId, distributionMethod,
+										 distributionColumn, colocationId);
 	}
 }
 
@@ -1265,32 +1403,73 @@ TryDropSplitShardsOnFailure(HTAB *mapOfShardToPlacementCreatedByWorkflow)
 
 
 /*
- * SplitShard API to split a given shard (or shard group) in non-blocking fashion
- * based on specified split points to a set of destination nodes.
- * splitOperation             : Customer operation that triggered split.
- * shardIntervalToSplit       : Source shard interval to be split.
- * shardSplitPointsList		  : Split Points list for the source 'shardInterval'.
- * workersForPlacementList	  : Placement list corresponding to split children.
+ * AcquireNonblockingSplitLock does not allow concurrent nonblocking splits, because we share memory and
+ * replication slots.
  */
 static void
-NonBlockingShardSplit(SplitOperation splitOperation,
-					  ShardInterval *shardIntervalToSplit,
-					  List *shardSplitPointsList,
-					  List *workersForPlacementList)
+AcquireNonblockingSplitLock(Oid relationId)
 {
+	LOCKTAG tag;
+	const bool sessionLock = false;
+	const bool dontWait = true;
+
+	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_NONBLOCKING_SPLIT);
+
+	LockAcquireResult lockAcquired = LockAcquire(&tag, ExclusiveLock, sessionLock,
+												 dontWait);
+	if (!lockAcquired)
+	{
+		ereport(ERROR, (errmsg("could not acquire the lock required to split "
+							   "concurrently %s.", generate_qualified_relation_name(
+								   relationId)),
+						errdetail("It means that either a concurrent shard move "
+								  "or distributed table creation is happening."),
+						errhint("Make sure that the concurrent operation has "
+								"finished and re-run the command")));
+	}
+}
+
+
+/*
+ * SplitShard API to split a given shard (or shard group) in non-blocking fashion
+ * based on specified split points to a set of destination nodes.
+ * splitOperation                   : Customer operation that triggered split.
+ * splitWorkflowId                  : Number used to identify split workflow in names.
+ * sourceColocatedShardIntervalList : Source shard group to be split.
+ * shardSplitPointsList             : Split Points list for the source 'shardInterval'.
+ * workersForPlacementList          : Placement list corresponding to split children.
+ * distributionColumnList           : Maps relation IDs to distribution columns.
+ *                                    If not specified, the distribution column is read
+ *                                    from the metadata.
+ * targetColocationId               : Specifies the colocation ID (only used for
+ *                                    create_distributed_table_concurrently).
+ */
+void
+NonBlockingShardSplit(SplitOperation splitOperation,
+					  uint64 splitWorkflowId,
+					  List *sourceColocatedShardIntervalList,
+					  List *shardSplitPointsList,
+					  List *workersForPlacementList,
+					  DistributionColumnMap *distributionColumnOverrides,
+					  uint32 targetColocationId)
+{
+	ErrorIfMultipleNonblockingMoveSplitInTheSameTransaction();
+
 	char *superUser = CitusExtensionOwnerName();
 	char *databaseName = get_database_name(MyDatabaseId);
-
-	List *sourceColocatedShardIntervalList = ColocatedShardIntervalList(
-		shardIntervalToSplit);
 
 	/* First create shard interval metadata for split children */
 	List *shardGroupSplitIntervalListList = CreateSplitIntervalsForShardGroup(
 		sourceColocatedShardIntervalList,
 		shardSplitPointsList);
 
-	WorkerNode *sourceShardToCopyNode = ActiveShardPlacementWorkerNode(
-		shardIntervalToSplit->shardId);
+	ShardInterval *firstShard = linitial(sourceColocatedShardIntervalList);
+
+	/* Acquire global lock to prevent concurrent nonblocking splits */
+	AcquireNonblockingSplitLock(firstShard->relationId);
+
+	WorkerNode *sourceShardToCopyNode =
+		ActiveShardPlacementWorkerNode(firstShard->shardId);
 
 	/* Create hashmap to group shards for publication-subscription management */
 	HTAB *publicationInfoHash = CreateShardSplitInfoMapForPublication(
@@ -1352,13 +1531,13 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		/* 4) Create Publications. */
 		CreatePublications(sourceConnection, publicationInfoHash);
 
-
 		/* 5) Execute 'worker_split_shard_replication_setup UDF */
 		List *replicationSlotInfoList = ExecuteSplitShardReplicationSetupUDF(
 			sourceShardToCopyNode,
 			sourceColocatedShardIntervalList,
 			shardGroupSplitIntervalListList,
-			workersForPlacementList);
+			workersForPlacementList,
+			distributionColumnOverrides);
 
 		/*
 		 * Subscriber flow starts from here.
@@ -1400,7 +1579,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		/* 8) Do snapshotted Copy */
 		DoSplitCopy(sourceShardToCopyNode, sourceColocatedShardIntervalList,
 					shardGroupSplitIntervalListList, workersForPlacementList,
-					snapshot);
+					snapshot, distributionColumnOverrides);
 
 		/*
 		 * 9) Create replica identities, this needs to be done before enabling
@@ -1446,7 +1625,6 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		/* 19) Drop Publications */
 		DropPublications(sourceConnection, publicationInfoHash);
 
-
 		/*
 		 * 20) Drop old shards and delete related metadata. Have to do that before
 		 * creating the new shard metadata, because there's cross-checks
@@ -1454,7 +1632,40 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		 */
 		DropShardList(sourceColocatedShardIntervalList);
 
-		/* 21) Insert new shard and placement metdata */
+		/*
+		 * 21) In case of create_distributed_table_concurrently, which converts
+		 * a Citus local table to a distributed table, update the distributed
+		 * table metadata now.
+		 *
+		 * We would rather have this be outside of the scope of NonBlockingShardSplit,
+		 * but we cannot make metadata changes before replication slot creation, and
+		 * we cannot create the replication slot before creating new shards and
+		 * corresponding publications, because the decoder uses a catalog snapshot
+		 * from the time of the slot creation, which means it would not be able to see
+		 * the shards or publications when replication starts if it was created before.
+		 *
+		 * We also cannot easily move metadata changes to be after this function,
+		 * because CreateForeignKeyConstraints relies on accurate metadata and
+		 * we also want to perform the clean-up logic in PG_CATCH in case of
+		 * failure.
+		 *
+		 * Hence, this appears to be the only suitable spot for updating
+		 * pg_dist_partition and pg_dist_colocation.
+		 */
+		if (splitOperation == CREATE_DISTRIBUTED_TABLE)
+		{
+			/* we currently only use split for hash-distributed tables */
+			char distributionMethod = DISTRIBUTE_BY_HASH;
+			int shardCount = list_length(shardSplitPointsList) + 1;
+
+			UpdateDistributionColumnsForShardGroup(sourceColocatedShardIntervalList,
+												   distributionColumnOverrides,
+												   distributionMethod,
+												   shardCount,
+												   targetColocationId);
+		}
+
+		/* 22) Insert new shard and placement metdata */
 		InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
 										 workersForPlacementList);
 
@@ -1462,7 +1673,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 									workersForPlacementList);
 
 		/*
-		 * 22) Create foreign keys if exists after the metadata changes happening in
+		 * 23) Create foreign keys if exists after the metadata changes happening in
 		 * DropShardList() and InsertSplitChildrenShardMetadata() because the foreign
 		 * key creation depends on the new metadata.
 		 */
@@ -1470,7 +1681,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 									workersForPlacementList);
 
 		/*
-		 * 23) Drop dummy shards.
+		 * 24) Drop dummy shards.
 		 */
 		DropDummyShards(mapOfDummyShardToPlacement);
 
@@ -1654,12 +1865,14 @@ static List *
 ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 									 List *sourceColocatedShardIntervalList,
 									 List *shardGroupSplitIntervalListList,
-									 List *destinationWorkerNodesList)
+									 List *destinationWorkerNodesList,
+									 DistributionColumnMap *distributionColumnOverrides)
 {
 	StringInfo splitShardReplicationUDF = CreateSplitShardReplicationSetupUDF(
 		sourceColocatedShardIntervalList,
 		shardGroupSplitIntervalListList,
-		destinationWorkerNodesList);
+		destinationWorkerNodesList,
+		distributionColumnOverrides);
 
 	/* Force a new connection to execute the UDF */
 	int connectionFlags = 0;
@@ -1756,7 +1969,8 @@ ExecuteSplitShardReleaseSharedMemory(WorkerNode *sourceWorkerNode)
 StringInfo
 CreateSplitShardReplicationSetupUDF(List *sourceColocatedShardIntervalList,
 									List *shardGroupSplitIntervalListList,
-									List *destinationWorkerNodesList)
+									List *destinationWorkerNodesList,
+									DistributionColumnMap *distributionColumnOverrides)
 {
 	StringInfo splitChildrenRows = makeStringInfo();
 
@@ -1768,11 +1982,15 @@ CreateSplitShardReplicationSetupUDF(List *sourceColocatedShardIntervalList,
 	{
 		int64 sourceShardId = sourceShardIntervalToCopy->shardId;
 		Oid relationId = sourceShardIntervalToCopy->relationId;
-		Var *partitionColumn = DistPartitionKey(relationId);
+
+		Var *distributionColumn =
+			GetDistributionColumnWithOverrides(relationId,
+											   distributionColumnOverrides);
 
 		bool missingOK = false;
-		char *partitionColumnName =
-			get_attname(relationId, partitionColumn->varattno, missingOK);
+		char *distributionColumnName =
+			get_attname(relationId, distributionColumn->varattno,
+						missingOK);
 
 		ShardInterval *splitChildShardInterval = NULL;
 		WorkerNode *destinationWorkerNode = NULL;
@@ -1795,7 +2013,7 @@ CreateSplitShardReplicationSetupUDF(List *sourceColocatedShardIntervalList,
 			appendStringInfo(splitChildrenRows,
 							 "ROW(%lu, %s, %lu, %s, %s, %u)::pg_catalog.split_shard_info",
 							 sourceShardId,
-							 quote_literal_cstr(partitionColumnName),
+							 quote_literal_cstr(distributionColumnName),
 							 splitChildShardInterval->shardId,
 							 quote_literal_cstr(minValueString->data),
 							 quote_literal_cstr(maxValueString->data),

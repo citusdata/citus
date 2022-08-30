@@ -996,10 +996,18 @@ IsParentTable(Oid relationId)
 	systable_endscan(scan);
 	table_close(pgInherits, AccessShareLock);
 
-	if (tableInherited && PartitionedTable(relationId))
+	Relation relation = try_relation_open(relationId, AccessShareLock);
+	if (relation == NULL)
+	{
+		ereport(ERROR, (errmsg("relation with OID %u does not exist", relationId)));
+	}
+
+	if (tableInherited && PartitionedTableNoLock(relationId))
 	{
 		tableInherited = false;
 	}
+
+	relation_close(relation, AccessShareLock);
 
 	return tableInherited;
 }
@@ -1290,4 +1298,30 @@ PartitionBound(Oid partitionId)
 	ReleaseSysCache(tuple);
 
 	return partitionBoundString;
+}
+
+
+/*
+ * ListShardsUnderParentRelation returns a list of ShardInterval for every
+ * shard under a given relation, meaning it includes the shards of child
+ * tables in a partitioning hierarchy.
+ */
+List *
+ListShardsUnderParentRelation(Oid relationId)
+{
+	List *shardList = LoadShardIntervalList(relationId);
+
+	if (PartitionedTable(relationId))
+	{
+		List *partitionList = PartitionList(relationId);
+		Oid partitionRelationId = InvalidOid;
+
+		foreach_oid(partitionRelationId, partitionList)
+		{
+			List *childShardList = ListShardsUnderParentRelation(partitionRelationId);
+			shardList = list_concat(shardList, childShardList);
+		}
+	}
+
+	return shardList;
 }

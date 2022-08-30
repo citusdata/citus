@@ -9,15 +9,16 @@
 
 #include "postgres.h"
 #include "pg_version_compat.h"
+#include "distributed/citus_ruleutils.h"
+#include "distributed/distribution_column.h"
+#include "distributed/intermediate_results.h"
+#include "distributed/listutils.h"
+#include "distributed/multi_executor.h"
+#include "distributed/utils/array_type.h"
+#include "distributed/worker_shard_copy.h"
 #include "utils/lsyscache.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
-#include "distributed/utils/array_type.h"
-#include "distributed/listutils.h"
-#include "distributed/multi_executor.h"
-#include "distributed/worker_shard_copy.h"
-#include "distributed/intermediate_results.h"
-#include "distributed/citus_ruleutils.h"
 
 PG_FUNCTION_INFO_V1(worker_split_copy);
 
@@ -38,6 +39,7 @@ static DestReceiver ** CreateShardCopyDestReceivers(EState *estate,
 static DestReceiver *  CreatePartitionedSplitCopyDestReceiver(EState *executor,
 															  ShardInterval *
 															  shardIntervalToSplitCopy,
+															  char *partitionColumnName,
 															  List *splitCopyInfoList);
 static void BuildMinMaxRangeArrays(List *splitCopyInfoList, ArrayType **minValueArray,
 								   ArrayType **maxValueArray);
@@ -54,7 +56,10 @@ worker_split_copy(PG_FUNCTION_ARGS)
 	uint64 shardIdToSplitCopy = DatumGetUInt64(PG_GETARG_DATUM(0));
 	ShardInterval *shardIntervalToSplitCopy = LoadShardInterval(shardIdToSplitCopy);
 
-	ArrayType *splitCopyInfoArrayObject = PG_GETARG_ARRAYTYPE_P(1);
+	text *partitionColumnText = PG_GETARG_TEXT_P(1);
+	char *partitionColumnName = text_to_cstring(partitionColumnText);
+
+	ArrayType *splitCopyInfoArrayObject = PG_GETARG_ARRAYTYPE_P(2);
 	bool arrayHasNull = ARR_HASNULL(splitCopyInfoArrayObject);
 	if (arrayHasNull)
 	{
@@ -82,6 +87,7 @@ worker_split_copy(PG_FUNCTION_ARGS)
 	EState *executor = CreateExecutorState();
 	DestReceiver *splitCopyDestReceiver = CreatePartitionedSplitCopyDestReceiver(executor,
 																				 shardIntervalToSplitCopy,
+																				 partitionColumnName,
 																				 splitCopyInfoList);
 
 	Oid sourceShardToCopySchemaOId = get_rel_namespace(
@@ -228,6 +234,7 @@ CreateShardCopyDestReceivers(EState *estate, ShardInterval *shardIntervalToSplit
 static DestReceiver *
 CreatePartitionedSplitCopyDestReceiver(EState *estate,
 									   ShardInterval *shardIntervalToSplitCopy,
+									   char *partitionColumnName,
 									   List *splitCopyInfoList)
 {
 	/* Create underlying ShardCopyDestReceivers */
@@ -240,10 +247,17 @@ CreatePartitionedSplitCopyDestReceiver(EState *estate,
 	ArrayType *minValuesArray = NULL;
 	ArrayType *maxValuesArray = NULL;
 	BuildMinMaxRangeArrays(splitCopyInfoList, &minValuesArray, &maxValuesArray);
-	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(
-		shardIntervalToSplitCopy->relationId);
-	char partitionMethod = cacheEntry->partitionMethod;
-	Var *partitionColumn = cacheEntry->partitionColumn;
+
+	/* we currently only support hash-distribution */
+	char partitionMethod = DISTRIBUTE_BY_HASH;
+
+	/* synthetically build the partition column by looking at shard columns */
+	uint64 shardId = shardIntervalToSplitCopy->shardId;
+	bool missingOK = false;
+	Oid shardRelationId = LookupShardRelationFromCatalog(shardId, missingOK);
+	Var *partitionColumn = BuildDistributionKeyFromColumnName(shardRelationId,
+															  partitionColumnName,
+															  AccessShareLock);
 
 	CitusTableCacheEntry *shardSearchInfo =
 		QueryTupleShardSearchInfo(minValuesArray, maxValuesArray,

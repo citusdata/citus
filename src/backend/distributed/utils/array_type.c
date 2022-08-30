@@ -114,7 +114,8 @@ IntegerArrayTypeToList(ArrayType *arrayObject)
 
 	for (int index = 0; index < arrayObjectCount; index++)
 	{
-		list = lappend_int(list, datumObjectArray[index]);
+		int32 intObject = DatumGetInt32(datumObjectArray[index]);
+		list = lappend_int(list, intObject);
 	}
 
 	return list;

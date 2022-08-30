@@ -1,0 +1,288 @@
+create schema create_distributed_table_concurrently;
+set search_path to create_distributed_table_concurrently;
+set citus.shard_replication_factor to 1;
+-- make sure we have the coordinator in the metadata
+SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+create table ref (id int primary key);
+select create_reference_table('ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+insert into ref select s from generate_series(0,9) s;
+create table test (key text, id int references ref (id) on delete cascade, t timestamptz default now()) partition by range (t);
+create table test_1 partition of test for values from ('2022-01-01') to ('2022-12-31');
+create table test_2 partition of test for values from ('2023-01-01') to ('2023-12-31');
+insert into test (key,id,t) select s,s%10, '2022-01-01'::date + interval '1 year' * (s%2) from generate_series(1,100) s;
+create table nocolo (x int, y int);
+-- test error conditions
+select create_distributed_table_concurrently('test','key', 'append');
+ERROR:  only hash-distributed tables can be distributed without blocking writes
+select create_distributed_table_concurrently('test','key', 'range');
+ERROR:  only hash-distributed tables can be distributed without blocking writes
+select create_distributed_table_concurrently('test','noexists', 'hash');
+ERROR:  column "noexists" of relation "test" does not exist
+select create_distributed_table_concurrently(0,'key');
+ERROR:  relation with OID XXXX does not exist
+select create_distributed_table_concurrently('ref','id');
+ERROR:  table "ref" is already distributed
+set citus.shard_replication_factor to 2;
+select create_distributed_table_concurrently('test','key', 'hash');
+ERROR:  cannot distribute a table concurrently when citus.shard_replication_factor > 1
+set citus.shard_replication_factor to 1;
+begin;
+select create_distributed_table_concurrently('test','key');
+ERROR:  create_distributed_table_concurrently cannot run inside a transaction block
+rollback;
+select create_distributed_table_concurrently('test','key'), create_distributed_table_concurrently('test','key');
+NOTICE:  relation test does not have a REPLICA IDENTITY or PRIMARY KEY
+DETAIL:  UPDATE and DELETE commands on the relation will error out during create_distributed_table_concurrently unless there is a REPLICA IDENTITY or PRIMARY KEY. INSERT commands will still work.
+ERROR:  multiple shard movements/splits via logical replication in the same transaction is currently not supported
+select create_distributed_table_concurrently('nocolo','x');
+NOTICE:  relation nocolo does not have a REPLICA IDENTITY or PRIMARY KEY
+DETAIL:  UPDATE and DELETE commands on the relation will error out during create_distributed_table_concurrently unless there is a REPLICA IDENTITY or PRIMARY KEY. INSERT commands will still work.
+ create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+select create_distributed_table_concurrently('test','key', colocate_with := 'nocolo');
+ERROR:  cannot colocate tables nocolo and test
+DETAIL:  Distribution column types don't match for nocolo and test.
+select create_distributed_table_concurrently('test','key', colocate_with := 'noexists');
+ERROR:  relation "noexists" does not exist
+-- use colocate_with "default"
+select create_distributed_table_concurrently('test','key', shard_count := 11);
+NOTICE:  relation test does not have a REPLICA IDENTITY or PRIMARY KEY
+DETAIL:  UPDATE and DELETE commands on the relation will error out during create_distributed_table_concurrently unless there is a REPLICA IDENTITY or PRIMARY KEY. INSERT commands will still work.
+ create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+select shardcount from pg_dist_partition p join pg_dist_colocation c using (colocationid) where logicalrelid = 'test'::regclass;
+ shardcount
+---------------------------------------------------------------------
+         11
+(1 row)
+
+select count(*) from pg_dist_shard where logicalrelid = 'test'::regclass;
+ count
+---------------------------------------------------------------------
+    11
+(1 row)
+
+-- verify queries still work
+select count(*) from test;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+select key, id from test where key = '1';
+ key | id
+---------------------------------------------------------------------
+ 1   |  1
+(1 row)
+
+select count(*) from test_1;
+ count
+---------------------------------------------------------------------
+    50
+(1 row)
+
+-- verify that the foreign key to reference table was created
+begin;
+delete from ref;
+select count(*) from test;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+rollback;
+-- verify that we can undistribute the table
+begin;
+select undistribute_table('test', cascade_via_foreign_keys := true);
+NOTICE:  converting the partitions of create_distributed_table_concurrently.test
+NOTICE:  creating a new table for create_distributed_table_concurrently.test
+NOTICE:  dropping the old create_distributed_table_concurrently.test
+NOTICE:  renaming the new table to create_distributed_table_concurrently.test
+NOTICE:  creating a new table for create_distributed_table_concurrently.ref
+NOTICE:  moving the data of create_distributed_table_concurrently.ref
+NOTICE:  dropping the old create_distributed_table_concurrently.ref
+NOTICE:  renaming the new table to create_distributed_table_concurrently.ref
+NOTICE:  creating a new table for create_distributed_table_concurrently.test_1
+NOTICE:  moving the data of create_distributed_table_concurrently.test_1
+NOTICE:  dropping the old create_distributed_table_concurrently.test_1
+NOTICE:  renaming the new table to create_distributed_table_concurrently.test_1
+NOTICE:  creating a new table for create_distributed_table_concurrently.test_2
+NOTICE:  moving the data of create_distributed_table_concurrently.test_2
+NOTICE:  dropping the old create_distributed_table_concurrently.test_2
+NOTICE:  renaming the new table to create_distributed_table_concurrently.test_2
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+rollback;
+-- verify that we can co-locate with create_distributed_table_concurrently
+create table test2 (x text primary key, y text);
+insert into test2 (x,y) select s,s from generate_series(1,100) s;
+select create_distributed_table_concurrently('test2','x', colocate_with := 'test');
+ create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify co-located joins work
+select count(*) from test join test2 on (key = x);
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+select id, y from test join test2 on (key = x) where key = '1';
+ id | y
+---------------------------------------------------------------------
+  1 | 1
+(1 row)
+
+-- verify co-locaed foreign keys work
+alter table test add constraint fk foreign key (key) references test2 (x);
+-------foreign key tests among different table types--------
+-- verify we do not allow foreign keys from reference table to distributed table concurrently
+create table ref_table1(id int);
+create table dist_table1(id int primary key);
+select create_reference_table('ref_table1');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+alter table ref_table1 add constraint fkey foreign key (id) references dist_table1(id);
+select create_distributed_table_concurrently('dist_table1', 'id');
+ERROR:  relation dist_table1 is referenced by a foreign key from ref_table1
+DETAIL:  foreign keys from a reference table to a distributed table are not supported.
+-- verify we do not allow foreign keys from citus local table to distributed table concurrently
+create table citus_local_table1(id int);
+select citus_add_local_table_to_metadata('citus_local_table1');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+create table dist_table2(id int primary key);
+alter table citus_local_table1 add constraint fkey foreign key (id) references dist_table2(id);
+select create_distributed_table_concurrently('dist_table2', 'id');
+ERROR:  relation dist_table2 is referenced by a foreign key from citus_local_table1
+DETAIL:  foreign keys from a citus local table to a distributed table are not supported.
+-- verify we do not allow foreign keys from regular table to distributed table concurrently
+create table local_table1(id int);
+create table dist_table3(id int primary key);
+alter table local_table1 add constraint fkey foreign key (id) references dist_table3(id);
+select create_distributed_table_concurrently('dist_table3', 'id');
+ERROR:  relation dist_table3 is referenced by a foreign key from local_table1
+DETAIL:  foreign keys from a regular table to a distributed table are not supported.
+-- verify we allow foreign keys from distributed table to reference table concurrently
+create table ref_table2(id int primary key);
+select create_reference_table('ref_table2');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+create table dist_table4(id int references ref_table2(id));
+select create_distributed_table_concurrently('dist_table4', 'id');
+NOTICE:  relation dist_table4 does not have a REPLICA IDENTITY or PRIMARY KEY
+DETAIL:  UPDATE and DELETE commands on the relation will error out during create_distributed_table_concurrently unless there is a REPLICA IDENTITY or PRIMARY KEY. INSERT commands will still work.
+ create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+insert into ref_table2 select s from generate_series(1,100) s;
+insert into dist_table4 select s from generate_series(1,100) s;
+select count(*) as total from dist_table4;
+ total
+---------------------------------------------------------------------
+       100
+(1 row)
+
+-- verify we do not allow foreign keys from distributed table to citus local table concurrently
+create table citus_local_table2(id int primary key);
+select citus_add_local_table_to_metadata('citus_local_table2');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+create table dist_table5(id int references citus_local_table2(id));
+select create_distributed_table_concurrently('dist_table5', 'id');
+NOTICE:  relation dist_table5 does not have a REPLICA IDENTITY or PRIMARY KEY
+DETAIL:  UPDATE and DELETE commands on the relation will error out during create_distributed_table_concurrently unless there is a REPLICA IDENTITY or PRIMARY KEY. INSERT commands will still work.
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
+DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+-- verify we do not allow foreign keys from distributed table to regular table concurrently
+create table local_table2(id int primary key);
+create table dist_table6(id int references local_table2(id));
+select create_distributed_table_concurrently('dist_table6', 'id');
+ERROR:  relation local_table2 is referenced by a foreign key from dist_table6
+DETAIL:  foreign keys from a distributed table to a regular table are not supported.
+-------foreign key tests among different table types--------
+-- columnar tests --
+-- create table with partitions
+create table test_columnar (id int) partition by range (id);
+create table test_columnar_1 partition of test_columnar for values from (1) to (51);
+create table test_columnar_2 partition of test_columnar for values from (51) to (101) using columnar;
+-- load some data
+insert into test_columnar (id) select s from generate_series(1,100) s;
+-- distribute table
+select create_distributed_table_concurrently('test_columnar','id');
+NOTICE:  relation test_columnar does not have a REPLICA IDENTITY or PRIMARY KEY
+DETAIL:  UPDATE and DELETE commands on the relation will error out during create_distributed_table_concurrently unless there is a REPLICA IDENTITY or PRIMARY KEY. INSERT commands will still work.
+ create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify queries still work
+select count(*) from test_columnar;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+select id from test_columnar where id = 1;
+ id
+---------------------------------------------------------------------
+   1
+(1 row)
+
+select id from test_columnar where id = 51;
+ id
+---------------------------------------------------------------------
+   51
+(1 row)
+
+select count(*) from test_columnar_1;
+ count
+---------------------------------------------------------------------
+    50
+(1 row)
+
+select count(*) from test_columnar_2;
+ count
+---------------------------------------------------------------------
+    50
+(1 row)
+
+-- columnar tests --
+set client_min_messages to warning;
+drop schema create_distributed_table_concurrently cascade;

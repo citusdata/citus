@@ -48,7 +48,10 @@ typedef enum AdvisoryLocktagClass
 /* CitusOperations has constants for citus operations */
 typedef enum CitusOperations
 {
-	CITUS_TRANSACTION_RECOVERY = 0
+	CITUS_TRANSACTION_RECOVERY = 0,
+	CITUS_NONBLOCKING_SPLIT = 1,
+	CITUS_CREATE_DISTRIBUTED_TABLE_CONCURRENTLY = 2,
+	CITUS_CREATE_COLOCATION_DEFAULT = 3
 } CitusOperations;
 
 /* reuse advisory lock, but with different, unused field 4 (4)*/
@@ -176,6 +179,8 @@ extern void LockTransactionRecovery(LOCKMODE lockMode);
 extern void SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode);
 extern void LockRelationShardResources(List *relationShardList, LOCKMODE lockMode);
 extern List * GetSortedReferenceShardIntervals(List *relationList);
+
+void AcquireCreateDistributedTableConcurrentlyLock(Oid relationId);
 
 /* Lock parent table's colocated shard resource */
 extern void LockParentShardResourceIfPartition(List *shardIntervalList,

@@ -98,6 +98,66 @@ ConstraintIsAForeignKeyToReferenceTable(char *inputConstaintName, Oid relationId
 
 
 /*
+ * EnsureNoFKeyFromTableType ensures that given relation is not referenced by any table specified
+ * by table type flag.
+ */
+void
+EnsureNoFKeyFromTableType(Oid relationId, int tableTypeFlag)
+{
+	int flags = INCLUDE_REFERENCED_CONSTRAINTS | EXCLUDE_SELF_REFERENCES |
+				tableTypeFlag;
+	List *referencedFKeyOids = GetForeignKeyOids(relationId, flags);
+
+	if (list_length(referencedFKeyOids) > 0)
+	{
+		Oid referencingFKeyOid = linitial_oid(referencedFKeyOids);
+		Oid referencingTableId = GetReferencingTableId(referencingFKeyOid);
+
+		char *referencingRelName = get_rel_name(referencingTableId);
+		char *referencedRelName = get_rel_name(relationId);
+		char *referencingTableTypeName = GetTableTypeName(referencingTableId);
+
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("relation %s is referenced by a foreign key from %s",
+							   referencedRelName, referencingRelName),
+						errdetail(
+							"foreign keys from a %s to a distributed table are not supported.",
+							referencingTableTypeName)));
+	}
+}
+
+
+/*
+ * EnsureNoFKeyToTableType ensures that given relation is not referencing by any table specified
+ * by table type flag.
+ */
+void
+EnsureNoFKeyToTableType(Oid relationId, int tableTypeFlag)
+{
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | EXCLUDE_SELF_REFERENCES |
+				tableTypeFlag;
+	List *referencingFKeyOids = GetForeignKeyOids(relationId, flags);
+
+	if (list_length(referencingFKeyOids) > 0)
+	{
+		Oid referencedFKeyOid = linitial_oid(referencingFKeyOids);
+		Oid referencedTableId = GetReferencedTableId(referencedFKeyOid);
+
+		char *referencedRelName = get_rel_name(referencedTableId);
+		char *referencingRelName = get_rel_name(relationId);
+		char *referencedTableTypeName = GetTableTypeName(referencedTableId);
+
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("relation %s is referenced by a foreign key from %s",
+							   referencedRelName, referencingRelName),
+						errdetail(
+							"foreign keys from a distributed table to a %s are not supported.",
+							referencedTableTypeName)));
+	}
+}
+
+
+/*
  * ErrorIfUnsupportedForeignConstraintExists runs checks related to foreign
  * constraints and errors out if it is not possible to create one of the
  * foreign constraint in distributed environment.

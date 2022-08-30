@@ -23,6 +23,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shard_split.h"
+#include "distributed/utils/distribution_column_map.h"
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_split_shard_by_split_points);
@@ -52,12 +53,17 @@ citus_split_shard_by_split_points(PG_FUNCTION_ARGS)
 	Oid shardTransferModeOid = PG_GETARG_OID(3);
 	SplitMode shardSplitMode = LookupSplitMode(shardTransferModeOid);
 
+	DistributionColumnMap *distributionColumnOverrides = NULL;
+	List *sourceColocatedShardIntervalList = NIL;
 	SplitShard(
 		shardSplitMode,
 		SHARD_SPLIT_API,
 		shardIdToSplit,
 		shardSplitPointsList,
-		nodeIdsForPlacementList);
+		nodeIdsForPlacementList,
+		distributionColumnOverrides,
+		sourceColocatedShardIntervalList,
+		INVALID_COLOCATION_ID);
 
 	PG_RETURN_VOID();
 }

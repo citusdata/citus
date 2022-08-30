@@ -159,6 +159,7 @@ PG_FUNCTION_INFO_V1(worker_record_sequence_dependency);
  * or regular users as long as the regular user owns the input object.
  */
 PG_FUNCTION_INFO_V1(citus_internal_add_partition_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_delete_partition_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_shard_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_update_placement_metadata);
@@ -1208,6 +1209,24 @@ DistributionDeleteCommand(const char *schemaName, const char *tableName)
 					 quote_literal_cstr(distributedRelationName));
 
 	return deleteDistributionCommand->data;
+}
+
+
+/*
+ * DistributionDeleteMetadataCommand returns a query to delete pg_dist_partition
+ * metadata from a worker node for a given table.
+ */
+char *
+DistributionDeleteMetadataCommand(Oid relationId)
+{
+	StringInfo deleteCommand = makeStringInfo();
+	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+
+	appendStringInfo(deleteCommand,
+					 "SELECT pg_catalog.citus_internal_delete_partition_metadata(%s)",
+					 quote_literal_cstr(qualifiedRelationName));
+
+	return deleteCommand->data;
 }
 
 
@@ -3196,6 +3215,35 @@ EnsurePartitionMetadataIsSane(Oid relationId, char distributionMethod, int coloc
 							   "as the replication model.",
 							   REPLICATION_MODEL_STREAMING, REPLICATION_MODEL_2PC)));
 	}
+}
+
+
+/*
+ * citus_internal_delete_partition_metadata is an internal UDF to
+ * delete a row in pg_dist_partition.
+ */
+Datum
+citus_internal_delete_partition_metadata(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	PG_ENSURE_ARGNOTNULL(0, "relation");
+	Oid relationId = PG_GETARG_OID(0);
+
+	/* only owner of the table (or superuser) is allowed to add the Citus metadata */
+	EnsureTableOwner(relationId);
+
+	/* we want to serialize all the metadata changes to this table */
+	LockRelationOid(relationId, ShareUpdateExclusiveLock);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		EnsureCoordinatorInitiatedOperation();
+	}
+
+	DeletePartitionRow(relationId);
+
+	PG_RETURN_VOID();
 }
 
 

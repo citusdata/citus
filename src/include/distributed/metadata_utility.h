@@ -248,6 +248,10 @@ extern void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId,
 									  char replicationModel, bool autoConverted);
 extern void UpdatePgDistPartitionAutoConverted(Oid citusTableId, bool autoConverted);
+extern void UpdateDistributionColumnGlobally(Oid relationId, char distributionMethod,
+											 Var *distributionColumn, int colocationId);
+extern void UpdateDistributionColumn(Oid relationId, char distributionMethod,
+									 Var *distributionColumn, int colocationId);
 extern void DeletePartitionRow(Oid distributedRelationId);
 extern void DeleteShardRow(uint64 shardId);
 extern void UpdateShardPlacementState(uint64 placementId, char shardState);

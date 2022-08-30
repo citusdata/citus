@@ -277,7 +277,7 @@ test: add_coordinator
 test: replicate_reference_tables_to_coordinator
 test: citus_local_tables
 test: mixed_relkind_tests
-test: multi_row_router_insert
+test: multi_row_router_insert create_distributed_table_concurrently
 test: multi_reference_table citus_local_tables_queries
 test: citus_local_table_triggers
 test: coordinator_shouldhaveshards

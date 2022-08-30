@@ -160,6 +160,7 @@ SET citus.enable_binary_protocol = true;
 
 SELECT * from worker_split_copy(
     81060000, -- source shard id to copy
+    'l_orderkey',
     ARRAY[
          -- split copy info for split children 1
         ROW(81060015, -- destination shard id
@@ -178,6 +179,7 @@ SELECT * from worker_split_copy(
 -- BEGIN: Trigger 2-way remote shard split copy.
 SELECT * from worker_split_copy(
     81060000, -- source shard id to copy
+    'l_orderkey',
     ARRAY[
          -- split copy info for split children 1
         ROW(81060015, -- destination shard id

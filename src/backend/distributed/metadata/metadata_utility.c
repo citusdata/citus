@@ -39,6 +39,7 @@
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_partitioning_utils.h"
@@ -2146,6 +2147,96 @@ UpdatePgDistPartitionAutoConverted(Oid citusTableId, bool autoConverted)
 
 	CitusInvalidateRelcacheByRelid(citusTableId);
 
+	CommandCounterIncrement();
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistPartition, NoLock);
+}
+
+
+/*
+ * UpdateDistributionColumnGlobally sets the distribution column and colocation ID
+ * for a table in pg_dist_partition on all nodes
+ */
+void
+UpdateDistributionColumnGlobally(Oid relationId, char distributionMethod,
+								 Var *distributionColumn, int colocationId)
+{
+	UpdateDistributionColumn(relationId, distributionMethod, distributionColumn,
+							 colocationId);
+
+	if (ShouldSyncTableMetadata(relationId))
+	{
+		/* we use delete+insert because syncing uses specialized RPCs */
+		char *deleteMetadataCommand = DistributionDeleteMetadataCommand(relationId);
+		SendCommandToWorkersWithMetadata(deleteMetadataCommand);
+
+		/* pick up the new metadata (updated above) */
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+		char *insertMetadataCommand = DistributionCreateCommand(cacheEntry);
+		SendCommandToWorkersWithMetadata(insertMetadataCommand);
+	}
+}
+
+
+/*
+ * UpdateDistributionColumn sets the distribution column and colocation ID for a table
+ * in pg_dist_partition.
+ */
+void
+UpdateDistributionColumn(Oid relationId, char distributionMethod, Var *distributionColumn,
+						 int colocationId)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOK = true;
+	Datum values[Natts_pg_dist_partition];
+	bool isnull[Natts_pg_dist_partition];
+	bool replace[Natts_pg_dist_partition];
+
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
+													DistPartitionLogicalRelidIndexId(),
+													indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for citus table with oid: %u",
+							   relationId)));
+	}
+
+	memset(replace, 0, sizeof(replace));
+
+	replace[Anum_pg_dist_partition_partmethod - 1] = true;
+	values[Anum_pg_dist_partition_partmethod - 1] = CharGetDatum(distributionMethod);
+	isnull[Anum_pg_dist_partition_partmethod - 1] = false;
+
+	replace[Anum_pg_dist_partition_colocationid - 1] = true;
+	values[Anum_pg_dist_partition_colocationid - 1] = UInt32GetDatum(colocationId);
+	isnull[Anum_pg_dist_partition_colocationid - 1] = false;
+
+	replace[Anum_pg_dist_partition_autoconverted - 1] = true;
+	values[Anum_pg_dist_partition_autoconverted - 1] = BoolGetDatum(false);
+	isnull[Anum_pg_dist_partition_autoconverted - 1] = false;
+
+	char *distributionColumnString = nodeToString((Node *) distributionColumn);
+
+	replace[Anum_pg_dist_partition_partkey - 1] = true;
+	values[Anum_pg_dist_partition_partkey - 1] =
+		CStringGetTextDatum(distributionColumnString);
+	isnull[Anum_pg_dist_partition_partkey - 1] = false;
+
+	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+
+	CatalogTupleUpdate(pgDistPartition, &heapTuple->t_self, heapTuple);
+
+	CitusInvalidateRelcacheByRelid(relationId);
 	CommandCounterIncrement();
 
 	systable_endscan(scanDescriptor);
