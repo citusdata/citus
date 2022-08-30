@@ -71,7 +71,6 @@ typedef struct ShardCommandList
 } ShardCommandList;
 
 /* local function forward declarations */
-static bool RelationCanPublishAllModifications(Oid relationId);
 static bool CanUseLogicalReplication(Oid relationId, char shardReplicationMode);
 static void ErrorIfTableCannotBeReplicated(Oid relationId);
 static void ErrorIfTargetNodeIsNotSafeToCopyTo(const char *targetNodeName,
@@ -635,7 +634,7 @@ VerifyTablesHaveReplicaIdentity(List *colocatedTableList)
  * RelationCanPublishAllModifications returns true if the relation is safe to publish
  * all modification while being replicated via logical replication.
  */
-static bool
+bool
 RelationCanPublishAllModifications(Oid relationId)
 {
 	Relation relation = RelationIdGetRelation(relationId);

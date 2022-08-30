@@ -451,12 +451,12 @@ push(@pgOptions, "wal_level='logical'");
 
 # Faster logical replication status update so tests with logical replication
 # run faster
-push(@pgOptions, "wal_receiver_status_interval=1");
+push(@pgOptions, "wal_receiver_status_interval=0");
 
 # Faster logical replication apply worker launch so tests with logical
 # replication run faster. This is used in ApplyLauncherMain in
 # src/backend/replication/logical/launcher.c.
-push(@pgOptions, "wal_retrieve_retry_interval=1000");
+push(@pgOptions, "wal_retrieve_retry_interval=250");
 
 push(@pgOptions, "max_logical_replication_workers=50");
 push(@pgOptions, "max_wal_senders=50");
@@ -704,7 +704,7 @@ if (!$conninfo)
     # Create new data directories, copy workers for speed
     # --allow-group-access is used to ensure we set permissions on private keys
     # correctly
-    system(catfile("$bindir", "initdb"), ("--no-sync", "--allow-group-access", "-U", $user, "--encoding", "UTF8", catfile($TMP_CHECKDIR, $MASTERDIR, "data"))) == 0
+    system(catfile("$bindir", "initdb"), ("--no-sync", "--allow-group-access", "-U", $user, "--encoding", "UTF8", "--locale", "POSIX", catfile($TMP_CHECKDIR, $MASTERDIR, "data"))) == 0
         or die "Could not create $MASTERDIR data directory";
 
 	generate_hba("master");
@@ -789,18 +789,17 @@ if ($useMitmproxy)
     die "a file already exists at $mitmFifoPath, delete it before trying again";
   }
 
-  system("lsof -i :$mitmPort");
-  if (! $?) {
-    die "cannot start mitmproxy because a process already exists on port $mitmPort";
-  }
-
   if ($Config{osname} eq "linux")
   {
-    system("netstat --tcp -n | grep $mitmPort");
+    system("netstat --tcp -n | grep :$mitmPort");
   }
   else
   {
-    system("netstat -p tcp -n | grep $mitmPort");
+    system("netstat -p tcp -n | grep :$mitmPort");
+  }
+
+  if (system("lsof -i :$mitmPort") == 0) {
+    die "cannot start mitmproxy because a process already exists on port $mitmPort";
   }
 
   my $childPid = fork();
@@ -1100,6 +1099,18 @@ sub RunVanillaTests
                         ("--port","$masterPort"),
                         ("--user","$user"),
                         ("--dbname", "$dbName"));
+}
+
+if ($useMitmproxy) {
+    my $tries = 0;
+    until(system("lsof -i :$mitmPort") == 0) {
+        if ($tries > 60) {
+            die("waited for 60 seconds to start the mitmproxy, but it failed")
+        }
+        print("waiting: mitmproxy was not started yet\n");
+        sleep(1);
+        $tries++;
+    }
 }
 
 # Finally run the tests

@@ -152,6 +152,7 @@ SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \
 SET citus.enable_binary_protocol = false;
 SELECT * from worker_split_copy(
     81070000, -- source shard id to copy
+    'l_orderkey',
     ARRAY[
          -- split copy info for split children 1
         ROW(81070015, -- destination shard id
@@ -170,6 +171,7 @@ SELECT * from worker_split_copy(
 -- BEGIN: Trigger 2-way remote shard split copy.
 SELECT * from worker_split_copy(
     81070000, -- source shard id to copy
+    'l_orderkey',
     ARRAY[
          -- split copy info for split children 1
         ROW(81070015, -- destination shard id

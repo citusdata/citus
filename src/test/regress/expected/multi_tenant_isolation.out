@@ -669,7 +669,7 @@ SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1997-08-08';
 SET search_path to "Tenant Isolation";
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE nodeport = :worker_1_port;
 SELECT isolate_tenant_to_new_shard('lineitem_date', '1997-08-08', shard_transfer_mode => 'block_writes');
-ERROR:  cannot split shard because relation "lineitem_date" has an inactive shard placement for the shard xxxxx
+ERROR:  cannot isolate tenant because relation "lineitem_date" has an inactive shard placement for the shard xxxxx
 HINT:  Use master_copy_shard_placement UDF to repair the inactive shard placement.
 UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE nodeport = :worker_1_port;
 \c - mx_isolation_role_ent - :master_port

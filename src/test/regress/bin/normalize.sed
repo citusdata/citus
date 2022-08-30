@@ -116,6 +116,17 @@ s/(ERROR: |WARNING: |error:) server closed the connection unexpectedly/\1 connec
 /^\s*connection not open$/d
 #endif /* (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14) */
 
+# Changed outputs after minor bump to PG14.5 and PG13.8
+s/(ERROR: |WARNING: |error:) invalid socket/\1 connection not open/g
+
+# Extra outputs after minor bump to PG14.5 and PG13.8
+/^\s*invalid socket$/d
+
+# pg15 changes
+s/is not a PostgreSQL server process/is not a PostgreSQL backend process/g
+s/ AS "\?column\?"//g
+s/".*\.(.*)": (found .* removable)/"\1": \2/g
+
 # intermediate_results
 s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\/xx_x_xxx\/\3.data/g
 

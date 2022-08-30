@@ -224,7 +224,7 @@ SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables WHERE table_schema = 'create_distributed_table_non_empty_failure' and table_name LIKE 'test_table%'$$);
 
 -- in the first test, cancel the first connection we sent from the coordinator
-SELECT citus.mitmproxy('conn.cancel(' ||  pg_backend_pid() || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE").cancel(' ||  pg_backend_pid() || ')');
 SELECT create_distributed_table('test_table', 'id');
 SELECT citus.mitmproxy('conn.allow()');
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;

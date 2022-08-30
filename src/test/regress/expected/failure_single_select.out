@@ -23,7 +23,7 @@ SELECT create_distributed_table('select_test', 'key');
 
 -- put data in shard for which mitm node is first placement
 INSERT INTO select_test VALUES (3, 'test data');
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT.*select_test").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -45,7 +45,7 @@ WARNING:  connection to the remote node localhost:xxxxx failed with the followin
 
 -- kill after first SELECT; txn should fail as INSERT triggers
 -- 2PC (and placementis not marked bad)
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT.*select_test").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -66,7 +66,7 @@ TRUNCATE select_test;
 -- now the same tests with query cancellation
 -- put data in shard for which mitm node is first placement
 INSERT INTO select_test VALUES (3, 'test data');
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").cancel(' ||  pg_backend_pid() || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT.*select_test").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -77,7 +77,7 @@ ERROR:  canceling statement due to user request
 SELECT * FROM select_test WHERE key = 3;
 ERROR:  canceling statement due to user request
 -- cancel after first SELECT; txn should fail and nothing should be marked as invalid
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").cancel(' ||  pg_backend_pid() || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT.*select_test").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -107,7 +107,7 @@ SELECT citus.mitmproxy('conn.allow()');
 TRUNCATE select_test;
 -- cancel the second query
 -- error after second SELECT; txn should fail
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).cancel(' ||  pg_backend_pid() || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT.*select_test").after(1).cancel(' ||  pg_backend_pid() || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -126,7 +126,7 @@ SELECT * FROM select_test WHERE key = 3;
 ERROR:  canceling statement due to user request
 COMMIT;
 -- error after second SELECT; txn should fails the transaction
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).reset()');
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT.*select_test").after(1).reset()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -144,7 +144,7 @@ INSERT INTO select_test VALUES (3, 'even more data');
 SELECT * FROM select_test WHERE key = 3;
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 COMMIT;
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(2).kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT.*pg_prepared_xacts").after(2).kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -173,7 +173,7 @@ SELECT create_distributed_table('select_test', 'key');
 
 SET citus.max_cached_conns_per_worker TO 1; -- allow connection to be cached
 INSERT INTO select_test VALUES (1, 'test data');
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT.*select_test").after(1).kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -188,7 +188,7 @@ SELECT * FROM select_test WHERE key = 1;
 SELECT * FROM select_test WHERE key = 1;
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- now the same test with query cancellation
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).cancel(' ||  pg_backend_pid() || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT.*select_test").after(1).cancel(' ||  pg_backend_pid() || ')');
  mitmproxy
 ---------------------------------------------------------------------
 

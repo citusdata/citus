@@ -490,6 +490,10 @@ RangePartitionJoinBaseRelationId(MultiJoin *joinNode)
 	{
 		partitionNode = (MultiPartition *) rightChildNode;
 	}
+	else
+	{
+		Assert(false);
+	}
 
 	Index baseTableId = partitionNode->splitPointTableId;
 	MultiTable *baseTable = FindTableNode((MultiNode *) joinNode, baseTableId);
@@ -575,12 +579,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 		Job *job = (Job *) linitial(dependentJobList);
 		if (CitusIsA(job, MapMergeJob))
 		{
-			MapMergeJob *mapMergeJob = (MapMergeJob *) job;
 			isRepartitionJoin = true;
-			if (mapMergeJob->reduceQuery)
-			{
-				updateColumnAttributes = false;
-			}
 		}
 	}
 
@@ -2566,7 +2565,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	{
 		pg_get_query_def(taskQuery, queryString);
 		ereport(DEBUG4, (errmsg("distributed statement: %s",
-								ApplyLogRedaction(queryString->data))));
+								queryString->data)));
 		SetTaskQueryString(subqueryTask, queryString->data);
 	}
 
@@ -2721,7 +2720,7 @@ SqlTaskList(Job *job)
 		/* log the query string we generated */
 		ereport(DEBUG4, (errmsg("generated sql query for task %d", sqlTask->taskId),
 						 errdetail("query string: \"%s\"",
-								   ApplyLogRedaction(sqlQueryString->data))));
+								   sqlQueryString->data)));
 
 		sqlTask->anchorShardId = INVALID_SHARD_ID;
 		if (anchorRangeTableBasedAssignment)
@@ -3232,45 +3231,6 @@ BinaryOpExpression(Expr *clause, Node **leftOperand, Node **rightOperand)
 		Assert(*rightOperand != NULL);
 		*rightOperand = strip_implicit_coercions(*rightOperand);
 	}
-	return true;
-}
-
-
-/*
- * SimpleOpExpression checks that given expression is a simple operator
- * expression. A simple operator expression is a binary operator expression with
- * operands of a var and a non-null constant.
- */
-bool
-SimpleOpExpression(Expr *clause)
-{
-	Const *constantClause = NULL;
-
-	Node *leftOperand;
-	Node *rightOperand;
-	if (!BinaryOpExpression(clause, &leftOperand, &rightOperand))
-	{
-		return false;
-	}
-
-	if (IsA(rightOperand, Const) && IsA(leftOperand, Var))
-	{
-		constantClause = (Const *) rightOperand;
-	}
-	else if (IsA(leftOperand, Const) && IsA(rightOperand, Var))
-	{
-		constantClause = (Const *) leftOperand;
-	}
-	else
-	{
-		return false;
-	}
-
-	if (constantClause->constisnull)
-	{
-		return false;
-	}
-
 	return true;
 }
 
@@ -4710,18 +4670,13 @@ MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList, uint32 taskIdIndex)
 	for (uint32 partitionId = initialPartitionId; partitionId < partitionCount;
 		 partitionId++)
 	{
-		Task *mergeTask = NULL;
 		List *mapOutputFetchTaskList = NIL;
 		ListCell *mapTaskCell = NULL;
 		uint32 mergeTaskId = taskIdIndex;
 
-		Query *reduceQuery = mapMergeJob->reduceQuery;
-		if (reduceQuery == NULL)
-		{
-			/* create logical merge task (not executed, but useful for bookkeeping) */
-			mergeTask = CreateBasicTask(jobId, mergeTaskId, MERGE_TASK,
-										"<merge>");
-		}
+		/* create logical merge task (not executed, but useful for bookkeeping) */
+		Task *mergeTask = CreateBasicTask(jobId, mergeTaskId, MERGE_TASK,
+										  "<merge>");
 		mergeTask->partitionId = partitionId;
 		taskIdIndex++;
 

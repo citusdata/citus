@@ -431,7 +431,7 @@ ParseTreeRawStmt(const char *ddlCommand)
 	/* log immediately if dictated by log statement */
 	if (check_log_statement(parseTreeList))
 	{
-		ereport(LOG, (errmsg("statement: %s", ApplyLogRedaction(ddlCommand)),
+		ereport(LOG, (errmsg("statement: %s", ddlCommand),
 					  errhidestmt(true)));
 	}
 

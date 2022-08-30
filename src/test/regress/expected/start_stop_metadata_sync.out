@@ -1,6 +1,7 @@
 CREATE SCHEMA start_stop_metadata_sync;
 SET search_path TO "start_stop_metadata_sync";
 SET citus.next_shard_id TO 980000;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 980000;
 SET client_min_messages TO WARNING;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
@@ -157,12 +158,12 @@ SELECT * FROM test_matview;
 SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'events%' ORDER BY logicalrelid::text;
         logicalrelid        | partmethod |                                                          partkey                                                           | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
- events                     | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1} |      1390012 | s        | f
- events_2021_feb            | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1} |      1390012 | s        | f
- events_2021_jan            | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1} |      1390012 | s        | f
- events_replicated          | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1} |      1390013 | c        | f
- events_replicated_2021_feb | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1} |      1390013 | c        | f
- events_replicated_2021_jan | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1} |      1390013 | c        | f
+ events                     | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1} |       980000 | s        | f
+ events_2021_feb            | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1} |       980000 | s        | f
+ events_2021_jan            | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1} |       980000 | s        | f
+ events_replicated          | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1} |       980001 | c        | f
+ events_replicated_2021_feb | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1} |       980001 | c        | f
+ events_replicated_2021_jan | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1} |       980001 | c        | f
 (6 rows)
 
 SELECT count(*) > 0 FROM pg_dist_node;

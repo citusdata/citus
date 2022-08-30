@@ -27,6 +27,12 @@ extern bool AddAllLocalTablesToMetadata;
 /* controlled via GUC, should be accessed via EnableLocalReferenceForeignKeys() */
 extern bool EnableLocalReferenceForeignKeys;
 
+/*
+ * GUC that controls whether to allow unique/exclude constraints without
+ * distribution column.
+ */
+extern bool AllowUnsafeConstraints;
+
 extern bool EnableUnsafeTriggers;
 
 extern int MaxMatViewSizeToAutoRecreate;
@@ -252,6 +258,8 @@ extern void ErrorIfUnsupportedForeignConstraintExists(Relation relation,
 													  char distributionMethod,
 													  Var *distributionColumn,
 													  uint32 colocationId);
+extern void EnsureNoFKeyFromTableType(Oid relationId, int tableTypeFlag);
+extern void EnsureNoFKeyToTableType(Oid relationId, int tableTypeFlag);
 extern void ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(Oid localTableId);
 extern bool ColumnReferencedByAnyForeignKey(char *columnName, Oid relationId);
 extern bool ColumnAppearsInForeignKey(char *columnName, Oid relationId);
@@ -264,7 +272,6 @@ extern List * GetForeignConstraintFromDistributedTablesCommands(Oid relationId);
 extern List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
 extern bool AnyForeignKeyDependsOnIndex(Oid indexId);
 extern bool HasForeignKeyWithLocalTable(Oid relationId);
-extern bool HasForeignKeyToCitusLocalTable(Oid relationId);
 extern bool HasForeignKeyToReferenceTable(Oid relationOid);
 extern List * GetForeignKeysFromLocalTables(Oid relationId);
 extern bool TableReferenced(Oid relationOid);

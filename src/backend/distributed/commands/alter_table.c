@@ -640,6 +640,8 @@ ConvertTable(TableConversionState *con)
 		Oid partitionRelationId = InvalidOid;
 		foreach_oid(partitionRelationId, partitionList)
 		{
+			char *tableQualifiedName = generate_qualified_relation_name(
+				partitionRelationId);
 			char *detachPartitionCommand = GenerateDetachPartitionCommand(
 				partitionRelationId);
 			char *attachPartitionCommand = GenerateAlterTableAttachPartitionCommand(
@@ -684,6 +686,19 @@ ConvertTable(TableConversionState *con)
 			{
 				foreignKeyCommands = list_concat(foreignKeyCommands,
 												 partitionReturn->foreignKeyCommands);
+			}
+
+
+			/*
+			 * If we are altering a partitioned distributed table by
+			 * colocateWith:none, we override con->colocationWith parameter
+			 * with the first newly created partition table to share the
+			 * same colocation group for rest of partitions and partitioned
+			 * table.
+			 */
+			if (con->colocateWith != NULL && IsColocateWithNone(con->colocateWith))
+			{
+				con->colocateWith = tableQualifiedName;
 			}
 		}
 	}

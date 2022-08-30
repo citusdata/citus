@@ -1,6 +1,16 @@
 --
 -- GRANT_ON_SCHEMA_PROPAGATION
 --
+-- this test has different output for PG13/14 compared to PG15
+-- In PG15, public schema is owned by pg_database_owner role
+-- Relevant PG commit: b073c3ccd06e4cb845e121387a43faa8c68a7b62
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15;
+ server_version_ge_15
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- test grants are propagated when the schema is
 CREATE SCHEMA dist_schema;
 CREATE TABLE dist_schema.dist_table (id int);
@@ -332,16 +342,16 @@ GRANT USAGE ON SCHEMA PUBLIC TO PUBLIC;
 RESET ROLE;
 -- check if the grants are propagated correctly
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
- nspname |                               nspacl
+ nspname |                                                 nspacl
 ---------------------------------------------------------------------
- public  | {postgres=UC/postgres,=UC/postgres,role_1=U*C*/postgres,=U/role_1}
+ public  | {pg_database_owner=UC/pg_database_owner,=UC/pg_database_owner,role_1=U*C*/pg_database_owner,=U/role_1}
 (1 row)
 
 \c - - - :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
- nspname |                               nspacl
+ nspname |                                                 nspacl
 ---------------------------------------------------------------------
- public  | {postgres=UC/postgres,=UC/postgres,role_1=U*C*/postgres,=U/role_1}
+ public  | {pg_database_owner=UC/pg_database_owner,=UC/pg_database_owner,role_1=U*C*/pg_database_owner,=U/role_1}
 (1 row)
 
 \c - - - :master_port
@@ -354,16 +364,16 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- check if the grants are propagated correctly
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
- nspname |                               nspacl
+ nspname |                                                 nspacl
 ---------------------------------------------------------------------
- public  | {postgres=UC/postgres,=UC/postgres,role_1=U*C*/postgres,=U/role_1}
+ public  | {pg_database_owner=UC/pg_database_owner,=UC/pg_database_owner,role_1=U*C*/pg_database_owner,=U/role_1}
 (1 row)
 
 \c - - - :worker_2_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
- nspname |                               nspacl
+ nspname |                                                 nspacl
 ---------------------------------------------------------------------
- public  | {postgres=UC/postgres,=UC/postgres,role_1=U*C*/postgres,=U/role_1}
+ public  | {pg_database_owner=UC/pg_database_owner,=UC/pg_database_owner,role_1=U*C*/pg_database_owner,=U/role_1}
 (1 row)
 
 \c - - - :master_port
@@ -371,16 +381,16 @@ SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspna
 REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM role_1 CASCADE;
 -- check if the grants are propagated correctly
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
- nspname |               nspacl
+ nspname |                             nspacl
 ---------------------------------------------------------------------
- public  | {postgres=UC/postgres,=UC/postgres}
+ public  | {pg_database_owner=UC/pg_database_owner,=UC/pg_database_owner}
 (1 row)
 
 \c - - - :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspname;
- nspname |               nspacl
+ nspname |                             nspacl
 ---------------------------------------------------------------------
- public  | {postgres=UC/postgres,=UC/postgres}
+ public  | {pg_database_owner=UC/pg_database_owner,=UC/pg_database_owner}
 (1 row)
 
 \c - - - :master_port

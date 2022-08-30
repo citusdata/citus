@@ -74,6 +74,8 @@ static uint64 NextPlanId = 1;
 /* keep track of planner call stack levels */
 int PlannerLevel = 0;
 
+static void ErrorIfQueryHasMergeCommand(Query *queryTree);
+static bool ContainsMergeCommandWalker(Node *node);
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
 static bool IsUpdateOrDelete(Query *query);
@@ -148,6 +150,12 @@ distributed_planner(Query *parse,
 		/* this cursor flag could only be set when Citus has been loaded */
 		Assert(CitusHasBeenLoaded());
 
+		/*
+		 * We cannot have merge command for this path as well because
+		 * there cannot be recursively planned merge command.
+		 */
+		Assert(!ContainsMergeCommandWalker((Node *) parse));
+
 		needsDistributedPlanning = true;
 	}
 	else if (CitusHasBeenLoaded())
@@ -187,13 +195,20 @@ distributed_planner(Query *parse,
 
 		planContext.originalQuery = copyObject(parse);
 
-		/*
-		 * When there are partitioned tables (not applicable to fast path),
-		 * pretend that they are regular tables to avoid unnecessary work
-		 * in standard_planner.
-		 */
+
 		if (!fastPathRouterQuery)
 		{
+			/*
+			 * Fast path queries cannot have merge command, and we
+			 * prevent the remaining here.
+			 */
+			ErrorIfQueryHasMergeCommand(parse);
+
+			/*
+			 * When there are partitioned tables (not applicable to fast path),
+			 * pretend that they are regular tables to avoid unnecessary work
+			 * in standard_planner.
+			 */
 			bool setPartitionedTablesInherited = false;
 			AdjustPartitioningForDistributedPlanning(rangeTableList,
 													 setPartitionedTablesInherited);
@@ -284,6 +299,59 @@ distributed_planner(Query *parse,
 	}
 
 	return result;
+}
+
+
+/*
+ * ErrorIfQueryHasMergeCommand walks over the query tree and throws error
+ * if there are any Merge command (e.g., CMD_MERGE) in the query tree.
+ */
+static void
+ErrorIfQueryHasMergeCommand(Query *queryTree)
+{
+	/*
+	 * Postgres currently doesn't support Merge queries inside subqueries and
+	 * ctes, but lets be defensive and do query tree walk anyway.
+	 *
+	 * We do not call this path for fast-path queries to avoid this additional
+	 * overhead.
+	 */
+	if (ContainsMergeCommandWalker((Node *) queryTree))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("MERGE command is not supported on Citus tables yet")));
+	}
+}
+
+
+/*
+ * ContainsMergeCommandWalker walks over the node and finds if there are any
+ * Merge command (e.g., CMD_MERGE) in the node.
+ */
+static bool
+ContainsMergeCommandWalker(Node *node)
+{
+#if PG_VERSION_NUM >= PG_VERSION_15
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+		if (query->commandType == CMD_MERGE)
+		{
+			return true;
+		}
+
+		return query_tree_walker((Query *) node, ContainsMergeCommandWalker, NULL, 0);
+	}
+
+	return expression_tree_walker(node, ContainsMergeCommandWalker, NULL);
+#endif
+
+	return false;
 }
 
 

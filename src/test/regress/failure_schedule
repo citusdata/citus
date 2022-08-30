@@ -18,6 +18,7 @@ test: failure_copy_on_hash
 test: failure_create_reference_table
 test: failure_create_distributed_table_non_empty
 test: failure_create_table
+test: failure_create_distributed_table_concurrently
 test: failure_single_select
 
 test: failure_multi_shard_update_delete

@@ -1417,3 +1417,27 @@ SELECT shardid FROM pg_dist_shard;
 SELECT rebalance_table_shards('test_with_all_shards_excluded', excluded_shard_list:='{102073, 102074, 102075, 102076}');
 
 DROP TABLE test_with_all_shards_excluded;
+
+SET citus.shard_count TO 2;
+
+CREATE TABLE "events.Energy Added" (user_id int, time timestamp with time zone, data jsonb, PRIMARY KEY (user_id, time )) PARTITION BY RANGE ("time");
+CREATE INDEX idx_btree_hobbies ON "events.Energy Added" USING BTREE ((data->>'location'));
+SELECT create_distributed_table('"events.Energy Added"', 'user_id');
+CREATE TABLE "Energy Added_17634"  PARTITION OF "events.Energy Added" FOR VALUES  FROM ('2018-04-13 00:00:00+00') TO ('2018-04-14 00:00:00+00');
+CREATE TABLE "Energy Added_17635"  PARTITION OF "events.Energy Added" FOR VALUES  FROM ('2018-04-14 00:00:00+00') TO ('2018-04-15 00:00:00+00');
+
+create table colocated_t1 (a int);
+select create_distributed_table('colocated_t1','a',colocate_with=>'"events.Energy Added"');
+
+create table colocated_t2 (a int);
+select create_distributed_table('colocated_t2','a',colocate_with=>'"events.Energy Added"');
+
+create table colocated_t3 (a int);
+select create_distributed_table('colocated_t3','a',colocate_with=>'"events.Energy Added"');
+
+SET client_min_messages TO DEBUG4;
+SELECT * FROM get_rebalance_table_shards_plan('colocated_t1', rebalance_strategy := 'by_disk_size');
+RESET client_min_messages;
+
+DROP TABLE "events.Energy Added", colocated_t1, colocated_t2, colocated_t3;
+RESET citus.shard_count;

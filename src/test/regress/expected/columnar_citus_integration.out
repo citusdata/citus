@@ -957,13 +957,16 @@ SELECT * FROM weird_col_explain;
                Columnar Projected Columns: "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb", "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'"
 (7 rows)
 
+\set VERBOSITY terse
+SELECT public.plan_without_result_lines($Q$
 EXPLAIN (COSTS OFF, SUMMARY OFF)
 SELECT *, "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb"
 FROM weird_col_explain
 WHERE "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb" * 2 >
       "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'!";
+$Q$);
 NOTICE:  identifier "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'!" will be truncated to "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'"
-                                                                                   QUERY PLAN
+                                                                              plan_without_result_lines
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 4
@@ -975,6 +978,7 @@ NOTICE:  identifier "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa
                Columnar Projected Columns: "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb", "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'"
 (8 rows)
 
+\set VERBOSITY default
 -- should not project any columns
 EXPLAIN (COSTS OFF, SUMMARY OFF)
 SELECT COUNT(*) FROM weird_col_explain;

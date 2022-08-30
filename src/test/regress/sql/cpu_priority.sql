@@ -63,6 +63,9 @@ SET search_path TO cpu_priority;
 -- in their CREATE SUBSCRIPTION commands.
 SET citus.log_remote_commands TO ON;
 SET citus.grep_remote_commands = '%CREATE SUBSCRIPTION%';
+-- We disable binary protocol, so we have consistent output between PG13 and
+-- PG14, beacuse PG13 doesn't support binary logical replication.
+SET citus.enable_binary_protocol = false;
 SELECT master_move_shard_placement(11568900, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
 SET citus.cpu_priority_for_logical_replication_senders = 15;
 SELECT master_move_shard_placement(11568900, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'force_logical');

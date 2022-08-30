@@ -182,8 +182,17 @@ GetExplicitTriggerIdList(Oid relationId)
 		 * Note that we mark truncate trigger that we create on citus tables as
 		 * internal. Hence, below we discard citus_truncate_trigger as well as
 		 * the implicit triggers created by postgres for foreign key validation.
+		 *
+		 * Pre PG15, tgisinternal is true for a "child" trigger on a partition
+		 * cloned from the trigger on the parent.
+		 * In PG15, tgisinternal is false in that case. However, we don't want to
+		 * create this trigger on the partition since it will create a conflict
+		 * when we try to attach the partition to the parent table:
+		 * ERROR: trigger "..." for relation "{partition_name}" already exists
+		 * Hence we add an extra check on whether the parent id is invalid to
+		 * make sure this is not a child trigger
 		 */
-		if (!triggerForm->tgisinternal)
+		if (!triggerForm->tgisinternal && (triggerForm->tgparentid == InvalidOid))
 		{
 			triggerIdList = lappend_oid(triggerIdList, triggerForm->oid);
 		}

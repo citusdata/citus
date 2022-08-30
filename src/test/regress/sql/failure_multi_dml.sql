@@ -212,6 +212,7 @@ COPY dml_test FROM STDIN WITH CSV;
 
 -- fail at PREPARED COMMIT as we use 2PC
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
+SET client_min_messages TO ERROR;
 
 BEGIN;
 DELETE FROM dml_test WHERE id = 1;
@@ -220,6 +221,8 @@ INSERT INTO dml_test VALUES (5, 'Epsilon');
 UPDATE dml_test SET name = 'alpha' WHERE id = 1;
 UPDATE dml_test SET name = 'gamma' WHERE id = 3;
 COMMIT;
+
+RESET client_min_messages;
 
 -- all changes should be committed because we injected
 -- the failure on the COMMIT time. And, we should not

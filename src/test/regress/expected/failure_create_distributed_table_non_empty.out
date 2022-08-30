@@ -115,7 +115,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -572,7 +574,7 @@ SELECT citus.mitmproxy('conn.kill()');
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -593,7 +595,7 @@ SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables W
 (2 rows)
 
 -- in the first test, cancel the first connection we sent from the coordinator
-SELECT citus.mitmproxy('conn.cancel(' ||  pg_backend_pid() || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE").cancel(' ||  pg_backend_pid() || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -637,7 +639,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------

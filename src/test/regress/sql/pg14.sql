@@ -1,7 +1,7 @@
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 13 AS server_version_above_thirteen
+SELECT substring(:'server_version', '\d+')::int >= 14 AS server_version_ge_14
 \gset
-\if :server_version_above_thirteen
+\if :server_version_ge_14
 \else
 \q
 \endif
@@ -92,9 +92,9 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE col_compression (a TEXT COMPRESSION pglz, b TEXT);
 SELECT create_distributed_table('col_compression', 'a', shard_count:=4);
 
-SELECT attname || ' ' || attcompression AS column_compression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'col\_compression%' AND attnum > 0 ORDER BY 1;
+SELECT attname || ' ' || attcompression::text AS column_compression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'col\_compression%' AND attnum > 0 ORDER BY 1;
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
-SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
+SELECT attname || ' ' || attcompression::text FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
 )$$);
 
 -- test column compression propagation in rebalance
@@ -103,20 +103,20 @@ SELECT citus_move_shard_placement((SELECT * FROM moving_shard), :'public_worker_
 SELECT rebalance_table_shards('col_compression', rebalance_strategy := 'by_shard_count', shard_transfer_mode := 'block_writes');
 CALL citus_cleanup_orphaned_shards();
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
-SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
+SELECT attname || ' ' || attcompression::text FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
 )$$);
 
 -- test propagation of ALTER TABLE .. ALTER COLUMN .. SET COMPRESSION ..
 ALTER TABLE col_compression ALTER COLUMN b SET COMPRESSION pglz;
 ALTER TABLE col_compression ALTER COLUMN a SET COMPRESSION default;
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
-SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
+SELECT attname || ' ' || attcompression::text FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
 )$$);
 
 -- test propagation of ALTER TABLE .. ADD COLUMN .. COMPRESSION ..
 ALTER TABLE col_compression ADD COLUMN c TEXT COMPRESSION pglz;
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
-SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
+SELECT attname || ' ' || attcompression::text FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
 )$$);
 
 -- test attaching to a partitioned table with column compression
@@ -126,7 +126,7 @@ SELECT create_distributed_table('col_comp_par', 'a');
 CREATE TABLE col_comp_par_1 PARTITION OF col_comp_par FOR VALUES FROM ('abc') TO ('def');
 
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
-SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_comp\_par\_1\_%' AND attnum > 0 ORDER BY 1
+SELECT attname || ' ' || attcompression::text FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_comp\_par\_1\_%' AND attnum > 0 ORDER BY 1
 )$$);
 
 RESET citus.multi_shard_modify_mode;
@@ -762,6 +762,22 @@ WITH (
     fillfactor='75'
 );
 SELECT create_distributed_table('compression_and_generated_col', 'rev', colocate_with:='none');
+
+-- See that it's enabling the binary option for logical replication
+BEGIN;
+SET LOCAL citus.log_remote_commands TO ON;
+SET LOCAL citus.grep_remote_commands = '%CREATE SUBSCRIPTION%';
+SELECT citus_move_shard_placement(980042, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode := 'force_logical');
+ROLLBACK;
+
+-- See that it doesn't enable the binary option for logical replication if we
+-- disable binary protocol.
+BEGIN;
+SET LOCAL citus.log_remote_commands TO ON;
+SET LOCAL citus.grep_remote_commands = '%CREATE SUBSCRIPTION%';
+SET LOCAL citus.enable_binary_protocol = FALSE;
+SELECT citus_move_shard_placement(980042, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode := 'force_logical');
+ROLLBACK;
 
 DROP TABLE compression_and_defaults, compression_and_generated_col;
 

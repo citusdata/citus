@@ -50,7 +50,7 @@ extern void BackendManagementShmemInit(void);
 extern size_t BackendManagementShmemSize(void);
 extern void InitializeBackendManagement(void);
 extern int TotalProcCount(void);
-extern void InitializeBackendData(void);
+extern void InitializeBackendData(uint64 globalPID);
 extern void LockBackendSharedMemory(LWLockMode lockMode);
 extern void UnlockBackendSharedMemory(void);
 extern void UnSetDistributedTransactionId(void);

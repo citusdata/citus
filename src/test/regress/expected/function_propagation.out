@@ -1,5 +1,6 @@
 CREATE SCHEMA function_propagation_schema;
 SET search_path TO 'function_propagation_schema';
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 10000;
 -- Check whether supported dependencies can be distributed while propagating functions
 -- Check types
 SET citus.enable_metadata_sync TO OFF;
@@ -1115,7 +1116,7 @@ SELECT create_distributed_function('func_to_colocate(int)', colocate_with:='tbl_
 SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catalog.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
  distribution_argument_index | colocationid | force_delegation
 ---------------------------------------------------------------------
-                             |        10003 |
+                             |        10002 |
 (1 row)
 
 -- convert to non-delegated
@@ -1143,7 +1144,7 @@ SELECT create_distributed_function('func_to_colocate(int)','$1','tbl_to_colocate
 SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catalog.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
  distribution_argument_index | colocationid | force_delegation
 ---------------------------------------------------------------------
-                           0 |        10005 |
+                           0 |        10001 |
 (1 row)
 
 -- try create or replace the same func
@@ -1152,7 +1153,7 @@ CREATE OR REPLACE FUNCTION func_to_colocate (a int) returns int as $$select 1;$$
 SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catalog.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
  distribution_argument_index | colocationid | force_delegation
 ---------------------------------------------------------------------
-                           0 |        10005 |
+                           0 |        10001 |
 (1 row)
 
 -- convert to non-delegated
@@ -1180,7 +1181,7 @@ SELECT create_distributed_function('func_to_colocate(int)','$1','tbl_to_colocate
 SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catalog.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
  distribution_argument_index | colocationid | force_delegation
 ---------------------------------------------------------------------
-                           0 |        10005 | t
+                           0 |        10001 | t
 (1 row)
 
 -- convert to non-delegated

@@ -24,6 +24,7 @@
 #include "nodes/nodes.h"
 #include "nodes/primnodes.h"
 #include "parser/scansup.h"
+#include "parser/parse_relation.h"
 #include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/errcodes.h"
@@ -123,7 +124,7 @@ column_to_column_name(PG_FUNCTION_ARGS)
 Var *
 BuildDistributionKeyFromColumnName(Oid relationId, char *columnName, LOCKMODE lockMode)
 {
-	Relation relation = try_relation_open(relationId, ExclusiveLock);
+	Relation relation = try_relation_open(relationId, lockMode);
 
 	if (relation == NULL)
 	{
@@ -169,6 +170,76 @@ BuildDistributionKeyFromColumnName(Oid relationId, char *columnName, LOCKMODE lo
 	ReleaseSysCache(columnTuple);
 
 	return distributionColumn;
+}
+
+
+/*
+ * EnsureValidDistributionColumn Errors out if the
+ * specified column does not exist or is not suitable to be used as a
+ * distribution column. It does not hold locks.
+ */
+void
+EnsureValidDistributionColumn(Oid relationId, char *columnName)
+{
+	Relation relation = try_relation_open(relationId, AccessShareLock);
+
+	if (relation == NULL)
+	{
+		ereport(ERROR, (errmsg("relation does not exist")));
+	}
+
+	char *tableName = get_rel_name(relationId);
+
+	/* it'd probably better to downcase identifiers consistent with SQL case folding */
+	truncate_identifier(columnName, strlen(columnName), true);
+
+	/* lookup column definition */
+	HeapTuple columnTuple = SearchSysCacheAttName(relationId, columnName);
+	if (!HeapTupleIsValid(columnTuple))
+	{
+		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_COLUMN),
+						errmsg("column \"%s\" of relation \"%s\" does not exist",
+							   columnName, tableName)));
+	}
+
+	Form_pg_attribute columnForm = (Form_pg_attribute) GETSTRUCT(columnTuple);
+
+	/* check if the column may be referenced in the distribution key */
+	if (columnForm->attnum <= 0)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot reference system column \"%s\" in relation \"%s\"",
+							   columnName, tableName)));
+	}
+
+	ReleaseSysCache(columnTuple);
+
+	relation_close(relation, AccessShareLock);
+}
+
+
+/*
+ * ColumnTypeIdForRelationColumnName returns type id for the given relation's column name.
+ */
+Oid
+ColumnTypeIdForRelationColumnName(Oid relationId, char *columnName)
+{
+	Assert(columnName != NULL);
+
+	AttrNumber attNum = get_attnum(relationId, columnName);
+
+	if (attNum == InvalidAttrNumber)
+	{
+		ereport(ERROR, (errmsg("invalid attr %s", columnName)));
+	}
+
+	Relation relation = relation_open(relationId, AccessShareLock);
+
+	Oid typeId = attnumTypeId(relation, attNum);
+
+	relation_close(relation, AccessShareLock);
+
+	return typeId;
 }
 
 

@@ -269,13 +269,13 @@ RESET client_min_messages;
 SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::regclass::text IN ('test_proc_colocation_0');
       logicalrelid      | colocationid
 ---------------------------------------------------------------------
- test_proc_colocation_0 |      1410004
+ test_proc_colocation_0 |      1410005
 (1 row)
 
 SELECT proname, colocationid FROM pg_proc JOIN pg_catalog.pg_dist_object ON pg_proc.oid = pg_catalog.pg_dist_object.objid WHERE proname IN ('proc_0');
  proname | colocationid
 ---------------------------------------------------------------------
- proc_0  |      1410004
+ proc_0  |      1410005
 (1 row)
 
 -- shardCount is not null && cascade_to_colocated is true
@@ -302,13 +302,13 @@ RESET client_min_messages;
 SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::regclass::text IN ('test_proc_colocation_0');
       logicalrelid      | colocationid
 ---------------------------------------------------------------------
- test_proc_colocation_0 |      1410003
+ test_proc_colocation_0 |      1410006
 (1 row)
 
 SELECT proname, colocationid FROM pg_proc JOIN pg_catalog.pg_dist_object ON pg_proc.oid = pg_catalog.pg_dist_object.objid WHERE proname IN ('proc_0');
  proname | colocationid
 ---------------------------------------------------------------------
- proc_0  |      1410003
+ proc_0  |      1410006
 (1 row)
 
 -- colocatewith is not null && cascade_to_colocated is true
@@ -356,13 +356,13 @@ RESET client_min_messages;
 SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::regclass::text IN ('test_proc_colocation_0');
       logicalrelid      | colocationid
 ---------------------------------------------------------------------
- test_proc_colocation_0 |      1410005
+ test_proc_colocation_0 |      1410008
 (1 row)
 
 SELECT proname, colocationid FROM pg_proc JOIN pg_catalog.pg_dist_object ON pg_proc.oid = pg_catalog.pg_dist_object.objid WHERE proname IN ('proc_0');
  proname | colocationid
 ---------------------------------------------------------------------
- proc_0  |      1410005
+ proc_0  |      1410008
 (1 row)
 
 -- try a case with more than one procedure
@@ -386,14 +386,14 @@ SELECT create_distributed_function('proc_1(float8)', 'dist_key', 'test_proc_colo
 SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::regclass::text IN ('test_proc_colocation_0');
       logicalrelid      | colocationid
 ---------------------------------------------------------------------
- test_proc_colocation_0 |      1410005
+ test_proc_colocation_0 |      1410008
 (1 row)
 
 SELECT proname, colocationid FROM pg_proc JOIN pg_catalog.pg_dist_object ON pg_proc.oid = pg_catalog.pg_dist_object.objid WHERE proname IN ('proc_0', 'proc_1') ORDER BY proname;
  proname | colocationid
 ---------------------------------------------------------------------
- proc_0  |      1410005
- proc_1  |      1410005
+ proc_0  |      1410008
+ proc_1  |      1410008
 (2 rows)
 
 SET client_min_messages TO DEBUG1;
@@ -437,14 +437,14 @@ RESET client_min_messages;
 SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::regclass::text IN ('test_proc_colocation_0');
       logicalrelid      | colocationid
 ---------------------------------------------------------------------
- test_proc_colocation_0 |      1410003
+ test_proc_colocation_0 |      1410009
 (1 row)
 
 SELECT proname, colocationid FROM pg_proc JOIN pg_catalog.pg_dist_object ON pg_proc.oid = pg_catalog.pg_dist_object.objid WHERE proname IN ('proc_0', 'proc_1') ORDER BY proname;
  proname | colocationid
 ---------------------------------------------------------------------
- proc_0  |      1410003
- proc_1  |      1410003
+ proc_0  |      1410009
+ proc_1  |      1410009
 (2 rows)
 
 -- case which shouldn't preserve colocation for now
@@ -462,14 +462,14 @@ NOTICE:  renaming the new table to mx_alter_distributed_table.test_proc_colocati
 SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::regclass::text IN ('test_proc_colocation_0');
       logicalrelid      | colocationid
 ---------------------------------------------------------------------
- test_proc_colocation_0 |      1410006
+ test_proc_colocation_0 |      1410010
 (1 row)
 
 SELECT proname, colocationid FROM pg_proc JOIN pg_catalog.pg_dist_object ON pg_proc.oid = pg_catalog.pg_dist_object.objid WHERE proname IN ('proc_0', 'proc_1') ORDER BY proname;
  proname | colocationid
 ---------------------------------------------------------------------
- proc_0  |      1410003
- proc_1  |      1410003
+ proc_0  |      1410009
+ proc_1  |      1410009
 (2 rows)
 
 SET client_min_messages TO WARNING;

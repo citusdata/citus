@@ -36,6 +36,7 @@ extern void InsertColocationGroupLocally(uint32 colocationId, int shardCount,
 										 Oid distributionColumnType,
 										 Oid distributionColumnCollation);
 extern bool IsColocateWithNone(char *colocateWithTableName);
+extern bool IsColocateWithDefault(char *colocateWithTableName);
 extern uint32 GetNextColocationId(void);
 extern void ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId);
 extern void CheckReplicationModel(Oid sourceRelationId, Oid targetRelationId);
@@ -48,5 +49,15 @@ extern void UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colo
 extern void DeleteColocationGroupIfNoTablesBelong(uint32 colocationId);
 extern List * ColocationGroupTableList(uint32 colocationId, uint32 count);
 extern void DeleteColocationGroupLocally(uint32 colocationId);
+extern uint32 FindColocateWithColocationId(Oid relationId, char replicationModel,
+										   Oid distributionColumnType,
+										   Oid distributionColumnCollation,
+										   int shardCount, bool shardCountIsStrict,
+										   char *colocateWithTableName);
+extern void EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
+										  Oid distributionColumnType,
+										  Oid sourceRelationId);
+extern void AcquireColocationDefaultLock(void);
+extern void ReleaseColocationDefaultLock(void);
 
 #endif /* COLOCATION_UTILS_H_ */

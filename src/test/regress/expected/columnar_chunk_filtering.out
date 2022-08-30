@@ -264,17 +264,21 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
          Columnar Projected Columns: a
 (9 rows)
 
+SELECT plan_without_arrows($Q$
 EXPLAIN (costs off, timing off, summary off)
   SELECT y, * FROM another_columnar_table;
-                      QUERY PLAN
+$Q$);
+                      plan_without_arrows
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on another_columnar_table
    Columnar Projected Columns: x, y
 (2 rows)
 
+SELECT plan_without_arrows($Q$
 EXPLAIN (costs off, timing off, summary off)
   SELECT *, x FROM another_columnar_table;
-                      QUERY PLAN
+$Q$);
+                      plan_without_arrows
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on another_columnar_table
    Columnar Projected Columns: x, y

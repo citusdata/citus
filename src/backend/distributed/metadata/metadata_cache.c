@@ -496,6 +496,49 @@ IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
 
 
 /*
+ * GetTableTypeName returns string representation of the table type.
+ */
+char *
+GetTableTypeName(Oid tableId)
+{
+	bool regularTable = false;
+	char partitionMethod = ' ';
+	char replicationModel = ' ';
+	if (IsCitusTable(tableId))
+	{
+		CitusTableCacheEntry *referencingCacheEntry = GetCitusTableCacheEntry(tableId);
+		partitionMethod = referencingCacheEntry->partitionMethod;
+		replicationModel = referencingCacheEntry->replicationModel;
+	}
+	else
+	{
+		regularTable = true;
+	}
+
+	if (regularTable)
+	{
+		return "regular table";
+	}
+	else if (partitionMethod == 'h')
+	{
+		return "distributed table";
+	}
+	else if (partitionMethod == 'n' && replicationModel == 't')
+	{
+		return "reference table";
+	}
+	else if (partitionMethod == 'n' && replicationModel != 't')
+	{
+		return "citus local table";
+	}
+	else
+	{
+		return "unknown table";
+	}
+}
+
+
+/*
  * IsCitusTable returns whether relationId is a distributed relation or
  * not.
  */
@@ -614,6 +657,45 @@ PartitionColumnViaCatalog(Oid relationId)
 	table_close(pgDistPartition, NoLock);
 
 	return partitionColumn;
+}
+
+
+/*
+ * ColocationIdViaCatalog gets a relationId and returns the colocation
+ * id column from pg_dist_partition via reading from catalog.
+ */
+uint32
+ColocationIdViaCatalog(Oid relationId)
+{
+	HeapTuple partitionTuple = PgDistPartitionTupleViaCatalog(relationId);
+	if (!HeapTupleIsValid(partitionTuple))
+	{
+		return INVALID_COLOCATION_ID;
+	}
+
+	Datum datumArray[Natts_pg_dist_partition];
+	bool isNullArray[Natts_pg_dist_partition];
+
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
+
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	heap_deform_tuple(partitionTuple, tupleDescriptor, datumArray, isNullArray);
+
+	if (isNullArray[Anum_pg_dist_partition_colocationid - 1])
+	{
+		/* colocation id cannot be NULL, still let's make sure */
+		heap_freetuple(partitionTuple);
+		table_close(pgDistPartition, NoLock);
+		return INVALID_COLOCATION_ID;
+	}
+
+	Datum colocationIdDatum = datumArray[Anum_pg_dist_partition_colocationid - 1];
+	uint32 colocationId = DatumGetUInt32(colocationIdDatum);
+
+	heap_freetuple(partitionTuple);
+	table_close(pgDistPartition, NoLock);
+
+	return colocationId;
 }
 
 
@@ -2832,42 +2914,6 @@ TextOutFunctionId(void)
 
 
 /*
- * PgTableVisibleFuncId returns oid of the pg_table_is_visible function.
- */
-Oid
-PgTableVisibleFuncId(void)
-{
-	if (MetadataCache.pgTableIsVisibleFuncId == InvalidOid)
-	{
-		const int argCount = 1;
-
-		MetadataCache.pgTableIsVisibleFuncId =
-			FunctionOid("pg_catalog", "pg_table_is_visible", argCount);
-	}
-
-	return MetadataCache.pgTableIsVisibleFuncId;
-}
-
-
-/*
- * CitusTableVisibleFuncId returns oid of the citus_table_is_visible function.
- */
-Oid
-CitusTableVisibleFuncId(void)
-{
-	if (MetadataCache.citusTableIsVisibleFuncId == InvalidOid)
-	{
-		const int argCount = 1;
-
-		MetadataCache.citusTableIsVisibleFuncId =
-			FunctionOid("pg_catalog", "citus_table_is_visible", argCount);
-	}
-
-	return MetadataCache.citusTableIsVisibleFuncId;
-}
-
-
-/*
  * RelationIsAKnownShardFuncId returns oid of the relation_is_a_known_shard function.
  */
 Oid
@@ -4421,17 +4467,6 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 	table_close(pgDistPartition, AccessShareLock);
 
 	return relationIdList;
-}
-
-
-/*
- * ClusterHasReferenceTable returns true if the cluster has
- * any reference table.
- */
-bool
-ClusterHasReferenceTable(void)
-{
-	return list_length(CitusTableTypeIdList(REFERENCE_TABLE)) > 0;
 }
 
 

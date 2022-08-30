@@ -47,4 +47,5 @@ extern void DropShardSplitPublications(MultiConnection *sourceConnection,
 extern void DropShardSplitSubsriptions(List *shardSplitSubscribersMetadataList);
 extern void DropShardSplitReplicationSlots(MultiConnection *sourceConnection,
 										   List *replicationSlotInfoList);
+
 #endif /* SHARDSPLIT_LOGICAL_REPLICATION_H */

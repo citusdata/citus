@@ -146,6 +146,7 @@ DEFINE_COLUMNAR_PASSTHROUGH_FUNC(test_columnar_storage_write_new_page)
 #define DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE 9999999
 static char *CitusVersion = CITUS_VERSION;
 static char *DeprecatedEmptyString = "";
+static char *MitmfifoEmptyString = "";
 
 /* deprecated GUC value that should not be used anywhere outside this file */
 static int ReplicationModel = REPLICATION_MODEL_STREAMING;
@@ -653,9 +654,17 @@ void
 StartupCitusBackend(void)
 {
 	InitializeMaintenanceDaemonBackend();
-	InitializeBackendData();
-	RegisterConnectionCleanup();
+
+	/*
+	 * For queries this will be a no-op. But for background daemons we might
+	 * still need to initialize the backend data. For those backaground daemons
+	 * it doesn't really matter that we temporarily assign
+	 * INVALID_CITUS_INTERNAL_BACKEND_GPID, since we override it again two
+	 * lines below.
+	 */
+	InitializeBackendData(INVALID_CITUS_INTERNAL_BACKEND_GPID);
 	AssignGlobalPID();
+	RegisterConnectionCleanup();
 }
 
 
@@ -727,8 +736,8 @@ CitusCleanupConnectionsAtExit(int code, Datum arg)
 	DeallocateReservedConnections();
 
 	/* we don't want any monitoring view/udf to show already exited backends */
-	UnSetGlobalPID();
 	SetActiveMyBackend(false);
+	UnSetGlobalPID();
 }
 
 
@@ -815,6 +824,26 @@ RegisterCitusConfigVariables(void)
 					 "disallowed by default. This setting can be used to allow "
 					 "nested distributed execution."),
 		&AllowNestedDistributedExecution,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.allow_unsafe_constraints",
+		gettext_noop("Enables unique constraints and exclusion constraints "
+					 "that do not include a distribution column."),
+		gettext_noop("To enforce global uniqueness, Citus normally requires "
+					 "that unique constraints and exclusion constraints contain "
+					 "the distribution column. If the tuple does not include the "
+					 "distribution column, Citus cannot ensure that the same value "
+					 "is not present in another shard. However, in some cases the "
+					 "index creator knows that uniqueness within the shard implies "
+					 "global uniqueness (e.g. when indexing an expression derived "
+					 "from the distribution column) and adding the distribution column "
+					 "separately may not be desirable. This setting can then be used "
+					 "to disable the check."),
+		&AllowUnsafeConstraints,
 		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
@@ -1786,6 +1815,24 @@ RegisterCitusConfigVariables(void)
 		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	/*
+	 * Previously we setting this configuration parameter
+	 * in the fly for failure tests schedule.
+	 * However, PG15 doesn't allow that anymore: reserved prefixes
+	 * like "citus" cannot be used to set non-existing GUCs.
+	 * Relevant PG commit: 88103567cb8fa5be46dc9fac3e3b8774951a2be7
+	 */
+
+	DefineCustomStringVariable(
+		"citus.mitmfifo",
+		gettext_noop("Sets the citus mitm fifo path for failure tests"),
+		gettext_noop("This GUC is only used for testing."),
+		&MitmfifoEmptyString,
+		"",
+		PGC_SUSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomEnumVariable(
 		"citus.multi_shard_modify_mode",
 		gettext_noop("Sets the connection type for multi shard modify queries"),
@@ -2679,36 +2726,28 @@ CitusAuthHook(Port *port, int status)
 									  "regular client connections",
 									  MaxClientConnections)));
 		}
+	}
 
-		/*
-		 * Right after this, before we assign global pid, this backend
-		 * might get blocked by a DDL as that happens during parsing.
-		 *
-		 * That's why, lets mark the backend as an external backend
-		 * which is likely to execute a distributed command.
-		 *
-		 * We do this so that this backend gets the chance to show
-		 * up in citus_lock_waits.
-		 *
-		 * We cannot assign a new global PID yet here, because that
-		 * would require reading from catalogs, but that's not allowed
-		 * this early in the connection startup (because no database
-		 * has been assigned yet).
-		 */
-		InitializeBackendData();
-		SetBackendDataDistributedCommandOriginator(true);
-	}
-	else
-	{
-		/*
-		 * We set the global PID in the backend data here already to be able to
-		 * do blocked process detection on connections that are opened over a
-		 * replication connection. A replication connection backend will never
-		 * call StartupCitusBackend, which normally sets up the global PID.
-		 */
-		InitializeBackendData();
-		SetBackendDataGlobalPID(gpid);
-	}
+	/*
+	 * Right after this, but before we assign global pid, this backend might
+	 * get blocked by a DDL as that happens during parsing.
+	 *
+	 * That's why, we now initialize its backend data, with the gpid.
+	 *
+	 * We do this so that this backend gets the chance to show up in
+	 * citus_lock_waits.
+	 *
+	 * We cannot assign a new global PID yet here, because that would require
+	 * reading from catalogs, but that's not allowed this early in the
+	 * connection startup (because no database has been assigned yet).
+	 *
+	 * A second reason is for backends that never call StartupCitusBackend. For
+	 * those we already set the global PID in the backend data here to be able
+	 * to do blocked process detection on connections that are opened over a
+	 * replication connection. A replication connection backend will never call
+	 * StartupCitusBackend, which normally sets up the global PID.
+	 */
+	InitializeBackendData(gpid);
 
 	/* let other authentication hooks to kick in first */
 	if (original_client_auth_hook)

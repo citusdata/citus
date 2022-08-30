@@ -4,9 +4,9 @@
 -- tests citus_stat_statements functionality
 
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int > 13 AS server_version_above_thirteen
+SELECT substring(:'server_version', '\d+')::int >= 14 AS server_version_ge_14
 \gset
-\if :server_version_above_thirteen
+\if :server_version_ge_14
 SET compute_query_id = 'on';
 \endif
 
@@ -50,7 +50,7 @@ SELECT create_distributed_table('test','a');
 insert into test values(1);
 
 select query, calls from citus_stat_statements();
-\if :server_version_above_thirteen
+\if :server_version_ge_14
 SET compute_query_id = 'off';
 \else
 set citus.stat_statements_track = 'none';
@@ -64,7 +64,7 @@ insert into test values(1);
 select query, calls from citus_stat_statements();
 
 
-\if :server_version_above_thirteen
+\if :server_version_ge_14
 SET compute_query_id = 'on';
 \else
 RESET citus.stat_statements_track;
@@ -290,6 +290,6 @@ DROP TABLE stat_test_text, stat_test_bigint, stat_test_bigint_other, stat_test_r
 DROP FUNCTION normalize_query_string(text);
 
 
-\if :server_version_above_thirteen
+\if :server_version_ge_14
 SET compute_query_id = 'off';
 \endif

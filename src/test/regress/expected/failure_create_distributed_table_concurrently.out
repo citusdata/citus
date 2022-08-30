@@ -1,0 +1,203 @@
+--
+-- failure_create_distributed_table_concurrently adds failure tests for creating distributed table concurrently without data.
+--
+-- due to different libpq versions
+-- some warning messages differ
+-- between local and CI
+SET client_min_messages TO ERROR;
+-- setup db
+CREATE SCHEMA IF NOT EXISTS create_dist_tbl_con;
+SET SEARCH_PATH = create_dist_tbl_con;
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 1;
+SET citus.max_adaptive_executor_pool_size TO 1;
+SELECT pg_backend_pid() as pid \gset
+-- make sure coordinator is in the metadata
+SELECT citus_set_coordinator_host('localhost', 57636);
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
+-- create table that will be distributed concurrently
+CREATE TABLE table_1 (id int PRIMARY KEY);
+-- START OF TESTS
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+-- failure on shard table creation
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE create_dist_tbl_con.table_1").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table_concurrently('table_1', 'id');
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+-- cancellation on shard table creation
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE TABLE create_dist_tbl_con.table_1").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table_concurrently('table_1', 'id');
+ERROR:  canceling statement due to user request
+-- failure on table constraints on replica identity creation
+SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE create_dist_tbl_con.table_1 ADD CONSTRAINT").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table_concurrently('table_1', 'id');
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+-- cancellation on table constraints on replica identity creation
+SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE create_dist_tbl_con.table_1 ADD CONSTRAINT").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table_concurrently('table_1', 'id');
+ERROR:  canceling statement due to user request
+-- failure on subscription creation
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE SUBSCRIPTION").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table_concurrently('table_1', 'id');
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+-- cancellation on subscription creation
+SELECT citus.mitmproxy('conn.onQuery(query="CREATE SUBSCRIPTION").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table_concurrently('table_1', 'id');
+ERROR:  canceling statement due to user request
+-- failure on catching up LSN
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT min\(latest_end_lsn\) FROM pg_stat_subscription").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table_concurrently('table_1', 'id');
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+-- cancellation on catching up LSN
+SELECT citus.mitmproxy('conn.onQuery(query="SELECT min\(latest_end_lsn\) FROM pg_stat_subscription").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table_concurrently('table_1', 'id');
+ERROR:  canceling statement due to user request
+-- Comment out below flaky tests. It is caused by shard split cleanup which does not work properly yet.
+-- -- failure on dropping subscription
+-- SELECT citus.mitmproxy('conn.onQuery(query="DROP SUBSCRIPTION").kill()');
+-- SELECT create_distributed_table_concurrently('table_1', 'id');
+-- -- cancellation on dropping subscription
+-- SELECT citus.mitmproxy('conn.onQuery(query="DROP SUBSCRIPTION").cancel(' || :pid || ')');
+-- SELECT create_distributed_table_concurrently('table_1', 'id');
+-- -- failure on dropping old shard
+-- SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS create_dist_tbl_con.table_1").kill()');
+-- SELECT create_distributed_table_concurrently('table_1', 'id');
+-- -- cancellation on dropping old shard
+-- SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS create_dist_tbl_con.table_1").cancel(' || :pid || ')');
+-- SELECT create_distributed_table_concurrently('table_1', 'id');
+-- failure on transaction begin
+SELECT citus.mitmproxy('conn.onQuery(query="BEGIN").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table_concurrently('table_1', 'id');
+ERROR:  failure on connection marked as essential: localhost:xxxxx
+-- failure on transaction begin
+SELECT citus.mitmproxy('conn.onQuery(query="BEGIN").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table_concurrently('table_1', 'id');
+ERROR:  canceling statement due to user request
+-- failure on transaction commit
+SELECT citus.mitmproxy('conn.onQuery(query="COMMIT").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table_concurrently('table_1', 'id');
+ERROR:  failure on connection marked as essential: localhost:xxxxx
+-- failure on transaction commit
+SELECT citus.mitmproxy('conn.onQuery(query="COMMIT").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table_concurrently('table_1', 'id');
+ERROR:  canceling statement due to user request
+-- failure on prepare transaction
+SELECT citus.mitmproxy('conn.onQuery(query="PREPARE TRANSACTION").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table_concurrently('table_1', 'id');
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+-- failure on prepare transaction
+SELECT citus.mitmproxy('conn.onQuery(query="PREPARE TRANSACTION").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table_concurrently('table_1', 'id');
+ERROR:  canceling statement due to user request
+-- END OF TESTS
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Verify that the table can be distributed concurrently after unsuccessful attempts
+SELECT create_distributed_table_concurrently('table_1', 'id');
+ create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM pg_dist_shard WHERE logicalrelid = 'table_1'::regclass;
+ logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue
+---------------------------------------------------------------------
+ table_1      | 1880096 | t            | -2147483648   | -1
+ table_1      | 1880097 | t            | 0             | 2147483647
+(2 rows)
+
+DROP SCHEMA create_dist_tbl_con CASCADE;
+SET search_path TO default;
+SELECT citus_remove_node('localhost', 57636);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+

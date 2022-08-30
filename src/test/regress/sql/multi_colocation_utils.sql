@@ -236,7 +236,7 @@ SELECT * FROM pg_dist_colocation WHERE colocationid = 4;
 
 -- check to see whether metadata is synced
 SELECT nodeport, unnest(result::jsonb[]) FROM run_command_on_workers($$
-SELECT array_agg(row_to_json(c)) FROM pg_dist_colocation c WHERE colocationid = 4
+SELECT coalesce(array_agg(row_to_json(c)), '{}') FROM pg_dist_colocation c WHERE colocationid = 4
 $$);
 
 -- create dropped colocation group again
@@ -591,3 +591,40 @@ DROP TABLE range_table;
 DROP TABLE none;
 DROP TABLE ref;
 DROP TABLE local_table;
+
+
+CREATE TABLE tbl_1 (a INT, b INT);
+CREATE TABLE tbl_2 (a INT, b INT);
+CREATE TABLE tbl_3 (a INT, b INT);
+
+SELECT create_distributed_table('tbl_1', 'a', shard_count:=4);
+SELECT create_distributed_table('tbl_2', 'a', shard_count:=4);
+SELECT create_distributed_table('tbl_3', 'a', shard_count:=4, colocate_with:='NONE');
+
+SELECT colocation_id AS col_id_1 FROM citus_tables WHERE table_name::text = 'tbl_1' \gset
+SELECT colocation_id AS col_id_2 FROM citus_tables WHERE table_name::text = 'tbl_2' \gset
+SELECT colocation_id AS col_id_3 FROM citus_tables WHERE table_name::text = 'tbl_3' \gset
+
+-- check that tables are colocated correctly
+SELECT :col_id_1 = :col_id_2;
+SELECT :col_id_1 = :col_id_3;
+
+-- check that there are separate rows for both colocation groups in pg_dist_colocation
+SELECT result FROM run_command_on_all_nodes('
+    SELECT count(*) FROM pg_dist_colocation WHERE colocationid = ' || :col_id_1
+);
+SELECT result FROM run_command_on_all_nodes('
+    SELECT count(*) FROM pg_dist_colocation WHERE colocationid = ' || :col_id_3
+);
+
+DROP TABLE tbl_1, tbl_3;
+
+-- check that empty colocation group is dropped and non-empty is not
+SELECT result FROM run_command_on_all_nodes('
+    SELECT count(*) FROM pg_dist_colocation WHERE colocationid = ' || :col_id_1
+);
+SELECT result FROM run_command_on_all_nodes('
+    SELECT count(*) FROM pg_dist_colocation WHERE colocationid = ' || :col_id_3
+);
+
+DROP TABLE tbl_2;

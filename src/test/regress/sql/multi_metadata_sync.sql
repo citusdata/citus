@@ -1,6 +1,11 @@
 --
 -- MULTI_METADATA_SYNC
 --
+-- this test has different output for PG13/14 compared to PG15
+-- In PG15, public schema is owned by pg_database_owner role
+-- Relevant PG commit: b073c3ccd06e4cb845e121387a43faa8c68a7b62
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15;
 
 -- Tests for metadata snapshot functions, metadata syncing functions and propagation of
 -- metadata changes to MX tables.
@@ -10,6 +15,7 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1310000;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 2;
 SET citus.replicate_reference_tables_on_activate TO off;
 
 SELECT nextval('pg_catalog.pg_dist_placement_placementid_seq') AS last_placement_id

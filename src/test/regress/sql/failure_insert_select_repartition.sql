@@ -47,19 +47,25 @@ INSERT INTO target_table SELECT * FROM replicated_source_table;
 SELECT * FROM target_table ORDER BY a;
 
 --
--- kill fetch_intermediate_results
+-- kill the COPY command that's created by fetch_intermediate_results
 -- this fails the fetch into target, so source replication doesn't matter
 -- and both should fail
+-- We don't kill the fetch_intermediate_results query directly, because that
+-- resulted in randomly failing tests on CI. The reason for that is that there
+-- is a race condition, where killing the fetch_intermediate_results query
+-- removes the data files before the fetch_intermediate_results query from the
+-- other node can read them. In theory a similar race condition still exists
+-- when killing the COPY, but CI doesn't hit that race condition in practice.
 --
 
 TRUNCATE target_table;
 
-SELECT citus.mitmproxy('conn.onQuery(query="fetch_intermediate_results").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="COPY").kill()');
 INSERT INTO target_table SELECT * FROM source_table;
 
 SELECT * FROM target_table ORDER BY a;
 
-SELECT citus.mitmproxy('conn.onQuery(query="fetch_intermediate_results").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="COPY").kill()');
 INSERT INTO target_table SELECT * FROM replicated_source_table;
 
 SELECT * FROM target_table ORDER BY a;

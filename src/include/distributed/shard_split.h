@@ -12,6 +12,8 @@
 #ifndef SHARDSPLIT_H_
 #define SHARDSPLIT_H_
 
+#include "distributed/utils/distribution_column_map.h"
+
 /* Split Modes supported by Shard Split API */
 typedef enum SplitMode
 {
@@ -28,9 +30,9 @@ typedef enum SplitMode
 typedef enum SplitOperation
 {
 	SHARD_SPLIT_API = 0,
-	ISOLATE_TENANT_TO_NEW_SHARD
+	ISOLATE_TENANT_TO_NEW_SHARD,
+	CREATE_DISTRIBUTED_TABLE
 } SplitOperation;
-
 
 /*
  * SplitShard API to split a given shard (or shard group) using split mode and
@@ -40,10 +42,15 @@ extern void SplitShard(SplitMode splitMode,
 					   SplitOperation splitOperation,
 					   uint64 shardIdToSplit,
 					   List *shardSplitPointsList,
-					   List *nodeIdsForPlacementList);
+					   List *nodeIdsForPlacementList,
+					   DistributionColumnMap *distributionColumnOverrides,
+					   List *colocatedShardIntervalList,
+					   uint32 targetColocationId);
 
 extern void DropShardList(List *shardIntervalList);
 
 extern SplitMode LookupSplitMode(Oid shardTransferModeOid);
+
+extern void ErrorIfMultipleNonblockingMoveSplitInTheSameTransaction(void);
 
 #endif /* SHARDSPLIT_H_ */

@@ -160,7 +160,6 @@ typedef struct Job
 typedef struct MapMergeJob
 {
 	Job job;
-	Query *reduceQuery;
 	PartitionType partitionType;
 	Var *partitionColumn;
 	uint32 partitionCount;
@@ -551,7 +550,6 @@ extern CollateExpr * RelabelTypeToCollateExpr(RelabelType *relabelType);
 extern Node * BuildBaseConstraint(Var *column);
 extern void UpdateConstraint(Node *baseConstraint, ShardInterval *shardInterval);
 extern bool BinaryOpExpression(Expr *clause, Node **leftOperand, Node **rightOperand);
-extern bool SimpleOpExpression(Expr *clause);
 
 /* helper functions */
 extern Var * MakeInt4Column(void);

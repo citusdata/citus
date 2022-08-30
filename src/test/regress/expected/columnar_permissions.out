@@ -37,7 +37,8 @@ ERROR:  must be owner of table no_access
 -- only tuples related to columnar_permissions should be visible
 select relation, chunk_group_row_limit, stripe_row_limit, compression, compression_level
   from columnar.options
-  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass);
+  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass)
+  order by relation;
        relation       | chunk_group_row_limit | stripe_row_limit | compression | compression_level
 ---------------------------------------------------------------------
  columnar_permissions |                 10000 |             2222 | none        |                 3
@@ -45,7 +46,8 @@ select relation, chunk_group_row_limit, stripe_row_limit, compression, compressi
 
 select relation, stripe_num, row_count, first_row_number
   from columnar.stripe
-  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass);
+  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass)
+  order by relation, stripe_num;
        relation       | stripe_num | row_count | first_row_number
 ---------------------------------------------------------------------
  columnar_permissions |          1 |         1 |                1
@@ -54,7 +56,8 @@ select relation, stripe_num, row_count, first_row_number
 
 select relation, stripe_num, attr_num, chunk_group_num, value_count
   from columnar.chunk
-  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass);
+  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass)
+  order by relation, stripe_num;
        relation       | stripe_num | attr_num | chunk_group_num | value_count
 ---------------------------------------------------------------------
  columnar_permissions |          1 |        1 |               0 |           1
@@ -63,7 +66,8 @@ select relation, stripe_num, attr_num, chunk_group_num, value_count
 
 select relation, stripe_num, chunk_group_num, row_count
   from columnar.chunk_group
-  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass);
+  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass)
+  order by relation, stripe_num;
        relation       | stripe_num | chunk_group_num | row_count
 ---------------------------------------------------------------------
  columnar_permissions |          1 |               0 |         1
@@ -93,7 +97,8 @@ PL/pgSQL function alter_columnar_table_set(regclass,integer,integer,name,integer
 -- should see tuples from both columnar_permissions and no_access
 select relation, chunk_group_row_limit, stripe_row_limit, compression, compression_level
   from columnar.options
-  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass);
+  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass)
+  order by relation;
        relation       | chunk_group_row_limit | stripe_row_limit | compression | compression_level
 ---------------------------------------------------------------------
  no_access            |                 10000 |           150000 | zstd        |                 3
@@ -102,7 +107,8 @@ select relation, chunk_group_row_limit, stripe_row_limit, compression, compressi
 
 select relation, stripe_num, row_count, first_row_number
   from columnar.stripe
-  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass);
+  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass)
+  order by relation, stripe_num;
        relation       | stripe_num | row_count | first_row_number
 ---------------------------------------------------------------------
  no_access            |          1 |         1 |                1
@@ -116,7 +122,8 @@ select relation, stripe_num, row_count, first_row_number
 
 select relation, stripe_num, attr_num, chunk_group_num, value_count
   from columnar.chunk
-  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass);
+  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass)
+  order by relation, stripe_num;
        relation       | stripe_num | attr_num | chunk_group_num | value_count
 ---------------------------------------------------------------------
  no_access            |          1 |        1 |               0 |           1
@@ -134,7 +141,8 @@ select relation, stripe_num, attr_num, chunk_group_num, value_count
 
 select relation, stripe_num, chunk_group_num, row_count
   from columnar.chunk_group
-  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass);
+  where relation in ('no_access'::regclass, 'columnar_permissions'::regclass)
+  order by relation, stripe_num;
        relation       | stripe_num | chunk_group_num | row_count
 ---------------------------------------------------------------------
  no_access            |          1 |               0 |         1

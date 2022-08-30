@@ -1,8 +1,21 @@
+--
+-- ISSUE_5248
+--
+-- This test file has an alternative output because of the change in the
+-- backup modes of Postgres. Specifically, there is a renaming
+-- issue: pg_stop_backup PRE PG15 vs pg_backup_stop PG15+
+-- The alternative output can be deleted when we drop support for PG14
+--
+
 CREATE SCHEMA issue_5248;
 SET search_path TO issue_5248;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 3013000;
+
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
+\gset
 
 create table countries(
   id serial primary key
@@ -190,7 +203,11 @@ FROM     (
                        (
                               SELECT utc_offset
                               FROM   pg_catalog.pg_timezone_names limit 1 offset 4) limit 91) AS subq_3
+\if :server_version_ge_15
+WHERE    pg_catalog.pg_backup_stop() > cast(NULL AS record) limit 100;
+\else
 WHERE    pg_catalog.pg_stop_backup() > cast(NULL AS pg_lsn) limit 100;
+\endif
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA issue_5248 CASCADE;

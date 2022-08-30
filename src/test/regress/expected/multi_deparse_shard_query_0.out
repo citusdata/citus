@@ -1,0 +1,419 @@
+--
+-- MULTI_DEPARSE_SHARD_QUERY
+--
+-- This test file has an alternative output because of the change in the
+-- display of SQL-standard function's arguments in INSERT/SELECT in PG15.
+-- The alternative output can be deleted when we drop support for PG14
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15;
+ server_version_ge_15
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SET citus.next_shard_id TO 13100000;
+SET citus.shard_replication_factor TO 1;
+CREATE FUNCTION deparse_shard_query_test(text)
+	RETURNS VOID
+	AS 'citus'
+ 	LANGUAGE C STRICT;
+-- create the first table
+CREATE TABLE raw_events_1
+	(tenant_id bigint,
+	 value_1 int,
+	 value_2 int,
+	 value_3 float,
+	 value_4 bigint,
+	 value_5 text,
+	 value_6 int DEfAULT 10,
+	 value_7 int,
+	 event_at date DEfAULT now()
+	 );
+SELECT create_distributed_table('raw_events_1', 'tenant_id', 'hash');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- create the first table
+CREATE TABLE raw_events_2
+	(tenant_id bigint,
+	 value_1 int,
+	 value_2 int,
+	 value_3 float,
+	 value_4 bigint,
+	 value_5 text,
+	 value_6 float DEfAULT (random()*100)::float,
+	 value_7 int,
+	 event_at date DEfAULT now()
+	 );
+SELECT create_distributed_table('raw_events_2', 'tenant_id', 'hash');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE aggregated_events
+	(tenant_id bigint,
+	 sum_value_1 bigint,
+	 average_value_2 float,
+	 average_value_3 float,
+	 sum_value_4 bigint,
+	 sum_value_5 float,
+	 average_value_6 int,
+	 rollup_hour date);
+SELECT create_distributed_table('aggregated_events', 'tenant_id', 'hash');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- start with very simple examples on a single table
+SELECT deparse_shard_query_test('
+INSERT INTO raw_events_1
+SELECT * FROM raw_events_1;
+');
+INFO:  query: INSERT INTO public.raw_events_1 (tenant_id, value_1, value_2, value_3, value_4, value_5, value_6, value_7, event_at) SELECT tenant_id, value_1, value_2, value_3, value_4, value_5, value_6, value_7, event_at FROM public.raw_events_1
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT deparse_shard_query_test('
+INSERT INTO raw_events_1(tenant_id, value_4)
+SELECT
+	tenant_id, value_4
+FROM
+	raw_events_1;
+');
+INFO:  query: INSERT INTO public.raw_events_1 (tenant_id, value_4, value_6, event_at) SELECT tenant_id, value_4, 10 AS value_6, (now())::date AS event_at FROM public.raw_events_1
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+-- now that shuffle columns a bit on a single table
+SELECT deparse_shard_query_test('
+INSERT INTO raw_events_1(value_5, value_2, tenant_id, value_4)
+SELECT
+	value_2::text, value_5::int, tenant_id, value_4
+FROM
+	raw_events_1;
+');
+INFO:  query: INSERT INTO public.raw_events_1 (tenant_id, value_2, value_4, value_5, value_6, event_at) SELECT tenant_id, (value_5)::integer AS value_5, value_4, (value_2)::text AS value_2, 10 AS value_6, (now())::date AS event_at FROM public.raw_events_1
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+-- same test on two different tables
+SELECT deparse_shard_query_test('
+INSERT INTO raw_events_1(value_5, value_2, tenant_id, value_4)
+SELECT
+	value_2::text, value_5::int, tenant_id, value_4
+FROM
+	raw_events_2;
+');
+INFO:  query: INSERT INTO public.raw_events_1 (tenant_id, value_2, value_4, value_5, value_6, event_at) SELECT tenant_id, (value_5)::integer AS value_5, value_4, (value_2)::text AS value_2, 10 AS value_6, (now())::date AS event_at FROM public.raw_events_2
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+-- lets do some simple aggregations
+SELECT deparse_shard_query_test(E'
+INSERT INTO aggregated_events (tenant_id, rollup_hour, sum_value_1, average_value_3, average_value_6, sum_value_4)
+SELECT
+	tenant_id, date_trunc(\'hour\', event_at) , sum(value_1), avg(value_3), avg(value_6), sum(value_4)
+FROM
+	raw_events_1
+GROUP BY
+	tenant_id, date_trunc(\'hour\', event_at)
+');
+INFO:  query: INSERT INTO public.aggregated_events (tenant_id, sum_value_1, average_value_3, sum_value_4, average_value_6, rollup_hour) SELECT tenant_id, sum(value_1) AS sum, avg(value_3) AS avg, sum(value_4) AS sum, avg(value_6) AS avg, date_trunc('hour'::text, (event_at)::timestamp with time zone) AS date_trunc FROM public.raw_events_1 GROUP BY tenant_id, (date_trunc('hour'::text, (event_at)::timestamp with time zone))
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+-- also some subqueries, JOINS with a complicated target lists
+-- a simple JOIN
+SELECT deparse_shard_query_test('
+INSERT INTO raw_events_1 (value_3, tenant_id)
+SELECT
+	raw_events_2.value_3, raw_events_1.tenant_id
+FROM
+	raw_events_1, raw_events_2
+WHERE
+	raw_events_1.tenant_id = raw_events_2.tenant_id;
+');
+INFO:  query: INSERT INTO public.raw_events_1 (tenant_id, value_3, value_6, event_at) SELECT raw_events_1.tenant_id, raw_events_2.value_3, 10 AS value_6, (now())::date AS event_at FROM public.raw_events_1, public.raw_events_2 WHERE (raw_events_1.tenant_id OPERATOR(pg_catalog.=) raw_events_2.tenant_id)
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+-- join with group by
+SELECT deparse_shard_query_test('
+INSERT INTO raw_events_1 (value_3, tenant_id)
+SELECT
+	max(raw_events_2.value_3), avg(raw_events_1.value_3)
+FROM
+	raw_events_1, raw_events_2
+WHERE
+	raw_events_1.tenant_id = raw_events_2.tenant_id GROUP BY raw_events_1.event_at
+');
+INFO:  query: INSERT INTO public.raw_events_1 (tenant_id, value_3, value_6, event_at) SELECT avg(raw_events_1.value_3) AS avg, max(raw_events_2.value_3) AS max, 10 AS value_6, (now())::date AS event_at FROM public.raw_events_1, public.raw_events_2 WHERE (raw_events_1.tenant_id OPERATOR(pg_catalog.=) raw_events_2.tenant_id) GROUP BY raw_events_1.event_at
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+-- a more complicated JOIN
+SELECT deparse_shard_query_test('
+INSERT INTO aggregated_events (sum_value_4, tenant_id)
+SELECT
+	max(r1.value_4), r3.tenant_id
+FROM
+	raw_events_1 r1, raw_events_2 r2, raw_events_1 r3
+WHERE
+	r1.tenant_id = r2.tenant_id AND r2.tenant_id = r3.tenant_id
+GROUP BY
+	r1.value_1, r3.tenant_id, r2.event_at
+ORDER BY
+	r2.event_at DESC;
+');
+INFO:  query: INSERT INTO public.aggregated_events (tenant_id, sum_value_4) SELECT r3.tenant_id, max(r1.value_4) AS max FROM public.raw_events_1 r1, public.raw_events_2 r2, public.raw_events_1 r3 WHERE ((r1.tenant_id OPERATOR(pg_catalog.=) r2.tenant_id) AND (r2.tenant_id OPERATOR(pg_catalog.=) r3.tenant_id)) GROUP BY r1.value_1, r3.tenant_id, r2.event_at ORDER BY r2.event_at DESC
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+-- queries with CTEs are supported
+SELECT deparse_shard_query_test('
+WITH first_tenant AS (SELECT event_at, value_5, tenant_id FROM raw_events_1)
+INSERT INTO aggregated_events (rollup_hour, sum_value_5, tenant_id)
+SELECT
+	event_at, sum(value_5::int), tenant_id
+FROM
+	raw_events_1
+GROUP BY
+	event_at, tenant_id;
+');
+INFO:  query: WITH first_tenant AS (SELECT raw_events_1.event_at, raw_events_1.value_5, raw_events_1.tenant_id FROM public.raw_events_1) INSERT INTO public.aggregated_events (tenant_id, sum_value_5, rollup_hour) SELECT tenant_id, sum((value_5)::integer) AS sum, event_at FROM public.raw_events_1 GROUP BY event_at, tenant_id
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT deparse_shard_query_test('
+WITH first_tenant AS (SELECT event_at, value_5, tenant_id FROM raw_events_1)
+INSERT INTO aggregated_events (sum_value_5, tenant_id)
+SELECT
+	sum(value_5::int), tenant_id
+FROM
+	raw_events_1
+GROUP BY
+	event_at, tenant_id;
+');
+INFO:  query: WITH first_tenant AS (SELECT raw_events_1.event_at, raw_events_1.value_5, raw_events_1.tenant_id FROM public.raw_events_1) INSERT INTO public.aggregated_events (tenant_id, sum_value_5) SELECT tenant_id, sum((value_5)::integer) AS sum FROM public.raw_events_1 GROUP BY event_at, tenant_id
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT deparse_shard_query_test('
+INSERT INTO aggregated_events (sum_value_1, sum_value_5, tenant_id)
+WITH RECURSIVE hierarchy as (
+	SELECT value_1, 1 AS LEVEL, tenant_id
+		FROM raw_events_1
+		WHERE tenant_id = 1
+	UNION
+	SELECT re.value_2, (h.level+1), re.tenant_id
+		FROM hierarchy h JOIN raw_events_1 re
+			ON (h.tenant_id = re.tenant_id AND
+				h.value_1 = re.value_6))
+SELECT * FROM hierarchy WHERE LEVEL <= 2;
+');
+INFO:  query: INSERT INTO public.aggregated_events (tenant_id, sum_value_1, sum_value_5) WITH RECURSIVE hierarchy AS (SELECT raw_events_1.value_1, 1 AS level, raw_events_1.tenant_id FROM public.raw_events_1 WHERE (raw_events_1.tenant_id OPERATOR(pg_catalog.=) 1) UNION SELECT re.value_2, (h.level OPERATOR(pg_catalog.+) 1), re.tenant_id FROM (hierarchy h JOIN public.raw_events_1 re ON (((h.tenant_id OPERATOR(pg_catalog.=) re.tenant_id) AND (h.value_1 OPERATOR(pg_catalog.=) re.value_6))))) SELECT tenant_id, value_1, level FROM hierarchy WHERE (level OPERATOR(pg_catalog.<=) 2)
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT deparse_shard_query_test('
+INSERT INTO aggregated_events (sum_value_1)
+SELECT
+	DISTINCT value_1
+FROM
+	raw_events_1;
+');
+INFO:  query: INSERT INTO public.aggregated_events (sum_value_1) SELECT DISTINCT value_1 FROM public.raw_events_1
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+-- many filters suffled
+SELECT deparse_shard_query_test(E'
+INSERT INTO aggregated_events (sum_value_5, sum_value_1, tenant_id)
+SELECT value_3, value_2, tenant_id
+	FROM raw_events_1
+	WHERE (value_5 like \'%s\' or value_5 like \'%a\') and (tenant_id = 1) and (value_6 < 3000 or value_3 > 8000);
+');
+INFO:  query: INSERT INTO public.aggregated_events (tenant_id, sum_value_1, sum_value_5) SELECT tenant_id, value_2, value_3 FROM public.raw_events_1 WHERE (((value_5 OPERATOR(pg_catalog.~~) '%s'::text) OR (value_5 OPERATOR(pg_catalog.~~) '%a'::text)) AND (tenant_id OPERATOR(pg_catalog.=) 1) AND ((value_6 OPERATOR(pg_catalog.<) 3000) OR (value_3 OPERATOR(pg_catalog.>) (8000)::double precision)))
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT deparse_shard_query_test(E'
+INSERT INTO aggregated_events (sum_value_5, tenant_id)
+SELECT rank() OVER (PARTITION BY tenant_id ORDER BY value_6), tenant_id
+	FROM raw_events_1
+	WHERE event_at = now();
+');
+INFO:  query: INSERT INTO public.aggregated_events (tenant_id, sum_value_5) SELECT tenant_id, rank() OVER (PARTITION BY tenant_id ORDER BY value_6) AS rank FROM public.raw_events_1 WHERE (event_at OPERATOR(pg_catalog.=) now())
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT deparse_shard_query_test(E'
+INSERT INTO aggregated_events (sum_value_5, tenant_id, sum_value_4)
+SELECT random(), int4eq(1, max(value_1))::int, value_6
+	FROM raw_events_1
+	WHERE event_at = now()
+	GROUP BY event_at, value_7, value_6;
+');
+INFO:  query: INSERT INTO public.aggregated_events (tenant_id, sum_value_4, sum_value_5) SELECT (int4eq(1, max(value_1)))::integer AS int4eq, value_6, random() AS random FROM public.raw_events_1 WHERE (event_at OPERATOR(pg_catalog.=) now()) GROUP BY event_at, value_7, value_6
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT deparse_shard_query_test('
+INSERT INTO aggregated_events (sum_value_1, tenant_id)
+SELECT
+	count(DISTINCT CASE
+			WHEN
+				value_1 > 100
+			THEN
+				tenant_id
+			ELSE
+				value_6
+			END) as c,
+		max(tenant_id)
+	FROM
+		raw_events_1;
+');
+INFO:  query: INSERT INTO public.aggregated_events (tenant_id, sum_value_1) SELECT max(tenant_id) AS max, count(DISTINCT CASE WHEN (value_1 OPERATOR(pg_catalog.>) 100) THEN tenant_id ELSE (value_6)::bigint END) AS c FROM public.raw_events_1
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT deparse_shard_query_test('
+INSERT INTO raw_events_1(value_7, value_1, tenant_id)
+SELECT
+	value_7, value_1, tenant_id
+FROM
+	(SELECT
+		tenant_id, value_2 as value_7, value_1
+	FROM
+		raw_events_2
+	) as foo
+');
+INFO:  query: INSERT INTO public.raw_events_1 (tenant_id, value_1, value_6, value_7, event_at) SELECT tenant_id, value_1, 10 AS value_6, value_7, (now())::date AS event_at FROM (SELECT raw_events_2.tenant_id, raw_events_2.value_2 AS value_7, raw_events_2.value_1 FROM public.raw_events_2) foo
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT deparse_shard_query_test(E'
+INSERT INTO aggregated_events(sum_value_1, tenant_id, sum_value_5)
+SELECT
+	sum(value_1), tenant_id, sum(value_5::bigint)
+FROM
+	(SELECT
+		raw_events_1.event_at, raw_events_2.tenant_id, raw_events_2.value_5, raw_events_1.value_1
+	FROM
+		raw_events_2, raw_events_1
+	WHERE
+		raw_events_1.tenant_id = raw_events_2.tenant_id	
+	) as foo
+GROUP BY
+	tenant_id, date_trunc(\'hour\', event_at)
+');
+INFO:  query: INSERT INTO public.aggregated_events (tenant_id, sum_value_1, sum_value_5) SELECT tenant_id, sum(value_1) AS sum, sum((value_5)::bigint) AS sum FROM (SELECT raw_events_1.event_at, raw_events_2.tenant_id, raw_events_2.value_5, raw_events_1.value_1 FROM public.raw_events_2, public.raw_events_1 WHERE (raw_events_1.tenant_id OPERATOR(pg_catalog.=) raw_events_2.tenant_id)) foo GROUP BY tenant_id, (date_trunc('hour'::text, (event_at)::timestamp with time zone))
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT deparse_shard_query_test(E'
+INSERT INTO raw_events_2(tenant_id, value_1, value_2, value_3, value_4)
+SELECT
+	tenant_id, value_1, value_2, value_3, value_4
+FROM
+	(SELECT
+		value_2, value_4, tenant_id, value_1, value_3
+	FROM
+		raw_events_1
+	) as foo
+');
+INFO:  query: INSERT INTO public.raw_events_2 (tenant_id, value_1, value_2, value_3, value_4, value_6, event_at) SELECT tenant_id, value_1, value_2, value_3, value_4, (random() OPERATOR(pg_catalog.*) (100)::double precision) AS value_6, (now())::date AS event_at FROM (SELECT raw_events_1.value_2, raw_events_1.value_4, raw_events_1.tenant_id, raw_events_1.value_1, raw_events_1.value_3 FROM public.raw_events_1) foo
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT deparse_shard_query_test(E'
+INSERT INTO raw_events_2(tenant_id, value_1, value_4, value_2, value_3)
+SELECT
+	*
+FROM
+	(SELECT
+		value_2, value_4, tenant_id, value_1, value_3
+	FROM
+		raw_events_1
+	) as foo
+');
+INFO:  query: INSERT INTO public.raw_events_2 (tenant_id, value_1, value_2, value_3, value_4, value_6, event_at) SELECT value_2, value_4, value_1, value_3, tenant_id, (random() OPERATOR(pg_catalog.*) (100)::double precision) AS value_6, (now())::date AS event_at FROM (SELECT raw_events_1.value_2, raw_events_1.value_4, raw_events_1.tenant_id, raw_events_1.value_1, raw_events_1.value_3 FROM public.raw_events_1) foo
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+-- use a column multiple times
+SELECT deparse_shard_query_test('
+INSERT INTO raw_events_1(tenant_id, value_7, value_4)
+SELECT
+	tenant_id, value_7, value_7
+FROM
+	raw_events_1
+ORDER BY
+	value_2, value_1;
+');
+INFO:  query: INSERT INTO public.raw_events_1 (tenant_id, value_4, value_6, value_7, event_at) SELECT tenant_id, value_7, 10 AS value_6, value_7, (now())::date AS event_at FROM public.raw_events_1 ORDER BY value_2, value_1
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+
+-- test dropped table as well
+ALTER TABLE raw_events_1 DROP COLUMN value_5;
+SELECT deparse_shard_query_test('
+INSERT INTO raw_events_1(tenant_id, value_7, value_4)
+SELECT
+	tenant_id, value_7, value_4
+FROM
+	raw_events_1;
+');
+INFO:  query: INSERT INTO public.raw_events_1 (tenant_id, value_4, value_6, value_7, event_at) SELECT tenant_id, value_4, 10 AS value_6, value_7, (now())::date AS event_at FROM public.raw_events_1
+ deparse_shard_query_test
+---------------------------------------------------------------------
+
+(1 row)
+

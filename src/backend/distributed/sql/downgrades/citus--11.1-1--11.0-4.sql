@@ -70,6 +70,7 @@ DROP FUNCTION pg_catalog.citus_split_shard_by_split_points(
     shard_transfer_mode citus.shard_transfer_mode);
 DROP FUNCTION pg_catalog.worker_split_copy(
     source_shard_id bigint,
+    distribution_column text,
     splitCopyInfos pg_catalog.split_copy_info[]);
 DROP TYPE pg_catalog.split_copy_info;
 
@@ -81,6 +82,8 @@ DROP FUNCTION pg_catalog.worker_split_shard_replication_setup(
     splitShardInfo pg_catalog.split_shard_info[]);
 DROP TYPE pg_catalog.split_shard_info;
 DROP TYPE pg_catalog.replication_slot_info;
+
+DROP FUNCTION pg_catalog.worker_split_shard_release_dsm();
 
 DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_id int, OUT initiator_node_identifier int4,
                                                      OUT worker_query BOOL, OUT transaction_number int8, OUT transaction_stamp timestamptz,
@@ -95,6 +98,8 @@ DROP FUNCTION pg_catalog.replicate_reference_tables(citus.shard_transfer_mode);
 
 DROP FUNCTION pg_catalog.isolate_tenant_to_new_shard(table_name regclass, tenant_id "any", cascade_option text, shard_transfer_mode citus.shard_transfer_mode);
 #include "../udfs/isolate_tenant_to_new_shard/8.0-1.sql"
+DROP FUNCTION pg_catalog.create_distributed_table_concurrently;
+DROP FUNCTION pg_catalog.citus_internal_delete_partition_metadata(regclass);
 
 DROP TABLE pg_catalog.pg_dist_cleanup;
 DROP SEQUENCE pg_catalog.pg_dist_operationid_seq;

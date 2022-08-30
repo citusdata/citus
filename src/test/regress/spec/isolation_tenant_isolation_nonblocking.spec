@@ -3,18 +3,23 @@ setup
 	SET citus.shard_count to 2;
 	SET citus.shard_replication_factor to 1;
 	SELECT setval('pg_dist_shardid_seq',
-		CASE WHEN nextval('pg_dist_shardid_seq') > 1599999 OR nextval('pg_dist_shardid_seq') < 1500000
-			THEN 1500000
+		CASE WHEN nextval('pg_dist_shardid_seq') > 1599999 OR nextval('pg_dist_shardid_seq') < 1500072
+			THEN 1500072
 			ELSE nextval('pg_dist_shardid_seq')-2
 		END);
 
 	CREATE TABLE isolation_table (id int PRIMARY KEY, value int);
 	SELECT create_distributed_table('isolation_table', 'id');
+
+	-- different colocation id
+	CREATE TABLE isolation_table2 (id smallint PRIMARY KEY, value int);
+	SELECT create_distributed_table('isolation_table2', 'id');
 }
 
 teardown
 {
 	DROP TABLE isolation_table;
+	DROP TABLE isolation_table2;
 }
 
 session "s1"
@@ -32,11 +37,13 @@ step "s1-begin"
 step "s1-load-cache"
 {
 	TRUNCATE isolation_table;
+	TRUNCATE isolation_table2;
 }
 
 step "s1-insert"
 {
 	INSERT INTO isolation_table VALUES (5, 10);
+	INSERT INTO isolation_table2 VALUES (5, 10);
 }
 
 step "s1-update"
@@ -59,9 +66,24 @@ step "s1-copy"
 	COPY isolation_table FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
 }
 
-step "s1-isolate-tenant"
+step "s1-isolate-tenant-same-coloc"
 {
 	SELECT isolate_tenant_to_new_shard('isolation_table', 2, shard_transfer_mode => 'force_logical');
+}
+
+step "s1-isolate-tenant-same-coloc-blocking"
+{
+	SELECT isolate_tenant_to_new_shard('isolation_table', 2, shard_transfer_mode => 'block_writes');
+}
+
+step "s1-isolate-tenant-no-same-coloc"
+{
+	SELECT isolate_tenant_to_new_shard('isolation_table2', 2, shard_transfer_mode => 'force_logical');
+}
+
+step "s1-isolate-tenant-no-same-coloc-blocking"
+{
+	SELECT isolate_tenant_to_new_shard('isolation_table2', 2, shard_transfer_mode => 'block_writes');
 }
 
 step "s1-commit"
@@ -122,7 +144,7 @@ step "s3-release-advisory-lock"
 // s1 can execute its DML command concurrently with s2 shard isolation =>
 // s3 releases the advisory lock so that s2 can finish the transaction
 
-// run tenant isolation while concurrently performing an DML and index creation
+// run tenant isolation while concurrently performing an DML
 // we expect DML queries of s2 to succeed without being blocked.
 permutation "s1-load-cache" "s1-insert" "s3-acquire-advisory-lock" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-update" "s1-commit" "s3-release-advisory-lock" "s2-commit" "s2-print-cluster"
 permutation "s1-load-cache" "s1-insert" "s3-acquire-advisory-lock" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-delete" "s1-commit" "s3-release-advisory-lock" "s2-commit" "s2-print-cluster"
@@ -135,8 +157,20 @@ permutation "s1-insert" "s3-acquire-advisory-lock" "s1-begin" "s1-select" "s2-be
 permutation "s3-acquire-advisory-lock" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-insert" "s1-commit" "s3-release-advisory-lock" "s2-commit" "s2-print-cluster"
 permutation "s3-acquire-advisory-lock" "s1-begin" "s1-select" "s2-begin" "s2-isolate-tenant" "s1-copy" "s1-commit" "s3-release-advisory-lock" "s2-commit" "s2-print-cluster"
 
-// concurrent tenant isolation blocks on different shards of the same table (or any colocated table)
-permutation "s1-load-cache" "s1-insert" "s3-acquire-advisory-lock" "s1-begin" "s1-isolate-tenant" "s2-isolate-tenant" "s3-release-advisory-lock" "s1-commit" "s2-print-cluster"
+// concurrent nonblocking tenant isolations with the same colocation id are not allowed
+permutation "s1-load-cache" "s1-insert" "s3-acquire-advisory-lock" "s2-isolate-tenant" "s1-isolate-tenant-same-coloc" "s3-release-advisory-lock" "s2-print-cluster"
 
-// the same test above without loading the cache at first
-permutation "s1-insert" "s3-acquire-advisory-lock" "s1-begin" "s1-isolate-tenant" "s2-isolate-tenant" "s3-release-advisory-lock" "s1-commit" "s2-print-cluster"
+// concurrent blocking and nonblocking tenant isolations with the same colocation id are not allowed
+permutation "s1-load-cache" "s1-insert" "s3-acquire-advisory-lock" "s2-isolate-tenant" "s1-isolate-tenant-same-coloc-blocking" "s3-release-advisory-lock" "s2-print-cluster"
+
+// concurrent nonblocking tenant isolations in different transactions are not allowed
+permutation "s1-load-cache" "s1-insert" "s3-acquire-advisory-lock" "s2-isolate-tenant" "s1-isolate-tenant-no-same-coloc" "s3-release-advisory-lock" "s2-print-cluster"
+
+// concurrent nonblocking tenant isolations in the same transaction are not allowed
+permutation "s1-load-cache" "s1-insert" "s3-acquire-advisory-lock" "s2-begin" "s2-isolate-tenant" "s1-isolate-tenant-no-same-coloc" "s3-release-advisory-lock" "s2-commit" "s2-print-cluster"
+
+// concurrent blocking and nonblocking tenant isolations with different colocation ids in different transactions are allowed
+permutation "s1-load-cache" "s1-insert" "s3-acquire-advisory-lock" "s2-isolate-tenant" "s1-isolate-tenant-no-same-coloc-blocking" "s3-release-advisory-lock" "s2-print-cluster"
+
+// concurrent blocking and nonblocking tenant isolations with different colocation ids in the same transaction are allowed
+permutation "s1-load-cache" "s1-insert" "s3-acquire-advisory-lock" "s2-isolate-tenant" "s1-isolate-tenant-no-same-coloc-blocking" "s3-release-advisory-lock" "s2-print-cluster"

@@ -194,7 +194,7 @@ count
 (1 row)
 
 
-starting permutation: s1-add-primary-key s1-start-session-level-connection s1-begin-on-worker s1-upsert s2-start-session-level-connection s2-begin-on-worker s2-drop s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection s3-select-count
+starting permutation: s1-add-primary-key s1-start-session-level-connection s1-begin-on-worker s1-upsert s2-drop s1-commit-worker s1-stop-connection s3-select-count
 create_reference_table
 ---------------------------------------------------------------------
 
@@ -227,22 +227,6 @@ run_commands_on_session_level_connection_to_node
 
 (1 row)
 
-step s2-start-session-level-connection:
-        SELECT start_session_level_connection_to_node('localhost', 57638);
-
-start_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-step s2-begin-on-worker:
-        SELECT run_commands_on_session_level_connection_to_node('BEGIN');
-
-run_commands_on_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
 step s2-drop:
  DROP TABLE ref_table;
  <waiting ...>
@@ -255,24 +239,8 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-drop: <... completed>
-step s2-commit-worker:
-        SELECT run_commands_on_session_level_connection_to_node('COMMIT');
-
-run_commands_on_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
 step s1-stop-connection:
  SELECT stop_session_level_connection_to_node();
-
-stop_session_level_connection_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-step s2-stop-connection:
-        SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------

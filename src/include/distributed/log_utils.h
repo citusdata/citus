@@ -19,10 +19,6 @@
 extern bool EnableUnsupportedFeatureMessages;
 
 extern bool IsLoggableLevel(int logLevel);
-extern char * HashLogMessage(const char *text);
-
-#define ApplyLogRedaction(text) \
-	(log_min_messages <= ereport_loglevel ? HashLogMessage(text) : text)
 
 #undef ereport
 

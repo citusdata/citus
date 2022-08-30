@@ -39,6 +39,7 @@
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_partitioning_utils.h"
@@ -81,6 +82,8 @@ static bool DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 										 uint64 *tableSize);
 static List * ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId);
 static char * GenerateShardStatisticsQueryForShardList(List *shardIntervalList);
+static char * GenerateSizeQueryForRelationNameList(List *quotedShardNames,
+												   char *sizeFunction);
 static char * GetWorkerPartitionedSizeUDFNameBySizeQueryType(SizeQueryType sizeQueryType);
 static char * GetSizeQueryBySizeQueryType(SizeQueryType sizeQueryType);
 static char * GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode,
@@ -720,7 +723,8 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 {
 	StringInfo selectQuery = makeStringInfo();
 
-	appendStringInfo(selectQuery, "SELECT ");
+	List *partitionedShardNames = NIL;
+	List *nonPartitionedShardNames = NIL;
 
 	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, shardIntervalList)
@@ -746,27 +750,73 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 		char *shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
 		char *quotedShardName = quote_literal_cstr(shardQualifiedName);
 
+		/* for partitoned tables, we will call worker_partitioned_... size functions */
 		if (optimizePartitionCalculations && PartitionedTable(shardInterval->relationId))
 		{
-			appendStringInfo(selectQuery, GetWorkerPartitionedSizeUDFNameBySizeQueryType(
-								 sizeQueryType), quotedShardName);
+			partitionedShardNames = lappend(partitionedShardNames, quotedShardName);
 		}
+
+		/* for non-partitioned tables, we will use Postgres' size functions */
 		else
 		{
-			appendStringInfo(selectQuery, GetSizeQueryBySizeQueryType(sizeQueryType),
-							 quotedShardName);
+			nonPartitionedShardNames = lappend(nonPartitionedShardNames, quotedShardName);
 		}
-
-		appendStringInfo(selectQuery, " + ");
 	}
 
-	/*
-	 * Add 0 as a last size, it handles empty list case and makes size control checks
-	 * unnecessary which would have implemented without this line.
-	 */
-	appendStringInfo(selectQuery, "0;");
+	/* SELECT SUM(worker_partitioned_...) FROM VALUES (...) */
+	char *subqueryForPartitionedShards =
+		GenerateSizeQueryForRelationNameList(partitionedShardNames,
+											 GetWorkerPartitionedSizeUDFNameBySizeQueryType(
+												 sizeQueryType));
+
+	/* SELECT SUM(pg_..._size) FROM VALUES (...) */
+	char *subqueryForNonPartitionedShards =
+		GenerateSizeQueryForRelationNameList(nonPartitionedShardNames,
+											 GetSizeQueryBySizeQueryType(sizeQueryType));
+
+	appendStringInfo(selectQuery, "SELECT (%s) + (%s);",
+					 subqueryForPartitionedShards, subqueryForNonPartitionedShards);
+
+	elog(DEBUG4, "Size Query: %s", selectQuery->data);
 
 	return selectQuery;
+}
+
+
+/*
+ * GenerateSizeQueryForPartitionedShards generates and returns a query with a template:
+ * SELECT SUM( <sizeFunction>(relid) ) FROM (VALUES (<shardName>), (<shardName>), ...) as q(relid)
+ */
+static char *
+GenerateSizeQueryForRelationNameList(List *quotedShardNames, char *sizeFunction)
+{
+	if (list_length(quotedShardNames) == 0)
+	{
+		return "SELECT 0";
+	}
+
+	StringInfo selectQuery = makeStringInfo();
+
+	appendStringInfo(selectQuery, "SELECT SUM(");
+	appendStringInfo(selectQuery, sizeFunction, "relid");
+	appendStringInfo(selectQuery, ") FROM (VALUES ");
+
+	bool addComma = false;
+	char *quotedShardName = NULL;
+	foreach_ptr(quotedShardName, quotedShardNames)
+	{
+		if (addComma)
+		{
+			appendStringInfoString(selectQuery, ", ");
+		}
+		addComma = true;
+
+		appendStringInfo(selectQuery, "(%s)", quotedShardName);
+	}
+
+	appendStringInfoString(selectQuery, ") as q(relid)");
+
+	return selectQuery->data;
 }
 
 
@@ -2105,6 +2155,96 @@ UpdatePgDistPartitionAutoConverted(Oid citusTableId, bool autoConverted)
 
 
 /*
+ * UpdateDistributionColumnGlobally sets the distribution column and colocation ID
+ * for a table in pg_dist_partition on all nodes
+ */
+void
+UpdateDistributionColumnGlobally(Oid relationId, char distributionMethod,
+								 Var *distributionColumn, int colocationId)
+{
+	UpdateDistributionColumn(relationId, distributionMethod, distributionColumn,
+							 colocationId);
+
+	if (ShouldSyncTableMetadata(relationId))
+	{
+		/* we use delete+insert because syncing uses specialized RPCs */
+		char *deleteMetadataCommand = DistributionDeleteMetadataCommand(relationId);
+		SendCommandToWorkersWithMetadata(deleteMetadataCommand);
+
+		/* pick up the new metadata (updated above) */
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+		char *insertMetadataCommand = DistributionCreateCommand(cacheEntry);
+		SendCommandToWorkersWithMetadata(insertMetadataCommand);
+	}
+}
+
+
+/*
+ * UpdateDistributionColumn sets the distribution column and colocation ID for a table
+ * in pg_dist_partition.
+ */
+void
+UpdateDistributionColumn(Oid relationId, char distributionMethod, Var *distributionColumn,
+						 int colocationId)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOK = true;
+	Datum values[Natts_pg_dist_partition];
+	bool isnull[Natts_pg_dist_partition];
+	bool replace[Natts_pg_dist_partition];
+
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
+													DistPartitionLogicalRelidIndexId(),
+													indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for citus table with oid: %u",
+							   relationId)));
+	}
+
+	memset(replace, 0, sizeof(replace));
+
+	replace[Anum_pg_dist_partition_partmethod - 1] = true;
+	values[Anum_pg_dist_partition_partmethod - 1] = CharGetDatum(distributionMethod);
+	isnull[Anum_pg_dist_partition_partmethod - 1] = false;
+
+	replace[Anum_pg_dist_partition_colocationid - 1] = true;
+	values[Anum_pg_dist_partition_colocationid - 1] = UInt32GetDatum(colocationId);
+	isnull[Anum_pg_dist_partition_colocationid - 1] = false;
+
+	replace[Anum_pg_dist_partition_autoconverted - 1] = true;
+	values[Anum_pg_dist_partition_autoconverted - 1] = BoolGetDatum(false);
+	isnull[Anum_pg_dist_partition_autoconverted - 1] = false;
+
+	char *distributionColumnString = nodeToString((Node *) distributionColumn);
+
+	replace[Anum_pg_dist_partition_partkey - 1] = true;
+	values[Anum_pg_dist_partition_partkey - 1] =
+		CStringGetTextDatum(distributionColumnString);
+	isnull[Anum_pg_dist_partition_partkey - 1] = false;
+
+	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+
+	CatalogTupleUpdate(pgDistPartition, &heapTuple->t_self, heapTuple);
+
+	CitusInvalidateRelcacheByRelid(relationId);
+	CommandCounterIncrement();
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistPartition, NoLock);
+}
+
+
+/*
  * Check that the current user has `mode` permissions on relationId, error out
  * if not. Superusers always have such permissions.
  */
@@ -2131,21 +2271,6 @@ EnsureTableOwner(Oid relationId)
 	{
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLE,
 					   get_rel_name(relationId));
-	}
-}
-
-
-/*
- * Check that the current user has owner rights to the schema, error out if
- * not. Superusers are regarded as owners.
- */
-void
-EnsureSchemaOwner(Oid schemaId)
-{
-	if (!pg_namespace_ownercheck(schemaId, GetUserId()))
-	{
-		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_SCHEMA,
-					   get_namespace_name(schemaId));
 	}
 }
 

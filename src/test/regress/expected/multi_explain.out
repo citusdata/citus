@@ -301,12 +301,14 @@ Sort
                           Group Key: l_quantity
                           ->  Seq Scan on lineitem_360000 lineitem
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+SELECT public.plan_normalize_memory($Q$
 EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+$Q$);
 Sort (actual rows=50 loops=1)
   Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
-  Sort Method: quicksort  Memory: 27kB
+  Sort Method: quicksort  Memory: xxx
   ->  HashAggregate (actual rows=50 loops=1)
         Group Key: remote_scan.l_quantity
         ->  Custom Scan (Citus Adaptive) (actual rows=100 loops=1)
@@ -369,13 +371,15 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
 END;
 DROP TABLE t1, t2;
 -- Test query text output, with ANALYZE ON
+SELECT public.plan_normalize_memory($Q$
 EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+$Q$);
 Sort (actual rows=50 loops=1)
   Output: remote_scan.l_quantity, (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))
   Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
-  Sort Method: quicksort  Memory: 27kB
+  Sort Method: quicksort  Memory: xxx
   ->  HashAggregate (actual rows=50 loops=1)
         Output: remote_scan.l_quantity, COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)
         Group Key: remote_scan.l_quantity
@@ -632,6 +636,21 @@ Aggregate
                                             ->  Seq Scan on events_1400285 events
                                                   Filter: ((event_type)::text = ANY ('{click,submit,pay}'::text[]))
 -- Union and left join subquery pushdown
+-- enable_group_by_reordering is a new GUC introduced in PG15
+-- it does some optimization of the order of group by keys which results
+-- in a different explain output plan between PG13/14 and PG15
+-- Hence we set that GUC to off.
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
+\gset
+\if :server_version_ge_15
+SET enable_group_by_reordering TO off;
+\endif
+SELECT DISTINCT 1 FROM run_command_on_workers($$ALTER SYSTEM SET enable_group_by_reordering TO off;$$);
+1
+SELECT run_command_on_workers($$SELECT pg_reload_conf()$$);
+(localhost,57637,t,t)
+(localhost,57638,t,t)
 EXPLAIN (COSTS OFF)
 SELECT
 	avg(array_length(events, 1)) AS event_average,
@@ -854,6 +873,14 @@ Sort
                                                                                 Sort Key: events_2.composite_id
                                                                                 ->  Seq Scan on events_1400285 events_2
                                                                                       Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type) AND ((event_type)::text = 'pay'::text))
+\if :server_version_ge_15
+RESET enable_group_by_reordering;
+\endif
+SELECT DISTINCT 1 FROM run_command_on_workers($$ALTER SYSTEM RESET enable_group_by_reordering;$$);
+1
+SELECT run_command_on_workers($$SELECT pg_reload_conf()$$);
+(localhost,57637,t,t)
+(localhost,57638,t,t)
 -- Lateral join subquery pushdown
 -- set subquery_pushdown due to limit in the query
 SET citus.subquery_pushdown to ON;
@@ -1023,12 +1050,14 @@ Custom Scan (Citus Adaptive)
         ->  Delete on lineitem_hash_part_360044 lineitem_hash_part
               ->  Seq Scan on lineitem_hash_part_360044 lineitem_hash_part
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
+SELECT public.plan_normalize_memory($Q$
 EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+$Q$);
 Sort (actual rows=50 loops=1)
   Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
-  Sort Method: quicksort  Memory: 27kB
+  Sort Method: quicksort  Memory: xxx
   ->  HashAggregate (actual rows=50 loops=1)
         Group Key: remote_scan.l_quantity
         ->  Custom Scan (Citus Adaptive) (actual rows=100 loops=1)

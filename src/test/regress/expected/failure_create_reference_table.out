@@ -25,7 +25,9 @@ SELECT citus.mitmproxy('conn.onQuery().kill()');
 (1 row)
 
 SELECT create_reference_table('ref_table');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT count(*) FROM pg_dist_shard_placement;
  count
 ---------------------------------------------------------------------
@@ -40,7 +42,9 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="BEGIN").kill()');
 (1 row)
 
 SELECT create_reference_table('ref_table');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT count(*) FROM pg_dist_shard_placement;
  count
 ---------------------------------------------------------------------
@@ -70,7 +74,9 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="SELECT 1").kill()');
 (1 row)
 
 SELECT create_reference_table('ref_table');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT count(*) FROM pg_dist_shard_placement;
  count
 ---------------------------------------------------------------------
@@ -171,8 +177,8 @@ SELECT create_reference_table('ref_table');
 SELECT shardid, nodeport, shardstate FROM pg_dist_shard_placement ORDER BY shardid, nodeport;
  shardid  | nodeport | shardstate
 ---------------------------------------------------------------------
- 10000008 |     9060 |          1
- 10000008 |    57637 |          1
+ 10000003 |     9060 |          1
+ 10000003 |    57637 |          1
 (2 rows)
 
 SET client_min_messages TO NOTICE;

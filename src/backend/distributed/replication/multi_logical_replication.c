@@ -1807,11 +1807,21 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 		appendStringInfo(createSubscriptionCommand,
 						 "CREATE SUBSCRIPTION %s CONNECTION %s PUBLICATION %s "
 						 "WITH (citus_use_authinfo=true, create_slot=false, "
-						 " copy_data=false, enabled=false, slot_name=%s)",
+						 "copy_data=false, enabled=false, slot_name=%s",
 						 quote_identifier(target->subscriptionName),
 						 quote_literal_cstr(conninfo->data),
 						 quote_identifier(target->publication->name),
 						 quote_identifier(target->replicationSlot->name));
+
+		if (EnableBinaryProtocol && PG_VERSION_NUM >= PG_VERSION_14)
+		{
+			appendStringInfoString(createSubscriptionCommand, ", binary=true)");
+		}
+		else
+		{
+			appendStringInfoString(createSubscriptionCommand, ")");
+		}
+
 
 		ExecuteCriticalRemoteCommand(target->superuserConnection,
 									 createSubscriptionCommand->data);

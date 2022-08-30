@@ -1,4 +1,6 @@
 #include "udfs/citus_locks/11.1-1.sql"
+#include "udfs/create_distributed_table_concurrently/11.1-1.sql"
+#include "udfs/citus_internal_delete_partition_metadata/11.1-1.sql"
 
 DROP FUNCTION pg_catalog.worker_create_schema(bigint,text);
 DROP FUNCTION pg_catalog.worker_cleanup_job_schema_cache();
@@ -73,6 +75,7 @@ DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_
 #include "udfs/worker_split_shard_replication_setup/11.1-1.sql"
 #include "udfs/citus_isolation_test_session_is_blocked/11.1-1.sql"
 #include "udfs/replicate_reference_tables/11.1-1.sql"
+#include "udfs/worker_split_shard_release_dsm/11.1-1.sql"
 
 DROP FUNCTION pg_catalog.isolate_tenant_to_new_shard(table_name regclass, tenant_id "any", cascade_option text);
 #include "udfs/isolate_tenant_to_new_shard/11.1-1.sql"

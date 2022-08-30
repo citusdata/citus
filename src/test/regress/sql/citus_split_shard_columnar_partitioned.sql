@@ -79,7 +79,7 @@ SET citus.shard_replication_factor TO 1;
     INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
     INNER JOIN pg_catalog.pg_namespace ns  ON cls.relnamespace = ns.oid
     WHERE node.noderole = 'primary' AND ns.nspname = 'citus_split_test_schema_columnar_partitioned'
-    ORDER BY logicalrelid, shardminvalue::BIGINT;
+    ORDER BY logicalrelid, shardminvalue::BIGINT, nodeport;
 -- END: Create table to split, along with other co-located tables. Add indexes, statistics etc.
 
 -- BEGIN: Create constraints for tables.
@@ -176,7 +176,7 @@ SET citus.shard_replication_factor TO 1;
     INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
     INNER JOIN pg_catalog.pg_namespace ns  ON cls.relnamespace = ns.oid
     WHERE node.noderole = 'primary' AND ns.nspname = 'citus_split_test_schema_columnar_partitioned'
-    ORDER BY logicalrelid, shardminvalue::BIGINT;
+    ORDER BY logicalrelid, shardminvalue::BIGINT, nodeport;
 
     SELECT count(*) FROM reference_table;
     SELECT count(*) FROM colocated_partitioned_table;
@@ -243,7 +243,7 @@ SET citus.shard_replication_factor TO 1;
     INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
     INNER JOIN pg_catalog.pg_namespace ns  ON cls.relnamespace = ns.oid
     WHERE node.noderole = 'primary' AND ns.nspname = 'citus_split_test_schema_columnar_partitioned'
-    ORDER BY logicalrelid, shardminvalue::BIGINT;
+    ORDER BY logicalrelid, shardminvalue::BIGINT, nodeport;
 
     SELECT count(*) FROM reference_table;
     SELECT count(*) FROM colocated_partitioned_table;

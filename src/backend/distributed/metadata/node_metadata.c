@@ -2547,6 +2547,24 @@ EnsureCoordinator(void)
 
 
 /*
+ * EnsureCoordinatorIsInMetadata checks whether the coordinator is added to the
+ * metadata, which is required for many operations.
+ */
+void
+EnsureCoordinatorIsInMetadata(void)
+{
+	bool isCoordinatorInMetadata = false;
+	PrimaryNodeForGroup(COORDINATOR_GROUP_ID, &isCoordinatorInMetadata);
+	if (!isCoordinatorInMetadata)
+	{
+		ereport(ERROR, (errmsg("coordinator is not added to the metadata"),
+						errhint("Use SELECT citus_set_coordinator_host('<hostname>') "
+								"to configure the coordinator hostname")));
+	}
+}
+
+
+/*
  * InsertCoordinatorIfClusterEmpty can be used to ensure Citus tables can be
  * created even on a node that has just performed CREATE EXTENSION citus;
  */

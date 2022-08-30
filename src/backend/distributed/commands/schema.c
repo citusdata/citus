@@ -151,6 +151,11 @@ List *
 PreprocessGrantOnSchemaStmt(Node *node, const char *queryString,
 							ProcessUtilityContext processUtilityContext)
 {
+	if (!ShouldPropagate())
+	{
+		return NIL;
+	}
+
 	GrantStmt *stmt = castNode(GrantStmt, node);
 	Assert(stmt->objtype == OBJECT_SCHEMA);
 

@@ -11,16 +11,27 @@ step s1-begin:
  BEGIN;
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode         |count
+classid|  objid|objsubid|mode         |application_name                           |backend_type  |query
 ---------------------------------------------------------------------
-ExclusiveLock|    1
-ShareLock    |    1
+      0|8429800|       4|ShareLock    |isolation/isolation_ref2ref_foreign_keys/s2|client backend|     UPDATE ref_table_1 SET id = 2 WHERE id = 1;
+      0|8429800|       5|ExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     UPDATE ref_table_1 SET id = 2 WHERE id = 1;
 (2 rows)
 
 step s1-rollback:
@@ -30,13 +41,24 @@ step s2-rollback:
     ROLLBACK;
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode|count
+classid|objid|objsubid|mode|application_name|backend_type|query
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -49,29 +71,51 @@ step s2-delete-table-1:
     DELETE FROM ref_table_1 WHERE id = 1;
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode         |count
+classid|  objid|objsubid|mode         |application_name                           |backend_type  |query
 ---------------------------------------------------------------------
-ExclusiveLock|    1
-ShareLock    |    1
+      0|8429800|       4|ShareLock    |isolation/isolation_ref2ref_foreign_keys/s2|client backend|     DELETE FROM ref_table_1 WHERE id = 1;
+      0|8429800|       5|ExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     DELETE FROM ref_table_1 WHERE id = 1;
 (2 rows)
 
 step s2-rollback:
     ROLLBACK;
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode|count
+classid|objid|objsubid|mode|application_name|backend_type|query
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -84,29 +128,52 @@ step s2-update-table-2:
     UPDATE ref_table_2 SET id = 2 WHERE id = 1;
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode         |count
+classid|  objid|objsubid|mode         |application_name                           |backend_type  |query
 ---------------------------------------------------------------------
-ExclusiveLock|    2
-ShareLock    |    1
-(2 rows)
+      0|8429800|       5|ExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     UPDATE ref_table_2 SET id = 2 WHERE id = 1;
+      0|8429801|       4|ShareLock    |isolation/isolation_ref2ref_foreign_keys/s2|client backend|     UPDATE ref_table_2 SET id = 2 WHERE id = 1;
+      0|8429801|       5|ExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     UPDATE ref_table_2 SET id = 2 WHERE id = 1;
+(3 rows)
 
 step s2-rollback:
     ROLLBACK;
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode|count
+classid|objid|objsubid|mode|application_name|backend_type|query
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -119,29 +186,52 @@ step s2-delete-table-2:
     DELETE FROM ref_table_2 WHERE id = 1;
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode         |count
+classid|  objid|objsubid|mode         |application_name                           |backend_type  |query
 ---------------------------------------------------------------------
-ExclusiveLock|    2
-ShareLock    |    1
-(2 rows)
+      0|8429800|       5|ExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     DELETE FROM ref_table_2 WHERE id = 1;
+      0|8429801|       4|ShareLock    |isolation/isolation_ref2ref_foreign_keys/s2|client backend|     DELETE FROM ref_table_2 WHERE id = 1;
+      0|8429801|       5|ExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     DELETE FROM ref_table_2 WHERE id = 1;
+(3 rows)
 
 step s2-rollback:
     ROLLBACK;
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode|count
+classid|objid|objsubid|mode|application_name|backend_type|query
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -157,17 +247,30 @@ step s1-begin:
  BEGIN;
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode         |count
+classid|  objid|objsubid|mode         |application_name                           |backend_type  |query
 ---------------------------------------------------------------------
-ExclusiveLock|    3
-ShareLock    |    1
-(2 rows)
+      0|8429800|       5|ExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     UPDATE ref_table_3 SET id = 2 WHERE id = 1;
+      0|8429801|       5|ExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     UPDATE ref_table_3 SET id = 2 WHERE id = 1;
+      0|8429802|       4|ShareLock    |isolation/isolation_ref2ref_foreign_keys/s2|client backend|     UPDATE ref_table_3 SET id = 2 WHERE id = 1;
+      0|8429802|       5|ExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     UPDATE ref_table_3 SET id = 2 WHERE id = 1;
+(4 rows)
 
 step s1-rollback:
     ROLLBACK;
@@ -176,13 +279,24 @@ step s2-rollback:
     ROLLBACK;
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode|count
+classid|objid|objsubid|mode|application_name|backend_type|query
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -198,17 +312,30 @@ step s1-begin:
  BEGIN;
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode         |count
+classid|  objid|objsubid|mode         |application_name                           |backend_type  |query
 ---------------------------------------------------------------------
-ExclusiveLock|    3
-ShareLock    |    1
-(2 rows)
+      0|8429800|       5|ExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     DELETE FROM ref_table_3 WHERE id = 1;
+      0|8429801|       5|ExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     DELETE FROM ref_table_3 WHERE id = 1;
+      0|8429802|       4|ShareLock    |isolation/isolation_ref2ref_foreign_keys/s2|client backend|     DELETE FROM ref_table_3 WHERE id = 1;
+      0|8429802|       5|ExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     DELETE FROM ref_table_3 WHERE id = 1;
+(4 rows)
 
 step s1-rollback:
     ROLLBACK;
@@ -217,13 +344,24 @@ step s2-rollback:
     ROLLBACK;
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode|count
+classid|objid|objsubid|mode|application_name|backend_type|query
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -236,29 +374,51 @@ step s2-insert-table-1:
     INSERT INTO ref_table_1 VALUES (7, 7);
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode            |count
+classid|  objid|objsubid|mode            |application_name                           |backend_type  |query
 ---------------------------------------------------------------------
-RowExclusiveLock|    1
-ShareLock       |    1
+      0|8429800|       4|ShareLock       |isolation/isolation_ref2ref_foreign_keys/s2|client backend|     INSERT INTO ref_table_1 VALUES (7, 7);
+      0|8429800|       5|RowExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     INSERT INTO ref_table_1 VALUES (7, 7);
 (2 rows)
 
 step s2-rollback:
     ROLLBACK;
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode|count
+classid|objid|objsubid|mode|application_name|backend_type|query
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -271,29 +431,52 @@ step s2-insert-table-2:
     INSERT INTO ref_table_2 VALUES (7, 5);
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode            |count
+classid|  objid|objsubid|mode            |application_name                           |backend_type  |query
 ---------------------------------------------------------------------
-RowExclusiveLock|    2
-ShareLock       |    1
-(2 rows)
+      0|8429800|       5|RowExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     INSERT INTO ref_table_2 VALUES (7, 5);
+      0|8429801|       4|ShareLock       |isolation/isolation_ref2ref_foreign_keys/s2|client backend|     INSERT INTO ref_table_2 VALUES (7, 5);
+      0|8429801|       5|RowExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     INSERT INTO ref_table_2 VALUES (7, 5);
+(3 rows)
 
 step s2-rollback:
     ROLLBACK;
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode|count
+classid|objid|objsubid|mode|application_name|backend_type|query
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -306,29 +489,53 @@ step s2-insert-table-3:
     INSERT INTO ref_table_3 VALUES (7, 5);
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode            |count
+classid|  objid|objsubid|mode            |application_name                           |backend_type  |query
 ---------------------------------------------------------------------
-RowExclusiveLock|    3
-ShareLock       |    1
-(2 rows)
+      0|8429800|       5|RowExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     INSERT INTO ref_table_3 VALUES (7, 5);
+      0|8429801|       5|RowExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     INSERT INTO ref_table_3 VALUES (7, 5);
+      0|8429802|       4|ShareLock       |isolation/isolation_ref2ref_foreign_keys/s2|client backend|     INSERT INTO ref_table_3 VALUES (7, 5);
+      0|8429802|       5|RowExclusiveLock|isolation/isolation_ref2ref_foreign_keys/s2|client backend|     INSERT INTO ref_table_3 VALUES (7, 5);
+(4 rows)
 
 step s2-rollback:
     ROLLBACK;
 
 step s1-view-locks:
-    SELECT mode, count(*)
-    FROM pg_locks
+    -- The following output changed in PG versions 13.6 and 14.2. The output is expected
+    -- to change in earlier versions of PG as the and application_name format did not use
+    -- to include session name at the end.
+    SELECT classid,
+        objid,
+        objsubid,
+        mode,
+        application_name,
+        backend_type,
+        regexp_replace(query, E'[\\n\\r\\u2028]+', ' ', 'g' ) query
+    FROM pg_locks l
+    JOIN pg_stat_activity a
+    ON l.pid = a.pid
     WHERE locktype='advisory'
-    GROUP BY mode
-    ORDER BY 1, 2;
+        AND application_name <> 'Citus Maintenance Daemon'
+    ORDER BY 1, 2, 3, 4;
 
-mode|count
+classid|objid|objsubid|mode|application_name|backend_type|query
 ---------------------------------------------------------------------
 (0 rows)
 

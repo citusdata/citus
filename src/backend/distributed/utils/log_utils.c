@@ -39,14 +39,3 @@ IsLoggableLevel(int logLevel)
 {
 	return log_min_messages <= logLevel || client_min_messages <= logLevel;
 }
-
-
-/*
- * HashLogMessage is deprecated and doesn't do anything anymore. Its indirect
- * usage will be removed later.
- */
-char *
-HashLogMessage(const char *logText)
-{
-	return (char *) logText;
-}

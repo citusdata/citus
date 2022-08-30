@@ -248,6 +248,10 @@ extern void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId,
 									  char replicationModel, bool autoConverted);
 extern void UpdatePgDistPartitionAutoConverted(Oid citusTableId, bool autoConverted);
+extern void UpdateDistributionColumnGlobally(Oid relationId, char distributionMethod,
+											 Var *distributionColumn, int colocationId);
+extern void UpdateDistributionColumn(Oid relationId, char distributionMethod,
+									 Var *distributionColumn, int colocationId);
 extern void DeletePartitionRow(Oid distributedRelationId);
 extern void DeleteShardRow(uint64 shardId);
 extern void UpdateShardPlacementState(uint64 placementId, char shardState);
@@ -276,7 +280,6 @@ extern Oid TableOwnerOid(Oid relationId);
 extern char * TableOwner(Oid relationId);
 extern void EnsureTablePermissions(Oid relationId, AclMode mode);
 extern void EnsureTableOwner(Oid relationId);
-extern void EnsureSchemaOwner(Oid schemaId);
 extern void EnsureHashDistributedTable(Oid relationId);
 extern void EnsureFunctionOwner(Oid functionId);
 extern void EnsureSuperUser(void);

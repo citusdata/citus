@@ -18,6 +18,7 @@ teardown
     SELECT 1 FROM master_add_node('localhost', 57638);
 
     RESET search_path;
+    DROP SCHEMA IF EXISTS col_schema CASCADE;
     DROP TABLE IF EXISTS t1 CASCADE;
     DROP TABLE IF EXISTS t2 CASCADE;
     DROP TABLE IF EXISTS t3 CASCADE;
@@ -118,6 +119,13 @@ step "s2-commit"
     COMMIT;
 }
 
+step "s2-create-table-for-colocation"
+{
+    CREATE SCHEMA col_schema;
+    CREATE TABLE col_schema.col_tbl (a INT, b INT);
+    SELECT create_distributed_table('col_schema.col_tbl', 'a');
+}
+
 // prints from session 2 are run at the end when the worker has already been added by the
 // test
 step "s2-print-distributed-objects"
@@ -199,7 +207,7 @@ permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-create-sche
 
 // concurrency tests with multi schema distribution
 permutation "s1-print-distributed-objects" "s2-create-schema" "s1-begin" "s2-begin" "s1-add-worker" "s2-create-table" "s1-commit" "s2-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
-permutation "s1-print-distributed-objects" "s1-add-worker" "s2-create-schema" "s2-begin" "s3-begin" "s3-use-schema" "s2-create-table" "s3-create-table" "s2-commit" "s3-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
+permutation "s1-print-distributed-objects" "s2-create-table-for-colocation" "s1-add-worker" "s2-create-schema" "s2-begin" "s3-begin" "s3-use-schema" "s2-create-table" "s3-create-table" "s2-commit" "s3-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
 permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s3-begin" "s1-add-worker" "s2-create-schema" "s3-create-schema2" "s1-commit" "s2-create-table" "s2-commit" "s3-create-table" "s3-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
 
 // type and schema tests
@@ -212,10 +220,10 @@ permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-create-sche
 // s3-wait-for-metadata-sync step, we do "s2-begin" followed directly by
 // "s2-commit", because "COMMIT"  syncs the messages
 
-permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-distribute-function" "s1-commit" "s2-begin" "s2-commit"  "s3-wait-for-metadata-sync" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
-permutation "s1-print-distributed-objects" "s1-begin" "s2-public-schema" "s2-distribute-function" "s2-begin" "s2-commit" "s3-wait-for-metadata-sync" "s1-add-worker" "s1-commit" "s3-wait-for-metadata-sync" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
+permutation "s1-print-distributed-objects" "s2-create-table-for-colocation" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-distribute-function" "s1-commit" "s2-begin" "s2-commit"  "s3-wait-for-metadata-sync" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
+permutation "s1-print-distributed-objects" "s2-create-table-for-colocation" "s1-begin" "s2-public-schema" "s2-distribute-function" "s2-begin" "s2-commit" "s3-wait-for-metadata-sync" "s1-add-worker" "s1-commit" "s3-wait-for-metadata-sync" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
 
 // we cannot run the following operations concurrently
 // the problem is that NOTIFY event doesn't (reliably) happen before COMMIT
 // so we have to commit s2 before s1 starts
-permutation "s1-print-distributed-objects" "s2-begin" "s2-create-schema" "s2-distribute-function" "s2-commit" "s3-wait-for-metadata-sync" "s1-begin" "s1-add-worker" "s1-commit" "s3-wait-for-metadata-sync" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
+permutation "s1-print-distributed-objects" "s2-create-table-for-colocation" "s2-begin" "s2-create-schema" "s2-distribute-function" "s2-commit" "s3-wait-for-metadata-sync" "s1-begin" "s1-add-worker" "s1-commit" "s3-wait-for-metadata-sync" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
