@@ -137,8 +137,10 @@ def create_citus_extension(pg_path, node_ports):
 
 def run_pg_regress(pg_path, pg_srcdir, port, schedule):
     should_exit = True
-    _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit)
-    subprocess.run("bin/copy_modified", check=True)
+    try:
+        _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit)
+    finally:
+        subprocess.run("bin/copy_modified", check=True)
 
 
 def run_pg_regress_without_exit(
