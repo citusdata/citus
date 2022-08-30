@@ -10,8 +10,35 @@ SELECT create_distributed_table('test','x');
 
 (1 row)
 
+-- Add 1 row to each shard
+SELECT get_shard_id_for_distribution_column('test', 1);
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                            801009000
+(1 row)
+
 INSERT INTO test VALUES (1,2);
+SELECT get_shard_id_for_distribution_column('test', 3);
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                            801009001
+(1 row)
+
 INSERT INTO test VALUES (3,2);
+SELECT get_shard_id_for_distribution_column('test', 6);
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                            801009002
+(1 row)
+
+INSERT INTO test VALUES (8,2);
+SELECT get_shard_id_for_distribution_column('test', 11);
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                            801009003
+(1 row)
+
+INSERT INTO test VALUES (11,2);
 -- Set a very high slow start to avoid opening parallel connections
 SET citus.executor_slow_start_interval TO '60s';
 SET citus.max_adaptive_executor_pool_size TO 2;
@@ -19,7 +46,7 @@ BEGIN;
 SELECT count(*) FROM test a JOIN (SELECT x, pg_sleep(0.1) FROM test) b USING (x);
  count
 ---------------------------------------------------------------------
-     2
+     4
 (1 row)
 
 SELECT sum(result::bigint) FROM run_command_on_workers($$
@@ -35,10 +62,10 @@ END;
 -- SELECT takes longer than slow start interval, should open multiple connections
 SET citus.executor_slow_start_interval TO '10ms';
 BEGIN;
-SELECT count(*) FROM test a JOIN (SELECT x, pg_sleep(0.1) FROM test) b USING (x);
+SELECT count(*) FROM test a JOIN (SELECT x, pg_sleep(0.2) FROM test) b USING (x);
  count
 ---------------------------------------------------------------------
-     2
+     4
 (1 row)
 
 SELECT sum(result::bigint) FROM run_command_on_workers($$
