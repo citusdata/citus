@@ -565,7 +565,7 @@ EnsureAndGetHealthyConnections(dlist_head *connections, bool checkTransactionSta
 		bool inRemoteTrasaction =
 			transaction->transactionState != REMOTE_TRANS_NOT_STARTED;
 
-		if (inRemoteTrasaction && checkTransactionState)
+		if (checkTransactionState && inRemoteTrasaction)
 		{
 			PGTransactionStatusType status = PQtransactionStatus(connection->pgConn);
 
@@ -580,7 +580,8 @@ EnsureAndGetHealthyConnections(dlist_head *connections, bool checkTransactionSta
 		{
 			healthyConnections = lappend(healthyConnections, connection);
 		}
-		else if (inRemoteTrasaction && checkTransactionState &&
+		else if (checkTransactionState && inRemoteTrasaction &&
+				 transaction->transactionFailed &&
 				 (transaction->transactionCritical ||
 				  !dlist_is_empty(&connection->referencedPlacements)))
 		{
