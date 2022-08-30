@@ -617,14 +617,35 @@ RemoteSocketClosed(MultiConnection *connection)
 	bool socketClosed = false;
 #if PG_VERSION_NUM >= PG_VERSION_15
 
+	if (!WaitEventSetCanReportClosed())
+	{
+		/* the kernel build does not support WL_SOCKET_CLOSED */
+		return false;
+	}
+
 	WaitEventSet *waitEventSet =
 		CreateWaitEventSet(CurrentMemoryContext, 1);
 	int sock = PQsocket(connection->pgConn);
-	WaitEvent *events = palloc0(sizeof(WaitEvent));
+	WaitEvent events[1];
+	int waitEventSetIndex =
+		CitusAddWaitEventSetToSet(waitEventSet, WL_SOCKET_CLOSED, sock,
+								  NULL, (void *) connection);
 
-	/* TODO: process return value of CitusAddWaitEventSetToSet */
-	CitusAddWaitEventSetToSet(waitEventSet, WL_SOCKET_CLOSED, sock,
-							  NULL, (void *) connection);
+	if (waitEventSetIndex == WAIT_EVENT_SET_INDEX_FAILED)
+	{
+		/*
+		 * Inform failed to add to wait event set with a debug message as this
+		 * is too detailed information for users. We let the code flow just in
+		 * case it can successfully finish the execution.
+		 */
+		ereport(DEBUG1, (errcode(ERRCODE_CONNECTION_FAILURE),
+						 errmsg("Adding wait event for node %s:%d failed. "
+								"The socket was: %d",
+								connection->hostname,
+								connection->port, sock)));
+
+		return false;
+	}
 
 	long timeout = 0; /* do not wait at all */
 	int eventCount = WaitEventSetWait(waitEventSet, timeout, events,
