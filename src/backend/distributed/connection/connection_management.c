@@ -581,6 +581,8 @@ EnsureAndGetHealthyConnections(dlist_head *connections)
 				 (transaction->transactionCritical ||
 				  !dlist_is_empty(&connection->referencedPlacements)))
 		{
+			CHECK_FOR_INTERRUPTS();
+
 			ReportConnectionError(connection, ERROR);
 
 			/*
