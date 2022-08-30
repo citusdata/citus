@@ -109,11 +109,17 @@ GetCurrentProgressMonitor(void)
 /*
  * FinalizeCurrentProgressMonitor releases the dynamic memory segment of the current
  * progress monitoring data structure and removes the process from
- * pg_stat_get_progress_info() output.
+ * pg_stat_get_progress_info() output. If there's no such dynamic memory
+ * segment this is a no-op.
  */
 void
 FinalizeCurrentProgressMonitor(void)
 {
+	if (currentProgressDSMHandle == DSM_HANDLE_INVALID)
+	{
+		return;
+	}
+
 	dsm_segment *dsmSegment = dsm_find_mapping(currentProgressDSMHandle);
 
 	if (dsmSegment != NULL)
