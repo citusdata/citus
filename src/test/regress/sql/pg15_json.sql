@@ -58,7 +58,7 @@ FROM my_films,
      lateral(SELECT * FROM JSON_TABLE (js, '$.favorites[*]' COLUMNS (id FOR ORDINALITY,
                            kind text PATH '$.kind',
                            NESTED PATH '$.films[*]' COLUMNS (title text PATH '$.title', director text PATH '$.director'))) AS jt) as sub
-WHERE my_films.id = 1;
+WHERE my_films.id = 1 ORDER BY 1,2,3,4;
 
 -- router query with an explicit LATEREL SUBQUERY and LIMIT
 SELECT sub.*
@@ -66,7 +66,7 @@ FROM my_films,
      lateral(SELECT * FROM JSON_TABLE (js, '$.favorites[*]' COLUMNS (id FOR ORDINALITY,
                            kind text PATH '$.kind',
                            NESTED PATH '$.films[*]' COLUMNS (title text PATH '$.title', director text PATH '$.director'))) AS jt ORDER BY id DESC LIMIT 1) as sub
-WHERE my_films.id = 1;
+WHERE my_films.id = 1 ORDER BY 1,2,3,4;
 
 -- set it DEBUG1 in case the plan changes
 -- we can see details
@@ -229,7 +229,8 @@ FROM
    )
    PLAN (favs INNER ((films1 INNER film1) CROSS (films2 INNER film2)))
   ) AS jt
- WHERE kind1 > kind2 AND director1 = director2;
+ WHERE kind1 > kind2 AND director1 = director2
+ ORDER BY 1,2,3,4;
 
 RESET client_min_messages;
 
@@ -267,7 +268,7 @@ from user_profiles WHERE anyjson IS NOT NULL ORDER BY 1;
 SELECT i,
        json_query('[{"x": "aaa"},{"x": "bbb"},{"x": "ccc"}]'::JSONB, '$[$i].x' passing id AS i RETURNING text omit quotes)
 FROM generate_series(0, 3) i
-JOIN my_films ON(id = i);
+JOIN my_films ON(id = i) ORDER BY 1;
 
 -- we can use JSON_TABLE in modification queries as well
 
