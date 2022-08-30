@@ -2004,6 +2004,21 @@ RegisterCitusConfigVariables(void)
 		WarnIfReplicationModelIsSet, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.require_coordinator_in_metadata",
+		gettext_noop("Sets whether Citus requires that the coordinator is in the "
+					 "metadata"),
+		gettext_noop("Various Citus features depend on the coordinator being in the "
+					 "metadata. By default, we check whether this is the case when "
+					 "creating a Citus table. You can circumvent this check by "
+					 "disabling this setting."),
+		&IsCoordinatorInMetadataRequired,
+		true,
+		PGC_SUSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+
+	DefineCustomBoolVariable(
 		"citus.running_under_isolation_test",
 		gettext_noop(
 			"Only useful for testing purposes, when set to true, Citus does some "

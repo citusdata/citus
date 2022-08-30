@@ -62,6 +62,7 @@ extern int MaxWorkerNodesTracked;
 extern char *WorkerListFileName;
 extern char *CurrentCluster;
 extern bool ReplicateReferenceTablesOnActivate;
+extern bool IsCoordinatorInMetadataRequired;
 
 extern void ActivateNodeList(List *nodeList);
 extern int ActivateNode(char *nodeName, int nodePort);
@@ -90,6 +91,7 @@ extern WorkerNode * FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePor
 extern WorkerNode * FindNodeWithNodeId(int nodeId, bool missingOk);
 extern List * ReadDistNode(bool includeNodesFromOtherClusters);
 extern void EnsureCoordinator(void);
+void EnsureCoordinatorInMetadata(void);
 extern void InsertCoordinatorIfClusterEmpty(void);
 extern uint32 GroupForNode(char *nodeName, int32 nodePort);
 extern WorkerNode * PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes);

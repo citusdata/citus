@@ -486,6 +486,9 @@ push(@pgOptions, "citus.enable_manual_changes_to_shards=on");
 push(@pgOptions, "citus.allow_unsafe_locks_from_workers=on");
 push(@pgOptions, "citus.stat_statements_track = 'all'");
 
+# We currently have too many tests that omit coordinator from metadata
+push(@pgOptions, "citus.require_coordinator_in_metadata=off");
+
 # Some tests look at shards in pg_class, make sure we can usually see them:
 push(@pgOptions, "citus.show_shards_for_app_name_prefixes='pg_regress'");
 

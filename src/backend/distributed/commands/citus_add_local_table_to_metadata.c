@@ -203,6 +203,9 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	/* enable citus_add_local_table_to_metadata on an empty node */
 	InsertCoordinatorIfClusterEmpty();
 
+	/* make sure the coordinator is in the metadata */
+	EnsureCoordinatorInMetadata();
+
 	/*
 	 * Creating Citus local tables relies on functions that accesses
 	 * shards locally (e.g., ExecuteAndLogUtilityCommand()). As long as

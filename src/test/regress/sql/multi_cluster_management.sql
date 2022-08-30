@@ -70,6 +70,12 @@ SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
 SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
+
+-- coordinator was not yet added to the metadata yet, should fail
+SET citus.require_coordinator_in_metadata TO on;
+SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
+RESET citus.require_coordinator_in_metadata;
+
 SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
 
 -- see that there are some active placements in the candidate node

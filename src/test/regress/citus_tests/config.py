@@ -173,7 +173,10 @@ class CitusUpgradeConfig(CitusBaseClusterConfig):
         self.pre_tar_path = arguments["--citus-pre-tar"]
         self.post_tar_path = arguments["--citus-post-tar"]
         self.temp_dir = "./tmp_citus_upgrade"
-        self.new_settings = {"citus.enable_version_checks": "false"}
+        self.new_settings = {
+			"citus.enable_version_checks": "false",
+			"citus.require_coordinator_in_metadata": "false"
+		}
         self.user = SUPER_USER_NAME
         self.mixed_mode = arguments["--mixed"]
         self.fixed_port = 57635
