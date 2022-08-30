@@ -623,10 +623,12 @@ RemoteSocketClosed(MultiConnection *connection)
 		return false;
 	}
 
+	int eventCount = 0;
+	WaitEvent events[3];
+
 	WaitEventSet *waitEventSet =
-		CreateWaitEventSet(CurrentMemoryContext, 1);
+		CreateWaitEventSet(CurrentMemoryContext, 3);
 	int sock = PQsocket(connection->pgConn);
-	WaitEvent events[1];
 	int waitEventSetIndex =
 		CitusAddWaitEventSetToSet(waitEventSet, WL_SOCKET_CLOSED, sock,
 								  NULL, (void *) connection);
@@ -644,18 +646,52 @@ RemoteSocketClosed(MultiConnection *connection)
 								connection->hostname,
 								connection->port, sock)));
 
+		FreeWaitEventSet(waitEventSet);
+
 		return false;
 	}
 
-	long timeout = 0; /* do not wait at all */
-	int eventCount = WaitEventSetWait(waitEventSet, timeout, events,
-									  1, WAIT_EVENT_CLIENT_READ);
-	if (eventCount > 0)
-	{
-		Assert(eventCount == 1);
+	CitusAddWaitEventSetToSet(waitEventSet, WL_POSTMASTER_DEATH, PGINVALID_SOCKET, NULL,
+							  NULL);
+	CitusAddWaitEventSetToSet(waitEventSet, WL_LATCH_SET, PGINVALID_SOCKET, MyLatch,
+							  NULL);
 
-		WaitEvent *event = &events[0];
-		socketClosed = (event->events & WL_SOCKET_CLOSED);
+	long timeout = 0; /* do not wait at all */
+	int eventIndex = 0;
+
+retry:
+	eventCount =
+		WaitEventSetWait(waitEventSet, timeout, events,
+						 3, WAIT_EVENT_CLIENT_READ);
+	for (; eventIndex < eventCount; eventIndex++)
+	{
+		WaitEvent *event = &events[eventIndex];
+
+		if (event->events & WL_POSTMASTER_DEATH)
+		{
+			ereport(ERROR, (errmsg("postmaster was shut down, exiting")));
+		}
+
+		if (event->events & WL_SOCKET_CLOSED)
+		{
+			socketClosed = true;
+
+			/* we found what we are searching for */
+			break;
+		}
+
+		if (event->events & WL_LATCH_SET)
+		{
+			/*
+			 * A latch event might be preventing other events from being
+			 * reported.  Reset it and poll again.  No need to restore it
+			 * because no code should expect latches to survive across
+			 * CHECK_FOR_INTERRUPTS().
+			 */
+			ResetLatch(MyLatch);
+
+			goto retry;
+		}
 	}
 
 	FreeWaitEventSet(waitEventSet);
