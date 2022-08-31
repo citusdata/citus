@@ -25,7 +25,7 @@ SET citus.max_cached_conns_per_worker TO 1;
 SELECT count(*) FROM socket_test_table;
 
 -- kill all the cached backends on the workers
-SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE query ilike '%socket_test_table%' AND pid !=pg_backend_pid()) as foo$$);
+SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pg_terminate_backend(pid, 1000) FROM pg_stat_activity WHERE query ilike '%socket_test_table%' AND pid !=pg_backend_pid()) as foo$$);
 
 -- show that none remains
 SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pid FROM pg_stat_activity WHERE query ilike '%socket_test_table%' AND pid !=pg_backend_pid()) as foo$$);
@@ -39,9 +39,7 @@ SET citus.max_adaptive_executor_pool_size TO 16;
 SET citus.max_cached_conns_per_worker TO 16;
 SET citus.force_max_query_parallelization  TO ON;
 SELECT count(*) FROM socket_test_table;
-SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE query ilike '%socket_test_table%' AND pid !=pg_backend_pid()) as foo$$);
--- show that none remains
-SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pid FROM pg_stat_activity WHERE query ilike '%socket_test_table%' AND pid !=pg_backend_pid()) as foo$$);
+SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pg_terminate_backend(pid, 1000) FROM pg_stat_activity WHERE query ilike '%socket_test_table%' AND pid !=pg_backend_pid()) as foo$$);
 
 SELECT count(*) FROM socket_test_table;
 
@@ -54,28 +52,20 @@ SET citus.force_max_query_parallelization  TO OFF;
 
 -- single row INSERT
 INSERT INTO socket_test_table VALUES (1);
-SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE query ilike '%socket_test_table%' AND pid !=pg_backend_pid()) as foo$$) ORDER BY result;
--- show that none remains
-SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pid FROM pg_stat_activity WHERE query ilike '%socket_test_table%' AND pid !=pg_backend_pid()) as foo$$);
-
+SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pg_terminate_backend(pid, 1000) FROM pg_stat_activity WHERE query ilike '%socket_test_table%' AND pid !=pg_backend_pid()) as foo$$) ORDER BY result;
 INSERT INTO socket_test_table VALUES (1);
-
 
 -- single row UPDATE
 UPDATE socket_test_table SET value = 15 WHERE id = 1;
-SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE query ilike '%socket_test_table%' AND pid !=pg_backend_pid()) as foo$$) ORDER BY result;
--- show that none remains
-SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pid FROM pg_stat_activity WHERE query ilike '%socket_test_table%' AND pid !=pg_backend_pid()) as foo$$);
-
+SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pg_terminate_backend(pid, 1000) FROM pg_stat_activity WHERE query ilike '%socket_test_table%' AND pid !=pg_backend_pid()) as foo$$) ORDER BY result;
 UPDATE socket_test_table SET value = 15 WHERE id = 1;
-
 
 -- we cannot recover in a transaction block
 BEGIN;
   SELECT count(*) FROM socket_test_table;
 
   -- kill all the cached backends on the workers
-  SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE query ilike '%socket_test_table%' AND pid !=pg_backend_pid()) as foo$$);
+  SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pg_terminate_backend(pid, 1000) FROM pg_stat_activity WHERE query ilike '%socket_test_table%' AND pid !=pg_backend_pid()) as foo$$);
 
   SELECT count(*) FROM socket_test_table;
 ROLLBACK;
@@ -89,10 +79,7 @@ SET citus.max_adaptive_executor_pool_size TO 1;
 SET citus.max_cached_conns_per_worker TO 1;
 SET citus.force_max_query_parallelization  TO ON;
 SELECT count(*) FROM socket_test_table;
-SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE query ilike '%socket_test_table_%' AND query not ilike '%pg_stat_activity%' AND pid !=pg_backend_pid()) as foo$$);
--- show that none remains
-SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pid FROM pg_stat_activity WHERE query ilike '%socket_test_table_%' AND query not ilike '%pg_stat_activity%' AND pid !=pg_backend_pid()) as foo$$);
-
+SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pg_terminate_backend(pid, 1000) FROM pg_stat_activity WHERE query ilike '%socket_test_table_%' AND query not ilike '%pg_stat_activity%' AND pid !=pg_backend_pid()) as foo$$);
 SELECT count(*) FROM socket_test_table;
 
 \c - - - :master_port
