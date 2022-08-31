@@ -1347,6 +1347,7 @@ DropShardListMetadata(List *shardIntervalList)
 	}
 }
 
+
 /*
  * DropShardList drops actual shards from the worker nodes.
  */
@@ -1377,12 +1378,12 @@ DropShardList(List *shardIntervalList)
 			if (storageType == SHARD_STORAGE_TABLE)
 			{
 				appendStringInfo(dropQuery, DROP_REGULAR_TABLE_COMMAND,
-									qualifiedShardName);
+								 qualifiedShardName);
 			}
 			else if (storageType == SHARD_STORAGE_FOREIGN)
 			{
 				appendStringInfo(dropQuery, DROP_FOREIGN_TABLE_COMMAND,
-									qualifiedShardName);
+								 qualifiedShardName);
 			}
 
 			/* drop old shard */
@@ -1418,11 +1419,11 @@ InsertDeferredDropCleanupRecordsForShards(List *shardIntervalList)
 			char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
 
 			/* Log shard in pg_dist_cleanup.
-			* Parent shards are to be dropped only on sucess after split workflow is complete,
-			* so mark the policy as 'CLEANUP_DEFERRED_ON_SUCCESS'.
-			* We also log cleanup record in the current transaction. If the current transaction rolls back,
-			* we do not generate a record at all.
-			*/
+			 * Parent shards are to be dropped only on sucess after split workflow is complete,
+			 * so mark the policy as 'CLEANUP_DEFERRED_ON_SUCCESS'.
+			 * We also log cleanup record in the current transaction. If the current transaction rolls back,
+			 * we do not generate a record at all.
+			 */
 			CleanupPolicy policy = CLEANUP_DEFERRED_ON_SUCCESS;
 			InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
 													qualifiedShardName,
@@ -1431,6 +1432,7 @@ InsertDeferredDropCleanupRecordsForShards(List *shardIntervalList)
 		}
 	}
 }
+
 
 /*
  * AcquireNonblockingSplitLock does not allow concurrent nonblocking splits, because we share memory and
@@ -1654,7 +1656,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		/*
 		 * 20) Delete old shards metadata and either mark the shards as
 		 * to be deferred drop or physically delete them.
-	     * Have to do that before creating the new shard metadata,
+		 * Have to do that before creating the new shard metadata,
 		 * because there's cross-checks preventing inconsistent metadata
 		 * (like overlapping shards).
 		 */
@@ -1830,8 +1832,8 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			}
 
 			/* Log shard in pg_dist_cleanup. Given dummy shards are transient resources,
-				* we want to cleanup irrespective of operation success or failure.
-				*/
+			 * we want to cleanup irrespective of operation success or failure.
+			 */
 			CleanupPolicy policy = CLEANUP_ALWAYS;
 			InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
 												ConstructQualifiedShardName(
@@ -1893,8 +1895,8 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			}
 
 			/* Log shard in pg_dist_cleanup. Given dummy shards are transient resources,
-				* we want to cleanup irrespective of operation success or failure.
-				*/
+			 * we want to cleanup irrespective of operation success or failure.
+			 */
 			CleanupPolicy policy = CLEANUP_ALWAYS;
 			InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
 												ConstructQualifiedShardName(
