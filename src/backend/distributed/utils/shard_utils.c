@@ -16,7 +16,10 @@
 #include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/listutils.h"
+#include "distributed/log_utils.h"
 #include "distributed/metadata_utility.h"
+#include "distributed/multi_physical_planner.h"
 #include "distributed/relay_utility.h"
 #include "distributed/shard_utils.h"
 
@@ -120,4 +123,26 @@ GetLargestShardId()
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
 	return largestShardId;
+}
+
+
+/*
+ * VerifyShardStillExists errors out if the given tasks has any nonexistent
+ * shard id.
+ */
+void
+VerifyShardsStillExist(List *taskList)
+{
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
+	{
+		if (!ShardExists(task->anchorShardId))
+		{
+			ereport(ERROR, (errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
+							errmsg("shard for the given value does not exist"),
+							errdetail(
+								"A concurrent shard split may have moved the data into a new set of shards."),
+							errhint("Retry the query.")));
+		}
+	}
 }

@@ -31,6 +31,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/query_stats.h"
+#include "distributed/shard_utils.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_log_messages.h"
 #include "distributed/worker_protocol.h"
@@ -405,6 +406,9 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 
 		/* prevent concurrent placement changes */
 		AcquireMetadataLocks(workerJob->taskList);
+
+		/* error with a shard not found message if any shard in the tasks is nonexistent */
+		VerifyShardsStillExist(workerJob->taskList);
 
 		/* modify tasks are always assigned using first-replica policy */
 		workerJob->taskList = FirstReplicaAssignTaskList(workerJob->taskList);

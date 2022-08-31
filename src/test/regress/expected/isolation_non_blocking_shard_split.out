@@ -434,7 +434,7 @@ step s1-end:
  COMMIT;
 
 step s4-insert: <... completed>
-ERROR:  could not find valid entry for shard xxxxx
+ERROR:  shard for the given value does not exist
 step s4-end:
    COMMIT;
 

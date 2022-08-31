@@ -799,6 +799,32 @@ LoadShardInterval(uint64 shardId)
 
 
 /*
+ * ShardExists returns whether given shard exists or not.
+ */
+bool
+ShardExists(uint64 shardId)
+{
+	ShardIdCacheEntry *shardIdEntry = NULL;
+	bool foundShard = false;
+
+	PG_TRY();
+	{
+		shardIdEntry = LookupShardIdCacheEntry(shardId);
+		foundShard = true;
+		ereport(DEBUG5, (errmsg("relation_id = %u for shard with shard_id = %lu",
+								shardIdEntry->tableEntry->relationId, shardId)));
+	}
+	PG_CATCH();
+	{
+		ereport(DEBUG5, (errmsg("could not find shard with shard_id = %lu", shardId)));
+	}
+	PG_END_TRY();
+
+	return foundShard;
+}
+
+
+/*
  * RelationIdOfShard returns the relationId of the given shardId.
  */
 Oid
@@ -4650,37 +4676,6 @@ LookupShardRelationFromCatalog(int64 shardId, bool missingOk)
 	table_close(pgDistShard, NoLock);
 
 	return relationId;
-}
-
-
-/*
- * ShardExists returns whether the given shard ID exists in pg_dist_shard.
- */
-bool
-ShardExists(int64 shardId)
-{
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
-	Relation pgDistShard = table_open(DistShardRelationId(), AccessShareLock);
-	bool shardExists = false;
-
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardId));
-
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistShard,
-													DistShardShardidIndexId(), true,
-													NULL, scanKeyCount, scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	if (HeapTupleIsValid(heapTuple))
-	{
-		shardExists = true;
-	}
-
-	systable_endscan(scanDescriptor);
-	table_close(pgDistShard, NoLock);
-
-	return shardExists;
 }
 
 
