@@ -151,7 +151,8 @@ static List * ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 												   DistributionColumnMap *
 												   distributionColumnOverrides);
 static void ExecuteSplitShardReleaseSharedMemory(WorkerNode *sourceWorkerNode);
-static void AddDummyShardEntryInMap(HTAB *mapOfPlacementToDummyShardList, uint32 targetNodeId,
+static void AddDummyShardEntryInMap(HTAB *mapOfPlacementToDummyShardList, uint32
+									targetNodeId,
 									ShardInterval *shardInterval);
 static uint64 GetNextShardIdForSplitChild(void);
 static void AcquireNonblockingSplitLock(Oid relationId);
@@ -1486,7 +1487,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		 *    information.
 		 */
 		HTAB *mapOfPlacementToDummyShardList = CreateSimpleHash(NodeAndOwner,
-															GroupedShardSplitInfos);
+																GroupedShardSplitInfos);
 		CreateDummyShardsForShardGroup(
 			mapOfPlacementToDummyShardList,
 			sourceColocatedShardIntervalList,
