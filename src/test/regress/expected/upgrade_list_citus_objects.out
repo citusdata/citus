@@ -273,5 +273,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(262 rows)
+(265 rows)
 
