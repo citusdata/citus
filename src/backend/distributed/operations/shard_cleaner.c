@@ -226,7 +226,7 @@ DropOrphanedShardsForCleanup()
 	foreach_ptr(record, cleanupRecordList)
 	{
 		/* We only support one resource type at the moment */
-		if (record->objectType != CLEANUP_SHARD_PLACEMENT)
+		if (record->objectType != CLEANUP_OBJECT_SHARD_PLACEMENT)
 		{
 			ereport(WARNING, (errmsg("Invalid object type %d for cleanup record ",
 									 record->objectType)));
@@ -416,7 +416,7 @@ CompleteNewOperationNeedingCleanup(bool isSuccess)
 	foreach_ptr(record, currentOperationRecordList)
 	{
 		/* We only supporting cleaning shards right now */
-		if (record->objectType != CLEANUP_SHARD_PLACEMENT)
+		if (record->objectType != CLEANUP_OBJECT_SHARD_PLACEMENT)
 		{
 			ereport(WARNING, (errmsg("Invalid object type %d for cleanup record ",
 									 record->objectType)));
@@ -432,6 +432,13 @@ CompleteNewOperationNeedingCleanup(bool isSuccess)
 			if (TryDropShardOutsideTransaction(qualifiedTableName, workerNode->workerName,
 											   workerNode->workerPort))
 			{
+				/*
+				 * Delete cleanup records outside transaction as:
+				 * 1.The resources are marked as 'CLEANUP_ALWAYS' and should be cleaned no matter
+				 *   you succeeded or failed.
+				 * 2.The resources are marked as 'CLEANUP_ON_FAILURE' and we know isSucess = FALSE
+				 *   i.e. operation is failing.
+				 */
 				DeleteCleanupRecordByRecordIdOutsideTransaction(record->recordId);
 				removedShardCountOnComplete++;
 			}
@@ -442,6 +449,11 @@ CompleteNewOperationNeedingCleanup(bool isSuccess)
 		}
 		else if (record->policy == CLEANUP_ON_FAILURE && isSuccess)
 		{
+			/* Delete cleanup records in same transaction as:
+			 * The resources are marked as 'CLEANUP_ON_FAILURE' and we are approaching a successful
+			 * completion of the operation. However, we cannot guarentee that operation will succeed
+			 * so we tie the Delete with parent transaction.
+			 */
 			DeleteCleanupRecordByRecordId(record->recordId);
 		}
 	}
@@ -527,6 +539,11 @@ InsertCleanupRecordInSubtransaction(CleanupObject objectType,
 	 */
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
 
+	StringInfo sequenceName = makeStringInfo();
+	appendStringInfo(sequenceName, "%s.%s",
+					 PG_CATALOG,
+					 CLEANUPRECORDID_SEQUENCE_NAME);
+
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
 					 "INSERT INTO %s.%s "
@@ -534,7 +551,7 @@ InsertCleanupRecordInSubtransaction(CleanupObject objectType,
 					 " VALUES ( nextval('%s'), " UINT64_FORMAT ", %d, %s, %d, %d)",
 					 PG_CATALOG,
 					 PG_DIST_CLEANUP,
-					 CLEANUPRECORDID_SEQUENCE_NAME,
+					 sequenceName->data,
 					 CurrentOperationId,
 					 objectType,
 					 quote_literal_cstr(objectName),
@@ -683,13 +700,7 @@ GetNextOperationId()
 	if (queryResult != RESPONSE_OKAY || !IsResponseOK(result) || PQntuples(result) != 1 ||
 		PQnfields(result) != 1)
 	{
-		PQclear(result);
-		ForgetResults(connection);
-		CloseConnection(connection);
-
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg(
-							"Could not generate a valid operation identifier.")));
+		ReportResultError(connection, result, ERROR);
 	}
 
 	operationdId = SafeStringToUint64(PQgetvalue(result, 0, 0 /* nodeId column*/));

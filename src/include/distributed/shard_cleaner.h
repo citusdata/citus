@@ -33,8 +33,8 @@ extern OperationId CurrentOperationId;
  */
 typedef enum CleanupObject
 {
-	CLEANUP_INVALID = 0,
-	CLEANUP_SHARD_PLACEMENT = 1
+	CLEANUP_OBJECT_INVALID = 0,
+	CLEANUP_OBJECT_SHARD_PLACEMENT = 1
 } CleanupObject;
 
 /*

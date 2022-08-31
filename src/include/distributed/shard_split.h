@@ -47,8 +47,6 @@ extern void SplitShard(SplitMode splitMode,
 					   List *colocatedShardIntervalList,
 					   uint32 targetColocationId);
 
-extern void DropShardList(List *shardIntervalList);
-
 extern SplitMode LookupSplitMode(Oid shardTransferModeOid);
 
 extern void ErrorIfMultipleNonblockingMoveSplitInTheSameTransaction(void);

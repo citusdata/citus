@@ -157,6 +157,9 @@ static void AddDummyShardEntryInMap(HTAB *mapOfPlacementToDummyShardList, uint32
 static uint64 GetNextShardIdForSplitChild(void);
 static void AcquireNonblockingSplitLock(Oid relationId);
 static List * GetWorkerNodesFromWorkerIds(List *nodeIdsForPlacementList);
+static void DropShardListMetadata(List *shardIntervalList);
+static void DropShardList(List *shardIntervalList);
+static void InsertDeferredDropCleanupRecordsForShards(List *shardIntervalList);
 
 /* Customize error message strings based on operation type */
 static const char *const SplitOperationName[] =
@@ -602,12 +605,24 @@ BlockingShardSplit(SplitOperation splitOperation,
 		 * going forward are part of the same distributed transaction.
 		 */
 
+
 		/*
-		 * Drop old shards and delete related metadata. Have to do that before
-		 * creating the new shard metadata, because there's cross-checks
-		 * preventing inconsistent metadata (like overlapping shards).
+		 * Delete old shards metadata and either mark the shards as
+		 * to be deferred drop or physically delete them.
+		 * Have to do that before creating the new shard metadata,
+		 * because there's cross-checks preventing inconsistent metadata
+		 * (like overlapping shards).
 		 */
-		DropShardList(sourceColocatedShardIntervalList);
+		if (DeferShardDeleteOnSplit)
+		{
+			InsertDeferredDropCleanupRecordsForShards(sourceColocatedShardIntervalList);
+		}
+		else
+		{
+			DropShardList(sourceColocatedShardIntervalList);
+		}
+
+		DropShardListMetadata(sourceColocatedShardIntervalList);
 
 		/* Insert new shard and placement metdata */
 		InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
@@ -671,17 +686,7 @@ CheckIfRelationWithSameNameExists(ShardInterval *shardInterval, WorkerNode *work
 												   checkShardExistsQuery->data, &result);
 	if (queryResult != RESPONSE_OKAY || !IsResponseOK(result) || PQntuples(result) != 1)
 	{
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg(
-							"Cannot check if relation %s already exists for split on worker %s:%d",
-							ConstructQualifiedShardName(shardInterval),
-							connection->hostname,
-							connection->port)));
-
-		PQclear(result);
-		ForgetResults(connection);
-
-		return false;
+		ReportResultError(connection, result, ERROR);
 	}
 
 	char *checkExists = PQgetvalue(result, 0, 0);
@@ -733,24 +738,22 @@ CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 			if (relationExists)
 			{
 				ereport(ERROR, (errcode(ERRCODE_DUPLICATE_TABLE),
-								errmsg("Relation %s already exists on worker %s:%d.",
+								errmsg("relation %s already exists on worker %s:%d",
 									   ConstructQualifiedShardName(shardInterval),
 									   workerPlacementNode->workerName,
 									   workerPlacementNode->workerPort)));
 			}
-			else
-			{
-				CleanupPolicy policy = CLEANUP_ON_FAILURE;
-				InsertCleanupRecordInSubtransaction(CLEANUP_SHARD_PLACEMENT,
-													ConstructQualifiedShardName(
-														shardInterval),
-													workerPlacementNode->groupId,
-													policy);
 
-				/* Create new split child shard on the specified placement list */
-				CreateObjectOnPlacement(splitShardCreationCommandList,
-										workerPlacementNode);
-			}
+			CleanupPolicy policy = CLEANUP_ON_FAILURE;
+			InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+												ConstructQualifiedShardName(
+													shardInterval),
+												workerPlacementNode->groupId,
+												policy);
+
+			/* Create new split child shard on the specified placement list */
+			CreateObjectOnPlacement(splitShardCreationCommandList,
+									workerPlacementNode);
 		}
 	}
 }
@@ -1302,11 +1305,11 @@ CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 
 
 /*
- * DropShardList drops shards and their metadata from both the coordinator and
+ * DropShardListMetadata drops shard metadata from both the coordinator and
  * mx nodes.
  */
-void
-DropShardList(List *shardIntervalList)
+static void
+DropShardListMetadata(List *shardIntervalList)
 {
 	ListCell *shardIntervalCell = NULL;
 
@@ -1331,7 +1334,34 @@ DropShardList(List *shardIntervalList)
 			}
 		}
 
-		/* delete shard placements and drop shards */
+		/* delete shard placements */
+		List *shardPlacementList = ActiveShardPlacementList(oldShardId);
+		foreach(shardPlacementCell, shardPlacementList)
+		{
+			ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
+			DeleteShardPlacementRow(placement->placementId);
+		}
+
+		/* delete shard row */
+		DeleteShardRow(oldShardId);
+	}
+}
+
+/*
+ * DropShardList drops actual shards from the worker nodes.
+ */
+static void
+DropShardList(List *shardIntervalList)
+{
+	ListCell *shardIntervalCell = NULL;
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+		ListCell *shardPlacementCell = NULL;
+		uint64 oldShardId = shardInterval->shardId;
+
+		/* delete shard placements */
 		List *shardPlacementList = ActiveShardPlacementList(oldShardId);
 		foreach(shardPlacementCell, shardPlacementList)
 		{
@@ -1340,49 +1370,67 @@ DropShardList(List *shardIntervalList)
 			uint32 workerPort = placement->nodePort;
 			StringInfo dropQuery = makeStringInfo();
 
-			DeleteShardPlacementRow(placement->placementId);
+			/* get shard name */
+			char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
+
+			char storageType = shardInterval->storageType;
+			if (storageType == SHARD_STORAGE_TABLE)
+			{
+				appendStringInfo(dropQuery, DROP_REGULAR_TABLE_COMMAND,
+									qualifiedShardName);
+			}
+			else if (storageType == SHARD_STORAGE_FOREIGN)
+			{
+				appendStringInfo(dropQuery, DROP_FOREIGN_TABLE_COMMAND,
+									qualifiedShardName);
+			}
+
+			/* drop old shard */
+			SendCommandToWorker(workerName, workerPort, dropQuery->data);
+		}
+	}
+}
+
+
+/*
+ * If deferred drop is enabled, insert deferred cleanup records instead of
+ * dropping actual shards from the worker nodes. The shards will be dropped
+ * by background cleaner later.
+ */
+static void
+InsertDeferredDropCleanupRecordsForShards(List *shardIntervalList)
+{
+	ListCell *shardIntervalCell = NULL;
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+		ListCell *shardPlacementCell = NULL;
+		uint64 oldShardId = shardInterval->shardId;
+
+		/* mark for deferred drop */
+		List *shardPlacementList = ActiveShardPlacementList(oldShardId);
+		foreach(shardPlacementCell, shardPlacementList)
+		{
+			ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
 
 			/* get shard name */
 			char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
 
-			if (DeferShardDeleteOnSplit)
-			{
-				/* Log shard in pg_dist_cleanup.
-				 * Parent shards are to be dropped only on sucess after split workflow is complete,
-				 * so mark the policy as 'CLEANUP_DEFERRED_ON_SUCCESS'.
-				 * We also log cleanup record in the current transaction. If the current transaction rolls back,
-				 * we do not generate a record at all.
-				 */
-				CleanupPolicy policy = CLEANUP_DEFERRED_ON_SUCCESS;
-				InsertCleanupRecordInCurrentTransaction(CLEANUP_SHARD_PLACEMENT,
-														qualifiedShardName,
-														placement->groupId,
-														policy);
-			}
-			else
-			{
-				char storageType = shardInterval->storageType;
-				if (storageType == SHARD_STORAGE_TABLE)
-				{
-					appendStringInfo(dropQuery, DROP_REGULAR_TABLE_COMMAND,
-									 qualifiedShardName);
-				}
-				else if (storageType == SHARD_STORAGE_FOREIGN)
-				{
-					appendStringInfo(dropQuery, DROP_FOREIGN_TABLE_COMMAND,
-									 qualifiedShardName);
-				}
-
-				/* drop old shard */
-				SendCommandToWorker(workerName, workerPort, dropQuery->data);
-			}
+			/* Log shard in pg_dist_cleanup.
+			* Parent shards are to be dropped only on sucess after split workflow is complete,
+			* so mark the policy as 'CLEANUP_DEFERRED_ON_SUCCESS'.
+			* We also log cleanup record in the current transaction. If the current transaction rolls back,
+			* we do not generate a record at all.
+			*/
+			CleanupPolicy policy = CLEANUP_DEFERRED_ON_SUCCESS;
+			InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+													qualifiedShardName,
+													placement->groupId,
+													policy);
 		}
-
-		/* delete shard row */
-		DeleteShardRow(oldShardId);
 	}
 }
-
 
 /*
  * AcquireNonblockingSplitLock does not allow concurrent nonblocking splits, because we share memory and
@@ -1604,11 +1652,22 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		DropPublications(sourceConnection, publicationInfoHash);
 
 		/*
-		 * 20) Drop old shards and delete related metadata. Have to do that before
-		 * creating the new shard metadata, because there's cross-checks
-		 * preventing inconsistent metadata (like overlapping shards).
+		 * 20) Delete old shards metadata and either mark the shards as
+		 * to be deferred drop or physically delete them.
+	     * Have to do that before creating the new shard metadata,
+		 * because there's cross-checks preventing inconsistent metadata
+		 * (like overlapping shards).
 		 */
-		DropShardList(sourceColocatedShardIntervalList);
+		if (DeferShardDeleteOnSplit)
+		{
+			InsertDeferredDropCleanupRecordsForShards(sourceColocatedShardIntervalList);
+		}
+		else
+		{
+			DropShardList(sourceColocatedShardIntervalList);
+		}
+
+		DropShardListMetadata(sourceColocatedShardIntervalList);
 
 		/*
 		 * 21) In case of create_distributed_table_concurrently, which converts
@@ -1764,32 +1823,30 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			if (relationExists)
 			{
 				ereport(ERROR, (errcode(ERRCODE_DUPLICATE_TABLE),
-								errmsg("Relation %s already exists on worker %s:%d.",
+								errmsg("relation %s already exists on worker %s:%d",
 									   ConstructQualifiedShardName(shardInterval),
 									   workerPlacementNode->workerName,
 									   workerPlacementNode->workerPort)));
 			}
-			else
-			{
-				/* Log shard in pg_dist_cleanup. Given dummy shards are transient resources,
-				 * we want to cleanup irrespective of operation success or failure.
-				 */
-				CleanupPolicy policy = CLEANUP_ALWAYS;
-				InsertCleanupRecordInSubtransaction(CLEANUP_SHARD_PLACEMENT,
-													ConstructQualifiedShardName(
-														shardInterval),
-													workerPlacementNode->groupId,
-													policy);
 
-				/* Create dummy source shard on the specified placement list */
-				CreateObjectOnPlacement(splitShardCreationCommandList,
-										workerPlacementNode);
+			/* Log shard in pg_dist_cleanup. Given dummy shards are transient resources,
+				* we want to cleanup irrespective of operation success or failure.
+				*/
+			CleanupPolicy policy = CLEANUP_ALWAYS;
+			InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+												ConstructQualifiedShardName(
+													shardInterval),
+												workerPlacementNode->groupId,
+												policy);
 
-				/* Add dummy source shard entry created for placement node in map */
-				AddDummyShardEntryInMap(mapOfPlacementToDummyShardList,
-										workerPlacementNode->nodeId,
-										shardInterval);
-			}
+			/* Create dummy source shard on the specified placement list */
+			CreateObjectOnPlacement(splitShardCreationCommandList,
+									workerPlacementNode);
+
+			/* Add dummy source shard entry created for placement node in map */
+			AddDummyShardEntryInMap(mapOfPlacementToDummyShardList,
+									workerPlacementNode->nodeId,
+									shardInterval);
 		}
 	}
 
@@ -1829,31 +1886,29 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			if (relationExists)
 			{
 				ereport(ERROR, (errcode(ERRCODE_DUPLICATE_TABLE),
-								errmsg("Relation %s already exists on worker %s:%d.",
+								errmsg("relation %s already exists on worker %s:%d",
 									   ConstructQualifiedShardName(shardInterval),
 									   sourceWorkerNode->workerName,
 									   sourceWorkerNode->workerPort)));
 			}
-			else
-			{
-				/* Log shard in pg_dist_cleanup. Given dummy shards are transient resources,
-				 * we want to cleanup irrespective of operation success or failure.
-				 */
-				CleanupPolicy policy = CLEANUP_ALWAYS;
-				InsertCleanupRecordInSubtransaction(CLEANUP_SHARD_PLACEMENT,
-													ConstructQualifiedShardName(
-														shardInterval),
-													sourceWorkerNode->groupId,
-													policy);
 
-				/* Create dummy split child shard on source worker node */
-				CreateObjectOnPlacement(splitShardCreationCommandList, sourceWorkerNode);
+			/* Log shard in pg_dist_cleanup. Given dummy shards are transient resources,
+				* we want to cleanup irrespective of operation success or failure.
+				*/
+			CleanupPolicy policy = CLEANUP_ALWAYS;
+			InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
+												ConstructQualifiedShardName(
+													shardInterval),
+												sourceWorkerNode->groupId,
+												policy);
 
-				/* Add dummy split child shard entry created on source node */
-				AddDummyShardEntryInMap(mapOfPlacementToDummyShardList,
-										sourceWorkerNode->nodeId,
-										shardInterval);
-			}
+			/* Create dummy split child shard on source worker node */
+			CreateObjectOnPlacement(splitShardCreationCommandList, sourceWorkerNode);
+
+			/* Add dummy split child shard entry created on source node */
+			AddDummyShardEntryInMap(mapOfPlacementToDummyShardList,
+									sourceWorkerNode->nodeId,
+									shardInterval);
 		}
 	}
 }
