@@ -660,8 +660,14 @@ GetNextOperationId()
 	}
 
 	/* Generate sequence using a subtransaction. else we can hold replication slot creation for operations */
+	StringInfo sequenceName = makeStringInfo();
+	appendStringInfo(sequenceName, "%s.%s",
+		PG_CATALOG,
+		OPERATIONID_SEQUENCE_NAME);
+
 	StringInfo nextValueCommand = makeStringInfo();
-	appendStringInfo(nextValueCommand, "SELECT nextval(%s);", OPERATIONID_SEQUENCE_NAME);
+	appendStringInfo(nextValueCommand, "SELECT nextval(%s);",
+		quote_literal_cstr(sequenceName->data));
 
 	int connectionFlag = FORCE_NEW_CONNECTION;
 	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlag,
