@@ -176,6 +176,7 @@ step s1-lock-pg-dist-placement:
     LOCK TABLE pg_dist_placement IN SHARE ROW EXCLUSIVE MODE;
 
 s2: DEBUG:  could not acquire shard lock to cleanup placements
+s2: WARNING:  there is a shard placement in node group 0 but there are no nodes in that group
 step s2-drop-old-shards:
     SELECT run_try_drop_marked_shards();
 
