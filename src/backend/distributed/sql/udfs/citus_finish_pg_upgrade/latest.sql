@@ -93,7 +93,6 @@ BEGIN
     DROP TABLE public.pg_dist_transaction;
     DROP TABLE public.pg_dist_rebalance_strategy;
     DROP TABLE public.pg_dist_cleanup;
-
     --
     -- reset sequences
     --
