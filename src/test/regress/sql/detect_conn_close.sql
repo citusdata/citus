@@ -85,9 +85,8 @@ ROLLBACK;
 \c - - - :worker_1_port
 SET search_path TO socket_close;
 
--- now, use 16 connections per worker, we can still recover all connections
-SET citus.max_adaptive_executor_pool_size TO 16;
-SET citus.max_cached_conns_per_worker TO 16;
+SET citus.max_adaptive_executor_pool_size TO 1;
+SET citus.max_cached_conns_per_worker TO 1;
 SET citus.force_max_query_parallelization  TO ON;
 SELECT count(*) FROM socket_test_table;
 SELECT result FROM run_command_on_workers($$SELECT count(*) FROM (SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE query ilike '%socket_test_table_%' AND query not ilike '%pg_stat_activity%' AND pid !=pg_backend_pid()) as foo$$);
