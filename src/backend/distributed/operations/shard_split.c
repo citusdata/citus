@@ -47,7 +47,7 @@
 #include "postmaster/postmaster.h"
 
 /* declarations for dynamic loading */
-bool DeferShardDeleteOnSplit = true;
+bool DeferShardDeleteOnSplit = false;
 
 /*
  * Entry for map that tracks ShardInterval -> Placement Node

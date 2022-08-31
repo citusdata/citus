@@ -1023,7 +1023,7 @@ RegisterCitusConfigVariables(void)
 					 "citus.defer_shard_delete_interval to make sure defered deletions "
 					 "will be executed"),
 		&DeferShardDeleteOnSplit,
-		true,
+		false,
 		PGC_USERSET,
 		0,
 		NULL, NULL, NULL);
