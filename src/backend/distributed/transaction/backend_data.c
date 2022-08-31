@@ -105,9 +105,6 @@ static BackendData *MyBackendData = NULL;
 static CitusBackendType CurrentBackendType = CITUS_BACKEND_NOT_ASSIGNED;
 
 
-static void DetermineCitusBackendType(void);
-
-
 PG_FUNCTION_INFO_V1(assign_distributed_transaction_id);
 PG_FUNCTION_INFO_V1(get_current_transaction_id);
 PG_FUNCTION_INFO_V1(get_global_active_transactions);
@@ -681,7 +678,7 @@ TotalProcCount(void)
  * initialized this backend can be correctly shown in citus_lock_waits.
  */
 void
-InitializeBackendData(uint64 globalPID)
+InitializeBackendData(const char *applicationName)
 {
 	if (MyBackendData != NULL)
 	{
@@ -692,6 +689,8 @@ InitializeBackendData(uint64 globalPID)
 		 */
 		return;
 	}
+
+	uint64 gpid = ExtractGlobalPID(applicationName);
 
 	MyBackendData = &backendManagementShmemData->backends[MyProc->pgprocno];
 
@@ -704,20 +703,8 @@ InitializeBackendData(uint64 globalPID)
 	UnSetGlobalPID();
 
 	SpinLockAcquire(&MyBackendData->mutex);
-
-	/*
-	 * Use the given globalPID to initialize
-	 */
-	if (globalPID == INVALID_CITUS_INTERNAL_BACKEND_GPID)
-	{
-		MyBackendData->distributedCommandOriginator =
-			true;
-	}
-	else
-	{
-		MyBackendData->globalPID = globalPID;
-		MyBackendData->distributedCommandOriginator = false;
-	}
+	MyBackendData->distributedCommandOriginator = IsExternalClientBackend();
+	MyBackendData->globalPID = gpid;
 	SpinLockRelease(&MyBackendData->mutex);
 
 	/*
@@ -1045,7 +1032,7 @@ citus_pid_for_gpid(PG_FUNCTION_ARGS)
  * if the application name is not compatible with Citus' application names returns 0.
  */
 uint64
-ExtractGlobalPID(char *applicationName)
+ExtractGlobalPID(const char *applicationName)
 {
 	/* does application name exist */
 	if (!applicationName)
@@ -1371,7 +1358,7 @@ IsRebalancerInternalBackend(void)
 {
 	if (CurrentBackendType == CITUS_BACKEND_NOT_ASSIGNED)
 	{
-		DetermineCitusBackendType();
+		DetermineCitusBackendType(application_name);
 	}
 
 	return CurrentBackendType == CITUS_REBALANCER_BACKEND;
@@ -1387,7 +1374,7 @@ IsCitusInternalBackend(void)
 {
 	if (CurrentBackendType == CITUS_BACKEND_NOT_ASSIGNED)
 	{
-		DetermineCitusBackendType();
+		DetermineCitusBackendType(application_name);
 	}
 
 	return CurrentBackendType == CITUS_INTERNAL_BACKEND;
@@ -1403,29 +1390,41 @@ IsCitusRunCommandBackend(void)
 {
 	if (CurrentBackendType == CITUS_BACKEND_NOT_ASSIGNED)
 	{
-		DetermineCitusBackendType();
+		DetermineCitusBackendType(application_name);
 	}
 
 	return CurrentBackendType == CITUS_RUN_COMMAND_BACKEND;
 }
 
 
+bool
+IsExternalClientBackend(void)
+{
+	if (CurrentBackendType == CITUS_BACKEND_NOT_ASSIGNED)
+	{
+		DetermineCitusBackendType(application_name);
+	}
+
+	return CurrentBackendType == EXTERNAL_CLIENT_BACKEND;
+}
+
+
 /*
  * DetermineCitusBackendType determines the type of backend based on the application_name.
  */
-static void
-DetermineCitusBackendType(void)
+void
+DetermineCitusBackendType(const char *applicationName)
 {
-	if (ExtractGlobalPID(application_name) != INVALID_CITUS_INTERNAL_BACKEND_GPID)
+	if (ExtractGlobalPID(applicationName) != INVALID_CITUS_INTERNAL_BACKEND_GPID)
 	{
 		CurrentBackendType = CITUS_INTERNAL_BACKEND;
 	}
-	else if (application_name && strcmp(application_name, CITUS_REBALANCER_NAME) == 0)
+	else if (applicationName && strcmp(applicationName, CITUS_REBALANCER_NAME) == 0)
 	{
 		CurrentBackendType = CITUS_REBALANCER_BACKEND;
 	}
-	else if (application_name &&
-			 strcmp(application_name, CITUS_RUN_COMMAND_APPLICATION_NAME) == 0)
+	else if (applicationName &&
+			 strcmp(applicationName, CITUS_RUN_COMMAND_APPLICATION_NAME) == 0)
 	{
 		CurrentBackendType = CITUS_RUN_COMMAND_BACKEND;
 	}
