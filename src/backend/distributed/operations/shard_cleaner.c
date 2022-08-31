@@ -15,12 +15,14 @@
 #include "access/genam.h"
 #include "access/xact.h"
 #include "catalog/namespace.h"
+#include "commands/dbcommands.h"
 #include "commands/sequence.h"
 #include "postmaster/postmaster.h"
 #include "nodes/makefuncs.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 
+#include "distributed/citus_safe_lib.h"
 #include "distributed/listutils.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -657,17 +659,41 @@ GetNextOperationId()
 		return operationdId;
 	}
 
-	/* token location, or -1 if unknown */
-	const int location = -1;
-	RangeVar *sequenceName = makeRangeVar(PG_CATALOG,
-										  OPERATIONID_SEQUENCE_NAME,
-										  location);
+	/* Generate sequence using a subtransaction. else we can hold replication slot creation for operations */
+	StringInfo sequenceName = makeStringInfo();
+	appendStringInfo(sequenceName, "%s.%s",
+					 PG_CATALOG,
+					 OPERATIONID_SEQUENCE_NAME);
 
-	bool missingOK = false;
-	Oid sequenceId = RangeVarGetRelid(sequenceName, NoLock, missingOK);
+	StringInfo nextValueCommand = makeStringInfo();
+	appendStringInfo(nextValueCommand, "SELECT nextval(%s);",
+					 quote_literal_cstr(sequenceName->data));
 
-	bool checkPermissions = false;
-	operationdId = nextval_internal(sequenceId, checkPermissions);
+	int connectionFlag = FORCE_NEW_CONNECTION;
+	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlag,
+																LocalHostName,
+																PostPortNumber,
+																CitusExtensionOwnerName(),
+																get_database_name(
+																	MyDatabaseId));
+
+	PGresult *result = NULL;
+	int queryResult = ExecuteOptionalRemoteCommand(connection, nextValueCommand->data,
+												   &result);
+	if (queryResult != RESPONSE_OKAY || !IsResponseOK(result) || PQntuples(result) != 1 ||
+		PQnfields(result) != 1)
+	{
+		PQclear(result);
+		ForgetResults(connection);
+		CloseConnection(connection);
+
+		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
+						errmsg(
+							"Could not generate a valid operation identifier.")));
+	}
+
+	operationdId = SafeStringToUint64(PQgetvalue(result, 0, 0 /* nodeId column*/));
+	CloseConnection(connection);
 
 	return operationdId;
 }
