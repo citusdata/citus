@@ -2,7 +2,6 @@ setup
 {
     SELECT setval('pg_dist_shardid_seq', 1500000);
     SET citus.shard_count to 2;
-	SET citus.next_operation_id to 17;
 	SET citus.shard_replication_factor to 1;
 
 	CREATE TABLE reference_table (id int PRIMARY KEY, value int);
