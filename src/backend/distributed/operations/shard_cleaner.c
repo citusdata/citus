@@ -71,8 +71,10 @@ PG_FUNCTION_INFO_V1(citus_cleanup_orphaned_shards);
 PG_FUNCTION_INFO_V1(isolation_cleanup_orphaned_shards);
 
 static int DropOrphanedShardsForMove(bool waitForLocks);
-static bool TryDropShardOutsideTransaction(char *qualifiedTableName, char *nodeName, int
-										   nodePort);
+static bool TryDropShardOutsideTransaction(OperationId operationId,
+										   char *qualifiedTableName,
+										   char *nodeName,
+										   int nodePort);
 static bool TryLockRelationAndPlacementCleanup(Oid relationId, LOCKMODE lockmode);
 
 /* Functions for cleanup infrastructure */
@@ -208,6 +210,13 @@ TryDropOrphanedShards(bool waitForLocks)
 }
 
 
+/*
+ * DropOrphanedShardsForCleanup removes resources that were marked for cleanup by operation.
+ * It does so by trying to take an exclusive lock on the resources. If the lock cannot be
+ * obtained it skips the resource and continues with others.
+ * The resource that has been skipped will be removed at a later iteration when there are no
+ * locks held anymore.
+ */
 static int
 DropOrphanedShardsForCleanup()
 {
@@ -253,7 +262,9 @@ DropOrphanedShardsForCleanup()
 			continue;
 		}
 
-		if (TryDropShardOutsideTransaction(qualifiedTableName, workerNode->workerName,
+		if (TryDropShardOutsideTransaction(record->operationId,
+										   qualifiedTableName,
+										   workerNode->workerName,
 										   workerNode->workerPort))
 		{
 			/* delete the cleanup record */
@@ -344,7 +355,9 @@ DropOrphanedShardsForMove(bool waitForLocks)
 		ShardInterval *shardInterval = LoadShardInterval(placement->shardId);
 		char *qualifiedTableName = ConstructQualifiedShardName(shardInterval);
 
-		if (TryDropShardOutsideTransaction(qualifiedTableName, shardPlacement->nodeName,
+		if (TryDropShardOutsideTransaction(INVALID_OPERATION_ID,
+										   qualifiedTableName,
+										   shardPlacement->nodeName,
 										   shardPlacement->nodePort))
 		{
 			/* delete the actual placement */
@@ -429,7 +442,9 @@ CompleteNewOperationNeedingCleanup(bool isSuccess)
 			char *qualifiedTableName = record->objectName;
 			WorkerNode *workerNode = LookupNodeForGroup(record->nodeGroupId);
 
-			if (TryDropShardOutsideTransaction(qualifiedTableName, workerNode->workerName,
+			if (TryDropShardOutsideTransaction(CurrentOperationId,
+											   qualifiedTableName,
+											   workerNode->workerName,
 											   workerNode->workerPort))
 			{
 				/*
@@ -437,7 +452,9 @@ CompleteNewOperationNeedingCleanup(bool isSuccess)
 				 * 1.The resources are marked as 'CLEANUP_ALWAYS' and should be cleaned no matter
 				 *   you succeeded or failed.
 				 * 2.The resources are marked as 'CLEANUP_ON_FAILURE' and we know isSucess = FALSE
-				 *   i.e. operation is failing.
+				 *   i.e. operation is failing. Given we will abort the operation's transaction, we
+				 *   cannot delete records in the current transaction. We delete these records outside
+				 *   of the current transaction via a localhost connection.
 				 */
 				DeleteCleanupRecordByRecordIdOutsideTransaction(record->recordId);
 				removedShardCountOnComplete++;
@@ -615,15 +632,17 @@ TryLockRelationAndPlacementCleanup(Oid relationId, LOCKMODE lockmode)
  * true on success.
  */
 static bool
-TryDropShardOutsideTransaction(char *qualifiedTableName, char *nodeName, int nodePort)
+TryDropShardOutsideTransaction(OperationId operationId, char *qualifiedTableName,
+							   char *nodeName, int nodePort)
 {
-	char *operation = (CurrentOperationId == INVALID_OPERATION_ID) ? "move" : "cleanup";
-	ereport(LOG, (errmsg("dropping shard %s for %s "
-						 "on %s:%d",
+	char *operation = (operationId == INVALID_OPERATION_ID) ? "move" : "cleanup";
+
+	ereport(LOG, (errmsg("cleaning up %s on %s:%d which was left "
+						 "after a %s",
 						 qualifiedTableName,
-						 operation,
 						 nodeName,
-						 nodePort)));
+						 nodePort,
+						 operation)));
 
 	/* prepare sql query to execute to drop the shard */
 	StringInfo dropQuery = makeStringInfo();
@@ -704,6 +723,9 @@ GetNextOperationId()
 	}
 
 	operationdId = SafeStringToUint64(PQgetvalue(result, 0, 0 /* nodeId column*/));
+
+	PQclear(result);
+	ForgetResults(connection);
 	CloseConnection(connection);
 
 	return operationdId;

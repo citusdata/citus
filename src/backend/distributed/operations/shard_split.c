@@ -672,7 +672,7 @@ CheckIfRelationWithSameNameExists(ShardInterval *shardInterval, WorkerNode *work
 
 	StringInfo checkShardExistsQuery = makeStringInfo();
 	appendStringInfo(checkShardExistsQuery,
-					 "SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = '%s' AND tablename = '%s');",
+					 "SELECT EXISTS (SELECT FROM pg_catalog.pg_tables WHERE schemaname = '%s' AND tablename = '%s');",
 					 schemaName,
 					 shardName);
 
