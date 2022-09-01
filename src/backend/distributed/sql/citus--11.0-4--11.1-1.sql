@@ -63,6 +63,7 @@ BEGIN
 
   END IF;
 END $check_citus$;
+#include "udfs/citus_prepare_pg_upgrade/11.1-1.sql"
 #include "udfs/citus_finish_pg_upgrade/11.1-1.sql"
 
 DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_id int, OUT initiator_node_identifier int4,
