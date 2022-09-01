@@ -62,6 +62,7 @@ BEGIN
     INSERT INTO pg_catalog.pg_dist_local_group SELECT * FROM public.pg_dist_local_group;
     INSERT INTO pg_catalog.pg_dist_transaction SELECT * FROM public.pg_dist_transaction;
     INSERT INTO pg_catalog.pg_dist_colocation SELECT * FROM public.pg_dist_colocation;
+    INSERT INTO pg_catalog.pg_dist_cleanup SELECT * FROM public.pg_dist_cleanup;
     -- enterprise catalog tables
     INSERT INTO pg_catalog.pg_dist_authinfo SELECT * FROM public.pg_dist_authinfo;
     INSERT INTO pg_catalog.pg_dist_poolinfo SELECT * FROM public.pg_dist_poolinfo;
@@ -91,6 +92,7 @@ BEGIN
     DROP TABLE public.pg_dist_shard;
     DROP TABLE public.pg_dist_transaction;
     DROP TABLE public.pg_dist_rebalance_strategy;
+    DROP TABLE public.pg_dist_cleanup;
     --
     -- reset sequences
     --
@@ -99,6 +101,8 @@ BEGIN
     PERFORM setval('pg_catalog.pg_dist_groupid_seq', (SELECT MAX(groupid)+1 AS max_group_id FROM pg_dist_node), false);
     PERFORM setval('pg_catalog.pg_dist_node_nodeid_seq', (SELECT MAX(nodeid)+1 AS max_node_id FROM pg_dist_node), false);
     PERFORM setval('pg_catalog.pg_dist_colocationid_seq', (SELECT MAX(colocationid)+1 AS max_colocation_id FROM pg_dist_colocation), false);
+    PERFORM setval('pg_catalog.pg_dist_operationid_seq', (SELECT MAX(operation_id)+1 AS max_operation_id FROM pg_dist_cleanup), false);
+    PERFORM setval('pg_catalog.pg_dist_cleanup_recordid_seq', (SELECT MAX(record_id)+1 AS max_record_id FROM pg_dist_cleanup), false);
 
     --
     -- register triggers
