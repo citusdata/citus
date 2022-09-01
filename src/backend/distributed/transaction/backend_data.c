@@ -1017,16 +1017,16 @@ ExtractGlobalPID(char *applicationName)
 		return INVALID_CITUS_INTERNAL_BACKEND_GPID;
 	}
 
-	/* are the remaining characters of the application name numbers */
-	uint64 numberOfRemainingChars = strlen(applicationNameCopy) - prefixLength;
-	if (numberOfRemainingChars <= 0 ||
-		!strisdigit_s(applicationNameCopy + prefixLength, numberOfRemainingChars))
-	{
-		return INVALID_CITUS_INTERNAL_BACKEND_GPID;
-	}
-
 	char *globalPIDString = &applicationNameCopy[prefixLength];
 	uint64 globalPID = strtoul(globalPIDString, NULL, 10);
+	if (globalPID == 0)
+	{
+		/*
+		 * INVALID_CITUS_INTERNAL_BACKEND_GPID is 0, but just to be explicit
+		 * about how we handle strtoul errors.
+		 */
+		return INVALID_CITUS_INTERNAL_BACKEND_GPID;
+	}
 
 	return globalPID;
 }
