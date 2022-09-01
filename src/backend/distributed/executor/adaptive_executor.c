@@ -476,6 +476,9 @@ typedef struct WorkerSession
 
 	/* events reported by the latest call to WaitEventSetWait */
 	int latestUnconsumedWaitEvents;
+
+	/* number of times we retried establishing the connection */
+	int connectionRetryCount;
 } WorkerSession;
 
 
@@ -3656,6 +3659,26 @@ ConnectionStateMachine(WorkerSession *session)
 					workerPool->idleConnectionCount--;
 				}
 
+				/* TODO: refine this check */
+				RemoteTransaction *transaction = &connection->remoteTransaction;
+				if (!transaction->transactionCritical &&
+					session->connectionRetryCount == 0)
+				{
+					session->connectionRetryCount++;
+
+					/*
+					 * Try to connect again, we will reuse the same MultiConnection
+					 * and keep it as claimed.
+					 */
+					RestartConnection(connection);
+
+					/* socket will have changed */
+					execution->rebuildWaitEventSet = true;
+
+					connection->connectionState = MULTI_CONNECTION_INITIAL;
+					break;
+				}
+
 				connection->connectionState = MULTI_CONNECTION_FAILED;
 				break;
 			}
@@ -4164,7 +4187,11 @@ UpdateConnectionWaitFlags(WorkerSession *session, int waitFlags)
 		return;
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_15
+	connection->waitFlags = waitFlags | WL_SOCKET_CLOSED;
+#else
 	connection->waitFlags = waitFlags;
+#endif
 
 	/* without signalling the execution, the flag changes won't be reflected */
 	execution->waitFlagsChanged = true;
@@ -4201,6 +4228,14 @@ CheckConnectionReady(WorkerSession *session)
 		/* more data to send, wait for socket to become writable */
 		waitFlags = waitFlags | WL_SOCKET_WRITEABLE;
 	}
+
+#if PG_VERSION_NUM >= PG_VERSION_15
+	if ((session->latestUnconsumedWaitEvents & WL_SOCKET_CLOSED) != 0)
+	{
+		connection->connectionState = MULTI_CONNECTION_LOST;
+		return false;
+	}
+#endif
 
 	if ((session->latestUnconsumedWaitEvents & WL_SOCKET_READABLE) != 0)
 	{

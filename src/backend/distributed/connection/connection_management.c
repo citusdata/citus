@@ -1483,6 +1483,30 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 
 
 /*
+ * RestartConnection starts a new connection attempt for the given
+ * MultiConnection.
+ *
+ * We assume that we already went through all the other initialization steps in
+ * StartNodeUserDatabaseConnection, such as incrementing shared connection
+ * counters.
+ */
+void
+RestartConnection(MultiConnection *connection)
+{
+	ShutdownConnection(connection);
+
+	ConnectionHashKey key;
+	strlcpy(key.hostname, connection->hostname, MAX_NODE_LENGTH);
+	key.port = connection->port;
+	strlcpy(key.user, connection->user, NAMEDATALEN);
+	strlcpy(key.database, connection->database, NAMEDATALEN);
+	key.replicationConnParam = connection->requiresReplication;
+
+	StartConnectionEstablishment(connection, &key);
+}
+
+
+/*
  * ResetConnection preserves the given connection for later usage by
  * resetting its states.
  */
