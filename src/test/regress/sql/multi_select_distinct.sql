@@ -3,6 +3,8 @@
 --
 -- Tests select distinct, and select distinct on features.
 --
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15;
 
 ANALYZE lineitem_hash_part;
 
@@ -113,13 +115,11 @@ EXPLAIN (COSTS FALSE)
 -- check the plan if the hash aggreate is disabled. We expect to see sort+unique
 -- instead of aggregate plan node to handle distinct.
 SET enable_hashagg TO off;
-SELECT public.plan_without_result_lines($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT count(*)
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY 1;
-$Q$);
 
 SET enable_hashagg TO on;
 
@@ -142,14 +142,12 @@ EXPLAIN (COSTS FALSE)
 -- check the plan if the hash aggreate is disabled. Similar to the explain of
 -- the query above.
 SET enable_hashagg TO off;
-SELECT public.plan_without_result_lines($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT l_suppkey, count(*)
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY 1
 		LIMIT 10;
-$Q$);
 
 SET enable_hashagg TO on;
 
@@ -173,14 +171,12 @@ EXPLAIN (COSTS FALSE)
 -- check the plan if the hash aggreate is disabled. This explain errors out due
 -- to a bug right now, expectation must be corrected after fixing it.
 SET enable_hashagg TO off;
-SELECT public.plan_without_result_lines($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT l_suppkey, avg(l_partkey)
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY 1,2
 		LIMIT 10;
-$Q$);
 
 SET enable_hashagg TO on;
 
@@ -203,14 +199,12 @@ EXPLAIN (COSTS FALSE)
 -- check the plan if the hash aggreate is disabled. We expect to see sort+unique to
 -- handle distinct on.
 SET enable_hashagg TO off;
-SELECT public.plan_without_result_lines($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT ON (l_suppkey) avg(l_partkey)
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY l_suppkey,1
 		LIMIT 10;
-$Q$);
 
 SET enable_hashagg TO on;
 
@@ -232,14 +226,12 @@ EXPLAIN (COSTS FALSE)
 -- check the plan if the hash aggreate is disabled. This explain errors out due
 -- to a bug right now, expectation must be corrected after fixing it.
 SET enable_hashagg TO off;
-SELECT public.plan_without_result_lines($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT avg(ceil(l_partkey / 2))
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY 1
 		LIMIT 10;
-$Q$);
 
 SET enable_hashagg TO on;
 
@@ -261,14 +253,12 @@ EXPLAIN (COSTS FALSE)
 -- check the plan if the hash aggreate is disabled. This explain errors out due
 -- to a bug right now, expectation must be corrected after fixing it.
 SET enable_hashagg TO off;
-SELECT public.plan_without_result_lines($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT sum(l_suppkey) + count(l_partkey) AS dis
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY 1
 		LIMIT 10;
-$Q$);
 
 SET enable_hashagg TO on;
 
@@ -345,13 +335,11 @@ EXPLAIN (COSTS FALSE)
 
 -- check the plan if the hash aggreate is disabled
 SET enable_hashagg TO off;
-SELECT public.plan_without_result_lines($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT DISTINCT ceil(count(case when l_partkey > 100000 THEN 1 ELSE 0 END) / 2) AS count
 		FROM lineitem_hash_part
 		GROUP BY l_suppkey
 		ORDER BY 1;
-$Q$);
 
 SET enable_hashagg TO on;
 

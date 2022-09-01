@@ -1261,10 +1261,8 @@ NOTICE:  copying the data has completed
 
 (1 row)
 
-SELECT public.plan_without_result_lines($Q$
 explain (costs off) insert into table_with_sequences select y, x from table_with_sequences;
-$Q$);
-                               plan_without_result_lines
+                                   QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
@@ -1289,10 +1287,8 @@ NOTICE:  copying the data has completed
 
 (1 row)
 
-SELECT public.plan_without_result_lines($Q$
 explain (costs off) insert into table_with_user_sequences select y, x from table_with_user_sequences;
-$Q$);
-                                    plan_without_result_lines
+                                        QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator

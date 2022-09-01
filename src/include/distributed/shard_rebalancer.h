@@ -73,7 +73,9 @@
 /* *INDENT-ON* */
 
 #define REBALANCE_ACTIVITY_MAGIC_NUMBER 1337
+#define REBALANCE_PROGRESS_WAITING 0
 #define REBALANCE_PROGRESS_MOVING 1
+#define REBALANCE_PROGRESS_MOVED 2
 
 /* Enumeration that defines different placement update types */
 typedef enum
@@ -193,7 +195,9 @@ extern List * ReplicationPlacementUpdates(List *workerNodeList, List *shardPlace
 extern void ExecuteRebalancerCommandInSeparateTransaction(char *command);
 extern void AcquirePlacementColocationLock(Oid relationId, int lockMode,
 										   const char *operationName);
-extern void SetupRebalanceMonitor(List *placementUpdateList, Oid relationId);
 
+extern void SetupRebalanceMonitor(List *placementUpdateList,
+								  Oid relationId,
+								  uint64 initialProgressState);
 
 #endif   /* SHARD_REBALANCER_H */

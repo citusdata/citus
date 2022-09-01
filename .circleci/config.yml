@@ -22,6 +22,14 @@ parameters:
   style_checker_tools_version:
     type: string
     default: '0.8.18'
+  flaky_test:
+    type: string
+    default: ''
+  flaky_test_make:
+    type: string
+    default: check-minimal
+
+
 jobs:
   build:
     description: Build the citus extension
@@ -529,9 +537,116 @@ jobs:
           name: install dependencies and run ch_benchmark tests
           no_output_timeout: 20m
 
+  test-flakyness:
+    description: Runs a test multiple times to see if it's flaky
+    parallelism: 32
+    parameters:
+      pg_major:
+        description: 'postgres major version'
+        type: integer
+      image:
+        description: 'docker image to use as for the tests'
+        type: string
+        default: citus/exttester
+      image_tag:
+        description: 'docker image tag to use'
+        type: string
+      make:
+        description: 'make target'
+        type: string
+        default: check-minimal
+      test:
+        description: 'the test that should be run multiple times'
+        type: string
+      runs:
+        description: 'number of times that the test should be run in total'
+        type: integer
+        default: 1600
+    docker:
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
+    working_directory: /home/circleci/project
+    resource_class: small
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install Extension'
+          command: |
+            tar xfv "${CIRCLE_WORKING_DIRECTORY}/install-${PG_MAJOR}.tar" --directory /
+      - run:
+          name: 'Configure'
+          command: |
+            chown -R circleci .
+            gosu circleci ./configure --without-pg-version-check
+      - run:
+          name: 'Enable core dumps'
+          command: |
+            ulimit -c unlimited
+      - run:
+          name: 'Run minimal tests'
+          command: |
+            gosu circleci make -C src/test/regress << parameters.make >> EXTRA_TESTS="$(for i in $(seq << parameters.runs >> | circleci tests split); do echo -n '<< parameters.test >> ' ; done)"
+          no_output_timeout: 2m
+      - run:
+          name: 'Regressions'
+          command: |
+            if [ -f "src/test/regress/regression.diffs" ]; then
+              cat src/test/regress/regression.diffs
+              exit 1
+            fi
+          when: on_fail
+      - run:
+          name: 'Copy coredumps'
+          command: |
+            mkdir -p /tmp/core_dumps
+            if ls core.* 1> /dev/null 2>&1; then
+                cp core.* /tmp/core_dumps
+            fi
+          when: on_fail
+      - store_artifacts:
+          name: 'Save regressions'
+          path: src/test/regress/regression.diffs
+      - store_artifacts:
+          name: 'Save mitmproxy output (failure test specific)'
+          path: src/test/regress/proxy.output
+      - store_artifacts:
+          name: 'Save results'
+          path: src/test/regress/results/
+      - store_artifacts:
+          name: 'Save core dumps'
+          path: /tmp/core_dumps
+      - store_artifacts:
+          name: 'Save coordinator log'
+          path: src/test/regress/tmp_check/master/log
+      - store_artifacts:
+          name: 'Save worker1 log'
+          path: src/test/regress/tmp_check/worker.57637/log
+      - store_artifacts:
+          name: 'Save worker2 log'
+          path: src/test/regress/tmp_check/worker.57638/log
+
 workflows:
   version: 2
+  flaky_test_debugging:
+    when: << pipeline.parameters.flaky_test >>
+    jobs:
+      - build:
+          name: build-flaky-15
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+
+      - test-flakyness:
+          name: 'test-15_flaky'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          requires: [build-flaky-15]
+          make: '<< pipeline.parameters.flaky_test_make >>'
+          test: '<< pipeline.parameters.flaky_test >>'
+
   build_and_test:
+    when:
+      not: << pipeline.parameters.flaky_test >>
     jobs:
       - build:
           name: build-13

@@ -1303,6 +1303,12 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 
 	cpath->methods = &ColumnarScanPathMethods;
 
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+
+	/* necessary to avoid extra Result node in PG15 */
+	cpath->flags = CUSTOMPATH_SUPPORT_PROJECTION;
+#endif
+
 	/*
 	 * populate generic path information
 	 */
@@ -1544,6 +1550,12 @@ ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
 		clauses, false /* no pseudoconstants */);
 	cscan->scan.plan.targetlist = list_copy(tlist);
 	cscan->scan.scanrelid = best_path->path.parent->relid;
+
+#if (PG_VERSION_NUM >= 150000)
+
+	/* necessary to avoid extra Result node in PG15 */
+	cscan->flags = CUSTOMPATH_SUPPORT_PROJECTION;
+#endif
 
 	return (Plan *) cscan;
 }

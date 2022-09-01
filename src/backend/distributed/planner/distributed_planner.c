@@ -1369,7 +1369,14 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 	Node *distributedPlanData = (Node *) distributedPlan;
 
 	customScan->custom_private = list_make1(distributedPlanData);
+
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+
+	/* necessary to avoid extra Result node in PG15 */
+	customScan->flags = CUSTOMPATH_SUPPORT_BACKWARD_SCAN | CUSTOMPATH_SUPPORT_PROJECTION;
+#else
 	customScan->flags = CUSTOMPATH_SUPPORT_BACKWARD_SCAN;
+#endif
 
 	/*
 	 * Fast path queries cannot have any subplans by definition, so skip
