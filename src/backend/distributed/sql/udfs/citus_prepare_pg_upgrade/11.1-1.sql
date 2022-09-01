@@ -32,7 +32,6 @@ BEGIN
     DROP TABLE IF EXISTS public.pg_dist_poolinfo;
     DROP TABLE IF EXISTS public.pg_dist_rebalance_strategy;
     DROP TABLE IF EXISTS public.pg_dist_object;
-    DROP TABLE IF EXISTS public.pg_dist_cleanup;
 
     --
     -- backup citus catalog tables
@@ -45,7 +44,6 @@ BEGIN
     CREATE TABLE public.pg_dist_local_group AS SELECT * FROM pg_catalog.pg_dist_local_group;
     CREATE TABLE public.pg_dist_transaction AS SELECT * FROM pg_catalog.pg_dist_transaction;
     CREATE TABLE public.pg_dist_colocation AS SELECT * FROM pg_catalog.pg_dist_colocation;
-    CREATE TABLE public.pg_dist_cleanup AS SELECT * FROM pg_catalog.pg_dist_cleanup;
     -- enterprise catalog tables
     CREATE TABLE public.pg_dist_authinfo AS SELECT * FROM pg_catalog.pg_dist_authinfo;
     CREATE TABLE public.pg_dist_poolinfo AS SELECT * FROM pg_catalog.pg_dist_poolinfo;
