@@ -577,7 +577,19 @@ EnsureTxStateAndGetHealthyConnections(dlist_head *connections,
 			{
 				/*
 				 * If a connection is executing a critical transaction or accessed any
-				 * placements, we should not continue the execution.
+				 * placements, we should not skip this connection (or return as
+				 * healthy connection).
+				 *
+				 * Critical transaction means that the caller -- or the initiator
+				 * of the transaction -- cannot afford to handle any failures
+				 * within the transaction, so better fail right now.
+				 *
+				 * If a placement is accessed inside a transaction and the
+				 * transaction has failed, we cannot proceed. Otherwise,
+				 * another connection in the same transaction might try
+				 * to access the same placement over a different connection.
+				 * That could cause self-deadlocks or break read-your-own-writes
+				 * consistency.
 				 */
 				ReportConnectionError(connection, ERROR);
 			}
@@ -692,8 +704,7 @@ ProcessWaitEventsForSocketClose(WaitEvent *events, int eventCount, bool *socketC
 {
 	*socketClosed = false;
 
-	int eventIndex = 0;
-	for (; eventIndex < eventCount; eventIndex++)
+	for (int eventIndex = 0; eventIndex < eventCount; eventIndex++)
 	{
 		WaitEvent *event = &events[eventIndex];
 
