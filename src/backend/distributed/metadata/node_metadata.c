@@ -2659,9 +2659,16 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 
 	/*
 	 * simple_heap_delete() expects that the caller has at least an
-	 * AccessShareLock on replica identity index.
+	 * AccessShareLock on primary key index.
+	 *
+	 * XXX: This does not seem required, do we really need to acquire this lock?
+	 * Postgres doesn't acquire such locks on indexes before deleting catalog tuples.
+	 * Linking here the reasons we added this lock acquirement:
+	 * https://github.com/citusdata/citus/pull/2851#discussion_r306569462
+	 * https://github.com/citusdata/citus/pull/2855#discussion_r313628554
+	 * https://github.com/citusdata/citus/issues/1890
 	 */
-	Relation replicaIndex = index_open(RelationGetReplicaIndex(pgDistNode),
+	Relation replicaIndex = index_open(RelationGetPrimaryKeyIndex(pgDistNode),
 									   AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
