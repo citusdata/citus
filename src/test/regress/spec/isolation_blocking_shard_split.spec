@@ -6,17 +6,18 @@ setup
 	SET citus.shard_replication_factor to 1;
     SELECT setval('pg_dist_shardid_seq', 1500000);
 
+	-- Cleanup any orphan shards that might be left over from a previous run.
+	CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
+	RETURNS VOID
+	AS 'citus'
+	LANGUAGE C STRICT VOLATILE;
+
 	CREATE TABLE to_split_table (id int, value int);
 	SELECT create_distributed_table('to_split_table', 'id');
 }
 
 teardown
 {
-	-- Cleanup any orphan shards that might be left over from a previous run.
-	CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
-	RETURNS VOID
-	AS 'citus'
-	LANGUAGE C STRICT VOLATILE;
 	SELECT run_try_drop_marked_shards();
 
 	DROP TABLE to_split_table;
@@ -86,6 +87,29 @@ step "s1-start-connection"
 step "s1-stop-connection"
 {
     SELECT stop_session_level_connection_to_node();
+}
+
+// this advisory lock with (almost) random values are only used
+// for testing purposes. For details, check Citus' logical replication
+// source code
+step "s1-acquire-split-advisory-lock"
+{
+    SELECT pg_advisory_lock(44000, 55152);
+}
+
+step "s1-release-split-advisory-lock"
+{
+    SELECT pg_advisory_unlock(44000, 55152);
+}
+
+step "s1-run-cleaner"
+{
+	SELECT run_try_drop_marked_shards();
+}
+
+step "s1-show-pg_dist_cleanup"
+{
+	SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
 }
 
 step "s1-blocking-shard-split"
@@ -190,3 +214,8 @@ permutation "s1-begin" "s1-select" "s2-begin" "s2-blocking-shard-split" "s1-ddl"
 permutation "s1-load-cache" "s1-start-connection"  "s1-lock-to-split-shard" "s2-print-locks" "s2-blocking-shard-split" "s2-print-locks" "s2-show-pg_dist_cleanup" "s1-stop-connection"
 // The same test above without loading the cache at first
 permutation "s1-start-connection"  "s1-lock-to-split-shard" "s2-print-locks" "s2-blocking-shard-split" "s2-print-cluster" "s2-show-pg_dist_cleanup" "s1-stop-connection"
+
+// When a split operation is running, cleaner cannot clean its resources.
+permutation "s1-load-cache" "s1-acquire-split-advisory-lock" "s2-blocking-shard-split" "s1-run-cleaner" "s1-show-pg_dist_cleanup" "s1-release-split-advisory-lock" "s1-run-cleaner" "s2-show-pg_dist_cleanup"
+// The same test above without loading the cache at first
+permutation "s1-acquire-split-advisory-lock" "s2-blocking-shard-split" "s1-run-cleaner" "s1-show-pg_dist_cleanup" "s1-release-split-advisory-lock" "s1-run-cleaner" "s2-show-pg_dist_cleanup"

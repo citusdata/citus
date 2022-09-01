@@ -796,6 +796,9 @@ TupleToCleanupRecord(HeapTuple heapTuple, TupleDesc tupleDescriptor)
 	record->recordId =
 		DatumGetUInt64(datumArray[Anum_pg_dist_cleanup_record_id - 1]);
 
+	record->operationId =
+		DatumGetUInt64(datumArray[Anum_pg_dist_cleanup_operation_id - 1]);
+
 	record->objectType =
 		DatumGetInt32(datumArray[Anum_pg_dist_cleanup_object_type - 1]);
 

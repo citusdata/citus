@@ -594,6 +594,9 @@ BlockingShardSplit(SplitOperation splitOperation,
 					shardGroupSplitIntervalListList, workersForPlacementList,
 					snapshotName, distributionColumnOverrides);
 
+		/* Used for testing */
+		ConflictOnlyWithIsolationTesting();
+
 		/* Create auxiliary structures (indexes, stats, replicaindentities, triggers) */
 		CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
 											   workersForPlacementList,

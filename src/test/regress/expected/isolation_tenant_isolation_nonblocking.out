@@ -1001,13 +1001,8 @@ step s2-isolate-tenant:
  <waiting ...>
 step s1-isolate-tenant-no-same-coloc-blocking: 
  SELECT isolate_tenant_to_new_shard('isolation_table2', 2, shard_transfer_mode => 'block_writes');
-
-isolate_tenant_to_new_shard
----------------------------------------------------------------------
-                    1500183
-(1 row)
-
-step s3-release-advisory-lock:
+ <waiting ...>
+step s3-release-advisory-lock: 
     SELECT pg_advisory_unlock(44000, 55152);
 
 pg_advisory_unlock
@@ -1019,6 +1014,12 @@ step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                     1500180
+(1 row)
+
+step s1-isolate-tenant-no-same-coloc-blocking: <... completed>
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500183
 (1 row)
 
 step s2-print-cluster:
@@ -1073,13 +1074,8 @@ step s2-isolate-tenant:
  <waiting ...>
 step s1-isolate-tenant-no-same-coloc-blocking: 
  SELECT isolate_tenant_to_new_shard('isolation_table2', 2, shard_transfer_mode => 'block_writes');
-
-isolate_tenant_to_new_shard
----------------------------------------------------------------------
-                    1500194
-(1 row)
-
-step s3-release-advisory-lock:
+ <waiting ...>
+step s3-release-advisory-lock: 
     SELECT pg_advisory_unlock(44000, 55152);
 
 pg_advisory_unlock
@@ -1091,6 +1087,12 @@ step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
                     1500191
+(1 row)
+
+step s1-isolate-tenant-no-same-coloc-blocking: <... completed>
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500194
 (1 row)
 
 step s2-print-cluster:
