@@ -44,7 +44,6 @@ step s2-commit:
  COMMIT;
 
 step s1-update: <... completed>
-ERROR:  shard for the given value does not exist
 step s1-commit:
  COMMIT;
 
@@ -69,7 +68,7 @@ nodeport|shardid|success|result
 
 id|value
 ---------------------------------------------------------------------
- 5|   10
+ 5|   5
 (1 row)
 
 
@@ -117,7 +116,6 @@ step s2-commit:
  COMMIT;
 
 step s1-delete: <... completed>
-ERROR:  shard for the given value does not exist
 step s1-commit:
  COMMIT;
 
@@ -135,15 +133,14 @@ step s2-print-cluster:
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
    57637|1500009|t      |     0
-   57637|1500010|t      |     1
+   57637|1500010|t      |     0
    57637|1500011|t      |     0
    57638|1500008|t      |     0
 (4 rows)
 
 id|value
 ---------------------------------------------------------------------
- 5|   10
-(1 row)
+(0 rows)
 
 
 starting permutation: s1-load-cache s1-begin s1-select s2-begin s2-isolate-tenant s1-insert s2-commit s1-commit s2-print-cluster
@@ -187,7 +184,6 @@ step s2-commit:
  COMMIT;
 
 step s1-insert: <... completed>
-ERROR:  shard for the given value does not exist
 step s1-commit:
  COMMIT;
 
@@ -205,14 +201,15 @@ step s2-print-cluster:
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
    57637|1500015|t      |     0
-   57637|1500016|t      |     0
+   57637|1500016|t      |     1
    57637|1500017|t      |     0
    57638|1500014|t      |     0
 (4 rows)
 
 id|value
 ---------------------------------------------------------------------
-(0 rows)
+ 5|   10
+(1 row)
 
 
 starting permutation: s1-load-cache s1-begin s1-select s2-begin s2-isolate-tenant s1-copy s2-commit s1-commit s2-print-cluster
@@ -409,7 +406,6 @@ step s2-commit:
  COMMIT;
 
 step s1-update: <... completed>
-ERROR:  shard for the given value does not exist
 step s1-commit:
  COMMIT;
 
@@ -434,7 +430,7 @@ nodeport|shardid|success|result
 
 id|value
 ---------------------------------------------------------------------
- 5|   10
+ 5|   5
 (1 row)
 
 
@@ -479,7 +475,6 @@ step s2-commit:
  COMMIT;
 
 step s1-delete: <... completed>
-ERROR:  shard for the given value does not exist
 step s1-commit:
  COMMIT;
 
@@ -497,15 +492,14 @@ step s2-print-cluster:
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
    57637|1500039|t      |     0
-   57637|1500040|t      |     1
+   57637|1500040|t      |     0
    57637|1500041|t      |     0
    57638|1500038|t      |     0
 (4 rows)
 
 id|value
 ---------------------------------------------------------------------
- 5|   10
-(1 row)
+(0 rows)
 
 
 starting permutation: s1-begin s1-select s2-begin s2-isolate-tenant s1-insert s2-commit s1-commit s2-print-cluster
@@ -546,7 +540,6 @@ step s2-commit:
  COMMIT;
 
 step s1-insert: <... completed>
-ERROR:  shard for the given value does not exist
 step s1-commit:
  COMMIT;
 
@@ -564,14 +557,15 @@ step s2-print-cluster:
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
    57637|1500045|t      |     0
-   57637|1500046|t      |     0
+   57637|1500046|t      |     1
    57637|1500047|t      |     0
    57638|1500044|t      |     0
 (4 rows)
 
 id|value
 ---------------------------------------------------------------------
-(0 rows)
+ 5|   10
+(1 row)
 
 
 starting permutation: s1-begin s1-select s2-begin s2-isolate-tenant s1-copy s2-commit s1-commit s2-print-cluster

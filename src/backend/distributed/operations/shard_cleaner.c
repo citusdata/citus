@@ -183,6 +183,7 @@ DropOrphanedShards(bool waitForLocks)
 	}
 
 	int failedShardDropCount = 0;
+	bool missingOk = false;
 	List *shardPlacementList = AllShardPlacementsWithShardPlacementState(
 		SHARD_STATE_TO_DELETE);
 	foreach(shardPlacementCell, shardPlacementList)
@@ -191,7 +192,7 @@ DropOrphanedShards(bool waitForLocks)
 			shardPlacementCell);
 
 		if (!PrimaryNodeForGroup(placement->groupId, NULL) ||
-			!ShardExists(placement->shardId))
+			!ShardExists(placement->shardId, missingOk))
 		{
 			continue;
 		}

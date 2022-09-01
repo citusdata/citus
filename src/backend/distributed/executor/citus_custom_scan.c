@@ -68,6 +68,8 @@ static void CitusEndScan(CustomScanState *node);
 static void CitusReScan(CustomScanState *node);
 static void SetJobColocationId(Job *job);
 static void EnsureForceDelegationDistributionKey(Job *job);
+static void EnsureShardsExist(Job *job);
+static void TryToRerouteFastPathModifyQuery(Job *job);
 
 
 /* create custom scan methods for all executors */
@@ -407,8 +409,14 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		/* prevent concurrent placement changes */
 		AcquireMetadataLocks(workerJob->taskList);
 
-		/* error with a shard not found message if any shard in the tasks is nonexistent */
-		VerifyShardsStillExist(workerJob->taskList);
+		/* try to reroute tasks only if the query is fast path and also has any invalid shard */
+		if (currentPlan->fastPathRouterPlan && !ShardsStillExist(workerJob->taskList))
+		{
+			TryToRerouteFastPathModifyQuery(workerJob);
+		}
+
+		/* ensure there is no invalid shard */
+		EnsureShardsExist(workerJob);
 
 		/* modify tasks are always assigned using first-replica policy */
 		workerJob->taskList = FirstReplicaAssignTaskList(workerJob->taskList);
@@ -441,6 +449,45 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	}
 
 	MemoryContextSwitchTo(oldContext);
+}
+
+
+/*
+ * TryToRerouteFastPathModifyQuery tries to reroute non-existent shards in given job if it finds any such shard,
+ * only for fastpath queries.
+ *
+ * Should only be called if the job belongs to a fastpath modify query
+ */
+static void
+TryToRerouteFastPathModifyQuery(Job *job)
+{
+	if (job->jobQuery->commandType == CMD_INSERT)
+	{
+		RegenerateTaskListForInsert(job);
+	}
+	else
+	{
+		RegenerateTaskForFasthPathQuery(job);
+		RebuildQueryStrings(job);
+	}
+}
+
+
+/*
+ * EnsureShardsExist ensures all shards are valid in job. If it finds a non-existent shard
+ * in given job, it fails.
+ */
+static void
+EnsureShardsExist(Job *job)
+{
+	if (!ShardsStillExist(job->taskList))
+	{
+		ereport(ERROR, (errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
+						errmsg("shard for the given value does not exist"),
+						errdetail(
+							"A concurrent shard split may have moved the data into a new set of shards."),
+						errhint("Retry the query.")));
+	}
 }
 
 

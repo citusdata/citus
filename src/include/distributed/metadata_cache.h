@@ -157,7 +157,7 @@ extern uint32 ColocationIdViaCatalog(Oid relationId);
 extern bool IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel);
 extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
-extern bool ShardExists(uint64 shardId);
+extern bool ShardExists(uint64 shardId, bool missingOk);
 extern Oid RelationIdForShard(uint64 shardId);
 extern bool ReferenceTableShardId(uint64 shardId);
 extern bool DistributedTableShardId(uint64 shardId);

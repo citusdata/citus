@@ -127,22 +127,21 @@ GetLargestShardId()
 
 
 /*
- * VerifyShardStillExists errors out if the given tasks has any nonexistent
+ * ShardsStillExist errors out if the given tasks has any nonexistent
  * shard id.
  */
-void
-VerifyShardsStillExist(List *taskList)
+bool
+ShardsStillExist(List *taskList)
 {
+	bool missingOk = true;
 	Task *task = NULL;
 	foreach_ptr(task, taskList)
 	{
-		if (!ShardExists(task->anchorShardId))
+		if (!ShardExists(task->anchorShardId, missingOk))
 		{
-			ereport(ERROR, (errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
-							errmsg("shard for the given value does not exist"),
-							errdetail(
-								"A concurrent shard split may have moved the data into a new set of shards."),
-							errhint("Retry the query.")));
+			return false;
 		}
 	}
+
+	return true;
 }
