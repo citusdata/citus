@@ -62,7 +62,6 @@ BEGIN
     INSERT INTO pg_catalog.pg_dist_local_group SELECT * FROM public.pg_dist_local_group;
     INSERT INTO pg_catalog.pg_dist_transaction SELECT * FROM public.pg_dist_transaction;
     INSERT INTO pg_catalog.pg_dist_colocation SELECT * FROM public.pg_dist_colocation;
-    INSERT INTO pg_catalog.pg_dist_cleanup SELECT * FROM public.pg_dist_cleanup;
     -- enterprise catalog tables
     INSERT INTO pg_catalog.pg_dist_authinfo SELECT * FROM public.pg_dist_authinfo;
     INSERT INTO pg_catalog.pg_dist_poolinfo SELECT * FROM public.pg_dist_poolinfo;
@@ -92,7 +91,6 @@ BEGIN
     DROP TABLE public.pg_dist_shard;
     DROP TABLE public.pg_dist_transaction;
     DROP TABLE public.pg_dist_rebalance_strategy;
-    DROP TABLE public.pg_dist_cleanup;
     --
     -- reset sequences
     --
