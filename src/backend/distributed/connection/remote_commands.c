@@ -256,7 +256,7 @@ ReportConnectionError(MultiConnection *connection, int elevel)
 		messageDetail = pchomp(PQerrorMessage(pgConn));
 	}
 
-	if (messageDetail)
+	if (messageDetail && messageDetail[0] != '\0')
 	{
 		ereport(elevel, (errcode(ERRCODE_CONNECTION_FAILURE),
 						 errmsg("connection to the remote node %s:%d failed with the "
