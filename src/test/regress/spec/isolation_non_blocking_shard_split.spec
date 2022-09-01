@@ -240,4 +240,4 @@ permutation "s1-start-connection"  "s1-lock-to-split-shard" "s2-print-locks" "s2
 // When a split operation is running, cleaner cannot clean its resources.
 permutation "s1-load-cache" "s1-acquire-split-advisory-lock" "s2-non-blocking-shard-split" "s1-run-cleaner" "s1-show-pg_dist_cleanup" "s1-release-split-advisory-lock" "s1-run-cleaner" "s2-show-pg_dist_cleanup"
 // The same test above without loading the cache at first
-permutation "s1-acquire-split-advisory-lock" "s2-blocking-shard-split" "s1-run-cleaner" "s1-show-pg_dist_cleanup" "s1-release-split-advisory-lock" "s1-run-cleaner" "s2-show-pg_dist_cleanup"
+permutation "s1-acquire-split-advisory-lock" "s2-non-blocking-shard-split" "s1-run-cleaner" "s1-show-pg_dist_cleanup" "s1-release-split-advisory-lock" "s1-run-cleaner" "s2-show-pg_dist_cleanup"
