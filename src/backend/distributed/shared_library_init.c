@@ -158,6 +158,7 @@ static int ReplicationModel = REPLICATION_MODEL_STREAMING;
 
 /* we override the application_name assign_hook and keep a pointer to the old one */
 static GucStringAssignHook OldApplicationNameAssignHook = NULL;
+static bool RanStartupCitusBackend = false;
 
 static object_access_hook_type PrevObjectAccessHook = NULL;
 
@@ -677,10 +678,11 @@ StartupCitusBackend(void)
 	 * this is a no-op, since InitializeBackendData will already have extracted
 	 * the gpid from the application_name.
 	 */
-	AssignGlobalPID();
+	AssignGlobalPID(application_name);
 
 	SetBackendDataDatabaseId();
 	RegisterConnectionCleanup();
+	RanStartupCitusBackend = true;
 }
 
 
@@ -2597,7 +2599,11 @@ static void
 ApplicationNameAssignHook(const char *newval, void *extra)
 {
 	ResetHideShardsDecision();
-	ResetCitusBackendType();
+	DetermineCitusBackendType(newval);
+	if (RanStartupCitusBackend)
+	{
+		AssignGlobalPID(newval);
+	}
 	OldApplicationNameAssignHook(newval, extra);
 }
 
