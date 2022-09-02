@@ -1850,6 +1850,36 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 
 
 /*
+ * SkipForeignKeyValidationIfConstraintIsFkey checks and processes the alter table
+ * statement to be worked on the distributed table. Currently, it only processes
+ * ALTER TABLE ... ADD FOREIGN KEY command to skip the validation step.
+ */
+void
+SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement)
+{
+	/* first check whether a distributed relation is affected */
+	if (alterTableStatement->relation == NULL)
+	{
+		return;
+	}
+
+	LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+	Oid leftRelationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+	if (!OidIsValid(leftRelationId))
+	{
+		return;
+	}
+
+	if (!IsCitusTable(leftRelationId))
+	{
+		return;
+	}
+
+	SkipConstraintValidation = true;
+}
+
+
+/*
  * IsAlterTableRenameStmt returns whether the passed-in RenameStmt is one of
  * the following forms:
  *

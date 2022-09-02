@@ -607,7 +607,16 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 				AlterTableStmtObjType_compat(alterTableStmt) == OBJECT_FOREIGN_TABLE)
 			{
 				ErrorIfAlterDropsPartitionColumn(alterTableStmt);
-				SkipConstraintValidation = true;
+
+				/*
+				 * When issuing an ALTER TABLE ... ADD FOREIGN KEY command, the
+				 * the validation step should be skipped on the distributed table.
+				 * Therefore, we check whether the given ALTER TABLE statement is a
+				 * FOREIGN KEY constraint and if so disable the validation step.
+				 * Note validation is done on the shard level when DDL propagation
+				 * is enabled. The following eagerly executes some tasks on workers.
+				 */
+				SkipForeignKeyValidationIfConstraintIsFkey(alterTableStmt);
 			}
 		}
 	}
