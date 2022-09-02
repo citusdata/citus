@@ -241,3 +241,6 @@ SELECT * FROM sale_triggers ORDER BY 1, 2;
  truncate_trigger_xxxxxxx      | sale_california | O
 (12 rows)
 
+-- check that we can't rename child triggers on partitions of distributed tables
+ALTER TRIGGER another_trigger ON sale_newyork RENAME TO another_renamed_trigger;
+ERROR:  cannot rename child triggers on distributed partitions
