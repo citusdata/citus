@@ -1217,7 +1217,7 @@ GetForeignConstraintCommandsToReferenceTable(ShardInterval *shardInterval)
 	uint64 shardId = shardInterval->shardId;
 	Oid relationId = shardInterval->relationId;
 
-	List *commandList = list_make1("SET citus.skip_constraint_validation TO ON;");
+	List *commandList = list_make1("SET LOCAL citus.skip_constraint_validation TO ON;");
 
 	/*
 	 * Set search_path to NIL so that all objects outside of pg_catalog will be
