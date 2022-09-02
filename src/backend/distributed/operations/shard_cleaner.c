@@ -279,7 +279,7 @@ DropOrphanedShardsForCleanup()
 
 	if (failedShardCountForCleanup > 0)
 	{
-		ereport(WARNING, (errmsg("Failed to drop %d cleanup shards out of %d",
+		ereport(WARNING, (errmsg("Failed to cleanup %d shards out of %d",
 								 failedShardCountForCleanup, list_length(
 									 cleanupRecordList))));
 	}
@@ -483,7 +483,7 @@ CompleteNewOperationNeedingCleanup(bool isSuccess)
 
 		if (failedShardCountOnComplete > 0)
 		{
-			ereport(WARNING, (errmsg("Failed to drop %d cleanup shards out of %d",
+			ereport(WARNING, (errmsg("Failed to cleanup %d shards out of %d",
 									 failedShardCountOnComplete, list_length(
 										 currentOperationRecordList))));
 		}

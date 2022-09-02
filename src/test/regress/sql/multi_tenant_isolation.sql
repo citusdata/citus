@@ -395,8 +395,7 @@ CREATE EVENT TRIGGER abort_drop ON sql_drop
 
 \c - postgres - :master_port
 -- Disable deferred drop otherwise we will skip the drop and operation will succeed instead of failing.
-ALTER SYSTEM SET citus.defer_drop_after_shard_split TO false;
-SELECT pg_reload_conf();
+SET citus.defer_drop_after_shard_split TO OFF;
 \c - mx_isolation_role_ent - :master_port
 SET search_path to "Tenant Isolation";
 
@@ -412,8 +411,7 @@ SELECT * FROM pg_dist_shard
 
 \c - postgres - :master_port
 -- Reenable deferred drop.
-ALTER SYSTEM SET citus.defer_drop_after_shard_split TO true;
-SELECT pg_reload_conf();
+SET citus.defer_drop_after_shard_split TO ON;
 
 \c - - - :worker_1_port
 SET search_path to "Tenant Isolation";

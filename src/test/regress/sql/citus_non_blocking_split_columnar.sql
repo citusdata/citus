@@ -5,6 +5,11 @@ SET citus.next_placement_id TO 8770000;
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 
+-- Since Deferred drop is enabled, set the cleanup interval to a large value
+-- to avoid flaky tests.
+ALTER SYSTEM SET citus.defer_shard_delete_interval TO 600000;
+SELECT pg_reload_conf();
+
 -- BEGIN: Create table to split, along with other co-located tables. Add indexes, statistics etc.
     CREATE TABLE sensors(
         measureid         integer,
@@ -156,6 +161,11 @@ SET citus.shard_replication_factor TO 1;
 
 -- BEGIN: Split a shard along its co-located shards
 \c - - - :master_port
+    -- Since Deferred drop is enabled, set the cleanup interval to a large value
+    -- to avoid flaky tests.
+    ALTER SYSTEM SET citus.defer_shard_delete_interval TO 600000;
+    SELECT pg_reload_conf();
+
     SET search_path TO "citus_split_test_schema_columnar_partitioned";
     SET citus.next_shard_id TO 8999000;
     SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
@@ -223,6 +233,11 @@ SET citus.shard_replication_factor TO 1;
 
 -- BEGIN: Split a partition table directly
 \c - - - :master_port
+    -- Since Deferred drop is enabled, set the cleanup interval to a large value
+    -- to avoid flaky tests.
+    ALTER SYSTEM SET citus.defer_shard_delete_interval TO 600000;
+    SELECT pg_reload_conf();
+
     SET search_path TO "citus_split_test_schema_columnar_partitioned";
     SET citus.next_shard_id TO 8999100;
     SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset

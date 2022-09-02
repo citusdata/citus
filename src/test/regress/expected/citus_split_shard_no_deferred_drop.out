@@ -1,5 +1,5 @@
 /*
-This suite runs wihtout deferred drop enabled.
+This suite runs without deferred drop enabled.
 Citus Shard Split Test.The test is model similar to 'shard_move_constraints'.
 Here is a high level overview of test plan:
  1. Create a table 'sensors' (ShardCount = 2) to be split. Add indexes and statistics on this table.
@@ -12,13 +12,7 @@ Here is a high level overview of test plan:
  8. Split an already split shard second time on a different schema.
 */
 CREATE SCHEMA "citus_split_test_schema_no_deferred_drop";
-ALTER SYSTEM SET citus.defer_drop_after_shard_split TO false;
-SELECT pg_reload_conf();
- pg_reload_conf
----------------------------------------------------------------------
- t
-(1 row)
-
+SET citus.defer_drop_after_shard_split TO OFF;
 CREATE ROLE test_split_deferred_role WITH LOGIN;
 GRANT USAGE, CREATE ON SCHEMA "citus_split_test_schema_no_deferred_drop" TO test_split_deferred_role;
 SET ROLE test_split_deferred_role;
@@ -204,6 +198,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 -- END : Display current state
 -- BEGIN : Move one shard before we split it.
 \c - postgres - :master_port
+SET citus.defer_drop_after_shard_split TO OFF;
 SET ROLE test_split_deferred_role;
 SET search_path TO "citus_split_test_schema_no_deferred_drop";
 SET citus.next_shard_id TO 8981007;
@@ -384,6 +379,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 -- END : Display current state
 -- BEGIN: Should be able to change/drop constraints
 \c - postgres - :master_port
+SET citus.defer_drop_after_shard_split TO OFF;
 SET ROLE test_split_deferred_role;
 SET search_path TO "citus_split_test_schema_no_deferred_drop";
 ALTER INDEX index_on_sensors RENAME TO index_on_sensors_renamed;
@@ -464,11 +460,5 @@ DETAIL:  drop cascades to table citus_split_test_schema_no_deferred_drop.sensors
 drop cascades to table citus_split_test_schema_no_deferred_drop.reference_table
 drop cascades to table citus_split_test_schema_no_deferred_drop.colocated_dist_table
 drop cascades to table citus_split_test_schema_no_deferred_drop.table_with_index_rep_identity
-ALTER SYSTEM SET citus.defer_drop_after_shard_split TO true;
-SELECT pg_reload_conf();
- pg_reload_conf
----------------------------------------------------------------------
- t
-(1 row)
-
+SET citus.defer_drop_after_shard_split TO ON;
 --END : Cleanup

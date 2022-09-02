@@ -1,5 +1,5 @@
 /*
-This suite runs wihtout deferred drop enabled.
+This suite runs without deferred drop enabled.
 Citus Shard Split Test.The test is model similar to 'shard_move_constraints'.
 Here is a high level overview of test plan:
  1. Create a table 'sensors' (ShardCount = 2) to be split. Add indexes and statistics on this table.
@@ -14,9 +14,7 @@ Here is a high level overview of test plan:
 
 CREATE SCHEMA "citus_split_test_schema_no_deferred_drop";
 
-ALTER SYSTEM SET citus.defer_drop_after_shard_split TO false;
-SELECT pg_reload_conf();
-
+SET citus.defer_drop_after_shard_split TO OFF;
 CREATE ROLE test_split_deferred_role WITH LOGIN;
 GRANT USAGE, CREATE ON SCHEMA "citus_split_test_schema_no_deferred_drop" TO test_split_deferred_role;
 SET ROLE test_split_deferred_role;
@@ -123,6 +121,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 
 -- BEGIN : Move one shard before we split it.
 \c - postgres - :master_port
+SET citus.defer_drop_after_shard_split TO OFF;
 SET ROLE test_split_deferred_role;
 SET search_path TO "citus_split_test_schema_no_deferred_drop";
 SET citus.next_shard_id TO 8981007;
@@ -204,6 +203,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 
 -- BEGIN: Should be able to change/drop constraints
 \c - postgres - :master_port
+SET citus.defer_drop_after_shard_split TO OFF;
 SET ROLE test_split_deferred_role;
 SET search_path TO "citus_split_test_schema_no_deferred_drop";
 ALTER INDEX index_on_sensors RENAME TO index_on_sensors_renamed;
@@ -242,6 +242,5 @@ SELECT COUNT(*) FROM colocated_dist_table;
 \c - postgres - :master_port
 DROP SCHEMA "citus_split_test_schema_no_deferred_drop" CASCADE;
 
-ALTER SYSTEM SET citus.defer_drop_after_shard_split TO true;
-SELECT pg_reload_conf();
+SET citus.defer_drop_after_shard_split TO ON;
 --END : Cleanup

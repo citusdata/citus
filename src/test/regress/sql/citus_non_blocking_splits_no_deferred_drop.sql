@@ -1,5 +1,5 @@
 /*
-This suite runs wihtout deferred drop enabled.
+This suite runs without deferred drop enabled.
 
 Citus Shard Split Test.The test is model similar to 'shard_move_constraints'.
 Here is a high level overview of test plan:
@@ -19,12 +19,11 @@ Here is a high level overview of test plan:
 
 CREATE SCHEMA "citus_split_test_schema";
 
-ALTER SYSTEM SET citus.defer_drop_after_shard_split TO false;
-SELECT pg_reload_conf();
+SET citus.defer_drop_after_shard_split TO OFF;
 
-CREATE ROLE test_shard_split_role WITH LOGIN;
-GRANT USAGE, CREATE ON SCHEMA "citus_split_test_schema" TO test_shard_split_role;
-SET ROLE test_shard_split_role;
+CREATE ROLE test_shard_split_role_nodeferred_drop WITH LOGIN;
+GRANT USAGE, CREATE ON SCHEMA "citus_split_test_schema" TO test_shard_split_role_nodeferred_drop;
+SET ROLE test_shard_split_role_nodeferred_drop;
 
 SET search_path TO "citus_split_test_schema";
 SET citus.next_shard_id TO 8981000;
@@ -128,7 +127,8 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 
 -- BEGIN : Move one shard before we split it.
 \c - postgres - :master_port
-SET ROLE test_shard_split_role;
+SET citus.defer_drop_after_shard_split TO OFF;
+SET ROLE test_shard_split_role_nodeferred_drop;
 SET search_path TO "citus_split_test_schema";
 SET citus.next_shard_id TO 8981007;
 SET citus.defer_drop_after_shard_move TO OFF;
@@ -209,7 +209,8 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 
 -- BEGIN: Should be able to change/drop constraints
 \c - postgres - :master_port
-SET ROLE test_shard_split_role;
+SET citus.defer_drop_after_shard_split TO OFF;
+SET ROLE test_shard_split_role_nodeferred_drop;
 SET search_path TO "citus_split_test_schema";
 ALTER INDEX index_on_sensors RENAME TO index_on_sensors_renamed;
 ALTER INDEX index_on_sensors_renamed ALTER COLUMN 1 SET STATISTICS 200;
@@ -289,6 +290,5 @@ SELECT COUNT(*) FROM colocated_dist_table;
 \c - postgres - :master_port
 DROP SCHEMA "citus_split_test_schema" CASCADE;
 
-ALTER SYSTEM SET citus.defer_drop_after_shard_split TO true;
-SELECT pg_reload_conf();
+SET citus.defer_drop_after_shard_split TO ON;
 --END : Cleanup
