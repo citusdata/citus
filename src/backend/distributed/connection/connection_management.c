@@ -1483,17 +1483,18 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 
 
 /*
- * RestartConnection starts a new connection attempt for the given
- * MultiConnection.
- *
- * We assume that we already went through all the other initialization steps in
- * StartNodeUserDatabaseConnection, such as incrementing shared connection
- * counters.
+ * RestartConnection first closes the input connection,
+ * and returns a new connection attempt to the node
+ * the oldConnection connected to.
  */
 void
-RestartConnection(MultiConnection *connection)
+RestartPQConnection(MultiConnection *connection)
 {
-	ShutdownConnection(connection);
+	if (connection->pgConn != NULL)
+	{
+		PQfinish(connection->pgConn);
+		connection->pgConn = NULL;
+	}
 
 	ConnectionHashKey key;
 	strlcpy(key.hostname, connection->hostname, MAX_NODE_LENGTH);

@@ -3659,7 +3659,6 @@ ConnectionStateMachine(WorkerSession *session)
 					workerPool->idleConnectionCount--;
 				}
 
-				/* TODO: refine this check */
 				RemoteTransaction *transaction = &connection->remoteTransaction;
 				if (!transaction->transactionCritical &&
 					session->connectionRetryCount == 0)
@@ -3667,15 +3666,39 @@ ConnectionStateMachine(WorkerSession *session)
 					session->connectionRetryCount++;
 
 					/*
-					 * Try to connect again, we will reuse the same MultiConnection
-					 * and keep it as claimed.
+					 * Close the underlying pgConn connection, and establish
+					 * a new one. We refrain using ShutdownConnection() or
+					 * CloseConnection() as at this point we already have a
+					 * connection with proper flags (e.g., WAIT_FOR_CONNECTION vs
+					 * OPTIONAL_CONNECTION or metadata connection etc.).
+					 *
+					 * Also, it is sufficient just to re-connect for the underlying
+					 * pqConn and keep the executor state as-is.
+					 *
+					 * Most commonly this would be used when a remote socket of
+					 * a cached connection is closed, and we are at the start of
+					 * the execution.
 					 */
-					RestartConnection(connection);
+					RestartPQConnection(connection);
 
-					/* socket will have changed */
+					/*
+					 * The currentTask should be re-assigned to the newConnection,
+					 * but let the transaction state machine do that.
+					 */
+					if (session->currentTask)
+					{
+						/* the task could not have ended */
+						Assert(INSTR_TIME_IS_ZERO(session->currentTask->endTime));
+
+						/* we are going to re-start the task execution */
+						INSTR_TIME_SET_ZERO(session->currentTask->startTime);
+					}
+
+					/* connection changed, so we need to rebuild */
 					execution->rebuildWaitEventSet = true;
 
 					connection->connectionState = MULTI_CONNECTION_INITIAL;
+
 					break;
 				}
 
@@ -3843,7 +3866,10 @@ HandleMultiConnectionSuccess(WorkerSession *session)
 								connection->connectionEstablishmentEnd))));
 
 	workerPool->activeConnectionCount++;
-	workerPool->idleConnectionCount++;
+	if (session->currentTask == NULL)
+	{
+		workerPool->idleConnectionCount++;
+	}
 }
 
 
@@ -3958,8 +3984,8 @@ TransactionStateMachine(WorkerSession *session)
 				}
 				else
 				{
-					TaskPlacementExecution *placementExecution = PopPlacementExecution(
-						session);
+					TaskPlacementExecution *placementExecution =
+						PopPlacementExecution(session);
 					if (placementExecution == NULL)
 					{
 						/*

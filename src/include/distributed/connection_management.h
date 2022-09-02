@@ -294,7 +294,7 @@ extern MultiConnection * StartNodeUserDatabaseConnection(uint32 flags,
 														 int32 port,
 														 const char *user,
 														 const char *database);
-extern void RestartConnection(MultiConnection *connection);
+extern void RestartPQConnection(MultiConnection *oldConnection);
 extern void CloseAllConnectionsAfterTransaction(void);
 extern void CloseNodeConnectionsAfterTransaction(char *nodeName, int nodePort);
 extern MultiConnection * ConnectionAvailableToNode(char *hostName, int nodePort,
