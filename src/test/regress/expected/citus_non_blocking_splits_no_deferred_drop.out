@@ -16,12 +16,12 @@ Here is a high level overview of test plan:
  11. Drop the colocated table with no replica identity.
  12. Show we allow Split with the shard transfer mode 'auto' if all colocated tables has replica identity.
 */
-CREATE SCHEMA "citus_split_test_schema";
+CREATE SCHEMA "citus_split_test_schema_no_deferred_drop";
 SET citus.defer_drop_after_shard_split TO OFF;
 CREATE ROLE test_shard_split_role_nodeferred_drop WITH LOGIN;
-GRANT USAGE, CREATE ON SCHEMA "citus_split_test_schema" TO test_shard_split_role_nodeferred_drop;
+GRANT USAGE, CREATE ON SCHEMA "citus_split_test_schema_no_deferred_drop" TO test_shard_split_role_nodeferred_drop;
 SET ROLE test_shard_split_role_nodeferred_drop;
-SET search_path TO "citus_split_test_schema";
+SET search_path TO "citus_split_test_schema_no_deferred_drop";
 SET citus.next_shard_id TO 8981000;
 SET citus.next_placement_id TO 8610000;
 SET citus.shard_count TO 2;
@@ -119,7 +119,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 (6 rows)
 
 \c - - - :worker_1_port
-    SET search_path TO "citus_split_test_schema", public, pg_catalog;
+    SET search_path TO "citus_split_test_schema_no_deferred_drop", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -132,25 +132,25 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 (1 row)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
-    tablename    |                                                                                                indexdef
+    tablename    |                                                                                                        indexdef
 ---------------------------------------------------------------------
- sensors_8981000 | CREATE INDEX hash_index_on_sensors_8981000 ON citus_split_test_schema.sensors_8981000 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_8981000 | CREATE INDEX index_on_sensors_8981000 ON citus_split_test_schema.sensors_8981000 USING btree (lower((measureid)::text))
- sensors_8981000 | CREATE INDEX index_with_include_on_sensors_8981000 ON citus_split_test_schema.sensors_8981000 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
- sensors_8981000 | CREATE UNIQUE INDEX sensors_pkey_8981000 ON citus_split_test_schema.sensors_8981000 USING btree (measureid, eventdatetime, measure_data)
+ sensors_8981000 | CREATE INDEX hash_index_on_sensors_8981000 ON citus_split_test_schema_no_deferred_drop.sensors_8981000 USING hash (((measure_data -> 'IsFailed'::text)))
+ sensors_8981000 | CREATE INDEX index_on_sensors_8981000 ON citus_split_test_schema_no_deferred_drop.sensors_8981000 USING btree (lower((measureid)::text))
+ sensors_8981000 | CREATE INDEX index_with_include_on_sensors_8981000 ON citus_split_test_schema_no_deferred_drop.sensors_8981000 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
+ sensors_8981000 | CREATE UNIQUE INDEX sensors_pkey_8981000 ON citus_split_test_schema_no_deferred_drop.sensors_8981000 USING btree (measureid, eventdatetime, measure_data)
 (4 rows)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'table_with_index_rep_identity_%' ORDER BY 1,2;
-               tablename               |                                                      indexdef
+               tablename               |                                                              indexdef
 ---------------------------------------------------------------------
- table_with_index_rep_identity_8981005 | CREATE UNIQUE INDEX uqx_8981005 ON citus_split_test_schema.table_with_index_rep_identity_8981005 USING btree (key)
+ table_with_index_rep_identity_8981005 | CREATE UNIQUE INDEX uqx_8981005 ON citus_split_test_schema_no_deferred_drop.table_with_index_rep_identity_8981005 USING btree (key)
 (1 row)
 
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema')
+        WHERE nspname IN ('citus_split_test_schema_no_deferred_drop')
     )
     ORDER BY stxname ASC;
          stxname
@@ -160,7 +160,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 (2 rows)
 
 \c - - - :worker_2_port
-    SET search_path TO "citus_split_test_schema", public, pg_catalog;
+    SET search_path TO "citus_split_test_schema_no_deferred_drop", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -173,25 +173,25 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 (1 row)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
-    tablename    |                                                                                                indexdef
+    tablename    |                                                                                                        indexdef
 ---------------------------------------------------------------------
- sensors_8981001 | CREATE INDEX hash_index_on_sensors_8981001 ON citus_split_test_schema.sensors_8981001 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_8981001 | CREATE INDEX index_on_sensors_8981001 ON citus_split_test_schema.sensors_8981001 USING btree (lower((measureid)::text))
- sensors_8981001 | CREATE INDEX index_with_include_on_sensors_8981001 ON citus_split_test_schema.sensors_8981001 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
- sensors_8981001 | CREATE UNIQUE INDEX sensors_pkey_8981001 ON citus_split_test_schema.sensors_8981001 USING btree (measureid, eventdatetime, measure_data)
+ sensors_8981001 | CREATE INDEX hash_index_on_sensors_8981001 ON citus_split_test_schema_no_deferred_drop.sensors_8981001 USING hash (((measure_data -> 'IsFailed'::text)))
+ sensors_8981001 | CREATE INDEX index_on_sensors_8981001 ON citus_split_test_schema_no_deferred_drop.sensors_8981001 USING btree (lower((measureid)::text))
+ sensors_8981001 | CREATE INDEX index_with_include_on_sensors_8981001 ON citus_split_test_schema_no_deferred_drop.sensors_8981001 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
+ sensors_8981001 | CREATE UNIQUE INDEX sensors_pkey_8981001 ON citus_split_test_schema_no_deferred_drop.sensors_8981001 USING btree (measureid, eventdatetime, measure_data)
 (4 rows)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'table_with_index_rep_identity_%' ORDER BY 1,2;
-               tablename               |                                                      indexdef
+               tablename               |                                                              indexdef
 ---------------------------------------------------------------------
- table_with_index_rep_identity_8981006 | CREATE UNIQUE INDEX uqx_8981006 ON citus_split_test_schema.table_with_index_rep_identity_8981006 USING btree (key)
+ table_with_index_rep_identity_8981006 | CREATE UNIQUE INDEX uqx_8981006 ON citus_split_test_schema_no_deferred_drop.table_with_index_rep_identity_8981006 USING btree (key)
 (1 row)
 
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema')
+        WHERE nspname IN ('citus_split_test_schema_no_deferred_drop')
     )
     ORDER BY stxname ASC;
          stxname
@@ -205,7 +205,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 \c - postgres - :master_port
 SET citus.defer_drop_after_shard_split TO OFF;
 SET ROLE test_shard_split_role_nodeferred_drop;
-SET search_path TO "citus_split_test_schema";
+SET search_path TO "citus_split_test_schema_no_deferred_drop";
 SET citus.next_shard_id TO 8981007;
 SET citus.defer_drop_after_shard_move TO OFF;
 SELECT citus_move_shard_placement(8981000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='force_logical');
@@ -279,7 +279,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 (15 rows)
 
 \c - - - :worker_1_port
-    SET search_path TO "citus_split_test_schema", public, pg_catalog;
+    SET search_path TO "citus_split_test_schema_no_deferred_drop", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -293,30 +293,30 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 (2 rows)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
-    tablename    |                                                                                                indexdef
+    tablename    |                                                                                                        indexdef
 ---------------------------------------------------------------------
- sensors_8981013 | CREATE INDEX hash_index_on_sensors_8981013 ON citus_split_test_schema.sensors_8981013 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_8981013 | CREATE INDEX index_on_sensors_8981013 ON citus_split_test_schema.sensors_8981013 USING btree (lower((measureid)::text))
- sensors_8981013 | CREATE INDEX index_with_include_on_sensors_8981013 ON citus_split_test_schema.sensors_8981013 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
- sensors_8981013 | CREATE UNIQUE INDEX sensors_pkey_8981013 ON citus_split_test_schema.sensors_8981013 USING btree (measureid, eventdatetime, measure_data)
- sensors_8981014 | CREATE INDEX hash_index_on_sensors_8981014 ON citus_split_test_schema.sensors_8981014 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_8981014 | CREATE INDEX index_on_sensors_8981014 ON citus_split_test_schema.sensors_8981014 USING btree (lower((measureid)::text))
- sensors_8981014 | CREATE INDEX index_with_include_on_sensors_8981014 ON citus_split_test_schema.sensors_8981014 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
- sensors_8981014 | CREATE UNIQUE INDEX sensors_pkey_8981014 ON citus_split_test_schema.sensors_8981014 USING btree (measureid, eventdatetime, measure_data)
+ sensors_8981013 | CREATE INDEX hash_index_on_sensors_8981013 ON citus_split_test_schema_no_deferred_drop.sensors_8981013 USING hash (((measure_data -> 'IsFailed'::text)))
+ sensors_8981013 | CREATE INDEX index_on_sensors_8981013 ON citus_split_test_schema_no_deferred_drop.sensors_8981013 USING btree (lower((measureid)::text))
+ sensors_8981013 | CREATE INDEX index_with_include_on_sensors_8981013 ON citus_split_test_schema_no_deferred_drop.sensors_8981013 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
+ sensors_8981013 | CREATE UNIQUE INDEX sensors_pkey_8981013 ON citus_split_test_schema_no_deferred_drop.sensors_8981013 USING btree (measureid, eventdatetime, measure_data)
+ sensors_8981014 | CREATE INDEX hash_index_on_sensors_8981014 ON citus_split_test_schema_no_deferred_drop.sensors_8981014 USING hash (((measure_data -> 'IsFailed'::text)))
+ sensors_8981014 | CREATE INDEX index_on_sensors_8981014 ON citus_split_test_schema_no_deferred_drop.sensors_8981014 USING btree (lower((measureid)::text))
+ sensors_8981014 | CREATE INDEX index_with_include_on_sensors_8981014 ON citus_split_test_schema_no_deferred_drop.sensors_8981014 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
+ sensors_8981014 | CREATE UNIQUE INDEX sensors_pkey_8981014 ON citus_split_test_schema_no_deferred_drop.sensors_8981014 USING btree (measureid, eventdatetime, measure_data)
 (8 rows)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'table_with_index_rep_identity_%' ORDER BY 1,2;
-               tablename               |                                                      indexdef
+               tablename               |                                                              indexdef
 ---------------------------------------------------------------------
- table_with_index_rep_identity_8981019 | CREATE UNIQUE INDEX uqx_8981019 ON citus_split_test_schema.table_with_index_rep_identity_8981019 USING btree (key)
- table_with_index_rep_identity_8981020 | CREATE UNIQUE INDEX uqx_8981020 ON citus_split_test_schema.table_with_index_rep_identity_8981020 USING btree (key)
+ table_with_index_rep_identity_8981019 | CREATE UNIQUE INDEX uqx_8981019 ON citus_split_test_schema_no_deferred_drop.table_with_index_rep_identity_8981019 USING btree (key)
+ table_with_index_rep_identity_8981020 | CREATE UNIQUE INDEX uqx_8981020 ON citus_split_test_schema_no_deferred_drop.table_with_index_rep_identity_8981020 USING btree (key)
 (2 rows)
 
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema')
+        WHERE nspname IN ('citus_split_test_schema_no_deferred_drop')
     )
     ORDER BY stxname ASC;
          stxname
@@ -327,7 +327,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 (3 rows)
 
 \c - - - :worker_2_port
-    SET search_path TO "citus_split_test_schema", public, pg_catalog;
+    SET search_path TO "citus_split_test_schema_no_deferred_drop", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -342,35 +342,35 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 (3 rows)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
-    tablename    |                                                                                                indexdef
+    tablename    |                                                                                                        indexdef
 ---------------------------------------------------------------------
- sensors_8981007 | CREATE INDEX hash_index_on_sensors_8981007 ON citus_split_test_schema.sensors_8981007 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_8981007 | CREATE INDEX index_on_sensors_8981007 ON citus_split_test_schema.sensors_8981007 USING btree (lower((measureid)::text))
- sensors_8981007 | CREATE INDEX index_with_include_on_sensors_8981007 ON citus_split_test_schema.sensors_8981007 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
- sensors_8981007 | CREATE UNIQUE INDEX sensors_pkey_8981007 ON citus_split_test_schema.sensors_8981007 USING btree (measureid, eventdatetime, measure_data)
- sensors_8981008 | CREATE INDEX hash_index_on_sensors_8981008 ON citus_split_test_schema.sensors_8981008 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_8981008 | CREATE INDEX index_on_sensors_8981008 ON citus_split_test_schema.sensors_8981008 USING btree (lower((measureid)::text))
- sensors_8981008 | CREATE INDEX index_with_include_on_sensors_8981008 ON citus_split_test_schema.sensors_8981008 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
- sensors_8981008 | CREATE UNIQUE INDEX sensors_pkey_8981008 ON citus_split_test_schema.sensors_8981008 USING btree (measureid, eventdatetime, measure_data)
- sensors_8981015 | CREATE INDEX hash_index_on_sensors_8981015 ON citus_split_test_schema.sensors_8981015 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_8981015 | CREATE INDEX index_on_sensors_8981015 ON citus_split_test_schema.sensors_8981015 USING btree (lower((measureid)::text))
- sensors_8981015 | CREATE INDEX index_with_include_on_sensors_8981015 ON citus_split_test_schema.sensors_8981015 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
- sensors_8981015 | CREATE UNIQUE INDEX sensors_pkey_8981015 ON citus_split_test_schema.sensors_8981015 USING btree (measureid, eventdatetime, measure_data)
+ sensors_8981007 | CREATE INDEX hash_index_on_sensors_8981007 ON citus_split_test_schema_no_deferred_drop.sensors_8981007 USING hash (((measure_data -> 'IsFailed'::text)))
+ sensors_8981007 | CREATE INDEX index_on_sensors_8981007 ON citus_split_test_schema_no_deferred_drop.sensors_8981007 USING btree (lower((measureid)::text))
+ sensors_8981007 | CREATE INDEX index_with_include_on_sensors_8981007 ON citus_split_test_schema_no_deferred_drop.sensors_8981007 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
+ sensors_8981007 | CREATE UNIQUE INDEX sensors_pkey_8981007 ON citus_split_test_schema_no_deferred_drop.sensors_8981007 USING btree (measureid, eventdatetime, measure_data)
+ sensors_8981008 | CREATE INDEX hash_index_on_sensors_8981008 ON citus_split_test_schema_no_deferred_drop.sensors_8981008 USING hash (((measure_data -> 'IsFailed'::text)))
+ sensors_8981008 | CREATE INDEX index_on_sensors_8981008 ON citus_split_test_schema_no_deferred_drop.sensors_8981008 USING btree (lower((measureid)::text))
+ sensors_8981008 | CREATE INDEX index_with_include_on_sensors_8981008 ON citus_split_test_schema_no_deferred_drop.sensors_8981008 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
+ sensors_8981008 | CREATE UNIQUE INDEX sensors_pkey_8981008 ON citus_split_test_schema_no_deferred_drop.sensors_8981008 USING btree (measureid, eventdatetime, measure_data)
+ sensors_8981015 | CREATE INDEX hash_index_on_sensors_8981015 ON citus_split_test_schema_no_deferred_drop.sensors_8981015 USING hash (((measure_data -> 'IsFailed'::text)))
+ sensors_8981015 | CREATE INDEX index_on_sensors_8981015 ON citus_split_test_schema_no_deferred_drop.sensors_8981015 USING btree (lower((measureid)::text))
+ sensors_8981015 | CREATE INDEX index_with_include_on_sensors_8981015 ON citus_split_test_schema_no_deferred_drop.sensors_8981015 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
+ sensors_8981015 | CREATE UNIQUE INDEX sensors_pkey_8981015 ON citus_split_test_schema_no_deferred_drop.sensors_8981015 USING btree (measureid, eventdatetime, measure_data)
 (12 rows)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'table_with_index_rep_identity_%' ORDER BY 1,2;
-               tablename               |                                                      indexdef
+               tablename               |                                                              indexdef
 ---------------------------------------------------------------------
- table_with_index_rep_identity_8981011 | CREATE UNIQUE INDEX uqx_8981011 ON citus_split_test_schema.table_with_index_rep_identity_8981011 USING btree (key)
- table_with_index_rep_identity_8981012 | CREATE UNIQUE INDEX uqx_8981012 ON citus_split_test_schema.table_with_index_rep_identity_8981012 USING btree (key)
- table_with_index_rep_identity_8981021 | CREATE UNIQUE INDEX uqx_8981021 ON citus_split_test_schema.table_with_index_rep_identity_8981021 USING btree (key)
+ table_with_index_rep_identity_8981011 | CREATE UNIQUE INDEX uqx_8981011 ON citus_split_test_schema_no_deferred_drop.table_with_index_rep_identity_8981011 USING btree (key)
+ table_with_index_rep_identity_8981012 | CREATE UNIQUE INDEX uqx_8981012 ON citus_split_test_schema_no_deferred_drop.table_with_index_rep_identity_8981012 USING btree (key)
+ table_with_index_rep_identity_8981021 | CREATE UNIQUE INDEX uqx_8981021 ON citus_split_test_schema_no_deferred_drop.table_with_index_rep_identity_8981021 USING btree (key)
 (3 rows)
 
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema')
+        WHERE nspname IN ('citus_split_test_schema_no_deferred_drop')
     )
     ORDER BY stxname ASC;
          stxname
@@ -386,7 +386,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 \c - postgres - :master_port
 SET citus.defer_drop_after_shard_split TO OFF;
 SET ROLE test_shard_split_role_nodeferred_drop;
-SET search_path TO "citus_split_test_schema";
+SET search_path TO "citus_split_test_schema_no_deferred_drop";
 ALTER INDEX index_on_sensors RENAME TO index_on_sensors_renamed;
 ALTER INDEX index_on_sensors_renamed ALTER COLUMN 1 SET STATISTICS 200;
 DROP STATISTICS stats_on_sensors;
@@ -406,7 +406,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 
 (1 row)
 
-SET search_path TO "citus_split_test_schema";
+SET search_path TO "citus_split_test_schema_no_deferred_drop";
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
@@ -555,11 +555,11 @@ SELECT COUNT(*) FROM colocated_dist_table;
 -- END: Validate Data Count
 --BEGIN : Cleanup
 \c - postgres - :master_port
-DROP SCHEMA "citus_split_test_schema" CASCADE;
+DROP SCHEMA "citus_split_test_schema_no_deferred_drop" CASCADE;
 NOTICE:  drop cascades to 4 other objects
-DETAIL:  drop cascades to table citus_split_test_schema.sensors
-drop cascades to table citus_split_test_schema.reference_table
-drop cascades to table citus_split_test_schema.colocated_dist_table
-drop cascades to table citus_split_test_schema.table_with_index_rep_identity
+DETAIL:  drop cascades to table citus_split_test_schema_no_deferred_drop.sensors
+drop cascades to table citus_split_test_schema_no_deferred_drop.reference_table
+drop cascades to table citus_split_test_schema_no_deferred_drop.colocated_dist_table
+drop cascades to table citus_split_test_schema_no_deferred_drop.table_with_index_rep_identity
 SET citus.defer_drop_after_shard_split TO ON;
 --END : Cleanup
