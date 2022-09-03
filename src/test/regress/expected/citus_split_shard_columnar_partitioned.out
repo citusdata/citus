@@ -259,8 +259,6 @@ SELECT pg_reload_conf();
 -- END: Show the current state on workers
 -- BEGIN: Split a shard along its co-located shards
 \c - - - :master_port
-    -- Since Deferred drop is enabled, set the cleanup interval to a large value
-    -- to avoid flaky tests.
     SET search_path TO "citus_split_test_schema_columnar_partitioned";
     SET citus.next_shard_id TO 8999000;
     SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
@@ -954,7 +952,7 @@ SELECT pg_reload_conf();
 -- END: Show the updated state on workers
 --BEGIN : Cleanup
     \c - postgres - :master_port
-    ALTER SYSTEM SET citus.defer_shard_delete_interval TO 600000;
+    ALTER SYSTEM SET citus.defer_shard_delete_interval TO 15000;
     SELECT pg_reload_conf();
  pg_reload_conf
 ---------------------------------------------------------------------
