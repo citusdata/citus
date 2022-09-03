@@ -63,7 +63,7 @@ typedef struct CleanupRecord
 	CleanupPolicy policy;
 } CleanupRecord;
 
-/* operation ID set by StartNewOperationNeedingCleanup */
+/* operation ID set by RegisterNewOperationNeedingCleanup */
 OperationId CurrentOperationId = INVALID_OPERATION_ID;
 
 /* declarations for dynamic loading */
@@ -381,11 +381,11 @@ DropOrphanedShardsForMove(bool waitForLocks)
 
 
 /*
- * StartNewOperationNeedingCleanup is be called by an operation to register
+ * RegisterNewOperationNeedingCleanup is be called by an operation to register
  * for cleanup.
  */
 OperationId
-StartNewOperationNeedingCleanup(void)
+RegisterNewOperationNeedingCleanup(void)
 {
 	CurrentOperationId = GetNextOperationId();
 
@@ -396,27 +396,14 @@ StartNewOperationNeedingCleanup(void)
 
 
 /*
- * CompleteNewOperationNeedingCleanup is be called by an operation to signal
- * completion. This will trigger cleanup of appropriate resources.
+ * FinalizeNewOperationNeedingCleanupOnFailure is be called by an operation to signal
+ * completion with failure. This will trigger cleanup of appropriate resources.
  */
 void
-CompleteNewOperationNeedingCleanup(bool isSuccess)
+FinalizeNewOperationNeedingCleanupOnFailure()
 {
-	/*
-	 * As part of operation completion:
-	 * 1. Drop all resources of CurrentOperationId that are marked with 'CLEANUP_ALWAYS' policy and
-	 *     the respective cleanup records in seperate transaction.
-	 *
-	 * 2. For all resources of CurrentOperationId that are marked with 'CLEANUP_ON_FAILURE':
-	 *    a) If isSuccess = true, drop cleanup records as operation is nearing completion.
-	 *       As the operation is nearing successful completion. This is done as part of the
-	 *       same transaction so will rollback in case of potential failure later.
-	 *
-	 *    b) If isSuccess = false, drop resource and cleanup records in a seperate transaction.
-	 */
-
 	/* We must have a valid OperationId. Any operation requring cleanup
-	 * will call StartNewOperationNeedingCleanup.
+	 * will call RegisterNewOperationNeedingCleanup.
 	 */
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
 
@@ -436,25 +423,24 @@ CompleteNewOperationNeedingCleanup(bool isSuccess)
 			continue;
 		}
 
-		if (record->policy == CLEANUP_ALWAYS ||
-			(record->policy == CLEANUP_ON_FAILURE && !isSuccess))
+		if (record->policy == CLEANUP_ALWAYS || record->policy == CLEANUP_ON_FAILURE)
 		{
 			char *qualifiedTableName = record->objectName;
 			WorkerNode *workerNode = LookupNodeForGroup(record->nodeGroupId);
 
+			/*
+			 * For all resources of CurrentOperationId that are marked as 'CLEANUP_ALWAYS' or
+			 * 'CLEANUP_ON_FAILURE', drop resource and cleanup records.
+			 */
 			if (TryDropShardOutsideTransaction(CurrentOperationId,
 											   qualifiedTableName,
 											   workerNode->workerName,
 											   workerNode->workerPort))
 			{
 				/*
-				 * Delete cleanup records outside transaction as:
-				 * 1.The resources are marked as 'CLEANUP_ALWAYS' and should be cleaned no matter
-				 *   you succeeded or failed.
-				 * 2.The resources are marked as 'CLEANUP_ON_FAILURE' and we know isSucess = FALSE
-				 *   i.e. operation is failing. Given we will abort the operation's transaction, we
-				 *   cannot delete records in the current transaction. We delete these records outside
-				 *   of the current transaction via a localhost connection.
+				 * Given the operation is failing and we will abort its transaction, we cannot delete
+				 * records in the current transaction. Delete these records outside of the
+				 * current transaction via a localhost connection.
 				 */
 				DeleteCleanupRecordByRecordIdOutsideTransaction(record->recordId);
 				removedShardCountOnComplete++;
@@ -464,9 +450,82 @@ CompleteNewOperationNeedingCleanup(bool isSuccess)
 				failedShardCountOnComplete++;
 			}
 		}
-		else if (record->policy == CLEANUP_ON_FAILURE && isSuccess)
+	}
+
+	if (list_length(currentOperationRecordList) > 0)
+	{
+		ereport(LOG, (errmsg("Removed %d orphaned shards out of %d",
+							 removedShardCountOnComplete, list_length(
+								 currentOperationRecordList))));
+
+		if (failedShardCountOnComplete > 0)
 		{
-			/* Delete cleanup records in same transaction as:
+			ereport(WARNING, (errmsg("Failed to cleanup %d shards out of %d",
+									 failedShardCountOnComplete, list_length(
+										 currentOperationRecordList))));
+		}
+	}
+}
+
+
+/*
+ * FinalizeNewOperationNeedingCleanupOnSuccess is be called by an operation to signal
+ * completion with success. This will trigger cleanup of appropriate resources.
+ */
+void
+FinalizeNewOperationNeedingCleanupOnSuccess()
+{
+	/* We must have a valid OperationId. Any operation requring cleanup
+	 * will call RegisterNewOperationNeedingCleanup.
+	 */
+	Assert(CurrentOperationId != INVALID_OPERATION_ID);
+
+	List *currentOperationRecordList = ListCleanupRecordsForCurrentOperation();
+
+	int removedShardCountOnComplete = 0;
+	int failedShardCountOnComplete = 0;
+
+	CleanupRecord *record = NULL;
+	foreach_ptr(record, currentOperationRecordList)
+	{
+		/* We only supporting cleaning shards right now */
+		if (record->objectType != CLEANUP_OBJECT_SHARD_PLACEMENT)
+		{
+			ereport(WARNING, (errmsg("Invalid object type %d for cleanup record ",
+									 record->objectType)));
+			continue;
+		}
+
+		if (record->policy == CLEANUP_ALWAYS)
+		{
+			char *qualifiedTableName = record->objectName;
+			WorkerNode *workerNode = LookupNodeForGroup(record->nodeGroupId);
+
+			/*
+			 * For all resources of CurrentOperationId that are marked as 'CLEANUP_ALWAYS'
+			 * drop resource and cleanup records.
+			 */
+			if (TryDropShardOutsideTransaction(CurrentOperationId,
+											   qualifiedTableName,
+											   workerNode->workerName,
+											   workerNode->workerPort))
+			{
+				/*
+				 * Delete cleanup records outside transaction as:
+				 * The resources are marked as 'CLEANUP_ALWAYS' and should be cleaned no matter
+				 * the operation succeeded or failed.
+				 */
+				DeleteCleanupRecordByRecordIdOutsideTransaction(record->recordId);
+				removedShardCountOnComplete++;
+			}
+			else
+			{
+				failedShardCountOnComplete++;
+			}
+		}
+		else if (record->policy == CLEANUP_ON_FAILURE)
+		{
+			/* Delete cleanup records (and not the actual resource) in same transaction as:
 			 * The resources are marked as 'CLEANUP_ON_FAILURE' and we are approaching a successful
 			 * completion of the operation. However, we cannot guarentee that operation will succeed
 			 * so we tie the Delete with parent transaction.
@@ -503,7 +562,7 @@ InsertCleanupRecordInCurrentTransaction(CleanupObject objectType,
 										CleanupPolicy policy)
 {
 	/* We must have a valid OperationId. Any operation requring cleanup
-	 * will call StartNewOperationNeedingCleanup.
+	 * will call RegisterNewOperationNeedingCleanup.
 	 */
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
 
@@ -552,7 +611,7 @@ InsertCleanupRecordInSubtransaction(CleanupObject objectType,
 									CleanupPolicy policy)
 {
 	/* We must have a valid OperationId. Any operation requring cleanup
-	 * will call StartNewOperationNeedingCleanup.
+	 * will call RegisterNewOperationNeedingCleanup.
 	 */
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
 
@@ -770,7 +829,7 @@ static List *
 ListCleanupRecordsForCurrentOperation(void)
 {
 	/* We must have a valid OperationId. Any operation requring cleanup
-	 * will call StartNewOperationNeedingCleanup.
+	 * will call RegisterNewOperationNeedingCleanup.
 	 */
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
 

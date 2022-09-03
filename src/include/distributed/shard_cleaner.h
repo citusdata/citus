@@ -68,10 +68,10 @@ typedef enum CleanupPolicy
 /* APIs for cleanup infrastructure */
 
 /*
- * StartNewOperationNeedingCleanup is be called by an operation to register
+ * RegisterNewOperationNeedingCleanup is be called by an operation to register
  * for cleanup.
  */
-extern OperationId StartNewOperationNeedingCleanup(void);
+extern OperationId RegisterNewOperationNeedingCleanup(void);
 
 /*
  * InsertCleanupRecordInCurrentTransaction inserts a new pg_dist_cleanup entry
@@ -98,9 +98,17 @@ extern void InsertCleanupRecordInSubtransaction(CleanupObject objectType,
 												CleanupPolicy policy);
 
 /*
- * CompleteNewOperationNeedingCleanup is be called by an operation to signal
- * completion. This will trigger cleanup of appropriate resources.
+ * FinalizeNewOperationNeedingCleanupOnFailure is be called by an operation to signal
+ * completion on failure. This will trigger cleanup of appropriate resources
+ * and cleanup records.
  */
-extern void CompleteNewOperationNeedingCleanup(bool isSuccess);
+extern void FinalizeNewOperationNeedingCleanupOnFailure();
+
+/*
+ * FinalizeNewOperationNeedingCleanupOnSuccess is be called by an operation to signal
+ * completion on success. This will trigger cleanup of appropriate resources
+ * and cleanup records.
+ */
+extern void FinalizeNewOperationNeedingCleanupOnSuccess();
 
 #endif /*CITUS_SHARD_CLEANER_H */
