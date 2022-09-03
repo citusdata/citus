@@ -9,7 +9,7 @@ setup
     AS 'citus', $$test_assign_global_pid$$;
     SET citus.shard_replication_factor TO 1;
     SET citus.shard_count TO 4;
-    select setval('pg_dist_shardid_seq', GREATEST(1300000, nextval('pg_dist_shardid_seq')));
+    ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1300001;
 
     CREATE TABLE test_table(column1 int, column2 int);
     SELECT create_distributed_table('test_table', 'column1');
