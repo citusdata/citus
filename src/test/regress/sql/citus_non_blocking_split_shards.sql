@@ -128,10 +128,6 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 
 -- BEGIN : Move one shard before we split it.
 \c - postgres - :master_port
--- Since Deferred drop is enabled, set the cleanup interval to a large value
--- to avoid flaky tests.
-ALTER SYSTEM SET citus.defer_shard_delete_interval TO 600000;
-SELECT pg_reload_conf();
 SET ROLE test_shard_split_role;
 SET search_path TO "citus_split_test_schema";
 SET citus.next_shard_id TO 8981007;
@@ -213,10 +209,6 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 
 -- BEGIN: Should be able to change/drop constraints
 \c - postgres - :master_port
--- Since Deferred drop is enabled, set the cleanup interval to a large value
--- to avoid flaky tests.
-ALTER SYSTEM SET citus.defer_shard_delete_interval TO 600000;
-SELECT pg_reload_conf();
 SET ROLE test_shard_split_role;
 SET search_path TO "citus_split_test_schema";
 ALTER INDEX index_on_sensors RENAME TO index_on_sensors_renamed;
@@ -295,5 +287,7 @@ SELECT COUNT(*) FROM colocated_dist_table;
 
 --BEGIN : Cleanup
 \c - postgres - :master_port
+ALTER SYSTEM SET citus.defer_shard_delete_interval TO 15000;
+SELECT pg_reload_conf();
 DROP SCHEMA "citus_split_test_schema" CASCADE;
 --END : Cleanup
