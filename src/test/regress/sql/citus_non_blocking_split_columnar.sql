@@ -1,5 +1,5 @@
-CREATE SCHEMA "citus_split_test_schema_columnar_partitioned";
-SET search_path TO "citus_split_test_schema_columnar_partitioned";
+CREATE SCHEMA "citus_split_non_blocking_schema_columnar_partitioned";
+SET search_path TO "citus_split_non_blocking_schema_columnar_partitioned";
 SET citus.next_shard_id TO 8970000;
 SET citus.next_placement_id TO 8770000;
 SET citus.shard_count TO 1;
@@ -83,7 +83,7 @@ SELECT pg_reload_conf();
     INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
     INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
     INNER JOIN pg_catalog.pg_namespace ns  ON cls.relnamespace = ns.oid
-    WHERE node.noderole = 'primary' AND ns.nspname = 'citus_split_test_schema_columnar_partitioned'
+    WHERE node.noderole = 'primary' AND ns.nspname = 'citus_split_non_blocking_schema_columnar_partitioned'
     ORDER BY logicalrelid, shardminvalue::BIGINT, nodeport;
 -- END: Create table to split, along with other co-located tables. Add indexes, statistics etc.
 
@@ -125,7 +125,7 @@ SELECT pg_reload_conf();
 
 -- BEGIN: Show the current state on workers
 \c - - - :worker_1_port
-    SET search_path TO "citus_split_test_schema_columnar_partitioned";
+    SET search_path TO "citus_split_non_blocking_schema_columnar_partitioned";
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -137,12 +137,12 @@ SELECT pg_reload_conf();
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema_columnar_partitioned')
+        WHERE nspname IN ('citus_split_non_blocking_schema_columnar_partitioned')
     )
     ORDER BY stxname ASC;
 
     \c - - - :worker_2_port
-    SET search_path TO "citus_split_test_schema_columnar_partitioned";
+    SET search_path TO "citus_split_non_blocking_schema_columnar_partitioned";
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -154,14 +154,14 @@ SELECT pg_reload_conf();
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema_columnar_partitioned')
+        WHERE nspname IN ('citus_split_non_blocking_schema_columnar_partitioned')
     )
     ORDER BY stxname ASC;
 -- END: Show the current state on workers
 
 -- BEGIN: Split a shard along its co-located shards
 \c - - - :master_port
-    SET search_path TO "citus_split_test_schema_columnar_partitioned";
+    SET search_path TO "citus_split_non_blocking_schema_columnar_partitioned";
     SET citus.next_shard_id TO 8999000;
     SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
     SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
@@ -180,7 +180,7 @@ SELECT pg_reload_conf();
     INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
     INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
     INNER JOIN pg_catalog.pg_namespace ns  ON cls.relnamespace = ns.oid
-    WHERE node.noderole = 'primary' AND ns.nspname = 'citus_split_test_schema_columnar_partitioned'
+    WHERE node.noderole = 'primary' AND ns.nspname = 'citus_split_non_blocking_schema_columnar_partitioned'
     ORDER BY logicalrelid, shardminvalue::BIGINT, nodeport;
 
     SELECT count(*) FROM reference_table;
@@ -192,7 +192,7 @@ SELECT pg_reload_conf();
 
 -- BEGIN: Show the updated state on workers
     \c - - - :worker_1_port
-    SET search_path TO "citus_split_test_schema_columnar_partitioned";
+    SET search_path TO "citus_split_non_blocking_schema_columnar_partitioned";
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -204,12 +204,12 @@ SELECT pg_reload_conf();
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema_columnar_partitioned')
+        WHERE nspname IN ('citus_split_non_blocking_schema_columnar_partitioned')
     )
     ORDER BY stxname ASC;
 
     \c - - - :worker_2_port
-    SET search_path TO "citus_split_test_schema_columnar_partitioned";
+    SET search_path TO "citus_split_non_blocking_schema_columnar_partitioned";
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -221,14 +221,14 @@ SELECT pg_reload_conf();
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema_columnar_partitioned')
+        WHERE nspname IN ('citus_split_non_blocking_schema_columnar_partitioned')
     )
     ORDER BY stxname ASC;
 -- END: Show the updated state on workers
 
 -- BEGIN: Split a partition table directly
 \c - - - :master_port
-    SET search_path TO "citus_split_test_schema_columnar_partitioned";
+    SET search_path TO "citus_split_non_blocking_schema_columnar_partitioned";
     SET citus.next_shard_id TO 8999100;
     SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
     SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
@@ -247,7 +247,7 @@ SELECT pg_reload_conf();
     INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
     INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
     INNER JOIN pg_catalog.pg_namespace ns  ON cls.relnamespace = ns.oid
-    WHERE node.noderole = 'primary' AND ns.nspname = 'citus_split_test_schema_columnar_partitioned'
+    WHERE node.noderole = 'primary' AND ns.nspname = 'citus_split_non_blocking_schema_columnar_partitioned'
     ORDER BY logicalrelid, shardminvalue::BIGINT, nodeport;
 
     SELECT count(*) FROM reference_table;
@@ -259,7 +259,7 @@ SELECT pg_reload_conf();
 
 -- BEGIN: Show the updated state on workers
     \c - - - :worker_1_port
-    SET search_path TO "citus_split_test_schema_columnar_partitioned";
+    SET search_path TO "citus_split_non_blocking_schema_columnar_partitioned";
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -271,12 +271,12 @@ SELECT pg_reload_conf();
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema_columnar_partitioned')
+        WHERE nspname IN ('citus_split_non_blocking_schema_columnar_partitioned')
     )
     ORDER BY stxname ASC;
 
     \c - - - :worker_2_port
-    SET search_path TO "citus_split_test_schema_columnar_partitioned";
+    SET search_path TO "citus_split_non_blocking_schema_columnar_partitioned";
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -288,7 +288,7 @@ SELECT pg_reload_conf();
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema_columnar_partitioned')
+        WHERE nspname IN ('citus_split_non_blocking_schema_columnar_partitioned')
     )
     ORDER BY stxname ASC;
 -- END: Show the updated state on workers
@@ -297,5 +297,5 @@ SELECT pg_reload_conf();
     \c - postgres - :master_port
     ALTER SYSTEM SET citus.defer_shard_delete_interval TO 15000;
     SELECT pg_reload_conf();
-    DROP SCHEMA "citus_split_test_schema_columnar_partitioned" CASCADE;
+    DROP SCHEMA "citus_split_non_blocking_schema_columnar_partitioned" CASCADE;
 --END : Cleanup
