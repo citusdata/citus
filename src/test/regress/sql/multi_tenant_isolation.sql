@@ -396,7 +396,7 @@ CREATE EVENT TRIGGER abort_drop ON sql_drop
 \c - postgres - :master_port
 -- Disable deferred drop otherwise we will skip the drop and operation will succeed instead of failing.
 SET citus.defer_drop_after_shard_split TO OFF;
-\c - mx_isolation_role_ent - :master_port
+SET ROLE mx_isolation_role_ent;
 SET search_path to "Tenant Isolation";
 
 \set VERBOSITY terse
@@ -408,10 +408,6 @@ SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_tra
 SELECT * FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
-
-\c - postgres - :master_port
--- Reenable deferred drop.
-SET citus.defer_drop_after_shard_split TO ON;
 
 \c - - - :worker_1_port
 SET search_path to "Tenant Isolation";

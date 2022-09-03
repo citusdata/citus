@@ -766,7 +766,7 @@ SET search_path to "Tenant Isolation";
 \set VERBOSITY terse
 SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_transfer_mode => 'block_writes');
 WARNING:  command DROP TABLE is disabled
-WARNING:  Failed to drop 1 cleanup shards out of 1
+WARNING:  Failed to cleanup 1 shards out of 1
 ERROR:  command CREATE TABLE is disabled
 \set VERBOSITY default
 \c - postgres - :worker_1_port
@@ -814,14 +814,8 @@ CREATE EVENT TRIGGER abort_drop ON sql_drop
    EXECUTE PROCEDURE abort_drop_command();
 \c - postgres - :master_port
 -- Disable deferred drop otherwise we will skip the drop and operation will succeed instead of failing.
-ALTER SYSTEM SET citus.defer_drop_after_shard_split TO false;
-SELECT pg_reload_conf();
- pg_reload_conf
----------------------------------------------------------------------
- t
-(1 row)
-
-\c - mx_isolation_role_ent - :master_port
+SET citus.defer_drop_after_shard_split TO OFF;
+SET ROLE mx_isolation_role_ent;
 SET search_path to "Tenant Isolation";
 \set VERBOSITY terse
 SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_transfer_mode => 'block_writes');
@@ -831,7 +825,7 @@ WARNING:  command DROP TABLE is disabled
 WARNING:  command DROP TABLE is disabled
 WARNING:  command DROP TABLE is disabled
 WARNING:  command DROP TABLE is disabled
-WARNING:  Failed to drop 6 cleanup shards out of 6
+WARNING:  Failed to cleanup 6 shards out of 6
 ERROR:  command DROP TABLE is disabled
 \set VERBOSITY default
 -- check if metadata is changed
@@ -865,15 +859,6 @@ SELECT * FROM pg_dist_shard
  lineitem_streaming | 1230045 | t            | 2147483647    | 2147483647
  orders_streaming   | 1230047 | t            | 2147483647    | 2147483647
 (24 rows)
-
-\c - postgres - :master_port
--- Reenable deferred drop.
-ALTER SYSTEM SET citus.defer_drop_after_shard_split TO true;
-SELECT pg_reload_conf();
- pg_reload_conf
----------------------------------------------------------------------
- t
-(1 row)
 
 \c - - - :worker_1_port
 SET search_path to "Tenant Isolation";
