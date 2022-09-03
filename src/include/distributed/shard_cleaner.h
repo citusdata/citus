@@ -102,13 +102,13 @@ extern void InsertCleanupRecordInSubtransaction(CleanupObject objectType,
  * completion on failure. This will trigger cleanup of appropriate resources
  * and cleanup records.
  */
-extern void FinalizeNewOperationNeedingCleanupOnFailure();
+extern void FinalizeNewOperationNeedingCleanupOnFailure(void);
 
 /*
  * FinalizeNewOperationNeedingCleanupOnSuccess is be called by an operation to signal
  * completion on success. This will trigger cleanup of appropriate resources
  * and cleanup records.
  */
-extern void FinalizeNewOperationNeedingCleanupOnSuccess();
+extern void FinalizeNewOperationNeedingCleanupOnSuccess(void);
 
 #endif /*CITUS_SHARD_CLEANER_H */
