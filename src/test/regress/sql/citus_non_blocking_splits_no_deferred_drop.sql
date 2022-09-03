@@ -17,15 +17,15 @@ Here is a high level overview of test plan:
  12. Show we allow Split with the shard transfer mode 'auto' if all colocated tables has replica identity.
 */
 
-CREATE SCHEMA "citus_split_test_schema";
+CREATE SCHEMA "citus_split_test_schema_no_deferred_drop";
 
 SET citus.defer_drop_after_shard_split TO OFF;
 
 CREATE ROLE test_shard_split_role_nodeferred_drop WITH LOGIN;
-GRANT USAGE, CREATE ON SCHEMA "citus_split_test_schema" TO test_shard_split_role_nodeferred_drop;
+GRANT USAGE, CREATE ON SCHEMA "citus_split_test_schema_no_deferred_drop" TO test_shard_split_role_nodeferred_drop;
 SET ROLE test_shard_split_role_nodeferred_drop;
 
-SET search_path TO "citus_split_test_schema";
+SET search_path TO "citus_split_test_schema_no_deferred_drop";
 SET citus.next_shard_id TO 8981000;
 SET citus.next_placement_id TO 8610000;
 SET citus.shard_count TO 2;
@@ -89,7 +89,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
   ORDER BY logicalrelid, shardminvalue::BIGINT;
 
 \c - - - :worker_1_port
-    SET search_path TO "citus_split_test_schema", public, pg_catalog;
+    SET search_path TO "citus_split_test_schema_no_deferred_drop", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -102,12 +102,12 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema')
+        WHERE nspname IN ('citus_split_test_schema_no_deferred_drop')
     )
     ORDER BY stxname ASC;
 
 \c - - - :worker_2_port
-    SET search_path TO "citus_split_test_schema", public, pg_catalog;
+    SET search_path TO "citus_split_test_schema_no_deferred_drop", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -120,7 +120,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema')
+        WHERE nspname IN ('citus_split_test_schema_no_deferred_drop')
     )
     ORDER BY stxname ASC;
 -- END : Display current state
@@ -129,7 +129,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 \c - postgres - :master_port
 SET citus.defer_drop_after_shard_split TO OFF;
 SET ROLE test_shard_split_role_nodeferred_drop;
-SET search_path TO "citus_split_test_schema";
+SET search_path TO "citus_split_test_schema_no_deferred_drop";
 SET citus.next_shard_id TO 8981007;
 SET citus.defer_drop_after_shard_move TO OFF;
 
@@ -171,7 +171,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
   ORDER BY logicalrelid, shardminvalue::BIGINT;
 
 \c - - - :worker_1_port
-    SET search_path TO "citus_split_test_schema", public, pg_catalog;
+    SET search_path TO "citus_split_test_schema_no_deferred_drop", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -184,12 +184,12 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema')
+        WHERE nspname IN ('citus_split_test_schema_no_deferred_drop')
     )
     ORDER BY stxname ASC;
 
 \c - - - :worker_2_port
-    SET search_path TO "citus_split_test_schema", public, pg_catalog;
+    SET search_path TO "citus_split_test_schema_no_deferred_drop", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -202,7 +202,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema')
+        WHERE nspname IN ('citus_split_test_schema_no_deferred_drop')
     )
     ORDER BY stxname ASC;
 -- END : Display current state
@@ -211,7 +211,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 \c - postgres - :master_port
 SET citus.defer_drop_after_shard_split TO OFF;
 SET ROLE test_shard_split_role_nodeferred_drop;
-SET search_path TO "citus_split_test_schema";
+SET search_path TO "citus_split_test_schema_no_deferred_drop";
 ALTER INDEX index_on_sensors RENAME TO index_on_sensors_renamed;
 ALTER INDEX index_on_sensors_renamed ALTER COLUMN 1 SET STATISTICS 200;
 DROP STATISTICS stats_on_sensors;
@@ -228,7 +228,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     ARRAY[:worker_1_node, :worker_2_node],
     'force_logical');
 
-SET search_path TO "citus_split_test_schema";
+SET search_path TO "citus_split_test_schema_no_deferred_drop";
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
@@ -288,7 +288,7 @@ SELECT COUNT(*) FROM colocated_dist_table;
 
 --BEGIN : Cleanup
 \c - postgres - :master_port
-DROP SCHEMA "citus_split_test_schema" CASCADE;
+DROP SCHEMA "citus_split_test_schema_no_deferred_drop" CASCADE;
 
 SET citus.defer_drop_after_shard_split TO ON;
 --END : Cleanup
