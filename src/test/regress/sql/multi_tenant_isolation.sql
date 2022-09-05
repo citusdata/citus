@@ -248,6 +248,10 @@ ORDER BY
 	revenue DESC,
 	o_orderdate;
 
+-- BEGIN: Perform deferred cleanup.
+CALL citus_cleanup_orphaned_shards();
+-- END: Perform deferred cleanup.
+
 -- check shards
 SET citus.override_table_visibility TO false;
 \d
@@ -359,6 +363,10 @@ RESET citus.enable_metadata_sync;
 CREATE EVENT TRIGGER abort_ddl ON ddl_command_end
    EXECUTE PROCEDURE abort_any_command();
 
+-- BEGIN: Perform deferred cleanup.
+CALL citus_cleanup_orphaned_shards();
+-- END: Perform deferred cleanup.
+
 SET citus.override_table_visibility TO false;
 \d
 
@@ -372,6 +380,10 @@ SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_tra
 
 \c - postgres - :worker_1_port
 SET search_path to "Tenant Isolation";
+
+-- BEGIN: Perform deferred cleanup.
+CALL citus_cleanup_orphaned_shards();
+-- END: Perform deferred cleanup.
 
 SET citus.override_table_visibility TO false;
 \d

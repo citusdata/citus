@@ -521,7 +521,7 @@ SplitShard(SplitMode splitMode,
 	uint64 splitWorkflowId = shardIntervalToSplit->shardId;
 
 	/* Start operation to prepare for generating cleanup records */
-	RegisterNewOperationNeedingCleanup();
+	RegisterOperationNeedingCleanup();
 
 	if (splitMode == BLOCKING_SPLIT)
 	{
@@ -548,7 +548,7 @@ SplitShard(SplitMode splitMode,
 		PlacementMovedUsingLogicalReplicationInTX = true;
 	}
 
-	FinalizeNewOperationNeedingCleanupOnSuccess();
+	FinalizeOperationNeedingCleanupOnSuccess();
 }
 
 
@@ -648,7 +648,7 @@ BlockingShardSplit(SplitOperation splitOperation,
 		ShutdownAllConnections();
 
 		/* Do a best effort cleanup of shards created on workers in the above block */
-		FinalizeNewOperationNeedingCleanupOnFailure();
+		FinalizeOperationNeedingCleanupOnFailure();
 
 		PG_RE_THROW();
 	}
@@ -1746,7 +1746,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		 */
 		DropAllLogicalReplicationLeftovers(SHARD_SPLIT);
 
-		FinalizeNewOperationNeedingCleanupOnFailure();
+		FinalizeOperationNeedingCleanupOnFailure();
 
 		PG_RE_THROW();
 	}

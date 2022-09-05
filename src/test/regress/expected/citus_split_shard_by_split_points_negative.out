@@ -128,3 +128,11 @@ SELECT citus_split_shard_by_split_points(
 	ARRAY['-1073741826'],
 	ARRAY[:worker_1_node, :worker_2_node]);
 ERROR:  Operation split not supported for shard as replication factor '2' is greater than 1.
+--BEGIN : Cleanup
+\c - postgres - :master_port
+DROP SCHEMA "citus_split_shard_by_split_points_negative" CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to table citus_split_shard_by_split_points_negative.range_paritioned_table_to_split
+drop cascades to table citus_split_shard_by_split_points_negative.table_to_split
+drop cascades to table citus_split_shard_by_split_points_negative.table_to_split_replication_factor_2
+--END : Cleanup

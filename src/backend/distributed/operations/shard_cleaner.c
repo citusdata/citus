@@ -63,7 +63,7 @@ typedef struct CleanupRecord
 	CleanupPolicy policy;
 } CleanupRecord;
 
-/* operation ID set by RegisterNewOperationNeedingCleanup */
+/* operation ID set by RegisterOperationNeedingCleanup */
 OperationId CurrentOperationId = INVALID_OPERATION_ID;
 
 /* declarations for dynamic loading */
@@ -117,6 +117,7 @@ citus_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 
 	bool waitForLocks = true;
 	int droppedShardCount = DropOrphanedShardsForMove(waitForLocks);
+	droppedShardCount += DropOrphanedShardsForCleanup();
 	if (droppedShardCount > 0)
 	{
 		ereport(NOTICE, (errmsg("cleaned up %d orphaned shards", droppedShardCount)));
@@ -139,6 +140,7 @@ isolation_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 
 	bool waitForLocks = true;
 	int droppedShardCount = DropOrphanedShardsForMove(waitForLocks);
+	droppedShardCount += DropOrphanedShardsForCleanup();
 	if (droppedShardCount > 0)
 	{
 		ereport(NOTICE, (errmsg("cleaned up %d orphaned shards", droppedShardCount)));
@@ -381,11 +383,11 @@ DropOrphanedShardsForMove(bool waitForLocks)
 
 
 /*
- * RegisterNewOperationNeedingCleanup is be called by an operation to register
+ * RegisterOperationNeedingCleanup is be called by an operation to register
  * for cleanup.
  */
 OperationId
-RegisterNewOperationNeedingCleanup(void)
+RegisterOperationNeedingCleanup(void)
 {
 	CurrentOperationId = GetNextOperationId();
 
@@ -396,14 +398,14 @@ RegisterNewOperationNeedingCleanup(void)
 
 
 /*
- * FinalizeNewOperationNeedingCleanupOnFailure is be called by an operation to signal
+ * FinalizeOperationNeedingCleanupOnFailure is be called by an operation to signal
  * completion with failure. This will trigger cleanup of appropriate resources.
  */
 void
-FinalizeNewOperationNeedingCleanupOnFailure()
+FinalizeOperationNeedingCleanupOnFailure()
 {
 	/* We must have a valid OperationId. Any operation requring cleanup
-	 * will call RegisterNewOperationNeedingCleanup.
+	 * will call RegisterOperationNeedingCleanup.
 	 */
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
 
@@ -469,14 +471,14 @@ FinalizeNewOperationNeedingCleanupOnFailure()
 
 
 /*
- * FinalizeNewOperationNeedingCleanupOnSuccess is be called by an operation to signal
+ * FinalizeOperationNeedingCleanupOnSuccess is be called by an operation to signal
  * completion with success. This will trigger cleanup of appropriate resources.
  */
 void
-FinalizeNewOperationNeedingCleanupOnSuccess()
+FinalizeOperationNeedingCleanupOnSuccess()
 {
 	/* We must have a valid OperationId. Any operation requring cleanup
-	 * will call RegisterNewOperationNeedingCleanup.
+	 * will call RegisterOperationNeedingCleanup.
 	 */
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
 
@@ -562,7 +564,7 @@ InsertCleanupRecordInCurrentTransaction(CleanupObject objectType,
 										CleanupPolicy policy)
 {
 	/* We must have a valid OperationId. Any operation requring cleanup
-	 * will call RegisterNewOperationNeedingCleanup.
+	 * will call RegisterOperationNeedingCleanup.
 	 */
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
 
@@ -611,7 +613,7 @@ InsertCleanupRecordInSubtransaction(CleanupObject objectType,
 									CleanupPolicy policy)
 {
 	/* We must have a valid OperationId. Any operation requring cleanup
-	 * will call RegisterNewOperationNeedingCleanup.
+	 * will call RegisterOperationNeedingCleanup.
 	 */
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
 
@@ -829,7 +831,7 @@ static List *
 ListCleanupRecordsForCurrentOperation(void)
 {
 	/* We must have a valid OperationId. Any operation requring cleanup
-	 * will call RegisterNewOperationNeedingCleanup.
+	 * will call RegisterOperationNeedingCleanup.
 	 */
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
 

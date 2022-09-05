@@ -13,9 +13,8 @@ Here is a high level overview of test plan:
 
 CREATE SCHEMA "citus_split_test_schema";
 
--- Since Deferred drop is enabled, set the cleanup interval to a large value
--- to avoid flaky tests.
-ALTER SYSTEM SET citus.defer_shard_delete_interval TO 600000;
+-- Disable Deferred drop auto cleanup to avoid flaky tests.
+ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
 SELECT pg_reload_conf();
 
 CREATE ROLE test_split_role WITH LOGIN;
@@ -145,6 +144,10 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     ARRAY[:worker_1_node, :worker_2_node],
     'block_writes');
 
+-- BEGIN: Perform deferred cleanup.
+CALL citus_cleanup_orphaned_shards();
+-- END: Perform deferred cleanup.
+
 -- Perform 3 way split
 SELECT pg_catalog.citus_split_shard_by_split_points(
     8981001,
@@ -152,6 +155,10 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     ARRAY[:worker_1_node, :worker_1_node, :worker_2_node],
     'block_writes');
 -- END : Split two shards : One with move and One without move.
+
+-- BEGIN: Perform deferred cleanup.
+CALL citus_cleanup_orphaned_shards();
+-- END: Perform deferred cleanup.
 
 -- BEGIN : Move a shard post split.
 SELECT citus_move_shard_placement(8981007, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='block_writes');
@@ -223,6 +230,10 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     ARRAY[:worker_1_node, :worker_2_node],
     'block_writes');
 
+-- BEGIN: Perform deferred cleanup.
+CALL citus_cleanup_orphaned_shards();
+-- END: Perform deferred cleanup.
+
 SET search_path TO "citus_split_test_schema";
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
@@ -241,7 +252,7 @@ SELECT COUNT(*) FROM colocated_dist_table;
 
 --BEGIN : Cleanup
 \c - postgres - :master_port
-ALTER SYSTEM SET citus.defer_shard_delete_interval TO 15000;
+ALTER SYSTEM RESET citus.defer_shard_delete_interval;
 SELECT pg_reload_conf();
 DROP SCHEMA "citus_split_test_schema" CASCADE;
 --END : Cleanup

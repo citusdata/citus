@@ -13,9 +13,9 @@ INSERT INTO pg_catalog.pg_dist_cleanup (operation_id, object_type, object_name, 
 
 SELECT * from pg_dist_cleanup;
 
--- Set a very long(10mins) time interval to stop auto cleanup in case of deferred drop.
+-- Disable Deferred drop auto cleanup to avoid flaky tests.
 \c - postgres - :master_port
-ALTER SYSTEM SET citus.defer_shard_delete_interval TO 600000;
+ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
 SELECT pg_reload_conf();
 
 -- Perform a split and validate shard is marked for deferred drop.
@@ -58,13 +58,9 @@ SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind 
 \c - - - :worker_2_port
 SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r';
 
--- Set a very short(1ms) time interval to force deferred drop cleanup.
+-- Perform deferred drop cleanup.
 \c - postgres - :master_port
-ALTER SYSTEM SET citus.defer_shard_delete_interval TO 1;
-SELECT pg_reload_conf();
-
--- Give enough time for the deferred drop cleanup to run.
-SELECT pg_sleep(2);
+CALL citus_cleanup_orphaned_shards();
 
 -- Clenaup has been done.
 SELECT * from pg_dist_cleanup;

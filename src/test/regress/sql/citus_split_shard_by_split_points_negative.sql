@@ -109,3 +109,8 @@ SELECT citus_split_shard_by_split_points(
 	51261400,
 	ARRAY['-1073741826'],
 	ARRAY[:worker_1_node, :worker_2_node]);
+
+--BEGIN : Cleanup
+\c - postgres - :master_port
+DROP SCHEMA "citus_split_shard_by_split_points_negative" CASCADE;
+--END : Cleanup
