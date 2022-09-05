@@ -227,6 +227,8 @@ static float4 NodeCapacity(WorkerNode *workerNode, void *context);
 static ShardCost GetShardCost(uint64 shardId, void *context);
 static List * NonColocatedDistRelationIdList(void);
 static void RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid);
+static void RebalanceTableShardsBackground(RebalanceOptions *options, Oid
+										   shardReplicationModeOid);
 static void AcquireRebalanceColocationLock(Oid relationId, const char *operationName);
 static void ExecutePlacementUpdates(List *placementUpdateList, Oid
 									shardReplicationModeOid, char *noticeOperation);
@@ -256,6 +258,7 @@ PG_FUNCTION_INFO_V1(master_drain_node);
 PG_FUNCTION_INFO_V1(citus_shard_cost_by_disk_size);
 PG_FUNCTION_INFO_V1(citus_validate_rebalance_strategy_functions);
 PG_FUNCTION_INFO_V1(pg_dist_rebalance_strategy_enterprise_check);
+PG_FUNCTION_INFO_V1(citus_rebalance_start);
 
 bool RunningUnderIsolationTest = false;
 int MaxRebalancerLoggedIgnoredMoves = 5;
@@ -854,6 +857,40 @@ rebalance_table_shards(PG_FUNCTION_ARGS)
 	};
 	Oid shardTransferModeOid = PG_GETARG_OID(4);
 	RebalanceTableShards(&options, shardTransferModeOid);
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_rebalance_start rebalances the shards across the workers.
+ *
+ * SQL signature:
+ *
+ * citus_rebalance_start(
+ *     rebalance_strategy name,
+ *     shard_transfer_mode citus.shard_transfer_mode,
+ * ) RETURNS VOID
+ */
+Datum
+citus_rebalance_start(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	List *relationIdList = NonColocatedDistRelationIdList();
+	Form_pg_dist_rebalance_strategy strategy = GetRebalanceStrategy(
+		PG_GETARG_NAME_OR_NULL(0));
+	PG_ENSURE_ARGNOTNULL(1, "shard_transfer_mode");
+	Oid shardTransferModeOid = PG_GETARG_OID(1);
+
+	RebalanceOptions options = {
+		.relationIdList = relationIdList,
+		.threshold = strategy->defaultThreshold,
+		.maxShardMoves = 10000000,
+		.excludedShardArray = construct_empty_array(INT4OID),
+		.drainOnly = false,
+		.rebalanceStrategy = strategy,
+		.improvementThreshold = strategy->improvementThreshold,
+	};
+	RebalanceTableShardsBackground(&options, shardTransferModeOid);
 	PG_RETURN_VOID();
 }
 
@@ -1606,6 +1643,88 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 						  REBALANCE_PROGRESS_WAITING);
 	ExecutePlacementUpdates(placementUpdateList, shardReplicationModeOid, "Moving");
 	FinalizeCurrentProgressMonitor();
+}
+
+
+/*
+ * RebalanceTableShardsBackground rebalances the shards for the relations
+ * inside the relationIdList across the different workers. It does so using our
+ * background job+task infrastructure.
+ */
+static void
+RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationModeOid)
+{
+	char transferMode = LookupShardTransferMode(shardReplicationModeOid);
+	EnsureReferenceTablesExistOnAllNodesExtended(transferMode);
+
+	if (list_length(options->relationIdList) == 0)
+	{
+		return;
+	}
+
+	Oid relationId = InvalidOid;
+	char *operationName = "rebalance";
+	if (options->drainOnly)
+	{
+		operationName = "move";
+	}
+
+	foreach_oid(relationId, options->relationIdList)
+	{
+		AcquireRebalanceColocationLock(relationId, operationName);
+	}
+
+	List *placementUpdateList = GetRebalanceSteps(options);
+
+	if (list_length(placementUpdateList) == 0)
+	{
+		return;
+	}
+
+	/* find the name of the shard transfer mode to interpolate in the scheduled command */
+	Datum shardTranferModeLabelDatum =
+		DirectFunctionCall1(enum_out, shardReplicationModeOid);
+	char *shardTranferModeLabel = DatumGetCString(shardTranferModeLabelDatum);
+
+	if (list_length(placementUpdateList) == 0)
+	{
+		return;
+	}
+
+	/* schedule planned moves */
+	int64 jobId = CreateBackgroundJob("rebalance", "Rebalance colocation group ...");
+
+	PlacementUpdateEvent *move = NULL;
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+	bool first = true;
+	int64 prevJobId = 0;
+	foreach_ptr(move, placementUpdateList)
+	{
+		resetStringInfo(&buf);
+
+		appendStringInfo(&buf,
+						 "SELECT citus_move_shard_placement(%ld,%s,%u,%s,%u,%s)",
+						 move->shardId,
+						 quote_literal_cstr(move->sourceNode->workerName),
+						 move->sourceNode->workerPort,
+						 quote_literal_cstr(move->targetNode->workerName),
+						 move->targetNode->workerPort,
+						 quote_literal_cstr(shardTranferModeLabel));
+
+		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
+													  first ? 0 : 1, &prevJobId);
+		prevJobId = task->taskid;
+		first = false;
+	}
+
+	/*
+	 * This uses the first relationId from the list, it's only used for display
+	 * purposes so it does not really matter which to show
+	 */
+
+	/* ExecutePlacementUpdates(placementUpdateList, shardReplicationModeOid, "Moving"); */
+	/* FinalizeCurrentProgressMonitor(); */
 }
 
 
