@@ -249,6 +249,7 @@ ORDER BY
 	o_orderdate;
 
 -- BEGIN: Perform deferred cleanup.
+\c - postgres - :master_port
 CALL citus_cleanup_orphaned_shards();
 -- END: Perform deferred cleanup.
 
@@ -364,6 +365,7 @@ CREATE EVENT TRIGGER abort_ddl ON ddl_command_end
    EXECUTE PROCEDURE abort_any_command();
 
 -- BEGIN: Perform deferred cleanup.
+\c - postgres - :master_port
 CALL citus_cleanup_orphaned_shards();
 -- END: Perform deferred cleanup.
 
@@ -382,6 +384,7 @@ SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_tra
 SET search_path to "Tenant Isolation";
 
 -- BEGIN: Perform deferred cleanup.
+\c - postgres - :master_port
 CALL citus_cleanup_orphaned_shards();
 -- END: Perform deferred cleanup.
 

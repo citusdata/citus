@@ -15,9 +15,8 @@ Here is a high level overview of test plan:
  12. Show we allow Split with the shard transfer mode 'auto' if all colocated tables has replica identity.
 */
 CREATE SCHEMA "citus_split_test_schema";
--- Since Deferred drop is enabled, set the cleanup interval to a large value
--- to avoid flaky tests.
-ALTER SYSTEM SET citus.defer_shard_delete_interval TO 600000;
+-- Disable Deferred drop auto cleanup to avoid flaky tests.
+ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
 SELECT pg_reload_conf();
  pg_reload_conf
 ---------------------------------------------------------------------
@@ -236,6 +235,10 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 
 (1 row)
 
+-- BEGIN: Perform deferred cleanup.
+CALL citus_cleanup_orphaned_shards();
+NOTICE:  cleaned up 3 orphaned shards
+-- END: Perform deferred cleanup.
 -- Perform 3 way split
 SELECT pg_catalog.citus_split_shard_by_split_points(
     8981001,
@@ -248,6 +251,10 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 (1 row)
 
 -- END : Split two shards : One with move and One without move.
+-- BEGIN: Perform deferred cleanup.
+CALL citus_cleanup_orphaned_shards();
+NOTICE:  cleaned up 3 orphaned shards
+-- END: Perform deferred cleanup.
 -- BEGIN : Move a shard post split.
 SELECT citus_move_shard_placement(8981007, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='block_writes');
  citus_move_shard_placement
@@ -341,24 +348,14 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
             ORDER BY 1, 2;
      relname     |         Constraint         |                                 Definition
 ---------------------------------------------------------------------
- sensors_8981000 | fkey_table_to_dist_8981000 | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981003(measureid)
- sensors_8981001 | fkey_table_to_dist_8981001 | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981004(measureid)
  sensors_8981007 | fkey_table_to_dist_8981007 | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981009(measureid)
  sensors_8981008 | fkey_table_to_dist_8981008 | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981010(measureid)
  sensors_8981015 | fkey_table_to_dist_8981015 | FOREIGN KEY (measureid) REFERENCES colocated_dist_table_8981018(measureid)
-(5 rows)
+(3 rows)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'sensors_%' ORDER BY 1,2;
     tablename    |                                                                                                indexdef
 ---------------------------------------------------------------------
- sensors_8981000 | CREATE INDEX hash_index_on_sensors_8981000 ON citus_split_test_schema.sensors_8981000 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_8981000 | CREATE INDEX index_on_sensors_8981000 ON citus_split_test_schema.sensors_8981000 USING btree (lower((measureid)::text))
- sensors_8981000 | CREATE INDEX index_with_include_on_sensors_8981000 ON citus_split_test_schema.sensors_8981000 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
- sensors_8981000 | CREATE UNIQUE INDEX sensors_pkey_8981000 ON citus_split_test_schema.sensors_8981000 USING btree (measureid, eventdatetime, measure_data)
- sensors_8981001 | CREATE INDEX hash_index_on_sensors_8981001 ON citus_split_test_schema.sensors_8981001 USING hash (((measure_data -> 'IsFailed'::text)))
- sensors_8981001 | CREATE INDEX index_on_sensors_8981001 ON citus_split_test_schema.sensors_8981001 USING btree (lower((measureid)::text))
- sensors_8981001 | CREATE INDEX index_with_include_on_sensors_8981001 ON citus_split_test_schema.sensors_8981001 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
- sensors_8981001 | CREATE UNIQUE INDEX sensors_pkey_8981001 ON citus_split_test_schema.sensors_8981001 USING btree (measureid, eventdatetime, measure_data)
  sensors_8981007 | CREATE INDEX hash_index_on_sensors_8981007 ON citus_split_test_schema.sensors_8981007 USING hash (((measure_data -> 'IsFailed'::text)))
  sensors_8981007 | CREATE INDEX index_on_sensors_8981007 ON citus_split_test_schema.sensors_8981007 USING btree (lower((measureid)::text))
  sensors_8981007 | CREATE INDEX index_with_include_on_sensors_8981007 ON citus_split_test_schema.sensors_8981007 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
@@ -371,17 +368,15 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
  sensors_8981015 | CREATE INDEX index_on_sensors_8981015 ON citus_split_test_schema.sensors_8981015 USING btree (lower((measureid)::text))
  sensors_8981015 | CREATE INDEX index_with_include_on_sensors_8981015 ON citus_split_test_schema.sensors_8981015 USING btree (((measure_data -> 'IsFailed'::text))) INCLUDE (measure_data, eventdatetime, measure_status)
  sensors_8981015 | CREATE UNIQUE INDEX sensors_pkey_8981015 ON citus_split_test_schema.sensors_8981015 USING btree (measureid, eventdatetime, measure_data)
-(20 rows)
+(12 rows)
 
     SELECT tablename, indexdef FROM pg_indexes WHERE tablename like 'table_with_index_rep_identity_%' ORDER BY 1,2;
                tablename               |                                                      indexdef
 ---------------------------------------------------------------------
- table_with_index_rep_identity_8981005 | CREATE UNIQUE INDEX uqx_8981005 ON citus_split_test_schema.table_with_index_rep_identity_8981005 USING btree (key)
- table_with_index_rep_identity_8981006 | CREATE UNIQUE INDEX uqx_8981006 ON citus_split_test_schema.table_with_index_rep_identity_8981006 USING btree (key)
  table_with_index_rep_identity_8981011 | CREATE UNIQUE INDEX uqx_8981011 ON citus_split_test_schema.table_with_index_rep_identity_8981011 USING btree (key)
  table_with_index_rep_identity_8981012 | CREATE UNIQUE INDEX uqx_8981012 ON citus_split_test_schema.table_with_index_rep_identity_8981012 USING btree (key)
  table_with_index_rep_identity_8981021 | CREATE UNIQUE INDEX uqx_8981021 ON citus_split_test_schema.table_with_index_rep_identity_8981021 USING btree (key)
-(5 rows)
+(3 rows)
 
     SELECT stxname FROM pg_statistic_ext
     WHERE stxnamespace IN (
@@ -393,12 +388,10 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
          stxname
 ---------------------------------------------------------------------
  stats_on_sensors
- stats_on_sensors_8981000
- stats_on_sensors_8981001
  stats_on_sensors_8981007
  stats_on_sensors_8981008
  stats_on_sensors_8981015
-(6 rows)
+(4 rows)
 
 -- END : Display current state
 -- BEGIN: Should be able to change/drop constraints
@@ -424,6 +417,10 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 
 (1 row)
 
+-- BEGIN: Perform deferred cleanup.
+CALL citus_cleanup_orphaned_shards();
+NOTICE:  cleaned up 3 orphaned shards
+-- END: Perform deferred cleanup.
 SET search_path TO "citus_split_test_schema";
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
@@ -473,6 +470,9 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 ERROR:  cannot use logical replication to transfer shards of the relation table_no_rep_id since it doesn't have a REPLICA IDENTITY or PRIMARY KEY
 DETAIL:  UPDATE and DELETE commands on the shard will error out during logical replication unless there is a REPLICA IDENTITY or PRIMARY KEY.
 HINT:  If you wish to continue without a replica identity set the shard_transfer_mode to 'force_logical' or 'block_writes'.
+-- BEGIN: Perform deferred cleanup.
+CALL citus_cleanup_orphaned_shards();
+-- END: Perform deferred cleanup.
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
@@ -518,6 +518,10 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 
 (1 row)
 
+-- BEGIN: Perform deferred cleanup.
+CALL citus_cleanup_orphaned_shards();
+NOTICE:  cleaned up 3 orphaned shards
+-- END: Perform deferred cleanup.
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
@@ -573,7 +577,7 @@ SELECT COUNT(*) FROM colocated_dist_table;
 -- END: Validate Data Count
 --BEGIN : Cleanup
 \c - postgres - :master_port
-ALTER SYSTEM SET citus.defer_shard_delete_interval TO 15000;
+ALTER SYSTEM RESET citus.defer_shard_delete_interval;
 SELECT pg_reload_conf();
  pg_reload_conf
 ---------------------------------------------------------------------

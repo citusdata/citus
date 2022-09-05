@@ -140,7 +140,6 @@ isolation_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 
 	bool waitForLocks = true;
 	int droppedShardCount = DropOrphanedShardsForMove(waitForLocks);
-	droppedShardCount += DropOrphanedShardsForCleanup();
 	if (droppedShardCount > 0)
 	{
 		ereport(NOTICE, (errmsg("cleaned up %d orphaned shards", droppedShardCount)));
