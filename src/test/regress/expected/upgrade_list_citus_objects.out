@@ -73,6 +73,8 @@ ORDER BY 1;
  function citus_internal_update_relation_colocation(oid,integer)
  function citus_is_coordinator()
  function citus_isolation_test_session_is_blocked(integer,integer[])
+ function citus_jobs_cancel(bigint)
+ function citus_jobs_wait(bigint)
  function citus_json_concatenate(json,json)
  function citus_json_concatenate_final(json)
  function citus_jsonb_concatenate(jsonb,jsonb)
@@ -235,12 +237,17 @@ ORDER BY 1;
  function worker_split_shard_replication_setup(split_shard_info[])
  schema citus
  schema citus_internal
+ sequence pg_dist_background_jobs_job_id_seq
+ sequence pg_dist_background_tasks_task_id_seq
  sequence pg_dist_colocationid_seq
  sequence pg_dist_groupid_seq
  sequence pg_dist_node_nodeid_seq
  sequence pg_dist_placement_placementid_seq
  sequence pg_dist_shardid_seq
  table pg_dist_authinfo
+ table pg_dist_background_jobs
+ table pg_dist_background_tasks
+ table pg_dist_background_tasks_depend
  table pg_dist_colocation
  table pg_dist_local_group
  table pg_dist_node
@@ -255,6 +262,8 @@ ORDER BY 1;
  type citus.distribution_type
  type citus.shard_transfer_mode
  type citus_copy_format
+ type citus_job_status
+ type citus_task_status
  type noderole
  type replication_slot_info
  type split_copy_info
@@ -270,5 +279,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(262 rows)
+(271 rows)
 

@@ -32,6 +32,7 @@
 #include "common/string.h"
 #include "executor/executor.h"
 #include "distributed/backend_data.h"
+#include "distributed/background_jobs.h"
 #include "distributed/citus_depended_object.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_safe_lib.h"
@@ -867,6 +868,27 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	/* TODO remove before merge */
+	DefineCustomBoolVariable(
+		"citus.background_task_monitor_debug_delay",
+		NULL,
+		NULL,
+		&BackgroundTaskMonitorDebugDelay,
+		false,
+		PGC_SIGHUP,
+		GUC_UNIT_MS,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.background_task_queue_interval",
+		gettext_noop("Time to wait between checks for scheduled background tasks."),
+		NULL,
+		&BackgroundTaskQueueCheckInterval,
+		1000, -1, 7 * 24 * 3600 * 1000,
+		PGC_SIGHUP,
+		GUC_UNIT_MS,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
