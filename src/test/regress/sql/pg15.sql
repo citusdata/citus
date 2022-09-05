@@ -245,5 +245,15 @@ ON (true)
 WHEN MATCHED THEN
     UPDATE SET x = (SELECT count(*) FROM tbl2);
 
+-- test numeric types with negative scale
+CREATE TABLE numeric_negative_scale(numeric_column numeric(3,-1), orig_value int);
+INSERT into numeric_negative_scale SELECT x,x FROM generate_series(111, 115) x;
+-- verify that we can not distribute by a column that has numeric type with negative scale
+SELECT create_distributed_table('numeric_negative_scale','numeric_column');
+-- However, we can distribute by other columns
+SELECT create_distributed_table('numeric_negative_scale','orig_value');
+
+SELECT * FROM numeric_negative_scale ORDER BY 1,2;
+
 -- Clean up
 DROP SCHEMA pg15 CASCADE;
