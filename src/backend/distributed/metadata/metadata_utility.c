@@ -2365,6 +2365,16 @@ IsForeignTable(Oid relationId)
 }
 
 
+/*
+ * HasRunnableBackgroundTask looks in the catalog if there are any tasks that can be run.
+ * For a task to be able to run the following conditions apply:
+ *  - Task is in Running state. This could happen when a Background Tasks Queue Monitor
+ *    had crashed or is otherwise restarted. To recover from such a failure tasks in
+ *    Running state are deeed Runnable.
+ *  - Task is in Runnable state with either _no_ value set in not_before, or a value that
+ *    has currently passed. If the not_before field is set to a time in the future the
+ *    task is currently not ready to be started.
+ */
 bool
 HasRunnableBackgroundTask()
 {
@@ -2396,8 +2406,7 @@ HasRunnableBackgroundTask()
 							   scanKey);
 
 		HeapTuple taskTuple = NULL;
-		while (!hasScheduledTask &&
-			   HeapTupleIsValid(taskTuple = systable_getnext(scanDescriptor)))
+		while (HeapTupleIsValid(taskTuple = systable_getnext(scanDescriptor)))
 		{
 			TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
 			BackgroundTask *task = DeformBackgroundTaskHeapTuple(tupleDescriptor,
@@ -2409,6 +2418,7 @@ HasRunnableBackgroundTask()
 			}
 
 			hasScheduledTask = true;
+			break;
 		}
 
 		systable_endscan(scanDescriptor);
@@ -2420,6 +2430,10 @@ HasRunnableBackgroundTask()
 }
 
 
+/*
+ * BackgroundJobStatusByOid returns the C enum representation of a BackgroundJobsStatus
+ * based on the Oid of the SQL enum value.
+ */
 BackgroundJobStatus
 BackgroundJobStatusByOid(Oid enumOid)
 {
@@ -2447,10 +2461,14 @@ BackgroundJobStatusByOid(Oid enumOid)
 	{
 		return BACKGROUND_JOB_STATUS_FAILED;
 	}
-	ereport(ERROR, (errmsg("unknown enum value for citus_job_status")));
+	elog(ERROR, "unknown enum value for citus_job_status");
 }
 
 
+/*
+ * BackgroundTaskStatusByOid returns the C enum representation of a BackgroundTaskStatus
+ * based on the Oid of the SQL enum value.
+ */
 BackgroundTaskStatus
 BackgroundTaskStatusByOid(Oid enumOid)
 {
@@ -2486,6 +2504,13 @@ BackgroundTaskStatusByOid(Oid enumOid)
 }
 
 
+/*
+ * IsBackgroundJobStatusTerminal is a predicate returning if the BackgroundJobStatus
+ * passed is a terminal state of the Background Job state machine.
+ *
+ * For a Job to be in it's termnial state, all tasks from that job should also be in their
+ * termnial state.
+ */
 bool
 IsBackgroundJobStatusTerminal(BackgroundJobStatus status)
 {
@@ -2511,6 +2536,10 @@ IsBackgroundJobStatusTerminal(BackgroundJobStatus status)
 }
 
 
+/*
+ * IsBackgroundTaskStatusTerminal is a predicate returning if the BackgroundTaskStatus
+ * passed is a terminal state of the Background Task state machine.
+ */
 bool
 IsBackgroundTaskStatusTerminal(BackgroundTaskStatus status)
 {
@@ -2537,6 +2566,10 @@ IsBackgroundTaskStatusTerminal(BackgroundTaskStatus status)
 }
 
 
+/*
+ * BackgroundJobStatusOid returns the Oid corresponding to SQL enum value corresponding to
+ * the BackgroundJobStatus.
+ */
 Oid
 BackgroundJobStatusOid(BackgroundJobStatus status)
 {
@@ -2578,6 +2611,10 @@ BackgroundJobStatusOid(BackgroundJobStatus status)
 }
 
 
+/*
+ * BackgroundTaskStatusOid returns the Oid corresponding to SQL enum value corresponding to
+ * the BackgroundTaskStatus.
+ */
 Oid
 BackgroundTaskStatusOid(BackgroundTaskStatus status)
 {
@@ -2624,6 +2661,13 @@ BackgroundTaskStatusOid(BackgroundTaskStatus status)
 }
 
 
+/*
+ * GetNextBackgroundJobsJobId reads and increments the SQL sequence associated with the
+ * background job's job_id. After incrementing the counter it returns the counter back to
+ * the caller.
+ *
+ * The return value is typically used to insert new jobs into the catalog.
+ */
 int64
 GetNextBackgroundJobsJobId(void)
 {
@@ -2647,6 +2691,13 @@ GetNextBackgroundJobsJobId(void)
 }
 
 
+/*
+ * GetNextBackgroundTaskTaskId reads and increments the SQL sequence associated with the
+ * background job tasks' task_id. After incrementing the counter it returns the counter
+ * back to the caller.
+ *
+ * The return value is typically used to insert new tasks into the catalog.
+ */
 int64
 GetNextBackgroundTaskTaskId(void)
 {
@@ -2670,6 +2721,12 @@ GetNextBackgroundTaskTaskId(void)
 }
 
 
+/*
+ * CreateBackgroundJob is a helper function to insert a new Background Job into Citus'
+ * catalog. After inserting the new job's metadataa into the catalog it returns the job_id
+ * assigned to the new job. This is typically used to associate new tasks with the newly
+ * created job.
+ */
 int64
 CreateBackgroundJob(const char *jobType, const char *description)
 {
@@ -2715,6 +2772,15 @@ CreateBackgroundJob(const char *jobType, const char *description)
 }
 
 
+/*
+ * ScheduleBackgroundTask creates a new background task to be executed in the background.
+ *
+ * The new task is associated with an existing job based on it's id.
+ *
+ * Optionally the new task can depend on separate tasks associated with the same job. When
+ * a new task is created with dependencies on previous tasks we assume this task is
+ * blocked on its depending tasks.
+ */
 BackgroundTask *
 ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskCount,
 					   int64 dependingTaskIds[])
@@ -2813,6 +2879,16 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 }
 
 
+/*
+ * ResetRunningBackgroundTasks finds all tasks currently in Running state and resets their
+ * state back to runnable.
+ *
+ * Tasks that were running during a failover, crash or restart will still be marked
+ * running after. This function assumes appropriate care by the caller that the task is in
+ * fact _not_ running at the moment on the primary coordinator of the formation.
+ *
+ * Any pid associated with the running tasks will be cleared back to the NULL value.
+ */
 void
 ResetRunningBackgroundTasks(void)
 {
@@ -2867,6 +2943,11 @@ ResetRunningBackgroundTasks(void)
 }
 
 
+/*
+ * DeformBackgroundJobHeapTuple pareses a HeapTuple from pg_dist_background_job into its
+ * inmemory representation. This can be used while scanning a heap to quickly get access
+ * to all fields of a Job.
+ */
 static BackgroundJob *
 DeformBackgroundJobHeapTuple(TupleDesc tupleDescriptor, HeapTuple jobTuple)
 {
@@ -2910,6 +2991,11 @@ DeformBackgroundJobHeapTuple(TupleDesc tupleDescriptor, HeapTuple jobTuple)
 }
 
 
+/*
+ * DeformBackgroundTaskHeapTuple pareses a HeapTuple from pg_dist_background_tasks into
+ * its inmemory representation. This can be used while scanning a heap to quickly get
+ * access to all fields of a Task.
+ */
 static BackgroundTask *
 DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor, HeapTuple taskTuple)
 {
@@ -2956,6 +3042,11 @@ DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor, HeapTuple taskTuple)
 }
 
 
+/*
+ * BackgroundTaskHasUmnetDependencies checks if a task from the given job has any unmet
+ * dependencies. An unmet dependency is a Task that the task in question depends on and
+ * has not reached its Done state.
+ */
 static bool
 BackgroundTaskHasUmnetDependencies(int64 jobId, int64 taskId)
 {
@@ -3002,7 +3093,7 @@ BackgroundTaskHasUmnetDependencies(int64 jobId, int64 taskId)
 
 		/*
 		 * we assume that when we ask for job to be cleared it has no dependencies that
-		 * have errored. Once we move the job to error it should unschedule all dependant
+		 * have errorred. Once we move the job to error it should unschedule all dependant
 		 * jobs recursively.
 		 */
 		Assert(dependingJob->status != BACKGROUND_TASK_STATUS_ERROR);
@@ -3019,6 +3110,14 @@ BackgroundTaskHasUmnetDependencies(int64 jobId, int64 taskId)
 }
 
 
+/*
+ * BackgroundTaskReadyToRun checks if a task is ready to run. This consists of two checks
+ *  - the task has no unmet dependencies
+ *  - the task either has no not_before value set, or the not_before time has passed.
+ *
+ * Due to the costs of checking we check them in reverse order, but conceptually they
+ * should be thought of in the above order.
+ */
 static bool
 BackgroundTaskReadyToRun(BackgroundTask *task)
 {
@@ -3040,6 +3139,14 @@ BackgroundTaskReadyToRun(BackgroundTask *task)
 }
 
 
+/*
+ * GetRunnableBackgroundTask returns the first candidate for a task to be run. When a task
+ * is returned it has been checked for all the preconditions to hold.
+ *
+ * That means, if there is no task returned the background worker should close and let the
+ * maintenance daemon start a new background tasks queue monitor once task become
+ * available.
+ */
 BackgroundTask *
 GetRunnableBackgroundTask(void)
 {
@@ -3092,6 +3199,10 @@ GetRunnableBackgroundTask(void)
 }
 
 
+/*
+ * GetBackgroundJobByJobId loads a BackgroundJob from the catalog into memory. Return's a
+ * null pointer if no job exist with the given JobId.
+ */
 BackgroundJob *
 GetBackgroundJobByJobId(int64 jobId)
 {
@@ -3124,6 +3235,10 @@ GetBackgroundJobByJobId(int64 jobId)
 }
 
 
+/*
+ * GetBackgroundTaskByTaskId loads a BackgroundTask from the catalog into memory. Return's
+ * a null pointer if no job exist with the given JobId and TaskId.
+ */
 BackgroundTask *
 GetBackgroundTaskByTaskId(int64 jobId, int64 taskId)
 {
@@ -3161,6 +3276,11 @@ GetBackgroundTaskByTaskId(int64 jobId, int64 taskId)
 }
 
 
+/*
+ * JobTasksStatusCount scans all tasks associated with the provided job and count's the
+ * number of tasks that are tracked in each state. Effectively grouping and counting the
+ * tasks by their state.
+ */
 static bool
 JobTasksStatusCount(int64 jobId, int *blocked, int *runnable, int *running, int *done,
 					int *error, int *unscheduled, int *cancelled)
@@ -3276,6 +3396,16 @@ JobTasksStatusCount(int64 jobId, int *blocked, int *runnable, int *running, int 
 }
 
 
+/*
+ * UpdateBackgroundJob updates the job's metadata based on the most recent status of all
+ * its associated tasks.
+ *
+ * Since the state of a job is a function of the state of all associated tasks this
+ * function projects the tasks states into the job's state.
+ *
+ * When Citus makes a change to any of the tasks associated with the job it should call
+ * this function to correctly project the task updates onto the jobs metadata.
+ */
 void
 UpdateBackgroundJob(int64 jobId)
 {
@@ -3404,6 +3534,11 @@ UpdateBackgroundJob(int64 jobId)
 }
 
 
+/*
+ * UpdateBackgroundTask updates the catalog entry for the passed task, preventing an
+ * actual update when the inmemory representation is the same as the one stored in the
+ * catalog.
+ */
 void
 UpdateBackgroundTask(BackgroundTask *task)
 {
@@ -3540,6 +3675,12 @@ UpdateBackgroundTask(BackgroundTask *task)
 }
 
 
+/*
+ * GetDependantTasks returns a list of taskId's containing all tasks depending on the task
+ * passed via its arguments.
+ *
+ * Becasue tasks are int64 we allocate and return a List of int64 pointers.
+ */
 static List *
 GetDependantTasks(int64 jobId, int64 taskId)
 {
@@ -3583,6 +3724,18 @@ GetDependantTasks(int64 jobId, int64 taskId)
 }
 
 
+/*
+ * CancelTasksForJob cancels all tasks associated with a job that are not currently
+ * running and are not already in their termnial state. Canceling these tasks consist of
+ * updating the status of the task in the catalog.
+ *
+ * For all other tasks, namely the ones that are currently running, it returns the list of
+ * Pid's of the tasks running. These backends should be signalled for cancelation.
+ *
+ * Since we are either signalling or changing the status of a task we perform appropriate
+ * permission checks. This currently includes the exact same checks pg_cancel_backend
+ * would perform.
+ */
 List *
 CancelTasksForJob(int64 jobid)
 {
@@ -3673,6 +3826,13 @@ CancelTasksForJob(int64 jobid)
 }
 
 
+/*
+ * UnscheduleDependantTasks follows the dependency tree of the provided task recursively
+ * to unschedule any task depending on the current task.
+ *
+ * This is useful to unschedule any task that can never run because it will never satisfy
+ * the unmet dependency constraint.
+ */
 void
 UnscheduleDependantTasks(int64 jobId, int64 taskId)
 {
@@ -3737,6 +3897,13 @@ UnscheduleDependantTasks(int64 jobId, int64 taskId)
 }
 
 
+/*
+ * UnblockDependingBackgroundTasks unblocks any depending task that now satisfies the
+ * constraaint that it doesn't have unmet dependencies anymore. For this to be done we
+ * will find all tasks depending on the current task. Per found task we check if it has
+ * any unmet dependencies. If no tasks are found that would block the execution of this
+ * task we transition the task to Runnable state.
+ */
 void
 UnblockDependingBackgroundTasks(int64 jobId, int64 taskId)
 {
