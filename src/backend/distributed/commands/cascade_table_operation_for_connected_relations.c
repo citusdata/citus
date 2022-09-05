@@ -623,7 +623,7 @@ ExecuteForeignKeyCreateCommand(const char *commandString, bool skip_validation)
 	 */
 	Assert(IsA(parseTree, AlterTableStmt));
 
-	bool oldValue = SkipConstraintValidation;
+	bool oldSkipConstraintsValidationValue = SkipConstraintValidation;
 
 	if (skip_validation && IsA(parseTree, AlterTableStmt))
 	{
@@ -636,5 +636,5 @@ ExecuteForeignKeyCreateCommand(const char *commandString, bool skip_validation)
 	ProcessUtilityParseTree(parseTree, commandString, PROCESS_UTILITY_QUERY,
 							NULL, None_Receiver, NULL);
 
-	SkipConstraintValidation = oldValue;
+	SkipConstraintValidation = oldSkipConstraintsValidationValue;
 }

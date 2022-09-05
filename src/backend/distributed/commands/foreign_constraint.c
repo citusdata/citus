@@ -1197,15 +1197,12 @@ IsTableTypeIncluded(Oid relationId, int flags)
  * returns the list of commands that are required to create the foreign
  * constraints for that shardInterval.
  *
- * The function does the following hack:
- *    - Create the foreign constraints as INVALID on the shards
- *    - Manually update pg_constraint to mark the same foreign
- *      constraints as VALID
+ * The function adds a "SET LOCAL citus.skip_constraint_validation TO ON"
+ * command to command list, to prevent the validation for foreign keys.
  *
- * We implement the above hack because we aim to skip the validation phase
- * of foreign keys to reference tables. The validation is pretty costly and
- * given that the source placements already valid, the validation in the
- * target nodes is useless.
+ * We skip the validation phase of foreign keys to reference tables because
+ * the validation is pretty costly and given that the source placements are
+ * already valid, the validation in the target nodes is useless.
  *
  * The function does not apply the same logic for the already invalid foreign
  * constraints.
@@ -1309,7 +1306,7 @@ GetForeignConstraintCommandsToReferenceTable(ShardInterval *shardInterval)
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
 
-	commandList = lappend(commandList, "SET citus.skip_constraint_validation TO OFF;");
+	commandList = lappend(commandList, "RESET citus.skip_constraint_validation;");
 
 	return commandList;
 }

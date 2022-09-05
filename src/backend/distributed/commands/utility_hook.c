@@ -378,7 +378,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	Node *parsetree = pstmt->utilityStmt;
 	List *ddlJobs = NIL;
 	DistOpsValidationState distOpsValidationState = HasNoneValidObject;
-	bool oldValue = SkipConstraintValidation;
+	bool oldSkipConstraintsValidationValue = SkipConstraintValidation;
 
 	if (IsA(parsetree, ExplainStmt) &&
 		IsA(((ExplainStmt *) parsetree)->query, Query))
@@ -903,7 +903,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		CitusHasBeenLoaded(); /* lgtm[cpp/return-value-ignored] */
 	}
 
-	SkipConstraintValidation = oldValue;
+	SkipConstraintValidation = oldSkipConstraintsValidationValue;
 }
 
 

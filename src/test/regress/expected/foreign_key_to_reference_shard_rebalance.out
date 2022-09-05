@@ -179,7 +179,7 @@ SELECT * FROM get_foreign_key_to_reference_table_commands('referenceing_dist_tab
  SELECT worker_apply_inter_shard_ddl_command (15000018, 'fkey_to_reference_shard_rebalance', 15000017, 'fkey_to_reference_shard_rebalance', 'ALTER TABLE fkey_to_reference_shard_rebalance.referenceing_dist_table ADD CONSTRAINT c2 FOREIGN KEY (col2) REFERENCES fkey_to_reference_shard_rebalance.reference_table_commands(id) ON UPDATE CASCADE NOT VALID')
  SELECT worker_apply_inter_shard_ddl_command (15000018, 'fkey_to_reference_shard_rebalance', 15000017, 'fkey_to_reference_shard_rebalance', 'ALTER TABLE fkey_to_reference_shard_rebalance.referenceing_dist_table ADD CONSTRAINT very_very_very_very_very_very_very_very_very_very_very_very_ver FOREIGN KEY (col3) REFERENCES fkey_to_reference_shard_rebalance.reference_table_commands(id) ON UPDATE CASCADE')
  UPDATE pg_constraint SET convalidated = true WHERE conrelid = 'fkey_to_reference_shard_rebalance.referenceing_dist_table_15000018'::regclass AND conname = 'very_very_very_very_very_very_very_very_very__754e8716_15000018'
- SET citus.skip_constraint_validation TO OFF;
+ RESET citus.skip_constraint_validation;
 (7 rows)
 
 -- and show that rebalancer works fine
