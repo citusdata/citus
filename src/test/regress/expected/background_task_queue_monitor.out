@@ -158,6 +158,54 @@ SELECT a FROM results;
  48
 (1 row)
 
+-- test running two dependant tasks, with a failing task that we cancel
+TRUNCATE TABLE results;
+BEGIN;
+INSERT INTO pg_dist_background_jobs (job_type) VALUES ('simple test to verify background execution') RETURNING job_id \gset
+INSERT INTO pg_dist_background_tasks (job_id, command) VALUES (:job_id, $job$ INSERT INTO background_task_queue_monitor.results VALUES ( 5 ); $job$) RETURNING task_id AS task_id1 \gset
+INSERT INTO pg_dist_background_tasks (job_id, status, command) VALUES (:job_id, 'blocked', $job$ SELECT 1/0; $job$) RETURNING task_id AS task_id2 \gset
+INSERT INTO pg_dist_background_tasks (job_id, status, command) VALUES (:job_id, 'blocked', $job$ UPDATE background_task_queue_monitor.results SET a = a + 13; $job$) RETURNING task_id AS task_id3 \gset
+INSERT INTO pg_dist_background_tasks_depend (job_id, task_id, depends_on) VALUES (:job_id, :task_id2, :task_id1);
+INSERT INTO pg_dist_background_tasks_depend (job_id, task_id, depends_on) VALUES (:job_id, :task_id3, :task_id2);
+COMMIT;
+SELECT citus_jobs_wait(:job_id, desired_status => 'running'); -- wait for the job to be running, and possibly hitting a failure
+ citus_jobs_wait
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(.1); -- improve chances of hitting the failure
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_jobs_cancel(:job_id);
+ citus_jobs_cancel
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_jobs_wait(:job_id); -- wait for the job to be cancelled
+ citus_jobs_wait
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT state, NOT(started_at IS NULL) AS did_start FROM pg_dist_background_jobs WHERE job_id = :job_id;
+   state   | did_start
+---------------------------------------------------------------------
+ cancelled | t
+(1 row)
+
+SELECT status, NOT(message IS NULL) AS did_start FROM pg_dist_background_tasks WHERE job_id = :job_id ORDER BY task_id ASC;
+  status   | did_start
+---------------------------------------------------------------------
+ done      | f
+ cancelled | t
+ cancelled | f
+(3 rows)
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA background_task_queue_monitor CASCADE;
 ALTER SYSTEM RESET citus.background_task_queue_interval;
