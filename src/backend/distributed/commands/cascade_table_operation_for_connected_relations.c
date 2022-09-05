@@ -628,8 +628,8 @@ ExecuteForeignKeyCreateCommand(const char *commandString, bool skip_validation)
 	if (skip_validation && IsA(parseTree, AlterTableStmt))
 	{
 		set_config_option("citus.skip_constraint_validation", "true",
-					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
-					  GUC_ACTION_LOCAL, true, 0, false);
+						  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+						  GUC_ACTION_LOCAL, true, 0, false);
 
 		ereport(DEBUG4, (errmsg("skipping validation for foreign key create "
 								"command \"%s\"", commandString)));
