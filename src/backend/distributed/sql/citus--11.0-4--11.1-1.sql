@@ -102,7 +102,7 @@ ALTER TYPE citus.citus_task_status SET SCHEMA pg_catalog;
 CREATE TABLE citus.pg_dist_background_tasks(
     job_id bigint NOT NULL REFERENCES pg_catalog.pg_dist_background_jobs(job_id),
     task_id bigserial NOT NULL,
-    owner regrole NOT NULL,
+    owner regrole NOT NULL DEFAULT CURRENT_USER::regrole,
     pid integer,
     status pg_catalog.citus_task_status default 'runnable' NOT NULL,
     command text NOT NULL,
