@@ -30,6 +30,7 @@
 #include "distributed/namespace_utils.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/version_compat.h"
+#include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/inval.h"
@@ -1312,6 +1313,20 @@ GetForeignConstraintCommandsToReferenceTable(ShardInterval *shardInterval)
 
 	return commandList;
 }
+
+
+/*
+ * EnableSkippingConstraintValidation is simply a C interface for setting the following:
+ *      SET LOCAL citus.skip_constraint_validation TO on;
+ */
+void
+EnableSkippingConstraintValidation()
+{
+	set_config_option("citus.skip_constraint_validation", "true",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+}
+
 
 
 /*

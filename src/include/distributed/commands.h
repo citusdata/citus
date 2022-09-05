@@ -285,6 +285,7 @@ extern bool TableHasExternalForeignKeys(Oid relationId);
 extern List * GetForeignKeyOids(Oid relationId, int flags);
 extern Oid GetReferencedTableId(Oid foreignKeyId);
 extern Oid GetReferencingTableId(Oid foreignKeyId);
+extern void EnableSkippingConstraintValidation(void);
 extern bool RelationInvolvedInAnyNonInheritedForeignKeys(Oid relationId);
 
 

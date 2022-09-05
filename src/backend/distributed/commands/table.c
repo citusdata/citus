@@ -1875,7 +1875,7 @@ SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement)
 		return;
 	}
 
-	SkipConstraintValidation = true;
+	EnableSkippingConstraintValidation();
 }
 
 
