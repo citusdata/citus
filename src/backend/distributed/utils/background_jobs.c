@@ -82,7 +82,19 @@ PG_FUNCTION_INFO_V1(citus_jobs_cancel);
 PG_FUNCTION_INFO_V1(citus_jobs_wait);
 
 
-/* pg_catalog.citus_jobs_cancel(jobid bigint) */
+/*
+ * pg_catalog.citus_jobs_cancel(jobid bigint) void
+ *   cancels a scheduled/running job
+ *
+ * When cancelling a job there are two phases.
+ *  1. scan all associated tasks and transition all tasks that are not already in their
+ *     terminal state to cancelled. Except if the task is currently running.
+ *  2. for all running tasks we send a cancelation signal to the backend running the
+ *     query. The background executor/monitor will transition this task to cancelled.
+ *
+ * We apply the same policy checks as pg_cancel_backend to check if a user can cancel a
+ * job.
+ */
 Datum
 citus_jobs_cancel(PG_FUNCTION_ARGS)
 {
@@ -115,7 +127,18 @@ citus_jobs_cancel(PG_FUNCTION_ARGS)
 }
 
 
-/* pg_catalog.citus_jobs_wait(jobid bigint) */
+/*
+ * pg_catalog.citus_jobs_wait(jobid bigint,
+ *                            desired_status citus_job_status DEFAULT NULL) boolean
+ *   waits till a job reaches a desired status, or can't reach the status anymore because
+ *   it reached a (different) terminal state. When no desired_status is given it will
+ *   assume any terminal state as its desired status. The function returns if the
+ *   desired_state was reached.
+ *
+ * The current implementation is a polling implementation with an interval of 1 second.
+ * Ideally we would have some synchronization between the background tasks queue monitor
+ * and any backend calling this function to receive a signal when the job changes state.
+ */
 Datum
 citus_jobs_wait(PG_FUNCTION_ARGS)
 {
@@ -194,6 +217,11 @@ citus_jobs_wait(PG_FUNCTION_ARGS)
 }
 
 
+/*
+ * StartCitusBackgroundTaskQueueMonitor spawns a new background worker connected to the
+ * current database and owner. This background worker consumes the tasks that are ready
+ * for execution.
+ */
 BackgroundWorkerHandle *
 StartCitusBackgroundTaskQueueMonitor(Oid database, Oid extensionOwner)
 {
@@ -231,6 +259,17 @@ StartCitusBackgroundTaskQueueMonitor(Oid database, Oid extensionOwner)
 }
 
 
+/*
+ * CitusBackgroundTaskQueueMonitorMain is the main entry point for the background worker
+ * running the background tasks queue monitor.
+ *
+ * It's mainloop reads a runnable task from pg_dist_background_tasks and progressing the
+ * tasks and jobs state machines associated with the task. When no new task can be found
+ * it will exit(0) and lets the maintenance daemon poll for new tasks.
+ *
+ * The main loop is currently implemented as a synchronous loop stepping through the task
+ * and update its state before going to the next.
+ */
 void
 CitusBackgroundTaskQueueMonitorMain(Datum arg)
 {
@@ -600,6 +639,10 @@ bgw_generate_returned_message(StringInfoData *display_msg, ErrorData edata)
 }
 
 
+/*
+ * UpdateDependingTasks updates all depending tasks, based on the type of termnial state
+ * the current task reached.
+ */
 static void
 UpdateDependingTasks(BackgroundTask *task)
 {
@@ -627,6 +670,10 @@ UpdateDependingTasks(BackgroundTask *task)
 }
 
 
+/*
+ * ConsumeTaskWorkerOutput consumes the output of an executor and mutates the
+ * BackgroundTask object to reflect changes like the message and status on the task.
+ */
 static void
 ConsumeTaskWorkerOutput(shm_mq_handle *responseq, BackgroundTask *task, bool *hadError,
 						bool *cancelled)
@@ -747,6 +794,10 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, BackgroundTask *task, bool *ha
 }
 
 
+/*
+ * StoreArgumentsInDSM creates a dynamic shared memory segment to pass the query and its
+ * environment to the executor.
+ */
 static dsm_segment *
 StoreArgumentsInDSM(char *database, char *username, char *command)
 {
@@ -810,6 +861,12 @@ StoreArgumentsInDSM(char *database, char *username, char *command)
 }
 
 
+/*
+ * StartCitusBackgroundJobExecuter start a new background worker for the execution of a
+ * background task. Users intereted in the shared memory segment that is created between
+ * the background worker and the current backend can pass in a segOut to get a pointer to
+ * the dynamic shared memory.
+ */
 static BackgroundWorkerHandle *
 StartCitusBackgroundJobExecuter(char *database, char *user, char *command,
 								dsm_segment **segOut)
@@ -851,6 +908,9 @@ StartCitusBackgroundJobExecuter(char *database, char *user, char *command,
 }
 
 
+/*
+ * context for any log/error messages emitted from the background task executor.
+ */
 typedef struct CitusBackgroundJobExecuterErrorCallbackContext
 {
 	const char *database;
@@ -858,6 +918,10 @@ typedef struct CitusBackgroundJobExecuterErrorCallbackContext
 } CitusBackgroundJobExecuterErrorCallbackContext;
 
 
+/*
+ * CitusBackgroundJobExecuterErrorCallback is a callback handler that gets called for any
+ * ereport to add extra context to the message.
+ */
 static void
 CitusBackgroundJobExecuterErrorCallback(void *arg)
 {
@@ -869,9 +933,11 @@ CitusBackgroundJobExecuterErrorCallback(void *arg)
 
 
 /*
- * Background worker logic.
+ * CitusBackgroundJobExecuter is the main function of the bacgrkound tasks queue executor.
+ * This backend attaches to a shared memory segment as identified by the main_arg of the
+ * background worker.
  *
- * based on the background worker logic in pgcron
+ * This is moslty based on the background worker logic in pg_cron
  */
 void
 CitusBackgroundJobExecuter(Datum main_arg)
