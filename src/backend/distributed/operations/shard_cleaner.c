@@ -128,9 +128,9 @@ citus_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 
 
 /*
- * isolation_cleanup_orphaned_shards implements a test UDF that's the same as
- * citus_cleanup_orphaned_shards. The only difference is that this command can
- * be run in transactions, this is to test
+ * isolation_cleanup_orphaned_shards implements a TEST only UDF that's
+ * to delete orphaned shards that are still haning around in the system after MOVE.
+ * This command can be run in transactions for test purposes.
  */
 Datum
 isolation_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
