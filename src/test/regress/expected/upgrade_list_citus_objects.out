@@ -74,7 +74,7 @@ ORDER BY 1;
  function citus_is_coordinator()
  function citus_isolation_test_session_is_blocked(integer,integer[])
  function citus_jobs_cancel(bigint)
- function citus_jobs_wait(bigint)
+ function citus_jobs_wait(bigint, citus_job_status)
  function citus_json_concatenate(json,json)
  function citus_json_concatenate_final(json)
  function citus_jsonb_concatenate(jsonb,jsonb)
