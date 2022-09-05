@@ -98,6 +98,14 @@ citus_jobs_wait(PG_FUNCTION_ARGS)
 
 	int64 jobid = PG_GETARG_INT64(0);
 
+	/* parse the optional desired_status argument */
+	bool hasDesiredStatus = !PG_ARGISNULL(1);
+	BackgroundJobStatus desiredStatus = { 0 };
+	if (hasDesiredStatus)
+	{
+		desiredStatus = BackgroundJobStatusByOid(PG_GETARG_OID(1));
+	}
+
 	/*
 	 * Since we are wait polling we will actually allocate memory on every poll. To make
 	 * sure we don't put unneeded pressure on the memory we create a context that we clear
@@ -110,6 +118,7 @@ citus_jobs_wait(PG_FUNCTION_ARGS)
 													  ALLOCSET_DEFAULT_MAXSIZE);
 	MemoryContext oldContext = MemoryContextSwitchTo(waitContext);
 
+	bool reachedDesiredState = false;
 	while (true)
 	{
 		MemoryContextReset(waitContext);
@@ -118,11 +127,25 @@ citus_jobs_wait(PG_FUNCTION_ARGS)
 		if (!job)
 		{
 			ereport(ERROR, (errmsg("no job found for job with jobid: %ld", jobid)));
-			PG_RETURN_VOID();
+			PG_RETURN_BOOL(false);
+		}
+
+		if (hasDesiredStatus)
+		{
+			if (job->state == desiredStatus)
+			{
+				reachedDesiredState = true;
+
+				/* job has reached its desired status, done waiting */
+				break;
+			}
 		}
 
 		if (IsBackgroundJobStatusTerminal(job->state))
 		{
+			/* when no desired status was provided we reached our desired status here */
+			reachedDesiredState = !hasDesiredStatus;
+
 			/* job has reached its terminal state, done waiting */
 			break;
 		}
@@ -141,7 +164,7 @@ citus_jobs_wait(PG_FUNCTION_ARGS)
 	MemoryContextSwitchTo(oldContext);
 	MemoryContextDelete(waitContext);
 
-	PG_RETURN_VOID();
+	PG_RETURN_BOOL(reachedDesiredState);
 }
 
 

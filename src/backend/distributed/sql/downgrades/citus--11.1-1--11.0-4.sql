@@ -101,7 +101,7 @@ DROP FUNCTION pg_catalog.isolate_tenant_to_new_shard(table_name regclass, tenant
 DROP FUNCTION pg_catalog.create_distributed_table_concurrently;
 DROP FUNCTION pg_catalog.citus_internal_delete_partition_metadata(regclass);
 
-DROP FUNCTION pg_catalog.citus_jobs_cancel(bigint);
+DROP FUNCTION pg_catalog.citus_jobs_cancel(bigint, pg_catalog.citus_job_status);
 DROP FUNCTION pg_catalog.citus_jobs_wait(bigint);
 DROP TABLE pg_catalog.pg_dist_background_tasks_depend;
 DROP TABLE pg_catalog.pg_dist_background_tasks;
