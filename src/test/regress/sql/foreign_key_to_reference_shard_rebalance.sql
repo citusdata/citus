@@ -90,7 +90,7 @@ insert into ref_table_with_fkey select s from generate_series(0,9) s;
 create table partitioned_tbl_with_fkey (x int, y int, t timestamptz default now()) partition by range (t);
 select create_distributed_table('partitioned_tbl_with_fkey','x');
 create table partition_1_with_fkey partition of partitioned_tbl_with_fkey for values from ('2022-01-01') to ('2022-12-31');
-create table partition_2_with_fkey partition of partitioned_tbl_with_fkey for values from ('2023-01-01') to ('2023-12-31'); 
+create table partition_2_with_fkey partition of partitioned_tbl_with_fkey for values from ('2023-01-01') to ('2023-12-31');
 insert into partitioned_tbl_with_fkey (x,y) select s,s%10 from generate_series(1,100) s;
 
 ALTER TABLE partitioned_tbl_with_fkey ADD CONSTRAINT fkey_to_ref_tbl FOREIGN KEY (y) REFERENCES ref_table_with_fkey(id);

@@ -1328,7 +1328,6 @@ EnableSkippingConstraintValidation()
 }
 
 
-
 /*
  * RelationInvolvedInAnyNonInheritedForeignKeys returns true if relation involved
  * in a foreign key that is not inherited from its parent relation.
