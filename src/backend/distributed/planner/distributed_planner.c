@@ -559,7 +559,22 @@ int
 GetRTEIdentity(RangeTblEntry *rte)
 {
 	Assert(rte->rtekind == RTE_RELATION);
-	Assert(rte->values_lists != NIL);
+
+	/*
+	 * RangeTblEntry value_lists must not be empty at this point.
+	 * However, this might happen when processing SQL functions
+	 * in which case we will throw an error.
+	*/
+	if (rte->values_lists == NIL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			errmsg("cannot perform distributed planning on this "
+				"query because parameterized queries for SQL "
+				"functions referencing distributed tables are "
+				"not supported"),
+			errhint("Consider using PL/pgSQL functions instead.")));
+	}
+
 	Assert(IsA(rte->values_lists, IntList));
 	Assert(list_length(rte->values_lists) == 2);
 
