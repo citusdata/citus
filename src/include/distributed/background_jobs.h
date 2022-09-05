@@ -1,3 +1,13 @@
+/*-------------------------------------------------------------------------
+ *
+ * background_jobs.h
+ *	  Functions related to running the background tasks queue monitor.
+ *
+ * Copyright (c) Citus Data, Inc.
+ *
+ *-------------------------------------------------------------------------
+ */
+
 #ifndef CITUS_BACKGROUND_JOBS_H
 #define CITUS_BACKGROUND_JOBS_H
 

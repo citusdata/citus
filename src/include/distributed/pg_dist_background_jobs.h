@@ -1,3 +1,12 @@
+/*-------------------------------------------------------------------------
+ *
+ * pg_dist_background_jobs.h
+ *	  definition of the relation that holds the jobs metadata
+ *
+ * Copyright (c) Citus Data, Inc.
+ *
+ *-------------------------------------------------------------------------
+ */
 
 #ifndef CITUS_PG_DIST_BACKGROUND_JOBS_H
 #define CITUS_PG_DIST_BACKGROUND_JOBS_H

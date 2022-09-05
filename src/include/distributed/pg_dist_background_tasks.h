@@ -1,3 +1,12 @@
+/*-------------------------------------------------------------------------
+ *
+ * pg_dist_background_tasks.h
+ *	  definition of the relation that holds the tasks metadata
+ *
+ * Copyright (c) Citus Data, Inc.
+ *
+ *-------------------------------------------------------------------------
+ */
 
 #ifndef CITUS_PG_DIST_BACKGROUND_TASKS_H
 #define CITUS_PG_DIST_BACKGROUND_TASKS_H

@@ -96,7 +96,7 @@ typedef struct MaintenanceDaemonDBData
 double DistributedDeadlockDetectionTimeoutFactor = 2.0;
 int Recover2PCInterval = 60000;
 int DeferShardDeleteInterval = 15000;
-int BackgroundTaskQueueCheckInterval = 1000;
+int BackgroundTaskQueueCheckInterval = 60000;
 
 /* config variables for metadata sync timeout */
 int MetadataSyncInterval = 60000;
@@ -285,7 +285,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	TimestampTz lastStatStatementsPurgeTime = 0;
 	TimestampTz nextMetadataSyncTime = 0;
 
-	/* state kept for the reabalance check */
+	/* state kept for the background tasks queue monitor */
 	TimestampTz lastBackgroundTaskQueueCheck = 0;
 	BackgroundWorkerHandle *backgroundTasksQueueBgwHandle = NULL;
 

@@ -1,3 +1,13 @@
+/*-------------------------------------------------------------------------
+ *
+ * pg_dist_background_tasks_depend.h
+ *	  definition of the relation that holds which tasks depend on each
+ *	  other.
+ *
+ * Copyright (c) Citus Data, Inc.
+ *
+ *-------------------------------------------------------------------------
+ */
 
 #ifndef CITUS_PG_DIST_BACKGROUND_TASKS_DEPEND_H
 #define CITUS_PG_DIST_BACKGROUND_TASKS_DEPEND_H

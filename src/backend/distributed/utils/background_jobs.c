@@ -1,3 +1,29 @@
+/*-------------------------------------------------------------------------
+ *
+ * background_jobs.c
+ *	  Background jobs run as a background worker, spawned from the
+ *	  maintenance daemon. Jobs have tasks, tasks can depend on other
+ *	  tasks before execution.
+ *
+ * This file contains the code for two separate background workers to
+ * achieve the goal of running background tasks asynchronously from the
+ * main database workload. This first background worker is the
+ * Background Tasks Queue Monitor. This background worker keeps track of
+ * tasks recorded in pg_dist_background_tasks and ensures execution based
+ * on a statemachine. When a task needs to be executed it starts a
+ * Background Task Executor that executes the sql statement defined in the
+ * task. The output of the Executor is shared with the Monitor via a
+ * shared memory queue.
+ *
+ * To make sure there is only ever exactly one monitor running per database
+ * it takes an exclusive lock on the CITUS_BACKGROUND_TASK_MONITOR
+ * operation. This lock is consulted from the maintenance daemon to only
+ * spawn a new monitor when the lock is not held.
+ *
+ * Copyright (c) Citus Data, Inc.
+ *
+ *-------------------------------------------------------------------------
+ */
 
 #include "postgres.h"
 
