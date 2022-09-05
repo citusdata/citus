@@ -79,4 +79,25 @@ SELECT conname, contype, convalidated FROM pg_constraint WHERE conrelid = 'fkey_
 
 \c - - - :master_port
 
+SET search_path TO fkey_to_reference_shard_rebalance;
+SET citus.shard_replication_factor to 1;
+
+-- test moving a shard with foreign key
+create table ref_table_with_fkey (id int primary key);
+select create_reference_table('ref_table_with_fkey');
+insert into ref_table_with_fkey select s from generate_series(0,9) s;
+
+create table partitioned_tbl_with_fkey (x int, y int, t timestamptz default now()) partition by range (t);
+select create_distributed_table('partitioned_tbl_with_fkey','x');
+create table partition_1_with_fkey partition of partitioned_tbl_with_fkey for values from ('2022-01-01') to ('2022-12-31');
+create table partition_2_with_fkey partition of partitioned_tbl_with_fkey for values from ('2023-01-01') to ('2023-12-31'); 
+insert into partitioned_tbl_with_fkey (x,y) select s,s%10 from generate_series(1,100) s;
+
+ALTER TABLE partitioned_tbl_with_fkey ADD CONSTRAINT fkey_to_ref_tbl FOREIGN KEY (y) REFERENCES ref_table_with_fkey(id);
+
+WITH shardid AS (SELECT shardid FROM pg_dist_shard where logicalrelid = 'partitioned_tbl_with_fkey'::regclass ORDER BY shardid LIMIT 1)
+SELECT citus_move_shard_placement(shardid.shardid, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode := 'force_logical') FROM shardid;
+
+DROP TABLE partitioned_tbl_with_fkey, ref_table_with_fkey CASCADE;
+
 DROP SCHEMA fkey_to_reference_shard_rebalance CASCADE;
