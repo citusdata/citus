@@ -2126,6 +2126,20 @@ RegisterCitusConfigVariables(void)
 		NULL);
 
 	DefineCustomBoolVariable(
+		"citus.skip_advisory_lock_permission_checks",
+		gettext_noop("Postgres would normally enforce some "
+					 "ownership checks while acquiring locks. "
+					 "When this setting is 'off', Citus skips"
+					 "ownership checks on internal advisory "
+					 "locks."),
+		NULL,
+		&SkipAdvisoryLockPermissionChecks,
+		false,
+		GUC_SUPERUSER_ONLY,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.skip_jsonb_validation_in_copy",
 		gettext_noop("Skip validation of JSONB columns on the coordinator during COPY "
 					 "into a distributed table"),

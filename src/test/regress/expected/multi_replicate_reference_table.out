@@ -1150,6 +1150,38 @@ CREATE TABLE test (x int, y int references ref(a));
 SELECT create_distributed_table('test','x');
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
 END;
+-- verify the split fails if we still need to replicate reference tables
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('test','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_add_node('localhost', :worker_2_port);
+ citus_add_node
+---------------------------------------------------------------------
+        1370022
+(1 row)
+
+SELECT
+  citus_split_shard_by_split_points(shardid,
+                                    ARRAY[(shardminvalue::int + (shardmaxvalue::int - shardminvalue::int)/2)::text],
+                                    ARRAY[nodeid, nodeid],
+                                    'force_logical')
+FROM
+  pg_dist_shard, pg_dist_node
+WHERE
+  logicalrelid = 'replicate_reference_table.test'::regclass AND nodename = 'localhost' AND nodeport = :worker_2_port
+ORDER BY shardid LIMIT 1;
+ERROR:  reference tables have not been replicated to node localhost:xxxxx yet
+DETAIL:  Reference tables are lazily replicated after adding a node, but must exist before shards can be created on that node.
+HINT:  Run SELECT replicate_reference_tables(); to ensure reference tables exist on all nodes.
 -- test adding an invalid node while we have reference tables to replicate
 -- set client message level to ERROR and verbosity to terse to supporess
 -- OS-dependent host name resolution warnings
