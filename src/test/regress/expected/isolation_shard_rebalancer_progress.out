@@ -35,7 +35,9 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 ---------------------------------------------------------------------
 colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|                0|       1
 colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|                0|       1
-(2 rows)
+colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       0
+colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       0
+(4 rows)
 
 step s2-unlock-1-start:
  ROLLBACK;
@@ -112,9 +114,11 @@ step s7-get-progress:
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
 ---------------------------------------------------------------------
+colocated1|1500001|     73728|localhost |     57637|                0|localhost |     57638|            73728|       2
+colocated2|1500005|    401408|localhost |     57637|                0|localhost |     57638|           401408|       2
 colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       1
 colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       1
-(2 rows)
+(4 rows)
 
 step s3-unlock-2-start:
  ROLLBACK;
@@ -205,7 +209,9 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 ---------------------------------------------------------------------
 colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1
 colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1
-(2 rows)
+colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       0
+colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       0
+(4 rows)
 
 step s7-release-lock:
  COMMIT;
@@ -288,7 +294,9 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 ---------------------------------------------------------------------
 colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|             8192|       1
 colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|             8192|       1
-(2 rows)
+colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       0
+colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       0
+(4 rows)
 
 step s6-release-advisory-lock:
     SELECT pg_advisory_unlock(44000, 55152);

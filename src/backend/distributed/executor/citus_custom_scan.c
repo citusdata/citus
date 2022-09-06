@@ -31,6 +31,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/query_stats.h"
+#include "distributed/shard_utils.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_log_messages.h"
 #include "distributed/worker_protocol.h"
@@ -67,6 +68,9 @@ static void CitusEndScan(CustomScanState *node);
 static void CitusReScan(CustomScanState *node);
 static void SetJobColocationId(Job *job);
 static void EnsureForceDelegationDistributionKey(Job *job);
+static void EnsureAnchorShardsInJobExist(Job *job);
+static bool AnchorShardsInTaskListExist(List *taskList);
+static void TryToRerouteFastPathModifyQuery(Job *job);
 
 
 /* create custom scan methods for all executors */
@@ -406,6 +410,19 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		/* prevent concurrent placement changes */
 		AcquireMetadataLocks(workerJob->taskList);
 
+		/*
+		 * In case of a split, the shard might no longer be available. In that
+		 * case try to reroute. We can only do this for fast path queries.
+		 */
+		if (currentPlan->fastPathRouterPlan &&
+			!AnchorShardsInTaskListExist(workerJob->taskList))
+		{
+			TryToRerouteFastPathModifyQuery(workerJob);
+		}
+
+		/* ensure there is no invalid shard */
+		EnsureAnchorShardsInJobExist(workerJob);
+
 		/* modify tasks are always assigned using first-replica policy */
 		workerJob->taskList = FirstReplicaAssignTaskList(workerJob->taskList);
 	}
@@ -437,6 +454,65 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	}
 
 	MemoryContextSwitchTo(oldContext);
+}
+
+
+/*
+ * TryToRerouteFastPathModifyQuery tries to reroute non-existent shards in given job if it finds any such shard,
+ * only for fastpath queries.
+ *
+ * Should only be called if the job belongs to a fastpath modify query
+ */
+static void
+TryToRerouteFastPathModifyQuery(Job *job)
+{
+	if (job->jobQuery->commandType == CMD_INSERT)
+	{
+		RegenerateTaskListForInsert(job);
+	}
+	else
+	{
+		RegenerateTaskForFasthPathQuery(job);
+		RebuildQueryStrings(job);
+	}
+}
+
+
+/*
+ * EnsureAnchorShardsInJobExist ensures all shards are valid in job.
+ * If it finds a non-existent shard in given job, it throws an error.
+ */
+static void
+EnsureAnchorShardsInJobExist(Job *job)
+{
+	if (!AnchorShardsInTaskListExist(job->taskList))
+	{
+		ereport(ERROR, (errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
+						errmsg("shard for the given value does not exist"),
+						errdetail(
+							"A concurrent shard split may have moved the data into a new set of shards."),
+						errhint("Retry the query.")));
+	}
+}
+
+
+/*
+ * AnchorShardsInTaskListExist checks whether all the anchor shards in the task list
+ * still exist.
+ */
+static bool
+AnchorShardsInTaskListExist(List *taskList)
+{
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
+	{
+		if (!ShardExists(task->anchorShardId))
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 

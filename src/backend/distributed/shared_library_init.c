@@ -2126,6 +2126,20 @@ RegisterCitusConfigVariables(void)
 		NULL);
 
 	DefineCustomBoolVariable(
+		"citus.skip_advisory_lock_permission_checks",
+		gettext_noop("Postgres would normally enforce some "
+					 "ownership checks while acquiring locks. "
+					 "When this setting is 'off', Citus skips"
+					 "ownership checks on internal advisory "
+					 "locks."),
+		NULL,
+		&SkipAdvisoryLockPermissionChecks,
+		false,
+		GUC_SUPERUSER_ONLY,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.skip_jsonb_validation_in_copy",
 		gettext_noop("Skip validation of JSONB columns on the coordinator during COPY "
 					 "into a distributed table"),
@@ -2692,10 +2706,17 @@ StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
 static void
 CitusAuthHook(Port *port, int status)
 {
-	uint64 gpid = ExtractGlobalPID(port->application_name);
+	/*
+	 * We determine the backend type here because other calls in this hook rely
+	 * on it, both IsExternalClientBackend and InitializeBackendData. These
+	 * calls would normally initialize its value based on the application_name
+	 * global, but this global is not set yet at this point in the connection
+	 * initialization. So here we determine it based on the value from Port.
+	 */
+	DetermineCitusBackendType(port->application_name);
 
 	/* external connections to not have a GPID immediately */
-	if (gpid == INVALID_CITUS_INTERNAL_BACKEND_GPID)
+	if (IsExternalClientBackend())
 	{
 		/*
 		 * We raise the shared connection counter pre-emptively. As a result, we may
@@ -2747,7 +2768,8 @@ CitusAuthHook(Port *port, int status)
 	 * replication connection. A replication connection backend will never call
 	 * StartupCitusBackend, which normally sets up the global PID.
 	 */
-	InitializeBackendData(gpid);
+	InitializeBackendData(port->application_name);
+
 
 	/* let other authentication hooks to kick in first */
 	if (original_client_auth_hook)

@@ -559,9 +559,26 @@ int
 GetRTEIdentity(RangeTblEntry *rte)
 {
 	Assert(rte->rtekind == RTE_RELATION);
-	Assert(rte->values_lists != NIL);
+
+	/*
+	 * Since SQL functions might be in-lined by standard_planner,
+	 * we might miss assigning an RTE identity for RangeTblEntries
+	 * related to SQL functions. We already have checks in other
+	 * places to throw an error for SQL functions but they are not
+	 * sufficient due to function in-lining; so here we capture such
+	 * cases and throw an error here.
+	 */
+	if (list_length(rte->values_lists) != 2)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot perform distributed planning on this "
+							   "query because parameterized queries for SQL "
+							   "functions referencing distributed tables are "
+							   "not supported"),
+						errhint("Consider using PL/pgSQL functions instead.")));
+	}
+
 	Assert(IsA(rte->values_lists, IntList));
-	Assert(list_length(rte->values_lists) == 2);
 
 	return linitial_int(rte->values_lists);
 }
@@ -1369,7 +1386,14 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 	Node *distributedPlanData = (Node *) distributedPlan;
 
 	customScan->custom_private = list_make1(distributedPlanData);
+
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+
+	/* necessary to avoid extra Result node in PG15 */
+	customScan->flags = CUSTOMPATH_SUPPORT_BACKWARD_SCAN | CUSTOMPATH_SUPPORT_PROJECTION;
+#else
 	customScan->flags = CUSTOMPATH_SUPPORT_BACKWARD_SCAN;
+#endif
 
 	/*
 	 * Fast path queries cannot have any subplans by definition, so skip

@@ -21,6 +21,7 @@
 #include "catalog/pg_class.h"
 #include "catalog/pg_enum.h"
 #include "distributed/adaptive_executor.h"
+#include "distributed/backend_data.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
@@ -397,15 +398,28 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 									  targetNodeName, targetNodePort);
 
 
-	WorkerNode *sourceNode = FindWorkerNode(sourceNodeName, sourceNodePort);
-	WorkerNode *targetNode = FindWorkerNode(targetNodeName, targetNodePort);
+	/*
+	 * We want to be able to track progress of shard moves using
+	 * get_rebalancer_progress. If this move is initiated by the rebalancer,
+	 * then the rebalancer call has already set up the shared memory that is
+	 * used to do that. But if citus_move_shard_placement is called directly by
+	 * the user (or through any other mechanism), then the shared memory is not
+	 * set up yet. In that case we do it here.
+	 */
+	if (!IsRebalancerInternalBackend())
+	{
+		WorkerNode *sourceNode = FindWorkerNode(sourceNodeName, sourceNodePort);
+		WorkerNode *targetNode = FindWorkerNode(targetNodeName, targetNodePort);
 
-	PlacementUpdateEvent *placementUpdateEvent = palloc0(sizeof(PlacementUpdateEvent));
-	placementUpdateEvent->updateType = PLACEMENT_UPDATE_MOVE;
-	placementUpdateEvent->shardId = shardId;
-	placementUpdateEvent->sourceNode = sourceNode;
-	placementUpdateEvent->targetNode = targetNode;
-	SetupRebalanceMonitor(list_make1(placementUpdateEvent), relationId);
+		PlacementUpdateEvent *placementUpdateEvent = palloc0(
+			sizeof(PlacementUpdateEvent));
+		placementUpdateEvent->updateType = PLACEMENT_UPDATE_MOVE;
+		placementUpdateEvent->shardId = shardId;
+		placementUpdateEvent->sourceNode = sourceNode;
+		placementUpdateEvent->targetNode = targetNode;
+		SetupRebalanceMonitor(list_make1(placementUpdateEvent), relationId,
+							  REBALANCE_PROGRESS_MOVING);
+	}
 
 	/*
 	 * At this point of the shard moves, we don't need to block the writes to

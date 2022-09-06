@@ -700,6 +700,21 @@ CREATE TABLE test (x int, y int references ref(a));
 SELECT create_distributed_table('test','x');
 END;
 
+-- verify the split fails if we still need to replicate reference tables
+SELECT citus_remove_node('localhost', :worker_2_port);
+SELECT create_distributed_table('test','x');
+SELECT citus_add_node('localhost', :worker_2_port);
+SELECT
+  citus_split_shard_by_split_points(shardid,
+                                    ARRAY[(shardminvalue::int + (shardmaxvalue::int - shardminvalue::int)/2)::text],
+                                    ARRAY[nodeid, nodeid],
+                                    'force_logical')
+FROM
+  pg_dist_shard, pg_dist_node
+WHERE
+  logicalrelid = 'replicate_reference_table.test'::regclass AND nodename = 'localhost' AND nodeport = :worker_2_port
+ORDER BY shardid LIMIT 1;
+
 -- test adding an invalid node while we have reference tables to replicate
 -- set client message level to ERROR and verbosity to terse to supporess
 -- OS-dependent host name resolution warnings

@@ -1,0 +1,246 @@
+--
+-- UPGRADE_DISTRIBUTED_TRIGGERS_BEFORE
+--
+-- PRE PG15, Renaming the parent triggers on partitioned tables doesn't
+-- recurse to renaming the child triggers on the partitions as well.
+--
+-- this test is relevant only for pg14-15 upgrade
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int = 14 AS server_version_eq_14
+\gset
+\if :server_version_eq_14
+\else
+\q
+\endif
+CREATE SCHEMA upgrade_distributed_triggers;
+SET search_path TO upgrade_distributed_triggers, public;
+SET citus.shard_count TO 4;
+SET citus.enable_unsafe_triggers TO true;
+SELECT run_command_on_workers('ALTER SYSTEM SET citus.enable_unsafe_triggers TO true;');
+       run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,10201,t,"ALTER SYSTEM")
+ (localhost,10202,t,"ALTER SYSTEM")
+(2 rows)
+
+SELECT run_command_on_workers('SELECT pg_reload_conf();');
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,10201,t,t)
+ (localhost,10202,t,t)
+(2 rows)
+
+CREATE TABLE sale(
+    sale_date date not null,
+    state_code text,
+    product_sku text,
+    units integer)
+    PARTITION BY list (state_code);
+ALTER TABLE sale ADD CONSTRAINT sale_pk PRIMARY KEY (state_code, sale_date);
+CREATE TABLE sale_newyork PARTITION OF sale FOR VALUES IN ('NY');
+CREATE TABLE record_sale(
+    operation_type text not null,
+    product_sku text,
+    state_code text,
+    units integer,
+    PRIMARY KEY(state_code, product_sku, operation_type, units));
+SELECT create_distributed_table('sale', 'state_code');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE sale_california PARTITION OF sale FOR VALUES IN ('CA');
+SELECT create_distributed_table('record_sale', 'state_code', colocate_with := 'sale');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE OR REPLACE FUNCTION record_sale()
+RETURNS trigger
+AS $$
+BEGIN
+    INSERT INTO upgrade_distributed_triggers.record_sale(operation_type, product_sku, state_code, units)
+    VALUES (TG_OP, NEW.product_sku, NEW.state_code, NEW.units);
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+-- will rename this trigger
+CREATE TRIGGER record_sale_trigger
+AFTER INSERT OR UPDATE OR DELETE ON sale
+FOR EACH ROW EXECUTE FUNCTION upgrade_distributed_triggers.record_sale();
+-- will rename this trigger
+CREATE TRIGGER another_trigger
+AFTER INSERT OR UPDATE OR DELETE ON sale
+FOR EACH ROW EXECUTE FUNCTION upgrade_distributed_triggers.record_sale();
+-- won't rename this trigger
+CREATE TRIGGER not_renamed_trigger
+AFTER INSERT OR UPDATE OR DELETE ON sale
+FOR EACH ROW EXECUTE FUNCTION upgrade_distributed_triggers.record_sale();
+-- Trigger function should appear on workers
+SELECT proname from pg_proc WHERE oid='upgrade_distributed_triggers.record_sale'::regproc;
+   proname
+---------------------------------------------------------------------
+ record_sale
+(1 row)
+
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE oid='upgrade_distributed_triggers.record_sale'::regproc$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,10201,t,1)
+ (localhost,10202,t,1)
+(2 rows)
+
+-- Trigger should appear on workers
+SELECT tgrelid::regclass::text, tgname FROM pg_trigger WHERE tgname like 'record_sale_trigger%' ORDER BY 1,2;
+     tgrelid     |       tgname
+---------------------------------------------------------------------
+ sale            | record_sale_trigger
+ sale_california | record_sale_trigger
+ sale_newyork    | record_sale_trigger
+(3 rows)
+
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_trigger WHERE tgname like 'record_sale_trigger%';$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,10201,t,9)
+ (localhost,10202,t,9)
+(2 rows)
+
+CREATE VIEW sale_triggers AS
+    SELECT tgname, tgrelid::regclass, tgenabled
+    FROM pg_trigger
+    WHERE tgrelid::regclass::text like 'sale%'
+    ORDER BY 1, 2;
+SELECT * FROM sale_triggers ORDER BY 1, 2;
+         tgname         |     tgrelid     | tgenabled
+---------------------------------------------------------------------
+ another_trigger        | sale            | O
+ another_trigger        | sale_newyork    | O
+ another_trigger        | sale_california | O
+ not_renamed_trigger    | sale            | O
+ not_renamed_trigger    | sale_newyork    | O
+ not_renamed_trigger    | sale_california | O
+ record_sale_trigger    | sale            | O
+ record_sale_trigger    | sale_newyork    | O
+ record_sale_trigger    | sale_california | O
+ truncate_trigger_xxxxxxx | sale            | O
+ truncate_trigger_xxxxxxx | sale_newyork    | O
+ truncate_trigger_xxxxxxx | sale_california | O
+(12 rows)
+
+-- rename the triggers - note that it doesn't rename the
+-- triggers on the partitions
+ALTER TRIGGER record_sale_trigger ON sale RENAME TO renamed_record_sale_trigger;
+SELECT tgrelid::regclass::text, tgname FROM pg_trigger WHERE tgname like 'record_sale_trigger%' ORDER BY 1,2;
+     tgrelid     |       tgname
+---------------------------------------------------------------------
+ sale_california | record_sale_trigger
+ sale_newyork    | record_sale_trigger
+(2 rows)
+
+SELECT tgrelid::regclass::text, tgname FROM pg_trigger WHERE tgname like 'renamed_record_sale_trigger%' ORDER BY 1,2;
+ tgrelid |           tgname
+---------------------------------------------------------------------
+ sale    | renamed_record_sale_trigger
+(1 row)
+
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_trigger WHERE tgname like 'record_sale_trigger%';$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,10201,t,6)
+ (localhost,10202,t,6)
+(2 rows)
+
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_trigger WHERE tgname like 'renamed_record_sale_trigger%';$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,10201,t,3)
+ (localhost,10202,t,3)
+(2 rows)
+
+ALTER TRIGGER another_trigger ON sale RENAME TO another_renamed_trigger;
+SELECT * FROM sale_triggers ORDER BY 1, 2;
+           tgname            |     tgrelid     | tgenabled
+---------------------------------------------------------------------
+ another_renamed_trigger     | sale            | O
+ another_trigger             | sale_newyork    | O
+ another_trigger             | sale_california | O
+ not_renamed_trigger         | sale            | O
+ not_renamed_trigger         | sale_newyork    | O
+ not_renamed_trigger         | sale_california | O
+ record_sale_trigger         | sale_newyork    | O
+ record_sale_trigger         | sale_california | O
+ renamed_record_sale_trigger | sale            | O
+ truncate_trigger_xxxxxxx      | sale            | O
+ truncate_trigger_xxxxxxx      | sale_newyork    | O
+ truncate_trigger_xxxxxxx      | sale_california | O
+(12 rows)
+
+-- although the child triggers haven't been renamed to
+-- another_renamed_trigger, they are dropped when the parent is dropped
+DROP TRIGGER another_renamed_trigger ON sale;
+SELECT * FROM sale_triggers ORDER BY 1, 2;
+           tgname            |     tgrelid     | tgenabled
+---------------------------------------------------------------------
+ not_renamed_trigger         | sale            | O
+ not_renamed_trigger         | sale_newyork    | O
+ not_renamed_trigger         | sale_california | O
+ record_sale_trigger         | sale_newyork    | O
+ record_sale_trigger         | sale_california | O
+ renamed_record_sale_trigger | sale            | O
+ truncate_trigger_xxxxxxx      | sale            | O
+ truncate_trigger_xxxxxxx      | sale_newyork    | O
+ truncate_trigger_xxxxxxx      | sale_california | O
+(9 rows)
+
+SELECT tgrelid::regclass::text, tgname FROM pg_trigger WHERE tgname like 'another_renamed_trigger%' ORDER BY 1,2;
+ tgrelid | tgname
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT tgrelid::regclass::text, tgname FROM pg_trigger WHERE tgname like 'another_trigger%' ORDER BY 1,2;
+ tgrelid | tgname
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_trigger WHERE tgname like 'another_renamed_trigger%';$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,10201,t,0)
+ (localhost,10202,t,0)
+(2 rows)
+
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_trigger WHERE tgname like 'another_trigger%';$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,10201,t,0)
+ (localhost,10202,t,0)
+(2 rows)
+
+CREATE TRIGGER another_trigger
+AFTER INSERT OR UPDATE OR DELETE ON sale
+FOR EACH ROW EXECUTE FUNCTION upgrade_distributed_triggers.record_sale();
+ALTER TRIGGER another_trigger ON sale RENAME TO another_renamed_trigger;
+SELECT * FROM sale_triggers ORDER BY 1, 2;
+           tgname            |     tgrelid     | tgenabled
+---------------------------------------------------------------------
+ another_renamed_trigger     | sale            | O
+ another_trigger             | sale_newyork    | O
+ another_trigger             | sale_california | O
+ not_renamed_trigger         | sale            | O
+ not_renamed_trigger         | sale_newyork    | O
+ not_renamed_trigger         | sale_california | O
+ record_sale_trigger         | sale_newyork    | O
+ record_sale_trigger         | sale_california | O
+ renamed_record_sale_trigger | sale            | O
+ truncate_trigger_xxxxxxx      | sale            | O
+ truncate_trigger_xxxxxxx      | sale_newyork    | O
+ truncate_trigger_xxxxxxx      | sale_california | O
+(12 rows)
+
+-- check that we can't rename child triggers on partitions of distributed tables
+ALTER TRIGGER another_trigger ON sale_newyork RENAME TO another_renamed_trigger;
+ERROR:  cannot rename child triggers on distributed partitions

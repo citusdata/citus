@@ -1421,7 +1421,7 @@ DistributedExecutionRequiresRollback(List *taskList)
 		 * Do not check SelectOpensTransactionBlock, always open transaction block
 		 * if SELECT FOR UPDATE is executed inside a distributed transaction.
 		 */
-		return IsTransactionBlock();
+		return IsMultiStatementTransaction();
 	}
 
 	if (ReadOnlyTask(task->taskType))

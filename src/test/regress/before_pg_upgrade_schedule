@@ -8,6 +8,7 @@ test: upgrade_distributed_function_before upgrade_rebalance_strategy_before
 test: upgrade_autoconverted_before
 test: upgrade_citus_stat_activity
 test: upgrade_citus_locks
+test: upgrade_distributed_triggers_before
 
 # upgrade_columnar_before renames public schema to citus_schema, so let's
 # run this test as the last one.

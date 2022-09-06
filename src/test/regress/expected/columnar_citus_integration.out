@@ -958,15 +958,13 @@ SELECT * FROM weird_col_explain;
 (7 rows)
 
 \set VERBOSITY terse
-SELECT public.plan_without_result_lines($Q$
 EXPLAIN (COSTS OFF, SUMMARY OFF)
 SELECT *, "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb"
 FROM weird_col_explain
 WHERE "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb" * 2 >
       "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'!";
-$Q$);
 NOTICE:  identifier "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'!" will be truncated to "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'"
-                                                                              plan_without_result_lines
+                                                                                   QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 4

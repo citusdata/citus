@@ -1,0 +1,16 @@
+--
+-- UPGRADE_DISTRIBUTED_TRIGGERS_AFTER
+--
+-- In PG15, Renaming triggers on partitioned tables
+-- recurses to renaming the triggers on the partitions as well.
+-- Relevant PG commit:
+-- 80ba4bb383538a2ee846fece6a7b8da9518b6866
+--
+-- this test is relevant only for pg14-15 upgrade
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int = 15 AS server_version_eq_15
+\gset
+\if :server_version_eq_15
+\else
+\q

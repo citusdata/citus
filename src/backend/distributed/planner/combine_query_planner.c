@@ -30,7 +30,6 @@ static List * RemoteScanTargetList(List *workerTargetList);
 static PlannedStmt * BuildSelectStatementViaStdPlanner(Query *combineQuery,
 													   List *remoteScanTargetList,
 													   CustomScan *remoteScan);
-static bool FindCitusExtradataContainerRTE(Node *node, RangeTblEntry **result);
 
 static Plan * CitusCustomScanPathPlan(PlannerInfo *root, RelOptInfo *rel,
 									  struct CustomPath *best_path, List *tlist,
@@ -135,6 +134,12 @@ CreateCitusCustomScanPath(PlannerInfo *root, RelOptInfo *relOptInfo,
 	path->custom_path.path.pathtype = T_CustomScan;
 	path->custom_path.path.pathtarget = relOptInfo->reltarget;
 	path->custom_path.path.parent = relOptInfo;
+
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+
+	/* necessary to avoid extra Result node in PG15 */
+	path->custom_path.flags = CUSTOMPATH_SUPPORT_PROJECTION;
+#endif
 
 	/*
 	 * The 100k rows we put on the cost of the path is kind of arbitrary and could be
@@ -317,7 +322,7 @@ BuildSelectStatementViaStdPlanner(Query *combineQuery, List *remoteScanTargetLis
  * Finds the rangetable entry in the query that refers to the citus_extradata_container
  * and stores the pointer in result.
  */
-static bool
+bool
 FindCitusExtradataContainerRTE(Node *node, RangeTblEntry **result)
 {
 	if (node == NULL)

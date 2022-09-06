@@ -1,0 +1,14 @@
+--
+-- UPGRADE_DISTRIBUTED_TRIGGERS_BEFORE
+--
+-- PRE PG15, Renaming the parent triggers on partitioned tables doesn't
+-- recurse to renaming the child triggers on the partitions as well.
+--
+-- this test is relevant only for pg14-15 upgrade
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int = 14 AS server_version_eq_14
+\gset
+\if :server_version_eq_14
+\else
+\q

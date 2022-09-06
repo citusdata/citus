@@ -887,22 +887,39 @@ ALTER TABLE loc_tb ADD CONSTRAINT fkey FOREIGN KEY (a) references ref_tb(a);
 ERROR:  Citus can not handle circular dependencies between distributed objects
 -- drop the view&matview with circular dependency
 DROP VIEW v103 CASCADE;
-SET client_min_messages TO DEBUG1;
 -- now it should successfully add to metadata and create the views on workers
 ALTER TABLE loc_tb ADD CONSTRAINT fkey FOREIGN KEY (a) references ref_tb(a);
-DEBUG:  executing "CREATE OR REPLACE VIEW citus_local_tables_mx.v100 (a) AS  SELECT loc_tb.a
-   FROM citus_local_tables_mx.loc_tb; ALTER VIEW citus_local_tables_mx.v100 OWNER TO postgres"
-DEBUG:  "view v100" has dependency to "table loc_tb" that is not in Citus' metadata
-DEBUG:  executing "CREATE OR REPLACE VIEW citus_local_tables_mx.v101 (a) AS  SELECT loc_tb.a
-   FROM (citus_local_tables_mx.loc_tb
-     JOIN citus_local_tables_mx.ref_tb USING (a)); ALTER VIEW citus_local_tables_mx.v101 OWNER TO postgres"
-DEBUG:  "view v101" has dependency to "table loc_tb" that is not in Citus' metadata
-DEBUG:  executing "CREATE MATERIALIZED VIEW citus_local_tables_mx.matview_101 USING heap AS  SELECT loc_tb.a
-   FROM citus_local_tables_mx.loc_tb;ALTER MATERIALIZED VIEW citus_local_tables_mx.matview_101 OWNER TO postgres"
-DEBUG:  executing "CREATE OR REPLACE VIEW citus_local_tables_mx.v102 (a) AS  SELECT v101.a
-   FROM citus_local_tables_mx.v101; ALTER VIEW citus_local_tables_mx.v102 OWNER TO postgres"
-DEBUG:  "view v102" has dependency to "table loc_tb" that is not in Citus' metadata
-DEBUG:  validating foreign key constraint "fkey_xxxxxxx"
+-- verify the views are created on workers
+select run_command_on_workers($$SELECT count(*)=0 from citus_local_tables_mx.v100$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,t)
+ (localhost,57638,t,t)
+(2 rows)
+
+select run_command_on_workers($$SELECT count(*)=0 from citus_local_tables_mx.v101$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,t)
+ (localhost,57638,t,t)
+(2 rows)
+
+select run_command_on_workers($$SELECT count(*)=0 from citus_local_tables_mx.v102$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,t)
+ (localhost,57638,t,t)
+(2 rows)
+
+CREATE TABLE loc_tb_2 (a int);
+CREATE VIEW v104 AS SELECT * from loc_tb_2;
+SET client_min_messages TO DEBUG1;
+-- verify the CREATE command for the view is generated correctly
+ALTER TABLE loc_tb_2 ADD CONSTRAINT fkey_2 FOREIGN KEY (a) references ref_tb(a);
+DEBUG:  executing "CREATE OR REPLACE VIEW citus_local_tables_mx.v104 (a) AS  SELECT loc_tb_2.a
+   FROM citus_local_tables_mx.loc_tb_2; ALTER VIEW citus_local_tables_mx.v104 OWNER TO postgres"
+DEBUG:  "view v104" has dependency to "table loc_tb_2" that is not in Citus' metadata
+DEBUG:  validating foreign key constraint "fkey_2_1330083"
 SET client_min_messages TO WARNING;
 -- works fine
 select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100, citus_local_tables_mx.v101, citus_local_tables_mx.v102$$);
@@ -922,14 +939,14 @@ select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100$
  (localhost,57638,f,"ERROR:  relation ""citus_local_tables_mx.v100"" does not exist")
 (2 rows)
 
-	select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v101$$);
+select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v101$$);
                                 run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,f,"ERROR:  relation ""citus_local_tables_mx.v101"" does not exist")
  (localhost,57638,f,"ERROR:  relation ""citus_local_tables_mx.v101"" does not exist")
 (2 rows)
 
-	select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v102$$);
+select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v102$$);
                                 run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,f,"ERROR:  relation ""citus_local_tables_mx.v102"" does not exist")
