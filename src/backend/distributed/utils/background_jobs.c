@@ -701,10 +701,14 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, BackgroundTask *task, bool *ha
 	{
 		resetStringInfo(&msg);
 
-		/* Get next message. */
+		/*
+		 * Get next message. Currently blocking, hen multiple backends get implemented it
+		 * should switch to a non-blocking receive
+		 */
 		Size nbytes = 0;
 		void *data = NULL;
-		shm_mq_result res = shm_mq_receive(responseq, &nbytes, &data, false);
+		const bool noWait = false;
+		shm_mq_result res = shm_mq_receive(responseq, &nbytes, &data, noWait);
 
 		if (res != SHM_MQ_SUCCESS)
 		{
