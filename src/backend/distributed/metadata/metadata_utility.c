@@ -3276,31 +3276,26 @@ GetBackgroundTaskByTaskId(int64 jobId, int64 taskId)
 }
 
 
+typedef struct JobTaskStatusCounts
+{
+	int blocked;
+	int runnable;
+	int running;
+	int done;
+	int error;
+	int unscheduled;
+	int cancelled;
+} JobTaskStatusCounts;
+
+
 /*
  * JobTasksStatusCount scans all tasks associated with the provided job and count's the
  * number of tasks that are tracked in each state. Effectively grouping and counting the
  * tasks by their state.
  */
-static bool
-JobTasksStatusCount(int64 jobId, int *blocked, int *runnable, int *running, int *done,
-					int *error, int *unscheduled, int *cancelled)
+static JobTaskStatusCounts
+JobTasksStatusCount(int64 jobId)
 {
-#define CLEAR_OPTIONAL_COUNTER(counter) \
-	if (counter) \
-	{ \
-		*counter = 0; \
-	}
-
-	CLEAR_OPTIONAL_COUNTER(blocked);
-	CLEAR_OPTIONAL_COUNTER(runnable);
-	CLEAR_OPTIONAL_COUNTER(running);
-	CLEAR_OPTIONAL_COUNTER(done);
-	CLEAR_OPTIONAL_COUNTER(error);
-	CLEAR_OPTIONAL_COUNTER(unscheduled);
-	CLEAR_OPTIONAL_COUNTER(cancelled);
-
-#undef CLEAR_OPTIONAL_COUNTER
-
 	Relation pgDistBackgroundTasks =
 		table_open(DistBackgroundTasksRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
@@ -3317,8 +3312,8 @@ JobTasksStatusCount(int64 jobId, int *blocked, int *runnable, int *running, int 
 						   DistBackgroundTasksTaskIdIndexId(),
 						   indexOK, NULL, lengthof(scanKey), scanKey);
 
+	JobTaskStatusCounts counts = { 0 };
 	HeapTuple heapTuple = NULL;
-	bool allDone = true;
 	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
 		Datum values[Natts_pg_dist_background_tasks] = { 0 };
@@ -3330,53 +3325,47 @@ JobTasksStatusCount(int64 jobId, int *blocked, int *runnable, int *running, int 
 												1]);
 		BackgroundTaskStatus status = BackgroundTaskStatusByOid(statusOid);
 
-#define INCREMENT_OPTIONAL_COUNTER(counter) \
-	if (counter) \
-	{ \
-		(*counter)++; \
-	}
-
 		switch (status)
 		{
 			case BACKGROUND_TASK_STATUS_BLOCKED:
 			{
-				INCREMENT_OPTIONAL_COUNTER(blocked);
+				counts.blocked++;
 				break;
 			}
 
 			case BACKGROUND_TASK_STATUS_RUNNABLE:
 			{
-				INCREMENT_OPTIONAL_COUNTER(runnable);
+				counts.runnable++;
 				break;
 			}
 
 			case BACKGROUND_TASK_STATUS_RUNNING:
 			{
-				INCREMENT_OPTIONAL_COUNTER(running);
+				counts.running++;
 				break;
 			}
 
 			case BACKGROUND_TASK_STATUS_DONE:
 			{
-				INCREMENT_OPTIONAL_COUNTER(done);
+				counts.done++;
 				break;
 			}
 
 			case BACKGROUND_TASK_STATUS_ERROR:
 			{
-				INCREMENT_OPTIONAL_COUNTER(error);
+				counts.error++;
 				break;
 			}
 
 			case BACKGROUND_TASK_STATUS_UNSCHEDULED:
 			{
-				INCREMENT_OPTIONAL_COUNTER(unscheduled);
+				counts.unscheduled++;
 				break;
 			}
 
 			case BACKGROUND_TASK_STATUS_CANCELLED:
 			{
-				INCREMENT_OPTIONAL_COUNTER(cancelled);
+				counts.cancelled++;
 				break;
 			}
 
@@ -3385,14 +3374,12 @@ JobTasksStatusCount(int64 jobId, int *blocked, int *runnable, int *running, int 
 				elog(ERROR, "unknown state in pg_dist_background_tasks");
 			}
 		}
-
-#undef INCREMENT_OPTIONAL_COUNTER
 	}
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistBackgroundTasks, NoLock);
 
-	return allDone;
+	return counts;
 }
 
 
@@ -3409,31 +3396,23 @@ JobTasksStatusCount(int64 jobId, int *blocked, int *runnable, int *running, int 
 void
 UpdateBackgroundJob(int64 jobId)
 {
-	int blocked = 0;
-	int runnable = 0;
-	int running = 0;
-	int done = 0;
-	int error = 0;
-	int unscheduled = 0;
-	int cancelled = 0;
-
-	JobTasksStatusCount(jobId, &blocked, &runnable, &running, &done, &error,
-						&unscheduled, &cancelled);
+	JobTaskStatusCounts counts = JobTasksStatusCount(jobId);
 	BackgroundJobStatus status = BACKGROUND_JOB_STATUS_RUNNING;
 
-	if (cancelled > 0)
+	if (counts.cancelled > 0)
 	{
 		status = BACKGROUND_JOB_STATUS_CANCELLED;
 	}
-	else if (blocked + runnable + running + error + unscheduled == 0)
+	else if (counts.blocked + counts.runnable + counts.running + counts.error +
+			 counts.unscheduled == 0)
 	{
 		/* all tasks are done, job is finished */
 		status = BACKGROUND_JOB_STATUS_FINISHED;
 	}
-	else if (error + unscheduled > 0)
+	else if (counts.error + counts.unscheduled > 0)
 	{
 		/* we are either failing, or failed */
-		if (blocked + runnable + running > 0)
+		if (counts.blocked + counts.runnable + counts.running > 0)
 		{
 			/* failing, as there are still tasks to be run */
 			status = BACKGROUND_JOB_STATUS_FAILING;
@@ -3443,7 +3422,7 @@ UpdateBackgroundJob(int64 jobId)
 			status = BACKGROUND_JOB_STATUS_FAILED;
 		}
 	}
-	else if (blocked + runnable + running > 0)
+	else if (counts.blocked + counts.runnable + counts.running > 0)
 	{
 		status = BACKGROUND_JOB_STATUS_RUNNING;
 	}
