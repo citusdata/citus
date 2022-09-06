@@ -1199,13 +1199,7 @@ isolate_tenant_to_new_shard
 step s1-isolate-tenant-no-same-coloc-blocking: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500183
-(1 row)
-
-step s1-isolate-tenant-no-same-coloc-blocking: <... completed>
-isolate_tenant_to_new_shard
----------------------------------------------------------------------
-                    1500183
+                    1500211
 (1 row)
 
 step s2-print-cluster:
@@ -1278,13 +1272,7 @@ isolate_tenant_to_new_shard
 step s1-isolate-tenant-no-same-coloc-blocking: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500194
-(1 row)
-
-step s1-isolate-tenant-no-same-coloc-blocking: <... completed>
-isolate_tenant_to_new_shard
----------------------------------------------------------------------
-                    1500194
+                    1500222
 (1 row)
 
 step s2-print-cluster:
