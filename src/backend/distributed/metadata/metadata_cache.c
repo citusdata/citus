@@ -280,7 +280,7 @@ static Oid LookupEnumValueId(Oid typeId, char *valueName);
 static void InvalidateCitusTableCacheEntrySlot(CitusTableCacheEntrySlot *cacheSlot);
 static void InvalidateDistTableCache(void);
 static void InvalidateDistObjectCache(void);
-static void InitializeTableCacheEntry(int64 shardId);
+static bool InitializeTableCacheEntry(int64 shardId, bool missingOk);
 static bool IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
 									 CitusTableType tableType);
 static bool RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry, bool
@@ -1196,15 +1196,24 @@ ShardPlacementListIncludingOrphanedPlacements(uint64 shardId)
  * build the cache entry. Afterwards we know that the shard has to be in the
  * cache if it exists. If the shard does *not* exist, this function errors
  * (because LookupShardRelationFromCatalog errors out).
+ *
+ * If missingOk is true and the shard cannot be found, the function returns false.
  */
-static void
-InitializeTableCacheEntry(int64 shardId)
+static bool
+InitializeTableCacheEntry(int64 shardId, bool missingOk)
 {
-	bool missingOk = false;
 	Oid relationId = LookupShardRelationFromCatalog(shardId, missingOk);
+
+	if (!OidIsValid(relationId))
+	{
+		Assert(missingOk);
+		return false;
+	}
 
 	/* trigger building the cache for the shard id */
 	GetCitusTableCacheEntry(relationId); /* lgtm[cpp/return-value-ignored] */
+
+	return true;
 }
 
 
@@ -1261,7 +1270,11 @@ LookupShardIdCacheEntry(int64 shardId, bool missingOk)
 
 	if (!foundInCache)
 	{
-		InitializeTableCacheEntry(shardId);
+		if (!InitializeTableCacheEntry(shardId, missingOk))
+		{
+			return NULL;
+		}
+
 		recheck = true;
 	}
 	else

@@ -189,7 +189,7 @@ step s2-commit:
  COMMIT;
 
 step s1-update-complex: <... completed>
-ERROR:  could not find valid entry for shard xxxxx
+ERROR:  shard for the given value does not exist
 step s1-commit:
  COMMIT;
 
@@ -620,7 +620,7 @@ step s2-commit:
  COMMIT;
 
 step s1-update-complex: <... completed>
-ERROR:  could not find valid entry for shard xxxxx
+ERROR:  shard for the given value does not exist
 step s1-commit:
  COMMIT;
 

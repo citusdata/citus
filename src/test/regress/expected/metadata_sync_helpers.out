@@ -1138,7 +1138,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
 	SELECT citus_internal_update_placement_metadata(0, get_node_id(), get_node_id()+1);
-ERROR:  could not find valid entry for shard xxxxx
+ERROR:  Shard id does not exists: 0
 COMMIT;
 -- fails because none-existing shard
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
@@ -1151,7 +1151,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
 	SELECT citus_internal_update_placement_metadata(213123123123, get_node_id(), get_node_id()+1);
-ERROR:  could not find valid entry for shard xxxxx
+ERROR:  Shard id does not exists: 213123123123
 COMMIT;
 -- fails because we do not own the shard
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
@@ -1203,7 +1203,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	WITH shard_data(shardid)
 		AS (VALUES (1420100))
 	SELECT citus_internal_delete_shard_metadata(shardid) FROM shard_data;
-ERROR:  could not find valid entry for shard xxxxx
+ERROR:  Shard id does not exists: 1420100
 ROLLBACK;
 -- sucessfully delete shards
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
