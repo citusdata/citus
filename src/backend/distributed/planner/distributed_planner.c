@@ -562,7 +562,7 @@ GetRTEIdentity(RangeTblEntry *rte)
 
 	/*
 	 * Since SQL functions might be in-lined by standard_planner,
-	 * we might miss assigning an RTE identity for RangeTblEntry's
+	 * we might miss assigning an RTE identity for RangeTblEntries
 	 * related to SQL functions. We already have checks in other
 	 * places to throw an error for SQL functions but they are not
 	 * sufficient due to function in-lining; so here we capture such
