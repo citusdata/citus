@@ -147,6 +147,7 @@ isolation_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+
 /*
  * DropOrphanedShardsInSeparateTransaction cleans up orphaned shards by
  * connecting to localhost. This is done, so that the locks that
