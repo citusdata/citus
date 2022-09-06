@@ -320,6 +320,9 @@ INSERT INTO test_parameterized_sql VALUES(1, 1);
 SELECT * FROM test_parameterized_sql_function(1);
 ERROR:  cannot perform distributed planning on this query because parameterized queries for SQL functions referencing distributed tables are not supported
 HINT:  Consider using PL/pgSQL functions instead.
+SELECT (SELECT 1 FROM test_parameterized_sql limit 1) FROM test_parameterized_sql_function(1);
+ERROR:  cannot perform distributed planning on this query because parameterized queries for SQL functions referencing distributed tables are not supported
+HINT:  Consider using PL/pgSQL functions instead.
 SELECT test_parameterized_sql_function_in_subquery_where(1);
 ERROR:  could not create distributed plan
 DETAIL:  Possibly this is caused by the use of parameters in SQL functions, which is not supported in Citus.

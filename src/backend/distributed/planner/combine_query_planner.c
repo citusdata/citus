@@ -30,7 +30,6 @@ static List * RemoteScanTargetList(List *workerTargetList);
 static PlannedStmt * BuildSelectStatementViaStdPlanner(Query *combineQuery,
 													   List *remoteScanTargetList,
 													   CustomScan *remoteScan);
-static bool FindCitusExtradataContainerRTE(Node *node, RangeTblEntry **result);
 
 static Plan * CitusCustomScanPathPlan(PlannerInfo *root, RelOptInfo *rel,
 									  struct CustomPath *best_path, List *tlist,
@@ -323,7 +322,7 @@ BuildSelectStatementViaStdPlanner(Query *combineQuery, List *remoteScanTargetLis
  * Finds the rangetable entry in the query that refers to the citus_extradata_container
  * and stores the pointer in result.
  */
-static bool
+bool
 FindCitusExtradataContainerRTE(Node *node, RangeTblEntry **result)
 {
 	if (node == NULL)

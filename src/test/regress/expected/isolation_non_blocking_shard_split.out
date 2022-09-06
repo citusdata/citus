@@ -434,7 +434,6 @@ step s1-end:
  COMMIT;
 
 step s4-insert: <... completed>
-ERROR:  could not find valid entry for shard xxxxx
 step s4-end:
    COMMIT;
 
@@ -452,13 +451,14 @@ step s2-print-cluster:
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
    57638|1500002|t      |     0
-   57638|1500003|t      |     1
+   57638|1500003|t      |     2
 (2 rows)
 
        id|value
 ---------------------------------------------------------------------
+      900|    1
 123456789|    1
-(1 row)
+(2 rows)
 
 
 starting permutation: s2-print-cluster s3-acquire-advisory-lock s1-begin s2-begin s1-non-blocking-shard-split s2-insert s2-end s2-print-cluster s3-release-advisory-lock s1-end s2-print-cluster
