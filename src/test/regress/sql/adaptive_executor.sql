@@ -40,4 +40,22 @@ SELECT sum(result::bigint) FROM run_command_on_workers($$
 $$);
 END;
 
+CREATE OR REPLACE FUNCTION select_for_update()
+RETURNS void
+AS $$
+DECLARE
+    my int;
+BEGIN
+    SELECT y INTO my FROM test WHERE x = 1 FOR UPDATE;
+END;
+$$ LANGUAGE plpgsql;
+
+-- so that we can prove that we open a transaction block by logging below:
+-- "NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;..."
+SET citus.log_remote_commands TO on;
+
+SELECT select_for_update();
+
+SET citus.log_remote_commands TO off;
+
 DROP SCHEMA adaptive_executor CASCADE;
