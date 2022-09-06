@@ -143,9 +143,11 @@ typedef struct MetadataCacheData
 	Oid distPlacementRelationId;
 	Oid distBackgroundJobsRelationId;
 	Oid distBackgroundJobsJobIdIndexId;
+	Oid distBackgroundJobsJobIdSequenceId;
 	Oid distBackgroundTasksRelationId;
 	Oid distBackgroundTasksTaskIdIndexId;
 	Oid distBackgroundTasksStatusTaskIdIndexId;
+	Oid distBackgroundTasksTaskIdSequenceId;
 	Oid distBackgroundTasksDependRelationId;
 	Oid distBackgroundTasksDependTaskIdIndexId;
 	Oid distBackgroundTasksDependDependsOnIndexId;
@@ -2488,6 +2490,16 @@ DistBackgroundJobsJobIdIndexId(void)
 
 
 Oid
+DistBackgroundJobsJobIdSequenceId(void)
+{
+	CachedRelationLookup("pg_dist_background_jobs_job_id_seq",
+						 &MetadataCache.distBackgroundJobsJobIdSequenceId);
+
+	return MetadataCache.distBackgroundJobsJobIdSequenceId;
+}
+
+
+Oid
 DistBackgroundTasksRelationId(void)
 {
 	CachedRelationLookup("pg_dist_background_tasks",
@@ -2514,6 +2526,16 @@ DistBackgroundTasksStatusTaskIdIndexId(void)
 						 &MetadataCache.distBackgroundTasksStatusTaskIdIndexId);
 
 	return MetadataCache.distBackgroundTasksStatusTaskIdIndexId;
+}
+
+
+Oid
+DistBackgroundTasksTaskIdSequenceId(void)
+{
+	CachedRelationLookup("pg_dist_background_tasks_task_id_seq",
+						 &MetadataCache.distBackgroundTasksTaskIdSequenceId);
+
+	return MetadataCache.distBackgroundTasksTaskIdSequenceId;
 }
 
 

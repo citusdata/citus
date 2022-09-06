@@ -31,6 +31,7 @@
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
+#include "commands/sequence.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/citus_nodes.h"
@@ -2671,23 +2672,7 @@ BackgroundTaskStatusOid(BackgroundTaskStatus status)
 int64
 GetNextBackgroundJobsJobId(void)
 {
-	text *sequenceName = cstring_to_text(PG_DIST_BACKGROUND_JOBS_JOB_ID_SEQUENCE_NAME);
-	Oid sequenceId = ResolveRelationId(sequenceName, false);
-	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-
-	/* generate new and unique colocation id from sequence */
-	Datum jobIdOid = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
-
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
-
-	uint64 jobId = DatumGetInt64(jobIdOid);
-
-	return jobId;
+	return DatumGetInt64(nextval_internal(DistBackgroundJobsJobIdSequenceId(), false));
 }
 
 
@@ -2701,23 +2686,7 @@ GetNextBackgroundJobsJobId(void)
 int64
 GetNextBackgroundTaskTaskId(void)
 {
-	text *sequenceName = cstring_to_text(PG_DIST_BACKGROUND_TASK_TASK_ID_SEQUENCE_NAME);
-	Oid sequenceId = ResolveRelationId(sequenceName, false);
-	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-
-	/* generate new and unique colocation id from sequence */
-	Datum taskIdOid = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
-
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
-
-	uint64 taskId = DatumGetInt64(taskIdOid);
-
-	return taskId;
+	return DatumGetInt64(nextval_internal(DistBackgroundTasksTaskIdSequenceId(), false));
 }
 
 

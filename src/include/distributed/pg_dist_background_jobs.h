@@ -23,7 +23,4 @@
 #define Anum_pg_dist_background_jobs_started_at 5
 #define Anum_pg_dist_background_jobs_finished_at 6
 
-#define PG_DIST_BACKGROUND_JOBS_JOB_ID_SEQUENCE_NAME \
-	"pg_catalog.pg_dist_background_jobs_job_id_seq"
-
 #endif /* CITUS_PG_DIST_BACKGROUND_JOBS_H */

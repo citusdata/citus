@@ -256,6 +256,10 @@ extern Oid DistTransactionGroupIndexId(void);
 extern Oid DistPlacementGroupidIndexId(void);
 extern Oid DistObjectPrimaryKeyIndexId(void);
 
+/* sequence oids */
+extern Oid DistBackgroundJobsJobIdSequenceId(void);
+extern Oid DistBackgroundTasksTaskIdSequenceId(void);
+
 /* type oids */
 extern Oid LookupTypeOid(char *schemaNameSting, char *typeNameString);
 extern Oid CitusCopyFormatTypeId(void);

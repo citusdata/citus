@@ -26,7 +26,4 @@
 #define Anum_pg_dist_background_tasks_not_before 8
 #define Anum_pg_dist_background_tasks_message 9
 
-#define PG_DIST_BACKGROUND_TASK_TASK_ID_SEQUENCE_NAME \
-	"pg_catalog.pg_dist_background_tasks_task_id_seq"
-
 #endif /* CITUS_PG_DIST_BACKGROUND_TASKS_H */
