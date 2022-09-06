@@ -3182,7 +3182,7 @@ GetBackgroundJobByJobId(int64 jobId)
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
 
 	SysScanDesc scanDescriptor =
-		systable_beginscan(pgDistBackgroundJobs, DistBackgroundJobsJobIdIndexId(),
+		systable_beginscan(pgDistBackgroundJobs, DistBackgroundJobsPKeyIndexId(),
 						   indexOK, NULL, lengthof(scanKey), scanKey);
 
 	HeapTuple taskTuple = systable_getnext(scanDescriptor);
@@ -3223,7 +3223,7 @@ GetBackgroundTaskByTaskId(int64 jobId, int64 taskId)
 
 	SysScanDesc scanDescriptor =
 		systable_beginscan(pgDistBackgroundTasks,
-						   DistBackgroundTasksTaskIdIndexId(),
+						   DistBackgroundTasksPKeyIndexId(),
 						   indexOK, NULL, lengthof(scanKey), scanKey);
 
 	HeapTuple taskTuple = systable_getnext(scanDescriptor);
@@ -3274,7 +3274,7 @@ JobTasksStatusCount(int64 jobId)
 
 	SysScanDesc scanDescriptor =
 		systable_beginscan(pgDistBackgroundTasks,
-						   DistBackgroundTasksTaskIdIndexId(),
+						   DistBackgroundTasksPKeyIndexId(),
 						   indexOK, NULL, lengthof(scanKey), scanKey);
 
 	JobTaskStatusCounts counts = { 0 };
@@ -3409,7 +3409,7 @@ UpdateBackgroundJob(int64 jobId)
 
 	SysScanDesc scanDescriptor =
 		systable_beginscan(pgDistBackgroundJobs,
-						   DistBackgroundJobsJobIdIndexId(),
+						   DistBackgroundJobsPKeyIndexId(),
 						   indexOK, NULL, lengthof(scanKey), scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
@@ -3503,7 +3503,7 @@ UpdateBackgroundTask(BackgroundTask *task)
 
 	SysScanDesc scanDescriptor =
 		systable_beginscan(pgDistBackgroundTasks,
-						   DistBackgroundTasksTaskIdIndexId(),
+						   DistBackgroundTasksPKeyIndexId(),
 						   indexOK, NULL, lengthof(scanKey), scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
@@ -3695,7 +3695,7 @@ CancelTasksForJob(int64 jobid)
 
 	const bool indexOK = true;
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistBackgroundTasks,
-													DistBackgroundTasksTaskIdIndexId(),
+													DistBackgroundTasksPKeyIndexId(),
 													indexOK, NULL,
 													lengthof(scanKey), scanKey);
 
@@ -3807,7 +3807,7 @@ UnscheduleDependantTasks(int64 jobId, int64 taskId)
 						BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(cTaskId));
 			const bool indexOK = true;
 			SysScanDesc scanDescriptor = systable_beginscan(pgDistBackgroundTasks,
-															DistBackgroundTasksTaskIdIndexId(),
+															DistBackgroundTasksPKeyIndexId(),
 															indexOK, NULL,
 															lengthof(scanKey), scanKey);
 
