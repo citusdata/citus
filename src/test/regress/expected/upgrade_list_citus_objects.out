@@ -31,6 +31,7 @@ ORDER BY 1;
  function citus_calculate_gpid(integer,integer)
  function citus_check_cluster_node_health()
  function citus_check_connection_to_node(text,integer)
+ function citus_cleanup_orphaned_resources()
  function citus_cleanup_orphaned_shards()
  function citus_conninfo_cache_invalidate()
  function citus_coordinator_nodeid()
@@ -273,5 +274,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(265 rows)
+(266 rows)
 

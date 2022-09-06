@@ -7,10 +7,6 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1230000;
 SELECT nextval('pg_catalog.pg_dist_placement_placementid_seq') AS last_placement_id
 \gset
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 100000;
-CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
-RETURNS VOID
-AS 'citus'
-LANGUAGE C STRICT VOLATILE;
 CREATE SCHEMA "Tenant Isolation";
 SET search_path to "Tenant Isolation";
 CREATE ROLE mx_isolation_role_ent WITH LOGIN;
@@ -453,12 +449,8 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid >= 1230000 ORDER BY nodeport
 ERROR:  insert or update on table "lineitem_streaming_1230044" violates foreign key constraint "test_constraint_1230044"
 DETAIL:  Key (l_orderkey)=(128) is not present in table "orders_streaming_1230046".
 \c - postgres - :master_port
-SELECT run_try_drop_marked_shards();
- run_try_drop_marked_shards
----------------------------------------------------------------------
-
-(1 row)
-
+CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 30 orphaned resources
 -- connect to the worker node with metadata
 \c - mx_isolation_role_ent - :worker_1_port
 SET search_path to "Tenant Isolation";
@@ -725,12 +717,7 @@ SELECT * FROM pg_dist_shard
 (24 rows)
 
 \c - postgres - :master_port
-SELECT run_try_drop_marked_shards();
- run_try_drop_marked_shards
----------------------------------------------------------------------
-
-(1 row)
-
+CALL pg_catalog.citus_cleanup_orphaned_resources();
 -- test failure scenarios with triggers on workers
 \c - postgres - :worker_1_port
 SET search_path to "Tenant Isolation";
@@ -1114,12 +1101,8 @@ SELECT count(*) FROM test_colocated_table_2;
 (1 row)
 
 \c - postgres - :master_port
-SELECT run_try_drop_marked_shards();
- run_try_drop_marked_shards
----------------------------------------------------------------------
-
-(1 row)
-
+CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 10 orphaned resources
 \c - postgres - :worker_1_port
 -- show the foreign keys of the main table & its colocated shard on other tables
 SELECT tbl.relname, fk."Constraint", fk."Definition"

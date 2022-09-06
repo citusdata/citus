@@ -7,11 +7,6 @@
 --6. Failure on polling last write-ahead log location reported to origin WAL sender
 --7. Failure on dropping subscription
 CREATE SCHEMA "citus_failure_split_cleanup_schema";
--- Create a method to execute TryDropOrphanShards
-CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
-RETURNS VOID
-AS 'citus'
-LANGUAGE C STRICT VOLATILE;
 SET search_path TO "citus_failure_split_cleanup_schema";
 SET citus.next_shard_id TO 8981000;
 SET citus.next_placement_id TO 8610000;
@@ -99,12 +94,8 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
 (0 rows)
 
     \c - postgres - :master_port
-    SELECT run_try_drop_marked_shards();
- run_try_drop_marked_shards
----------------------------------------------------------------------
-
-(1 row)
-
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 79 orphaned resources
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
  operation_id | object_type | object_name | node_group_id | policy_type
@@ -210,12 +201,8 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
 (0 rows)
 
     \c - postgres - :master_port
-    SELECT run_try_drop_marked_shards();
- run_try_drop_marked_shards
----------------------------------------------------------------------
-
-(1 row)
-
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 4 orphaned resources
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
  operation_id | object_type | object_name | node_group_id | policy_type
@@ -323,12 +310,8 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
 (0 rows)
 
     \c - postgres - :master_port
-    SELECT run_try_drop_marked_shards();
- run_try_drop_marked_shards
----------------------------------------------------------------------
-
-(1 row)
-
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 4 orphaned resources
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
  operation_id | object_type | object_name | node_group_id | policy_type
@@ -435,12 +418,8 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
 (1 row)
 
     \c - postgres - :master_port
-    SELECT run_try_drop_marked_shards();
- run_try_drop_marked_shards
----------------------------------------------------------------------
-
-(1 row)
-
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 4 orphaned resources
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
  operation_id | object_type | object_name | node_group_id | policy_type
@@ -550,12 +529,8 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
 (1 row)
 
     \c - postgres - :master_port
-    SELECT run_try_drop_marked_shards();
- run_try_drop_marked_shards
----------------------------------------------------------------------
-
-(1 row)
-
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 4 orphaned resources
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
  operation_id | object_type | object_name | node_group_id | policy_type
@@ -665,12 +640,8 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
 (1 row)
 
     \c - postgres - :master_port
-    SELECT run_try_drop_marked_shards();
- run_try_drop_marked_shards
----------------------------------------------------------------------
-
-(1 row)
-
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 4 orphaned resources
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
  operation_id | object_type | object_name | node_group_id | policy_type
@@ -782,12 +753,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 (1 row)
 
     \c - postgres - :master_port
-    SELECT run_try_drop_marked_shards();
- run_try_drop_marked_shards
----------------------------------------------------------------------
-
-(1 row)
-
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
  operation_id | object_type | object_name | node_group_id | policy_type
