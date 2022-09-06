@@ -2898,20 +2898,39 @@ ResetRunningBackgroundTasks(void)
 		/* if there is a pid we need to signal the backend to stop */
 		if (!isnull[Anum_pg_dist_background_tasks_pid - 1])
 		{
-			int pid = DatumGetInt32(values[Anum_pg_dist_background_tasks_pid - 1]);
-			PGPROC *proc = BackendPidGetProc(pid);
-			const int sig = SIGTERM; /* we need to fully stop execution */
-			if (proc)
+			/*
+			 * Before signalling the pid we check if the task lock is hold, otherwise we
+			 * might cancel an arbitrary postgres backend
+			 */
+
+			int64 taskId =
+				DatumGetInt64(values[Anum_pg_dist_background_tasks_task_id - 1]);
+
+			/* No need to release lock, will get unlocked once our changes commit */
+			LOCKTAG locktag = { 0 };
+			SET_LOCKTAG_BACKGROUND_TASK(locktag, taskId);
+			const bool sessionLock = false;
+			const bool dontWait = true;
+			LockAcquireResult locked = LockAcquire(&locktag, AccessExclusiveLock,
+												   sessionLock, dontWait);
+			if (locked == LOCKACQUIRE_NOT_AVAIL)
 			{
-				/* it is a postgres process managed by postmaster */
-#ifdef HAVE_SETSID
-				if (kill(-pid, sig))
-#else
-				if (kill(pid, sig))
-#endif
+				/* there is still an executor holding the lock, needs a SIGTERM */
+				int pid = DatumGetInt32(values[Anum_pg_dist_background_tasks_pid - 1]);
+				PGPROC *proc = BackendPidGetProc(pid);
+				const int sig = SIGTERM; /* we need to fully stop execution */
+				if (proc)
 				{
-					ereport(WARNING, (errmsg("could not send signal to process %d: %m",
-											 pid)));
+					/* it is a postgres process managed by postmaster */
+	#ifdef HAVE_SETSID
+					if (kill(-pid, sig))
+	#else
+					if (kill(pid, sig))
+	#endif
+					{
+						ereport(WARNING, (errmsg("could not send signal to process %d: "
+												 "%m", pid)));
+					}
 				}
 			}
 		}
