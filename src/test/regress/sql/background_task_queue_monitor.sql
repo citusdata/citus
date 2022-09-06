@@ -47,7 +47,7 @@ INSERT INTO pg_dist_background_tasks (job_id, command) VALUES (:job_id, $job$ SE
 SELECT citus_jobs_wait(:job_id, desired_status => 'running');
 SELECT pg_sleep(.1); -- make sure it has time to error after it started running
 
-SELECT status, pid, retry_count, message, (not_before > now()) AS scheduled_into_the_future FROM pg_dist_background_tasks WHERE job_id = :job_id ORDER BY task_id ASC;
+SELECT status, pid, retry_count, NOT (message IS NULL) AS has_message, (not_before > now()) AS scheduled_into_the_future FROM pg_dist_background_tasks WHERE job_id = :job_id ORDER BY task_id ASC;
 
 -- test cancelling a failed/retrying job
 SELECT citus_jobs_cancel(:job_id);

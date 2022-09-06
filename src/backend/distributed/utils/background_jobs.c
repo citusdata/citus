@@ -323,7 +323,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 	/* make worker recognizable in pg_stat_activity */
 	pgstat_report_appname("citus background task queue monitor");
 
-	ereport(LOG, (errmsg("started citus background task queue monitor")));
+	ereport(DEBUG1, (errmsg("started citus background task queue monitor")));
 
 	/* TODO this is here for debugging purposses, remove before merge. */
 	if (BackgroundTaskMonitorDebugDelay)
