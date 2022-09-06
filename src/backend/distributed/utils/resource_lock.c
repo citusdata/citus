@@ -109,6 +109,8 @@ PG_FUNCTION_INFO_V1(lock_relation_if_exists);
 
 /* Config variable managed via guc.c */
 bool EnableAcquiringUnsafeLockFromWorkers = false;
+bool SkipAdvisoryLockPermissionChecks = false;
+
 
 /*
  * lock_shard_metadata allows the shard distribution metadata to be locked
@@ -248,7 +250,10 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 			continue;
 		}
 
-		EnsureTablePermissions(relationId, aclMask);
+		if (!SkipAdvisoryLockPermissionChecks)
+		{
+			EnsureTablePermissions(relationId, aclMask);
+		}
 
 		LockShardResource(shardId, lockMode);
 	}

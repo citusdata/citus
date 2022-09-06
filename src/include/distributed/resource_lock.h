@@ -149,6 +149,7 @@ enum DistLockConfigs
 	DIST_LOCK_NOWAIT = 2
 };
 
+
 /* Lock shard/relation metadata for safe modifications */
 extern void LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
 extern void LockPlacementCleanup(void);
@@ -194,5 +195,6 @@ extern void AcquireDistributedLockOnRelations(List *relationList, LOCKMODE lockM
 extern void PreprocessLockStatement(LockStmt *stmt, ProcessUtilityContext context);
 
 extern bool EnableAcquiringUnsafeLockFromWorkers;
+extern bool SkipAdvisoryLockPermissionChecks;
 
 #endif /* RESOURCE_LOCK_H */

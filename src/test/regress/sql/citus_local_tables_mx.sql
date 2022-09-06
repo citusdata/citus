@@ -465,9 +465,19 @@ ALTER TABLE loc_tb ADD CONSTRAINT fkey FOREIGN KEY (a) references ref_tb(a);
 -- drop the view&matview with circular dependency
 DROP VIEW v103 CASCADE;
 
-SET client_min_messages TO DEBUG1;
 -- now it should successfully add to metadata and create the views on workers
 ALTER TABLE loc_tb ADD CONSTRAINT fkey FOREIGN KEY (a) references ref_tb(a);
+-- verify the views are created on workers
+select run_command_on_workers($$SELECT count(*)=0 from citus_local_tables_mx.v100$$);
+select run_command_on_workers($$SELECT count(*)=0 from citus_local_tables_mx.v101$$);
+select run_command_on_workers($$SELECT count(*)=0 from citus_local_tables_mx.v102$$);
+
+CREATE TABLE loc_tb_2 (a int);
+CREATE VIEW v104 AS SELECT * from loc_tb_2;
+
+SET client_min_messages TO DEBUG1;
+-- verify the CREATE command for the view is generated correctly
+ALTER TABLE loc_tb_2 ADD CONSTRAINT fkey_2 FOREIGN KEY (a) references ref_tb(a);
 SET client_min_messages TO WARNING;
 
 -- works fine
@@ -477,8 +487,8 @@ select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100,
 ALTER TABLE loc_tb DROP CONSTRAINT fkey;
 -- fails because fkey is dropped and table is converted to local table
 select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100$$);
-	select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v101$$);
-	select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v102$$);
+select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v101$$);
+select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v102$$);
 
 INSERT INTO loc_tb VALUES (1), (2);
 -- test a matview with columnar
