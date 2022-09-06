@@ -3056,7 +3056,6 @@ BackgroundTaskHasUmnetDependencies(int64 jobId, int64 taskId)
 		 */
 		if (dependingJob->status == BACKGROUND_TASK_STATUS_DONE)
 		{
-			pfree(dependingJob);
 			continue;
 		}
 
@@ -3067,7 +3066,6 @@ BackgroundTaskHasUmnetDependencies(int64 jobId, int64 taskId)
 		 */
 		Assert(dependingJob->status != BACKGROUND_TASK_STATUS_ERROR);
 
-		pfree(dependingJob);
 		hasUnmetDependency = true;
 		break;
 	}
@@ -3154,8 +3152,6 @@ GetRunnableBackgroundTask(void)
 				/* found task, close table and return */
 				break;
 			}
-
-			pfree(task);
 			task = NULL;
 		}
 

@@ -110,11 +110,11 @@ SELECT pg_sleep(.1); -- make sure it has time to error after it started running
 (1 row)
 
 SELECT status, pid, retry_count, message, (not_before > now()) AS scheduled_into_the_future FROM pg_dist_background_tasks WHERE job_id = :job_id ORDER BY task_id ASC;
-  status  | pid | retry_count |                           message                           | scheduled_into_the_future
+  status  | pid | retry_count |                              message                               | scheduled_into_the_future
 ---------------------------------------------------------------------
- runnable |     |           1 | ERROR: division by zero                                    +| t
-          |     |             | CONTEXT: Citus Background Job Executor: regression/postgres+|
-          |     |             |                                                             |
+ runnable |     |           1 | ERROR: division by zero                                           +| t
+          |     |             | CONTEXT: Citus Background Task Queue Executor: regression/postgres+|
+          |     |             |                                                                    |
 (1 row)
 
 -- test cancelling a failed/retrying job
@@ -201,7 +201,7 @@ SELECT state, NOT(started_at IS NULL) AS did_start FROM pg_dist_background_jobs 
 SELECT status, NOT(message IS NULL) AS did_start FROM pg_dist_background_tasks WHERE job_id = :job_id ORDER BY task_id ASC;
   status   | did_start
 ---------------------------------------------------------------------
- done      | f
+ done      | t
  cancelled | t
  cancelled | f
 (3 rows)

@@ -323,7 +323,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 	/* make worker recognizable in pg_stat_activity */
 	pgstat_report_appname("citus background task queue monitor");
 
-	ereport(DEBUG1, (errmsg("started citus background task queue monitor")));
+	ereport(LOG, (errmsg("started citus background task queue monitor")));
 
 	/* TODO this is here for debugging purposses, remove before merge. */
 	if (BackgroundTaskMonitorDebugDelay)
@@ -757,7 +757,7 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, BackgroundTask *task, bool *ha
 
 				/*
 				 * the task might live in a separate context, hence we find its context
-				 * and allocate a coppy of the message in there
+				 * and allocate a copy of the message in there
 				 */
 				MemoryContext taskContext = GetMemoryChunkContext(task);
 				task->message = MemoryContextStrdup(taskContext, fullMessage.data);
@@ -779,11 +779,27 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, BackgroundTask *task, bool *ha
 
 				char *nonconst_tag = pstrdup(tag);
 
-				/* what does nonconst_tag contain? */
+				/* append the nonconst_tag to the task's message*/
+				StringInfoData fullMessage = { 0 };
+				initStringInfo(&fullMessage);
+				if (task->message)
+				{
+					appendStringInfoString(&fullMessage, task->message);
+				}
+				appendStringInfoString(&fullMessage, nonconst_tag);
+				appendStringInfoChar(&fullMessage, '\n');
 
-				task->status = BACKGROUND_TASK_STATUS_DONE;
+				/*
+				 * the task might live in a separate context, hence we find its context
+				 * and allocate a copy of the message in there
+				 */
+				MemoryContext taskContext = GetMemoryChunkContext(task);
+				task->message = MemoryContextStrdup(taskContext, fullMessage.data);
+				pfree(fullMessage.data);
 
 				pfree(nonconst_tag);
+
+				task->status = BACKGROUND_TASK_STATUS_DONE;
 				break;
 			}
 
