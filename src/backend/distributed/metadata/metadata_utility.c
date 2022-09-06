@@ -2853,9 +2853,10 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
  * ResetRunningBackgroundTasks finds all tasks currently in Running state and resets their
  * state back to runnable.
  *
- * Tasks that were running during a failover, crash or restart will still be marked
- * running after. This function assumes appropriate care by the caller that the task is in
- * fact _not_ running at the moment on the primary coordinator of the formation.
+ * While marking running tasks as runnable we check if the task might still be locked and
+ * the pid is managed by our current postmaster. If both are the case we terminate the
+ * backend. This will make sure that if a task was still running after a monitor crash or
+ * restart we stop the executor before we start a new one.
  *
  * Any pid associated with the running tasks will be cleared back to the NULL value.
  */
