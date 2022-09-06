@@ -286,7 +286,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	TimestampTz nextMetadataSyncTime = 0;
 
 	/* state kept for the background tasks queue monitor */
-	TimestampTz lastBackgroundTaskQueueCheck = 0;
+	TimestampTz lastBackgroundTaskQueueCheck = GetCurrentTimestamp();
 	BackgroundWorkerHandle *backgroundTasksQueueBgwHandle = NULL;
 	bool backgroundTasksQueueWarnedForLock = false;
 
@@ -695,7 +695,8 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			backgroundTasksQueueBgwHandle != NULL ? GetBackgroundWorkerPid(
 				backgroundTasksQueueBgwHandle, &backgroundTaskQueueWorkerPid) :
 			BGWH_STOPPED;
-		if (TimestampDifferenceExceeds(lastBackgroundTaskQueueCheck,
+		if (!RecoveryInProgress() && BackgroundTaskQueueCheckInterval > 0 &&
+			TimestampDifferenceExceeds(lastBackgroundTaskQueueCheck,
 									   GetCurrentTimestamp(),
 									   BackgroundTaskQueueCheckInterval) &&
 			backgroundTaskQueueWorkerStatus == BGWH_STOPPED)
