@@ -3517,7 +3517,7 @@ EnsureShardPlacementMetadataIsSane(Oid relationId, int64 shardId, int64 placemen
 								   int32 shardState, int64 shardLength, int32 groupId)
 {
 	/* we have just read the metadata, so we are sure that the shard exists */
-	Assert(ShardExists(shardId, false));
+	Assert(ShardExists(shardId));
 
 	if (placementId <= INVALID_PLACEMENT_ID)
 	{
@@ -3596,14 +3596,13 @@ citus_internal_update_placement_metadata(PG_FUNCTION_ARGS)
 		/* this UDF is not allowed allowed for executing as a separate command */
 		EnsureCoordinatorInitiatedOperation();
 
-		bool missingOk = false;
-
-		if (!ShardExists(shardId, missingOk))
+		if (!ShardExists(shardId))
 		{
 			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 							errmsg("Shard id does not exists: %ld", shardId)));
 		}
 
+		bool missingOk = false;
 		EnsureShardOwner(shardId, missingOk);
 
 		/*
@@ -3661,14 +3660,13 @@ citus_internal_delete_shard_metadata(PG_FUNCTION_ARGS)
 		/* this UDF is not allowed allowed for executing as a separate command */
 		EnsureCoordinatorInitiatedOperation();
 
-		bool missingOk = false;
-
-		if (!ShardExists(shardId, missingOk))
+		if (!ShardExists(shardId))
 		{
 			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 							errmsg("Shard id does not exists: %ld", shardId)));
 		}
 
+		bool missingOk = false;
 		EnsureShardOwner(shardId, missingOk);
 	}
 

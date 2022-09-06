@@ -805,8 +805,9 @@ LoadShardInterval(uint64 shardId)
  * and shard is not found.
  */
 bool
-ShardExists(uint64 shardId, bool missingOk)
+ShardExists(uint64 shardId)
 {
+	bool missingOk = true;
 	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId, missingOk);
 
 	if (!shardIdEntry)

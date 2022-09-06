@@ -133,11 +133,10 @@ GetLargestShardId()
 bool
 ShardsStillExist(List *taskList)
 {
-	bool missingOk = true;
 	Task *task = NULL;
 	foreach_ptr(task, taskList)
 	{
-		if (!ShardExists(task->anchorShardId, missingOk))
+		if (!ShardExists(task->anchorShardId))
 		{
 			return false;
 		}
