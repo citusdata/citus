@@ -2900,7 +2900,7 @@ ResetRunningBackgroundTasks(void)
 		if (!isnull[Anum_pg_dist_background_tasks_pid - 1])
 		{
 			/*
-			 * Before signalling the pid we check if the task lock is hold, otherwise we
+			 * Before signalling the pid we check if the task lock is held, otherwise we
 			 * might cancel an arbitrary postgres backend
 			 */
 
