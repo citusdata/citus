@@ -228,14 +228,5 @@ SELECT citus_move_shard_placement(shardid.shardid, 'localhost', 57637, 'localhos
 
 (1 row)
 
-DROP TABLE partitioned_tbl_with_fkey, ref_table_with_fkey CASCADE;
+SET client_min_messages TO WARNING;
 DROP SCHEMA fkey_to_reference_shard_rebalance CASCADE;
-NOTICE:  drop cascades to 8 other objects
-DETAIL:  drop cascades to type foreign_details
-drop cascades to view table_fkeys_in_workers
-drop cascades to table referenced_table
-drop cascades to table referencing_table
-drop cascades to table referencing_table2
-drop cascades to function get_foreign_key_to_reference_table_commands(oid)
-drop cascades to table reference_table_commands
-drop cascades to table referenceing_dist_table

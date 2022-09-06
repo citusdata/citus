@@ -98,6 +98,5 @@ ALTER TABLE partitioned_tbl_with_fkey ADD CONSTRAINT fkey_to_ref_tbl FOREIGN KEY
 WITH shardid AS (SELECT shardid FROM pg_dist_shard where logicalrelid = 'partitioned_tbl_with_fkey'::regclass ORDER BY shardid LIMIT 1)
 SELECT citus_move_shard_placement(shardid.shardid, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode := 'force_logical') FROM shardid;
 
-DROP TABLE partitioned_tbl_with_fkey, ref_table_with_fkey CASCADE;
-
+SET client_min_messages TO WARNING;
 DROP SCHEMA fkey_to_reference_shard_rebalance CASCADE;
