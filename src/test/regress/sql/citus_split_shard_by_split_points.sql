@@ -13,31 +13,26 @@ Here is a high level overview of test plan:
 
 CREATE SCHEMA "citus_split_test_schema";
 
+-- Disable Deferred drop auto cleanup to avoid flaky tests.
+ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
+SELECT pg_reload_conf();
+
+SET search_path TO "citus_split_test_schema";
+
 -- Helper to clean shards.
 CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
 RETURNS VOID
 AS 'citus'
 LANGUAGE C STRICT VOLATILE;
-
--- Disable Deferred drop auto cleanup to avoid flaky tests.
-ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
-SELECT pg_reload_conf();
 
 CREATE ROLE test_split_role WITH LOGIN;
 GRANT USAGE, CREATE ON SCHEMA "citus_split_test_schema" TO test_split_role;
 SET ROLE test_split_role;
 
-SET search_path TO "citus_split_test_schema";
 SET citus.next_shard_id TO 8981000;
 SET citus.next_placement_id TO 8610000;
 SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 1;
-
--- Helper to clean shards.
-CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
-RETURNS VOID
-AS 'citus'
-LANGUAGE C STRICT VOLATILE;
 
 -- BEGIN: Create table to split, along with other co-located tables. Add indexes, statistics etc.
 CREATE TABLE sensors(
@@ -243,7 +238,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     'block_writes');
 
 -- BEGIN: Perform deferred cleanup.
-SELECT run_try_drop_marked_shards();
+SELECT citus_split_test_schema.run_try_drop_marked_shards();
 -- END: Perform deferred cleanup.
 
 SET search_path TO "citus_split_test_schema";
