@@ -246,6 +246,12 @@ SELECT create_distributed_table('referenced_table', 'id', 'hash');
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 
+BEGIN;
+SET LOCAL citus.skip_constraint_validation TO on;
+SET LOCAL client_min_messages TO DEBUG1;
+ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY (ref_id) REFERENCES referenced_table (id);
+ABORT;
+
 -- test foreign constraint creation
 -- test foreign constraint creation with not supported parameters
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE SET NULL;
