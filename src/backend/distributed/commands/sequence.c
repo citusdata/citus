@@ -712,6 +712,121 @@ PostprocessAlterSequenceOwnerStmt(Node *node, const char *queryString)
 }
 
 
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+
+/*
+ * PreprocessAlterSequencePersistenceStmt is called for change of persistence
+ * of sequences before the persistence is changed on the local instance.
+ *
+ * If the sequence for which the persistence is changed is distributed, we execute
+ * the change on all the workers to keep the type in sync across the cluster.
+ */
+List *
+PreprocessAlterSequencePersistenceStmt(Node *node, const char *queryString,
+									   ProcessUtilityContext processUtilityContext)
+{
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
+	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
+
+	List *sequenceAddresses = GetObjectAddressListFromParseTree((Node *) stmt, false,
+																false);
+
+	/*  the code-path only supports a single object */
+	Assert(list_length(sequenceAddresses) == 1);
+
+	if (!ShouldPropagateAnyObject(sequenceAddresses))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+	QualifyTreeNode((Node *) stmt);
+
+	const char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION, (void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
+}
+
+
+/*
+ * AlterSequencePersistenceStmtObjectAddress returns the ObjectAddress of the
+ * sequence that is the subject of the AlterPersistenceStmt.
+ */
+List *
+AlterSequencePersistenceStmtObjectAddress(Node *node, bool missing_ok, bool isPostprocess)
+{
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
+	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
+
+	RangeVar *sequence = stmt->relation;
+	Oid seqOid = RangeVarGetRelid(sequence, NoLock, missing_ok);
+	ObjectAddress *sequenceAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*sequenceAddress, RelationRelationId, seqOid);
+
+	return list_make1(sequenceAddress);
+}
+
+
+/*
+ * PreprocessSequenceAlterTableStmt is called for change of persistence or owner
+ * of sequences before the persistence/owner is changed on the local instance.
+ *
+ * Altering persistence or owner are the only ALTER commands of a sequence
+ * that may pass through an AlterTableStmt as well
+ */
+List *
+PreprocessSequenceAlterTableStmt(Node *node, const char *queryString,
+								 ProcessUtilityContext processUtilityContext)
+{
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
+	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
+
+	ListCell *cmdCell = NULL;
+	foreach(cmdCell, stmt->cmds)
+	{
+		AlterTableCmd *cmd = castNode(AlterTableCmd, lfirst(cmdCell));
+		switch (cmd->subtype)
+		{
+			case AT_ChangeOwner:
+			{
+				return PreprocessAlterSequenceOwnerStmt(node,
+														queryString,
+														processUtilityContext);
+			}
+
+			case AT_SetLogged:
+			{
+				return PreprocessAlterSequencePersistenceStmt(node,
+															  queryString,
+															  processUtilityContext);
+			}
+
+			case AT_SetUnLogged:
+			{
+				return PreprocessAlterSequencePersistenceStmt(node,
+															  queryString,
+															  processUtilityContext);
+			}
+
+			default:
+			{
+				/* normally we shouldn't ever reach this */
+				ereport(ERROR, (errmsg("unsupported subtype for alter sequence command"),
+								errdetail("sub command type: %d",
+										  cmd->subtype)));
+			}
+		}
+	}
+	return NIL;
+}
+
+
+#endif
+
+
 /*
  * PreprocessGrantOnSequenceStmt is executed before the statement is applied to the local
  * postgres instance.

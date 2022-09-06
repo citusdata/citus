@@ -18,6 +18,10 @@
 #define RelationCreateStorage_compat(a, b, c) RelationCreateStorage(a, b, c)
 #define parse_analyze_varparams_compat(a, b, c, d, e) parse_analyze_varparams(a, b, c, d, \
 																			  e)
+#define CREATE_SEQUENCE_COMMAND \
+	"CREATE %sSEQUENCE IF NOT EXISTS %s AS %s INCREMENT BY " INT64_FORMAT \
+	" MINVALUE " INT64_FORMAT " MAXVALUE " INT64_FORMAT \
+	" START WITH " INT64_FORMAT " CACHE " INT64_FORMAT " %sCYCLE"
 #else
 
 #include "nodes/value.h"
@@ -61,6 +65,11 @@ RelationGetSmgr(Relation rel)
 	return rel->rd_smgr;
 }
 
+
+#define CREATE_SEQUENCE_COMMAND \
+	"CREATE SEQUENCE IF NOT EXISTS %s AS %s INCREMENT BY " INT64_FORMAT \
+	" MINVALUE " INT64_FORMAT " MAXVALUE " INT64_FORMAT \
+	" START WITH " INT64_FORMAT " CACHE " INT64_FORMAT " %sCYCLE"
 
 #endif
 

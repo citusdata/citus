@@ -256,7 +256,12 @@ pg_get_sequencedef_string(Oid sequenceRelationId)
 	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceRelationId);
 	char *typeName = format_type_be(pgSequenceForm->seqtypid);
 
-	char *sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND, qualifiedSequenceName,
+	char *sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND,
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+								 get_rel_persistence(sequenceRelationId) ==
+								 RELPERSISTENCE_UNLOGGED ? "UNLOGGED " : "",
+#endif
+								 qualifiedSequenceName,
 								 typeName,
 								 pgSequenceForm->seqincrement, pgSequenceForm->seqmin,
 								 pgSequenceForm->seqmax, pgSequenceForm->seqstart,
