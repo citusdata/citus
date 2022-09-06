@@ -515,10 +515,41 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 				}
 				else
 				{
-					/* TODO figure out good backoff strategy, we retry in 10*retry minutes */
+					/*
+					 * Per try we increase the delay as follows:
+					 *   retry 1: 1 min
+					 *   retry 2: 10 min
+					 *   retry 3: 60 min
+					 *
+					 * In the future we would like a callback on the job_type that could
+					 * distinguish the retry count and delay + potential jitter on a
+					 * job_type basis. For now we only assume this to be used by the
+					 * rebalancer and settled on the retry scheme above.
+					 */
+					int64 delayMs = 0;
+					switch (*(task->retry_count))
+					{
+						case 1:
+						{
+							delayMs = 1 * 60 * 1000;
+							break;
+						}
+
+						case 2:
+						{
+							delayMs = 10 * 60 * 1000;
+							break;
+						}
+
+						case 3:
+						default: /* just make sure retrying an hour for missed cases */
+						{
+							delayMs = 60 * 60 * 1000;
+							break;
+						}
+					}
 					TimestampTz notBefore = TimestampTzPlusMilliseconds(
-						GetCurrentTimestamp(),
-						*(task->retry_count) * 10 * 60 * 1000);
+						GetCurrentTimestamp(), delayMs);
 					SET_NULLABLE_FIELD(task, not_before, notBefore);
 
 					task->status = BACKGROUND_TASK_STATUS_RUNNABLE;
