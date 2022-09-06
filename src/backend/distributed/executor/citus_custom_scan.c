@@ -68,7 +68,8 @@ static void CitusEndScan(CustomScanState *node);
 static void CitusReScan(CustomScanState *node);
 static void SetJobColocationId(Job *job);
 static void EnsureForceDelegationDistributionKey(Job *job);
-static void EnsureShardsExist(Job *job);
+static void EnsureAnchorShardsInJobExist(Job *job);
+static bool AnchorShardsInTaskListExist(List *taskList);
 static void TryToRerouteFastPathModifyQuery(Job *job);
 
 
@@ -409,14 +410,18 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		/* prevent concurrent placement changes */
 		AcquireMetadataLocks(workerJob->taskList);
 
-		/* try to reroute tasks only if the query is fast path and also has any invalid shard */
-		if (currentPlan->fastPathRouterPlan && !ShardsStillExist(workerJob->taskList))
+		/*
+		 * In case of a split, the shard might no longer be available. In that
+		 * case try to reroute. We can only do this for fast path queries.
+		 */
+		if (currentPlan->fastPathRouterPlan &&
+			!AnchorShardsInTaskListExist(workerJob->taskList))
 		{
 			TryToRerouteFastPathModifyQuery(workerJob);
 		}
 
 		/* ensure there is no invalid shard */
-		EnsureShardsExist(workerJob);
+		EnsureAnchorShardsInJobExist(workerJob);
 
 		/* modify tasks are always assigned using first-replica policy */
 		workerJob->taskList = FirstReplicaAssignTaskList(workerJob->taskList);
@@ -474,13 +479,13 @@ TryToRerouteFastPathModifyQuery(Job *job)
 
 
 /*
- * EnsureShardsExist ensures all shards are valid in job. If it finds a non-existent shard
- * in given job, it fails.
+ * EnsureAnchorShardsInJobExist ensures all shards are valid in job.
+ * If it finds a non-existent shard in given job, it throws an error.
  */
 static void
-EnsureShardsExist(Job *job)
+EnsureAnchorShardsInJobExist(Job *job)
 {
-	if (!ShardsStillExist(job->taskList))
+	if (!AnchorShardsInTaskListExist(job->taskList))
 	{
 		ereport(ERROR, (errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
 						errmsg("shard for the given value does not exist"),
@@ -488,6 +493,26 @@ EnsureShardsExist(Job *job)
 							"A concurrent shard split may have moved the data into a new set of shards."),
 						errhint("Retry the query.")));
 	}
+}
+
+
+/*
+ * AnchorShardsInTaskListExist checks whether all the anchor shards in the task list
+ * still exist.
+ */
+static bool
+AnchorShardsInTaskListExist(List *taskList)
+{
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
+	{
+		if (!ShardExists(task->anchorShardId))
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 

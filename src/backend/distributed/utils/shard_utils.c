@@ -124,23 +124,3 @@ GetLargestShardId()
 
 	return largestShardId;
 }
-
-
-/*
- * ShardsStillExist errors out if the given tasks has any nonexistent
- * shard id.
- */
-bool
-ShardsStillExist(List *taskList)
-{
-	Task *task = NULL;
-	foreach_ptr(task, taskList)
-	{
-		if (!ShardExists(task->anchorShardId))
-		{
-			return false;
-		}
-	}
-
-	return true;
-}
