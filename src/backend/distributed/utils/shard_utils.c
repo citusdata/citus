@@ -16,7 +16,10 @@
 #include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/listutils.h"
+#include "distributed/log_utils.h"
 #include "distributed/metadata_utility.h"
+#include "distributed/multi_physical_planner.h"
 #include "distributed/relay_utility.h"
 #include "distributed/shard_utils.h"
 
