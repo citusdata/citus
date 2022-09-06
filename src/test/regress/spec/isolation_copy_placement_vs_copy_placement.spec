@@ -28,7 +28,7 @@ step "s1-load-cache"
 
 step "s1-repair-placement"
 {
-	SELECT master_copy_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638);
+	SELECT citus_copy_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638);
 }
 
 session "s2"
@@ -38,14 +38,14 @@ step "s2-begin"
 	BEGIN;
 }
 
-step "s2-set-placement-inactive"
+step "s2-delete-inactive"
 {
-	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard_for_test_table) AND nodeport = 57638;
+	DELETE FROM pg_dist_shard_placement WHERE shardid IN (SELECT * FROM selected_shard_for_test_table) AND nodeport = 57638;
 }
 
 step "s2-repair-placement"
 {
-	SELECT master_copy_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638);
+	SELECT citus_copy_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638, transfer_mode := 'block_writes');
 }
 
 // since test_hash_table has rep > 1 simple select query doesn't hit all placements
@@ -65,7 +65,7 @@ step "s2-commit"
 // note that "s1-repair-placement" errors out but that is expected
 // given that "s2-repair-placement" succeeds and the placement is
 // already repaired
-permutation "s1-load-cache" "s2-load-cache" "s2-set-placement-inactive" "s2-begin" "s2-repair-placement" "s1-repair-placement" "s2-commit"
+permutation "s1-load-cache" "s2-load-cache" "s2-delete-inactive" "s2-begin" "s2-repair-placement" "s1-repair-placement" "s2-commit"
 
 // the same test without the load caches
-permutation "s2-set-placement-inactive" "s2-begin" "s2-repair-placement" "s1-repair-placement" "s2-commit"
+permutation "s2-delete-inactive" "s2-begin" "s2-repair-placement" "s1-repair-placement" "s2-commit"

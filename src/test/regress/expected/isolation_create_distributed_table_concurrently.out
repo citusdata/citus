@@ -585,12 +585,12 @@ create_distributed_table_concurrently
 (1 row)
 
 step s4-print-colocations:
- SELECT * FROM pg_dist_colocation ORDER BY colocationid;
+ SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation ORDER BY colocationid;
 
-colocationid|shardcount|replicationfactor|distributioncolumntype|distributioncolumncollation
+shardcount|replicationfactor|distributioncolumntype|distributioncolumncollation
 ---------------------------------------------------------------------
-      123173|         4|                1|                    21|                          0
-      123174|         4|                1|                    23|                          0
+         4|                1|                    21|                          0
+         4|                1|                    23|                          0
 (2 rows)
 
 citus_remove_node
@@ -651,12 +651,12 @@ create_distributed_table_concurrently
 (1 row)
 
 step s4-print-colocations:
- SELECT * FROM pg_dist_colocation ORDER BY colocationid;
+ SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation ORDER BY colocationid;
 
-colocationid|shardcount|replicationfactor|distributioncolumntype|distributioncolumncollation
+shardcount|replicationfactor|distributioncolumntype|distributioncolumncollation
 ---------------------------------------------------------------------
-      123175|         4|                1|                    23|                          0
-      123176|         4|                1|                    21|                          0
+         4|                1|                    23|                          0
+         4|                1|                    21|                          0
 (2 rows)
 
 citus_remove_node
@@ -700,12 +700,12 @@ create_distributed_table_concurrently
 (1 row)
 
 step s4-print-colocations:
- SELECT * FROM pg_dist_colocation ORDER BY colocationid;
+ SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation ORDER BY colocationid;
 
-colocationid|shardcount|replicationfactor|distributioncolumntype|distributioncolumncollation
+shardcount|replicationfactor|distributioncolumntype|distributioncolumncollation
 ---------------------------------------------------------------------
-      123177|         4|                1|                    21|                          0
-      123178|         4|                1|                    23|                          0
+         4|                1|                    21|                          0
+         4|                1|                    23|                          0
 (2 rows)
 
 citus_remove_node
@@ -748,12 +748,12 @@ create_distributed_table_concurrently
 (1 row)
 
 step s4-print-colocations:
- SELECT * FROM pg_dist_colocation ORDER BY colocationid;
+ SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation ORDER BY colocationid;
 
-colocationid|shardcount|replicationfactor|distributioncolumntype|distributioncolumncollation
+shardcount|replicationfactor|distributioncolumntype|distributioncolumncollation
 ---------------------------------------------------------------------
-      123179|         4|                1|                    21|                          0
-      123180|         4|                1|                    23|                          0
+         4|                1|                    21|                          0
+         4|                1|                    23|                          0
 (2 rows)
 
 citus_remove_node

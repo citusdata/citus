@@ -182,7 +182,7 @@ SELECT master_remove_distributed_table_metadata_from_workers('mx_table'::regclas
 SELECT master_remove_partition_metadata('mx_table'::regclass, 'public', 'mx_table');
 SELECT count(*) FROM mx_table;
 
--- master_copy_shard_placement
+-- citus_copy_shard_placement
 SELECT logicalrelid, shardid AS testshardid, nodename, nodeport
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid = 'mx_table'::regclass AND nodeport=:worker_1_port
@@ -193,7 +193,7 @@ SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_po
 INSERT INTO pg_dist_placement (groupid, shardid, shardstate, shardlength)
 VALUES (:worker_2_group, :testshardid, 3, 0);
 
-SELECT master_copy_shard_placement(:testshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT citus_copy_shard_placement(:testshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
 
 SELECT shardid, nodename, nodeport, shardstate
 FROM pg_dist_shard_placement

@@ -83,7 +83,7 @@ replicate_reference_tables(PG_FUNCTION_ARGS)
 /*
  * EnsureReferenceTablesExistOnAllNodes ensures that a shard placement for every
  * reference table exists on all nodes. If a node does not have a set of shard
- * placements, then master_copy_shard_placement is called in a subtransaction
+ * placements, then citus_copy_shard_placement is called in a subtransaction
  * to pull the data to the new node.
  */
 void
@@ -96,7 +96,7 @@ EnsureReferenceTablesExistOnAllNodes(void)
 /*
  * EnsureReferenceTablesExistOnAllNodesExtended ensures that a shard placement for every
  * reference table exists on all nodes. If a node does not have a set of shard placements,
- * then master_copy_shard_placement is called in a subtransaction to pull the data to the
+ * then citus_copy_shard_placement is called in a subtransaction to pull the data to the
  * new node.
  *
  * The transferMode is passed on to the implementation of the copy to control the locks
@@ -193,7 +193,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	}
 
 	/*
-	 * master_copy_shard_placement triggers metadata sync-up, which tries to
+	 * citus_copy_shard_placement triggers metadata sync-up, which tries to
 	 * acquire a ShareLock on pg_dist_node. We do master_copy_shad_placement
 	 * in a separate connection. If we have modified pg_dist_node in the
 	 * current backend, this will cause a deadlock.
@@ -207,7 +207,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 
 	/*
 	 * Modifications to reference tables in current transaction are not visible
-	 * to master_copy_shard_placement, since it is done in a separate backend.
+	 * to citus_copy_shard_placement, since it is done in a separate backend.
 	 */
 	if (AnyRelationsModifiedInTransaction(referenceTableIdList))
 	{
@@ -235,7 +235,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 								newWorkerNode->workerPort)));
 
 		/*
-		 * Call master_copy_shard_placement using citus extension owner. Current
+		 * Call citus_copy_shard_placement using citus extension owner. Current
 		 * user might not have permissions to do the copy.
 		 */
 		const char *userName = CitusExtensionOwnerName();
@@ -348,7 +348,7 @@ WorkersWithoutReferenceTablePlacement(uint64 shardId, LOCKMODE lockMode)
 
 
 /*
- * CopyShardPlacementToWorkerNodeQuery returns the master_copy_shard_placement
+ * CopyShardPlacementToWorkerNodeQuery returns the citus_copy_shard_placement
  * command to copy the given shard placement to given node.
  */
 static StringInfo
@@ -364,8 +364,8 @@ CopyShardPlacementToWorkerNodeQuery(ShardPlacement *sourceShardPlacement,
 		"auto";
 
 	appendStringInfo(queryString,
-					 "SELECT master_copy_shard_placement("
-					 UINT64_FORMAT ", %s, %d, %s, %d, do_repair := false, "
+					 "SELECT citus_copy_shard_placement("
+					 UINT64_FORMAT ", %s, %d, %s, %d, "
 								   "transfer_mode := %s)",
 					 sourceShardPlacement->shardId,
 					 quote_literal_cstr(sourceShardPlacement->nodeName),

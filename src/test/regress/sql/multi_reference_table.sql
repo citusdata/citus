@@ -905,15 +905,6 @@ SELECT master_update_shard_statistics(:a_shard_id);
 
 SELECT master_get_table_ddl_events('reference_schema.reference_table_ddl');
 
--- in reality, we wouldn't need to repair any reference table shard placements
--- however, the test could be relevant for other purposes
-SELECT placementid AS a_placement_id FROM pg_dist_shard_placement WHERE shardid = :a_shard_id AND nodeport = :worker_1_port \gset
-SELECT placementid AS b_placement_id FROM pg_dist_shard_placement WHERE shardid = :a_shard_id AND nodeport = :worker_2_port \gset
-
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE placementid = :a_placement_id;
-SELECT master_copy_shard_placement(:a_shard_id, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
-SELECT shardid, shardstate FROM pg_dist_shard_placement WHERE placementid = :a_placement_id;
-
 -- some queries that are captured in functions
 CREATE OR REPLACE FUNCTION select_count_all() RETURNS bigint AS '
         SELECT

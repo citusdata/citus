@@ -59,7 +59,7 @@ SELECT master_create_empty_shard('table6_append');
                   13000021
 (1 row)
 
--- Mark tables as non-mx tables, in order to be able to test master_copy_shard_placement
+-- Mark tables as non-mx tables, in order to be able to test citus_copy_shard_placement
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
     ('table1_group1'::regclass, 'table2_group1'::regclass, 'table5_groupX'::regclass);
 -- test copy
@@ -90,13 +90,13 @@ ORDER BY s.shardid, sp.nodeport;
 (12 rows)
 
 -- try to copy colocated shards without a replica identity
-SELECT master_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, false);
+SELECT citus_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
 ERROR:  cannot use logical replication to transfer shards of the relation table2_group1 since it doesn't have a REPLICA IDENTITY or PRIMARY KEY
 DETAIL:  UPDATE and DELETE commands on the shard will error out during logical replication unless there is a REPLICA IDENTITY or PRIMARY KEY.
 HINT:  If you wish to continue without a replica identity set the shard_transfer_mode to 'force_logical' or 'block_writes'.
 -- copy colocated shards
-SELECT master_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, false, 'force_logical');
- master_copy_shard_placement
+SELECT citus_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
+ citus_copy_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
@@ -144,7 +144,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table2_
 
 \c - - - :master_port
 -- copy colocated shards again to see error message
-SELECT master_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, false, 'force_logical');
+SELECT citus_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
 ERROR:  shard xxxxx already exists in the target node
 -- test copying NOT colocated shard
 -- status before shard copy
@@ -169,8 +169,8 @@ ORDER BY s.shardid, sp.nodeport;
 (8 rows)
 
 -- copy NOT colocated shard
-SELECT master_copy_shard_placement(13000012, 'localhost', :worker_1_port, 'localhost', :worker_2_port, false, 'force_logical');
- master_copy_shard_placement
+SELECT citus_copy_shard_placement(13000012, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
+ citus_copy_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
@@ -214,8 +214,8 @@ ORDER BY s.shardid, sp.nodeport;
 (2 rows)
 
 -- copy shard in append distributed table
-SELECT master_copy_shard_placement(13000020, 'localhost', :worker_2_port, 'localhost', :worker_1_port, false, 'force_logical');
- master_copy_shard_placement
+SELECT citus_copy_shard_placement(13000020, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'force_logical');
+ citus_copy_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
@@ -524,7 +524,7 @@ SELECT  "Constraint", "Definition" FROM table_fkeys
 \c - - - :master_port
 -- test shard copy with foreign constraints
 -- we expect it to error out because we do not support foreign constraints with replication factor > 1
-SELECT master_copy_shard_placement(13000022, 'localhost', :worker_2_port, 'localhost', :worker_1_port, false);
+SELECT citus_copy_shard_placement(13000022, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
 ERROR:  cannot replicate shards with foreign keys
 -- lets also test that master_move_shard_placement doesn't break serials
 CREATE TABLE serial_move_test (key int, other_val serial);

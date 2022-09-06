@@ -223,8 +223,8 @@ SELECT master_create_empty_shard('citus_local_table_1');
 -- get_shard_id_for_distribution_column is supported
 SELECT get_shard_id_for_distribution_column('citus_local_table_1', 'not_checking_this_arg_for_non_dist_tables');
 SELECT get_shard_id_for_distribution_column('citus_local_table_1');
--- master_copy_shard_placement is not supported
-SELECT master_copy_shard_placement(shardid, 'localhost', :master_port, 'localhost', :worker_1_port, true)
+-- citus_copy_shard_placement is not supported
+SELECT citus_copy_shard_placement(shardid, 'localhost', :master_port, 'localhost', :worker_1_port)
 FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='citus_local_table_1'::regclass) as shardid;
 -- undistribute_table is supported
 BEGIN;
