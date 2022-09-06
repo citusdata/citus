@@ -83,7 +83,7 @@ DROP FUNCTION pg_catalog.isolate_tenant_to_new_shard(table_name regclass, tenant
 CREATE TYPE citus.citus_job_status AS ENUM ('scheduled', 'running', 'finished', 'cancelled', 'failing', 'failed');
 ALTER TYPE citus.citus_job_status SET SCHEMA pg_catalog;
 
-CREATE TABLE citus.pg_dist_background_jobs (
+CREATE TABLE citus.pg_dist_background_job (
     job_id bigserial NOT NULL,
     state pg_catalog.citus_job_status DEFAULT 'scheduled' NOT NULL,
     job_type name,
@@ -91,17 +91,17 @@ CREATE TABLE citus.pg_dist_background_jobs (
     started_at timestamptz,
     finished_at timestamptz,
 
-    CONSTRAINT pg_dist_background_jobs_pkey PRIMARY KEY (job_id)
+    CONSTRAINT pg_dist_background_job_pkey PRIMARY KEY (job_id)
 );
-ALTER TABLE citus.pg_dist_background_jobs SET SCHEMA pg_catalog;
-GRANT SELECT ON pg_catalog.pg_dist_background_jobs TO PUBLIC;
-GRANT SELECT ON pg_catalog.pg_dist_background_jobs_job_id_seq TO PUBLIC;
+ALTER TABLE citus.pg_dist_background_job SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.pg_dist_background_job TO PUBLIC;
+GRANT SELECT ON pg_catalog.pg_dist_background_job_job_id_seq TO PUBLIC;
 
 CREATE TYPE citus.citus_task_status AS ENUM ('blocked', 'runnable', 'running', 'done', 'error', 'unscheduled', 'cancelled');
 ALTER TYPE citus.citus_task_status SET SCHEMA pg_catalog;
 
-CREATE TABLE citus.pg_dist_background_tasks(
-    job_id bigint NOT NULL REFERENCES pg_catalog.pg_dist_background_jobs(job_id),
+CREATE TABLE citus.pg_dist_background_task(
+    job_id bigint NOT NULL REFERENCES pg_catalog.pg_dist_background_job(job_id),
     task_id bigserial NOT NULL,
     owner regrole NOT NULL DEFAULT CURRENT_USER::regrole,
     pid integer,
@@ -111,28 +111,28 @@ CREATE TABLE citus.pg_dist_background_tasks(
     not_before timestamptz, -- can be null to indicate no delay for start of the task, will be set on failure to delay retries
     message text,
 
-    CONSTRAINT pg_dist_background_tasks_pkey PRIMARY KEY (job_id, task_id),
+    CONSTRAINT pg_dist_background_task_pkey PRIMARY KEY (job_id, task_id),
     UNIQUE(task_id)
 );
-ALTER TABLE citus.pg_dist_background_tasks SET SCHEMA pg_catalog;
-CREATE INDEX pg_dist_background_tasks_status_task_id_index ON pg_catalog.pg_dist_background_tasks USING btree(status, task_id);
-GRANT SELECT ON pg_catalog.pg_dist_background_tasks TO PUBLIC;
-GRANT SELECT ON pg_catalog.pg_dist_background_tasks_task_id_seq TO PUBLIC;
+ALTER TABLE citus.pg_dist_background_task SET SCHEMA pg_catalog;
+CREATE INDEX pg_dist_background_task_status_task_id_index ON pg_catalog.pg_dist_background_task USING btree(status, task_id);
+GRANT SELECT ON pg_catalog.pg_dist_background_task TO PUBLIC;
+GRANT SELECT ON pg_catalog.pg_dist_background_task_task_id_seq TO PUBLIC;
 
-CREATE TABLE citus.pg_dist_background_tasks_depend(
-    job_id bigint NOT NULL REFERENCES pg_catalog.pg_dist_background_jobs(job_id) ON DELETE CASCADE,
+CREATE TABLE citus.pg_dist_background_task_depend(
+    job_id bigint NOT NULL REFERENCES pg_catalog.pg_dist_background_job(job_id) ON DELETE CASCADE,
     task_id bigint NOT NULL,
     depends_on bigint NOT NULL,
 
     PRIMARY KEY (job_id, task_id, depends_on),
-    FOREIGN KEY (job_id, task_id) REFERENCES pg_catalog.pg_dist_background_tasks (job_id, task_id) ON DELETE CASCADE,
-    FOREIGN KEY (job_id, depends_on) REFERENCES pg_catalog.pg_dist_background_tasks (job_id, task_id) ON DELETE CASCADE
+    FOREIGN KEY (job_id, task_id) REFERENCES pg_catalog.pg_dist_background_task (job_id, task_id) ON DELETE CASCADE,
+    FOREIGN KEY (job_id, depends_on) REFERENCES pg_catalog.pg_dist_background_task (job_id, task_id) ON DELETE CASCADE
 );
 
-ALTER TABLE citus.pg_dist_background_tasks_depend SET SCHEMA pg_catalog;
-CREATE INDEX pg_dist_background_tasks_depend_task_id ON pg_catalog.pg_dist_background_tasks_depend USING btree(job_id, task_id);
-CREATE INDEX pg_dist_background_tasks_depend_depends_on ON pg_catalog.pg_dist_background_tasks_depend USING btree(job_id, depends_on);
-GRANT SELECT ON pg_catalog.pg_dist_background_tasks_depend TO PUBLIC;
+ALTER TABLE citus.pg_dist_background_task_depend SET SCHEMA pg_catalog;
+CREATE INDEX pg_dist_background_task_depend_task_id ON pg_catalog.pg_dist_background_task_depend USING btree(job_id, task_id);
+CREATE INDEX pg_dist_background_task_depend_depends_on ON pg_catalog.pg_dist_background_task_depend USING btree(job_id, depends_on);
+GRANT SELECT ON pg_catalog.pg_dist_background_task_depend TO PUBLIC;
 
-#include "udfs/citus_jobs_wait/11.1-1.sql"
-#include "udfs/citus_jobs_cancel/11.1-1.sql"
+#include "udfs/citus_job_wait/11.1-1.sql"
+#include "udfs/citus_job_cancel/11.1-1.sql"

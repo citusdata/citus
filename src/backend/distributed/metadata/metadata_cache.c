@@ -141,16 +141,16 @@ typedef struct MetadataCacheData
 	bool extensionLoaded;
 	Oid distShardRelationId;
 	Oid distPlacementRelationId;
-	Oid distBackgroundJobsRelationId;
-	Oid distBackgroundJobsPKeyIndexId;
-	Oid distBackgroundJobsJobIdSequenceId;
-	Oid distBackgroundTasksRelationId;
-	Oid distBackgroundTasksPKeyIndexId;
-	Oid distBackgroundTasksStatusTaskIdIndexId;
-	Oid distBackgroundTasksTaskIdSequenceId;
-	Oid distBackgroundTasksDependRelationId;
-	Oid distBackgroundTasksDependTaskIdIndexId;
-	Oid distBackgroundTasksDependDependsOnIndexId;
+	Oid distBackgroundJobRelationId;
+	Oid distBackgroundJobPKeyIndexId;
+	Oid distBackgroundJobJobIdSequenceId;
+	Oid distBackgroundTaskRelationId;
+	Oid distBackgroundTaskPKeyIndexId;
+	Oid distBackgroundTaskStatusTaskIdIndexId;
+	Oid distBackgroundTaskTaskIdSequenceId;
+	Oid distBackgroundTaskDependRelationId;
+	Oid distBackgroundTaskDependTaskIdIndexId;
+	Oid distBackgroundTaskDependDependsOnIndexId;
 	Oid citusJobStatusScheduledId;
 	Oid citusJobStatusRunningId;
 	Oid citusJobStatusFinishedId;
@@ -2470,102 +2470,102 @@ DistLocalGroupIdRelationId(void)
 
 
 Oid
-DistBackgroundJobsRelationId(void)
+DistBackgroundJobRelationId(void)
 {
-	CachedRelationLookup("pg_dist_background_jobs",
-						 &MetadataCache.distBackgroundJobsRelationId);
+	CachedRelationLookup("pg_dist_background_job",
+						 &MetadataCache.distBackgroundJobRelationId);
 
-	return MetadataCache.distBackgroundJobsRelationId;
+	return MetadataCache.distBackgroundJobRelationId;
 }
 
 
 Oid
-DistBackgroundJobsPKeyIndexId(void)
+DistBackgroundJobPKeyIndexId(void)
 {
-	CachedRelationLookup("pg_dist_background_jobs_pkey",
-						 &MetadataCache.distBackgroundJobsPKeyIndexId);
+	CachedRelationLookup("pg_dist_background_job_pkey",
+						 &MetadataCache.distBackgroundJobPKeyIndexId);
 
-	return MetadataCache.distBackgroundJobsPKeyIndexId;
+	return MetadataCache.distBackgroundJobPKeyIndexId;
 }
 
 
 Oid
-DistBackgroundJobsJobIdSequenceId(void)
+DistBackgroundJobJobIdSequenceId(void)
 {
-	CachedRelationLookup("pg_dist_background_jobs_job_id_seq",
-						 &MetadataCache.distBackgroundJobsJobIdSequenceId);
+	CachedRelationLookup("pg_dist_background_job_job_id_seq",
+						 &MetadataCache.distBackgroundJobJobIdSequenceId);
 
-	return MetadataCache.distBackgroundJobsJobIdSequenceId;
+	return MetadataCache.distBackgroundJobJobIdSequenceId;
 }
 
 
 Oid
-DistBackgroundTasksRelationId(void)
+DistBackgroundTaskRelationId(void)
 {
-	CachedRelationLookup("pg_dist_background_tasks",
-						 &MetadataCache.distBackgroundTasksRelationId);
+	CachedRelationLookup("pg_dist_background_task",
+						 &MetadataCache.distBackgroundTaskRelationId);
 
-	return MetadataCache.distBackgroundTasksRelationId;
+	return MetadataCache.distBackgroundTaskRelationId;
 }
 
 
 Oid
-DistBackgroundTasksPKeyIndexId(void)
+DistBackgroundTaskPKeyIndexId(void)
 {
-	CachedRelationLookup("pg_dist_background_tasks_pkey",
-						 &MetadataCache.distBackgroundTasksPKeyIndexId);
+	CachedRelationLookup("pg_dist_background_task_pkey",
+						 &MetadataCache.distBackgroundTaskPKeyIndexId);
 
-	return MetadataCache.distBackgroundTasksPKeyIndexId;
+	return MetadataCache.distBackgroundTaskPKeyIndexId;
 }
 
 
 Oid
-DistBackgroundTasksStatusTaskIdIndexId(void)
+DistBackgroundTaskStatusTaskIdIndexId(void)
 {
-	CachedRelationLookup("pg_dist_background_tasks_status_task_id_index",
-						 &MetadataCache.distBackgroundTasksStatusTaskIdIndexId);
+	CachedRelationLookup("pg_dist_background_task_status_task_id_index",
+						 &MetadataCache.distBackgroundTaskStatusTaskIdIndexId);
 
-	return MetadataCache.distBackgroundTasksStatusTaskIdIndexId;
+	return MetadataCache.distBackgroundTaskStatusTaskIdIndexId;
 }
 
 
 Oid
-DistBackgroundTasksTaskIdSequenceId(void)
+DistBackgroundTaskTaskIdSequenceId(void)
 {
-	CachedRelationLookup("pg_dist_background_tasks_task_id_seq",
-						 &MetadataCache.distBackgroundTasksTaskIdSequenceId);
+	CachedRelationLookup("pg_dist_background_task_task_id_seq",
+						 &MetadataCache.distBackgroundTaskTaskIdSequenceId);
 
-	return MetadataCache.distBackgroundTasksTaskIdSequenceId;
+	return MetadataCache.distBackgroundTaskTaskIdSequenceId;
 }
 
 
 Oid
-DistBackgroundTasksDependRelationId(void)
+DistBackgroundTaskDependRelationId(void)
 {
-	CachedRelationLookup("pg_dist_background_tasks_depend",
-						 &MetadataCache.distBackgroundTasksDependRelationId);
+	CachedRelationLookup("pg_dist_background_task_depend",
+						 &MetadataCache.distBackgroundTaskDependRelationId);
 
-	return MetadataCache.distBackgroundTasksDependRelationId;
+	return MetadataCache.distBackgroundTaskDependRelationId;
 }
 
 
 Oid
-DistBackgroundTasksDependTaskIdIndexId(void)
+DistBackgroundTaskDependTaskIdIndexId(void)
 {
-	CachedRelationLookup("pg_dist_background_tasks_depend_task_id",
-						 &MetadataCache.distBackgroundTasksDependTaskIdIndexId);
+	CachedRelationLookup("pg_dist_background_task_depend_task_id",
+						 &MetadataCache.distBackgroundTaskDependTaskIdIndexId);
 
-	return MetadataCache.distBackgroundTasksDependTaskIdIndexId;
+	return MetadataCache.distBackgroundTaskDependTaskIdIndexId;
 }
 
 
 Oid
-DistBackgroundTasksDependDependsOnIndexId(void)
+DistBackgroundTaskDependDependsOnIndexId(void)
 {
-	CachedRelationLookup("pg_dist_background_tasks_depend_depends_on",
-						 &MetadataCache.distBackgroundTasksDependDependsOnIndexId);
+	CachedRelationLookup("pg_dist_background_task_depend_depends_on",
+						 &MetadataCache.distBackgroundTaskDependDependsOnIndexId);
 
-	return MetadataCache.distBackgroundTasksDependDependsOnIndexId;
+	return MetadataCache.distBackgroundTaskDependDependsOnIndexId;
 }
 
 

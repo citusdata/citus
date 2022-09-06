@@ -9,7 +9,7 @@
  * achieve the goal of running background tasks asynchronously from the
  * main database workload. This first background worker is the
  * Background Tasks Queue Monitor. This background worker keeps track of
- * tasks recorded in pg_dist_background_tasks and ensures execution based
+ * tasks recorded in pg_dist_background_task and ensures execution based
  * on a statemachine. When a task needs to be executed it starts a
  * Background Task Executor that executes the sql statement defined in the
  * task. The output of the Executor is shared with the Monitor via a
@@ -81,12 +81,12 @@ static void ConsumeTaskWorkerOutput(shm_mq_handle *responseq, BackgroundTask *ta
 									bool *hadError, bool *cancelled);
 static void UpdateDependingTasks(BackgroundTask *task);
 
-PG_FUNCTION_INFO_V1(citus_jobs_cancel);
-PG_FUNCTION_INFO_V1(citus_jobs_wait);
+PG_FUNCTION_INFO_V1(citus_job_cancel);
+PG_FUNCTION_INFO_V1(citus_job_wait);
 
 
 /*
- * pg_catalog.citus_jobs_cancel(jobid bigint) void
+ * pg_catalog.citus_job_cancel(jobid bigint) void
  *   cancels a scheduled/running job
  *
  * When cancelling a job there are two phases.
@@ -99,7 +99,7 @@ PG_FUNCTION_INFO_V1(citus_jobs_wait);
  * job.
  */
 Datum
-citus_jobs_cancel(PG_FUNCTION_ARGS)
+citus_job_cancel(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
@@ -144,7 +144,7 @@ citus_jobs_cancel(PG_FUNCTION_ARGS)
 
 
 /*
- * pg_catalog.citus_jobs_wait(jobid bigint,
+ * pg_catalog.citus_job_wait(jobid bigint,
  *                            desired_status citus_job_status DEFAULT NULL) boolean
  *   waits till a job reaches a desired status, or can't reach the status anymore because
  *   it reached a (different) terminal state. When no desired_status is given it will
@@ -156,7 +156,7 @@ citus_jobs_cancel(PG_FUNCTION_ARGS)
  * and any backend calling this function to receive a signal when the job changes state.
  */
 Datum
-citus_jobs_wait(PG_FUNCTION_ARGS)
+citus_job_wait(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
@@ -275,7 +275,7 @@ StartCitusBackgroundTaskQueueMonitor(Oid database, Oid extensionOwner)
  * CitusBackgroundTaskQueueMonitorMain is the main entry point for the background worker
  * running the background tasks queue monitor.
  *
- * It's mainloop reads a runnable task from pg_dist_background_tasks and progressing the
+ * It's mainloop reads a runnable task from pg_dist_background_task and progressing the
  * tasks and jobs state machines associated with the task. When no new task can be found
  * it will exit(0) and lets the maintenance daemon poll for new tasks.
  *

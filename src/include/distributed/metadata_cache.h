@@ -229,8 +229,8 @@ extern Oid DistPartitionRelationId(void);
 extern Oid DistShardRelationId(void);
 extern Oid DistPlacementRelationId(void);
 extern Oid DistNodeRelationId(void);
-extern Oid DistBackgroundJobsRelationId(void);
-extern Oid DistBackgroundTasksRelationId(void);
+extern Oid DistBackgroundJobRelationId(void);
+extern Oid DistBackgroundTaskRelationId(void);
 extern Oid DistRebalanceStrategyRelationId(void);
 extern Oid DistLocalGroupIdRelationId(void);
 extern Oid DistObjectRelationId(void);
@@ -240,12 +240,12 @@ extern Oid DistEnabledCustomAggregatesId(void);
 extern Oid DistNodeNodeIdIndexId(void);
 extern Oid DistPartitionLogicalRelidIndexId(void);
 extern Oid DistPartitionColocationidIndexId(void);
-extern Oid DistBackgroundJobsPKeyIndexId(void);
-extern Oid DistBackgroundTasksPKeyIndexId(void);
-extern Oid DistBackgroundTasksStatusTaskIdIndexId(void);
-extern Oid DistBackgroundTasksDependRelationId(void);
-extern Oid DistBackgroundTasksDependTaskIdIndexId(void);
-extern Oid DistBackgroundTasksDependDependsOnIndexId(void);
+extern Oid DistBackgroundJobPKeyIndexId(void);
+extern Oid DistBackgroundTaskPKeyIndexId(void);
+extern Oid DistBackgroundTaskStatusTaskIdIndexId(void);
+extern Oid DistBackgroundTaskDependRelationId(void);
+extern Oid DistBackgroundTaskDependTaskIdIndexId(void);
+extern Oid DistBackgroundTaskDependDependsOnIndexId(void);
 extern Oid DistShardLogicalRelidIndexId(void);
 extern Oid DistShardShardidIndexId(void);
 extern Oid DistPlacementShardidIndexId(void);
@@ -257,8 +257,8 @@ extern Oid DistPlacementGroupidIndexId(void);
 extern Oid DistObjectPrimaryKeyIndexId(void);
 
 /* sequence oids */
-extern Oid DistBackgroundJobsJobIdSequenceId(void);
-extern Oid DistBackgroundTasksTaskIdSequenceId(void);
+extern Oid DistBackgroundJobJobIdSequenceId(void);
+extern Oid DistBackgroundTaskTaskIdSequenceId(void);
 
 /* type oids */
 extern Oid LookupTypeOid(char *schemaNameSting, char *typeNameString);

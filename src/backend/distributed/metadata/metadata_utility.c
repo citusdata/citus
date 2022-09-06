@@ -46,9 +46,9 @@
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/pg_dist_background_jobs.h"
-#include "distributed/pg_dist_background_tasks.h"
-#include "distributed/pg_dist_backrgound_tasks_depend.h"
+#include "distributed/pg_dist_background_job.h"
+#include "distributed/pg_dist_background_task.h"
+#include "distributed/pg_dist_backrgound_task_depend.h"
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
@@ -2381,7 +2381,7 @@ bool
 HasRunnableBackgroundTask()
 {
 	Relation pgDistBackgroundTasks =
-		table_open(DistBackgroundTasksRelationId(), AccessShareLock);
+		table_open(DistBackgroundTaskRelationId(), AccessShareLock);
 
 	/* find any job in states listed here */
 	BackgroundTaskStatus taskStatus[] = {
@@ -2396,14 +2396,14 @@ HasRunnableBackgroundTask()
 		ScanKeyData scanKey[1] = { 0 };
 		const bool indexOK = true;
 
-		/* pg_dist_background_tasks.status == taskStatus[i] */
-		ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_status,
+		/* pg_dist_background_task.status == taskStatus[i] */
+		ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_status,
 					BTEqualStrategyNumber, F_OIDEQ,
 					ObjectIdGetDatum(BackgroundTaskStatusOid(taskStatus[i])));
 
 		SysScanDesc scanDescriptor =
 			systable_beginscan(pgDistBackgroundTasks,
-							   DistBackgroundTasksStatusTaskIdIndexId(),
+							   DistBackgroundTaskStatusTaskIdIndexId(),
 							   indexOK, NULL, scanKeyCount,
 							   scanKey);
 
@@ -2673,7 +2673,7 @@ BackgroundTaskStatusOid(BackgroundTaskStatus status)
 int64
 GetNextBackgroundJobsJobId(void)
 {
-	return DatumGetInt64(nextval_internal(DistBackgroundJobsJobIdSequenceId(), false));
+	return DatumGetInt64(nextval_internal(DistBackgroundJobJobIdSequenceId(), false));
 }
 
 
@@ -2687,7 +2687,7 @@ GetNextBackgroundJobsJobId(void)
 int64
 GetNextBackgroundTaskTaskId(void)
 {
-	return DatumGetInt64(nextval_internal(DistBackgroundTasksTaskIdSequenceId(), false));
+	return DatumGetInt64(nextval_internal(DistBackgroundTaskTaskIdSequenceId(), false));
 }
 
 
@@ -2701,35 +2701,35 @@ int64
 CreateBackgroundJob(const char *jobType, const char *description)
 {
 	Relation pgDistBackgroundJobs =
-		table_open(DistBackgroundJobsRelationId(), RowExclusiveLock);
+		table_open(DistBackgroundJobRelationId(), RowExclusiveLock);
 
 	/* insert new job */
-	Datum values[Natts_pg_dist_background_jobs] = { 0 };
-	bool nulls[Natts_pg_dist_background_jobs] = { 0 };
+	Datum values[Natts_pg_dist_background_job] = { 0 };
+	bool nulls[Natts_pg_dist_background_job] = { 0 };
 
 	memset(nulls, true, sizeof(nulls));
 
 	int64 jobId = GetNextBackgroundJobsJobId();
 
-	values[Anum_pg_dist_background_jobs_job_id - 1] = Int64GetDatum(jobId);
-	nulls[Anum_pg_dist_background_jobs_job_id - 1] = false;
+	values[Anum_pg_dist_background_job_job_id - 1] = Int64GetDatum(jobId);
+	nulls[Anum_pg_dist_background_job_job_id - 1] = false;
 
-	values[Anum_pg_dist_background_jobs_state - 1] = CitusJobStatusScheduledId();
-	nulls[Anum_pg_dist_background_jobs_state - 1] = false;
+	values[Anum_pg_dist_background_job_state - 1] = CitusJobStatusScheduledId();
+	nulls[Anum_pg_dist_background_job_state - 1] = false;
 
 	if (jobType)
 	{
 		NameData jobTypeName = { 0 };
 		namestrcpy(&jobTypeName, jobType);
-		values[Anum_pg_dist_background_jobs_job_type - 1] = NameGetDatum(&jobTypeName);
-		nulls[Anum_pg_dist_background_jobs_job_type - 1] = false;
+		values[Anum_pg_dist_background_job_job_type - 1] = NameGetDatum(&jobTypeName);
+		nulls[Anum_pg_dist_background_job_job_type - 1] = false;
 	}
 
 	if (description)
 	{
-		values[Anum_pg_dist_background_jobs_description - 1] =
+		values[Anum_pg_dist_background_job_description - 1] =
 			CStringGetTextDatum(description);
-		nulls[Anum_pg_dist_background_jobs_description - 1] = false;
+		nulls[Anum_pg_dist_background_job_description - 1] = false;
 	}
 
 	HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistBackgroundJobs),
@@ -2758,33 +2758,33 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 	BackgroundTask *task = NULL;
 
 	Relation pgDistBackgroundTasks =
-		table_open(DistBackgroundTasksRelationId(), RowExclusiveLock);
+		table_open(DistBackgroundTaskRelationId(), RowExclusiveLock);
 	Relation pgDistbackgroundTasksDepend = NULL;
 	if (dependingTaskCount > 0)
 	{
 		pgDistbackgroundTasksDepend =
-			table_open(DistBackgroundTasksDependRelationId(), RowExclusiveLock);
+			table_open(DistBackgroundTaskDependRelationId(), RowExclusiveLock);
 	}
 
 	/* 1. TODO verify depending jobs exist and lock them */
 
 	/* 2. insert new task */
 	{
-		Datum values[Natts_pg_dist_background_tasks] = { 0 };
-		bool nulls[Natts_pg_dist_background_tasks] = { 0 };
+		Datum values[Natts_pg_dist_background_task] = { 0 };
+		bool nulls[Natts_pg_dist_background_task] = { 0 };
 
 		memset(nulls, true, sizeof(nulls));
 
 		int64 taskId = GetNextBackgroundTaskTaskId();
 
-		values[Anum_pg_dist_background_tasks_job_id - 1] = Int64GetDatum(jobId);
-		nulls[Anum_pg_dist_background_tasks_job_id - 1] = false;
+		values[Anum_pg_dist_background_task_job_id - 1] = Int64GetDatum(jobId);
+		nulls[Anum_pg_dist_background_task_job_id - 1] = false;
 
-		values[Anum_pg_dist_background_tasks_task_id - 1] = Int64GetDatum(taskId);
-		nulls[Anum_pg_dist_background_tasks_task_id - 1] = false;
+		values[Anum_pg_dist_background_task_task_id - 1] = Int64GetDatum(taskId);
+		nulls[Anum_pg_dist_background_task_task_id - 1] = false;
 
-		values[Anum_pg_dist_background_tasks_owner - 1] = ObjectIdGetDatum(owner);
-		nulls[Anum_pg_dist_background_tasks_owner - 1] = false;
+		values[Anum_pg_dist_background_task_owner - 1] = ObjectIdGetDatum(owner);
+		nulls[Anum_pg_dist_background_task_owner - 1] = false;
 
 		Oid statusOid = InvalidOid;
 		if (dependingTaskCount == 0)
@@ -2795,11 +2795,11 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 		{
 			statusOid = CitusTaskStatusBlockedId();
 		}
-		values[Anum_pg_dist_background_tasks_status - 1] = ObjectIdGetDatum(statusOid);
-		nulls[Anum_pg_dist_background_tasks_status - 1] = false;
+		values[Anum_pg_dist_background_task_status - 1] = ObjectIdGetDatum(statusOid);
+		nulls[Anum_pg_dist_background_task_status - 1] = false;
 
-		values[Anum_pg_dist_background_tasks_command - 1] = CStringGetTextDatum(command);
-		nulls[Anum_pg_dist_background_tasks_command - 1] = false;
+		values[Anum_pg_dist_background_task_command - 1] = CStringGetTextDatum(command);
+		nulls[Anum_pg_dist_background_task_command - 1] = false;
 
 		HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistBackgroundTasks),
 											 values, nulls);
@@ -2817,21 +2817,21 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 		{
 			Assert(pgDistbackgroundTasksDepend != NULL);
 
-			Datum values[Natts_pg_dist_background_tasks_depend] = { 0 };
-			bool nulls[Natts_pg_dist_background_tasks_depend] = { 0 };
+			Datum values[Natts_pg_dist_background_task_depend] = { 0 };
+			bool nulls[Natts_pg_dist_background_task_depend] = { 0 };
 			memset(nulls, true, sizeof(nulls));
 
-			values[Anum_pg_dist_background_tasks_depend_job_id - 1] =
+			values[Anum_pg_dist_background_task_depend_job_id - 1] =
 				Int64GetDatum(jobId);
-			nulls[Anum_pg_dist_background_tasks_depend_job_id - 1] = false;
+			nulls[Anum_pg_dist_background_task_depend_job_id - 1] = false;
 
-			values[Anum_pg_dist_background_tasks_depend_task_id - 1] =
+			values[Anum_pg_dist_background_task_depend_task_id - 1] =
 				Int64GetDatum(task->taskid);
-			nulls[Anum_pg_dist_background_tasks_depend_task_id - 1] = false;
+			nulls[Anum_pg_dist_background_task_depend_task_id - 1] = false;
 
-			values[Anum_pg_dist_background_tasks_depend_depends_on - 1] =
+			values[Anum_pg_dist_background_task_depend_depends_on - 1] =
 				Int64GetDatum(dependingTaskIds[i]);
-			nulls[Anum_pg_dist_background_tasks_depend_depends_on - 1] = false;
+			nulls[Anum_pg_dist_background_task_depend_depends_on - 1] = false;
 
 			HeapTuple newTuple = heap_form_tuple(
 				RelationGetDescr(pgDistbackgroundTasksDepend), values, nulls);
@@ -2868,36 +2868,36 @@ ResetRunningBackgroundTasks(void)
 	const bool indexOK = true;
 
 	Relation pgDistBackgroundTasks =
-		table_open(DistBackgroundTasksRelationId(), AccessShareLock);
+		table_open(DistBackgroundTaskRelationId(), AccessShareLock);
 
-	/* pg_dist_background_tasks.status == 'running' */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_status,
+	/* pg_dist_background_task.status == 'running' */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_status,
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(CitusTaskStatusRunningId()));
 
 	SysScanDesc scanDescriptor =
 		systable_beginscan(pgDistBackgroundTasks,
-						   DistBackgroundTasksStatusTaskIdIndexId(),
+						   DistBackgroundTaskStatusTaskIdIndexId(),
 						   indexOK, NULL, scanKeyCount,
 						   scanKey);
 
 	HeapTuple taskTuple = NULL;
 	while (HeapTupleIsValid(taskTuple = systable_getnext(scanDescriptor)))
 	{
-		Datum values[Natts_pg_dist_background_tasks] = { 0 };
-		bool isnull[Natts_pg_dist_background_tasks] = { 0 };
-		bool replace[Natts_pg_dist_background_tasks] = { 0 };
+		Datum values[Natts_pg_dist_background_task] = { 0 };
+		bool isnull[Natts_pg_dist_background_task] = { 0 };
+		bool replace[Natts_pg_dist_background_task] = { 0 };
 
 		TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
 		heap_deform_tuple(taskTuple, tupleDescriptor, values, isnull);
 
-		values[Anum_pg_dist_background_tasks_status - 1] =
+		values[Anum_pg_dist_background_task_status - 1] =
 			ObjectIdGetDatum(CitusTaskStatusRunnableId());
-		isnull[Anum_pg_dist_background_tasks_status - 1] = false;
-		replace[Anum_pg_dist_background_tasks_status - 1] = true;
+		isnull[Anum_pg_dist_background_task_status - 1] = false;
+		replace[Anum_pg_dist_background_task_status - 1] = true;
 
 		/* if there is a pid we need to signal the backend to stop */
-		if (!isnull[Anum_pg_dist_background_tasks_pid - 1])
+		if (!isnull[Anum_pg_dist_background_task_pid - 1])
 		{
 			/*
 			 * Before signalling the pid we check if the task lock is held, otherwise we
@@ -2905,7 +2905,7 @@ ResetRunningBackgroundTasks(void)
 			 */
 
 			int64 taskId =
-				DatumGetInt64(values[Anum_pg_dist_background_tasks_task_id - 1]);
+				DatumGetInt64(values[Anum_pg_dist_background_task_task_id - 1]);
 
 			/* No need to release lock, will get unlocked once our changes commit */
 			LOCKTAG locktag = { 0 };
@@ -2917,7 +2917,7 @@ ResetRunningBackgroundTasks(void)
 			if (locked == LOCKACQUIRE_NOT_AVAIL)
 			{
 				/* there is still an executor holding the lock, needs a SIGTERM */
-				int pid = DatumGetInt32(values[Anum_pg_dist_background_tasks_pid - 1]);
+				int pid = DatumGetInt32(values[Anum_pg_dist_background_task_pid - 1]);
 				PGPROC *proc = BackendPidGetProc(pid);
 				const int sig = SIGTERM; /* we need to fully stop execution */
 				if (proc)
@@ -2936,9 +2936,9 @@ ResetRunningBackgroundTasks(void)
 			}
 		}
 
-		values[Anum_pg_dist_background_tasks_pid - 1] = InvalidOid;
-		isnull[Anum_pg_dist_background_tasks_pid - 1] = true;
-		replace[Anum_pg_dist_background_tasks_pid - 1] = true;
+		values[Anum_pg_dist_background_task_pid - 1] = InvalidOid;
+		isnull[Anum_pg_dist_background_task_pid - 1] = true;
+		replace[Anum_pg_dist_background_task_pid - 1] = true;
 
 		taskTuple = heap_modify_tuple(taskTuple, tupleDescriptor, values, isnull,
 									  replace);
@@ -2962,39 +2962,39 @@ ResetRunningBackgroundTasks(void)
 static BackgroundJob *
 DeformBackgroundJobHeapTuple(TupleDesc tupleDescriptor, HeapTuple jobTuple)
 {
-	Datum values[Natts_pg_dist_background_jobs] = { 0 };
-	bool nulls[Natts_pg_dist_background_jobs] = { 0 };
+	Datum values[Natts_pg_dist_background_job] = { 0 };
+	bool nulls[Natts_pg_dist_background_job] = { 0 };
 	heap_deform_tuple(jobTuple, tupleDescriptor, values, nulls);
 
 	BackgroundJob *job = palloc0(sizeof(BackgroundJob));
-	job->jobid = DatumGetInt64(values[Anum_pg_dist_background_jobs_job_id - 1]);
+	job->jobid = DatumGetInt64(values[Anum_pg_dist_background_job_job_id - 1]);
 	job->state = BackgroundJobStatusByOid(
-		DatumGetObjectId(values[Anum_pg_dist_background_jobs_state - 1]));
+		DatumGetObjectId(values[Anum_pg_dist_background_job_state - 1]));
 
-	if (!nulls[Anum_pg_dist_background_jobs_job_type - 1])
+	if (!nulls[Anum_pg_dist_background_job_job_type - 1])
 	{
-		Name jobTypeName = DatumGetName(values[Anum_pg_dist_background_jobs_job_type -
+		Name jobTypeName = DatumGetName(values[Anum_pg_dist_background_job_job_type -
 											   1]);
 		job->jobType = pstrdup(NameStr(*jobTypeName));
 	}
 
-	if (!nulls[Anum_pg_dist_background_jobs_description - 1])
+	if (!nulls[Anum_pg_dist_background_job_description - 1])
 	{
 		job->description = text_to_cstring(
-			DatumGetTextP(values[Anum_pg_dist_background_jobs_description - 1]));
+			DatumGetTextP(values[Anum_pg_dist_background_job_description - 1]));
 	}
 
-	if (!nulls[Anum_pg_dist_background_jobs_started_at - 1])
+	if (!nulls[Anum_pg_dist_background_job_started_at - 1])
 	{
 		TimestampTz startedAt =
-			DatumGetTimestampTz(values[Anum_pg_dist_background_jobs_started_at - 1]);
+			DatumGetTimestampTz(values[Anum_pg_dist_background_job_started_at - 1]);
 		SET_NULLABLE_FIELD(job, started_at, startedAt);
 	}
 
-	if (!nulls[Anum_pg_dist_background_jobs_finished_at - 1])
+	if (!nulls[Anum_pg_dist_background_job_finished_at - 1])
 	{
 		TimestampTz finishedAt =
-			DatumGetTimestampTz(values[Anum_pg_dist_background_jobs_finished_at - 1]);
+			DatumGetTimestampTz(values[Anum_pg_dist_background_job_finished_at - 1]);
 		SET_NULLABLE_FIELD(job, finished_at, finishedAt);
 	}
 
@@ -3003,50 +3003,50 @@ DeformBackgroundJobHeapTuple(TupleDesc tupleDescriptor, HeapTuple jobTuple)
 
 
 /*
- * DeformBackgroundTaskHeapTuple parses a HeapTuple from pg_dist_background_tasks into its
+ * DeformBackgroundTaskHeapTuple parses a HeapTuple from pg_dist_background_task into its
  * inmemory representation. This can be used while scanning a heap to quickly get access
  * to all fields of a Task.
  */
 static BackgroundTask *
 DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor, HeapTuple taskTuple)
 {
-	Datum values[Natts_pg_dist_background_tasks] = { 0 };
-	bool nulls[Natts_pg_dist_background_tasks] = { 0 };
+	Datum values[Natts_pg_dist_background_task] = { 0 };
+	bool nulls[Natts_pg_dist_background_task] = { 0 };
 	heap_deform_tuple(taskTuple, tupleDescriptor, values, nulls);
 
 	BackgroundTask *task = palloc0(sizeof(BackgroundTask));
-	task->jobid = DatumGetInt64(values[Anum_pg_dist_background_tasks_job_id - 1]);
-	task->taskid = DatumGetInt64(values[Anum_pg_dist_background_tasks_task_id - 1]);
-	task->owner = DatumGetObjectId(values[Anum_pg_dist_background_tasks_owner - 1]);
-	if (!nulls[Anum_pg_dist_background_tasks_pid - 1])
+	task->jobid = DatumGetInt64(values[Anum_pg_dist_background_task_job_id - 1]);
+	task->taskid = DatumGetInt64(values[Anum_pg_dist_background_task_task_id - 1]);
+	task->owner = DatumGetObjectId(values[Anum_pg_dist_background_task_owner - 1]);
+	if (!nulls[Anum_pg_dist_background_task_pid - 1])
 	{
-		int32 pid = DatumGetInt32(values[Anum_pg_dist_background_tasks_pid - 1]);
+		int32 pid = DatumGetInt32(values[Anum_pg_dist_background_task_pid - 1]);
 		SET_NULLABLE_FIELD(task, pid, pid);
 	}
 	task->status = BackgroundTaskStatusByOid(
-		DatumGetObjectId(values[Anum_pg_dist_background_tasks_status - 1]));
+		DatumGetObjectId(values[Anum_pg_dist_background_task_status - 1]));
 
 	task->command = text_to_cstring(
-		DatumGetTextP(values[Anum_pg_dist_background_tasks_command - 1]));
+		DatumGetTextP(values[Anum_pg_dist_background_task_command - 1]));
 
-	if (!nulls[Anum_pg_dist_background_tasks_retry_count - 1])
+	if (!nulls[Anum_pg_dist_background_task_retry_count - 1])
 	{
 		int32 retryCount =
-			DatumGetInt32(values[Anum_pg_dist_background_tasks_retry_count - 1]);
+			DatumGetInt32(values[Anum_pg_dist_background_task_retry_count - 1]);
 		SET_NULLABLE_FIELD(task, retry_count, retryCount);
 	}
 
-	if (!nulls[Anum_pg_dist_background_tasks_not_before - 1])
+	if (!nulls[Anum_pg_dist_background_task_not_before - 1])
 	{
 		TimestampTz notBefore =
-			DatumGetTimestampTz(values[Anum_pg_dist_background_tasks_not_before - 1]);
+			DatumGetTimestampTz(values[Anum_pg_dist_background_task_not_before - 1]);
 		SET_NULLABLE_FIELD(task, not_before, notBefore);
 	}
 
-	if (!nulls[Anum_pg_dist_background_tasks_message - 1])
+	if (!nulls[Anum_pg_dist_background_task_message - 1])
 	{
 		task->message = pstrdup(
-			DatumGetCString(values[Anum_pg_dist_background_tasks_message - 1]));
+			DatumGetCString(values[Anum_pg_dist_background_task_message - 1]));
 	}
 
 	return task;
@@ -3064,30 +3064,30 @@ BackgroundTaskHasUmnetDependencies(int64 jobId, int64 taskId)
 	bool hasUnmetDependency = false;
 
 	Relation pgDistBackgroundTasksDepend =
-		table_open(DistBackgroundTasksDependRelationId(), AccessShareLock);
+		table_open(DistBackgroundTaskDependRelationId(), AccessShareLock);
 
 	ScanKeyData scanKey[2] = { 0 };
 	bool indexOK = true;
 
-	/* pg_catalog.pg_dist_background_tasks_depend.job_id = jobId */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_depend_job_id,
+	/* pg_catalog.pg_dist_background_task_depend.job_id = jobId */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_depend_job_id,
 				BTEqualStrategyNumber, F_INT8EQ, jobId);
 
-	/* pg_catalog.pg_dist_background_tasks_depend.task_id = $taskId */
-	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_tasks_depend_task_id,
+	/* pg_catalog.pg_dist_background_task_depend.task_id = $taskId */
+	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_depend_task_id,
 				BTEqualStrategyNumber, F_INT8EQ, taskId);
 
 	SysScanDesc scanDescriptor =
 		systable_beginscan(pgDistBackgroundTasksDepend,
-						   DistBackgroundTasksDependTaskIdIndexId(),
+						   DistBackgroundTaskDependTaskIdIndexId(),
 						   indexOK, NULL, lengthof(scanKey),
 						   scanKey);
 
 	HeapTuple dependTuple = NULL;
 	while (HeapTupleIsValid(dependTuple = systable_getnext(scanDescriptor)))
 	{
-		Form_pg_dist_background_tasks_depend depends =
-			(Form_pg_dist_background_tasks_depend) GETSTRUCT(dependTuple);
+		Form_pg_dist_background_task_depend depends =
+			(Form_pg_dist_background_task_depend) GETSTRUCT(dependTuple);
 
 		BackgroundTask *dependingJob = GetBackgroundTaskByTaskId(jobId,
 																 depends->depends_on);
@@ -3160,7 +3160,7 @@ BackgroundTask *
 GetRunnableBackgroundTask(void)
 {
 	Relation pgDistBackgroundTasks =
-		table_open(DistBackgroundTasksRelationId(), AccessShareLock);
+		table_open(DistBackgroundTaskRelationId(), AccessShareLock);
 
 	BackgroundTaskStatus taskStatus[] = {
 		BACKGROUND_TASK_STATUS_RUNNABLE
@@ -3173,14 +3173,14 @@ GetRunnableBackgroundTask(void)
 		ScanKeyData scanKey[1] = { 0 };
 		const bool indexOK = true;
 
-		/* pg_dist_background_tasks.status == taskStatus[i] */
-		ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_status,
+		/* pg_dist_background_task.status == taskStatus[i] */
+		ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_status,
 					BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(
 						BackgroundTaskStatusOid(taskStatus[i])));
 
 		SysScanDesc scanDescriptor =
 			systable_beginscan(pgDistBackgroundTasks,
-							   DistBackgroundTasksStatusTaskIdIndexId(),
+							   DistBackgroundTaskStatusTaskIdIndexId(),
 							   indexOK, NULL, scanKeyCount,
 							   scanKey);
 
@@ -3217,14 +3217,14 @@ GetBackgroundJobByJobId(int64 jobId)
 	bool indexOK = true;
 
 	Relation pgDistBackgroundJobs =
-		table_open(DistBackgroundJobsRelationId(), AccessShareLock);
+		table_open(DistBackgroundJobRelationId(), AccessShareLock);
 
-	/* pg_dist_background_tasks.job_id == $jobId */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_jobs_job_id,
+	/* pg_dist_background_task.job_id == $jobId */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_job_job_id,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
 
 	SysScanDesc scanDescriptor =
-		systable_beginscan(pgDistBackgroundJobs, DistBackgroundJobsPKeyIndexId(),
+		systable_beginscan(pgDistBackgroundJobs, DistBackgroundJobPKeyIndexId(),
 						   indexOK, NULL, lengthof(scanKey), scanKey);
 
 	HeapTuple taskTuple = systable_getnext(scanDescriptor);
@@ -3253,19 +3253,19 @@ GetBackgroundTaskByTaskId(int64 jobId, int64 taskId)
 	bool indexOK = true;
 
 	Relation pgDistBackgroundTasks =
-		table_open(DistBackgroundTasksRelationId(), AccessShareLock);
+		table_open(DistBackgroundTaskRelationId(), AccessShareLock);
 
-	/* pg_dist_background_tasks.job_id == $jobId */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_job_id,
+	/* pg_dist_background_task.job_id == $jobId */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_job_id,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
 
-	/* pg_dist_background_tasks.task_id == $taskId */
-	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_tasks_task_id,
+	/* pg_dist_background_task.task_id == $taskId */
+	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_task_id,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(taskId));
 
 	SysScanDesc scanDescriptor =
 		systable_beginscan(pgDistBackgroundTasks,
-						   DistBackgroundTasksPKeyIndexId(),
+						   DistBackgroundTaskPKeyIndexId(),
 						   indexOK, NULL, lengthof(scanKey), scanKey);
 
 	HeapTuple taskTuple = systable_getnext(scanDescriptor);
@@ -3304,31 +3304,31 @@ static JobTaskStatusCounts
 JobTasksStatusCount(int64 jobId)
 {
 	Relation pgDistBackgroundTasks =
-		table_open(DistBackgroundTasksRelationId(), RowExclusiveLock);
+		table_open(DistBackgroundTaskRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
 
 	ScanKeyData scanKey[1] = { 0 };
 	const bool indexOK = true;
 
 	/* WHERE job_id = $task->jobId */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_job_id,
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_job_id,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
 
 	SysScanDesc scanDescriptor =
 		systable_beginscan(pgDistBackgroundTasks,
-						   DistBackgroundTasksPKeyIndexId(),
+						   DistBackgroundTaskPKeyIndexId(),
 						   indexOK, NULL, lengthof(scanKey), scanKey);
 
 	JobTaskStatusCounts counts = { 0 };
 	HeapTuple heapTuple = NULL;
 	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
-		Datum values[Natts_pg_dist_background_tasks] = { 0 };
-		bool isnull[Natts_pg_dist_background_tasks] = { 0 };
+		Datum values[Natts_pg_dist_background_task] = { 0 };
+		bool isnull[Natts_pg_dist_background_task] = { 0 };
 
 		heap_deform_tuple(heapTuple, tupleDescriptor, values, isnull);
 
-		Oid statusOid = DatumGetObjectId(values[Anum_pg_dist_background_tasks_status -
+		Oid statusOid = DatumGetObjectId(values[Anum_pg_dist_background_task_status -
 												1]);
 		BackgroundTaskStatus status = BackgroundTaskStatusByOid(statusOid);
 
@@ -3378,7 +3378,7 @@ JobTasksStatusCount(int64 jobId)
 
 			default:
 			{
-				elog(ERROR, "unknown state in pg_dist_background_tasks");
+				elog(ERROR, "unknown state in pg_dist_background_task");
 			}
 		}
 	}
@@ -3439,19 +3439,19 @@ UpdateBackgroundJob(int64 jobId)
 	}
 
 	Relation pgDistBackgroundJobs =
-		table_open(DistBackgroundJobsRelationId(), RowExclusiveLock);
+		table_open(DistBackgroundJobRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundJobs);
 
 	ScanKeyData scanKey[1] = { 0 };
 	const bool indexOK = true;
 
 	/* WHERE job_id = $task->jobId */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_jobs_job_id,
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_job_job_id,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
 
 	SysScanDesc scanDescriptor =
 		systable_beginscan(pgDistBackgroundJobs,
-						   DistBackgroundJobsPKeyIndexId(),
+						   DistBackgroundJobPKeyIndexId(),
 						   indexOK, NULL, lengthof(scanKey), scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
@@ -3461,9 +3461,9 @@ UpdateBackgroundJob(int64 jobId)
 							   UINT64_FORMAT, jobId)));
 	}
 
-	Datum values[Natts_pg_dist_background_tasks] = { 0 };
-	bool isnull[Natts_pg_dist_background_tasks] = { 0 };
-	bool replace[Natts_pg_dist_background_tasks] = { 0 };
+	Datum values[Natts_pg_dist_background_task] = { 0 };
+	bool isnull[Natts_pg_dist_background_task] = { 0 };
+	bool replace[Natts_pg_dist_background_task] = { 0 };
 
 	heap_deform_tuple(heapTuple, tupleDescriptor, values, isnull);
 
@@ -3479,26 +3479,26 @@ UpdateBackgroundJob(int64 jobId)
 	}
 
 	Oid stateOid = BackgroundJobStatusOid(status);
-	UPDATE_FIELD(Anum_pg_dist_background_jobs_state, false, ObjectIdGetDatum(stateOid));
+	UPDATE_FIELD(Anum_pg_dist_background_job_state, false, ObjectIdGetDatum(stateOid));
 
 	if (status == BACKGROUND_JOB_STATUS_RUNNING)
 	{
-		if (isnull[Anum_pg_dist_background_jobs_started_at - 1])
+		if (isnull[Anum_pg_dist_background_job_started_at - 1])
 		{
 			/* first time status has been updated and was running, updating started_at */
 			TimestampTz startedAt = GetCurrentTimestamp();
-			UPDATE_FIELD(Anum_pg_dist_background_jobs_started_at, false,
+			UPDATE_FIELD(Anum_pg_dist_background_job_started_at, false,
 						 TimestampTzGetDatum(startedAt));
 		}
 	}
 
 	if (IsBackgroundJobStatusTerminal(status))
 	{
-		if (isnull[Anum_pg_dist_background_jobs_finished_at - 1])
+		if (isnull[Anum_pg_dist_background_job_finished_at - 1])
 		{
 			/* didn't have a finished at time just yet, updating to now */
 			TimestampTz finishedAt = GetCurrentTimestamp();
-			UPDATE_FIELD(Anum_pg_dist_background_jobs_finished_at, false,
+			UPDATE_FIELD(Anum_pg_dist_background_job_finished_at, false,
 						 TimestampTzGetDatum(finishedAt));
 		}
 	}
@@ -3529,23 +3529,23 @@ void
 UpdateBackgroundTask(BackgroundTask *task)
 {
 	Relation pgDistBackgroundTasks =
-		table_open(DistBackgroundTasksRelationId(), RowExclusiveLock);
+		table_open(DistBackgroundTaskRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
 
 	ScanKeyData scanKey[2] = { 0 };
 	const bool indexOK = true;
 
 	/* WHERE job_id = $task->jobId */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_job_id,
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_job_id,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(task->jobid));
 
 	/* WHERE task_id = $task->taskid */
-	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_tasks_task_id,
+	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_task_id,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(task->taskid));
 
 	SysScanDesc scanDescriptor =
 		systable_beginscan(pgDistBackgroundTasks,
-						   DistBackgroundTasksPKeyIndexId(),
+						   DistBackgroundTaskPKeyIndexId(),
 						   indexOK, NULL, lengthof(scanKey), scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
@@ -3556,9 +3556,9 @@ UpdateBackgroundTask(BackgroundTask *task)
 							   task->jobid, task->taskid)));
 	}
 
-	Datum values[Natts_pg_dist_background_tasks] = { 0 };
-	bool isnull[Natts_pg_dist_background_tasks] = { 0 };
-	bool replace[Natts_pg_dist_background_tasks] = { 0 };
+	Datum values[Natts_pg_dist_background_task] = { 0 };
+	bool isnull[Natts_pg_dist_background_task] = { 0 };
+	bool replace[Natts_pg_dist_background_task] = { 0 };
 
 	heap_deform_tuple(heapTuple, tupleDescriptor, values, isnull);
 
@@ -3573,38 +3573,38 @@ UpdateBackgroundTask(BackgroundTask *task)
 		updated |= replace[((field) - 1)]; \
 	}
 
-	UPDATE_FIELD(Anum_pg_dist_background_tasks_owner, false, task->owner);
+	UPDATE_FIELD(Anum_pg_dist_background_task_owner, false, task->owner);
 
 	if (task->pid)
 	{
-		UPDATE_FIELD(Anum_pg_dist_background_tasks_pid, false, Int32GetDatum(*task->pid));
+		UPDATE_FIELD(Anum_pg_dist_background_task_pid, false, Int32GetDatum(*task->pid));
 	}
 	else
 	{
-		UPDATE_FIELD(Anum_pg_dist_background_tasks_pid, true, InvalidOid);
+		UPDATE_FIELD(Anum_pg_dist_background_task_pid, true, InvalidOid);
 	}
 
 	Oid statusOid = ObjectIdGetDatum(BackgroundTaskStatusOid(task->status));
-	UPDATE_FIELD(Anum_pg_dist_background_tasks_status, false, statusOid);
+	UPDATE_FIELD(Anum_pg_dist_background_task_status, false, statusOid);
 
 	if (task->retry_count)
 	{
-		UPDATE_FIELD(Anum_pg_dist_background_tasks_retry_count, false,
+		UPDATE_FIELD(Anum_pg_dist_background_task_retry_count, false,
 					 Int32GetDatum(*task->retry_count));
 	}
 	else
 	{
-		UPDATE_FIELD(Anum_pg_dist_background_tasks_retry_count, true, InvalidOid);
+		UPDATE_FIELD(Anum_pg_dist_background_task_retry_count, true, InvalidOid);
 	}
 
 	if (task->not_before)
 	{
-		UPDATE_FIELD(Anum_pg_dist_background_tasks_not_before, false,
+		UPDATE_FIELD(Anum_pg_dist_background_task_not_before, false,
 					 TimestampTzGetDatum(*task->not_before));
 	}
 	else
 	{
-		UPDATE_FIELD(Anum_pg_dist_background_tasks_not_before, true, InvalidOid);
+		UPDATE_FIELD(Anum_pg_dist_background_task_not_before, true, InvalidOid);
 	}
 
 	if (task->message)
@@ -3615,14 +3615,14 @@ UpdateBackgroundTask(BackgroundTask *task)
 		 * message
 		 */
 		bool updateMessage = false;
-		if (isnull[Anum_pg_dist_background_tasks_message - 1])
+		if (isnull[Anum_pg_dist_background_task_message - 1])
 		{
 			updateMessage = true;
 		}
 		else
 		{
 			text *oldMessageText =
-				DatumGetTextP(values[Anum_pg_dist_background_tasks_message - 1]);
+				DatumGetTextP(values[Anum_pg_dist_background_task_message - 1]);
 			char *oldMessage = text_to_cstring(oldMessageText);
 			if (strcmp(oldMessage, task->message) != 0)
 			{
@@ -3632,16 +3632,16 @@ UpdateBackgroundTask(BackgroundTask *task)
 
 		if (updateMessage)
 		{
-			values[Anum_pg_dist_background_tasks_message - 1] =
+			values[Anum_pg_dist_background_task_message - 1] =
 				CStringGetTextDatum(task->message);
-			isnull[Anum_pg_dist_background_tasks_message - 1] = false;
-			replace[Anum_pg_dist_background_tasks_message - 1] = true;
+			isnull[Anum_pg_dist_background_task_message - 1] = false;
+			replace[Anum_pg_dist_background_task_message - 1] = true;
 			updated |= true;
 		}
 	}
 	else
 	{
-		UPDATE_FIELD(Anum_pg_dist_background_tasks_message, true, InvalidOid);
+		UPDATE_FIELD(Anum_pg_dist_background_task_message, true, InvalidOid);
 	}
 
 #undef UPDATE_FIELD
@@ -3671,22 +3671,22 @@ static List *
 GetDependantTasks(int64 jobId, int64 taskId)
 {
 	Relation pgDistBackgroundTasksDepends =
-		table_open(DistBackgroundTasksDependRelationId(), RowExclusiveLock);
+		table_open(DistBackgroundTaskDependRelationId(), RowExclusiveLock);
 
 	ScanKeyData scanKey[2] = { 0 };
 	const bool indexOK = true;
 
-	/* pg_dist_background_tasks_depend.job_id = $jobId */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_depend_job_id,
+	/* pg_dist_background_task_depend.job_id = $jobId */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_depend_job_id,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
 
-	/* pg_dist_background_tasks_depend.depends_on = $taskId */
-	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_tasks_depend_depends_on,
+	/* pg_dist_background_task_depend.depends_on = $taskId */
+	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_depend_depends_on,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(taskId));
 
 	SysScanDesc scanDescriptor =
 		systable_beginscan(pgDistBackgroundTasksDepends,
-						   DistBackgroundTasksDependDependsOnIndexId(),
+						   DistBackgroundTaskDependDependsOnIndexId(),
 						   indexOK,
 						   NULL, lengthof(scanKey), scanKey);
 
@@ -3694,8 +3694,8 @@ GetDependantTasks(int64 jobId, int64 taskId)
 	HeapTuple heapTuple = NULL;
 	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
-		Form_pg_dist_background_tasks_depend depend =
-			(Form_pg_dist_background_tasks_depend) GETSTRUCT(heapTuple);
+		Form_pg_dist_background_task_depend depend =
+			(Form_pg_dist_background_task_depend) GETSTRUCT(heapTuple);
 
 		int64 *dTaskId = palloc0(sizeof(int64));
 		*dTaskId = depend->task_id;
@@ -3726,18 +3726,18 @@ List *
 CancelTasksForJob(int64 jobid)
 {
 	Relation pgDistBackgroundTasks =
-		table_open(DistBackgroundTasksRelationId(), RowExclusiveLock);
+		table_open(DistBackgroundTaskRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
 
 	ScanKeyData scanKey[1] = { 0 };
 
 	/* WHERE jobId = $jobid */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_job_id,
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_job_id,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobid));
 
 	const bool indexOK = true;
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistBackgroundTasks,
-													DistBackgroundTasksPKeyIndexId(),
+													DistBackgroundTaskPKeyIndexId(),
 													indexOK, NULL,
 													lengthof(scanKey), scanKey);
 
@@ -3745,13 +3745,13 @@ CancelTasksForJob(int64 jobid)
 	HeapTuple taskTuple = NULL;
 	while (HeapTupleIsValid(taskTuple = systable_getnext(scanDescriptor)))
 	{
-		Datum values[Natts_pg_dist_background_tasks] = { 0 };
-		bool nulls[Natts_pg_dist_background_tasks] = { 0 };
-		bool replace[Natts_pg_dist_background_tasks] = { 0 };
+		Datum values[Natts_pg_dist_background_task] = { 0 };
+		bool nulls[Natts_pg_dist_background_task] = { 0 };
+		bool replace[Natts_pg_dist_background_task] = { 0 };
 		heap_deform_tuple(taskTuple, tupleDescriptor, values, nulls);
 
 		Oid statusOid =
-			DatumGetObjectId(values[Anum_pg_dist_background_tasks_status - 1]);
+			DatumGetObjectId(values[Anum_pg_dist_background_task_status - 1]);
 		BackgroundTaskStatus status = BackgroundTaskStatusByOid(statusOid);
 
 		if (IsBackgroundTaskStatusTerminal(status))
@@ -3760,7 +3760,7 @@ CancelTasksForJob(int64 jobid)
 		}
 
 		/* make sure the current user has the rights to cancel this task */
-		Oid taskOwner = DatumGetObjectId(values[Anum_pg_dist_background_tasks_owner]);
+		Oid taskOwner = DatumGetObjectId(values[Anum_pg_dist_background_task_owner]);
 		if (superuser_arg(taskOwner) && !superuser())
 		{
 			/* must be a superuser to cancel tasks owned by superuser */
@@ -3782,9 +3782,9 @@ CancelTasksForJob(int64 jobid)
 
 		if (status == BACKGROUND_TASK_STATUS_RUNNING)
 		{
-			if (!nulls[Anum_pg_dist_background_tasks_pid - 1])
+			if (!nulls[Anum_pg_dist_background_task_pid - 1])
 			{
-				int32 pid = DatumGetInt32(values[Anum_pg_dist_background_tasks_pid - 1]);
+				int32 pid = DatumGetInt32(values[Anum_pg_dist_background_task_pid - 1]);
 				runningTaskPids = lappend_int(runningTaskPids, pid);
 			}
 
@@ -3793,10 +3793,10 @@ CancelTasksForJob(int64 jobid)
 		}
 
 		/* update to unscheduled */
-		nulls[Anum_pg_dist_background_tasks_status - 1] = false;
-		values[Anum_pg_dist_background_tasks_status - 1] = ObjectIdGetDatum(
+		nulls[Anum_pg_dist_background_task_status - 1] = false;
+		values[Anum_pg_dist_background_task_status - 1] = ObjectIdGetDatum(
 			BackgroundTaskStatusOid(BACKGROUND_TASK_STATUS_CANCELLED));
-		replace[Anum_pg_dist_background_tasks_status - 1] = true;
+		replace[Anum_pg_dist_background_task_status - 1] = true;
 
 		taskTuple = heap_modify_tuple(taskTuple, tupleDescriptor, values, nulls,
 									  replace);
@@ -3823,7 +3823,7 @@ void
 UnscheduleDependantTasks(int64 jobId, int64 taskId)
 {
 	Relation pgDistBackgroundTasks =
-		table_open(DistBackgroundTasksRelationId(), RowExclusiveLock);
+		table_open(DistBackgroundTaskRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
 
 	List *dependantTasks = GetDependantTasks(jobId, taskId);
@@ -3841,15 +3841,15 @@ UnscheduleDependantTasks(int64 jobId, int64 taskId)
 			ScanKeyData scanKey[2] = { 0 };
 
 			/* WHERE jobId = $jobId */
-			ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_job_id,
+			ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_job_id,
 						BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
 
 			/* WHERE taskId = task->taskId */
-			ScanKeyInit(&scanKey[1], Anum_pg_dist_background_tasks_task_id,
+			ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_task_id,
 						BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(cTaskId));
 			const bool indexOK = true;
 			SysScanDesc scanDescriptor = systable_beginscan(pgDistBackgroundTasks,
-															DistBackgroundTasksPKeyIndexId(),
+															DistBackgroundTaskPKeyIndexId(),
 															indexOK, NULL,
 															lengthof(scanKey), scanKey);
 
@@ -3860,14 +3860,14 @@ UnscheduleDependantTasks(int64 jobId, int64 taskId)
 									   "task_id: " UINT64_FORMAT, cTaskId)));
 			}
 
-			Datum values[Natts_pg_dist_background_tasks] = { 0 };
-			bool isnull[Natts_pg_dist_background_tasks] = { 0 };
-			bool replace[Natts_pg_dist_background_tasks] = { 0 };
+			Datum values[Natts_pg_dist_background_task] = { 0 };
+			bool isnull[Natts_pg_dist_background_task] = { 0 };
+			bool replace[Natts_pg_dist_background_task] = { 0 };
 
-			values[Anum_pg_dist_background_tasks_status - 1] =
+			values[Anum_pg_dist_background_task_status - 1] =
 				ObjectIdGetDatum(CitusTaskStatusUnscheduledId());
-			isnull[Anum_pg_dist_background_tasks_status - 1] = false;
-			replace[Anum_pg_dist_background_tasks_status - 1] = true;
+			isnull[Anum_pg_dist_background_task_status - 1] = false;
+			replace[Anum_pg_dist_background_task_status - 1] = true;
 
 			heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
 										  replace);
@@ -3894,27 +3894,27 @@ void
 UnblockDependingBackgroundTasks(int64 jobId, int64 taskId)
 {
 	Relation pgDistBackgroundTasksDepend =
-		table_open(DistBackgroundTasksDependRelationId(), RowExclusiveLock);
+		table_open(DistBackgroundTaskDependRelationId(), RowExclusiveLock);
 
 	ScanKeyData scanKey[2] = { 0 };
 
 	/* WHERE jobId = $jobId */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_tasks_depend_job_id,
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_depend_job_id,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
 
 	/* WHERE depends_on = $taskId */
-	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_tasks_depend_depends_on,
+	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_depend_depends_on,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(taskId));
 	const bool indexOK = true;
 	SysScanDesc scanDescriptor = systable_beginscan(
-		pgDistBackgroundTasksDepend, DistBackgroundTasksDependDependsOnIndexId(), indexOK,
+		pgDistBackgroundTasksDepend, DistBackgroundTaskDependDependsOnIndexId(), indexOK,
 		NULL, lengthof(scanKey), scanKey);
 
 	HeapTuple heapTuple = NULL;
 	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
-		Form_pg_dist_background_tasks_depend depend =
-			(Form_pg_dist_background_tasks_depend) GETSTRUCT(heapTuple);
+		Form_pg_dist_background_task_depend depend =
+			(Form_pg_dist_background_task_depend) GETSTRUCT(heapTuple);
 
 		if (!BackgroundTaskHasUmnetDependencies(jobId, depend->task_id))
 		{
