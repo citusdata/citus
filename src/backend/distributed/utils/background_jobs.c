@@ -195,15 +195,11 @@ citus_jobs_wait(PG_FUNCTION_ARGS)
 			PG_RETURN_BOOL(false);
 		}
 
-		if (hasDesiredStatus)
+		if (hasDesiredStatus && job->state == desiredStatus)
 		{
-			if (job->state == desiredStatus)
-			{
-				reachedDesiredState = true;
-
-				/* job has reached its desired status, done waiting */
-				break;
-			}
+			/* job has reached its desired status, done waiting */
+			reachedDesiredState = true;
+			break;
 		}
 
 		if (IsBackgroundJobStatusTerminal(job->state))
@@ -897,7 +893,8 @@ StartCitusBackgroundJobExecuter(char *database, char *user, char *command, int64
 	/* Configure a worker. */
 	BackgroundWorker worker = { 0 };
 	memset(&worker, 0, sizeof(worker));
-	SafeSnprintf(worker.bgw_name, BGW_MAXLEN, "Citus Background Job Executor: %s/%s",
+	SafeSnprintf(worker.bgw_name, BGW_MAXLEN,
+				 "Citus Background Task Queue Executor: %s/%s",
 				 database, user);
 	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
 	worker.bgw_start_time = BgWorkerStart_ConsistentState;
@@ -948,7 +945,7 @@ CitusBackgroundJobExecuterErrorCallback(void *arg)
 {
 	CitusBackgroundJobExecuterErrorCallbackContext *context =
 		(CitusBackgroundJobExecuterErrorCallbackContext *) arg;
-	errcontext("Citus Background Job Executor: %s/%s", context->database,
+	errcontext("Citus Background Task Queue Executor: %s/%s", context->database,
 			   context->username);
 }
 

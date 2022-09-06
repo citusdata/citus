@@ -2961,9 +2961,9 @@ DeformBackgroundJobHeapTuple(TupleDesc tupleDescriptor, HeapTuple jobTuple)
 
 
 /*
- * DeformBackgroundTaskHeapTuple pareses a HeapTuple from pg_dist_background_tasks into
- * its inmemory representation. This can be used while scanning a heap to quickly get
- * access to all fields of a Task.
+ * DeformBackgroundTaskHeapTuple parses a HeapTuple from pg_dist_background_tasks into its
+ * inmemory representation. This can be used while scanning a heap to quickly get access
+ * to all fields of a Task.
  */
 static BackgroundTask *
 DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor, HeapTuple taskTuple)
