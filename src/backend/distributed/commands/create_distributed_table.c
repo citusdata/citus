@@ -139,6 +139,14 @@ static Oid DropFKeysAndUndistributeTable(Oid relationId);
 static void DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag);
 static void CopyLocalDataIntoShards(Oid relationId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
+
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+static bool DistributionColumnUsesNumericColumnNegativeScale(TupleDesc relationDesc,
+															 Var *distributionColumn);
+static int numeric_typmod_scale(int32 typmod);
+static bool is_valid_numeric_typmod(int32 typmod);
+#endif
+
 static bool DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
 														Var *distributionColumn);
 static bool CanUseExclusiveConnections(Oid relationId, bool localTableEmpty);
@@ -1681,6 +1689,20 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 								  "AS (...) STORED.")));
 	}
 
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+
+	/* verify target relation is not distributed by a column of type numeric with negative scale */
+	if (distributionMethod != DISTRIBUTE_BY_NONE &&
+		DistributionColumnUsesNumericColumnNegativeScale(relationDesc,
+														 distributionColumn))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot distribute relation: %s", relationName),
+						errdetail("Distribution column must not use numeric type "
+								  "with negative scale")));
+	}
+#endif
+
 	/* check for support function needed by specified partition method */
 	if (distributionMethod == DISTRIBUTE_BY_HASH)
 	{
@@ -2400,6 +2422,59 @@ RelationUsesIdentityColumns(TupleDesc relationDesc)
 	return false;
 }
 
+
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+
+/*
+ * is_valid_numeric_typmod checks if the typmod value is valid
+ *
+ * Because of the offset, valid numeric typmods are at least VARHDRSZ
+ *
+ * Copied from PG. See numeric.c for understanding how this works.
+ */
+static bool
+is_valid_numeric_typmod(int32 typmod)
+{
+	return typmod >= (int32) VARHDRSZ;
+}
+
+
+/*
+ * numeric_typmod_scale extracts the scale from a numeric typmod.
+ *
+ * Copied from PG. See numeric.c for understanding how this works.
+ *
+ */
+static int
+numeric_typmod_scale(int32 typmod)
+{
+	return (((typmod - VARHDRSZ) & 0x7ff) ^ 1024) - 1024;
+}
+
+
+/*
+ * DistributionColumnUsesNumericColumnNegativeScale returns whether a given relation uses
+ * numeric data type with negative scale on distribution column
+ */
+static bool
+DistributionColumnUsesNumericColumnNegativeScale(TupleDesc relationDesc,
+												 Var *distributionColumn)
+{
+	Form_pg_attribute attributeForm = TupleDescAttr(relationDesc,
+													distributionColumn->varattno - 1);
+
+	if (attributeForm->atttypid == NUMERICOID &&
+		is_valid_numeric_typmod(attributeForm->atttypmod) &&
+		numeric_typmod_scale(attributeForm->atttypmod) < 0)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+#endif
 
 /*
  * DistributionColumnUsesGeneratedStoredColumn returns whether a given relation uses

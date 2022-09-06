@@ -27,6 +27,7 @@ extern Path * CreateCitusCustomScanPath(PlannerInfo *root, RelOptInfo *relOptInf
 										CustomScan *remoteScan);
 extern PlannedStmt * PlanCombineQuery(struct DistributedPlan *distributedPlan,
 									  struct CustomScan *dataScan);
+extern bool FindCitusExtradataContainerRTE(Node *node, RangeTblEntry **result);
 extern bool ReplaceCitusExtraDataContainer;
 extern CustomScan *ReplaceCitusExtraDataContainerWithCustomScan;
 

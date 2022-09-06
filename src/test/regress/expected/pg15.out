@@ -168,6 +168,10 @@ SELECT * FROM sale_triggers ORDER BY 1, 2;
  truncate_trigger_xxxxxxx  | sale_newyork    | O
 (6 rows)
 
+-- test that we can't rename a distributed clone trigger
+ALTER TRIGGER "new_record_sale_trigger" ON "pg15"."sale_newyork" RENAME TO "another_trigger_name";
+ERROR:  cannot rename trigger "new_record_sale_trigger" on table "sale_newyork"
+HINT:  Rename trigger on partitioned table "sale" instead.
 --
 -- In PG15, For GENERATED columns, all dependencies of the generation
 -- expression are recorded as NORMAL dependencies of the column itself.
@@ -388,9 +392,37 @@ ON (true)
 WHEN MATCHED THEN
     UPDATE SET x = (SELECT count(*) FROM tbl2);
 ERROR:  MERGE command is not supported on Citus tables yet
+-- test numeric types with negative scale
+CREATE TABLE numeric_negative_scale(numeric_column numeric(3,-1), orig_value int);
+INSERT into numeric_negative_scale SELECT x,x FROM generate_series(111, 115) x;
+-- verify that we can not distribute by a column that has numeric type with negative scale
+SELECT create_distributed_table('numeric_negative_scale','numeric_column');
+ERROR:  cannot distribute relation: numeric_negative_scale
+DETAIL:  Distribution column must not use numeric type with negative scale
+-- However, we can distribute by other columns
+SELECT create_distributed_table('numeric_negative_scale','orig_value');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg15.numeric_negative_scale$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM numeric_negative_scale ORDER BY 1,2;
+ numeric_column | orig_value
+---------------------------------------------------------------------
+            110 |        111
+            110 |        112
+            110 |        113
+            110 |        114
+            120 |        115
+(5 rows)
+
 -- Clean up
 DROP SCHEMA pg15 CASCADE;
-NOTICE:  drop cascades to 9 other objects
+NOTICE:  drop cascades to 10 other objects
 DETAIL:  drop cascades to collation german_phonebook_test
 drop cascades to collation default_provider
 drop cascades to table sale
@@ -400,3 +432,4 @@ drop cascades to view sale_triggers
 drop cascades to table generated_stored_ref
 drop cascades to table tbl1
 drop cascades to table tbl2
+drop cascades to table numeric_negative_scale

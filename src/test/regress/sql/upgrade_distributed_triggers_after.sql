@@ -69,4 +69,9 @@ ALTER TRIGGER "yet_another_trigger" ON "sale" RENAME TO "renamed_yet_another_tri
 
 SELECT * FROM sale_triggers ORDER BY 1, 2;
 
+-- after upgrade to PG15, test that we can't rename a distributed clone trigger
+ALTER TRIGGER "renamed_yet_another_trigger" ON "sale_alabama" RENAME TO "another_trigger_name";
+SELECT count(*) FROM pg_trigger WHERE tgname like 'another_trigger_name%';
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_trigger WHERE tgname like 'another_trigger_name%';$$);
+
 DROP SCHEMA upgrade_distributed_triggers CASCADE;

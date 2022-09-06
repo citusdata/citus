@@ -53,6 +53,9 @@ static void ExtractDropStmtTriggerAndRelationName(DropStmt *dropTriggerStmt,
 												  char **relationName);
 static void ErrorIfDropStmtDropsMultipleTriggers(DropStmt *dropTriggerStmt);
 static int16 GetTriggerTypeById(Oid triggerId);
+#if (PG_VERSION_NUM < PG_VERSION_15)
+static void ErrorOutIfCloneTrigger(Oid tgrelid, const char *tgname);
+#endif
 
 
 /* GUC that overrides trigger checks for distributed tables and reference tables */
@@ -316,6 +319,40 @@ CreateTriggerEventExtendNames(CreateTrigStmt *createTriggerStmt, char *schemaNam
 
 	char **relationSchemaName = &(relation->schemaname);
 	SetSchemaNameIfNotExist(relationSchemaName, schemaName);
+}
+
+
+/*
+ * PreprocessAlterTriggerRenameStmt is called before a ALTER TRIGGER RENAME
+ * command has been executed by standard process utility. This function errors
+ * out if we are trying to rename a child trigger on a partition of a distributed
+ * table. In PG15, this is not allowed anyway.
+ */
+List *
+PreprocessAlterTriggerRenameStmt(Node *node, const char *queryString,
+								 ProcessUtilityContext processUtilityContext)
+{
+#if (PG_VERSION_NUM < PG_VERSION_15)
+	RenameStmt *renameTriggerStmt = castNode(RenameStmt, node);
+	Assert(renameTriggerStmt->renameType == OBJECT_TRIGGER);
+
+	RangeVar *relation = renameTriggerStmt->relation;
+
+	bool missingOk = false;
+	Oid relationId = RangeVarGetRelid(relation, ALTER_TRIGGER_LOCK_MODE, missingOk);
+
+	if (!IsCitusTable(relationId))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+	ErrorOutForTriggerIfNotSupported(relationId);
+
+	ErrorOutIfCloneTrigger(relationId, renameTriggerStmt->subname);
+#endif
+
+	return NIL;
 }
 
 
@@ -609,6 +646,64 @@ ErrorOutForTriggerIfNotSupported(Oid relationId)
 
 	/* we always support triggers on citus local tables */
 }
+
+
+#if (PG_VERSION_NUM < PG_VERSION_15)
+
+/*
+ * ErrorOutIfCloneTrigger is a helper function to error
+ * out if we are trying to rename a child trigger on a
+ * partition of a distributed table.
+ * A lot of this code is borrowed from PG15 because
+ * renaming clone triggers isn't allowed in PG15 anymore.
+ */
+static void
+ErrorOutIfCloneTrigger(Oid tgrelid, const char *tgname)
+{
+	HeapTuple tuple;
+	ScanKeyData key[2];
+
+	Relation tgrel = table_open(TriggerRelationId, RowExclusiveLock);
+
+	/*
+	 * Search for the trigger to modify.
+	 */
+	ScanKeyInit(&key[0],
+				Anum_pg_trigger_tgrelid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(tgrelid));
+	ScanKeyInit(&key[1],
+				Anum_pg_trigger_tgname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(tgname));
+	SysScanDesc tgscan = systable_beginscan(tgrel, TriggerRelidNameIndexId, true,
+											NULL, 2, key);
+
+	if (HeapTupleIsValid(tuple = systable_getnext(tgscan)))
+	{
+		Form_pg_trigger trigform = (Form_pg_trigger) GETSTRUCT(tuple);
+
+		/*
+		 * If the trigger descends from a trigger on a parent partitioned
+		 * table, reject the rename.
+		 * Appended shard ids to find the trigger on the partition's shards
+		 * are not correct. Hence we would fail to find the trigger on the
+		 * partition's shard.
+		 */
+		if (OidIsValid(trigform->tgparentid))
+		{
+			ereport(ERROR, (
+						errmsg(
+							"cannot rename child triggers on distributed partitions")));
+		}
+	}
+
+	systable_endscan(tgscan);
+	table_close(tgrel, RowExclusiveLock);
+}
+
+
+#endif
 
 
 /*

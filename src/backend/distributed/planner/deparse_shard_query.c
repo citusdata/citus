@@ -17,6 +17,7 @@
 #include "catalog/pg_constraint.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/combine_query_planner.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/listutils.h"
@@ -79,12 +80,13 @@ RebuildQueryStrings(Job *workerJob)
 
 		if (UpdateOrDeleteQuery(query))
 		{
+			List *relationShardList = task->relationShardList;
+
 			/*
 			 * For UPDATE and DELETE queries, we may have subqueries and joins, so
 			 * we use relation shard list to update shard names and call
 			 * pg_get_query_def() directly.
 			 */
-			List *relationShardList = task->relationShardList;
 			UpdateRelationToShardNames((Node *) query, relationShardList);
 		}
 		else if (query->commandType == CMD_INSERT && task->modifyWithSubquery)
@@ -229,7 +231,16 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 
 	RangeTblEntry *newRte = (RangeTblEntry *) node;
 
-	if (newRte->rtekind != RTE_RELATION)
+	if (newRte->rtekind == RTE_FUNCTION)
+	{
+		newRte = NULL;
+		if (!FindCitusExtradataContainerRTE(node, &newRte))
+		{
+			/* only update function rtes containing citus_extradata_container */
+			return false;
+		}
+	}
+	else if (newRte->rtekind != RTE_RELATION)
 	{
 		return false;
 	}
