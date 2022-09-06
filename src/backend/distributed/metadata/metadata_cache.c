@@ -3318,7 +3318,7 @@ CitusJobStatusRunningId(void)
 
 
 Oid
-CitusJobStatusFinisehdId(void)
+CitusJobStatusFinishedId(void)
 {
 	if (!MetadataCache.citusJobStatusFinishedId)
 	{

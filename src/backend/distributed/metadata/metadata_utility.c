@@ -2446,7 +2446,7 @@ BackgroundJobStatusByOid(Oid enumOid)
 	{
 		return BACKGROUND_JOB_STATUS_RUNNING;
 	}
-	else if (enumOid == CitusJobStatusFinisehdId())
+	else if (enumOid == CitusJobStatusFinishedId())
 	{
 		return BACKGROUND_JOB_STATUS_FINISHED;
 	}
@@ -2588,7 +2588,7 @@ BackgroundJobStatusOid(BackgroundJobStatus status)
 
 		case BACKGROUND_JOB_STATUS_FINISHED:
 		{
-			return CitusJobStatusFinisehdId();
+			return CitusJobStatusFinishedId();
 		}
 
 		case BACKGROUND_JOB_STATUS_CANCELLED:

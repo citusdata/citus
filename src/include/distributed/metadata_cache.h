@@ -284,7 +284,7 @@ extern Oid TextCopyFormatId(void);
 extern Oid BinaryCopyFormatId(void);
 extern Oid CitusJobStatusScheduledId(void);
 extern Oid CitusJobStatusRunningId(void);
-extern Oid CitusJobStatusFinisehdId(void);
+extern Oid CitusJobStatusFinishedId(void);
 extern Oid CitusJobStatusCancelledId(void);
 extern Oid CitusJobStatusFailedId(void);
 extern Oid CitusJobStatusFailingId(void);
