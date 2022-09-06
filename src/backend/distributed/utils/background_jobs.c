@@ -1021,6 +1021,9 @@ CitusBackgroundJobExecuter(Datum main_arg)
 	/* Prepare to execute the query. */
 	SetCurrentStatementStartTimestamp();
 	debug_query_string = command;
+	char *appname = psprintf("citus background task queue executor (taskId %ld)",
+							 *taskId);
+	pgstat_report_appname(appname);
 	pgstat_report_activity(STATE_RUNNING, command);
 	StartTransactionCommand();
 	if (StatementTimeout > 0)
