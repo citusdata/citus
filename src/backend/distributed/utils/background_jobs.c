@@ -39,6 +39,7 @@
 #include "pgstat.h"
 #include "storage/dsm.h"
 #include "storage/ipc.h"
+#include "storage/procarray.h"
 #include "storage/shm_mq.h"
 #include "storage/shm_toc.h"
 #include "tcop/pquery.h"
@@ -111,6 +112,19 @@ citus_jobs_cancel(PG_FUNCTION_ARGS)
 	const int sig = SIGINT;
 	foreach_int(pid, pids)
 	{
+		PGPROC *proc = BackendPidGetProc(pid);
+		if (proc == NULL)
+		{
+			/*
+			 * This is just a warning so a loop-through-resultset will not abort
+			 * if one backend terminated on its own during the run.
+			 */
+			ereport(WARNING,
+					(errmsg("PID %d is not a PostgreSQL backend process", pid)));
+
+			continue;
+		}
+
 #ifdef HAVE_SETSID
 		if (kill(-pid, sig))
 #else
