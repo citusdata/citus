@@ -288,6 +288,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	/* state kept for the background tasks queue monitor */
 	TimestampTz lastBackgroundTaskQueueCheck = 0;
 	BackgroundWorkerHandle *backgroundTasksQueueBgwHandle = NULL;
+	bool backgroundTasksQueueWarnedForLock = false;
 
 	/*
 	 * We do metadata sync in a separate background worker. We need its
@@ -747,18 +748,25 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 				if (locked == LOCKACQUIRE_NOT_AVAIL)
 				{
-					ereport(WARNING, (errmsg(
-										  "background task queue monitor already held"),
-									  errdetail("the background task queue monitor lock "
-												"is held by another backend, indicating "
-												"the maintenance daemon has lost track "
-												"of an already running background task "
-												"queue monitor, not starting a new one"))
-							);
+					if (!backgroundTasksQueueWarnedForLock)
+					{
+						ereport(WARNING, (errmsg("background task queue monitor already "
+												 "held"),
+										  errdetail("the background task queue monitor "
+													"lock is held by another backend, "
+													"indicating the maintenance daemon "
+													"has lost track of an already "
+													"running background task queue "
+													"monitor, not starting a new one")));
+						backgroundTasksQueueWarnedForLock = true;
+					}
 				}
 				else
 				{
 					LockRelease(&tag, AccessExclusiveLock, sessionLock);
+
+					/* we were able to acquire the lock, reset the warning tracker */
+					backgroundTasksQueueWarnedForLock = false;
 
 					/* spawn background worker */
 					ereport(LOG, (errmsg("found scheduled background tasks, starting new "
