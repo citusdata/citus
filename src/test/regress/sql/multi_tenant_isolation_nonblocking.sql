@@ -555,6 +555,9 @@ SELECT isolate_tenant_to_new_shard('test_colocated_table_2', 1, 'CASCADE', shard
 
 SELECT count(*) FROM test_colocated_table_2;
 
+\c - postgres - :master_port
+SELECT run_try_drop_marked_shards();
+
 \c - postgres - :worker_1_port
 
 -- show the foreign keys of the main table & its colocated shard on other tables
