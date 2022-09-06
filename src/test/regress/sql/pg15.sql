@@ -114,6 +114,9 @@ SELECT * FROM sale_triggers ORDER BY 1, 2;
 ALTER TRIGGER "record_sale_trigger" ON "pg15"."sale" RENAME TO "new_record_sale_trigger";
 SELECT * FROM sale_triggers ORDER BY 1, 2;
 
+-- test that we can't rename a distributed clone trigger
+ALTER TRIGGER "new_record_sale_trigger" ON "pg15"."sale_newyork" RENAME TO "another_trigger_name";
+
 --
 -- In PG15, For GENERATED columns, all dependencies of the generation
 -- expression are recorded as NORMAL dependencies of the column itself.
@@ -241,6 +244,16 @@ USING tbl2
 ON (true)
 WHEN MATCHED THEN
     UPDATE SET x = (SELECT count(*) FROM tbl2);
+
+-- test numeric types with negative scale
+CREATE TABLE numeric_negative_scale(numeric_column numeric(3,-1), orig_value int);
+INSERT into numeric_negative_scale SELECT x,x FROM generate_series(111, 115) x;
+-- verify that we can not distribute by a column that has numeric type with negative scale
+SELECT create_distributed_table('numeric_negative_scale','numeric_column');
+-- However, we can distribute by other columns
+SELECT create_distributed_table('numeric_negative_scale','orig_value');
+
+SELECT * FROM numeric_negative_scale ORDER BY 1,2;
 
 -- Clean up
 DROP SCHEMA pg15 CASCADE;

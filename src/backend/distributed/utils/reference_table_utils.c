@@ -50,6 +50,7 @@ static void ReplicateReferenceTableShardToNode(ShardInterval *shardInterval,
 											   int nodePort);
 static bool AnyRelationsModifiedInTransaction(List *relationIdList);
 static List * ReplicatedMetadataSyncedDistributedTableList(void);
+static bool NodeHasAllReferenceTableReplicas(WorkerNode *workerNode);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(upgrade_to_reference_table);
@@ -687,4 +688,82 @@ ReplicateAllReferenceTablesToNode(WorkerNode *workerNode)
 				commandList);
 		}
 	}
+}
+
+
+/*
+ * ErrorIfNotAllNodesHaveReferenceTableReplicas throws an error when one of the
+ * nodes in the list does not have reference table replicas.
+ */
+void
+ErrorIfNotAllNodesHaveReferenceTableReplicas(List *workerNodeList)
+{
+	WorkerNode *workerNode = NULL;
+
+	foreach_ptr(workerNode, workerNodeList)
+	{
+		if (!NodeHasAllReferenceTableReplicas(workerNode))
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("reference tables have not been replicated to "
+								   "node %s:%d yet",
+								   workerNode->workerName,
+								   workerNode->workerPort),
+							errdetail("Reference tables are lazily replicated after "
+									  "adding a node, but must exist before shards can "
+									  "be created on that node."),
+							errhint("Run SELECT replicate_reference_tables(); to "
+									"ensure reference tables exist on all nodes.")));
+		}
+	}
+}
+
+
+/*
+ * NodeHasAllReferenceTablesReplicas returns whether the given worker node has reference
+ * table replicas. If there are no reference tables the function returns true.
+ *
+ * This function does not do any locking, so the situation could change immediately after,
+ * though we can only ever transition from false to true, so only "false" could be the
+ * incorrect answer.
+ *
+ * In the case where the function returns true because no reference tables exist
+ * on the node, a reference table could be created immediately after. However, the
+ * creation logic guarantees that this reference table will be created on all the
+ * nodes, so our answer was correct.
+ */
+static bool
+NodeHasAllReferenceTableReplicas(WorkerNode *workerNode)
+{
+	List *referenceTableIdList = CitusTableTypeIdList(REFERENCE_TABLE);
+
+	if (list_length(referenceTableIdList) == 0)
+	{
+		/* no reference tables exist */
+		return true;
+	}
+
+	Oid referenceTableId = linitial_oid(referenceTableIdList);
+	List *shardIntervalList = LoadShardIntervalList(referenceTableId);
+	if (list_length(shardIntervalList) != 1)
+	{
+		/* check for corrupt metadata */
+		ereport(ERROR, (errmsg("reference table \"%s\" can only have 1 shard",
+							   get_rel_name(referenceTableId))));
+	}
+
+	ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
+	List *shardPlacementList = ActiveShardPlacementList(shardInterval->shardId);
+
+	ShardPlacement *placement = NULL;
+	foreach_ptr(placement, shardPlacementList)
+	{
+		if (placement->groupId == workerNode->groupId)
+		{
+			/* our worker has a reference table placement */
+			return true;
+		}
+	}
+
+	return false;
 }

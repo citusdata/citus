@@ -114,3 +114,6 @@ FOR EACH ROW EXECUTE FUNCTION upgrade_distributed_triggers.record_sale();
 
 ALTER TRIGGER another_trigger ON sale RENAME TO another_renamed_trigger;
 SELECT * FROM sale_triggers ORDER BY 1, 2;
+
+-- check that we can't rename child triggers on partitions of distributed tables
+ALTER TRIGGER another_trigger ON sale_newyork RENAME TO another_renamed_trigger;

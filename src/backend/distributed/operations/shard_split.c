@@ -501,6 +501,8 @@ SplitShard(SplitMode splitMode,
 
 	List *workersForPlacementList = GetWorkerNodesFromWorkerIds(nodeIdsForPlacementList);
 
+	ErrorIfNotAllNodesHaveReferenceTableReplicas(workersForPlacementList);
+
 	List *sourceColocatedShardIntervalList = NIL;
 	if (colocatedShardIntervalList == NIL)
 	{
@@ -517,7 +519,6 @@ SplitShard(SplitMode splitMode,
 
 	if (splitMode == BLOCKING_SPLIT)
 	{
-		EnsureReferenceTablesExistOnAllNodesExtended(TRANSFER_MODE_BLOCK_WRITES);
 		BlockingShardSplit(
 			splitOperation,
 			splitWorkflowId,
