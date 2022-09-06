@@ -31,6 +31,12 @@ SET citus.next_placement_id TO 8610000;
 SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 1;
 
+-- Helper to clean shards.
+CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
+RETURNS VOID
+AS 'citus'
+LANGUAGE C STRICT VOLATILE;
+
 -- BEGIN: Create table to split, along with other co-located tables. Add indexes, statistics etc.
 CREATE TABLE sensors(
     measureid               integer,
@@ -149,7 +155,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     'force_logical');
 
 -- BEGIN: Perform deferred cleanup.
-CALL citus_cleanup_orphaned_shards();
+SELECT public.run_try_drop_marked_shards();
 -- END: Perform deferred cleanup.
 
 -- Perform 3 way split
@@ -161,7 +167,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 -- END : Split two shards : One with move and One without move.
 
 -- BEGIN: Perform deferred cleanup.
-CALL citus_cleanup_orphaned_shards();
+SELECT citus_split_test_schema.run_try_drop_marked_shards();
 -- END: Perform deferred cleanup.
 
 -- BEGIN : Move a shard post split.
@@ -235,7 +241,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     'force_logical');
 
 -- BEGIN: Perform deferred cleanup.
-CALL citus_cleanup_orphaned_shards();
+SELECT run_try_drop_marked_shards();
 -- END: Perform deferred cleanup.
 
 SET search_path TO "citus_split_test_schema";
@@ -261,7 +267,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     ARRAY[:worker_1_node, :worker_2_node]);
 
 -- BEGIN: Perform deferred cleanup.
-CALL citus_cleanup_orphaned_shards();
+SELECT run_try_drop_marked_shards();
 -- END: Perform deferred cleanup.
 
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
@@ -286,7 +292,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     'auto');
 
 -- BEGIN: Perform deferred cleanup.
-CALL citus_cleanup_orphaned_shards();
+SELECT run_try_drop_marked_shards();
 -- END: Perform deferred cleanup.
 
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport

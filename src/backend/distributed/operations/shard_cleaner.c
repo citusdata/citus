@@ -117,7 +117,6 @@ citus_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 
 	bool waitForLocks = true;
 	int droppedShardCount = DropOrphanedShardsForMove(waitForLocks);
-	droppedShardCount += DropOrphanedShardsForCleanup();
 	if (droppedShardCount > 0)
 	{
 		ereport(NOTICE, (errmsg("cleaned up %d orphaned shards", droppedShardCount)));
@@ -128,9 +127,9 @@ citus_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 
 
 /*
- * isolation_cleanup_orphaned_shards implements a TEST only UDF that's
- * to delete orphaned shards that are still haning around in the system after MOVE.
- * This command can be run in transactions for test purposes.
+ * isolation_cleanup_orphaned_shards implements a test UDF that's the same as
+ * citus_cleanup_orphaned_shards. The only difference is that this command can
+ * be run in transactions, this is to test
  */
 Datum
 isolation_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
@@ -147,7 +146,6 @@ isolation_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 
 	PG_RETURN_VOID();
 }
-
 
 /*
  * DropOrphanedShardsInSeparateTransaction cleans up orphaned shards by
