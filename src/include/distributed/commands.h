@@ -667,6 +667,8 @@ extern List * CreateTriggerStmtObjectAddress(Node *node, bool missingOk, bool
 											 isPostprocess);
 extern void CreateTriggerEventExtendNames(CreateTrigStmt *createTriggerStmt,
 										  char *schemaName, uint64 shardId);
+extern List * PreprocessAlterTriggerRenameStmt(Node *node, const char *queryString,
+											   ProcessUtilityContext processUtilityContext);
 extern List * PostprocessAlterTriggerRenameStmt(Node *node, const char *queryString);
 extern void AlterTriggerRenameEventExtendNames(RenameStmt *renameTriggerStmt,
 											   char *schemaName, uint64 shardId);
