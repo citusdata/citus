@@ -114,6 +114,9 @@ SELECT * FROM sale_triggers ORDER BY 1, 2;
 ALTER TRIGGER "record_sale_trigger" ON "pg15"."sale" RENAME TO "new_record_sale_trigger";
 SELECT * FROM sale_triggers ORDER BY 1, 2;
 
+-- test that we can't rename a distributed clone trigger
+ALTER TRIGGER "new_record_sale_trigger" ON "pg15"."sale_newyork" RENAME TO "another_trigger_name";
+
 --
 -- In PG15, For GENERATED columns, all dependencies of the generation
 -- expression are recorded as NORMAL dependencies of the column itself.
