@@ -5,6 +5,11 @@
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1230000;
 
+CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
+RETURNS VOID
+AS 'citus'
+LANGUAGE C STRICT VOLATILE;
+
 SELECT nextval('pg_catalog.pg_dist_placement_placementid_seq') AS last_placement_id
 \gset
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 100000;
@@ -224,6 +229,9 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid >= 1230000 ORDER BY nodeport
 128|106828|9339|1|38|69723.16|0.06|0.01|A|F|1992-09-01|1992-08-27|1992-10-01|TAKE BACK RETURN|FOB| cajole careful
 \.
 
+\c - postgres - :master_port
+SELECT run_try_drop_marked_shards();
+
 -- connect to the worker node with metadata
 \c - mx_isolation_role_ent - :worker_1_port
 SET search_path to "Tenant Isolation";
@@ -340,6 +348,9 @@ SELECT isolate_tenant_to_new_shard('test_append', 100, shard_transfer_mode => 'b
 SELECT * FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
+
+\c - postgres - :master_port
+SELECT run_try_drop_marked_shards();
 
 -- test failure scenarios with triggers on workers
 \c - postgres - :worker_1_port

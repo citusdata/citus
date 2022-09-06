@@ -242,6 +242,11 @@ DropOrphanedShardsForCleanup()
 			continue;
 		}
 
+		if (!PrimaryNodeForGroup(record->nodeGroupId, NULL))
+		{
+			continue;
+		}
+
 		/* Advisory locks are reentrant */
 		if (!TryLockOperationId(record->operationId))
 		{
