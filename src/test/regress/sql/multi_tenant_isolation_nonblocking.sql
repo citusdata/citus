@@ -9,10 +9,6 @@ SELECT nextval('pg_catalog.pg_dist_placement_placementid_seq') AS last_placement
 \gset
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 100000;
 
-CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
-RETURNS VOID
-AS 'citus'
-LANGUAGE C STRICT VOLATILE;
 
 CREATE SCHEMA "Tenant Isolation";
 SET search_path to "Tenant Isolation";
@@ -229,7 +225,7 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid >= 1230000 ORDER BY nodeport
 \.
 
 \c - postgres - :master_port
-SELECT run_try_drop_marked_shards();
+CALL pg_catalog.citus_cleanup_orphaned_resources();
 
 -- connect to the worker node with metadata
 \c - mx_isolation_role_ent - :worker_1_port
@@ -349,7 +345,7 @@ SELECT * FROM pg_dist_shard
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
 
 \c - postgres - :master_port
-SELECT run_try_drop_marked_shards();
+CALL pg_catalog.citus_cleanup_orphaned_resources();
 
 -- test failure scenarios with triggers on workers
 \c - postgres - :worker_1_port
@@ -556,7 +552,7 @@ SELECT isolate_tenant_to_new_shard('test_colocated_table_2', 1, 'CASCADE', shard
 SELECT count(*) FROM test_colocated_table_2;
 
 \c - postgres - :master_port
-SELECT run_try_drop_marked_shards();
+CALL pg_catalog.citus_cleanup_orphaned_resources();
 
 \c - postgres - :worker_1_port
 

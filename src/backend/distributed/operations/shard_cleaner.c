@@ -69,6 +69,7 @@ OperationId CurrentOperationId = INVALID_OPERATION_ID;
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_cleanup_orphaned_shards);
 PG_FUNCTION_INFO_V1(isolation_cleanup_orphaned_shards);
+PG_FUNCTION_INFO_V1(citus_cleanup_orphaned_resources);
 
 static int DropOrphanedShardsForMove(bool waitForLocks);
 static bool TryDropShardOutsideTransaction(OperationId operationId,
@@ -142,6 +143,36 @@ isolation_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 	if (droppedShardCount > 0)
 	{
 		ereport(NOTICE, (errmsg("cleaned up %d orphaned shards", droppedShardCount)));
+	}
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_cleanup_orphaned_resources implements a user-facing UDF to delete
+ * orphaned resources that are present in the system. These resources are
+ * orphaned by previous actions that either failed or marked the resources
+ * for deferred cleanup.
+ * The UDF only supports dropping shards at the moment but will be extended in
+ * near future to clean any type of resource.
+ *
+ * The function takes no arguments and runs on co-ordinator. It cannot be run in a
+ * transaction, because holding the locks it takes for a long time is not good.
+ * While the locks are held, it is impossible for the background daemon to
+ * perform concurrent cleanup.
+ */
+Datum
+citus_cleanup_orphaned_resources(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+	PreventInTransactionBlock(true, "citus_cleanup_orphaned_resources");
+
+	int droppedCount = DropOrphanedShardsForCleanup();
+	if (droppedCount > 0)
+	{
+		ereport(NOTICE, (errmsg("cleaned up %d orphaned resources", droppedCount)));
 	}
 
 	PG_RETURN_VOID();

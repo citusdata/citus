@@ -7,13 +7,6 @@
 --6. Failure on polling last write-ahead log location reported to origin WAL sender
 --7. Failure on dropping subscription
 CREATE SCHEMA "citus_failure_split_cleanup_schema";
-
--- Create a method to execute TryDropOrphanShards
-CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
-RETURNS VOID
-AS 'citus'
-LANGUAGE C STRICT VOLATILE;
-
 SET search_path TO "citus_failure_split_cleanup_schema";
 
 SET citus.next_shard_id TO 8981000;
@@ -61,7 +54,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SELECT subname FROM pg_subscription;
 
     \c - postgres - :master_port
-    SELECT run_try_drop_marked_shards();
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
 
@@ -107,7 +100,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SELECT subname FROM pg_subscription;
 
     \c - postgres - :master_port
-    SELECT run_try_drop_marked_shards();
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
 
@@ -153,7 +146,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SELECT subname FROM pg_subscription;
 
     \c - postgres - :master_port
-    SELECT run_try_drop_marked_shards();
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
 
@@ -199,7 +192,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SELECT subname FROM pg_subscription;
 
     \c - postgres - :master_port
-    SELECT run_try_drop_marked_shards();
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
 
@@ -245,7 +238,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SELECT subname FROM pg_subscription;
 
     \c - postgres - :master_port
-    SELECT run_try_drop_marked_shards();
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
 
@@ -291,7 +284,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SELECT subname FROM pg_subscription;
 
     \c - postgres - :master_port
-    SELECT run_try_drop_marked_shards();
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
 
@@ -340,7 +333,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SELECT subname FROM pg_subscription;
 
     \c - postgres - :master_port
-    SELECT run_try_drop_marked_shards();
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
 

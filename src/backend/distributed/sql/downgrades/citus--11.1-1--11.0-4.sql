@@ -104,3 +104,4 @@ DROP FUNCTION pg_catalog.citus_internal_delete_partition_metadata(regclass);
 DROP TABLE pg_catalog.pg_dist_cleanup;
 DROP SEQUENCE pg_catalog.pg_dist_operationid_seq;
 DROP SEQUENCE pg_catalog.pg_dist_cleanup_recordid_seq;
+DROP PROCEDURE pg_catalog.citus_cleanup_orphaned_resources();

@@ -5,12 +5,6 @@ SET citus.next_placement_id TO 8770000;
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 
--- Helper to clean shards.
-CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
-RETURNS VOID
-AS 'citus'
-LANGUAGE C STRICT VOLATILE;
-
 -- Disable Deferred drop auto cleanup to avoid flaky tests.
 ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
 SELECT pg_reload_conf();
@@ -179,7 +173,7 @@ SELECT pg_reload_conf();
 -- END: Split a shard along its co-located shards
 
 -- BEGIN: Perform deferred cleanup.
-SELECT run_try_drop_marked_shards();
+CALL pg_catalog.citus_cleanup_orphaned_resources();
 -- END: Perform deferred cleanup.
 
 -- BEGIN: Validate Shard Info and Data
@@ -250,7 +244,7 @@ SELECT run_try_drop_marked_shards();
 -- END: Split a partition table directly
 
 -- BEGIN: Perform deferred cleanup.
-SELECT run_try_drop_marked_shards();
+CALL pg_catalog.citus_cleanup_orphaned_resources();
 -- END: Perform deferred cleanup.
 
 -- BEGIN: Validate Shard Info and Data
