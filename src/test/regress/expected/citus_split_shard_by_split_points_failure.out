@@ -72,8 +72,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     ARRAY['-1073741824'],
     ARRAY[:worker_1_node, :worker_1_node],
     'block_writes');
-ERROR:  relation "sensors_8981002" already exists
-CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  relation citus_split_failure_test_schema.sensors_8981002 already exists on worker localhost:xxxxx
 -- BEGIN : Split Shard, which is expected to fail.
 -- BEGIN : Ensure tables were cleaned from worker
 \c - - - :worker_1_port

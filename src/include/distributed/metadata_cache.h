@@ -223,6 +223,7 @@ extern WorkerNode * LookupNodeForGroup(int32 groupId);
 extern Oid CitusCatalogNamespaceId(void);
 
 /* relation oids */
+extern Oid DistCleanupRelationId(void);
 extern Oid DistColocationRelationId(void);
 extern Oid DistColocationConfigurationIndexId(void);
 extern Oid DistPartitionRelationId(void);
@@ -247,6 +248,7 @@ extern Oid DistTransactionRelationId(void);
 extern Oid DistTransactionGroupIndexId(void);
 extern Oid DistPlacementGroupidIndexId(void);
 extern Oid DistObjectPrimaryKeyIndexId(void);
+extern Oid DistCleanupPrimaryKeyIndexId(void);
 
 /* type oids */
 extern Oid LookupTypeOid(char *schemaNameSting, char *typeNameString);

@@ -1,4 +1,5 @@
 /*
+This suite runs without deferred drop enabled.
 Citus Shard Split Test.The test is model similar to 'shard_move_constraints'.
 Here is a high level overview of test plan:
  1. Create a table 'sensors' (ShardCount = 2) to be split. Add indexes and statistics on this table.
@@ -9,22 +10,16 @@ Here is a high level overview of test plan:
  6. Trigger Split on both shards of 'sensors'. This will also split co-located tables.
  7. Move one of the split shard to test Split -> ShardMove.
  8. Split an already split shard second time on a different schema.
- 9. Create a colocated table with no replica identity.
- 10. Show we do not allow Split with the shard transfer mode 'auto' if any colocated table has no replica identity.
- 11. Drop the colocated table with no replica identity.
- 12. Show we allow Split with the shard transfer mode 'auto' if all colocated tables has replica identity.
 */
 
-CREATE SCHEMA "citus_split_test_schema";
+CREATE SCHEMA "citus_split_test_schema_no_deferred_drop";
 
--- Disable Deferred drop auto cleanup to avoid flaky tests.
-ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
-SELECT pg_reload_conf();
+SET citus.defer_drop_after_shard_split TO OFF;
+CREATE ROLE test_split_deferred_role WITH LOGIN;
+GRANT USAGE, CREATE ON SCHEMA "citus_split_test_schema_no_deferred_drop" TO test_split_deferred_role;
+SET ROLE test_split_deferred_role;
 
-CREATE ROLE test_shard_split_role WITH LOGIN;
-GRANT USAGE, CREATE ON SCHEMA "citus_split_test_schema" TO test_shard_split_role;
-SET ROLE test_shard_split_role;
-SET search_path TO "citus_split_test_schema";
+SET search_path TO "citus_split_test_schema_no_deferred_drop";
 SET citus.next_shard_id TO 8981000;
 SET citus.next_placement_id TO 8610000;
 SET citus.shard_count TO 2;
@@ -88,7 +83,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
   ORDER BY logicalrelid, shardminvalue::BIGINT;
 
 \c - - - :worker_1_port
-    SET search_path TO "citus_split_test_schema", public, pg_catalog;
+    SET search_path TO "citus_split_test_schema_no_deferred_drop", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -101,12 +96,12 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema')
+        WHERE nspname IN ('citus_split_test_schema_no_deferred_drop')
     )
     ORDER BY stxname ASC;
 
 \c - - - :worker_2_port
-    SET search_path TO "citus_split_test_schema", public, pg_catalog;
+    SET search_path TO "citus_split_test_schema_no_deferred_drop", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -119,15 +114,16 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema')
+        WHERE nspname IN ('citus_split_test_schema_no_deferred_drop')
     )
     ORDER BY stxname ASC;
 -- END : Display current state
 
 -- BEGIN : Move one shard before we split it.
 \c - postgres - :master_port
-SET ROLE test_shard_split_role;
-SET search_path TO "citus_split_test_schema";
+SET citus.defer_drop_after_shard_split TO OFF;
+SET ROLE test_split_deferred_role;
+SET search_path TO "citus_split_test_schema_no_deferred_drop";
 SET citus.next_shard_id TO 8981007;
 SET citus.defer_drop_after_shard_move TO OFF;
 
@@ -145,23 +141,15 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     8981000,
     ARRAY['-1073741824'],
     ARRAY[:worker_1_node, :worker_2_node],
-    'force_logical');
-
--- BEGIN: Perform deferred cleanup.
-CALL pg_catalog.citus_cleanup_orphaned_resources();
--- END: Perform deferred cleanup.
+    'block_writes');
 
 -- Perform 3 way split
 SELECT pg_catalog.citus_split_shard_by_split_points(
     8981001,
     ARRAY['536870911', '1610612735'],
     ARRAY[:worker_1_node, :worker_1_node, :worker_2_node],
-    'force_logical');
+    'block_writes');
 -- END : Split two shards : One with move and One without move.
-
--- BEGIN: Perform deferred cleanup.
-CALL pg_catalog.citus_cleanup_orphaned_resources();
--- END: Perform deferred cleanup.
 
 -- BEGIN : Move a shard post split.
 SELECT citus_move_shard_placement(8981007, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='block_writes');
@@ -177,7 +165,7 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
   ORDER BY logicalrelid, shardminvalue::BIGINT;
 
 \c - - - :worker_1_port
-    SET search_path TO "citus_split_test_schema", public, pg_catalog;
+    SET search_path TO "citus_split_test_schema_no_deferred_drop", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -190,12 +178,12 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema')
+        WHERE nspname IN ('citus_split_test_schema_no_deferred_drop')
     )
     ORDER BY stxname ASC;
 
 \c - - - :worker_2_port
-    SET search_path TO "citus_split_test_schema", public, pg_catalog;
+    SET search_path TO "citus_split_test_schema_no_deferred_drop", public, pg_catalog;
     SET citus.show_shards_for_app_name_prefixes = '*';
     SELECT tbl.relname, fk."Constraint", fk."Definition"
             FROM pg_catalog.pg_class tbl
@@ -208,15 +196,16 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
     WHERE stxnamespace IN (
         SELECT oid
         FROM pg_namespace
-        WHERE nspname IN ('citus_split_test_schema')
+        WHERE nspname IN ('citus_split_test_schema_no_deferred_drop')
     )
     ORDER BY stxname ASC;
 -- END : Display current state
 
 -- BEGIN: Should be able to change/drop constraints
 \c - postgres - :master_port
-SET ROLE test_shard_split_role;
-SET search_path TO "citus_split_test_schema";
+SET citus.defer_drop_after_shard_split TO OFF;
+SET ROLE test_split_deferred_role;
+SET search_path TO "citus_split_test_schema_no_deferred_drop";
 ALTER INDEX index_on_sensors RENAME TO index_on_sensors_renamed;
 ALTER INDEX index_on_sensors_renamed ALTER COLUMN 1 SET STATISTICS 200;
 DROP STATISTICS stats_on_sensors;
@@ -231,13 +220,9 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     8981007,
     ARRAY['-2100000000'],
     ARRAY[:worker_1_node, :worker_2_node],
-    'force_logical');
+    'block_writes');
 
--- BEGIN: Perform deferred cleanup.
-CALL pg_catalog.citus_cleanup_orphaned_resources();
--- END: Perform deferred cleanup.
-
-SET search_path TO "citus_split_test_schema";
+SET search_path TO "citus_split_test_schema_no_deferred_drop";
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
   INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
@@ -247,56 +232,6 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
   ORDER BY logicalrelid, shardminvalue::BIGINT;
 -- END: Split second time on another schema
 
--- BEGIN: Create a co-located table with no replica identity.
-CREATE TABLE table_no_rep_id (measureid integer);
-SELECT create_distributed_table('table_no_rep_id', 'measureid', colocate_with:='sensors');
--- END: Create a co-located table with no replica identity.
-
--- BEGIN: Split a shard with shard_transfer_mode='auto' and with a colocated table with no replica identity
-SET citus.next_shard_id TO 8981041;
-SELECT pg_catalog.citus_split_shard_by_split_points(
-    8981031,
-    ARRAY['-2120000000'],
-    ARRAY[:worker_1_node, :worker_2_node]);
-
--- BEGIN: Perform deferred cleanup.
-CALL pg_catalog.citus_cleanup_orphaned_resources();
--- END: Perform deferred cleanup.
-
-SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
-  FROM pg_dist_shard AS shard
-  INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
-  INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
-  INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
-  WHERE node.noderole = 'primary' AND (logicalrelid = 'sensors'::regclass OR logicalrelid = 'colocated_dist_table'::regclass OR logicalrelid = 'table_with_index_rep_identity'::regclass)
-  ORDER BY logicalrelid, shardminvalue::BIGINT;
--- END: Split a shard with shard_transfer_mode='auto' and with a colocated table with no replica identity
-
--- BEGIN: Drop the co-located table with no replica identity.
-DROP TABLE table_no_rep_id;
--- END: Drop the co-located table with no replica identity.
-
--- BEGIN: Split a shard with shard_transfer_mode='auto' and with all colocated tables has replica identity
-SET citus.next_shard_id TO 8981041;
-SELECT pg_catalog.citus_split_shard_by_split_points(
-    8981031,
-    ARRAY['-2120000000'],
-    ARRAY[:worker_1_node, :worker_2_node],
-    'auto');
-
--- BEGIN: Perform deferred cleanup.
-CALL pg_catalog.citus_cleanup_orphaned_resources();
--- END: Perform deferred cleanup.
-
-SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
-  FROM pg_dist_shard AS shard
-  INNER JOIN pg_dist_placement placement ON shard.shardid = placement.shardid
-  INNER JOIN pg_dist_node       node     ON placement.groupid = node.groupid
-  INNER JOIN pg_catalog.pg_class cls     ON shard.logicalrelid = cls.oid
-  WHERE node.noderole = 'primary' AND (logicalrelid = 'sensors'::regclass OR logicalrelid = 'colocated_dist_table'::regclass OR logicalrelid = 'table_with_index_rep_identity'::regclass)
-  ORDER BY logicalrelid, shardminvalue::BIGINT;
--- END: Split a shard with shard_transfer_mode='auto' and with all colocated tables has replica identity
-
 -- BEGIN: Validate Data Count
 SELECT COUNT(*) FROM sensors;
 SELECT COUNT(*) FROM reference_table;
@@ -305,7 +240,7 @@ SELECT COUNT(*) FROM colocated_dist_table;
 
 --BEGIN : Cleanup
 \c - postgres - :master_port
-ALTER SYSTEM RESET citus.defer_shard_delete_interval;
-SELECT pg_reload_conf();
-DROP SCHEMA "citus_split_test_schema" CASCADE;
+DROP SCHEMA "citus_split_test_schema_no_deferred_drop" CASCADE;
+
+SET citus.defer_drop_after_shard_split TO ON;
 --END : Cleanup

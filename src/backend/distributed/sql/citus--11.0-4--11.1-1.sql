@@ -63,6 +63,7 @@ BEGIN
 
   END IF;
 END $check_citus$;
+#include "udfs/citus_prepare_pg_upgrade/11.1-1.sql"
 #include "udfs/citus_finish_pg_upgrade/11.1-1.sql"
 
 DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_id int, OUT initiator_node_identifier int4,
@@ -79,3 +80,28 @@ DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_
 
 DROP FUNCTION pg_catalog.isolate_tenant_to_new_shard(table_name regclass, tenant_id "any", cascade_option text);
 #include "udfs/isolate_tenant_to_new_shard/11.1-1.sql"
+
+-- Table of records to:
+-- 1) Cleanup leftover resources after a failure
+-- 2) Deferred drop of old shard placements after a split.
+#include "udfs/citus_cleanup_orphaned_resources/11.1-1.sql"
+
+CREATE TABLE citus.pg_dist_cleanup (
+    record_id bigint primary key,
+    operation_id bigint not null,
+    object_type int not null,
+    object_name text not null,
+    node_group_id int not null,
+    policy_type int not null
+);
+ALTER TABLE citus.pg_dist_cleanup SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.pg_dist_cleanup TO public;
+
+-- Sequence used to generate operation Ids and record Ids in pg_dist_cleanup_record.
+CREATE SEQUENCE citus.pg_dist_operationid_seq;
+ALTER SEQUENCE citus.pg_dist_operationid_seq SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.pg_dist_operationid_seq TO public;
+
+CREATE SEQUENCE citus.pg_dist_cleanup_recordid_seq;
+ALTER SEQUENCE citus.pg_dist_cleanup_recordid_seq SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.pg_dist_cleanup_recordid_seq TO public;

@@ -1,8 +1,16 @@
+#include "isolation_mx_common.include.spec"
+
 setup
 {
 	SET citus.shard_count to 2;
 	SET citus.shard_replication_factor to 1;
     SELECT setval('pg_dist_shardid_seq', 1500000);
+
+	-- Cleanup any orphan shards that might be left over from a previous run.
+	CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
+	RETURNS VOID
+	AS 'citus'
+	LANGUAGE C STRICT VOLATILE;
 
 	CREATE TABLE to_split_table (id int, value int);
 	SELECT create_distributed_table('to_split_table', 'id');
@@ -10,6 +18,8 @@ setup
 
 teardown
 {
+	SELECT run_try_drop_marked_shards();
+
 	DROP TABLE to_split_table;
 }
 
@@ -64,6 +74,44 @@ step "s1-copy"
 	COPY to_split_table FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
 }
 
+step "s1-lock-to-split-shard"
+{
+  SELECT run_commands_on_session_level_connection_to_node('BEGIN; LOCK TABLE to_split_table_1500002 IN ACCESS SHARE MODE;');
+}
+
+step "s1-start-connection"
+{
+  SELECT start_session_level_connection_to_node('localhost', 57638);
+}
+
+step "s1-stop-connection"
+{
+    SELECT stop_session_level_connection_to_node();
+}
+
+// this advisory lock with (almost) random values are only used
+// for testing purposes. For details, check Citus' logical replication
+// source code
+step "s1-acquire-split-advisory-lock"
+{
+    SELECT pg_advisory_lock(44000, 55152);
+}
+
+step "s1-release-split-advisory-lock"
+{
+    SELECT pg_advisory_unlock(44000, 55152);
+}
+
+step "s1-run-cleaner"
+{
+	SELECT run_try_drop_marked_shards();
+}
+
+step "s1-show-pg_dist_cleanup"
+{
+	SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
+}
+
 step "s1-blocking-shard-split"
 {
 	SELECT pg_catalog.citus_split_shard_by_split_points(
@@ -83,6 +131,23 @@ session "s2"
 step "s2-begin"
 {
 	BEGIN;
+}
+
+step "s2-print-locks"
+{
+    SELECT * FROM master_run_on_worker(
+		ARRAY['localhost']::text[],
+		ARRAY[57638]::int[],
+		ARRAY[
+			'SELECT CONCAT(relation::regclass, ''-'', locktype, ''-'', mode) AS LockInfo FROM pg_locks
+				WHERE relation::regclass::text = ''to_split_table_1500002'';'
+			 ]::text[],
+		false);
+}
+
+step "s2-show-pg_dist_cleanup"
+{
+	SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
 }
 
 step "s2-blocking-shard-split"
@@ -144,3 +209,13 @@ permutation "s1-insert" "s1-begin" "s1-blocking-shard-split" "s2-blocking-shard-
 permutation "s1-load-cache" "s1-begin" "s1-select" "s2-begin" "s2-blocking-shard-split" "s1-ddl" "s2-commit" "s1-commit" "s2-print-cluster" "s2-print-index-count"
 // The same tests without loading the cache at first
 permutation "s1-begin" "s1-select" "s2-begin" "s2-blocking-shard-split" "s1-ddl" "s2-commit" "s1-commit" "s2-print-cluster" "s2-print-index-count"
+
+// With Deferred drop, AccessShareLock (acquired by SELECTS) do not block split from completion.
+permutation "s1-load-cache" "s1-start-connection"  "s1-lock-to-split-shard" "s2-print-locks" "s2-blocking-shard-split" "s2-print-locks" "s2-show-pg_dist_cleanup" "s1-stop-connection"
+// The same test above without loading the cache at first
+permutation "s1-start-connection"  "s1-lock-to-split-shard" "s2-print-locks" "s2-blocking-shard-split" "s2-print-cluster" "s2-show-pg_dist_cleanup" "s1-stop-connection"
+
+// When a split operation is running, cleaner cannot clean its resources.
+permutation "s1-load-cache" "s1-acquire-split-advisory-lock" "s2-blocking-shard-split" "s1-run-cleaner" "s1-show-pg_dist_cleanup" "s1-release-split-advisory-lock" "s1-run-cleaner" "s2-show-pg_dist_cleanup"
+// The same test above without loading the cache at first
+permutation "s1-acquire-split-advisory-lock" "s2-blocking-shard-split" "s1-run-cleaner" "s1-show-pg_dist_cleanup" "s1-release-split-advisory-lock" "s1-run-cleaner" "s2-show-pg_dist_cleanup"

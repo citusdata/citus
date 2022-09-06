@@ -100,3 +100,8 @@ DROP FUNCTION pg_catalog.isolate_tenant_to_new_shard(table_name regclass, tenant
 #include "../udfs/isolate_tenant_to_new_shard/8.0-1.sql"
 DROP FUNCTION pg_catalog.create_distributed_table_concurrently;
 DROP FUNCTION pg_catalog.citus_internal_delete_partition_metadata(regclass);
+
+DROP TABLE pg_catalog.pg_dist_cleanup;
+DROP SEQUENCE pg_catalog.pg_dist_operationid_seq;
+DROP SEQUENCE pg_catalog.pg_dist_cleanup_recordid_seq;
+DROP PROCEDURE pg_catalog.citus_cleanup_orphaned_resources();
