@@ -42,7 +42,8 @@ typedef enum AdvisoryLocktagClass
 	ADV_LOCKTAG_CLASS_CITUS_OPERATIONS = 9,
 	ADV_LOCKTAG_CLASS_CITUS_PLACEMENT_CLEANUP = 10,
 	ADV_LOCKTAG_CLASS_CITUS_LOGICAL_REPLICATION = 12,
-	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_PLACEMENT_COLOCATION = 13
+	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_PLACEMENT_COLOCATION = 13,
+	ADV_LOCKTAG_CLASS_CITUS_BACKGROUND_TASK = 14
 } AdvisoryLocktagClass;
 
 /* CitusOperations has constants for citus operations */
@@ -128,6 +129,16 @@ typedef enum CitusOperations
 						 (uint32) 0, \
 						 (uint32) 0, \
 						 ADV_LOCKTAG_CLASS_CITUS_LOGICAL_REPLICATION)
+
+/* reuse advisory lock, but with different, unused field 4 (14)
+ * Also it has the database hardcoded to MyDatabaseId, to ensure the locks
+ * are local to each database */
+#define SET_LOCKTAG_BACKGROUND_TASK(tag, taskId) \
+	SET_LOCKTAG_ADVISORY(tag, \
+						 MyDatabaseId, \
+						 (uint32) ((taskId) >> 32), \
+						 (uint32) (taskId), \
+						 ADV_LOCKTAG_CLASS_CITUS_BACKGROUND_TASK)
 
 /*
  * DistLockConfigs are used to configure the locking behaviour of AcquireDistributedLockOnRelations

@@ -111,7 +111,8 @@ CREATE TABLE citus.pg_dist_background_tasks(
     not_before timestamptz, -- can be null to indicate no delay for start of the task, will be set on failure to delay retries
     message text,
 
-    CONSTRAINT pg_dist_background_tasks_pkey PRIMARY KEY (job_id, task_id)
+    CONSTRAINT pg_dist_background_tasks_pkey PRIMARY KEY (job_id, task_id),
+    UNIQUE(task_id)
 );
 ALTER TABLE citus.pg_dist_background_tasks SET SCHEMA pg_catalog;
 CREATE INDEX pg_dist_background_tasks_status_task_id_index ON pg_catalog.pg_dist_background_tasks USING btree(status, task_id);

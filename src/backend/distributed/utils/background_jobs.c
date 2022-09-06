@@ -1035,6 +1035,22 @@ CitusBackgroundJobExecuter(Datum main_arg)
 
 	BackgroundWorkerInitializeConnection(database, username, 0);
 
+	/* make sure we are the only backend running for this task */
+	LOCKTAG locktag = { 0 };
+	SET_LOCKTAG_BACKGROUND_TASK(locktag, *taskId);
+	const bool sessionLock = true;
+	const bool dontWait = true;
+	LockAcquireResult locked =
+		LockAcquire(&locktag, AccessExclusiveLock, sessionLock, dontWait);
+	if (locked == LOCKACQUIRE_NOT_AVAIL)
+	{
+		ereport(ERROR, (errmsg("unable to acquire background task lock for taskId: %ld",
+							   *taskId),
+						errdetail("this indicates that an other backend is already "
+								  "executing this task")));
+		exit(0);
+	}
+
 	/* Prepare to execute the query. */
 	SetCurrentStatementStartTimestamp();
 	debug_query_string = command;

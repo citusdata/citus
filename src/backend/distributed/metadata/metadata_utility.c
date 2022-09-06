@@ -64,6 +64,7 @@
 #include "nodes/makefuncs.h"
 #include "parser/scansup.h"
 #include "storage/lmgr.h"
+#include "storage/procarray.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/datum.h"
@@ -2893,6 +2894,27 @@ ResetRunningBackgroundTasks(void)
 			ObjectIdGetDatum(CitusTaskStatusRunnableId());
 		isnull[Anum_pg_dist_background_tasks_status - 1] = false;
 		replace[Anum_pg_dist_background_tasks_status - 1] = true;
+
+		/* if there is a pid we need to signal the backend to stop */
+		if (!isnull[Anum_pg_dist_background_tasks_pid - 1])
+		{
+			int pid = DatumGetInt32(values[Anum_pg_dist_background_tasks_pid - 1]);
+			PGPROC *proc = BackendPidGetProc(pid);
+			const int sig = SIGTERM; /* we need to fully stop execution */
+			if (proc)
+			{
+				/* it is a postgres process managed by postmaster */
+#ifdef HAVE_SETSID
+				if (kill(-pid, sig))
+#else
+				if (kill(pid, sig))
+#endif
+				{
+					ereport(WARNING, (errmsg("could not send signal to process %d: %m",
+											 pid)));
+				}
+			}
+		}
 
 		values[Anum_pg_dist_background_tasks_pid - 1] = InvalidOid;
 		isnull[Anum_pg_dist_background_tasks_pid - 1] = true;
