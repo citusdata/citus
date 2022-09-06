@@ -69,10 +69,12 @@ bool BackgroundTaskMonitorDebugDelay = false;
 #define CITUS_BACKGROUND_TASK_KEY_USERNAME 1
 #define CITUS_BACKGROUND_TASK_KEY_COMMAND 2
 #define CITUS_BACKGROUND_TASK_KEY_QUEUE 3
-#define CITUS_BACKGROUND_TASK_NKEYS 4
+#define CITUS_BACKGROUND_TASK_KEY_TASK_ID 4
+#define CITUS_BACKGROUND_TASK_NKEYS 5
 
 static BackgroundWorkerHandle * StartCitusBackgroundJobExecuter(char *database,
 																char *user, char *command,
+																int64 taskId,
 																dsm_segment **pSegment);
 static void ExecuteSqlString(const char *sql);
 static void ConsumeTaskWorkerOutput(shm_mq_handle *responseq, BackgroundTask *task,
@@ -403,7 +405,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		dsm_segment *seg = NULL;
 		BackgroundWorkerHandle *handle =
 			StartCitusBackgroundJobExecuter(databaseName, userName, task->command,
-											&seg);
+											task->taskid, &seg);
 
 		if (handle == NULL)
 		{
@@ -813,7 +815,7 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, BackgroundTask *task, bool *ha
  * environment to the executor.
  */
 static dsm_segment *
-StoreArgumentsInDSM(char *database, char *username, char *command)
+StoreArgumentsInDSM(char *database, char *username, char *command, int64 taskId)
 {
 	/*
 	 * Create the shared memory that we will pass to the background
@@ -828,6 +830,7 @@ StoreArgumentsInDSM(char *database, char *username, char *command)
 	shm_toc_estimate_chunk(&e, strlen(command) + 1);
 #define QUEUE_SIZE ((Size) 65536)
 	shm_toc_estimate_chunk(&e, QUEUE_SIZE);
+	shm_toc_estimate_chunk(&e, sizeof(int64));
 	shm_toc_estimate_keys(&e, CITUS_BACKGROUND_TASK_NKEYS);
 	Size segsize = shm_toc_estimate(&e);
 
@@ -862,6 +865,10 @@ StoreArgumentsInDSM(char *database, char *username, char *command)
 	shm_toc_insert(toc, CITUS_BACKGROUND_TASK_KEY_QUEUE, mq);
 	shm_mq_set_receiver(mq, MyProc);
 
+	int64 *taskIdTarget = shm_toc_allocate(toc, sizeof(int64));
+	*taskIdTarget = taskId;
+	shm_toc_insert(toc, CITUS_BACKGROUND_TASK_KEY_TASK_ID, taskIdTarget);
+
 	/*
 	 * Attach the queue before launching a worker, so that we'll automatically
 	 * detach the queue if we error out.  (Otherwise, the worker might sit
@@ -882,10 +889,10 @@ StoreArgumentsInDSM(char *database, char *username, char *command)
  * the dynamic shared memory.
  */
 static BackgroundWorkerHandle *
-StartCitusBackgroundJobExecuter(char *database, char *user, char *command,
+StartCitusBackgroundJobExecuter(char *database, char *user, char *command, int64 taskId,
 								dsm_segment **segOut)
 {
-	dsm_segment *seg = StoreArgumentsInDSM(database, user, command);
+	dsm_segment *seg = StoreArgumentsInDSM(database, user, command, taskId);
 
 	/* Configure a worker. */
 	BackgroundWorker worker = { 0 };
@@ -991,6 +998,7 @@ CitusBackgroundJobExecuter(Datum main_arg)
 	char *database = shm_toc_lookup(toc, CITUS_BACKGROUND_TASK_KEY_DATABASE, false);
 	char *username = shm_toc_lookup(toc, CITUS_BACKGROUND_TASK_KEY_USERNAME, false);
 	char *command = shm_toc_lookup(toc, CITUS_BACKGROUND_TASK_KEY_COMMAND, false);
+	int64 *taskId = shm_toc_lookup(toc, CITUS_BACKGROUND_TASK_KEY_TASK_ID, false);
 	shm_mq *mq = shm_toc_lookup(toc, CITUS_BACKGROUND_TASK_KEY_QUEUE, false);
 
 	shm_mq_set_sender(mq, MyProc);
