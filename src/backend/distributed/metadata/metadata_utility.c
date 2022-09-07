@@ -2778,7 +2778,9 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 {
 	BackgroundTask *task = NULL;
 
-	Relation pgDistBackgroundTasks =
+	Relation pgDistBackgroundJob =
+		table_open(DistBackgroundJobRelationId(), RowExclusiveLock);
+	Relation pgDistBackgroundTask =
 		table_open(DistBackgroundTaskRelationId(), RowExclusiveLock);
 	Relation pgDistbackgroundTasksDepend = NULL;
 	if (dependingTaskCount > 0)
@@ -2787,7 +2789,30 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 			table_open(DistBackgroundTaskDependRelationId(), RowExclusiveLock);
 	}
 
-	/* 1. insert new task */
+	/* 1. verify job exist */
+	{
+		ScanKeyData scanKey[1] = { 0 };
+		bool indexOK = true;
+
+		/* pg_dist_background_job.job_id == $jobId */
+		ScanKeyInit(&scanKey[0], Anum_pg_dist_background_job_job_id,
+					BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
+
+		SysScanDesc scanDescriptor =
+			systable_beginscan(pgDistBackgroundJob,
+							   DistBackgroundJobPKeyIndexId(),
+							   indexOK, NULL, lengthof(scanKey), scanKey);
+
+		HeapTuple jobTuple = systable_getnext(scanDescriptor);
+		if (!HeapTupleIsValid(jobTuple))
+		{
+			ereport(ERROR, (errmsg("job for newly created task does not exist.")));
+		}
+
+		systable_endscan(scanDescriptor);
+	}
+
+	/* 2. insert new task */
 	{
 		Datum values[Natts_pg_dist_background_task] = { 0 };
 		bool nulls[Natts_pg_dist_background_task] = { 0 };
@@ -2820,9 +2845,9 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 		values[Anum_pg_dist_background_task_command - 1] = CStringGetTextDatum(command);
 		nulls[Anum_pg_dist_background_task_command - 1] = false;
 
-		HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistBackgroundTasks),
+		HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistBackgroundTask),
 											 values, nulls);
-		CatalogTupleInsert(pgDistBackgroundTasks, newTuple);
+		CatalogTupleInsert(pgDistBackgroundTask, newTuple);
 
 		task = palloc0(sizeof(BackgroundTask));
 		task->taskid = taskId;
@@ -2830,11 +2855,11 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 		task->command = pstrdup(command);
 	}
 
-	/* 2. insert dependencies into catalog */
+	/* 3. insert dependencies into catalog */
 	{
 		for (int i = 0; i < dependingTaskCount; i++)
 		{
-			/* 2.1 after verifying the task exists for this job */
+			/* 3.1 after verifying the task exists for this job */
 			{
 				ScanKeyData scanKey[2] = { 0 };
 				bool indexOK = true;
@@ -2848,7 +2873,7 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 							BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(task->taskid));
 
 				SysScanDesc scanDescriptor =
-					systable_beginscan(pgDistBackgroundTasks,
+					systable_beginscan(pgDistBackgroundTask,
 									   DistBackgroundTaskPKeyIndexId(),
 									   indexOK, NULL, lengthof(scanKey), scanKey);
 
@@ -2890,7 +2915,8 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 	{
 		table_close(pgDistbackgroundTasksDepend, NoLock);
 	}
-	table_close(pgDistBackgroundTasks, NoLock);
+	table_close(pgDistBackgroundTask, NoLock);
+	table_close(pgDistBackgroundJob, NoLock);
 
 	return task;
 }
