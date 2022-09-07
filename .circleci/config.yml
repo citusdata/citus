@@ -116,7 +116,7 @@ jobs:
         type: string
         default: 12-13
     docker:
-      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
+      - image: '<< parameters.image >>:<< parameters.image_tag >>-vabaecad'
     working_directory: /home/circleci/project
     steps:
       - checkout
