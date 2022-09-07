@@ -252,8 +252,52 @@ INSERT into numeric_negative_scale SELECT x,x FROM generate_series(111, 115) x;
 SELECT create_distributed_table('numeric_negative_scale','numeric_column');
 -- However, we can distribute by other columns
 SELECT create_distributed_table('numeric_negative_scale','orig_value');
+-- Verify that we can not change the distribution column to the numeric column
+SELECT alter_distributed_table('numeric_negative_scale',
+                                distribution_column := 'numeric_column');
 
 SELECT * FROM numeric_negative_scale ORDER BY 1,2;
 
+-- verify that numeric types with scale greater than precision are also ok
+-- a precision of 2, and scale of 3 means that all the numbers should be less than 10^-1 and of the form 0,0XY
+CREATE TABLE numeric_scale_gt_precision(numeric_column numeric(2,3));
+SELECT * FROM create_distributed_table('numeric_scale_gt_precision','numeric_column');
+INSERT INTO numeric_scale_gt_precision SELECT x FROM generate_series(0.01234, 0.09, 0.005) x;
+
+-- verify that we store only 2 digits, and discard the rest of them.
+SELECT * FROM numeric_scale_gt_precision ORDER BY 1;
+-- verify we can route queries to the right shards
+SELECT * FROM numeric_scale_gt_precision WHERE numeric_column=0.027;
+
+-- test new regex functions
+-- print order comments that contain the word `fluffily` at least twice
+SELECT o_comment FROM public.orders WHERE regexp_count(o_comment, 'FluFFily', 1, 'i')>=2 ORDER BY 1;
+-- print the same items using a different regexp function
+SELECT o_comment FROM public.orders WHERE regexp_like(o_comment, 'fluffily.*fluffily') ORDER BY 1;
+-- print the position where we find the second fluffily in the comment
+SELECT o_comment, regexp_instr(o_comment, 'fluffily.*(fluffily)') FROM public.orders ORDER BY 2 desc LIMIT 5;
+-- print the substrings between two `fluffily`
+SELECT regexp_substr(o_comment, 'fluffily.*fluffily') FROM public.orders ORDER BY 1 LIMIT 5;
+-- replace second `fluffily` with `silkily`
+SELECT regexp_replace(o_comment, 'fluffily', 'silkily', 1, 2) FROM public.orders WHERE regexp_like(o_comment, 'fluffily.*fluffily') ORDER BY 1 desc;
+
+-- test new COPY features
+-- COPY TO statements with text format and headers
+CREATE TABLE copy_test(id int, data int);
+SELECT create_distributed_table('copy_test', 'id');
+INSERT INTO copy_test SELECT x, x FROM generate_series(1,100) x;
+COPY copy_test TO :'temp_dir''copy_test.txt' WITH ( HEADER true, FORMAT text);
+
+-- Create another distributed table with different column names and test COPY FROM with header match
+CREATE TABLE copy_test2(id int, data_ int);
+SELECT create_distributed_table('copy_test2', 'id');
+COPY copy_test2 FROM :'temp_dir''copy_test.txt' WITH ( HEADER match, FORMAT text);
+
+-- verify that the command works if we rename the column
+ALTER TABLE copy_test2 RENAME COLUMN data_ TO data;
+COPY copy_test2 FROM :'temp_dir''copy_test.txt' WITH ( HEADER match, FORMAT text);
+SELECT count(*)=100 FROM copy_test2;
+
 -- Clean up
+\set VERBOSITY terse
 DROP SCHEMA pg15 CASCADE;
