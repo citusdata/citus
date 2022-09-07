@@ -252,9 +252,22 @@ INSERT into numeric_negative_scale SELECT x,x FROM generate_series(111, 115) x;
 SELECT create_distributed_table('numeric_negative_scale','numeric_column');
 -- However, we can distribute by other columns
 SELECT create_distributed_table('numeric_negative_scale','orig_value');
+-- Verify that we can not change the distribution column to the numeric column
+SELECT alter_distributed_table('numeric_negative_scale',
+                                distribution_column := 'numeric_column');
 
 SELECT * FROM numeric_negative_scale ORDER BY 1,2;
 
+-- verify that numeric types with scale greater than precision are also ok
+-- a precision of 2, and scale of 3 means that all the numbers should be less than 10^-1 and of the form 0,0XY
+CREATE TABLE numeric_scale_gt_precision(numeric_column numeric(2,3));
+SELECT * FROM create_distributed_table('numeric_scale_gt_precision','numeric_column');
+INSERT INTO numeric_scale_gt_precision SELECT x FROM generate_series(0.01234, 0.09, 0.005) x;
+
+-- verify that we store only 2 digits, and discard the rest of them.
+SELECT * FROM numeric_scale_gt_precision ORDER BY 1;
+-- verify we can route queries to the right shards
+SELECT * FROM numeric_scale_gt_precision WHERE numeric_column=0.027;
 
 -- test new regex functions
 -- print order comments that contain the word `fluffily` at least twice

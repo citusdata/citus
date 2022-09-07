@@ -410,6 +410,12 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 
 (1 row)
 
+-- Verify that we can not change the distribution column to the numeric column
+SELECT alter_distributed_table('numeric_negative_scale',
+                                distribution_column := 'numeric_column');
+NOTICE:  creating a new table for pg15.numeric_negative_scale
+ERROR:  cannot distribute relation: numeric_negative_scale_xxxxxx"
+DETAIL:  Distribution column must not use numeric type with negative scale
 SELECT * FROM numeric_negative_scale ORDER BY 1,2;
  numeric_column | orig_value
 ---------------------------------------------------------------------
@@ -419,6 +425,45 @@ SELECT * FROM numeric_negative_scale ORDER BY 1,2;
             110 |        114
             120 |        115
 (5 rows)
+
+-- verify that numeric types with scale greater than precision are also ok
+-- a precision of 2, and scale of 3 means that all the numbers should be less than 10^-1 and of the form 0,0XY
+CREATE TABLE numeric_scale_gt_precision(numeric_column numeric(2,3));
+SELECT * FROM create_distributed_table('numeric_scale_gt_precision','numeric_column');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO numeric_scale_gt_precision SELECT x FROM generate_series(0.01234, 0.09, 0.005) x;
+-- verify that we store only 2 digits, and discard the rest of them.
+SELECT * FROM numeric_scale_gt_precision ORDER BY 1;
+ numeric_column
+---------------------------------------------------------------------
+          0.012
+          0.017
+          0.022
+          0.027
+          0.032
+          0.037
+          0.042
+          0.047
+          0.052
+          0.057
+          0.062
+          0.067
+          0.072
+          0.077
+          0.082
+          0.087
+(16 rows)
+
+-- verify we can route queries to the right shards
+SELECT * FROM numeric_scale_gt_precision WHERE numeric_column=0.027;
+ numeric_column
+---------------------------------------------------------------------
+          0.027
+(1 row)
 
 -- test new regex functions
 -- print order comments that contain the word `fluffily` at least twice
@@ -510,4 +555,4 @@ SELECT count(*)=100 FROM copy_test2;
 -- Clean up
 \set VERBOSITY terse
 DROP SCHEMA pg15 CASCADE;
-NOTICE:  drop cascades to 11 other objects
+NOTICE:  drop cascades to 13 other objects
