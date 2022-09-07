@@ -69,6 +69,7 @@
 #include "utils/builtins.h"
 #include "utils/datum.h"
 #include "utils/fmgroids.h"
+#include "utils/fmgrprotos.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
@@ -2882,6 +2883,7 @@ ResetRunningBackgroundTasks(void)
 						   scanKey);
 
 	HeapTuple taskTuple = NULL;
+	List *taskIdsToWait = NIL;
 	while (HeapTupleIsValid(taskTuple = systable_getnext(scanDescriptor)))
 	{
 		Datum values[Natts_pg_dist_background_task] = { 0 };
@@ -2916,23 +2918,36 @@ ResetRunningBackgroundTasks(void)
 												   sessionLock, dontWait);
 			if (locked == LOCKACQUIRE_NOT_AVAIL)
 			{
-				/* there is still an executor holding the lock, needs a SIGTERM */
-				int pid = DatumGetInt32(values[Anum_pg_dist_background_task_pid - 1]);
-				PGPROC *proc = BackendPidGetProc(pid);
-				const int sig = SIGTERM; /* we need to fully stop execution */
-				if (proc)
+				/*
+				 * There is still an executor holding the lock, needs a SIGTERM.
+				 */
+				Datum pidDatum = values[Anum_pg_dist_background_task_pid - 1];
+				const Datum timeoutDatum = Int64GetDatum(0);
+				Datum signalSuccessDatum = DirectFunctionCall2(pg_terminate_backend,
+															   pidDatum, timeoutDatum);
+				bool signalSuccess = DatumGetBool(signalSuccessDatum);
+				if (!signalSuccess)
 				{
-					/* it is a postgres process managed by postmaster */
-	#ifdef HAVE_SETSID
-					if (kill(-pid, sig))
-	#else
-					if (kill(pid, sig))
-	#endif
-					{
-						ereport(WARNING, (errmsg("could not send signal to process %d: "
-												 "%m", pid)));
-					}
+					/*
+					 * We run this backend as superuser, any failure will probably cause
+					 * long delays waiting on the task lock before we can commit.
+					 */
+					ereport(WARNING,
+							(errmsg("could not send signal to process %d: %m",
+									DatumGetInt32(pidDatum)),
+							 errdetail("failing to signal an old executor could cause "
+									   "delays starting the background task monitor")));
 				}
+
+				/*
+				 * Since we didn't already acquire the lock here we need to wait on this
+				 * lock before committing the change to the catalog. However, we first
+				 * want to signal all backends before waiting on the lock, hence we keep a
+				 * list for later
+				 */
+				int64 *taskIdTarget = palloc0(sizeof(int64));
+				*taskIdTarget = taskId;
+				taskIdsToWait = lappend(taskIdsToWait, taskIdTarget);
 			}
 		}
 
@@ -2944,6 +2959,23 @@ ResetRunningBackgroundTasks(void)
 									  replace);
 
 		CatalogTupleUpdate(pgDistBackgroundTasks, &taskTuple->t_self, taskTuple);
+	}
+
+	if (list_length(taskIdsToWait) > 0)
+	{
+		ereport(LOG, (errmsg("waiting till all tasks release their lock before "
+							 "continuing with the background task monitor")));
+
+		/* there are tasks that need to release their lock before we can continue */
+		int64 *taskId = NULL;
+		foreach_ptr(taskId, taskIdsToWait)
+		{
+			LOCKTAG locktag = { 0 };
+			SET_LOCKTAG_BACKGROUND_TASK(locktag, *taskId);
+			const bool sessionLock = false;
+			const bool dontWait = false;
+			(void) LockAcquire(&locktag, AccessExclusiveLock, sessionLock, dontWait);
+		}
 	}
 
 	CommandCounterIncrement();

@@ -45,6 +45,7 @@
 #include "tcop/pquery.h"
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
+#include "utils/fmgrprotos.h"
 #include "utils/memutils.h"
 #include "utils/portal.h"
 #include "utils/ps_status.h"
@@ -111,27 +112,12 @@ citus_job_cancel(PG_FUNCTION_ARGS)
 
 	/* send cancellation to any running backends */
 	int pid = 0;
-	const int sig = SIGINT;
 	foreach_int(pid, pids)
 	{
-		PGPROC *proc = BackendPidGetProc(pid);
-		if (proc == NULL)
-		{
-			/*
-			 * This is just a warning so a loop-through-resultset will not abort
-			 * if one backend terminated on its own during the run.
-			 */
-			ereport(WARNING,
-					(errmsg("PID %d is not a PostgreSQL backend process", pid)));
-
-			continue;
-		}
-
-#ifdef HAVE_SETSID
-		if (kill(-pid, sig))
-#else
-		if (kill(pid, sig))
-#endif
+		Datum pidDatum = Int32GetDatum(pid);
+		Datum signalSuccessDatum = DirectFunctionCall1(pg_cancel_backend, pidDatum);
+		bool signalSuccess = DatumGetBool(signalSuccessDatum);
+		if (!signalSuccess)
 		{
 			ereport(WARNING, (errmsg("could not send signal to process %d: %m", pid)));
 		}

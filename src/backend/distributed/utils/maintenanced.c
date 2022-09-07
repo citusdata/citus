@@ -27,6 +27,7 @@
 #include "access/xlog.h"
 #include "catalog/pg_extension.h"
 #include "citus_version.h"
+#include "catalog/pg_authid.h"
 #include "catalog/pg_namespace.h"
 #include "commands/async.h"
 #include "commands/extension.h"
