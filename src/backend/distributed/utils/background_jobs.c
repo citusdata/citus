@@ -340,6 +340,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 
 	MemoryContext oldContextPerJob = MemoryContextSwitchTo(perTaskContext);
+	TimestampTz backgroundWorkerFailedStartTime = 0;
 	bool hasJobs = true;
 	while (hasJobs)
 	{
@@ -392,9 +393,43 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 		if (handle == NULL)
 		{
-			ereport(ERROR, (errmsg("unable to start background worker for background "
-								   "task execution")));
+			/*
+			 * We are unable to start a background worker for the task execution.
+			 * Probably we are out of background workers. Warn once and restart the loop
+			 * after a short sleep.
+			 */
+			if (backgroundWorkerFailedStartTime == 0)
+			{
+				ereport(WARNING, (errmsg("unable to start background worker for "
+										 "background task execution")));
+				backgroundWorkerFailedStartTime = GetCurrentTimestamp();
+			}
+
+			const long delay_ms = 1000;
+			(void) WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
+							 delay_ms, WAIT_EVENT_PG_SLEEP);
+			ResetLatch(MyLatch);
+
+			continue;
 		}
+
+		if (backgroundWorkerFailedStartTime > 0)
+		{
+			/*
+			 * We had a delay in starting the background worker for task execution. Report
+			 * the actual delay and reset the time. This allows a subsequent task to
+			 * report again if it can't start a background worker directly.
+			 */
+			long secs = 0;
+			int microsecs = 0;
+			TimestampDifference(backgroundWorkerFailedStartTime, GetCurrentTimestamp(),
+								&secs, &microsecs);
+			ereport(LOG, (errmsg("able to start a background worker with %ld seconds"
+								 "delay", secs)));
+
+			backgroundWorkerFailedStartTime = 0;
+		}
+
 
 		pid_t pid = 0;
 		GetBackgroundWorkerPid(handle, &pid);
