@@ -607,15 +607,14 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			 * based on the retry count we either transition the task to its error
 			 * state, or we calculate a new backoff time for future execution.
 			 */
-			if (*task->retry_count >= 3)
+			int64 delayMs = CalculateBackoffDelay(*(task->retry_count));
+			if (delayMs < 0)
 			{
-				/* fail after 3 retries */
 				task->status = BACKGROUND_TASK_STATUS_ERROR;
 				UNSET_NULLABLE_FIELD(task, not_before);
 			}
 			else
 			{
-				int64 delayMs = CalculateBackoffDelay(*(task->retry_count));
 				TimestampTz notBefore = TimestampTzPlusMilliseconds(
 					GetCurrentTimestamp(), delayMs);
 				SET_NULLABLE_FIELD(task, not_before, notBefore);
@@ -649,9 +648,11 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
  * CalculateBackoffDelay calculates the time to backoff between retries.
  *
  * Per try we increase the delay as follows:
- *   retry 1: 1 min
- *   retry 2: 10 min
- *   retry 3: 60 min
+ *   retry 1: 5 sec
+ *   retry 2: 20 sec
+ *   retry 3-30: 1 min
+ *
+ * returns -1 when retrying should stop.
  *
  * In the future we would like a callback on the job_type that could
  * distinguish the retry count and delay + potential jitter on a
@@ -661,24 +662,19 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 static int64
 CalculateBackoffDelay(int retryCount)
 {
-	switch (retryCount)
+	if (retryCount == 1)
 	{
-		case 1:
-		{
-			return 1 * 60 * 1000;
-		}
-
-		case 2:
-		{
-			return 10 * 60 * 1000;
-		}
-
-		case 3:
-		default: /* just make sure retrying an hour for missed cases */
-		{
-			return 60 * 60 * 1000;
-		}
+		return 5 * 1000;
 	}
+	else if (retryCount == 2)
+	{
+		return 20 * 1000;
+	}
+	else if (retryCount <= 30)
+	{
+		return 60 * 1000;
+	}
+	return -1;
 }
 
 

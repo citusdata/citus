@@ -886,7 +886,7 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("Time to wait between checks for scheduled background tasks."),
 		NULL,
 		&BackgroundTaskQueueCheckInterval,
-		60000, -1, 7 * 24 * 3600 * 1000,
+		5000, -1, 7 * 24 * 3600 * 1000,
 		PGC_SIGHUP,
 		GUC_UNIT_MS,
 		NULL, NULL, NULL);
