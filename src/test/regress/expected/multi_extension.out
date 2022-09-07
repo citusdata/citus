@@ -1139,7 +1139,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                         | function citus_cleanup_orphaned_resources()
                                                                                         | function citus_internal_delete_partition_metadata(regclass) void
                                                                                         | function citus_job_cancel(bigint) void
-                                                                                        | function citus_job_wait(bigint,citus_job_status) boolean
+                                                                                        | function citus_job_wait(bigint,citus_job_status) void
                                                                                         | function citus_locks() SETOF record
                                                                                         | function citus_split_shard_by_split_points(bigint,text[],integer[],citus.shard_transfer_mode) void
                                                                                         | function create_distributed_table_concurrently(regclass,text,citus.distribution_type,text,integer) void

@@ -171,7 +171,6 @@ citus_job_wait(PG_FUNCTION_ARGS)
 													  ALLOCSET_DEFAULT_MAXSIZE);
 	MemoryContext oldContext = MemoryContextSwitchTo(waitContext);
 
-	bool reachedDesiredState = false;
 	while (true)
 	{
 		MemoryContextReset(waitContext);
@@ -180,20 +179,39 @@ citus_job_wait(PG_FUNCTION_ARGS)
 		if (!job)
 		{
 			ereport(ERROR, (errmsg("no job found for job with jobid: %ld", jobid)));
-			PG_RETURN_BOOL(false);
+			PG_RETURN_VOID();
 		}
 
 		if (hasDesiredStatus && job->state == desiredStatus)
 		{
 			/* job has reached its desired status, done waiting */
-			reachedDesiredState = true;
 			break;
 		}
 
 		if (IsBackgroundJobStatusTerminal(job->state))
 		{
-			/* when no desired status was provided we reached our desired status here */
-			reachedDesiredState = !hasDesiredStatus;
+			if (hasDesiredStatus)
+			{
+				/*
+				 * We have reached a termnial state, which is not the desired state we
+				 * were waiting for, otherwise we would have escaped earlier. Since it is
+				 * a terminal state we know that we can never reach the desired state.
+				 */
+
+				Oid reachedStatusOid = BackgroundJobStatusOid(job->state);
+				Datum reachedStatusNameDatum = DirectFunctionCall1(enum_out,
+																   reachedStatusOid);
+				char *reachedStatusName = DatumGetCString(reachedStatusNameDatum);
+
+				Oid desiredStatusOid = BackgroundJobStatusOid(desiredStatus);
+				Datum desiredStatusNameDatum = DirectFunctionCall1(enum_out,
+																   desiredStatusOid);
+				char *desiredStatusName = DatumGetCString(desiredStatusNameDatum);
+
+				ereport(ERROR,
+						(errmsg("Job reached terminal state \"%s\" instead of desired "
+								"state \"%s\"", reachedStatusName, desiredStatusName)));
+			}
 
 			/* job has reached its terminal state, done waiting */
 			break;
@@ -213,7 +231,7 @@ citus_job_wait(PG_FUNCTION_ARGS)
 	MemoryContextSwitchTo(oldContext);
 	MemoryContextDelete(waitContext);
 
-	PG_RETURN_BOOL(reachedDesiredState);
+	PG_RETURN_VOID();
 }
 
 

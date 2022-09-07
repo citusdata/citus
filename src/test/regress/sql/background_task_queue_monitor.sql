@@ -23,6 +23,9 @@ INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id, $job$ SEL
 SELECT citus_job_cancel(:job_id);
 SELECT citus_job_wait(:job_id);
 
+-- verify we get an error when waiting for a job to reach a specific status while it is already in a different terminal status
+SELECT citus_job_wait(:job_id, desired_status => 'finished');
+
 -- show that the status has been cancelled
 SELECT state, NOT(started_at IS NULL) AS did_start FROM pg_dist_background_job WHERE job_id = :job_id;
 SELECT status, NOT(message IS NULL) AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;

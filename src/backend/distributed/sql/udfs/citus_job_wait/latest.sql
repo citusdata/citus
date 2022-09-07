@@ -1,5 +1,5 @@
 CREATE FUNCTION pg_catalog.citus_job_wait(jobid bigint, desired_status pg_catalog.citus_job_status DEFAULT NULL)
-    RETURNS BOOL
+    RETURNS VOID
     LANGUAGE C
     AS 'MODULE_PATHNAME',$$citus_job_wait$$;
 COMMENT ON FUNCTION pg_catalog.citus_job_wait(jobid bigint, desired_status pg_catalog.citus_job_status)
