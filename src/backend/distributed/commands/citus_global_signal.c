@@ -22,8 +22,8 @@
 
 static bool CitusSignalBackend(uint64 globalPID, uint64 timeout, int sig);
 
-PG_FUNCTION_INFO_V1(pg_cancel_backend);
-PG_FUNCTION_INFO_V1(pg_terminate_backend);
+PG_FUNCTION_INFO_V1(citus_cancel_backend);
+PG_FUNCTION_INFO_V1(citus_terminate_backend);
 
 /*
  * pg_cancel_backend overrides the Postgres' pg_cancel_backend to cancel
@@ -34,7 +34,7 @@ PG_FUNCTION_INFO_V1(pg_terminate_backend);
  * pg_cancel_backend function is used.
  */
 Datum
-pg_cancel_backend(PG_FUNCTION_ARGS)
+citus_cancel_backend(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
@@ -57,7 +57,7 @@ pg_cancel_backend(PG_FUNCTION_ARGS)
  * pg_terminate_backend function is used.
  */
 Datum
-pg_terminate_backend(PG_FUNCTION_ARGS)
+citus_terminate_backend(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
