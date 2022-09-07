@@ -81,6 +81,7 @@ static void ExecuteSqlString(const char *sql);
 static void ConsumeTaskWorkerOutput(shm_mq_handle *responseq, BackgroundTask *task,
 									bool *hadError, bool *cancelled);
 static void UpdateDependingTasks(BackgroundTask *task);
+static int64 CalculateBackoffDelay(int retryCount);
 
 PG_FUNCTION_INFO_V1(citus_job_cancel);
 PG_FUNCTION_INFO_V1(citus_job_wait);
@@ -431,14 +432,8 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 		while (GetBackgroundWorkerPid(handle, &pid) != BGWH_STOPPED)
 		{
-			int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
+			int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH;
 			int rc = WaitLatch(MyLatch, latchFlags, (long) 1000, PG_WAIT_EXTENSION);
-
-			/* emergency bailout if postmaster has died */
-			if (rc & WL_POSTMASTER_DEATH)
-			{
-				proc_exit(1);
-			}
 
 			if (rc & WL_LATCH_SET)
 			{
@@ -472,17 +467,17 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 		UNSET_NULLABLE_FIELD(task, pid);
 		task->status = BACKGROUND_TASK_STATUS_DONE;
-		if (hadError)
+		if (cancelled)
+		{
+			task->status = BACKGROUND_TASK_STATUS_CANCELLED;
+		}
+		else if (hadError)
 		{
 			/*
 			 * When we had an error we need to decide if we want to retry (keep the
-			 * scheduled state), or move to failed state
+			 * runnable state), or move to error state
 			 */
-			if (cancelled)
-			{
-				task->status = BACKGROUND_TASK_STATUS_CANCELLED;
-			}
-			else if (!task->retry_count)
+			if (!task->retry_count)
 			{
 				SET_NULLABLE_FIELD(task, retry_count, 1);
 			}
@@ -491,55 +486,24 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 				(*task->retry_count)++;
 			}
 
-			if (task->retry_count)
+			/*
+			 * based on the retry cound we either transition the task to its error
+			 * state, or we calculate a new backoff time for future execution.
+			 */
+			if (*task->retry_count >= 3)
 			{
-				if (*task->retry_count >= 3)
-				{
-					/* fail after 3 retries */
-					task->status = BACKGROUND_TASK_STATUS_ERROR;
-					UNSET_NULLABLE_FIELD(task, not_before);
-				}
-				else
-				{
-					/*
-					 * Per try we increase the delay as follows:
-					 *   retry 1: 1 min
-					 *   retry 2: 10 min
-					 *   retry 3: 60 min
-					 *
-					 * In the future we would like a callback on the job_type that could
-					 * distinguish the retry count and delay + potential jitter on a
-					 * job_type basis. For now we only assume this to be used by the
-					 * rebalancer and settled on the retry scheme above.
-					 */
-					int64 delayMs = 0;
-					switch (*(task->retry_count))
-					{
-						case 1:
-						{
-							delayMs = 1 * 60 * 1000;
-							break;
-						}
+				/* fail after 3 retries */
+				task->status = BACKGROUND_TASK_STATUS_ERROR;
+				UNSET_NULLABLE_FIELD(task, not_before);
+			}
+			else
+			{
+				int64 delayMs = CalculateBackoffDelay(*(task->retry_count));
+				TimestampTz notBefore = TimestampTzPlusMilliseconds(
+					GetCurrentTimestamp(), delayMs);
+				SET_NULLABLE_FIELD(task, not_before, notBefore);
 
-						case 2:
-						{
-							delayMs = 10 * 60 * 1000;
-							break;
-						}
-
-						case 3:
-						default: /* just make sure retrying an hour for missed cases */
-						{
-							delayMs = 60 * 60 * 1000;
-							break;
-						}
-					}
-					TimestampTz notBefore = TimestampTzPlusMilliseconds(
-						GetCurrentTimestamp(), delayMs);
-					SET_NULLABLE_FIELD(task, not_before, notBefore);
-
-					task->status = BACKGROUND_TASK_STATUS_RUNNABLE;
-				}
+				task->status = BACKGROUND_TASK_STATUS_RUNNABLE;
 			}
 		}
 
@@ -555,6 +519,43 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 	MemoryContextSwitchTo(oldContextPerJob);
 	MemoryContextDelete(perTaskContext);
+}
+
+
+/*
+ * CalculateBackoffDelay calculates the time to backoff between retries.
+ *
+ * Per try we increase the delay as follows:
+ *   retry 1: 1 min
+ *   retry 2: 10 min
+ *   retry 3: 60 min
+ *
+ * In the future we would like a callback on the job_type that could
+ * distinguish the retry count and delay + potential jitter on a
+ * job_type basis. For now we only assume this to be used by the
+ * rebalancer and settled on the retry scheme above.
+ */
+static int64
+CalculateBackoffDelay(int retryCount)
+{
+	switch (retryCount)
+	{
+		case 1:
+		{
+			return 1 * 60 * 1000;
+		}
+
+		case 2:
+		{
+			return 10 * 60 * 1000;
+		}
+
+		case 3:
+		default: /* just make sure retrying an hour for missed cases */
+		{
+			return 60 * 60 * 1000;
+		}
+	}
 }
 
 
