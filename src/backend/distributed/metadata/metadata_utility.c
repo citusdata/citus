@@ -3133,13 +3133,6 @@ BackgroundTaskHasUmnetDependencies(int64 jobId, int64 taskId)
 			continue;
 		}
 
-		/*
-		 * we assume that when we ask for job to be cleared it has no dependencies that
-		 * have errorred. Once we move the job to error it should unschedule all dependent
-		 * jobs recursively.
-		 */
-		Assert(dependingJob->status != BACKGROUND_TASK_STATUS_ERROR);
-
 		hasUnmetDependency = true;
 		break;
 	}
