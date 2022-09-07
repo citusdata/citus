@@ -3920,20 +3920,20 @@ CancelTasksForJob(int64 jobid)
 
 
 /*
- * UnscheduleDependantTasks follows the dependency tree of the provided task recursively
+ * UnscheduleDependentTasks follows the dependency tree of the provided task recursively
  * to unschedule any task depending on the current task.
  *
  * This is useful to unschedule any task that can never run because it will never satisfy
  * the unmet dependency constraint.
  */
 void
-UnscheduleDependantTasks(int64 jobId, int64 taskId)
+UnscheduleDependentTasks(BackgroundTask *task)
 {
 	Relation pgDistBackgroundTasks =
 		table_open(DistBackgroundTaskRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
 
-	List *dependantTasks = GetDependantTasks(jobId, taskId);
+	List *dependantTasks = GetDependantTasks(task->jobid, task->taskid);
 	while (list_length(dependantTasks) > 0)
 	{
 		/* pop last item from stack */
@@ -3941,17 +3941,18 @@ UnscheduleDependantTasks(int64 jobId, int64 taskId)
 		dependantTasks = list_delete_last(dependantTasks);
 
 		/* push new dependant tasks on to stack */
-		dependantTasks = list_concat(dependantTasks, GetDependantTasks(jobId, cTaskId));
+		dependantTasks = list_concat(dependantTasks,
+									 GetDependantTasks(task->jobid, cTaskId));
 
 		/* unschedule current task */
 		{
 			ScanKeyData scanKey[2] = { 0 };
 
-			/* WHERE jobId = $jobId */
+			/* WHERE jobId = $task->jobid */
 			ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_job_id,
-						BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
+						BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(task->jobid));
 
-			/* WHERE taskId = task->taskId */
+			/* WHERE taskId = dependentTask->taskId */
 			ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_task_id,
 						BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(cTaskId));
 			const bool indexOK = true;
@@ -3998,7 +3999,7 @@ UnscheduleDependantTasks(int64 jobId, int64 taskId)
  * task we transition the task to Runnable state.
  */
 void
-UnblockDependingBackgroundTasks(int64 jobId, int64 taskId)
+UnblockDependingBackgroundTasks(BackgroundTask *task)
 {
 	Relation pgDistBackgroundTasksDepend =
 		table_open(DistBackgroundTaskDependRelationId(), RowExclusiveLock);
@@ -4007,11 +4008,11 @@ UnblockDependingBackgroundTasks(int64 jobId, int64 taskId)
 
 	/* WHERE jobId = $jobId */
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_depend_job_id,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(task->jobid));
 
 	/* WHERE depends_on = $taskId */
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_depend_depends_on,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(taskId));
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(task->taskid));
 	const bool indexOK = true;
 	SysScanDesc scanDescriptor = systable_beginscan(
 		pgDistBackgroundTasksDepend, DistBackgroundTaskDependDependsOnIndexId(), indexOK,
@@ -4023,14 +4024,14 @@ UnblockDependingBackgroundTasks(int64 jobId, int64 taskId)
 		Form_pg_dist_background_task_depend depend =
 			(Form_pg_dist_background_task_depend) GETSTRUCT(heapTuple);
 
-		if (!BackgroundTaskHasUmnetDependencies(jobId, depend->task_id))
+		if (!BackgroundTaskHasUmnetDependencies(task->jobid, depend->task_id))
 		{
 			/*
 			 * The task does not have any unmet dependencies anymore and should become
 			 * runnable
 			 */
 
-			BackgroundTask *unblockedTask = GetBackgroundTaskByTaskId(jobId,
+			BackgroundTask *unblockedTask = GetBackgroundTaskByTaskId(task->jobid,
 																	  depend->task_id);
 			if (unblockedTask->status == BACKGROUND_TASK_STATUS_CANCELLED)
 			{

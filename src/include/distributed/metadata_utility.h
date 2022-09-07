@@ -397,8 +397,8 @@ extern void UpdateJobStatus(int64 taskId, const pid_t *pid, BackgroundTaskStatus
 							const int32 *retry_count, char *message);
 extern bool UpdateJobError(BackgroundTask *job, ErrorData *edata);
 extern List * CancelTasksForJob(int64 jobid);
-extern void UnscheduleDependantTasks(int64 jobId, int64 taskId);
-extern void UnblockDependingBackgroundTasks(int64 jobId, int64 taskId);
+extern void UnscheduleDependentTasks(BackgroundTask *task);
+extern void UnblockDependingBackgroundTasks(BackgroundTask *task);
 extern BackgroundJobStatus BackgroundJobStatusByOid(Oid enumOid);
 extern BackgroundTaskStatus BackgroundTaskStatusByOid(Oid enumOid);
 extern bool IsBackgroundJobStatusTerminal(BackgroundJobStatus status);

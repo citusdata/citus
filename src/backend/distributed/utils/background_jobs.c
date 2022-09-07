@@ -798,14 +798,14 @@ UpdateDependingTasks(BackgroundTask *task)
 	{
 		case BACKGROUND_TASK_STATUS_DONE:
 		{
-			UnblockDependingBackgroundTasks(task->jobid, task->taskid);
+			UnblockDependingBackgroundTasks(task);
 			break;
 		}
 
 		case BACKGROUND_TASK_STATUS_ERROR:
 		{
 			/* when we error this task, we need to unschedule all dependant tasks */
-			UnscheduleDependantTasks(task->jobid, task->taskid);
+			UnscheduleDependentTasks(task);
 			break;
 		}
 
