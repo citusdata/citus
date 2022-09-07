@@ -79,7 +79,7 @@ static BackgroundWorkerHandle * StartCitusBackgroundTaskExecuter(char *database,
 																 int64 taskId,
 																 dsm_segment **pSegment);
 static void ExecuteSqlString(const char *sql);
-static void ConsumeTaskWorkerOutput(shm_mq_handle *responseq, BackgroundTask *task,
+static void ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInfo message,
 									bool *hadError, bool *cancelled);
 static void UpdateDependingTasks(BackgroundTask *task);
 static int64 CalculateBackoffDelay(int retryCount);
@@ -323,7 +323,6 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 	{
 		ereport(ERROR, (errmsg("background task queue monitor already running for "
 							   "database")));
-		exit(0);
 	}
 
 	/* make worker recognizable in pg_stat_activity */
@@ -459,6 +458,45 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		StartTransactionCommand();
 		PushActiveSnapshot(GetTransactionSnapshot());
 
+		/*
+		 * Reload task while holding a new AccessExclusiveLock on the table. A separate
+		 * process could have cancelled or removed the task by now, they would not see the
+		 * pid and status update, so it is our responsibility to stop the backend and
+		 * _not_ write the pid and running status.
+		 *
+		 * The lock will release on transaction commit.
+		 */
+		LockRelationOid(DistBackgroundTaskRelationId(), AccessExclusiveLock);
+
+		oldContext = MemoryContextSwitchTo(perTaskContext);
+		task = GetBackgroundTaskByTaskId(task->jobid, task->taskid);
+		MemoryContextSwitchTo(oldContext);
+
+		if (!task || task->status == BACKGROUND_TASK_STATUS_CANCELLING ||
+			task->status == BACKGROUND_TASK_STATUS_CANCELLED)
+		{
+			task->status = BACKGROUND_TASK_STATUS_CANCELLED;
+			UpdateBackgroundTask(task);
+			UpdateBackgroundJob(task->jobid);
+
+			PopActiveSnapshot();
+			CommitTransactionCommand();
+
+			/*
+			 * Terminate backend and release shared memory to not leak these resources
+			 * across iterations.
+			 */
+			TerminateBackgroundWorker(handle);
+			dsm_detach(seg);
+
+			/* there could be an other task ready to run, let a new loop decide */
+			continue;
+		}
+
+		/*
+		 * Now that we have verified the task has not been cancelled and still exist we
+		 * update it to reflect the new state
+		 */
 		task->status = BACKGROUND_TASK_STATUS_RUNNING;
 		SET_NULLABLE_FIELD(task, pid, pid);
 
@@ -473,16 +511,8 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 		bool hadError = false;
 		bool cancelled = false;
-
-		/*
-		 * We reset the old message (if present). This will only retain the last message
-		 * in the catalog. Otherwise it would concatenate all retries.
-		 */
-		if (task->message)
-		{
-			pfree(task->message);
-		}
-		task->message = NULL;
+		StringInfoData message = { 0 };
+		initStringInfo(&message);
 
 		while (GetBackgroundWorkerPid(handle, &pid) != BGWH_STOPPED)
 		{
@@ -500,7 +530,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			shm_mq *mq = shm_toc_lookup(toc, CITUS_BACKGROUND_TASK_KEY_QUEUE, false);
 			shm_mq_handle *responseq = shm_mq_attach(mq, seg, NULL);
 
-			ConsumeTaskWorkerOutput(responseq, task, &hadError, &cancelled);
+			ConsumeTaskWorkerOutput(responseq, &message, &hadError, &cancelled);
 
 			shm_mq_detach(responseq);
 		}
@@ -519,16 +549,44 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			shm_mq *mq = shm_toc_lookup(toc, CITUS_BACKGROUND_TASK_KEY_QUEUE, false);
 			shm_mq_handle *responseq = shm_mq_attach(mq, seg, NULL);
 
-			ConsumeTaskWorkerOutput(responseq, task, &hadError, &cancelled);
+			ConsumeTaskWorkerOutput(responseq, &message, &hadError, &cancelled);
 
 			shm_mq_detach(responseq);
 		}
 
-		UNSET_NULLABLE_FIELD(task, pid);
-		task->status = BACKGROUND_TASK_STATUS_DONE;
-		if (cancelled)
+		/*
+		 * Same as before, we need to lock pg_dist_background_task in a way where we can
+		 * check if there had been a concurrent cancel.
+		 */
+
+		LockRelationOid(DistBackgroundTaskRelationId(), AccessExclusiveLock);
+
+		oldContext = MemoryContextSwitchTo(perTaskContext);
+		task = GetBackgroundTaskByTaskId(task->jobid, task->taskid);
+		MemoryContextSwitchTo(oldContext);
+
+		if (!task || task->status == BACKGROUND_TASK_STATUS_CANCELLING ||
+			task->status == BACKGROUND_TASK_STATUS_CANCELLED)
 		{
+			/*
+			 * A concurrent cancel has happened or the task has disappeared, we are not
+			 * retrying or changing state, we will only reflect the message onto the task
+			 * and for completeness we update the job aswell, this should be a no-op
+			 *
+			 * We still need to release the shared memory and xact before looping
+			 */
+
+			dsm_detach(seg);
+
 			task->status = BACKGROUND_TASK_STATUS_CANCELLED;
+			task->message = message.data;
+			UpdateBackgroundTask(task);
+			UpdateBackgroundJob(task->jobid);
+
+			PopActiveSnapshot();
+			CommitTransactionCommand();
+
+			continue;
 		}
 		else if (hadError)
 		{
@@ -565,6 +623,12 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 				task->status = BACKGROUND_TASK_STATUS_RUNNABLE;
 			}
 		}
+		else
+		{
+			task->status = BACKGROUND_TASK_STATUS_DONE;
+		}
+		UNSET_NULLABLE_FIELD(task, pid);
+		task->message = message.data;
 
 		UpdateBackgroundTask(task);
 		UpdateDependingTasks(task);
@@ -764,7 +828,7 @@ UpdateDependingTasks(BackgroundTask *task)
  * BackgroundTask object to reflect changes like the message and status on the task.
  */
 static void
-ConsumeTaskWorkerOutput(shm_mq_handle *responseq, BackgroundTask *task, bool *hadError,
+ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInfo message, bool *hadError,
 						bool *cancelled)
 {
 	/*
@@ -823,24 +887,12 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, BackgroundTask *task, bool *ha
 					}
 				}
 
-				StringInfoData fullMessage = { 0 };
-				initStringInfo(&fullMessage);
-				if (task->message)
-				{
-					appendStringInfoString(&fullMessage, task->message);
-				}
-				appendStringInfoString(&fullMessage, display_msg.data);
-				appendStringInfoChar(&fullMessage, '\n');
-
-				/*
-				 * the task might live in a separate context, hence we find its context
-				 * and allocate a copy of the message in there
-				 */
-				MemoryContext taskContext = GetMemoryChunkContext(task);
-				task->message = MemoryContextStrdup(taskContext, fullMessage.data);
+				/* we keep only the last message */
+				resetStringInfo(message);
+				appendStringInfoString(message, display_msg.data);
+				appendStringInfoChar(message, '\n');
 
 				pfree(display_msg.data);
-				pfree(fullMessage.data);
 
 				break;
 			}
@@ -856,27 +908,12 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, BackgroundTask *task, bool *ha
 
 				char *nonconst_tag = pstrdup(tag);
 
-				/* append the nonconst_tag to the task's message*/
-				StringInfoData fullMessage = { 0 };
-				initStringInfo(&fullMessage);
-				if (task->message)
-				{
-					appendStringInfoString(&fullMessage, task->message);
-				}
-				appendStringInfoString(&fullMessage, nonconst_tag);
-				appendStringInfoChar(&fullMessage, '\n');
-
-				/*
-				 * the task might live in a separate context, hence we find its context
-				 * and allocate a copy of the message in there
-				 */
-				MemoryContext taskContext = GetMemoryChunkContext(task);
-				task->message = MemoryContextStrdup(taskContext, fullMessage.data);
-				pfree(fullMessage.data);
+				/* append the nonconst_tag to the task's message */
+				appendStringInfoString(message, nonconst_tag);
+				appendStringInfoChar(message, '\n');
 
 				pfree(nonconst_tag);
 
-				task->status = BACKGROUND_TASK_STATUS_DONE;
 				break;
 			}
 

@@ -111,7 +111,7 @@ GRANT SELECT ON pg_catalog.pg_dist_cleanup_recordid_seq TO public;
 #include "udfs/pg_cancel_backend/11.0-1.sql"
 #include "udfs/pg_terminate_backend/11.0-1.sql"
 
-CREATE TYPE citus.citus_job_status AS ENUM ('scheduled', 'running', 'finished', 'cancelled', 'failing', 'failed');
+CREATE TYPE citus.citus_job_status AS ENUM ('scheduled', 'running', 'finished', 'cancelling', 'cancelled', 'failing', 'failed');
 ALTER TYPE citus.citus_job_status SET SCHEMA pg_catalog;
 
 CREATE TABLE citus.pg_dist_background_job (
@@ -128,7 +128,7 @@ ALTER TABLE citus.pg_dist_background_job SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.pg_dist_background_job TO PUBLIC;
 GRANT SELECT ON pg_catalog.pg_dist_background_job_job_id_seq TO PUBLIC;
 
-CREATE TYPE citus.citus_task_status AS ENUM ('blocked', 'runnable', 'running', 'done', 'error', 'unscheduled', 'cancelled');
+CREATE TYPE citus.citus_task_status AS ENUM ('blocked', 'runnable', 'running', 'done', 'cancelling', 'error', 'unscheduled', 'cancelled');
 ALTER TYPE citus.citus_task_status SET SCHEMA pg_catalog;
 
 CREATE TABLE citus.pg_dist_background_task(

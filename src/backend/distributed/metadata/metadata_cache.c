@@ -153,6 +153,7 @@ typedef struct MetadataCacheData
 	Oid distBackgroundTaskDependDependsOnIndexId;
 	Oid citusJobStatusScheduledId;
 	Oid citusJobStatusRunningId;
+	Oid citusJobStatusCancellingId;
 	Oid citusJobStatusFinishedId;
 	Oid citusJobStatusCancelledId;
 	Oid citusJobStatusFailedId;
@@ -164,6 +165,7 @@ typedef struct MetadataCacheData
 	Oid citusTaskStatusErrorId;
 	Oid citusTaskStatusUnscheduledId;
 	Oid citusTaskStatusCancelledId;
+	Oid citusTaskStatusCancellingId;
 	Oid distRebalanceStrategyRelationId;
 	Oid distNodeRelationId;
 	Oid distNodeNodeIdIndexId;
@@ -3386,6 +3388,19 @@ CitusJobStatusRunningId(void)
 
 
 Oid
+CitusJobStatusCancellingId(void)
+{
+	if (!MetadataCache.citusJobStatusCancellingId)
+	{
+		MetadataCache.citusJobStatusCancellingId =
+			LookupStringEnumValueId("citus_job_status", "cancelling");
+	}
+
+	return MetadataCache.citusJobStatusCancellingId;
+}
+
+
+Oid
 CitusJobStatusFinishedId(void)
 {
 	if (!MetadataCache.citusJobStatusFinishedId)
@@ -3460,6 +3475,19 @@ CitusTaskStatusCancelledId(void)
 	}
 
 	return MetadataCache.citusTaskStatusCancelledId;
+}
+
+
+Oid
+CitusTaskStatusCancellingId(void)
+{
+	if (!MetadataCache.citusTaskStatusCancellingId)
+	{
+		MetadataCache.citusTaskStatusCancellingId =
+			LookupStringEnumValueId("citus_task_status", "cancelling");
+	}
+
+	return MetadataCache.citusTaskStatusCancellingId;
 }
 
 

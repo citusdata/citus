@@ -286,6 +286,7 @@ extern Oid TextCopyFormatId(void);
 extern Oid BinaryCopyFormatId(void);
 extern Oid CitusJobStatusScheduledId(void);
 extern Oid CitusJobStatusRunningId(void);
+extern Oid CitusJobStatusCancellingId(void);
 extern Oid CitusJobStatusFinishedId(void);
 extern Oid CitusJobStatusCancelledId(void);
 extern Oid CitusJobStatusFailedId(void);
@@ -297,6 +298,7 @@ extern Oid CitusTaskStatusDoneId(void);
 extern Oid CitusTaskStatusErrorId(void);
 extern Oid CitusTaskStatusUnscheduledId(void);
 extern Oid CitusTaskStatusCancelledId(void);
+extern Oid CitusTaskStatusCancellingId(void);
 
 /* user related functions */
 extern Oid CitusExtensionOwner(void);

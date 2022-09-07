@@ -2464,6 +2464,10 @@ BackgroundJobStatusByOid(Oid enumOid)
 	{
 		return BACKGROUND_JOB_STATUS_FAILED;
 	}
+	else if (enumOid == CitusJobStatusCancellingId())
+	{
+		return BACKGROUND_JOB_STATUS_CANCELLING;
+	}
 	elog(ERROR, "unknown enum value for citus_job_status");
 }
 
@@ -2503,6 +2507,10 @@ BackgroundTaskStatusByOid(Oid enumOid)
 	{
 		return BACKGROUND_TASK_STATUS_CANCELLED;
 	}
+	else if (enumOid == CitusTaskStatusCancellingId())
+	{
+		return BACKGROUND_TASK_STATUS_CANCELLING;
+	}
 	ereport(ERROR, (errmsg("unknown enum value for citus_task_status")));
 }
 
@@ -2519,15 +2527,16 @@ IsBackgroundJobStatusTerminal(BackgroundJobStatus status)
 {
 	switch (status)
 	{
+		case BACKGROUND_JOB_STATUS_CANCELLED:
 		case BACKGROUND_JOB_STATUS_FAILED:
 		case BACKGROUND_JOB_STATUS_FINISHED:
-		case BACKGROUND_JOB_STATUS_CANCELLED:
 		{
 			return true;
 		}
 
-		case BACKGROUND_JOB_STATUS_RUNNING:
+		case BACKGROUND_JOB_STATUS_CANCELLING:
 		case BACKGROUND_JOB_STATUS_FAILING:
+		case BACKGROUND_JOB_STATUS_RUNNING:
 		case BACKGROUND_JOB_STATUS_SCHEDULED:
 		{
 			return false;
@@ -2548,16 +2557,17 @@ IsBackgroundTaskStatusTerminal(BackgroundTaskStatus status)
 {
 	switch (status)
 	{
+		case BACKGROUND_TASK_STATUS_CANCELLED:
 		case BACKGROUND_TASK_STATUS_DONE:
 		case BACKGROUND_TASK_STATUS_ERROR:
 		case BACKGROUND_TASK_STATUS_UNSCHEDULED:
-		case BACKGROUND_TASK_STATUS_CANCELLED:
 		{
 			return true;
 		}
 
-		case BACKGROUND_TASK_STATUS_RUNNABLE:
 		case BACKGROUND_TASK_STATUS_BLOCKED:
+		case BACKGROUND_TASK_STATUS_CANCELLING:
+		case BACKGROUND_TASK_STATUS_RUNNABLE:
 		case BACKGROUND_TASK_STATUS_RUNNING:
 		{
 			return false;
@@ -2586,6 +2596,11 @@ BackgroundJobStatusOid(BackgroundJobStatus status)
 		case BACKGROUND_JOB_STATUS_RUNNING:
 		{
 			return CitusJobStatusRunningId();
+		}
+
+		case BACKGROUND_JOB_STATUS_CANCELLING:
+		{
+			return CitusJobStatusCancellingId();
 		}
 
 		case BACKGROUND_JOB_STATUS_FINISHED:
@@ -2656,6 +2671,11 @@ BackgroundTaskStatusOid(BackgroundTaskStatus status)
 		case BACKGROUND_TASK_STATUS_CANCELLED:
 		{
 			return CitusTaskStatusCancelledId();
+		}
+
+		case BACKGROUND_TASK_STATUS_CANCELLING:
+		{
+			return CitusTaskStatusCancellingId();
 		}
 	}
 
@@ -3185,7 +3205,7 @@ BackgroundTask *
 GetRunnableBackgroundTask(void)
 {
 	Relation pgDistBackgroundTasks =
-		table_open(DistBackgroundTaskRelationId(), AccessShareLock);
+		table_open(DistBackgroundTaskRelationId(), AccessExclusiveLock);
 
 	BackgroundTaskStatus taskStatus[] = {
 		BACKGROUND_TASK_STATUS_RUNNABLE
@@ -3317,6 +3337,7 @@ typedef struct JobTaskStatusCounts
 	int error;
 	int unscheduled;
 	int cancelled;
+	int cancelling;
 } JobTaskStatusCounts;
 
 
@@ -3401,6 +3422,12 @@ JobTasksStatusCount(int64 jobId)
 				break;
 			}
 
+			case BACKGROUND_TASK_STATUS_CANCELLING:
+			{
+				counts.cancelling++;
+				break;
+			}
+
 			default:
 			{
 				elog(ERROR, "unknown state in pg_dist_background_task");
@@ -3431,7 +3458,11 @@ UpdateBackgroundJob(int64 jobId)
 	JobTaskStatusCounts counts = JobTasksStatusCount(jobId);
 	BackgroundJobStatus status = BACKGROUND_JOB_STATUS_RUNNING;
 
-	if (counts.cancelled > 0)
+	if (counts.cancelling > 0)
+	{
+		status = BACKGROUND_JOB_STATUS_CANCELLING;
+	}
+	else if (counts.cancelled > 0)
 	{
 		status = BACKGROUND_JOB_STATUS_CANCELLED;
 	}
@@ -3751,7 +3782,7 @@ List *
 CancelTasksForJob(int64 jobid)
 {
 	Relation pgDistBackgroundTasks =
-		table_open(DistBackgroundTaskRelationId(), RowExclusiveLock);
+		table_open(DistBackgroundTaskRelationId(), AccessExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
 
 	ScanKeyData scanKey[1] = { 0 };
@@ -3805,22 +3836,21 @@ CancelTasksForJob(int64 jobid)
 								   "canceled or member of pg_signal_backend")));
 		}
 
+		BackgroundTaskStatus newStatus = BACKGROUND_TASK_STATUS_CANCELLED;
 		if (status == BACKGROUND_TASK_STATUS_RUNNING)
 		{
 			if (!nulls[Anum_pg_dist_background_task_pid - 1])
 			{
 				int32 pid = DatumGetInt32(values[Anum_pg_dist_background_task_pid - 1]);
 				runningTaskPids = lappend_int(runningTaskPids, pid);
+				newStatus = BACKGROUND_TASK_STATUS_CANCELLING;
 			}
-
-			/* running tasks we will cancel separately */
-			continue;
 		}
 
-		/* update to unscheduled */
+		/* update task to new status */
 		nulls[Anum_pg_dist_background_task_status - 1] = false;
 		values[Anum_pg_dist_background_task_status - 1] = ObjectIdGetDatum(
-			BackgroundTaskStatusOid(BACKGROUND_TASK_STATUS_CANCELLED));
+			BackgroundTaskStatusOid(newStatus));
 		replace[Anum_pg_dist_background_task_status - 1] = true;
 
 		taskTuple = heap_modify_tuple(taskTuple, tupleDescriptor, values, nulls,
