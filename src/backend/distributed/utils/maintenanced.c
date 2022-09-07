@@ -732,14 +732,14 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 				/*
 				 * Before we start the background worker we want to check if an orphaned
 				 * one is still running. This could happen when the maintenance daemon
-				 * restrated in a way where the background task queue monitor wasn't
+				 * restarted in a way where the background task queue monitor wasn't
 				 * restarted.
 				 *
 				 * To check if an orphaned background task queue monitor is still running
 				 * we quickly acquire the lock without waiting. If we can't acquire the
-				 * lock this was we know that some other backed still has the lock. We
-				 * prevent a new backend from starting and log a warning that we found
-				 * that another process still holds the lock.
+				 * lock this means that some other backed still has the lock. We prevent a
+				 * new backend from starting and log a warning that we found that another
+				 * process still holds the lock.
 				 */
 				LOCKTAG tag = { 0 };
 				SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_BACKGROUND_TASK_MONITOR);

@@ -454,6 +454,11 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		StartTransactionCommand();
 		PushActiveSnapshot(GetTransactionSnapshot());
 
+		/*
+		 * There is a small race condition between the last loop and the backend being
+		 * termninated. We re-consume the output of the process here again in case we have
+		 * missed a message.
+		 */
 		{
 			shm_toc *toc = shm_toc_attach(CITUS_BACKGROUND_TASK_MAGIC,
 										  dsm_segment_address(seg));
@@ -720,7 +725,7 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, BackgroundTask *task, bool *ha
 		resetStringInfo(&msg);
 
 		/*
-		 * Get next message. Currently blocking, hen multiple backends get implemented it
+		 * Get next message. Currently blocking, when multiple backends get implemented it
 		 * should switch to a non-blocking receive
 		 */
 		Size nbytes = 0;
