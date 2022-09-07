@@ -24,6 +24,8 @@ static bool CitusSignalBackend(uint64 globalPID, uint64 timeout, int sig);
 
 PG_FUNCTION_INFO_V1(pg_cancel_backend);
 PG_FUNCTION_INFO_V1(pg_terminate_backend);
+PG_FUNCTION_INFO_V1(citus_cancel_backend);
+PG_FUNCTION_INFO_V1(citus_terminate_backend);
 
 /*
  * pg_cancel_backend overrides the Postgres' pg_cancel_backend to cancel
@@ -49,6 +51,18 @@ pg_cancel_backend(PG_FUNCTION_ARGS)
 
 
 /*
+ * citus_cancel_backend is needed to make the pg_cancel_backend SQL function
+ * still work after downgrading from 11.1, which changed its definition to call
+ * a different symbol. See #6300/e29db74 for details.
+ */
+Datum
+citus_cancel_backend(PG_FUNCTION_ARGS)
+{
+	return pg_cancel_backend(fcinfo);
+}
+
+
+/*
  * pg_terminate_backend overrides the Postgres' pg_terminate_backend to terminate
  * a query with a global pid so a query can be terminated from another node.
  *
@@ -68,6 +82,18 @@ pg_terminate_backend(PG_FUNCTION_ARGS)
 	bool success = CitusSignalBackend(pid, timeout, sig);
 
 	PG_RETURN_BOOL(success);
+}
+
+
+/*
+ * citus_terminate_backend is needed to make the pg_terminate_backend SQL
+ * function still work after downgrading from 11.1, which changed its
+ * definition to call a different symbol. See #6300/e29db74 for details
+ */
+Datum
+citus_terminate_backend(PG_FUNCTION_ARGS)
+{
+	return pg_terminate_backend(fcinfo);
 }
 
 
