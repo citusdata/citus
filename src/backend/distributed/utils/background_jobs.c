@@ -80,7 +80,7 @@ static BackgroundWorkerHandle * StartCitusBackgroundTaskExecuter(char *database,
 																 dsm_segment **pSegment);
 static void ExecuteSqlString(const char *sql);
 static void ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInfo message,
-									bool *hadError, bool *cancelled);
+									bool *hadError);
 static void UpdateDependingTasks(BackgroundTask *task);
 static int64 CalculateBackoffDelay(int retryCount);
 
@@ -510,7 +510,6 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		MemoryContextSwitchTo(perTaskContext);
 
 		bool hadError = false;
-		bool cancelled = false;
 		StringInfoData message = { 0 };
 		initStringInfo(&message);
 
@@ -530,7 +529,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			shm_mq *mq = shm_toc_lookup(toc, CITUS_BACKGROUND_TASK_KEY_QUEUE, false);
 			shm_mq_handle *responseq = shm_mq_attach(mq, seg, NULL);
 
-			ConsumeTaskWorkerOutput(responseq, &message, &hadError, &cancelled);
+			ConsumeTaskWorkerOutput(responseq, &message, &hadError);
 
 			shm_mq_detach(responseq);
 		}
@@ -549,7 +548,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			shm_mq *mq = shm_toc_lookup(toc, CITUS_BACKGROUND_TASK_KEY_QUEUE, false);
 			shm_mq_handle *responseq = shm_mq_attach(mq, seg, NULL);
 
-			ConsumeTaskWorkerOutput(responseq, &message, &hadError, &cancelled);
+			ConsumeTaskWorkerOutput(responseq, &message, &hadError);
 
 			shm_mq_detach(responseq);
 		}
@@ -650,7 +649,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
  * Per try we increase the delay as follows:
  *   retry 1: 5 sec
  *   retry 2: 20 sec
- *   retry 3-30: 1 min
+ *   retry 3-32 (30 tries in total): 1 min
  *
  * returns -1 when retrying should stop.
  *
@@ -670,7 +669,7 @@ CalculateBackoffDelay(int retryCount)
 	{
 		return 20 * 1000;
 	}
-	else if (retryCount <= 30)
+	else if (retryCount <= 32)
 	{
 		return 60 * 1000;
 	}
@@ -824,8 +823,7 @@ UpdateDependingTasks(BackgroundTask *task)
  * BackgroundTask object to reflect changes like the message and status on the task.
  */
 static void
-ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInfo message, bool *hadError,
-						bool *cancelled)
+ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInfo message, bool *hadError)
 {
 	/*
 	 * Message-parsing routines operate on a null-terminated StringInfo,
@@ -874,14 +872,6 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInfo message, bool *hadE
 				pq_parse_errornotice(&msg, &edata);
 				initStringInfo(&display_msg);
 				bgw_generate_returned_message(&display_msg, edata);
-
-				if (edata.sqlerrcode == ERRCODE_QUERY_CANCELED)
-				{
-					if (cancelled)
-					{
-						*cancelled = true;
-					}
-				}
 
 				/* we keep only the last message */
 				resetStringInfo(message);
