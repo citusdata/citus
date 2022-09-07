@@ -73,10 +73,11 @@ bool BackgroundTaskMonitorDebugDelay = false;
 #define CITUS_BACKGROUND_TASK_KEY_TASK_ID 4
 #define CITUS_BACKGROUND_TASK_NKEYS 5
 
-static BackgroundWorkerHandle * StartCitusBackgroundJobExecuter(char *database,
-																char *user, char *command,
-																int64 taskId,
-																dsm_segment **pSegment);
+static BackgroundWorkerHandle * StartCitusBackgroundTaskExecuter(char *database,
+																 char *user,
+																 char *command,
+																 int64 taskId,
+																 dsm_segment **pSegment);
 static void ExecuteSqlString(const char *sql);
 static void ConsumeTaskWorkerOutput(shm_mq_handle *responseq, BackgroundTask *task,
 									bool *hadError, bool *cancelled);
@@ -341,8 +342,8 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 	MemoryContext oldContextPerJob = MemoryContextSwitchTo(perTaskContext);
 	TimestampTz backgroundWorkerFailedStartTime = 0;
-	bool hasJobs = true;
-	while (hasJobs)
+	bool hasTasks = true;
+	while (hasTasks)
 	{
 		MemoryContextReset(perTaskContext);
 
@@ -366,7 +367,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			PopActiveSnapshot();
 			CommitTransactionCommand();
 
-			hasJobs = false;
+			hasTasks = false;
 			break;
 		}
 
@@ -388,8 +389,8 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		 */
 		dsm_segment *seg = NULL;
 		BackgroundWorkerHandle *handle =
-			StartCitusBackgroundJobExecuter(databaseName, userName, task->command,
-											task->taskid, &seg);
+			StartCitusBackgroundTaskExecuter(databaseName, userName, task->command,
+											 task->taskid, &seg);
 
 		if (handle == NULL)
 		{
@@ -491,7 +492,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 		/*
 		 * There is a small race condition between the last loop and the backend being
-		 * termninated. We re-consume the output of the process here again in case we have
+		 * terminated. We re-consume the output of the process here again in case we have
 		 * missed a message.
 		 */
 		{
@@ -527,7 +528,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			}
 
 			/*
-			 * based on the retry cound we either transition the task to its error
+			 * based on the retry count we either transition the task to its error
 			 * state, or we calculate a new backoff time for future execution.
 			 */
 			if (*task->retry_count >= 3)
@@ -957,14 +958,14 @@ StoreArgumentsInDSM(char *database, char *username, char *command, int64 taskId)
 
 
 /*
- * StartCitusBackgroundJobExecuter start a new background worker for the execution of a
- * background task. Users intereted in the shared memory segment that is created between
- * the background worker and the current backend can pass in a segOut to get a pointer to
- * the dynamic shared memory.
+ * StartCitusBackgroundTaskExecuter start a new background worker for the execution of a
+ * background task. Callers interested in the shared memory segment that is created
+ * between the background worker and the current backend can pass in a segOut to get a
+ * pointer to the dynamic shared memory.
  */
 static BackgroundWorkerHandle *
-StartCitusBackgroundJobExecuter(char *database, char *user, char *command, int64 taskId,
-								dsm_segment **segOut)
+StartCitusBackgroundTaskExecuter(char *database, char *user, char *command, int64 taskId,
+								 dsm_segment **pSegment)
 {
 	dsm_segment *seg = StoreArgumentsInDSM(database, user, command, taskId);
 
@@ -981,7 +982,7 @@ StartCitusBackgroundJobExecuter(char *database, char *user, char *command, int64
 	worker.bgw_restart_time = BGW_NEVER_RESTART;
 	strcpy_s(worker.bgw_library_name, sizeof(worker.bgw_library_name), "citus");
 	strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_library_name),
-			 "CitusBackgroundJobExecuter");
+			 "CitusBackgroundTaskExecuter");
 	worker.bgw_main_arg = UInt32GetDatum(dsm_segment_handle(seg));
 	worker.bgw_notify_pid = MyProcPid;
 
@@ -995,9 +996,9 @@ StartCitusBackgroundJobExecuter(char *database, char *user, char *command, int64
 	pid_t pid = { 0 };
 	WaitForBackgroundWorkerStartup(handle, &pid);
 
-	if (segOut)
+	if (pSegment)
 	{
-		*segOut = seg;
+		*pSegment = seg;
 	}
 
 	return handle;
@@ -1029,14 +1030,14 @@ CitusBackgroundJobExecuterErrorCallback(void *arg)
 
 
 /*
- * CitusBackgroundJobExecuter is the main function of the bacgrkound tasks queue executor.
- * This backend attaches to a shared memory segment as identified by the main_arg of the
- * background worker.
+ * CitusBackgroundTaskExecuter is the main function of the background tasks queue
+ * executor. This backend attaches to a shared memory segment as identified by the
+ * main_arg of the background worker.
  *
- * This is moslty based on the background worker logic in pg_cron
+ * This is mostly based on the background worker logic in pg_cron
  */
 void
-CitusBackgroundJobExecuter(Datum main_arg)
+CitusBackgroundTaskExecuter(Datum main_arg)
 {
 	/*
 	 * TODO figure out if we need this signal handler that is in pgcron
