@@ -383,8 +383,6 @@ extern void EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid
 extern void AlterSequenceType(Oid seqOid, Oid typeOid);
 extern void EnsureRelationHasCompatibleSequenceTypes(Oid relationId);
 extern bool HasRunnableBackgroundTask(void);
-extern int64 GetNextBackgroundJobsJobId(void);
-extern int64 GetNextBackgroundTaskTaskId(void);
 extern int64 CreateBackgroundJob(const char *jobType, const char *description);
 extern BackgroundTask * ScheduleBackgroundTask(int64 jobId, Oid owner, char *command,
 											   int dependingTaskCount,

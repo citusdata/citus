@@ -2691,7 +2691,7 @@ BackgroundTaskStatusOid(BackgroundTaskStatus status)
  *
  * The return value is typically used to insert new jobs into the catalog.
  */
-int64
+static int64
 GetNextBackgroundJobsJobId(void)
 {
 	return DatumGetInt64(nextval_internal(DistBackgroundJobJobIdSequenceId(), false));
@@ -2705,7 +2705,7 @@ GetNextBackgroundJobsJobId(void)
  *
  * The return value is typically used to insert new tasks into the catalog.
  */
-int64
+static int64
 GetNextBackgroundTaskTaskId(void)
 {
 	return DatumGetInt64(nextval_internal(DistBackgroundTaskTaskIdSequenceId(), false));
