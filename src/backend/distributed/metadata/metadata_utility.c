@@ -2787,9 +2787,7 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 			table_open(DistBackgroundTaskDependRelationId(), RowExclusiveLock);
 	}
 
-	/* 1. TODO verify depending jobs exist and lock them */
-
-	/* 2. insert new task */
+	/* 1. insert new task */
 	{
 		Datum values[Natts_pg_dist_background_task] = { 0 };
 		bool nulls[Natts_pg_dist_background_task] = { 0 };
@@ -2832,10 +2830,38 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 		task->command = pstrdup(command);
 	}
 
-	/* 3. insert dependencies into catalog */
+	/* 2. insert dependencies into catalog */
 	{
 		for (int i = 0; i < dependingTaskCount; i++)
 		{
+			/* 2.1 after verifying the task exists for this job */
+			{
+				ScanKeyData scanKey[2] = { 0 };
+				bool indexOK = true;
+
+				/* pg_dist_background_task.job_id == $jobId */
+				ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_job_id,
+							BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
+
+				/* pg_dist_background_task.task_id == $taskId */
+				ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_task_id,
+							BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(task->taskid));
+
+				SysScanDesc scanDescriptor =
+					systable_beginscan(pgDistBackgroundTasks,
+									   DistBackgroundTaskPKeyIndexId(),
+									   indexOK, NULL, lengthof(scanKey), scanKey);
+
+				HeapTuple taskTuple = systable_getnext(scanDescriptor);
+				if (!HeapTupleIsValid(taskTuple))
+				{
+					ereport(ERROR, (errmsg("depending task for newly scheduled task does "
+										   "not exist")));
+				}
+
+				systable_endscan(scanDescriptor);
+			}
+
 			Assert(pgDistbackgroundTasksDepend != NULL);
 
 			Datum values[Natts_pg_dist_background_task_depend] = { 0 };
