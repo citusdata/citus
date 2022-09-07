@@ -105,3 +105,8 @@ GRANT SELECT ON pg_catalog.pg_dist_operationid_seq TO public;
 CREATE SEQUENCE citus.pg_dist_cleanup_recordid_seq;
 ALTER SEQUENCE citus.pg_dist_cleanup_recordid_seq SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.pg_dist_cleanup_recordid_seq TO public;
+
+-- We recreate these two UDF from 11.0-1 on purpose, because we changed their
+-- old definition. By recreating it here upgrades also pick up the new changes.
+#include "udfs/pg_cancel_backend/11.0-1.sql"
+#include "udfs/pg_terminate_backend/11.0-1.sql"
