@@ -78,5 +78,36 @@ $$);
 (1 row)
 
 END;
+CREATE OR REPLACE FUNCTION select_for_update()
+RETURNS void
+AS $$
+DECLARE
+    my int;
+BEGIN
+    SELECT y INTO my FROM test WHERE x = 1 FOR UPDATE;
+END;
+$$ LANGUAGE plpgsql;
+-- so that we can prove that we open a transaction block by logging below:
+-- "NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;..."
+SET citus.log_remote_commands TO on;
+SELECT select_for_update();
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT y         FROM test WHERE x = 1 FOR UPDATE"
+PL/pgSQL function select_for_update() line XX at SQL statement
+NOTICE:  issuing SELECT y FROM adaptive_executor.test_801009000 test WHERE (x OPERATOR(pg_catalog.=) 1) FOR UPDATE OF test
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT y         FROM test WHERE x = 1 FOR UPDATE"
+PL/pgSQL function select_for_update() line XX at SQL statement
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ select_for_update
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.log_remote_commands TO off;
 DROP SCHEMA adaptive_executor CASCADE;
-NOTICE:  drop cascades to table test
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table test
+drop cascades to function select_for_update()

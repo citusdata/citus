@@ -579,7 +579,7 @@ DropAllLogicalReplicationLeftovers(LogicalRepType type)
 		/*
 		 * We close all connections that we opened for the dropping here. That
 		 * way we don't keep these connections open unnecessarily during the
-		 * shard move (which can take a long time).
+		 * 'LogicalRepType' operation (which can take a long time).
 		 */
 		CloseConnection(cleanupConnection);
 	}

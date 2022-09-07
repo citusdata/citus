@@ -1,0 +1,800 @@
+-- The test excercises below failure scenarios
+--1. Failure while creating publications
+--2. Failure while creating shared memory segment
+--3. Failure while creating replication slots
+--4. Failure while enabling subscription
+--5. Failure on polling subscription state
+--6. Failure on polling last write-ahead log location reported to origin WAL sender
+--7. Failure on dropping subscription
+CREATE SCHEMA "citus_failure_split_cleanup_schema";
+SET search_path TO "citus_failure_split_cleanup_schema";
+SET citus.next_shard_id TO 8981000;
+SET citus.next_placement_id TO 8610000;
+SET citus.next_operation_id TO 777;
+SET citus.next_cleanup_record_id TO 11;
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 1;
+SELECT pg_backend_pid() as pid \gset
+-- Disable defer shard delete to stop auto cleanup.
+ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Connections on the proxy port(worker_2) are monitored
+SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
+SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port \gset
+CREATE TABLE table_to_split(id int PRIMARY KEY, int_data int, data text);
+SELECT create_distributed_table('table_to_split', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+--1. Failure while creating publications
+    SELECT citus.mitmproxy('conn.onQuery(query="CREATE PUBLICATION .* FOR TABLE").killall()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT pg_catalog.citus_split_shard_by_split_points(
+        8981000,
+        ARRAY['-100000'],
+        ARRAY[:worker_1_node, :worker_2_node],
+        'force_logical');
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type |                        object_name                        | node_group_id | policy_type
+---------------------------------------------------------------------
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
+(4 rows)
+
+    -- we need to allow connection so that we can connect to proxy
+    SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+    \c - - - :worker_2_proxy_port
+    SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
+    SET citus.show_shards_for_app_name_prefixes = '*';
+    -- Left over child shards
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+ table_to_split_8981002
+ table_to_split_8981003
+(3 rows)
+
+    -- Left over publications
+    SELECT pubname FROM pg_publication;
+ pubname
+---------------------------------------------------------------------
+(0 rows)
+
+    -- Left over replication slots
+    SELECT slot_name FROM pg_replication_slots;
+ slot_name
+---------------------------------------------------------------------
+(0 rows)
+
+    -- Left over subscriptions
+    SELECT subname FROM pg_subscription;
+ subname
+---------------------------------------------------------------------
+(0 rows)
+
+    \c - postgres - :master_port
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 79 orphaned resources
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type | object_name | node_group_id | policy_type
+---------------------------------------------------------------------
+(0 rows)
+
+    \c - - - :worker_2_proxy_port
+    SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
+    SET citus.show_shards_for_app_name_prefixes = '*';
+    -- Empty child shards after cleanup
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+    -- Empty publications
+    SELECT pubname FROM pg_publication;
+ pubname
+---------------------------------------------------------------------
+(0 rows)
+
+    -- Empty replication slot table
+    SELECT slot_name FROM pg_replication_slots;
+ slot_name
+---------------------------------------------------------------------
+(0 rows)
+
+    -- Empty subscriptions
+    SELECT subname FROM pg_subscription;
+ subname
+---------------------------------------------------------------------
+(0 rows)
+
+--2. Failure while creating shared memory segment
+    \c - postgres - :master_port
+    SET citus.next_shard_id TO 8981002;
+    SET citus.next_operation_id TO 777;
+    SET citus.next_cleanup_record_id TO 11;
+    SELECT citus.mitmproxy('conn.onQuery(query="SELECT \* FROM pg_catalog.worker_split_shard_replication_setup\(.*").killall()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT pg_catalog.citus_split_shard_by_split_points(
+        8981000,
+        ARRAY['-100000'],
+        ARRAY[:worker_1_node, :worker_2_node],
+        'force_logical');
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type |                        object_name                        | node_group_id | policy_type
+---------------------------------------------------------------------
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
+(4 rows)
+
+    -- we need to allow connection so that we can connect to proxy
+    SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+    \c - - - :worker_2_proxy_port
+    SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
+    SET citus.show_shards_for_app_name_prefixes = '*';
+    -- Left over child shards
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+ table_to_split_8981002
+ table_to_split_8981003
+(3 rows)
+
+    -- Left over publications
+    SELECT pubname FROM pg_publication;
+              pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Left over replication slots
+    SELECT slot_name FROM pg_replication_slots;
+ slot_name
+---------------------------------------------------------------------
+(0 rows)
+
+    -- Left over subscriptions
+    SELECT subname FROM pg_subscription;
+ subname
+---------------------------------------------------------------------
+(0 rows)
+
+    \c - postgres - :master_port
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 4 orphaned resources
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type | object_name | node_group_id | policy_type
+---------------------------------------------------------------------
+(0 rows)
+
+    \c - - - :worker_2_proxy_port
+    SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
+    SET citus.show_shards_for_app_name_prefixes = '*';
+    -- Empty child shards after cleanup
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+    -- Empty publications
+    SELECT pubname FROM pg_publication;
+              pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Empty replication slot table
+    SELECT slot_name FROM pg_replication_slots;
+ slot_name
+---------------------------------------------------------------------
+(0 rows)
+
+    -- Empty subscriptions
+    SELECT subname FROM pg_subscription;
+ subname
+---------------------------------------------------------------------
+(0 rows)
+
+--3. Failure while executing 'CREATE_REPLICATION_SLOT' for Snapshot.
+    \c - postgres - :master_port
+    SET citus.next_shard_id TO 8981002;
+    SET citus.next_operation_id TO 777;
+    SET citus.next_cleanup_record_id TO 11;
+    SELECT citus.mitmproxy('conn.onQuery(query="CREATE_REPLICATION_SLOT .* LOGICAL .* EXPORT_SNAPSHOT.*").killall()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT pg_catalog.citus_split_shard_by_split_points(
+        8981000,
+        ARRAY['-100000'],
+        ARRAY[:worker_1_node, :worker_2_node],
+        'force_logical');
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type |                        object_name                        | node_group_id | policy_type
+---------------------------------------------------------------------
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
+(4 rows)
+
+    -- we need to allow connection so that we can connect to proxy
+    SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+    \c - - - :worker_2_proxy_port
+    SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
+    SET citus.show_shards_for_app_name_prefixes = '*';
+    -- Left over child shards
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+ table_to_split_8981002
+ table_to_split_8981003
+(3 rows)
+
+    -- Left over publications
+    SELECT pubname FROM pg_publication;
+              pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Left over replication slots
+    SELECT slot_name FROM pg_replication_slots;
+ slot_name
+---------------------------------------------------------------------
+(0 rows)
+
+    -- Left over subscriptions
+    SELECT subname FROM pg_subscription;
+ subname
+---------------------------------------------------------------------
+(0 rows)
+
+    \c - postgres - :master_port
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 4 orphaned resources
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type | object_name | node_group_id | policy_type
+---------------------------------------------------------------------
+(0 rows)
+
+    \c - - - :worker_2_proxy_port
+    SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
+    SET citus.show_shards_for_app_name_prefixes = '*';
+    -- Empty child shards after cleanup
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+    -- Empty publications
+    SELECT pubname FROM pg_publication;
+              pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Empty replication slot table
+    SELECT slot_name FROM pg_replication_slots;
+ slot_name
+---------------------------------------------------------------------
+(0 rows)
+
+    -- Empty subscriptions
+    SELECT subname FROM pg_subscription;
+ subname
+---------------------------------------------------------------------
+(0 rows)
+
+--4. Failure while enabling subscription
+    \c - postgres - :master_port
+    SET citus.next_shard_id TO 8981002;
+    SET citus.next_operation_id TO 777;
+    SET citus.next_cleanup_record_id TO 11;
+    SELECT citus.mitmproxy('conn.onQuery(query="ALTER SUBSCRIPTION .* ENABLE").killall()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT pg_catalog.citus_split_shard_by_split_points(
+        8981000,
+        ARRAY['-100000'],
+        ARRAY[:worker_1_node, :worker_2_node],
+        'force_logical');
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type |                        object_name                        | node_group_id | policy_type
+---------------------------------------------------------------------
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
+(4 rows)
+
+    -- we need to allow connection so that we can connect to proxy
+    SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+    \c - - - :worker_2_proxy_port
+    SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
+    SET citus.show_shards_for_app_name_prefixes = '*';
+    -- Left over child shards
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+ table_to_split_8981002
+ table_to_split_8981003
+(3 rows)
+
+    -- Left over publications
+    SELECT pubname FROM pg_publication;
+              pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Left over replication slots
+    SELECT slot_name FROM pg_replication_slots;
+          slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Left over subscriptions
+    SELECT subname FROM pg_subscription;
+              subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
+    \c - postgres - :master_port
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 4 orphaned resources
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type | object_name | node_group_id | policy_type
+---------------------------------------------------------------------
+(0 rows)
+
+    \c - - - :worker_2_proxy_port
+    SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
+    SET citus.show_shards_for_app_name_prefixes = '*';
+    -- Empty child shards after cleanup
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+    -- Empty publications
+    SELECT pubname FROM pg_publication;
+              pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Empty replication slot table
+    SELECT slot_name FROM pg_replication_slots;
+          slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Empty subscriptions
+    SELECT subname FROM pg_subscription;
+              subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
+--5. Failure on polling subscription state
+    \c - postgres - :master_port
+    SET citus.next_shard_id TO 8981002;
+    SET citus.next_operation_id TO 777;
+    SET citus.next_cleanup_record_id TO 11;
+    SELECT citus.mitmproxy('conn.onQuery(query="^SELECT count\(\*\) FROM pg_subscription_rel").killall()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT pg_catalog.citus_split_shard_by_split_points(
+        8981000,
+        ARRAY['-100000'],
+        ARRAY[:worker_1_node, :worker_2_node],
+        'force_logical');
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type |                        object_name                        | node_group_id | policy_type
+---------------------------------------------------------------------
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
+(4 rows)
+
+    -- we need to allow connection so that we can connect to proxy
+    SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+    \c - - - :worker_2_proxy_port
+    SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
+    SET citus.show_shards_for_app_name_prefixes = '*';
+    -- Left over child shards
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+ table_to_split_8981002
+ table_to_split_8981003
+(3 rows)
+
+    -- Left over publications
+    SELECT pubname FROM pg_publication;
+              pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Left over replication slots
+    SELECT slot_name FROM pg_replication_slots;
+          slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Left over subscriptions
+    SELECT subname FROM pg_subscription;
+              subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
+    \c - postgres - :master_port
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 4 orphaned resources
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type | object_name | node_group_id | policy_type
+---------------------------------------------------------------------
+(0 rows)
+
+    \c - - - :worker_2_proxy_port
+    SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
+    SET citus.show_shards_for_app_name_prefixes = '*';
+    -- Empty child shards after cleanup
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+    -- Empty publications
+    SELECT pubname FROM pg_publication;
+              pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Empty replication slot table
+    SELECT slot_name FROM pg_replication_slots;
+          slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Empty subscriptions
+    SELECT subname FROM pg_subscription;
+              subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
+--6. Failure on polling last write-ahead log location reported to origin WAL sender
+    \c - postgres - :master_port
+    SET citus.next_shard_id TO 8981002;
+    SET citus.next_operation_id TO 777;
+    SET citus.next_cleanup_record_id TO 11;
+    SELECT citus.mitmproxy('conn.onQuery(query="^SELECT min\(latest_end_lsn").killall()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT pg_catalog.citus_split_shard_by_split_points(
+        8981000,
+        ARRAY['-100000'],
+        ARRAY[:worker_1_node, :worker_2_node],
+        'force_logical');
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type |                        object_name                        | node_group_id | policy_type
+---------------------------------------------------------------------
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             1 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981000 |             1 |           0
+          777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981002 |             2 |           0
+(4 rows)
+
+    -- we need to allow connection so that we can connect to proxy
+    SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+    \c - - - :worker_2_proxy_port
+    SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
+    SET citus.show_shards_for_app_name_prefixes = '*';
+    -- Left over child shards
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+ table_to_split_8981002
+ table_to_split_8981003
+(3 rows)
+
+    -- Left over publications
+    SELECT pubname FROM pg_publication;
+              pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Left over replication slots
+    SELECT slot_name FROM pg_replication_slots;
+          slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Left over subscriptions
+    SELECT subname FROM pg_subscription;
+              subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
+    \c - postgres - :master_port
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 4 orphaned resources
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type | object_name | node_group_id | policy_type
+---------------------------------------------------------------------
+(0 rows)
+
+    \c - - - :worker_2_proxy_port
+    SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
+    SET citus.show_shards_for_app_name_prefixes = '*';
+    -- Empty child shards after cleanup
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+    -- Empty publications
+    SELECT pubname FROM pg_publication;
+              pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Empty replication slot table
+    SELECT slot_name FROM pg_replication_slots;
+          slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Empty subscriptions
+    SELECT subname FROM pg_subscription;
+              subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
+--7. Failure on dropping subscription
+    \c - postgres - :master_port
+    SET citus.next_shard_id TO 8981002;
+    SET citus.next_operation_id TO 777;
+    SET citus.next_cleanup_record_id TO 11;
+    SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").killall()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT pg_catalog.citus_split_shard_by_split_points(
+        8981000,
+        ARRAY['-100000'],
+        ARRAY[:worker_1_node, :worker_2_node],
+        'force_logical');
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+    -- NO records expected as we fail at 'DropAllLogicalReplicationLeftovers' before creating
+    -- any resources.
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type | object_name | node_group_id | policy_type
+---------------------------------------------------------------------
+(0 rows)
+
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
+ relname
+---------------------------------------------------------------------
+(0 rows)
+
+    -- we need to allow connection so that we can connect to proxy
+    SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+    \c - - - :worker_2_proxy_port
+    SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
+    SET citus.show_shards_for_app_name_prefixes = '*';
+    -- Left over child shards
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+    -- Left over publications
+    SELECT pubname FROM pg_publication;
+              pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Left over replication slots
+    SELECT slot_name FROM pg_replication_slots;
+          slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Left over subscriptions
+    SELECT subname FROM pg_subscription;
+              subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
+    \c - postgres - :master_port
+    CALL pg_catalog.citus_cleanup_orphaned_resources();
+    SELECT operation_id, object_type, object_name, node_group_id, policy_type
+    FROM pg_dist_cleanup where operation_id = 777;
+ operation_id | object_type | object_name | node_group_id | policy_type
+---------------------------------------------------------------------
+(0 rows)
+
+    \c - - - :worker_2_proxy_port
+    SET search_path TO "citus_failure_split_cleanup_schema", public, pg_catalog;
+    SET citus.show_shards_for_app_name_prefixes = '*';
+    -- Empty child shards after cleanup
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
+        relname
+---------------------------------------------------------------------
+ table_to_split_8981000
+(1 row)
+
+    -- Empty publications
+    SELECT pubname FROM pg_publication;
+              pubname
+---------------------------------------------------------------------
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+ citus_shard_split_publication_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Empty replication slot table
+    SELECT slot_name FROM pg_replication_slots;
+          slot_name
+---------------------------------------------------------------------
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+ citus_shard_split_slot_xxxxxxx_xxxxxxx
+(2 rows)
+
+    -- Empty subscriptions
+    SELECT subname FROM pg_subscription;
+              subname
+---------------------------------------------------------------------
+ citus_shard_split_subscription_xxxxxxx
+(1 row)
+
+-- Cleanup
+\c - postgres - :master_port
+DROP SCHEMA "citus_failure_split_cleanup_schema" CASCADE;
+NOTICE:  drop cascades to table citus_failure_split_cleanup_schema.table_to_split
+-- Cleanup

@@ -11,6 +11,14 @@ Here is a high level overview of test plan:
  8. Split an already split shard second time on a different schema.
 */
 CREATE SCHEMA "citus_split_test_schema";
+-- Disable Deferred drop auto cleanup to avoid flaky tests.
+ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
 CREATE ROLE test_split_role WITH LOGIN;
 GRANT USAGE, CREATE ON SCHEMA "citus_split_test_schema" TO test_split_role;
 SET ROLE test_split_role;
@@ -223,6 +231,10 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 
 (1 row)
 
+-- BEGIN: Perform deferred cleanup.
+CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 4 orphaned resources
+-- END: Perform deferred cleanup.
 -- Perform 3 way split
 SELECT pg_catalog.citus_split_shard_by_split_points(
     8981001,
@@ -235,6 +247,10 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 (1 row)
 
 -- END : Split two shards : One with move and One without move.
+-- BEGIN: Perform deferred cleanup.
+CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 3 orphaned resources
+-- END: Perform deferred cleanup.
 -- BEGIN : Move a shard post split.
 SELECT citus_move_shard_placement(8981007, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='block_writes');
  citus_move_shard_placement
@@ -397,6 +413,10 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 
 (1 row)
 
+-- BEGIN: Perform deferred cleanup.
+CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 3 orphaned resources
+-- END: Perform deferred cleanup.
 SET search_path TO "citus_split_test_schema";
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
@@ -450,6 +470,13 @@ SELECT COUNT(*) FROM colocated_dist_table;
 -- END: Validate Data Count
 --BEGIN : Cleanup
 \c - postgres - :master_port
+ALTER SYSTEM RESET citus.defer_shard_delete_interval;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
 DROP SCHEMA "citus_split_test_schema" CASCADE;
 NOTICE:  drop cascades to 4 other objects
 DETAIL:  drop cascades to table citus_split_test_schema.sensors

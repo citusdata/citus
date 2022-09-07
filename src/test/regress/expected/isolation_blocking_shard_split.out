@@ -56,7 +56,6 @@ step s2-commit:
 	COMMIT;
 
 step s1-update: <... completed>
-ERROR:  could not find valid entry for shard xxxxx
 step s1-commit:
 	COMMIT;
 
@@ -80,7 +79,7 @@ nodeport|shardid|success|result
 
        id|value
 ---------------------------------------------------------------------
-123456789|    1
+123456789|  111
 (1 row)
 
 
@@ -140,7 +139,6 @@ step s2-commit:
 	COMMIT;
 
 step s1-delete: <... completed>
-ERROR:  could not find valid entry for shard xxxxx
 step s1-commit:
 	COMMIT;
 
@@ -158,14 +156,13 @@ step s2-print-cluster:
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
    57637|1500001|t      |     0
-   57637|1500003|t      |     1
+   57637|1500003|t      |     0
    57638|1500004|t      |     0
 (3 rows)
 
-       id|value
+id|value
 ---------------------------------------------------------------------
-123456789|    1
-(1 row)
+(0 rows)
 
 
 starting permutation: s1-load-cache s1-begin s1-select s2-begin s2-blocking-shard-split s1-insert s2-commit s1-commit s2-print-cluster
@@ -221,7 +218,6 @@ get_shard_id_for_distribution_column
                              1500002
 (1 row)
 
-ERROR:  could not find valid entry for shard xxxxx
 step s1-commit:
 	COMMIT;
 
@@ -239,13 +235,14 @@ step s2-print-cluster:
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
    57637|1500001|t      |     0
-   57637|1500003|t      |     0
+   57637|1500003|t      |     1
    57638|1500004|t      |     0
 (3 rows)
 
-id|value
+       id|value
 ---------------------------------------------------------------------
-(0 rows)
+123456789|    1
+(1 row)
 
 
 starting permutation: s1-load-cache s1-begin s1-select s2-begin s2-blocking-shard-split s1-copy s2-commit s1-commit s2-print-cluster
@@ -373,7 +370,6 @@ step s2-commit:
 	COMMIT;
 
 step s1-update: <... completed>
-ERROR:  could not find valid entry for shard xxxxx
 step s1-commit:
 	COMMIT;
 
@@ -397,7 +393,7 @@ nodeport|shardid|success|result
 
        id|value
 ---------------------------------------------------------------------
-123456789|    1
+123456789|    111
 (1 row)
 
 
@@ -453,7 +449,6 @@ step s2-commit:
 	COMMIT;
 
 step s1-delete: <... completed>
-ERROR:  could not find valid entry for shard xxxxx
 step s1-commit:
 	COMMIT;
 
@@ -471,14 +466,13 @@ step s2-print-cluster:
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
    57637|1500001|t      |     0
-   57637|1500003|t      |     1
+   57637|1500003|t      |     0
    57638|1500004|t      |     0
 (3 rows)
 
-       id|value
+id|value
 ---------------------------------------------------------------------
-123456789|    1
-(1 row)
+(0 rows)
 
 
 starting permutation: s1-begin s1-select s2-begin s2-blocking-shard-split s1-insert s2-commit s1-commit s2-print-cluster
@@ -530,7 +524,6 @@ get_shard_id_for_distribution_column
                              1500002
 (1 row)
 
-ERROR:  could not find valid entry for shard xxxxx
 step s1-commit:
 	COMMIT;
 
@@ -548,13 +541,14 @@ step s2-print-cluster:
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
    57637|1500001|t      |     0
-   57637|1500003|t      |     0
+   57637|1500003|t      |     1
    57638|1500004|t      |     0
 (3 rows)
 
-id|value
+       id|value
 ---------------------------------------------------------------------
-(0 rows)
+123456789|    1
+(1 row)
 
 
 starting permutation: s1-begin s1-select s2-begin s2-blocking-shard-split s1-copy s2-commit s1-commit s2-print-cluster
@@ -936,4 +930,317 @@ nodeport|success|result
    57637|t      |     1
    57638|t      |     1
 (3 rows)
+
+
+starting permutation: s1-load-cache s1-start-connection s1-lock-to-split-shard s2-print-locks s2-blocking-shard-split s2-print-locks s2-show-pg_dist_cleanup s1-stop-connection
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+ -- Indirect way to load cache.
+ TRUNCATE to_split_table;
+
+step s1-start-connection:
+  SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-lock-to-split-shard:
+  SELECT run_commands_on_session_level_connection_to_node('BEGIN; LOCK TABLE to_split_table_1500002 IN ACCESS SHARE MODE;');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-print-locks:
+    SELECT * FROM master_run_on_worker(
+  ARRAY['localhost']::text[],
+  ARRAY[57638]::int[],
+  ARRAY[
+   'SELECT CONCAT(relation::regclass, ''-'', locktype, ''-'', mode) AS LockInfo FROM pg_locks
+    WHERE relation::regclass::text = ''to_split_table_1500002'';'
+    ]::text[],
+  false);
+
+node_name|node_port|success|result
+---------------------------------------------------------------------
+localhost|    57638|t      |to_split_table_1500002-relation-AccessShareLock
+(1 row)
+
+step s2-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-print-locks:
+    SELECT * FROM master_run_on_worker(
+  ARRAY['localhost']::text[],
+  ARRAY[57638]::int[],
+  ARRAY[
+   'SELECT CONCAT(relation::regclass, ''-'', locktype, ''-'', mode) AS LockInfo FROM pg_locks
+    WHERE relation::regclass::text = ''to_split_table_1500002'';'
+    ]::text[],
+  false);
+
+node_name|node_port|success|result
+---------------------------------------------------------------------
+localhost|    57638|t      |to_split_table_1500002-relation-AccessShareLock
+(1 row)
+
+step s2-show-pg_dist_cleanup:
+ SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
+
+object_name                  |object_type|policy_type
+---------------------------------------------------------------------
+public.to_split_table_1500002|          1|          2
+(1 row)
+
+step s1-stop-connection:
+    SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-start-connection s1-lock-to-split-shard s2-print-locks s2-blocking-shard-split s2-print-cluster s2-show-pg_dist_cleanup s1-stop-connection
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-start-connection:
+  SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-lock-to-split-shard:
+  SELECT run_commands_on_session_level_connection_to_node('BEGIN; LOCK TABLE to_split_table_1500002 IN ACCESS SHARE MODE;');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-print-locks:
+    SELECT * FROM master_run_on_worker(
+  ARRAY['localhost']::text[],
+  ARRAY[57638]::int[],
+  ARRAY[
+   'SELECT CONCAT(relation::regclass, ''-'', locktype, ''-'', mode) AS LockInfo FROM pg_locks
+    WHERE relation::regclass::text = ''to_split_table_1500002'';'
+    ]::text[],
+  false);
+
+node_name|node_port|success|result
+---------------------------------------------------------------------
+localhost|    57638|t      |to_split_table_1500002-relation-AccessShareLock
+(1 row)
+
+step s2-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('to_split_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM to_split_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500001|t      |     0
+   57637|1500003|t      |     0
+   57638|1500004|t      |     0
+(3 rows)
+
+id|value
+---------------------------------------------------------------------
+(0 rows)
+
+step s2-show-pg_dist_cleanup:
+ SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
+
+object_name                  |object_type|policy_type
+---------------------------------------------------------------------
+public.to_split_table_1500002|          1|          2
+(1 row)
+
+step s1-stop-connection:
+    SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-load-cache s1-acquire-split-advisory-lock s2-blocking-shard-split s1-run-cleaner s1-show-pg_dist_cleanup s1-release-split-advisory-lock s1-run-cleaner s2-show-pg_dist_cleanup
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+ -- Indirect way to load cache.
+ TRUNCATE to_split_table;
+
+step s1-acquire-split-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+ <waiting ...>
+step s1-run-cleaner: 
+ SELECT run_try_drop_marked_shards();
+
+run_try_drop_marked_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-show-pg_dist_cleanup:
+ SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
+
+object_name                  |object_type|policy_type
+---------------------------------------------------------------------
+public.to_split_table_1500003|          1|          1
+public.to_split_table_1500004|          1|          1
+(2 rows)
+
+step s1-release-split-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-blocking-shard-split: <... completed>
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-run-cleaner:
+ SELECT run_try_drop_marked_shards();
+
+run_try_drop_marked_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-show-pg_dist_cleanup:
+ SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
+
+object_name|object_type|policy_type
+---------------------------------------------------------------------
+(0 rows)
+
+
+starting permutation: s1-acquire-split-advisory-lock s2-blocking-shard-split s1-run-cleaner s1-show-pg_dist_cleanup s1-release-split-advisory-lock s1-run-cleaner s2-show-pg_dist_cleanup
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-acquire-split-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-blocking-shard-split:
+ SELECT pg_catalog.citus_split_shard_by_split_points(
+  1500002,
+  ARRAY['1073741824'],
+  ARRAY[1, 2],
+  'block_writes');
+ <waiting ...>
+step s1-run-cleaner: 
+ SELECT run_try_drop_marked_shards();
+
+run_try_drop_marked_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-show-pg_dist_cleanup:
+ SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
+
+object_name                  |object_type|policy_type
+---------------------------------------------------------------------
+public.to_split_table_1500003|          1|          1
+public.to_split_table_1500004|          1|          1
+(2 rows)
+
+step s1-release-split-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-blocking-shard-split: <... completed>
+citus_split_shard_by_split_points
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-run-cleaner:
+ SELECT run_try_drop_marked_shards();
+
+run_try_drop_marked_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-show-pg_dist_cleanup:
+ SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
+
+object_name|object_type|policy_type
+---------------------------------------------------------------------
+(0 rows)
 

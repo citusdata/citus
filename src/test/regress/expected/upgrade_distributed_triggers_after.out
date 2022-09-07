@@ -218,6 +218,23 @@ SELECT * FROM sale_triggers ORDER BY 1, 2;
  truncate_trigger_xxxxxxx      | sale_alabama    | O
 (12 rows)
 
+-- after upgrade to PG15, test that we can't rename a distributed clone trigger
+ALTER TRIGGER "renamed_yet_another_trigger" ON "sale_alabama" RENAME TO "another_trigger_name";
+ERROR:  cannot rename trigger "renamed_yet_another_trigger" on table "sale_alabama"
+HINT:  Rename trigger on partitioned table "sale" instead.
+SELECT count(*) FROM pg_trigger WHERE tgname like 'another_trigger_name%';
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_trigger WHERE tgname like 'another_trigger_name%';$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,10201,t,0)
+ (localhost,10202,t,0)
+(2 rows)
+
 DROP SCHEMA upgrade_distributed_triggers CASCADE;
 NOTICE:  drop cascades to 4 other objects
 DETAIL:  drop cascades to function record_sale()

@@ -168,6 +168,10 @@ SELECT * FROM sale_triggers ORDER BY 1, 2;
  truncate_trigger_xxxxxxx  | sale_newyork    | O
 (6 rows)
 
+-- test that we can't rename a distributed clone trigger
+ALTER TRIGGER "new_record_sale_trigger" ON "pg15"."sale_newyork" RENAME TO "another_trigger_name";
+ERROR:  cannot rename trigger "new_record_sale_trigger" on table "sale_newyork"
+HINT:  Rename trigger on partitioned table "sale" instead.
 --
 -- In PG15, For GENERATED columns, all dependencies of the generation
 -- expression are recorded as NORMAL dependencies of the column itself.
@@ -388,15 +392,167 @@ ON (true)
 WHEN MATCHED THEN
     UPDATE SET x = (SELECT count(*) FROM tbl2);
 ERROR:  MERGE command is not supported on Citus tables yet
+-- test numeric types with negative scale
+CREATE TABLE numeric_negative_scale(numeric_column numeric(3,-1), orig_value int);
+INSERT into numeric_negative_scale SELECT x,x FROM generate_series(111, 115) x;
+-- verify that we can not distribute by a column that has numeric type with negative scale
+SELECT create_distributed_table('numeric_negative_scale','numeric_column');
+ERROR:  cannot distribute relation: numeric_negative_scale
+DETAIL:  Distribution column must not use numeric type with negative scale
+-- However, we can distribute by other columns
+SELECT create_distributed_table('numeric_negative_scale','orig_value');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg15.numeric_negative_scale$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Verify that we can not change the distribution column to the numeric column
+SELECT alter_distributed_table('numeric_negative_scale',
+                                distribution_column := 'numeric_column');
+NOTICE:  creating a new table for pg15.numeric_negative_scale
+ERROR:  cannot distribute relation: numeric_negative_scale_xxxxxx"
+DETAIL:  Distribution column must not use numeric type with negative scale
+SELECT * FROM numeric_negative_scale ORDER BY 1,2;
+ numeric_column | orig_value
+---------------------------------------------------------------------
+            110 |        111
+            110 |        112
+            110 |        113
+            110 |        114
+            120 |        115
+(5 rows)
+
+-- verify that numeric types with scale greater than precision are also ok
+-- a precision of 2, and scale of 3 means that all the numbers should be less than 10^-1 and of the form 0,0XY
+CREATE TABLE numeric_scale_gt_precision(numeric_column numeric(2,3));
+SELECT * FROM create_distributed_table('numeric_scale_gt_precision','numeric_column');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO numeric_scale_gt_precision SELECT x FROM generate_series(0.01234, 0.09, 0.005) x;
+-- verify that we store only 2 digits, and discard the rest of them.
+SELECT * FROM numeric_scale_gt_precision ORDER BY 1;
+ numeric_column
+---------------------------------------------------------------------
+          0.012
+          0.017
+          0.022
+          0.027
+          0.032
+          0.037
+          0.042
+          0.047
+          0.052
+          0.057
+          0.062
+          0.067
+          0.072
+          0.077
+          0.082
+          0.087
+(16 rows)
+
+-- verify we can route queries to the right shards
+SELECT * FROM numeric_scale_gt_precision WHERE numeric_column=0.027;
+ numeric_column
+---------------------------------------------------------------------
+          0.027
+(1 row)
+
+-- test new regex functions
+-- print order comments that contain the word `fluffily` at least twice
+SELECT o_comment FROM public.orders WHERE regexp_count(o_comment, 'FluFFily', 1, 'i')>=2 ORDER BY 1;
+                                 o_comment
+---------------------------------------------------------------------
+ al, bold deposits cajole fluffily fluffily final foxes. pending ideas beli
+ ly regular packages are fluffily even ideas. fluffily final
+ ng instructions integrate fluffily among the fluffily silent accounts. bli
+ ructions wake fluffily fluffily final gifts! furiou
+ s boost blithely fluffily idle ideas? fluffily even pin
+(5 rows)
+
+-- print the same items using a different regexp function
+SELECT o_comment FROM public.orders WHERE regexp_like(o_comment, 'fluffily.*fluffily') ORDER BY 1;
+                                 o_comment
+---------------------------------------------------------------------
+ al, bold deposits cajole fluffily fluffily final foxes. pending ideas beli
+ ly regular packages are fluffily even ideas. fluffily final
+ ng instructions integrate fluffily among the fluffily silent accounts. bli
+ ructions wake fluffily fluffily final gifts! furiou
+ s boost blithely fluffily idle ideas? fluffily even pin
+(5 rows)
+
+-- print the position where we find the second fluffily in the comment
+SELECT o_comment, regexp_instr(o_comment, 'fluffily.*(fluffily)') FROM public.orders ORDER BY 2 desc LIMIT 5;
+                                 o_comment                                  | regexp_instr
+---------------------------------------------------------------------
+ ng instructions integrate fluffily among the fluffily silent accounts. bli |           27
+ al, bold deposits cajole fluffily fluffily final foxes. pending ideas beli |           26
+ ly regular packages are fluffily even ideas. fluffily final                |           25
+ s boost blithely fluffily idle ideas? fluffily even pin                    |           18
+ ructions wake fluffily fluffily final gifts! furiou                        |           15
+(5 rows)
+
+-- print the substrings between two `fluffily`
+SELECT regexp_substr(o_comment, 'fluffily.*fluffily') FROM public.orders ORDER BY 1 LIMIT 5;
+         regexp_substr
+---------------------------------------------------------------------
+ fluffily among the fluffily
+ fluffily even ideas. fluffily
+ fluffily fluffily
+ fluffily fluffily
+ fluffily idle ideas? fluffily
+(5 rows)
+
+-- replace second `fluffily` with `silkily`
+SELECT regexp_replace(o_comment, 'fluffily', 'silkily', 1, 2) FROM public.orders WHERE regexp_like(o_comment, 'fluffily.*fluffily') ORDER BY 1 desc;
+                              regexp_replace
+---------------------------------------------------------------------
+ s boost blithely fluffily idle ideas? silkily even pin
+ ructions wake fluffily silkily final gifts! furiou
+ ng instructions integrate fluffily among the silkily silent accounts. bli
+ ly regular packages are fluffily even ideas. silkily final
+ al, bold deposits cajole fluffily silkily final foxes. pending ideas beli
+(5 rows)
+
+-- test new COPY features
+-- COPY TO statements with text format and headers
+CREATE TABLE copy_test(id int, data int);
+SELECT create_distributed_table('copy_test', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO copy_test SELECT x, x FROM generate_series(1,100) x;
+COPY copy_test TO :'temp_dir''copy_test.txt' WITH ( HEADER true, FORMAT text);
+-- Create another distributed table with different column names and test COPY FROM with header match
+CREATE TABLE copy_test2(id int, data_ int);
+SELECT create_distributed_table('copy_test2', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+COPY copy_test2 FROM :'temp_dir''copy_test.txt' WITH ( HEADER match, FORMAT text);
+ERROR:  column name mismatch in header line field 2: got "data", expected "data_"
+CONTEXT:  COPY copy_test2, line 1: "id	data"
+-- verify that the command works if we rename the column
+ALTER TABLE copy_test2 RENAME COLUMN data_ TO data;
+COPY copy_test2 FROM :'temp_dir''copy_test.txt' WITH ( HEADER match, FORMAT text);
+SELECT count(*)=100 FROM copy_test2;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- Clean up
+\set VERBOSITY terse
 DROP SCHEMA pg15 CASCADE;
-NOTICE:  drop cascades to 9 other objects
-DETAIL:  drop cascades to collation german_phonebook_test
-drop cascades to collation default_provider
-drop cascades to table sale
-drop cascades to table record_sale
-drop cascades to function record_sale()
-drop cascades to view sale_triggers
-drop cascades to table generated_stored_ref
-drop cascades to table tbl1
-drop cascades to table tbl2
+NOTICE:  drop cascades to 13 other objects

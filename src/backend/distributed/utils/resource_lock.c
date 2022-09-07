@@ -109,6 +109,8 @@ PG_FUNCTION_INFO_V1(lock_relation_if_exists);
 
 /* Config variable managed via guc.c */
 bool EnableAcquiringUnsafeLockFromWorkers = false;
+bool SkipAdvisoryLockPermissionChecks = false;
+
 
 /*
  * lock_shard_metadata allows the shard distribution metadata to be locked
@@ -248,7 +250,10 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 			continue;
 		}
 
-		EnsureTablePermissions(relationId, aclMask);
+		if (!SkipAdvisoryLockPermissionChecks)
+		{
+			EnsureTablePermissions(relationId, aclMask);
+		}
 
 		LockShardResource(shardId, lockMode);
 	}
@@ -508,7 +513,11 @@ LockPlacementCleanup(void)
 	LOCKTAG tag;
 	const bool sessionLock = false;
 	const bool dontWait = false;
-	SET_LOCKTAG_PLACEMENT_CLEANUP(tag);
+
+	/* Moves acquire lock with a constant operation id CITUS_SHARD_MOVE.
+	 * This will change as we add support for parallel moves.
+	 */
+	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_SHARD_MOVE);
 	(void) LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
 }
 
@@ -523,7 +532,11 @@ TryLockPlacementCleanup(void)
 	LOCKTAG tag;
 	const bool sessionLock = false;
 	const bool dontWait = true;
-	SET_LOCKTAG_PLACEMENT_CLEANUP(tag);
+
+	/* Moves acquire lock with a constant operation id CITUS_SHARD_MOVE.
+	 * This will change as we add support for parallel moves.
+	 */
+	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_SHARD_MOVE);
 	bool lockAcquired = LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
 	return lockAcquired;
 }

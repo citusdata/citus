@@ -224,6 +224,9 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid >= 1230000 ORDER BY nodeport
 128|106828|9339|1|38|69723.16|0.06|0.01|A|F|1992-09-01|1992-08-27|1992-10-01|TAKE BACK RETURN|FOB| cajole careful
 \.
 
+\c - postgres - :master_port
+CALL pg_catalog.citus_cleanup_orphaned_resources();
+
 -- connect to the worker node with metadata
 \c - mx_isolation_role_ent - :worker_1_port
 SET search_path to "Tenant Isolation";
@@ -340,6 +343,9 @@ SELECT isolate_tenant_to_new_shard('test_append', 100, shard_transfer_mode => 'f
 SELECT * FROM pg_dist_shard
 	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
 	ORDER BY shardminvalue::BIGINT, logicalrelid;
+
+\c - postgres - :master_port
+CALL pg_catalog.citus_cleanup_orphaned_resources();
 
 -- test failure scenarios with triggers on workers
 \c - postgres - :worker_1_port
@@ -544,6 +550,9 @@ DROP TABLE test_colocated_table_no_rep_identity;
 SELECT isolate_tenant_to_new_shard('test_colocated_table_2', 1, 'CASCADE', shard_transfer_mode => 'auto');
 
 SELECT count(*) FROM test_colocated_table_2;
+
+\c - postgres - :master_port
+CALL pg_catalog.citus_cleanup_orphaned_resources();
 
 \c - postgres - :worker_1_port
 

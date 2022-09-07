@@ -59,7 +59,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500078
+                    1500090
 (1 row)
 
 step s2-commit:
@@ -78,10 +78,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500077|t      |     0
-   57637|1500078|t      |     1
-   57637|1500079|t      |     0
-   57638|1500074|t      |     0
+   57637|1500089|t      |     0
+   57637|1500090|t      |     1
+   57637|1500091|t      |     0
+   57638|1500086|t      |     0
 (4 rows)
 
 id|value
@@ -149,7 +149,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500086
+                    1500098
 (1 row)
 
 step s2-commit:
@@ -168,15 +168,107 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500085|t      |     0
-   57637|1500086|t      |     0
-   57637|1500087|t      |     0
-   57638|1500082|t      |     0
+   57637|1500097|t      |     0
+   57637|1500098|t      |     0
+   57637|1500099|t      |     0
+   57638|1500094|t      |     0
 (4 rows)
 
 id|value
 ---------------------------------------------------------------------
 (0 rows)
+
+
+starting permutation: s1-load-cache s1-insert s3-acquire-advisory-lock s1-begin s1-select s2-begin s2-isolate-tenant s1-update-complex s1-commit s3-release-advisory-lock s2-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-load-cache:
+ TRUNCATE isolation_table;
+ TRUNCATE isolation_table2;
+
+step s1-insert:
+ INSERT INTO isolation_table VALUES (5, 10);
+ INSERT INTO isolation_table2 VALUES (5, 10);
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+ SELECT count(*) FROM isolation_table WHERE id = 5;
+
+count
+---------------------------------------------------------------------
+    1
+(1 row)
+
+step s2-begin:
+ BEGIN;
+
+step s2-isolate-tenant:
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'force_logical');
+ <waiting ...>
+step s1-update-complex: 
+ UPDATE isolation_table SET value = 5 WHERE id IN (
+        SELECT max(id) FROM isolation_table
+    );
+
+step s1-commit:
+ COMMIT;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-isolate-tenant: <... completed>
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500106
+(1 row)
+
+step s2-commit:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('isolation_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500105|t      |     0
+   57637|1500106|t      |     1
+   57637|1500107|t      |     0
+   57638|1500102|t      |     0
+(4 rows)
+
+id|value
+---------------------------------------------------------------------
+ 5|    5
+(1 row)
 
 
 starting permutation: s1-load-cache s3-acquire-advisory-lock s1-begin s1-select s2-begin s2-isolate-tenant s1-insert s1-commit s3-release-advisory-lock s2-commit s2-print-cluster
@@ -235,7 +327,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500094
+                    1500114
 (1 row)
 
 step s2-commit:
@@ -254,10 +346,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500093|t      |     0
-   57637|1500094|t      |     1
-   57637|1500095|t      |     0
-   57638|1500090|t      |     0
+   57637|1500113|t      |     0
+   57637|1500114|t      |     1
+   57637|1500115|t      |     0
+   57638|1500110|t      |     0
 (4 rows)
 
 id|value
@@ -321,7 +413,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500102
+                    1500122
 (1 row)
 
 step s2-commit:
@@ -340,10 +432,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500101|t      |     1
-   57637|1500102|t      |     1
-   57637|1500103|t      |     2
-   57638|1500098|t      |     1
+   57637|1500121|t      |     1
+   57637|1500122|t      |     1
+   57637|1500123|t      |     2
+   57638|1500118|t      |     1
 (4 rows)
 
 id|value
@@ -411,7 +503,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500110
+                    1500130
 (1 row)
 
 step s2-commit:
@@ -430,10 +522,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500109|t      |     0
-   57637|1500110|t      |     1
-   57637|1500111|t      |     0
-   57638|1500106|t      |     0
+   57637|1500129|t      |     0
+   57637|1500130|t      |     1
+   57637|1500131|t      |     0
+   57638|1500126|t      |     0
 (4 rows)
 
 id|value
@@ -497,7 +589,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500118
+                    1500138
 (1 row)
 
 step s2-commit:
@@ -516,15 +608,103 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500117|t      |     0
-   57637|1500118|t      |     0
-   57637|1500119|t      |     0
-   57638|1500114|t      |     0
+   57637|1500137|t      |     0
+   57637|1500138|t      |     0
+   57637|1500139|t      |     0
+   57638|1500134|t      |     0
 (4 rows)
 
 id|value
 ---------------------------------------------------------------------
 (0 rows)
+
+
+starting permutation: s1-insert s3-acquire-advisory-lock s1-begin s1-select s2-begin s2-isolate-tenant s1-update-complex s1-commit s3-release-advisory-lock s2-commit s2-print-cluster
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-insert:
+ INSERT INTO isolation_table VALUES (5, 10);
+ INSERT INTO isolation_table2 VALUES (5, 10);
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+    -- the tests are written with the logic where single shard SELECTs
+    -- do not to open transaction blocks
+    SET citus.select_opens_transaction_block TO false;
+
+step s1-select:
+ SELECT count(*) FROM isolation_table WHERE id = 5;
+
+count
+---------------------------------------------------------------------
+    1
+(1 row)
+
+step s2-begin:
+ BEGIN;
+
+step s2-isolate-tenant:
+ SELECT isolate_tenant_to_new_shard('isolation_table', 5, shard_transfer_mode => 'force_logical');
+ <waiting ...>
+step s1-update-complex: 
+ UPDATE isolation_table SET value = 5 WHERE id IN (
+        SELECT max(id) FROM isolation_table
+    );
+
+step s1-commit:
+ COMMIT;
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-isolate-tenant: <... completed>
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500146
+(1 row)
+
+step s2-commit:
+ COMMIT;
+
+step s2-print-cluster:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('isolation_table', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ -- rows
+ SELECT id, value FROM isolation_table ORDER BY id, value;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500145|t      |     0
+   57637|1500146|t      |     1
+   57637|1500147|t      |     0
+   57638|1500142|t      |     0
+(4 rows)
+
+id|value
+---------------------------------------------------------------------
+ 5|    5
+(1 row)
 
 
 starting permutation: s3-acquire-advisory-lock s1-begin s1-select s2-begin s2-isolate-tenant s1-insert s1-commit s3-release-advisory-lock s2-commit s2-print-cluster
@@ -579,7 +759,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500126
+                    1500154
 (1 row)
 
 step s2-commit:
@@ -598,10 +778,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500125|t      |     0
-   57637|1500126|t      |     1
-   57637|1500127|t      |     0
-   57638|1500122|t      |     0
+   57637|1500153|t      |     0
+   57637|1500154|t      |     1
+   57637|1500155|t      |     0
+   57638|1500150|t      |     0
 (4 rows)
 
 id|value
@@ -661,7 +841,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500134
+                    1500162
 (1 row)
 
 step s2-commit:
@@ -680,10 +860,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500133|t      |     1
-   57637|1500134|t      |     1
-   57637|1500135|t      |     2
-   57638|1500130|t      |     1
+   57637|1500161|t      |     1
+   57637|1500162|t      |     1
+   57637|1500163|t      |     2
+   57638|1500158|t      |     1
 (4 rows)
 
 id|value
@@ -736,7 +916,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500142
+                    1500170
 (1 row)
 
 step s2-print-cluster:
@@ -752,10 +932,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500141|t      |     0
-   57637|1500142|t      |     1
-   57637|1500143|t      |     0
-   57638|1500138|t      |     0
+   57637|1500169|t      |     0
+   57637|1500170|t      |     1
+   57637|1500171|t      |     0
+   57638|1500166|t      |     0
 (4 rows)
 
 id|value
@@ -804,7 +984,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500150
+                    1500178
 (1 row)
 
 step s2-print-cluster:
@@ -820,10 +1000,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500149|t      |     0
-   57637|1500150|t      |     1
-   57637|1500151|t      |     0
-   57638|1500146|t      |     0
+   57637|1500177|t      |     0
+   57637|1500178|t      |     1
+   57637|1500179|t      |     0
+   57638|1500174|t      |     0
 (4 rows)
 
 id|value
@@ -872,7 +1052,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500158
+                    1500186
 (1 row)
 
 step s2-print-cluster:
@@ -888,10 +1068,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500157|t      |     0
-   57637|1500158|t      |     1
-   57637|1500159|t      |     0
-   57638|1500154|t      |     0
+   57637|1500185|t      |     0
+   57637|1500186|t      |     1
+   57637|1500187|t      |     0
+   57638|1500182|t      |     0
 (4 rows)
 
 id|value
@@ -943,7 +1123,7 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500169
+                    1500197
 (1 row)
 
 step s2-commit:
@@ -962,10 +1142,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500168|t      |     0
-   57637|1500169|t      |     1
-   57637|1500170|t      |     0
-   57638|1500165|t      |     0
+   57637|1500196|t      |     0
+   57637|1500197|t      |     1
+   57637|1500198|t      |     0
+   57638|1500193|t      |     0
 (4 rows)
 
 id|value
@@ -1001,13 +1181,8 @@ step s2-isolate-tenant:
  <waiting ...>
 step s1-isolate-tenant-no-same-coloc-blocking: 
  SELECT isolate_tenant_to_new_shard('isolation_table2', 2, shard_transfer_mode => 'block_writes');
-
-isolate_tenant_to_new_shard
----------------------------------------------------------------------
-                    1500183
-(1 row)
-
-step s3-release-advisory-lock:
+ <waiting ...>
+step s3-release-advisory-lock: 
     SELECT pg_advisory_unlock(44000, 55152);
 
 pg_advisory_unlock
@@ -1018,7 +1193,13 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500180
+                    1500208
+(1 row)
+
+step s1-isolate-tenant-no-same-coloc-blocking: <... completed>
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500211
 (1 row)
 
 step s2-print-cluster:
@@ -1034,10 +1215,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500179|t      |     0
-   57637|1500180|t      |     1
-   57637|1500181|t      |     0
-   57638|1500176|t      |     0
+   57637|1500207|t      |     0
+   57637|1500208|t      |     1
+   57637|1500209|t      |     0
+   57638|1500204|t      |     0
 (4 rows)
 
 id|value
@@ -1073,13 +1254,8 @@ step s2-isolate-tenant:
  <waiting ...>
 step s1-isolate-tenant-no-same-coloc-blocking: 
  SELECT isolate_tenant_to_new_shard('isolation_table2', 2, shard_transfer_mode => 'block_writes');
-
-isolate_tenant_to_new_shard
----------------------------------------------------------------------
-                    1500194
-(1 row)
-
-step s3-release-advisory-lock:
+ <waiting ...>
+step s3-release-advisory-lock: 
     SELECT pg_advisory_unlock(44000, 55152);
 
 pg_advisory_unlock
@@ -1090,7 +1266,13 @@ t
 step s2-isolate-tenant: <... completed>
 isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                    1500191
+                    1500219
+(1 row)
+
+step s1-isolate-tenant-no-same-coloc-blocking: <... completed>
+isolate_tenant_to_new_shard
+---------------------------------------------------------------------
+                    1500222
 (1 row)
 
 step s2-print-cluster:
@@ -1106,10 +1288,10 @@ step s2-print-cluster:
 
 nodeport|shardid|success|result
 ---------------------------------------------------------------------
-   57637|1500190|t      |     0
-   57637|1500191|t      |     1
-   57637|1500192|t      |     0
-   57638|1500187|t      |     0
+   57637|1500218|t      |     0
+   57637|1500219|t      |     1
+   57637|1500220|t      |     0
+   57638|1500215|t      |     0
 (4 rows)
 
 id|value

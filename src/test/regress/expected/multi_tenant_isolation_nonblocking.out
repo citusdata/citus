@@ -448,6 +448,9 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid >= 1230000 ORDER BY nodeport
 \COPY lineitem_streaming FROM STDIN WITH DELIMITER '|'
 ERROR:  insert or update on table "lineitem_streaming_1230044" violates foreign key constraint "test_constraint_1230044"
 DETAIL:  Key (l_orderkey)=(128) is not present in table "orders_streaming_1230046".
+\c - postgres - :master_port
+CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 30 orphaned resources
 -- connect to the worker node with metadata
 \c - mx_isolation_role_ent - :worker_1_port
 SET search_path to "Tenant Isolation";
@@ -713,6 +716,8 @@ SELECT * FROM pg_dist_shard
  orders_streaming   | 1230047 | t            | 2147483647    | 2147483647
 (24 rows)
 
+\c - postgres - :master_port
+CALL pg_catalog.citus_cleanup_orphaned_resources();
 -- test failure scenarios with triggers on workers
 \c - postgres - :worker_1_port
 SET search_path to "Tenant Isolation";
@@ -753,6 +758,8 @@ SET citus.override_table_visibility TO false;
 SET search_path to "Tenant Isolation";
 \set VERBOSITY terse
 SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_transfer_mode => 'force_logical');
+WARNING:  command DROP TABLE is disabled
+WARNING:  Failed to cleanup 1 shards out of 1
 ERROR:  command CREATE TABLE is disabled
 \set VERBOSITY default
 \c - postgres - :worker_1_port
@@ -796,12 +803,6 @@ CREATE EVENT TRIGGER abort_drop ON sql_drop
 SET search_path to "Tenant Isolation";
 \set VERBOSITY terse
 SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_transfer_mode => 'force_logical');
-WARNING:  command DROP TABLE is disabled
-WARNING:  command DROP TABLE is disabled
-WARNING:  command DROP TABLE is disabled
-WARNING:  command DROP TABLE is disabled
-WARNING:  command DROP TABLE is disabled
-WARNING:  command DROP TABLE is disabled
 ERROR:  command DROP SUBSCRIPTION is disabled
 \set VERBOSITY default
 -- check if metadata is changed
@@ -1099,6 +1100,9 @@ SELECT count(*) FROM test_colocated_table_2;
    101
 (1 row)
 
+\c - postgres - :master_port
+CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 10 orphaned resources
 \c - postgres - :worker_1_port
 -- show the foreign keys of the main table & its colocated shard on other tables
 SELECT tbl.relname, fk."Constraint", fk."Definition"

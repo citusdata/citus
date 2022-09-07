@@ -117,6 +117,10 @@ NOTICE:  renaming the new table to create_distributed_table_concurrently.test
 NOTICE:  creating a new table for create_distributed_table_concurrently.ref
 NOTICE:  moving the data of create_distributed_table_concurrently.ref
 NOTICE:  dropping the old create_distributed_table_concurrently.ref
+NOTICE:  drop cascades to constraint test_id_fkey_1190041 on table create_distributed_table_concurrently.test_1190041
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+SQL statement "DROP TABLE create_distributed_table_concurrently.ref CASCADE"
 NOTICE:  renaming the new table to create_distributed_table_concurrently.ref
 NOTICE:  creating a new table for create_distributed_table_concurrently.test_1
 NOTICE:  moving the data of create_distributed_table_concurrently.test_1

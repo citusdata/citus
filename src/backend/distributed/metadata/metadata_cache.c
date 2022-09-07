@@ -170,6 +170,8 @@ typedef struct MetadataCacheData
 	Oid distLocalGroupRelationId;
 	Oid distObjectRelationId;
 	Oid distObjectPrimaryKeyIndexId;
+	Oid distCleanupRelationId;
+	Oid distCleanupPrimaryKeyIndexId;
 	Oid distColocationRelationId;
 	Oid distColocationConfigurationIndexId;
 	Oid distPartitionRelationId;
@@ -254,7 +256,7 @@ static ScanKeyData DistObjectScanKey[3];
 
 /* local function forward declarations */
 static HeapTuple PgDistPartitionTupleViaCatalog(Oid relationId);
-static ShardIdCacheEntry * LookupShardIdCacheEntry(int64 shardId);
+static ShardIdCacheEntry * LookupShardIdCacheEntry(int64 shardId, bool missingOk);
 static CitusTableCacheEntry * BuildCitusTableCacheEntry(Oid relationId);
 static void BuildCachedShardList(CitusTableCacheEntry *cacheEntry);
 static void PrepareWorkerNodeCache(void);
@@ -303,10 +305,11 @@ static Oid LookupEnumValueId(Oid typeId, char *valueName);
 static void InvalidateCitusTableCacheEntrySlot(CitusTableCacheEntrySlot *cacheSlot);
 static void InvalidateDistTableCache(void);
 static void InvalidateDistObjectCache(void);
-static void InitializeTableCacheEntry(int64 shardId);
+static bool InitializeTableCacheEntry(int64 shardId, bool missingOk);
 static bool IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
 									 CitusTableType tableType);
-static bool RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry);
+static bool RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry, bool
+											missingOk);
 
 static Oid DistAuthinfoRelationId(void);
 static Oid DistAuthinfoIndexId(void);
@@ -804,7 +807,8 @@ CitusTableList(void)
 ShardInterval *
 LoadShardInterval(uint64 shardId)
 {
-	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
+	bool missingOk = false;
+	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId, missingOk);
 	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
 	int shardIndex = shardIdEntry->shardIndex;
 
@@ -822,12 +826,32 @@ LoadShardInterval(uint64 shardId)
 
 
 /*
+ * ShardExists returns whether given shard exists or not. It fails if missingOk is false
+ * and shard is not found.
+ */
+bool
+ShardExists(uint64 shardId)
+{
+	bool missingOk = true;
+	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId, missingOk);
+
+	if (!shardIdEntry)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
  * RelationIdOfShard returns the relationId of the given shardId.
  */
 Oid
 RelationIdForShard(uint64 shardId)
 {
-	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
+	bool missingOk = false;
+	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId, missingOk);
 	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
 	return tableEntry->relationId;
 }
@@ -840,7 +864,8 @@ RelationIdForShard(uint64 shardId)
 bool
 ReferenceTableShardId(uint64 shardId)
 {
-	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
+	bool missingOk = false;
+	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId, missingOk);
 	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
 	return IsCitusTableTypeCacheEntry(tableEntry, REFERENCE_TABLE);
 }
@@ -858,7 +883,8 @@ DistributedTableShardId(uint64 shardId)
 		return false;
 	}
 
-	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
+	bool missingOk = false;
+	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId, missingOk);
 	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
 	return IsCitusTableTypeCacheEntry(tableEntry, DISTRIBUTED_TABLE);
 }
@@ -873,7 +899,8 @@ DistributedTableShardId(uint64 shardId)
 GroupShardPlacement *
 LoadGroupShardPlacement(uint64 shardId, uint64 placementId)
 {
-	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
+	bool missingOk = false;
+	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId, missingOk);
 	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
 	int shardIndex = shardIdEntry->shardIndex;
 
@@ -908,7 +935,8 @@ LoadGroupShardPlacement(uint64 shardId, uint64 placementId)
 ShardPlacement *
 LoadShardPlacement(uint64 shardId, uint64 placementId)
 {
-	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
+	bool missingOk = false;
+	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId, missingOk);
 	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
 	int shardIndex = shardIdEntry->shardIndex;
 	GroupShardPlacement *groupPlacement = LoadGroupShardPlacement(shardId, placementId);
@@ -931,7 +959,8 @@ ShardPlacementOnGroupIncludingOrphanedPlacements(int32 groupId, uint64 shardId)
 {
 	ShardPlacement *placementOnNode = NULL;
 
-	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
+	bool missingOk = false;
+	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId, missingOk);
 	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
 	int shardIndex = shardIdEntry->shardIndex;
 	GroupShardPlacement *placementArray =
@@ -1151,7 +1180,8 @@ ShardPlacementListIncludingOrphanedPlacements(uint64 shardId)
 {
 	List *placementList = NIL;
 
-	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
+	bool missingOk = false;
+	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId, missingOk);
 	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
 	int shardIndex = shardIdEntry->shardIndex;
 
@@ -1191,15 +1221,24 @@ ShardPlacementListIncludingOrphanedPlacements(uint64 shardId)
  * build the cache entry. Afterwards we know that the shard has to be in the
  * cache if it exists. If the shard does *not* exist, this function errors
  * (because LookupShardRelationFromCatalog errors out).
+ *
+ * If missingOk is true and the shard cannot be found, the function returns false.
  */
-static void
-InitializeTableCacheEntry(int64 shardId)
+static bool
+InitializeTableCacheEntry(int64 shardId, bool missingOk)
 {
-	bool missingOk = false;
 	Oid relationId = LookupShardRelationFromCatalog(shardId, missingOk);
+
+	if (!OidIsValid(relationId))
+	{
+		Assert(missingOk);
+		return false;
+	}
 
 	/* trigger building the cache for the shard id */
 	GetCitusTableCacheEntry(relationId); /* lgtm[cpp/return-value-ignored] */
+
+	return true;
 }
 
 
@@ -1209,7 +1248,7 @@ InitializeTableCacheEntry(int64 shardId)
  * entry in the cache and false if it didn't.
  */
 static bool
-RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry)
+RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry, bool missingOk)
 {
 	/*
 	 * We might have some concurrent metadata changes. In order to get the changes,
@@ -1221,7 +1260,8 @@ RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry)
 		return false;
 	}
 	Oid oldRelationId = shardEntry->tableEntry->relationId;
-	Oid currentRelationId = LookupShardRelationFromCatalog(shardEntry->shardId, false);
+	Oid currentRelationId = LookupShardRelationFromCatalog(shardEntry->shardId,
+														   missingOk);
 
 	/*
 	 * The relation OID to which the shard belongs could have changed,
@@ -1236,11 +1276,12 @@ RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry)
 
 
 /*
- * LookupShardCacheEntry returns the cache entry belonging to a shard, or
- * errors out if that shard is unknown.
+ * LookupShardCacheEntry returns the cache entry belonging to a shard.
+ * It errors out if that shard is unknown and missingOk is false. Else,
+ * it will return a NULL cache entry.
  */
 static ShardIdCacheEntry *
-LookupShardIdCacheEntry(int64 shardId)
+LookupShardIdCacheEntry(int64 shardId, bool missingOk)
 {
 	bool foundInCache = false;
 	bool recheck = false;
@@ -1254,12 +1295,16 @@ LookupShardIdCacheEntry(int64 shardId)
 
 	if (!foundInCache)
 	{
-		InitializeTableCacheEntry(shardId);
+		if (!InitializeTableCacheEntry(shardId, missingOk))
+		{
+			return NULL;
+		}
+
 		recheck = true;
 	}
 	else
 	{
-		recheck = RefreshTableCacheEntryIfInvalid(shardEntry);
+		recheck = RefreshTableCacheEntryIfInvalid(shardEntry, missingOk);
 	}
 
 	/*
@@ -1273,7 +1318,8 @@ LookupShardIdCacheEntry(int64 shardId)
 
 		if (!foundInCache)
 		{
-			ereport(ERROR, (errmsg("could not find valid entry for shard "
+			int eflag = (missingOk) ? DEBUG1 : ERROR;
+			ereport(eflag, (errmsg("could not find valid entry for shard "
 								   UINT64_FORMAT, shardId)));
 		}
 	}
@@ -2667,6 +2713,28 @@ DistObjectPrimaryKeyIndexId(void)
 	}
 
 	return MetadataCache.distObjectPrimaryKeyIndexId;
+}
+
+
+/* return oid of pg_dist_cleanup relation */
+Oid
+DistCleanupRelationId(void)
+{
+	CachedRelationLookup("pg_dist_cleanup",
+						 &MetadataCache.distCleanupRelationId);
+
+	return MetadataCache.distCleanupRelationId;
+}
+
+
+/* return oid of pg_dist_cleanup primary key index */
+Oid
+DistCleanupPrimaryKeyIndexId(void)
+{
+	CachedRelationLookup("pg_dist_cleanup_pkey",
+						 &MetadataCache.distCleanupPrimaryKeyIndexId);
+
+	return MetadataCache.distCleanupPrimaryKeyIndexId;
 }
 
 
@@ -4545,6 +4613,9 @@ InvalidateCitusTableCacheEntrySlot(CitusTableCacheEntrySlot *cacheSlot)
 	{
 		/* reload the metadata */
 		cacheSlot->citusTableMetadata->isValid = false;
+
+		/* clean up ShardIdCacheHash */
+		RemoveStaleShardIdCacheEntries(cacheSlot->citusTableMetadata);
 	}
 }
 
@@ -4942,37 +5013,6 @@ LookupShardRelationFromCatalog(int64 shardId, bool missingOk)
 	table_close(pgDistShard, NoLock);
 
 	return relationId;
-}
-
-
-/*
- * ShardExists returns whether the given shard ID exists in pg_dist_shard.
- */
-bool
-ShardExists(int64 shardId)
-{
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
-	Relation pgDistShard = table_open(DistShardRelationId(), AccessShareLock);
-	bool shardExists = false;
-
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardId));
-
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistShard,
-													DistShardShardidIndexId(), true,
-													NULL, scanKeyCount, scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	if (HeapTupleIsValid(heapTuple))
-	{
-		shardExists = true;
-	}
-
-	systable_endscan(scanDescriptor);
-	table_close(pgDistShard, NoLock);
-
-	return shardExists;
 }
 
 

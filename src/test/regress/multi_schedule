@@ -86,7 +86,7 @@ test: multi_agg_type_conversion multi_count_type_conversion recursive_relation_p
 test: multi_partition_pruning single_hash_repartition_join unsupported_lateral_subqueries
 test: multi_join_pruning multi_hash_pruning intermediate_result_pruning
 test: multi_null_minmax_value_pruning cursors
-test: modification_correctness
+test: modification_correctness adv_lock_permission
 test: multi_query_directory_cleanup
 test: multi_task_assignment_policy multi_cross_shard
 test: multi_utility_statements

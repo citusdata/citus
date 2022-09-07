@@ -1136,6 +1136,7 @@ SELECT * FROM multi_extension.print_extension_changes();
  table columnar.chunk_group                                                             |
  table columnar.options                                                                 |
  table columnar.stripe                                                                  |
+                                                                                        | function citus_cleanup_orphaned_resources()
                                                                                         | function citus_internal_delete_partition_metadata(regclass) void
                                                                                         | function citus_job_cancel(bigint) void
                                                                                         | function citus_job_wait(bigint,citus_job_status) boolean
@@ -1150,16 +1151,19 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                         | function worker_split_shard_replication_setup(split_shard_info[]) SETOF replication_slot_info
                                                                                         | sequence pg_dist_background_job_job_id_seq
                                                                                         | sequence pg_dist_background_task_task_id_seq
+                                                                                        | sequence pg_dist_cleanup_recordid_seq
+                                                                                        | sequence pg_dist_operationid_seq
                                                                                         | table pg_dist_background_job
                                                                                         | table pg_dist_background_task
                                                                                         | table pg_dist_background_task_depend
+                                                                                        | table pg_dist_cleanup
                                                                                         | type citus_job_status
                                                                                         | type citus_task_status
                                                                                         | type replication_slot_info
                                                                                         | type split_copy_info
                                                                                         | type split_shard_info
                                                                                         | view citus_locks
-(46 rows)
+(50 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

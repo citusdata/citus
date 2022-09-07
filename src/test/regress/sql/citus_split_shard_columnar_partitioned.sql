@@ -5,6 +5,10 @@ SET citus.next_placement_id TO 8770000;
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 
+-- Disable Deferred drop auto cleanup to avoid flaky tests.
+ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
+SELECT pg_reload_conf();
+
 -- BEGIN: Create table to split, along with other co-located tables. Add indexes, statistics etc.
     CREATE TABLE sensors(
         measureid         integer,
@@ -168,6 +172,10 @@ SET citus.shard_replication_factor TO 1;
         'block_writes');
 -- END: Split a shard along its co-located shards
 
+-- BEGIN: Perform deferred cleanup.
+CALL pg_catalog.citus_cleanup_orphaned_resources();
+-- END: Perform deferred cleanup.
+
 -- BEGIN: Validate Shard Info and Data
     SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
     FROM pg_dist_shard AS shard
@@ -235,6 +243,10 @@ SET citus.shard_replication_factor TO 1;
         'block_writes');
 -- END: Split a partition table directly
 
+-- BEGIN: Perform deferred cleanup.
+CALL pg_catalog.citus_cleanup_orphaned_resources();
+-- END: Perform deferred cleanup.
+
 -- BEGIN: Validate Shard Info and Data
     SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
     FROM pg_dist_shard AS shard
@@ -290,5 +302,7 @@ SET citus.shard_replication_factor TO 1;
 
 --BEGIN : Cleanup
     \c - postgres - :master_port
+    ALTER SYSTEM RESET citus.defer_shard_delete_interval;
+    SELECT pg_reload_conf();
     DROP SCHEMA "citus_split_test_schema_columnar_partitioned" CASCADE;
 --END : Cleanup
