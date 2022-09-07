@@ -852,10 +852,17 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInfo message, bool *hadE
 
 		appendBinaryStringInfo(&msg, data, nbytes);
 
+		/*
+		 * msgtype seems to be documented on
+		 * https://www.postgresql.org/docs/current/protocol-message-formats.html
+		 *
+		 * Here we mostly handle the same message types as supported in pg_cron as the
+		 * executor is highly influenced by the implementation there.
+		 */
 		char msgtype = pq_getmsgbyte(&msg);
 		switch (msgtype)
 		{
-			case 'E': /* ERROR */
+			case 'E': /* ErrorResponse */
 			{
 				if (hadError)
 				{
@@ -864,7 +871,7 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInfo message, bool *hadE
 				__attribute__((fallthrough));
 			}
 
-			case 'N': /* NOTICE */
+			case 'N': /* NoticeResponse */
 			{
 				ErrorData edata = { 0 };
 				StringInfoData display_msg = { 0 };
@@ -883,12 +890,7 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInfo message, bool *hadE
 				break;
 			}
 
-			case 'T':
-			{
-				break;
-			}
-
-			case 'C': /* completed? */
+			case 'C': /* CommandComplete */
 			{
 				const char *tag = pq_getmsgstring(&msg);
 
@@ -907,6 +909,7 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInfo message, bool *hadE
 			case 'D':
 			case 'G':
 			case 'H':
+			case 'T':
 			case 'W':
 			case 'Z':
 			{
