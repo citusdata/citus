@@ -193,7 +193,7 @@ citus_job_wait(PG_FUNCTION_ARGS)
 			if (hasDesiredStatus)
 			{
 				/*
-				 * We have reached a termnial state, which is not the desired state we
+				 * We have reached a terminal state, which is not the desired state we
 				 * were waiting for, otherwise we would have escaped earlier. Since it is
 				 * a terminal state we know that we can never reach the desired state.
 				 */
@@ -791,7 +791,7 @@ bgw_generate_returned_message(StringInfoData *display_msg, ErrorData edata)
 
 
 /*
- * UpdateDependingTasks updates all depending tasks, based on the type of termnial state
+ * UpdateDependingTasks updates all depending tasks, based on the type of terminal state
  * the current task reached.
  */
 static void

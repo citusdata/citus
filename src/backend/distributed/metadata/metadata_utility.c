@@ -2519,8 +2519,8 @@ BackgroundTaskStatusByOid(Oid enumOid)
  * IsBackgroundJobStatusTerminal is a predicate returning if the BackgroundJobStatus
  * passed is a terminal state of the Background Job state machine.
  *
- * For a Job to be in it's termnial state, all tasks from that job should also be in their
- * termnial state.
+ * For a Job to be in it's terminal state, all tasks from that job should also be in their
+ * terminal state.
  */
 bool
 IsBackgroundJobStatusTerminal(BackgroundJobStatus status)
@@ -3861,11 +3861,11 @@ GetDependantTasks(int64 jobId, int64 taskId)
 
 /*
  * CancelTasksForJob cancels all tasks associated with a job that are not currently
- * running and are not already in their termnial state. Canceling these tasks consist of
+ * running and are not already in their terminal state. Canceling these tasks consist of
  * updating the status of the task in the catalog.
  *
  * For all other tasks, namely the ones that are currently running, it returns the list of
- * Pid's of the tasks running. These backends should be signalled for cancelation.
+ * Pid's of the tasks running. These backends should be signalled for cancellation.
  *
  * Since we are either signalling or changing the status of a task we perform appropriate
  * permission checks. This currently includes the exact same checks pg_cancel_backend
