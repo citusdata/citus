@@ -610,8 +610,72 @@ SELECT * FROM FKTABLE ORDER BY id;
    1 |  2 |                    |                     0
 (2 rows)
 
--- Clean up
 \c - - - :master_port
+-- test NULL NOT DISTINCT clauses
+-- set the next shard id so that the error messages are easier to maintain
+SET citus.next_shard_id TO 960050;
+CREATE TABLE null_distinct_test(id INT, c1 INT, c2 INT, c3 VARCHAR(10)) ;
+SELECT create_distributed_table('null_distinct_test', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE UNIQUE INDEX idx1_null_distinct_test ON null_distinct_test(id, c1) NULLS DISTINCT ;
+CREATE UNIQUE INDEX idx2_null_distinct_test ON null_distinct_test(id, c2) NULLS NOT DISTINCT ;
+-- populate with some initial data
+INSERT INTO null_distinct_test VALUES (1, 1, 1, 'data1') ;
+INSERT INTO null_distinct_test VALUES (1, 2, NULL, 'data2') ;
+INSERT INTO null_distinct_test VALUES (1, NULL, 3, 'data3') ;
+-- should fail as we already have a null value in c2 column
+INSERT INTO null_distinct_test VALUES (1, NULL, NULL, 'data4') ;
+ERROR:  duplicate key value violates unique constraint "idx2_null_distinct_test_960050"
+DETAIL:  Key (id, c2)=(1, null) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
+INSERT INTO null_distinct_test VALUES (1, NULL, NULL, 'data4') ON CONFLICT DO NOTHING;
+INSERT INTO null_distinct_test VALUES (1, NULL, NULL, 'data4') ON CONFLICT (id, c2) DO UPDATE SET c2=100 RETURNING *;
+ id | c1 | c2  |  c3
+---------------------------------------------------------------------
+  1 |  2 | 100 | data2
+(1 row)
+
+-- should not fail as null values are distinct for c1 column
+INSERT INTO null_distinct_test VALUES (1, NULL, 5, 'data5') ;
+-- test that unique constraints also work properly
+-- since we have multiple (1,NULL) pairs for columns (id,c1) the first will work, second will fail
+ALTER TABLE null_distinct_test ADD CONSTRAINT uniq_distinct_c1 UNIQUE NULLS DISTINCT (id,c1);
+ALTER TABLE null_distinct_test ADD CONSTRAINT uniq_c1 UNIQUE NULLS NOT DISTINCT (id,c1);
+ERROR:  could not create unique index "uniq_c1_960050"
+DETAIL:  Key (id, c1)=(1, null) is duplicated.
+CONTEXT:  while executing command on localhost:xxxxx
+-- show all records in the table for fact checking
+SELECT * FROM null_distinct_test ORDER BY c3;
+ id | c1 | c2  |  c3
+---------------------------------------------------------------------
+  1 |  1 |   1 | data1
+  1 |  2 | 100 | data2
+  1 |    |   3 | data3
+  1 |    |   5 | data5
+(4 rows)
+
+-- test unique nulls not distinct constraints on a reference table
+CREATE TABLE reference_uniq_test (
+    x int, y int,
+    UNIQUE NULLS NOT DISTINCT (x, y)
+);
+SELECT create_reference_table('reference_uniq_test');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO reference_uniq_test VALUES (1, 1), (1, NULL), (NULL, 1);
+-- the following will fail
+INSERT INTO reference_uniq_test VALUES (1, NULL);
+ERROR:  duplicate key value violates unique constraint "reference_uniq_test_x_y_key_960054"
+DETAIL:  Key (x, y)=(1, null) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
+-- Clean up
 \set VERBOSITY terse
+SET client_min_messages TO ERROR;
 DROP SCHEMA pg15 CASCADE;
-NOTICE:  drop cascades to 15 other objects

@@ -800,6 +800,13 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 		appendStringInfoString(buffer, ") ");
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_15
+	if (indexStmt->nulls_not_distinct)
+	{
+		appendStringInfoString(buffer, "NULLS NOT DISTINCT ");
+	}
+#endif /* PG_VERSION_15 */
+
 	if (indexStmt->options != NIL)
 	{
 		appendStringInfoString(buffer, "WITH (");
