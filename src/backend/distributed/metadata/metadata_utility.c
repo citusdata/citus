@@ -3498,6 +3498,66 @@ JobTasksStatusCount(int64 jobId)
 
 
 /*
+ * SetFieldValue populates values, isnull, replace according to the newValue passed,
+ * returning if the value has been updated or not.
+ *
+ * suggested use would be:
+ *   updated |= SetFieldValue(Anum_...._...., isnull, replace, values, newValue);
+ *   updated |= SetFieldNull(Anum_...._...., isnull, replace, values);
+ *
+ * Only if updated is set in the end the tuple has to be updated in the catalog.
+ */
+static bool
+SetFieldValue(int attno, Datum values[], bool isnull[], bool replace[], Datum newValue)
+{
+	int idx = attno - 1;
+	bool updated = false;
+
+	if (isnull[idx])
+	{
+		isnull[idx] = false;
+		updated = true;
+	}
+
+	if (newValue != values[idx])
+	{
+		values[idx] = newValue;
+		updated = true;
+	}
+
+	replace[idx] = updated;
+	return updated;
+}
+
+
+/*
+ * SetFieldNull populates values, isnull and replace according to a null value,
+ * returning if the value has been updated or not.
+ *
+ * suggested use would be:
+ *   updated |= SetFieldValue(Anum_...._...., isnull, replace, values, newValue);
+ *   updated |= SetFieldNull(Anum_...._...., isnull, replace, values);
+ *
+ * Only if updated is set in the end the tuple has to be updated in the catalog.
+ */
+static bool
+SetFieldNull(int attno, Datum values[], bool isnull[], bool replace[])
+{
+	int idx = attno - 1;
+	bool updated = false;
+
+	if (!isnull[idx])
+	{
+		isnull[idx] = false;
+		updated = true;
+	}
+	values[idx] = InvalidOid;
+
+	return updated;
+}
+
+
+/*
  * UpdateBackgroundJob updates the job's metadata based on the most recent status of all
  * its associated tasks.
  *
@@ -3580,17 +3640,9 @@ UpdateBackgroundJob(int64 jobId)
 
 	bool updated = false;
 
-#define UPDATE_FIELD(field, newNull, newValue) \
-	{ \
-		replace[((field) - 1)] = (((newNull) != isnull[((field) - 1)]) \
-								  || (values[((field) - 1)] != (newValue))); \
-		isnull[((field) - 1)] = (newNull); \
-		values[((field) - 1)] = (newValue); \
-		updated |= replace[((field) - 1)]; \
-	}
-
 	Oid stateOid = BackgroundJobStatusOid(status);
-	UPDATE_FIELD(Anum_pg_dist_background_job_state, false, ObjectIdGetDatum(stateOid));
+	updated |= SetFieldValue(Anum_pg_dist_background_job_state, values, isnull, replace,
+							 ObjectIdGetDatum(stateOid));
 
 	if (status == BACKGROUND_JOB_STATUS_RUNNING)
 	{
@@ -3598,8 +3650,8 @@ UpdateBackgroundJob(int64 jobId)
 		{
 			/* first time status has been updated and was running, updating started_at */
 			TimestampTz startedAt = GetCurrentTimestamp();
-			UPDATE_FIELD(Anum_pg_dist_background_job_started_at, false,
-						 TimestampTzGetDatum(startedAt));
+			updated |= SetFieldValue(Anum_pg_dist_background_job_started_at, values,
+									 isnull, replace, TimestampTzGetDatum(startedAt));
 		}
 	}
 
@@ -3609,12 +3661,10 @@ UpdateBackgroundJob(int64 jobId)
 		{
 			/* didn't have a finished at time just yet, updating to now */
 			TimestampTz finishedAt = GetCurrentTimestamp();
-			UPDATE_FIELD(Anum_pg_dist_background_job_finished_at, false,
-						 TimestampTzGetDatum(finishedAt));
+			updated |= SetFieldValue(Anum_pg_dist_background_job_finished_at, values,
+									 isnull, replace, TimestampTzGetDatum(finishedAt));
 		}
 	}
-
-#undef UPDATE_FIELD
 
 	if (updated)
 	{
@@ -3675,24 +3725,18 @@ UpdateBackgroundTask(BackgroundTask *task)
 
 	bool updated = false;
 
-#define UPDATE_FIELD(field, newNull, newValue) \
-	{ \
-		replace[((field) - 1)] = (((newNull) != isnull[((field) - 1)]) \
-								  || (values[((field) - 1)] != (newValue))); \
-		isnull[((field) - 1)] = (newNull); \
-		values[((field) - 1)] = (newValue); \
-		updated |= replace[((field) - 1)]; \
-	}
-
-	UPDATE_FIELD(Anum_pg_dist_background_task_owner, false, task->owner);
+	updated |= SetFieldValue(Anum_pg_dist_background_task_owner, values, isnull, replace,
+							 task->owner);
 
 	if (task->pid)
 	{
-		UPDATE_FIELD(Anum_pg_dist_background_task_pid, false, Int32GetDatum(*task->pid));
+		updated |= SetFieldValue(Anum_pg_dist_background_task_pid, values, isnull,
+								 replace, Int32GetDatum(*task->pid));
 	}
 	else
 	{
-		UPDATE_FIELD(Anum_pg_dist_background_task_pid, true, InvalidOid);
+		updated |= SetFieldNull(Anum_pg_dist_background_task_pid, values, isnull,
+								replace);
 	}
 
 	Oid statusOid = ObjectIdGetDatum(BackgroundTaskStatusOid(task->status));
@@ -3700,22 +3744,24 @@ UpdateBackgroundTask(BackgroundTask *task)
 
 	if (task->retry_count)
 	{
-		UPDATE_FIELD(Anum_pg_dist_background_task_retry_count, false,
-					 Int32GetDatum(*task->retry_count));
+		updated |= SetFieldValue(Anum_pg_dist_background_task_retry_count, values, isnull,
+								 replace, Int32GetDatum(*task->retry_count));
 	}
 	else
 	{
-		UPDATE_FIELD(Anum_pg_dist_background_task_retry_count, true, InvalidOid);
+		updated |= SetFieldNull(Anum_pg_dist_background_task_retry_count, values, isnull,
+								replace);
 	}
 
 	if (task->not_before)
 	{
-		UPDATE_FIELD(Anum_pg_dist_background_task_not_before, false,
-					 TimestampTzGetDatum(*task->not_before));
+		updated |= SetFieldValue(Anum_pg_dist_background_task_not_before, values, isnull,
+								 replace, TimestampTzGetDatum(*task->not_before));
 	}
 	else
 	{
-		UPDATE_FIELD(Anum_pg_dist_background_task_not_before, true, InvalidOid);
+		updated |= SetFieldNull(Anum_pg_dist_background_task_not_before, values, isnull,
+								replace);
 	}
 
 	if (task->message)
@@ -3754,8 +3800,6 @@ UpdateBackgroundTask(BackgroundTask *task)
 	{
 		UPDATE_FIELD(Anum_pg_dist_background_task_message, true, InvalidOid);
 	}
-
-#undef UPDATE_FIELD
 
 	if (updated)
 	{
