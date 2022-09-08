@@ -705,7 +705,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			/* clear old background worker for task queue before checking for new tasks */
 			if (backgroundTasksQueueBgwHandle)
 			{
-				TerminateBackgroundWorker(backgroundTasksQueueBgwHandle);
 				pfree(backgroundTasksQueueBgwHandle);
 				backgroundTasksQueueBgwHandle = NULL;
 			}
