@@ -3539,17 +3539,14 @@ static bool
 SetFieldNull(int attno, Datum values[], bool isnull[], bool replace[])
 {
 	int idx = attno - 1;
-	bool updated = false;
-
-	if (!isnull[idx])
+	if (isnull[idx])
 	{
-		isnull[idx] = true;
-		updated = true;
+		return false;
 	}
+	isnull[idx] = true;
 	values[idx] = InvalidOid;
-
-	replace[idx] = updated;
-	return updated;
+	replace[idx] = true;
+	return true;
 }
 
 
