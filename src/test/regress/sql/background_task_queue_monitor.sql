@@ -28,7 +28,7 @@ SELECT citus_job_wait(:job_id, desired_status => 'finished');
 
 -- show that the status has been cancelled
 SELECT state, NOT(started_at IS NULL) AS did_start FROM pg_dist_background_job WHERE job_id = :job_id;
-SELECT status, NOT(message IS NULL) AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
+SELECT status, NOT(message = '') AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
 
 -- cancel a running job
 INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job','cancelling a task after it started') RETURNING job_id \gset
@@ -40,7 +40,7 @@ SELECT citus_job_wait(:job_id);
 
 -- show that the status has been cancelled
 SELECT state, NOT(started_at IS NULL) AS did_start FROM pg_dist_background_job WHERE job_id = :job_id;
-SELECT status, NOT(message IS NULL) AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
+SELECT status, NOT(message = '') AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
 
 -- test a failing task becomes runnable in the future again
 -- we cannot fully test the backoff strategy currently as it is hard coded to take about 50 minutes.
@@ -50,13 +50,13 @@ INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id, $job$ SEL
 SELECT citus_job_wait(:job_id, desired_status => 'running');
 SELECT pg_sleep(.1); -- make sure it has time to error after it started running
 
-SELECT status, pid, retry_count, NOT (message IS NULL) AS has_message, (not_before > now()) AS scheduled_into_the_future FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
+SELECT status, pid, retry_count, NOT(message = '') AS has_message, (not_before > now()) AS scheduled_into_the_future FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
 
 -- test cancelling a failed/retrying job
 SELECT citus_job_cancel(:job_id);
 
 SELECT state, NOT(started_at IS NULL) AS did_start FROM pg_dist_background_job WHERE job_id = :job_id;
-SELECT status, NOT(message IS NULL) AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
+SELECT status, NOT(message = '') AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
 
 -- test running two dependant tasks
 TRUNCATE TABLE results;
@@ -89,7 +89,7 @@ SELECT pg_sleep(.1); -- improve chances of hitting the failure
 SELECT citus_job_cancel(:job_id);
 SELECT citus_job_wait(:job_id); -- wait for the job to be cancelled
 SELECT state, NOT(started_at IS NULL) AS did_start FROM pg_dist_background_job WHERE job_id = :job_id;
-SELECT status, NOT(message IS NULL) AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
+SELECT status, NOT(message = '') AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA background_task_queue_monitor CASCADE;

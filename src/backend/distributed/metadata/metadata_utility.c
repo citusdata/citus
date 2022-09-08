@@ -2845,6 +2845,9 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 		values[Anum_pg_dist_background_task_command - 1] = CStringGetTextDatum(command);
 		nulls[Anum_pg_dist_background_task_command - 1] = false;
 
+		values[Anum_pg_dist_background_task_message - 1] = CStringGetTextDatum("");
+		nulls[Anum_pg_dist_background_task_message - 1] = false;
+
 		HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistBackgroundTask),
 											 values, nulls);
 		CatalogTupleInsert(pgDistBackgroundTask, newTuple);

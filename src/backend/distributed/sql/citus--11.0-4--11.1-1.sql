@@ -140,7 +140,7 @@ CREATE TABLE citus.pg_dist_background_task(
     command text NOT NULL,
     retry_count integer,
     not_before timestamptz, -- can be null to indicate no delay for start of the task, will be set on failure to delay retries
-    message text,
+    message text NOT NULL DEFAULT '',
 
     CONSTRAINT pg_dist_background_task_pkey PRIMARY KEY (job_id, task_id),
     UNIQUE(task_id)

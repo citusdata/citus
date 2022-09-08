@@ -56,7 +56,7 @@ SELECT state, NOT(started_at IS NULL) AS did_start FROM pg_dist_background_job W
  cancelled | f
 (1 row)
 
-SELECT status, NOT(message IS NULL) AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
+SELECT status, NOT(message = '') AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
   status   | did_start
 ---------------------------------------------------------------------
  cancelled | f
@@ -90,7 +90,7 @@ SELECT state, NOT(started_at IS NULL) AS did_start FROM pg_dist_background_job W
  cancelled | t
 (1 row)
 
-SELECT status, NOT(message IS NULL) AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
+SELECT status, NOT(message = '') AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
   status   | did_start
 ---------------------------------------------------------------------
  cancelled | t
@@ -112,7 +112,7 @@ SELECT pg_sleep(.1); -- make sure it has time to error after it started running
 
 (1 row)
 
-SELECT status, pid, retry_count, NOT (message IS NULL) AS has_message, (not_before > now()) AS scheduled_into_the_future FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
+SELECT status, pid, retry_count, NOT(message = '') AS has_message, (not_before > now()) AS scheduled_into_the_future FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
   status  | pid | retry_count | has_message | scheduled_into_the_future
 ---------------------------------------------------------------------
  runnable |     |           1 | t           | t
@@ -131,7 +131,7 @@ SELECT state, NOT(started_at IS NULL) AS did_start FROM pg_dist_background_job W
  cancelled | t
 (1 row)
 
-SELECT status, NOT(message IS NULL) AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
+SELECT status, NOT(message = '') AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
   status   | did_start
 ---------------------------------------------------------------------
  cancelled | t
@@ -199,7 +199,7 @@ SELECT state, NOT(started_at IS NULL) AS did_start FROM pg_dist_background_job W
  cancelled | t
 (1 row)
 
-SELECT status, NOT(message IS NULL) AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
+SELECT status, NOT(message = '') AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
   status   | did_start
 ---------------------------------------------------------------------
  done      | t
