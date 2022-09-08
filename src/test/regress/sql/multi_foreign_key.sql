@@ -246,7 +246,7 @@ SELECT create_distributed_table('referenced_table', 'id', 'hash');
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 
--- verify that we skip foreign key validation when citus.skip_constraint_validation is set to ON 
+-- verify that we skip foreign key validation when citus.skip_constraint_validation is set to ON
 -- not skipping validation would result in a distributed query, which emits debug messages
 BEGIN;
 SET LOCAL citus.skip_constraint_validation TO on;
