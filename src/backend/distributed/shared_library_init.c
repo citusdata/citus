@@ -2150,7 +2150,7 @@ RegisterCitusConfigVariables(void)
 					 "the constraints again at the destination."),
 		&SkipConstraintValidation,
 		false,
-		PGC_USERSET,
+		PGC_SUSET,
 		0,
 		NULL, NULL, NULL);
 

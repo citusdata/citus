@@ -1320,7 +1320,7 @@ void
 EnableSkippingConstraintValidation()
 {
 	set_config_option("citus.skip_constraint_validation", "true",
-					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  PGC_SUSET, PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
 }
 
