@@ -2779,14 +2779,14 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 	BackgroundTask *task = NULL;
 
 	Relation pgDistBackgroundJob =
-		table_open(DistBackgroundJobRelationId(), RowExclusiveLock);
+		table_open(DistBackgroundJobRelationId(), ExclusiveLock);
 	Relation pgDistBackgroundTask =
-		table_open(DistBackgroundTaskRelationId(), RowExclusiveLock);
+		table_open(DistBackgroundTaskRelationId(), ExclusiveLock);
 	Relation pgDistbackgroundTasksDepend = NULL;
 	if (dependingTaskCount > 0)
 	{
 		pgDistbackgroundTasksDepend =
-			table_open(DistBackgroundTaskDependRelationId(), RowExclusiveLock);
+			table_open(DistBackgroundTaskDependRelationId(), ExclusiveLock);
 	}
 
 	/* 1. verify job exist */
