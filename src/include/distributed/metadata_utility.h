@@ -391,7 +391,7 @@ extern BackgroundTask * ScheduleBackgroundTask(int64 jobId, Oid owner, char *com
 extern BackgroundTask * GetRunnableBackgroundTask(void);
 extern void ResetRunningBackgroundTasks(void);
 extern BackgroundJob * GetBackgroundJobByJobId(int64 jobId);
-extern BackgroundTask * GetBackgroundTaskByTaskId(int64 jobId, int64 taskId);
+extern BackgroundTask * GetBackgroundTaskByTaskId(int64 taskId);
 extern void UpdateBackgroundJob(int64 jobId);
 extern void UpdateBackgroundTask(BackgroundTask *task);
 extern void UpdateJobStatus(int64 taskId, const pid_t *pid, BackgroundTaskStatus status,

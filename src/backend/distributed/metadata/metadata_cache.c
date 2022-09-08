@@ -146,6 +146,7 @@ typedef struct MetadataCacheData
 	Oid distBackgroundJobJobIdSequenceId;
 	Oid distBackgroundTaskRelationId;
 	Oid distBackgroundTaskPKeyIndexId;
+	Oid distBackgroundTaskJobIdTaskIdIndexId;
 	Oid distBackgroundTaskStatusTaskIdIndexId;
 	Oid distBackgroundTaskTaskIdSequenceId;
 	Oid distBackgroundTaskDependRelationId;
@@ -2564,6 +2565,16 @@ DistBackgroundTaskPKeyIndexId(void)
 						 &MetadataCache.distBackgroundTaskPKeyIndexId);
 
 	return MetadataCache.distBackgroundTaskPKeyIndexId;
+}
+
+
+Oid
+DistBackgroundTaskJobIdTaskIdIndexId(void)
+{
+	CachedRelationLookup("pg_dist_background_task_job_id_task_id",
+						 &MetadataCache.distBackgroundTaskJobIdTaskIdIndexId);
+
+	return MetadataCache.distBackgroundTaskJobIdTaskIdIndexId;
 }
 
 

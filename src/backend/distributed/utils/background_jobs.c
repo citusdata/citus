@@ -472,7 +472,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		LockRelationOid(DistBackgroundTaskRelationId(), AccessExclusiveLock);
 
 		oldContext = MemoryContextSwitchTo(perTaskContext);
-		task = GetBackgroundTaskByTaskId(task->jobid, task->taskid);
+		task = GetBackgroundTaskByTaskId(task->taskid);
 		MemoryContextSwitchTo(oldContext);
 
 		if (!task || task->status == BACKGROUND_TASK_STATUS_CANCELLING ||
@@ -564,7 +564,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		LockRelationOid(DistBackgroundTaskRelationId(), AccessExclusiveLock);
 
 		oldContext = MemoryContextSwitchTo(perTaskContext);
-		task = GetBackgroundTaskByTaskId(task->jobid, task->taskid);
+		task = GetBackgroundTaskByTaskId(task->taskid);
 		MemoryContextSwitchTo(oldContext);
 
 		if (!task || task->status == BACKGROUND_TASK_STATUS_CANCELLING ||

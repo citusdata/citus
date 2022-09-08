@@ -2877,7 +2877,7 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 
 				SysScanDesc scanDescriptor =
 					systable_beginscan(pgDistBackgroundTask,
-									   DistBackgroundTaskPKeyIndexId(),
+									   DistBackgroundTaskJobIdTaskIdIndexId(),
 									   indexOK, NULL, lengthof(scanKey), scanKey);
 
 				HeapTuple taskTuple = systable_getnext(scanDescriptor);
@@ -3196,8 +3196,7 @@ BackgroundTaskHasUmnetDependencies(int64 jobId, int64 taskId)
 		Form_pg_dist_background_task_depend depends =
 			(Form_pg_dist_background_task_depend) GETSTRUCT(dependTuple);
 
-		BackgroundTask *dependingJob = GetBackgroundTaskByTaskId(jobId,
-																 depends->depends_on);
+		BackgroundTask *dependingJob = GetBackgroundTaskByTaskId(depends->depends_on);
 
 		/*
 		 * Only when the status of all depending jobs is done we clear this job and say
@@ -3347,20 +3346,16 @@ GetBackgroundJobByJobId(int64 jobId)
  * a null pointer if no job exist with the given JobId and TaskId.
  */
 BackgroundTask *
-GetBackgroundTaskByTaskId(int64 jobId, int64 taskId)
+GetBackgroundTaskByTaskId(int64 taskId)
 {
-	ScanKeyData scanKey[2] = { 0 };
+	ScanKeyData scanKey[1] = { 0 };
 	bool indexOK = true;
 
 	Relation pgDistBackgroundTasks =
 		table_open(DistBackgroundTaskRelationId(), AccessShareLock);
 
-	/* pg_dist_background_task.job_id == $jobId */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_job_id,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
-
 	/* pg_dist_background_task.task_id == $taskId */
-	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_task_id,
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_task_id,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(taskId));
 
 	SysScanDesc scanDescriptor =
@@ -3417,7 +3412,7 @@ JobTasksStatusCount(int64 jobId)
 
 	SysScanDesc scanDescriptor =
 		systable_beginscan(pgDistBackgroundTasks,
-						   DistBackgroundTaskPKeyIndexId(),
+						   DistBackgroundTaskJobIdTaskIdIndexId(),
 						   indexOK, NULL, lengthof(scanKey), scanKey);
 
 	JobTaskStatusCounts counts = { 0 };
@@ -3694,15 +3689,11 @@ UpdateBackgroundTask(BackgroundTask *task)
 		table_open(DistBackgroundTaskRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
 
-	ScanKeyData scanKey[2] = { 0 };
+	ScanKeyData scanKey[1] = { 0 };
 	const bool indexOK = true;
 
-	/* WHERE job_id = $task->jobId */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_job_id,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(task->jobid));
-
 	/* WHERE task_id = $task->taskid */
-	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_task_id,
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_task_id,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(task->taskid));
 
 	SysScanDesc scanDescriptor =
@@ -3895,7 +3886,7 @@ CancelTasksForJob(int64 jobid)
 
 	const bool indexOK = true;
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistBackgroundTasks,
-													DistBackgroundTaskPKeyIndexId(),
+													DistBackgroundTaskJobIdTaskIdIndexId(),
 													indexOK, NULL,
 													lengthof(scanKey), scanKey);
 
@@ -3996,14 +3987,10 @@ UnscheduleDependentTasks(BackgroundTask *task)
 
 		/* unschedule current task */
 		{
-			ScanKeyData scanKey[2] = { 0 };
-
-			/* WHERE jobId = $task->jobid */
-			ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_job_id,
-						BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(task->jobid));
+			ScanKeyData scanKey[1] = { 0 };
 
 			/* WHERE taskId = dependentTask->taskId */
-			ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_task_id,
+			ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_task_id,
 						BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(cTaskId));
 			const bool indexOK = true;
 			SysScanDesc scanDescriptor = systable_beginscan(pgDistBackgroundTasks,
@@ -4081,8 +4068,7 @@ UnblockDependingBackgroundTasks(BackgroundTask *task)
 			 * runnable
 			 */
 
-			BackgroundTask *unblockedTask = GetBackgroundTaskByTaskId(task->jobid,
-																	  depend->task_id);
+			BackgroundTask *unblockedTask = GetBackgroundTaskByTaskId(depend->task_id);
 			if (unblockedTask->status == BACKGROUND_TASK_STATUS_CANCELLED)
 			{
 				continue;
