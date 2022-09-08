@@ -109,6 +109,19 @@ static bool GetLocalDiskSpaceStats(uint64 *availableBytes, uint64 *totalBytes);
 static BackgroundTask * DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor,
 													  HeapTuple taskTuple);
 
+static bool SetFieldValue(int attno, Datum values[], bool isnull[], bool replace[],
+						  Datum newValue);
+static bool SetFieldText(int attno, Datum values[], bool isnull[], bool replace[],
+						 const char *newValue);
+static bool SetFieldNull(int attno, Datum values[], bool isnull[], bool replace[]);
+
+#define InitFieldValue(attno, values, isnull, initValue) \
+	(void) SetFieldValue((attno), (values), (isnull), NULL, (initValue))
+#define InitFieldText(attno, values, isnull, initValue) \
+	(void) SetFieldText((attno), (values), (isnull), NULL, (initValue))
+#define InitFieldNull(attno, values, isnull) \
+	(void) SetFieldNull((attno), (values), (isnull), NULL)
+
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(citus_local_disk_space_stats);
 PG_FUNCTION_INFO_V1(citus_table_size);
@@ -2726,35 +2739,33 @@ CreateBackgroundJob(const char *jobType, const char *description)
 
 	/* insert new job */
 	Datum values[Natts_pg_dist_background_job] = { 0 };
-	bool nulls[Natts_pg_dist_background_job] = { 0 };
-
-	memset(nulls, true, sizeof(nulls));
+	bool isnull[Natts_pg_dist_background_job] = { 0 };
+	memset(isnull, true, sizeof(isnull));
 
 	int64 jobId = GetNextBackgroundJobsJobId();
 
-	values[Anum_pg_dist_background_job_job_id - 1] = Int64GetDatum(jobId);
-	nulls[Anum_pg_dist_background_job_job_id - 1] = false;
+	InitFieldValue(Anum_pg_dist_background_job_job_id, values, isnull,
+				   Int64GetDatum(jobId));
 
-	values[Anum_pg_dist_background_job_state - 1] = CitusJobStatusScheduledId();
-	nulls[Anum_pg_dist_background_job_state - 1] = false;
+	InitFieldValue(Anum_pg_dist_background_job_state, values, isnull,
+				   ObjectIdGetDatum(CitusJobStatusScheduledId()));
 
 	if (jobType)
 	{
 		NameData jobTypeName = { 0 };
 		namestrcpy(&jobTypeName, jobType);
-		values[Anum_pg_dist_background_job_job_type - 1] = NameGetDatum(&jobTypeName);
-		nulls[Anum_pg_dist_background_job_job_type - 1] = false;
+		InitFieldValue(Anum_pg_dist_background_job_job_type, values, isnull,
+					   NameGetDatum(&jobTypeName));
 	}
 
 	if (description)
 	{
-		values[Anum_pg_dist_background_job_description - 1] =
-			CStringGetTextDatum(description);
-		nulls[Anum_pg_dist_background_job_description - 1] = false;
+		InitFieldText(Anum_pg_dist_background_job_description, values, isnull,
+					  description);
 	}
 
 	HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistBackgroundJobs),
-										 values, nulls);
+										 values, isnull);
 	CatalogTupleInsert(pgDistBackgroundJobs, newTuple);
 
 	table_close(pgDistBackgroundJobs, NoLock);
@@ -3494,10 +3505,13 @@ JobTasksStatusCount(int64 jobId)
 
 /*
  * SetFieldValue populates values, isnull, replace according to the newValue passed,
- * returning if the value has been updated or not.
+ * returning if the value has been updated or not. The replace argument can be omitted if
+ * we are simply initializing a field.
  *
  * suggested use would be:
+ *   bool updated = false;
  *   updated |= SetFieldValue(Anum_...._...., isnull, replace, values, newValue);
+ *   updated |= SetFieldText(Anum_...._...., isnull, replace, values, "hello world");
  *   updated |= SetFieldNull(Anum_...._...., isnull, replace, values);
  *
  * Only if updated is set in the end the tuple has to be updated in the catalog.
@@ -3520,17 +3534,74 @@ SetFieldValue(int attno, Datum values[], bool isnull[], bool replace[], Datum ne
 		updated = true;
 	}
 
-	replace[idx] = updated;
+	if (replace)
+	{
+		replace[idx] = updated;
+	}
+	return updated;
+}
+
+
+/*
+ * SetFieldText populates values, isnull, replace according to the newValue passed,
+ * returning if the value has been updated or not. The replace argument can be omitted if
+ * we are simply initializing a field.
+ *
+ * suggested use would be:
+ *   bool updated = false;
+ *   updated |= SetFieldValue(Anum_...._...., isnull, replace, values, newValue);
+ *   updated |= SetFieldText(Anum_...._...., isnull, replace, values, "hello world");
+ *   updated |= SetFieldNull(Anum_...._...., isnull, replace, values);
+ *
+ * Only if updated is set in the end the tuple has to be updated in the catalog.
+ */
+static bool
+SetFieldText(int attno, Datum values[], bool isnull[], bool replace[],
+			 const char *newValue)
+{
+	int idx = attno - 1;
+	bool updated = false;
+	bool shouldSetText = false;
+
+	if (isnull[idx])
+	{
+		isnull[idx] = false;
+		updated = true;
+		shouldSetText = true;
+	}
+	else
+	{
+		text *oldText = DatumGetTextP(values[idx]);
+		char *oldString = text_to_cstring(oldText);
+		if (strcmp(oldString, newValue) != 0)
+		{
+			shouldSetText = true;
+		}
+	}
+
+	if (shouldSetText)
+	{
+		values[idx] = CStringGetTextDatum(newValue);
+		updated = true;
+	}
+
+	if (replace)
+	{
+		replace[idx] = updated;
+	}
 	return updated;
 }
 
 
 /*
  * SetFieldNull populates values, isnull and replace according to a null value,
- * returning if the value has been updated or not.
+ * returning if the value has been updated or not. The replace argument can be omitted if
+ * we are simply initializing a field.
  *
  * suggested use would be:
+ *   bool updated = false;
  *   updated |= SetFieldValue(Anum_...._...., isnull, replace, values, newValue);
+ *   updated |= SetFieldText(Anum_...._...., isnull, replace, values, "hello world");
  *   updated |= SetFieldNull(Anum_...._...., isnull, replace, values);
  *
  * Only if updated is set in the end the tuple has to be updated in the catalog.
@@ -3545,7 +3616,10 @@ SetFieldNull(int attno, Datum values[], bool isnull[], bool replace[])
 	}
 	isnull[idx] = true;
 	values[idx] = InvalidOid;
-	replace[idx] = true;
+	if (replace)
+	{
+		replace[idx] = true;
+	}
 	return true;
 }
 
@@ -3756,35 +3830,8 @@ UpdateBackgroundTask(BackgroundTask *task)
 
 	if (task->message)
 	{
-		/*
-		 * we check if the old message was either a null pointer or different from what we
-		 * currently have, if any we know that the message has changed and we update the
-		 * message
-		 */
-		bool updateMessage = false;
-		if (isnull[Anum_pg_dist_background_task_message - 1])
-		{
-			updateMessage = true;
-		}
-		else
-		{
-			text *oldMessageText =
-				DatumGetTextP(values[Anum_pg_dist_background_task_message - 1]);
-			char *oldMessage = text_to_cstring(oldMessageText);
-			if (strcmp(oldMessage, task->message) != 0)
-			{
-				updateMessage = true;
-			}
-		}
-
-		if (updateMessage)
-		{
-			values[Anum_pg_dist_background_task_message - 1] =
-				CStringGetTextDatum(task->message);
-			isnull[Anum_pg_dist_background_task_message - 1] = false;
-			replace[Anum_pg_dist_background_task_message - 1] = true;
-			updated |= true;
-		}
+		updated |= SetFieldText(Anum_pg_dist_background_task_message, values, isnull,
+								replace, task->message);
 	}
 	else
 	{
