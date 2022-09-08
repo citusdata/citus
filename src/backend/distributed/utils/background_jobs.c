@@ -462,14 +462,14 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		PushActiveSnapshot(GetTransactionSnapshot());
 
 		/*
-		 * Reload task while holding a new AccessExclusiveLock on the table. A separate
-		 * process could have cancelled or removed the task by now, they would not see the
-		 * pid and status update, so it is our responsibility to stop the backend and
-		 * _not_ write the pid and running status.
+		 * Reload task while holding a new ExclusiveLock on the table. A separate process
+		 * could have cancelled or removed the task by now, they would not see the pid and
+		 * status update, so it is our responsibility to stop the backend and _not_ write
+		 * the pid and running status.
 		 *
 		 * The lock will release on transaction commit.
 		 */
-		LockRelationOid(DistBackgroundTaskRelationId(), AccessExclusiveLock);
+		LockRelationOid(DistBackgroundTaskRelationId(), ExclusiveLock);
 
 		oldContext = MemoryContextSwitchTo(perTaskContext);
 		task = GetBackgroundTaskByTaskId(task->taskid);
@@ -560,8 +560,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		 * Same as before, we need to lock pg_dist_background_task in a way where we can
 		 * check if there had been a concurrent cancel.
 		 */
-
-		LockRelationOid(DistBackgroundTaskRelationId(), AccessExclusiveLock);
+		LockRelationOid(DistBackgroundTaskRelationId(), ExclusiveLock);
 
 		oldContext = MemoryContextSwitchTo(perTaskContext);
 		task = GetBackgroundTaskByTaskId(task->taskid);

@@ -3259,7 +3259,7 @@ BackgroundTask *
 GetRunnableBackgroundTask(void)
 {
 	Relation pgDistBackgroundTasks =
-		table_open(DistBackgroundTaskRelationId(), AccessExclusiveLock);
+		table_open(DistBackgroundTaskRelationId(), ExclusiveLock);
 
 	BackgroundTaskStatus taskStatus[] = {
 		BACKGROUND_TASK_STATUS_RUNNABLE
@@ -3872,7 +3872,7 @@ List *
 CancelTasksForJob(int64 jobid)
 {
 	Relation pgDistBackgroundTasks =
-		table_open(DistBackgroundTaskRelationId(), AccessExclusiveLock);
+		table_open(DistBackgroundTaskRelationId(), ExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
 
 	ScanKeyData scanKey[1] = { 0 };
