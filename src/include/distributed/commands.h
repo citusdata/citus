@@ -285,6 +285,7 @@ extern bool TableHasExternalForeignKeys(Oid relationId);
 extern List * GetForeignKeyOids(Oid relationId, int flags);
 extern Oid GetReferencedTableId(Oid foreignKeyId);
 extern Oid GetReferencingTableId(Oid foreignKeyId);
+extern void EnableSkippingConstraintValidation(void);
 extern bool RelationInvolvedInAnyNonInheritedForeignKeys(Oid relationId);
 
 
@@ -529,8 +530,7 @@ extern List * PreprocessAlterTableMoveAllStmt(Node *node, const char *queryStrin
 											  ProcessUtilityContext processUtilityContext);
 extern List * PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 											 ProcessUtilityContext processUtilityContext);
-extern Node * SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStmt,
-														 bool processLocalRelation);
+extern void SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStmt);
 extern bool IsAlterTableRenameStmt(RenameStmt *renameStmt);
 extern void ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement);
 extern void PostprocessAlterTableStmt(AlterTableStmt *pStmt);

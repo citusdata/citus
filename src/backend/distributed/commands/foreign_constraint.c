@@ -30,6 +30,7 @@
 #include "distributed/namespace_utils.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/version_compat.h"
+#include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/inval.h"
@@ -78,7 +79,6 @@ static List * GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
 										int searchForeignKeyColumnFlags);
 static List * GetForeignKeysWithLocalTables(Oid relationId);
 static bool IsTableTypeIncluded(Oid relationId, int flags);
-static void UpdateConstraintIsValid(Oid constraintId, bool isValid);
 
 
 /*
@@ -1197,15 +1197,12 @@ IsTableTypeIncluded(Oid relationId, int flags)
  * returns the list of commands that are required to create the foreign
  * constraints for that shardInterval.
  *
- * The function does the following hack:
- *    - Create the foreign constraints as INVALID on the shards
- *    - Manually update pg_constraint to mark the same foreign
- *      constraints as VALID
+ * The function adds a "SET LOCAL citus.skip_constraint_validation TO ON"
+ * command to command list, to prevent the validation for foreign keys.
  *
- * We implement the above hack because we aim to skip the validation phase
- * of foreign keys to reference tables. The validation is pretty costly and
- * given that the source placements already valid, the validation in the
- * target nodes is useless.
+ * We skip the validation phase of foreign keys to reference tables because
+ * the validation is pretty costly and given that the source placements are
+ * already valid, the validation in the target nodes is useless.
  *
  * The function does not apply the same logic for the already invalid foreign
  * constraints.
@@ -1218,7 +1215,7 @@ GetForeignConstraintCommandsToReferenceTable(ShardInterval *shardInterval)
 	uint64 shardId = shardInterval->shardId;
 	Oid relationId = shardInterval->relationId;
 
-	List *commandList = NIL;
+	List *commandList = list_make1("SET LOCAL citus.skip_constraint_validation TO ON;");
 
 	/*
 	 * Set search_path to NIL so that all objects outside of pg_catalog will be
@@ -1243,8 +1240,6 @@ GetForeignConstraintCommandsToReferenceTable(ShardInterval *shardInterval)
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
-		char *constraintDefinition = NULL;
-
 
 		if (constraintForm->contype != CONSTRAINT_FOREIGN)
 		{
@@ -1272,22 +1267,7 @@ GetForeignConstraintCommandsToReferenceTable(ShardInterval *shardInterval)
 		char *schemaName = get_namespace_name(schemaId);
 		char *escapedSchemaName = quote_literal_cstr(schemaName);
 
-		/*
-		 * We're first marking the constraint's valid field as invalid
-		 * and get the constraint definition. Later, we mark the constraint
-		 * as valid back with directly updating to pg_constraint.
-		 */
-		if (constraintForm->convalidated == true)
-		{
-			UpdateConstraintIsValid(constraintId, false);
-			constraintDefinition = pg_get_constraintdef_command(constraintId);
-			UpdateConstraintIsValid(constraintId, true);
-		}
-		else
-		{
-			/* if the constraint is not valid, simply do nothing special */
-			constraintDefinition = pg_get_constraintdef_command(constraintId);
-		}
+		char *constraintDefinition = pg_get_constraintdef_command(constraintId);
 
 		StringInfo applyForeignConstraintCommand = makeStringInfo();
 		appendStringInfo(applyForeignConstraintCommand,
@@ -1295,6 +1275,7 @@ GetForeignConstraintCommandsToReferenceTable(ShardInterval *shardInterval)
 						 escapedSchemaName, referencedShardId,
 						 escapedReferencedSchemaName,
 						 quote_literal_cstr(constraintDefinition));
+
 		commandList = lappend(commandList, applyForeignConstraintCommand->data);
 
 		/* mark the constraint as valid again on the shard */
@@ -1325,60 +1306,22 @@ GetForeignConstraintCommandsToReferenceTable(ShardInterval *shardInterval)
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
 
+	commandList = lappend(commandList, "RESET citus.skip_constraint_validation;");
+
 	return commandList;
 }
 
 
 /*
- * UpdateConstraintIsValid is a utility function with sets the
- * pg_constraint.convalidated to the given isValid for the given
- * constraintId.
- *
- * This function should be called with caution because if used wrong
- * could lead to data inconsistencies.
+ * EnableSkippingConstraintValidation is simply a C interface for setting the following:
+ *      SET LOCAL citus.skip_constraint_validation TO on;
  */
-static void
-UpdateConstraintIsValid(Oid constraintId, bool isValid)
+void
+EnableSkippingConstraintValidation()
 {
-	ScanKeyData scankey[1];
-	Relation pgConstraint = table_open(ConstraintRelationId, AccessShareLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(pgConstraint);
-	Datum values[Natts_pg_constraint];
-	bool isnull[Natts_pg_constraint];
-	bool replace[Natts_pg_constraint];
-
-	ScanKeyInit(&scankey[0],
-				Anum_pg_constraint_oid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(constraintId));
-
-	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint,
-													ConstraintOidIndexId,
-													true,
-													NULL,
-													1,
-													scankey);
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	if (!HeapTupleIsValid(heapTuple))
-	{
-		elog(ERROR, "could not find tuple for constraint %u", constraintId);
-	}
-
-	memset(replace, 0, sizeof(replace));
-
-	values[Anum_pg_constraint_convalidated - 1] = BoolGetDatum(isValid);
-	isnull[Anum_pg_constraint_convalidated - 1] = false;
-	replace[Anum_pg_constraint_convalidated - 1] = true;
-
-	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
-
-	CatalogTupleUpdate(pgConstraint, &heapTuple->t_self, heapTuple);
-
-	CacheInvalidateHeapTuple(pgConstraint, heapTuple, NULL);
-	CommandCounterIncrement();
-
-	systable_endscan(scanDescriptor);
-	table_close(pgConstraint, NoLock);
+	set_config_option("citus.skip_constraint_validation", "true",
+					  PGC_SUSET, PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
 }
 
 
