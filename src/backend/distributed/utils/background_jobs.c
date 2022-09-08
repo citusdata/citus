@@ -428,6 +428,9 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 							 delay_ms, WAIT_EVENT_PG_SLEEP);
 			ResetLatch(MyLatch);
 
+			/* release the shared memory that we had allocated in starting the executor */
+			dsm_detach(seg);
+
 			continue;
 		}
 
