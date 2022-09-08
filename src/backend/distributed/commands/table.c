@@ -1882,9 +1882,11 @@ SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement)
 
 		if (alterTableType == AT_AddConstraint)
 		{
+			/* skip only if the constraint is a foreign key */
 			Constraint *constraint = (Constraint *) command->def;
 			if (constraint->contype == CONSTR_FOREIGN)
 			{
+				/* set the GUC skip_constraint_validation to on */
 				EnableSkippingConstraintValidation();
 				return;
 			}
