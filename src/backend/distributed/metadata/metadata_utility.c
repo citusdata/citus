@@ -2955,7 +2955,7 @@ ResetRunningBackgroundTasks(void)
 	const bool indexOK = true;
 
 	Relation pgDistBackgroundTasks =
-		table_open(DistBackgroundTaskRelationId(), AccessShareLock);
+		table_open(DistBackgroundTaskRelationId(), ExclusiveLock);
 
 	/* pg_dist_background_task.status == 'running' */
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_status,
@@ -3068,7 +3068,7 @@ ResetRunningBackgroundTasks(void)
 
 	systable_endscan(scanDescriptor);
 
-	table_close(pgDistBackgroundTasks, AccessShareLock);
+	table_close(pgDistBackgroundTasks, NoLock);
 }
 
 
