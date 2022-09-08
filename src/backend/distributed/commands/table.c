@@ -1875,7 +1875,21 @@ SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement)
 		return;
 	}
 
-	EnableSkippingConstraintValidation();
+	AlterTableCmd *command = NULL;
+	foreach_ptr(command, alterTableStatement->cmds)
+	{
+		AlterTableType alterTableType = command->subtype;
+
+		if (alterTableType == AT_AddConstraint)
+		{
+			Constraint *constraint = (Constraint *) command->def;
+			if (constraint->contype == CONSTR_FOREIGN)
+			{
+				EnableSkippingConstraintValidation();
+				return;
+			}
+		}
+	}
 }
 
 
