@@ -228,7 +228,7 @@ typedef struct BackgroundJob
 	{
 		TimestampTz started_at;
 		TimestampTz finished_at;
-	} __do_not_use;
+	} __nullable_storage;
 } BackgroundJob;
 
 typedef enum BackgroundTaskStatus
@@ -261,15 +261,16 @@ typedef struct BackgroundTask
 		int32 pid;
 		int32 retry_count;
 		TimestampTz not_before;
-	} __do_not_use;
+	} __nullable_storage;
 } BackgroundTask;
 
 #define SET_NULLABLE_FIELD(ptr, field, value) \
-	(ptr)->__do_not_use.field = (value); \
-	(ptr)->field = &((ptr)->__do_not_use.field)
+	(ptr)->__nullable_storage.field = (value); \
+	(ptr)->field = &((ptr)->__nullable_storage.field)
 
 #define UNSET_NULLABLE_FIELD(ptr, field) \
-	(ptr)->field = NULL
+	(ptr)->field = NULL; \
+	memset_struct_0((ptr)->__nullable_storage.field)
 
 /* Size functions */
 extern Datum citus_table_size(PG_FUNCTION_ARGS);

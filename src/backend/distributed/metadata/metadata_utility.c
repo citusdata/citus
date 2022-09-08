@@ -3548,11 +3548,12 @@ SetFieldNull(int attno, Datum values[], bool isnull[], bool replace[])
 
 	if (!isnull[idx])
 	{
-		isnull[idx] = false;
+		isnull[idx] = true;
 		updated = true;
 	}
 	values[idx] = InvalidOid;
 
+	replace[idx] = updated;
 	return updated;
 }
 
@@ -3740,7 +3741,8 @@ UpdateBackgroundTask(BackgroundTask *task)
 	}
 
 	Oid statusOid = ObjectIdGetDatum(BackgroundTaskStatusOid(task->status));
-	UPDATE_FIELD(Anum_pg_dist_background_task_status, false, statusOid);
+	updated |= SetFieldValue(Anum_pg_dist_background_task_status, values, isnull, replace,
+							 statusOid);
 
 	if (task->retry_count)
 	{
@@ -3798,7 +3800,8 @@ UpdateBackgroundTask(BackgroundTask *task)
 	}
 	else
 	{
-		UPDATE_FIELD(Anum_pg_dist_background_task_message, true, InvalidOid);
+		updated |= SetFieldNull(Anum_pg_dist_background_task_message, values, isnull,
+								replace);
 	}
 
 	if (updated)
