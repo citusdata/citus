@@ -359,6 +359,11 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 	MemoryContext oldContextPerJob = MemoryContextSwitchTo(perTaskContext);
 	TimestampTz backgroundWorkerFailedStartTime = 0;
+
+	/*
+	 * Although this variable could be omitted it does quickly and adequately describe
+	 * till when we are looping.
+	 */
 	bool hasTasks = true;
 	while (hasTasks)
 	{
