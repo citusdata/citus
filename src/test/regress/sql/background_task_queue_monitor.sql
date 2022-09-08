@@ -11,13 +11,13 @@ CREATE TABLE results (a int);
 
 -- simple job that inserts 1 into results to show that query runs
 SELECT a FROM results WHERE a = 1; -- verify result is not in there
-INSERT INTO pg_dist_background_job (job_type) VALUES ('simple test to verify background execution') RETURNING job_id \gset
+INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify background execution') RETURNING job_id \gset
 INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id, $job$ INSERT INTO background_task_queue_monitor.results VALUES ( 1 ); $job$) RETURNING task_id \gset
 SELECT citus_job_wait(:job_id); -- wait for the job to be finished
 SELECT a FROM results WHERE a = 1; -- verify result is there
 
 -- cancel a scheduled job
-INSERT INTO pg_dist_background_job (job_type) VALUES ('cancel a scheduled job') RETURNING job_id \gset
+INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job','cancel a scheduled job') RETURNING job_id \gset
 INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id, $job$ SELECT pg_sleep(5); $job$) RETURNING task_id \gset
 
 SELECT citus_job_cancel(:job_id);
@@ -31,7 +31,7 @@ SELECT state, NOT(started_at IS NULL) AS did_start FROM pg_dist_background_job W
 SELECT status, NOT(message IS NULL) AS did_start FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id ASC;
 
 -- cancel a running job
-INSERT INTO pg_dist_background_job (job_type) VALUES ('cancelling a task after it started') RETURNING job_id \gset
+INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job','cancelling a task after it started') RETURNING job_id \gset
 INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id, $job$ SELECT pg_sleep(5); $job$) RETURNING task_id \gset
 
 SELECT citus_job_wait(:job_id, desired_status => 'running');
@@ -44,7 +44,7 @@ SELECT status, NOT(message IS NULL) AS did_start FROM pg_dist_background_task WH
 
 -- test a failing task becomes runnable in the future again
 -- we cannot fully test the backoff strategy currently as it is hard coded to take about 50 minutes.
-INSERT INTO pg_dist_background_job (job_type) VALUES ('failure test due to division by zero') RETURNING job_id \gset
+INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'failure test due to division by zero') RETURNING job_id \gset
 INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id, $job$ SELECT 1/0; $job$) RETURNING task_id \gset
 
 SELECT citus_job_wait(:job_id, desired_status => 'running');
@@ -61,7 +61,7 @@ SELECT status, NOT(message IS NULL) AS did_start FROM pg_dist_background_task WH
 -- test running two dependant tasks
 TRUNCATE TABLE results;
 BEGIN;
-INSERT INTO pg_dist_background_job (job_type) VALUES ('simple test to verify background execution') RETURNING job_id \gset
+INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify background execution') RETURNING job_id \gset
 INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id, $job$ INSERT INTO background_task_queue_monitor.results VALUES ( 5 ); $job$) RETURNING task_id AS task_id1 \gset
 INSERT INTO pg_dist_background_task (job_id, status, command) VALUES (:job_id, 'blocked', $job$ UPDATE background_task_queue_monitor.results SET a = a * 7; $job$) RETURNING task_id AS task_id2 \gset
 INSERT INTO pg_dist_background_task (job_id, status, command) VALUES (:job_id, 'blocked', $job$ UPDATE background_task_queue_monitor.results SET a = a + 13; $job$) RETURNING task_id AS task_id3 \gset
@@ -75,7 +75,7 @@ SELECT a FROM results;
 -- test running two dependant tasks, with a failing task that we cancel
 TRUNCATE TABLE results;
 BEGIN;
-INSERT INTO pg_dist_background_job (job_type) VALUES ('simple test to verify background execution') RETURNING job_id \gset
+INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify background execution') RETURNING job_id \gset
 INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id, $job$ INSERT INTO background_task_queue_monitor.results VALUES ( 5 ); $job$) RETURNING task_id AS task_id1 \gset
 INSERT INTO pg_dist_background_task (job_id, status, command) VALUES (:job_id, 'blocked', $job$ SELECT 1/0; $job$) RETURNING task_id AS task_id2 \gset
 INSERT INTO pg_dist_background_task (job_id, status, command) VALUES (:job_id, 'blocked', $job$ UPDATE background_task_queue_monitor.results SET a = a + 13; $job$) RETURNING task_id AS task_id3 \gset
