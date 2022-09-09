@@ -1721,10 +1721,10 @@ CopyShardForeignConstraintCommandList(ShardInterval *shardInterval)
 	List *colocatedShardForeignConstraintCommandList = NIL;
 	List *referenceTableForeignConstraintList = NIL;
 
-	CopyShardForeignConstraintCommandListGrouped(shardInterval,
-												 &
-												 colocatedShardForeignConstraintCommandList,
-												 &referenceTableForeignConstraintList);
+	CopyShardForeignConstraintCommandListGrouped(
+		shardInterval,
+		&colocatedShardForeignConstraintCommandList,
+		&referenceTableForeignConstraintList);
 
 	return list_concat(colocatedShardForeignConstraintCommandList,
 					   referenceTableForeignConstraintList);

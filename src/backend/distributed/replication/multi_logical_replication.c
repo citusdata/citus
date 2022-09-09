@@ -114,7 +114,7 @@ bool PlacementMovedUsingLogicalReplicationInTX = false;
 static int logicalReplicationProgressReportTimeout = 10 * 1000;
 
 
-static void CreateForeignConstraintsToReferenceTable(List *logicalRepTargetList);
+static void CreateForeignKeyConstraints(List *logicalRepTargetList);
 static List * PrepareReplicationSubscriptionList(List *shardList);
 static List * GetReplicaIdentityCommandListForShard(Oid relationId, uint64 shardId);
 static List * GetIndexCommandListForShardBackingReplicaIdentity(Oid relationId,
@@ -139,8 +139,6 @@ static void ExecuteRemainingPostLoadTableCommands(List *shardList, char *targetN
 												  int targetNodePort);
 static void CreatePartitioningHierarchy(List *shardList, char *targetNodeName,
 										int targetNodePort);
-static void CreateColocatedForeignKeys(List *shardList, char *targetNodeName,
-									   int targetNodePort);
 static char * escape_param_str(const char *str);
 static XLogRecPtr GetRemoteLSN(MultiConnection *connection, char *command);
 static bool RelationSubscriptionsAreReady(
@@ -323,7 +321,7 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 * cascade to the hash distributed tables' shards if we had created
 		 * the constraints earlier.
 		 */
-		CreateForeignConstraintsToReferenceTable(logicalRepTargetList);
+		CreateForeignKeyConstraints(logicalRepTargetList);
 
 		/* we're done, cleanup the publication and subscription */
 		DropSubscriptions(logicalRepTargetList);
@@ -775,9 +773,6 @@ CreatePostLogicalReplicationDataLoadObjects(List *shardList, char *targetNodeNam
 
 	/* create partitioning hierarchy, if any */
 	CreatePartitioningHierarchy(shardList, targetNodeName, targetNodePort);
-
-	/* create colocated foreign keys, if any */
-	CreateColocatedForeignKeys(shardList, targetNodeName, targetNodePort);
 }
 
 
@@ -1129,64 +1124,21 @@ CreatePartitioningHierarchy(List *shardList, char *targetNodeName, int targetNod
 
 
 /*
- * CreateColocatedForeignKeys gets a shardList and creates the colocated foreign
- * keys between the shardList, if any,
+ * CreateForeignKeyConstraints is used to create the foreign constraints
+ * on the logical replication target without checking that they are actually
+ * valid.
+ *
+ * We skip the validation phase of foreign keys to after a shard
+ * move/copy/split because the validation is pretty costly and given that the
+ * source placements are already valid, the validation in the target nodes is
+ * useless.
  */
 static void
-CreateColocatedForeignKeys(List *shardList, char *targetNodeName, int targetNodePort)
-{
-	ereport(DEBUG1, (errmsg("Creating post logical replication objects "
-							"(co-located foreign keys) on node %s:%d", targetNodeName,
-							targetNodePort)));
-
-	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
-													   "CreateColocatedForeignKeys",
-													   ALLOCSET_DEFAULT_SIZES);
-	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
-
-	ListCell *shardCell = NULL;
-	foreach(shardCell, shardList)
-	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardCell);
-
-		List *shardForeignConstraintCommandList = NIL;
-		List *referenceTableForeignConstraintList = NIL;
-		CopyShardForeignConstraintCommandListGrouped(shardInterval,
-													 &shardForeignConstraintCommandList,
-													 &referenceTableForeignConstraintList);
-
-		if (shardForeignConstraintCommandList == NIL)
-		{
-			/* no colocated foreign keys, skip */
-			continue;
-		}
-
-		/*
-		 * Creating foreign keys may acquire conflicting locks when done in
-		 * parallel. Hence we create foreign keys one at a time.
-		 *
-		 */
-		char *tableOwner = TableOwner(shardInterval->relationId);
-		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
-												  tableOwner,
-												  shardForeignConstraintCommandList);
-		MemoryContextReset(localContext);
-	}
-
-	MemoryContextSwitchTo(oldContext);
-}
-
-
-/*
- * CreateForeignConstraintsToReferenceTable is used to create the foreign constraints
- * from distributed to reference tables in the newly created shard replicas.
- */
-static void
-CreateForeignConstraintsToReferenceTable(List *logicalRepTargetList)
+CreateForeignKeyConstraints(List *logicalRepTargetList)
 {
 	MemoryContext localContext =
 		AllocSetContextCreate(CurrentMemoryContext,
-							  "CreateForeignConstraintsToReferenceTable",
+							  "CreateKeyForeignConstraints",
 							  ALLOCSET_DEFAULT_SIZES);
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
@@ -1204,16 +1156,18 @@ CreateForeignConstraintsToReferenceTable(List *logicalRepTargetList)
 		 */
 		foreach_ptr(shardInterval, target->newShards)
 		{
-			List *commandList = GetForeignConstraintCommandsToReferenceTable(
+			List *commandList = CopyShardForeignConstraintCommandList(
 				shardInterval);
+			commandList = list_concat(
+				list_make1("SET LOCAL citus.skip_constraint_validation TO ON;"),
+				commandList);
 
-			char *command = NULL;
+			SendCommandListToWorkerOutsideTransaction(
+				target->superuserConnection->hostname,
+				target->superuserConnection->port,
+				target->superuserConnection->user,
+				commandList);
 
-			/* iterate over the commands and execute them in the same connection */
-			foreach_ptr(command, commandList)
-			{
-				ExecuteCriticalRemoteCommand(target->superuserConnection, command);
-			}
 			MemoryContextReset(localContext);
 		}
 	}

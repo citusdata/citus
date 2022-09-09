@@ -62,6 +62,7 @@ typedef struct TransactionProperties
 
 
 extern bool AllowNestedDistributedExecution;
+extern bool SkipConstraintValidation;
 extern int MultiShardConnectionType;
 extern bool WritableStandbyCoordinator;
 extern bool AllowModificationsFromWorkersToReplicatedTables;

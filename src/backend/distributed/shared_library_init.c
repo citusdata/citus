@@ -2151,6 +2151,21 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.skip_constraint_validation",
+		gettext_noop("Skip validation of constraints"),
+		gettext_noop("Validating constraints is a costly operation which effects Citus' "
+					 "performance negatively. With this GUC set to true, we skip "
+					 "validating them. Constraint validation can be redundant for some "
+					 "cases. For instance, when moving a shard, which has already "
+					 "validated constraints at the source; we don't need to validate "
+					 "the constraints again at the destination."),
+		&SkipConstraintValidation,
+		false,
+		PGC_SUSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.skip_jsonb_validation_in_copy",
 		gettext_noop("Skip validation of JSONB columns on the coordinator during COPY "
 					 "into a distributed table"),

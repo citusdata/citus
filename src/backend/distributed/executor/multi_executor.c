@@ -65,6 +65,11 @@ bool WritableStandbyCoordinator = false;
 bool AllowModificationsFromWorkersToReplicatedTables = true;
 
 /*
+ * Controlled by the GUC citus.skip_constraint_validation
+ */
+bool SkipConstraintValidation = false;
+
+/*
  * Setting that controls whether distributed queries should be
  * allowed within a task execution.
  */
@@ -854,6 +859,11 @@ AlterTableConstraintCheck(QueryDesc *queryDesc)
 	if (queryDesc->plannedstmt->commandType != CMD_SELECT)
 	{
 		return false;
+	}
+
+	if (SkipConstraintValidation)
+	{
+		return true;
 	}
 
 	/*

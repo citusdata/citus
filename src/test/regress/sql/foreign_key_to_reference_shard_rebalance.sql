@@ -55,12 +55,6 @@ SELECT count(*) FROM referencing_table2;
 CALL citus_cleanup_orphaned_shards();
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_to_reference_shard_rebalance.%' AND refd_relid LIKE 'fkey_to_reference_shard_rebalance.%' ORDER BY 1,2,3;
 
--- create a function to show the
-CREATE FUNCTION get_foreign_key_to_reference_table_commands(Oid)
-    RETURNS SETOF text
-    LANGUAGE C STABLE STRICT
-    AS 'citus', $$get_foreign_key_to_reference_table_commands$$;
-
 CREATE TABLE reference_table_commands (id int UNIQUE);
 CREATE TABLE referenceing_dist_table (id int, col1 int, col2 int, col3 int);
 SELECT create_reference_table('reference_table_commands');
@@ -68,7 +62,6 @@ SELECT create_distributed_table('referenceing_dist_table', 'id');
 ALTER TABLE referenceing_dist_table ADD CONSTRAINT c1 FOREIGN KEY (col1) REFERENCES reference_table_commands(id) ON UPDATE CASCADE;
 ALTER TABLE referenceing_dist_table ADD CONSTRAINT c2 FOREIGN KEY (col2) REFERENCES reference_table_commands(id) ON UPDATE CASCADE NOT VALID;
 ALTER TABLE referenceing_dist_table ADD CONSTRAINT very_very_very_very_very_very_very_very_very_very_very_very_very_long FOREIGN KEY (col3) REFERENCES reference_table_commands(id) ON UPDATE CASCADE;
-SELECT * FROM get_foreign_key_to_reference_table_commands('referenceing_dist_table'::regclass);
 
 -- and show that rebalancer works fine
 SELECT master_move_shard_placement(15000018, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
@@ -79,4 +72,24 @@ SELECT conname, contype, convalidated FROM pg_constraint WHERE conrelid = 'fkey_
 
 \c - - - :master_port
 
+SET search_path TO fkey_to_reference_shard_rebalance;
+SET citus.shard_replication_factor to 1;
+
+-- test moving a shard with foreign key
+create table ref_table_with_fkey (id int primary key);
+select create_reference_table('ref_table_with_fkey');
+insert into ref_table_with_fkey select s from generate_series(0,9) s;
+
+create table partitioned_tbl_with_fkey (x int, y int, t timestamptz default now()) partition by range (t);
+select create_distributed_table('partitioned_tbl_with_fkey','x');
+create table partition_1_with_fkey partition of partitioned_tbl_with_fkey for values from ('2022-01-01') to ('2022-12-31');
+create table partition_2_with_fkey partition of partitioned_tbl_with_fkey for values from ('2023-01-01') to ('2023-12-31');
+insert into partitioned_tbl_with_fkey (x,y) select s,s%10 from generate_series(1,100) s;
+
+ALTER TABLE partitioned_tbl_with_fkey ADD CONSTRAINT fkey_to_ref_tbl FOREIGN KEY (y) REFERENCES ref_table_with_fkey(id);
+
+WITH shardid AS (SELECT shardid FROM pg_dist_shard where logicalrelid = 'partitioned_tbl_with_fkey'::regclass ORDER BY shardid LIMIT 1)
+SELECT citus_move_shard_placement(shardid.shardid, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode := 'force_logical') FROM shardid;
+
+SET client_min_messages TO WARNING;
 DROP SCHEMA fkey_to_reference_shard_rebalance CASCADE;
