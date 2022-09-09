@@ -203,6 +203,74 @@ typedef enum SizeQueryType
 	TABLE_SIZE /* pg_table_size() */
 } SizeQueryType;
 
+typedef enum BackgroundJobStatus
+{
+	BACKGROUND_JOB_STATUS_SCHEDULED,
+	BACKGROUND_JOB_STATUS_RUNNING,
+	BACKGROUND_JOB_STATUS_FINISHED,
+	BACKGROUND_JOB_STATUS_CANCELLING,
+	BACKGROUND_JOB_STATUS_CANCELLED,
+	BACKGROUND_JOB_STATUS_FAILING,
+	BACKGROUND_JOB_STATUS_FAILED
+} BackgroundJobStatus;
+
+typedef struct BackgroundJob
+{
+	int64 jobid;
+	BackgroundJobStatus state;
+	char *jobType;
+	char *description;
+	TimestampTz *started_at;
+	TimestampTz *finished_at;
+
+	/* extra space to store values for nullable value types above */
+	struct
+	{
+		TimestampTz started_at;
+		TimestampTz finished_at;
+	} __nullable_storage;
+} BackgroundJob;
+
+typedef enum BackgroundTaskStatus
+{
+	BACKGROUND_TASK_STATUS_BLOCKED,
+	BACKGROUND_TASK_STATUS_RUNNABLE,
+	BACKGROUND_TASK_STATUS_RUNNING,
+	BACKGROUND_TASK_STATUS_CANCELLING,
+	BACKGROUND_TASK_STATUS_DONE,
+	BACKGROUND_TASK_STATUS_ERROR,
+	BACKGROUND_TASK_STATUS_UNSCHEDULED,
+	BACKGROUND_TASK_STATUS_CANCELLED
+} BackgroundTaskStatus;
+
+typedef struct BackgroundTask
+{
+	int64 jobid;
+	int64 taskid;
+	Oid owner;
+	int32 *pid;
+	BackgroundTaskStatus status;
+	char *command;
+	int32 *retry_count;
+	TimestampTz *not_before;
+	char *message;
+
+	/* extra space to store values for nullable value types above */
+	struct
+	{
+		int32 pid;
+		int32 retry_count;
+		TimestampTz not_before;
+	} __nullable_storage;
+} BackgroundTask;
+
+#define SET_NULLABLE_FIELD(ptr, field, value) \
+	(ptr)->__nullable_storage.field = (value); \
+	(ptr)->field = &((ptr)->__nullable_storage.field)
+
+#define UNSET_NULLABLE_FIELD(ptr, field) \
+	(ptr)->field = NULL; \
+	memset_struct_0((ptr)->__nullable_storage.field)
 
 /* Size functions */
 extern Datum citus_table_size(PG_FUNCTION_ARGS);
@@ -315,4 +383,27 @@ extern void EnsureSequenceTypeSupported(Oid seqOid, Oid attributeTypeId, Oid
 										ownerRelationId);
 extern void AlterSequenceType(Oid seqOid, Oid typeOid);
 extern void EnsureRelationHasCompatibleSequenceTypes(Oid relationId);
+extern bool HasRunnableBackgroundTask(void);
+extern int64 CreateBackgroundJob(const char *jobType, const char *description);
+extern BackgroundTask * ScheduleBackgroundTask(int64 jobId, Oid owner, char *command,
+											   int dependingTaskCount,
+											   int64 dependingTaskIds[]);
+extern BackgroundTask * GetRunnableBackgroundTask(void);
+extern void ResetRunningBackgroundTasks(void);
+extern BackgroundJob * GetBackgroundJobByJobId(int64 jobId);
+extern BackgroundTask * GetBackgroundTaskByTaskId(int64 taskId);
+extern void UpdateBackgroundJob(int64 jobId);
+extern void UpdateBackgroundTask(BackgroundTask *task);
+extern void UpdateJobStatus(int64 taskId, const pid_t *pid, BackgroundTaskStatus status,
+							const int32 *retry_count, char *message);
+extern bool UpdateJobError(BackgroundTask *job, ErrorData *edata);
+extern List * CancelTasksForJob(int64 jobid);
+extern void UnscheduleDependentTasks(BackgroundTask *task);
+extern void UnblockDependingBackgroundTasks(BackgroundTask *task);
+extern BackgroundJobStatus BackgroundJobStatusByOid(Oid enumOid);
+extern BackgroundTaskStatus BackgroundTaskStatusByOid(Oid enumOid);
+extern bool IsBackgroundJobStatusTerminal(BackgroundJobStatus status);
+extern bool IsBackgroundTaskStatusTerminal(BackgroundTaskStatus status);
+extern Oid BackgroundJobStatusOid(BackgroundJobStatus status);
+extern Oid BackgroundTaskStatusOid(BackgroundTaskStatus status);
 #endif   /* METADATA_UTILITY_H */

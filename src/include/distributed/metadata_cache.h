@@ -230,6 +230,8 @@ extern Oid DistPartitionRelationId(void);
 extern Oid DistShardRelationId(void);
 extern Oid DistPlacementRelationId(void);
 extern Oid DistNodeRelationId(void);
+extern Oid DistBackgroundJobRelationId(void);
+extern Oid DistBackgroundTaskRelationId(void);
 extern Oid DistRebalanceStrategyRelationId(void);
 extern Oid DistLocalGroupIdRelationId(void);
 extern Oid DistObjectRelationId(void);
@@ -239,6 +241,13 @@ extern Oid DistEnabledCustomAggregatesId(void);
 extern Oid DistNodeNodeIdIndexId(void);
 extern Oid DistPartitionLogicalRelidIndexId(void);
 extern Oid DistPartitionColocationidIndexId(void);
+extern Oid DistBackgroundJobPKeyIndexId(void);
+extern Oid DistBackgroundTaskPKeyIndexId(void);
+extern Oid DistBackgroundTaskJobIdTaskIdIndexId(void);
+extern Oid DistBackgroundTaskStatusTaskIdIndexId(void);
+extern Oid DistBackgroundTaskDependRelationId(void);
+extern Oid DistBackgroundTaskDependTaskIdIndexId(void);
+extern Oid DistBackgroundTaskDependDependsOnIndexId(void);
 extern Oid DistShardLogicalRelidIndexId(void);
 extern Oid DistShardShardidIndexId(void);
 extern Oid DistPlacementShardidIndexId(void);
@@ -249,6 +258,10 @@ extern Oid DistTransactionGroupIndexId(void);
 extern Oid DistPlacementGroupidIndexId(void);
 extern Oid DistObjectPrimaryKeyIndexId(void);
 extern Oid DistCleanupPrimaryKeyIndexId(void);
+
+/* sequence oids */
+extern Oid DistBackgroundJobJobIdSequenceId(void);
+extern Oid DistBackgroundTaskTaskIdSequenceId(void);
 
 /* type oids */
 extern Oid LookupTypeOid(char *schemaNameSting, char *typeNameString);
@@ -272,6 +285,21 @@ extern Oid SecondaryNodeRoleId(void);
 extern Oid CitusCopyFormatTypeId(void);
 extern Oid TextCopyFormatId(void);
 extern Oid BinaryCopyFormatId(void);
+extern Oid CitusJobStatusScheduledId(void);
+extern Oid CitusJobStatusRunningId(void);
+extern Oid CitusJobStatusCancellingId(void);
+extern Oid CitusJobStatusFinishedId(void);
+extern Oid CitusJobStatusCancelledId(void);
+extern Oid CitusJobStatusFailedId(void);
+extern Oid CitusJobStatusFailingId(void);
+extern Oid CitusTaskStatusBlockedId(void);
+extern Oid CitusTaskStatusRunnableId(void);
+extern Oid CitusTaskStatusRunningId(void);
+extern Oid CitusTaskStatusDoneId(void);
+extern Oid CitusTaskStatusErrorId(void);
+extern Oid CitusTaskStatusUnscheduledId(void);
+extern Oid CitusTaskStatusCancelledId(void);
+extern Oid CitusTaskStatusCancellingId(void);
 
 /* user related functions */
 extern Oid CitusExtensionOwner(void);

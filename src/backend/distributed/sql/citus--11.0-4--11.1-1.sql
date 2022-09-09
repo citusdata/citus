@@ -110,3 +110,60 @@ GRANT SELECT ON pg_catalog.pg_dist_cleanup_recordid_seq TO public;
 -- old definition. By recreating it here upgrades also pick up the new changes.
 #include "udfs/pg_cancel_backend/11.0-1.sql"
 #include "udfs/pg_terminate_backend/11.0-1.sql"
+
+CREATE TYPE citus.citus_job_status AS ENUM ('scheduled', 'running', 'finished', 'cancelling', 'cancelled', 'failing', 'failed');
+ALTER TYPE citus.citus_job_status SET SCHEMA pg_catalog;
+
+CREATE TABLE citus.pg_dist_background_job (
+    job_id bigserial NOT NULL,
+    state pg_catalog.citus_job_status DEFAULT 'scheduled' NOT NULL,
+    job_type name NOT NULL,
+    description text NOT NULL,
+    started_at timestamptz,
+    finished_at timestamptz,
+
+    CONSTRAINT pg_dist_background_job_pkey PRIMARY KEY (job_id)
+);
+ALTER TABLE citus.pg_dist_background_job SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.pg_dist_background_job TO PUBLIC;
+GRANT SELECT ON pg_catalog.pg_dist_background_job_job_id_seq TO PUBLIC;
+
+CREATE TYPE citus.citus_task_status AS ENUM ('blocked', 'runnable', 'running', 'done', 'cancelling', 'error', 'unscheduled', 'cancelled');
+ALTER TYPE citus.citus_task_status SET SCHEMA pg_catalog;
+
+CREATE TABLE citus.pg_dist_background_task(
+    job_id bigint NOT NULL REFERENCES pg_catalog.pg_dist_background_job(job_id),
+    task_id bigserial NOT NULL,
+    owner regrole NOT NULL DEFAULT CURRENT_USER::regrole,
+    pid integer,
+    status pg_catalog.citus_task_status default 'runnable' NOT NULL,
+    command text NOT NULL,
+    retry_count integer,
+    not_before timestamptz, -- can be null to indicate no delay for start of the task, will be set on failure to delay retries
+    message text NOT NULL DEFAULT '',
+
+    CONSTRAINT pg_dist_background_task_pkey PRIMARY KEY (task_id),
+    CONSTRAINT pg_dist_background_task_job_id_task_id UNIQUE (job_id, task_id) -- required for FK's to enforce tasks only reference other tasks within the same job
+);
+ALTER TABLE citus.pg_dist_background_task SET SCHEMA pg_catalog;
+CREATE INDEX pg_dist_background_task_status_task_id_index ON pg_catalog.pg_dist_background_task USING btree(status, task_id);
+GRANT SELECT ON pg_catalog.pg_dist_background_task TO PUBLIC;
+GRANT SELECT ON pg_catalog.pg_dist_background_task_task_id_seq TO PUBLIC;
+
+CREATE TABLE citus.pg_dist_background_task_depend(
+   job_id bigint NOT NULL REFERENCES pg_catalog.pg_dist_background_job(job_id) ON DELETE CASCADE,
+   task_id bigint NOT NULL,
+   depends_on bigint NOT NULL,
+
+   PRIMARY KEY (job_id, task_id, depends_on),
+   FOREIGN KEY (job_id, task_id) REFERENCES pg_catalog.pg_dist_background_task (job_id, task_id) ON DELETE CASCADE,
+   FOREIGN KEY (job_id, depends_on) REFERENCES pg_catalog.pg_dist_background_task (job_id, task_id) ON DELETE CASCADE
+);
+
+ALTER TABLE citus.pg_dist_background_task_depend SET SCHEMA pg_catalog;
+CREATE INDEX pg_dist_background_task_depend_task_id ON pg_catalog.pg_dist_background_task_depend USING btree(job_id, task_id);
+CREATE INDEX pg_dist_background_task_depend_depends_on ON pg_catalog.pg_dist_background_task_depend USING btree(job_id, depends_on);
+GRANT SELECT ON pg_catalog.pg_dist_background_task_depend TO PUBLIC;
+
+#include "udfs/citus_job_wait/11.1-1.sql"
+#include "udfs/citus_job_cancel/11.1-1.sql"

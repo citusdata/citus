@@ -141,6 +141,32 @@ typedef struct MetadataCacheData
 	bool extensionLoaded;
 	Oid distShardRelationId;
 	Oid distPlacementRelationId;
+	Oid distBackgroundJobRelationId;
+	Oid distBackgroundJobPKeyIndexId;
+	Oid distBackgroundJobJobIdSequenceId;
+	Oid distBackgroundTaskRelationId;
+	Oid distBackgroundTaskPKeyIndexId;
+	Oid distBackgroundTaskJobIdTaskIdIndexId;
+	Oid distBackgroundTaskStatusTaskIdIndexId;
+	Oid distBackgroundTaskTaskIdSequenceId;
+	Oid distBackgroundTaskDependRelationId;
+	Oid distBackgroundTaskDependTaskIdIndexId;
+	Oid distBackgroundTaskDependDependsOnIndexId;
+	Oid citusJobStatusScheduledId;
+	Oid citusJobStatusRunningId;
+	Oid citusJobStatusCancellingId;
+	Oid citusJobStatusFinishedId;
+	Oid citusJobStatusCancelledId;
+	Oid citusJobStatusFailedId;
+	Oid citusJobStatusFailingId;
+	Oid citusTaskStatusBlockedId;
+	Oid citusTaskStatusRunnableId;
+	Oid citusTaskStatusRunningId;
+	Oid citusTaskStatusDoneId;
+	Oid citusTaskStatusErrorId;
+	Oid citusTaskStatusUnscheduledId;
+	Oid citusTaskStatusCancelledId;
+	Oid citusTaskStatusCancellingId;
 	Oid distRebalanceStrategyRelationId;
 	Oid distNodeRelationId;
 	Oid distNodeNodeIdIndexId;
@@ -2492,6 +2518,116 @@ DistLocalGroupIdRelationId(void)
 }
 
 
+Oid
+DistBackgroundJobRelationId(void)
+{
+	CachedRelationLookup("pg_dist_background_job",
+						 &MetadataCache.distBackgroundJobRelationId);
+
+	return MetadataCache.distBackgroundJobRelationId;
+}
+
+
+Oid
+DistBackgroundJobPKeyIndexId(void)
+{
+	CachedRelationLookup("pg_dist_background_job_pkey",
+						 &MetadataCache.distBackgroundJobPKeyIndexId);
+
+	return MetadataCache.distBackgroundJobPKeyIndexId;
+}
+
+
+Oid
+DistBackgroundJobJobIdSequenceId(void)
+{
+	CachedRelationLookup("pg_dist_background_job_job_id_seq",
+						 &MetadataCache.distBackgroundJobJobIdSequenceId);
+
+	return MetadataCache.distBackgroundJobJobIdSequenceId;
+}
+
+
+Oid
+DistBackgroundTaskRelationId(void)
+{
+	CachedRelationLookup("pg_dist_background_task",
+						 &MetadataCache.distBackgroundTaskRelationId);
+
+	return MetadataCache.distBackgroundTaskRelationId;
+}
+
+
+Oid
+DistBackgroundTaskPKeyIndexId(void)
+{
+	CachedRelationLookup("pg_dist_background_task_pkey",
+						 &MetadataCache.distBackgroundTaskPKeyIndexId);
+
+	return MetadataCache.distBackgroundTaskPKeyIndexId;
+}
+
+
+Oid
+DistBackgroundTaskJobIdTaskIdIndexId(void)
+{
+	CachedRelationLookup("pg_dist_background_task_job_id_task_id",
+						 &MetadataCache.distBackgroundTaskJobIdTaskIdIndexId);
+
+	return MetadataCache.distBackgroundTaskJobIdTaskIdIndexId;
+}
+
+
+Oid
+DistBackgroundTaskStatusTaskIdIndexId(void)
+{
+	CachedRelationLookup("pg_dist_background_task_status_task_id_index",
+						 &MetadataCache.distBackgroundTaskStatusTaskIdIndexId);
+
+	return MetadataCache.distBackgroundTaskStatusTaskIdIndexId;
+}
+
+
+Oid
+DistBackgroundTaskTaskIdSequenceId(void)
+{
+	CachedRelationLookup("pg_dist_background_task_task_id_seq",
+						 &MetadataCache.distBackgroundTaskTaskIdSequenceId);
+
+	return MetadataCache.distBackgroundTaskTaskIdSequenceId;
+}
+
+
+Oid
+DistBackgroundTaskDependRelationId(void)
+{
+	CachedRelationLookup("pg_dist_background_task_depend",
+						 &MetadataCache.distBackgroundTaskDependRelationId);
+
+	return MetadataCache.distBackgroundTaskDependRelationId;
+}
+
+
+Oid
+DistBackgroundTaskDependTaskIdIndexId(void)
+{
+	CachedRelationLookup("pg_dist_background_task_depend_task_id",
+						 &MetadataCache.distBackgroundTaskDependTaskIdIndexId);
+
+	return MetadataCache.distBackgroundTaskDependTaskIdIndexId;
+}
+
+
+Oid
+DistBackgroundTaskDependDependsOnIndexId(void)
+{
+	CachedRelationLookup("pg_dist_background_task_depend_depends_on",
+						 &MetadataCache.distBackgroundTaskDependDependsOnIndexId);
+
+	return MetadataCache.distBackgroundTaskDependDependsOnIndexId;
+}
+
+
 /* return oid of pg_dist_rebalance_strategy relation */
 Oid
 DistRebalanceStrategyRelationId(void)
@@ -3233,6 +3369,201 @@ SecondaryNodeRoleId(void)
 	}
 
 	return MetadataCache.secondaryNodeRoleId;
+}
+
+
+Oid
+CitusJobStatusScheduledId(void)
+{
+	if (!MetadataCache.citusJobStatusScheduledId)
+	{
+		MetadataCache.citusJobStatusScheduledId =
+			LookupStringEnumValueId("citus_job_status", "scheduled");
+	}
+
+	return MetadataCache.citusJobStatusScheduledId;
+}
+
+
+Oid
+CitusJobStatusRunningId(void)
+{
+	if (!MetadataCache.citusJobStatusRunningId)
+	{
+		MetadataCache.citusJobStatusRunningId =
+			LookupStringEnumValueId("citus_job_status", "running");
+	}
+
+	return MetadataCache.citusJobStatusRunningId;
+}
+
+
+Oid
+CitusJobStatusCancellingId(void)
+{
+	if (!MetadataCache.citusJobStatusCancellingId)
+	{
+		MetadataCache.citusJobStatusCancellingId =
+			LookupStringEnumValueId("citus_job_status", "cancelling");
+	}
+
+	return MetadataCache.citusJobStatusCancellingId;
+}
+
+
+Oid
+CitusJobStatusFinishedId(void)
+{
+	if (!MetadataCache.citusJobStatusFinishedId)
+	{
+		MetadataCache.citusJobStatusFinishedId =
+			LookupStringEnumValueId("citus_job_status", "finished");
+	}
+
+	return MetadataCache.citusJobStatusFinishedId;
+}
+
+
+Oid
+CitusJobStatusCancelledId(void)
+{
+	if (!MetadataCache.citusJobStatusCancelledId)
+	{
+		MetadataCache.citusJobStatusCancelledId =
+			LookupStringEnumValueId("citus_job_status", "cancelled");
+	}
+
+	return MetadataCache.citusJobStatusCancelledId;
+}
+
+
+Oid
+CitusJobStatusFailedId(void)
+{
+	if (!MetadataCache.citusJobStatusFailedId)
+	{
+		MetadataCache.citusJobStatusFailedId =
+			LookupStringEnumValueId("citus_job_status", "failed");
+	}
+
+	return MetadataCache.citusJobStatusFailedId;
+}
+
+
+Oid
+CitusJobStatusFailingId(void)
+{
+	if (!MetadataCache.citusJobStatusFailingId)
+	{
+		MetadataCache.citusJobStatusFailingId =
+			LookupStringEnumValueId("citus_job_status", "failing");
+	}
+
+	return MetadataCache.citusJobStatusFailingId;
+}
+
+
+Oid
+CitusTaskStatusBlockedId(void)
+{
+	if (!MetadataCache.citusTaskStatusBlockedId)
+	{
+		MetadataCache.citusTaskStatusBlockedId =
+			LookupStringEnumValueId("citus_task_status", "blocked");
+	}
+
+	return MetadataCache.citusTaskStatusBlockedId;
+}
+
+
+Oid
+CitusTaskStatusCancelledId(void)
+{
+	if (!MetadataCache.citusTaskStatusCancelledId)
+	{
+		MetadataCache.citusTaskStatusCancelledId =
+			LookupStringEnumValueId("citus_task_status", "cancelled");
+	}
+
+	return MetadataCache.citusTaskStatusCancelledId;
+}
+
+
+Oid
+CitusTaskStatusCancellingId(void)
+{
+	if (!MetadataCache.citusTaskStatusCancellingId)
+	{
+		MetadataCache.citusTaskStatusCancellingId =
+			LookupStringEnumValueId("citus_task_status", "cancelling");
+	}
+
+	return MetadataCache.citusTaskStatusCancellingId;
+}
+
+
+Oid
+CitusTaskStatusRunnableId(void)
+{
+	if (!MetadataCache.citusTaskStatusRunnableId)
+	{
+		MetadataCache.citusTaskStatusRunnableId =
+			LookupStringEnumValueId("citus_task_status", "runnable");
+	}
+
+	return MetadataCache.citusTaskStatusRunnableId;
+}
+
+
+Oid
+CitusTaskStatusRunningId(void)
+{
+	if (!MetadataCache.citusTaskStatusRunningId)
+	{
+		MetadataCache.citusTaskStatusRunningId =
+			LookupStringEnumValueId("citus_task_status", "running");
+	}
+
+	return MetadataCache.citusTaskStatusRunningId;
+}
+
+
+Oid
+CitusTaskStatusDoneId(void)
+{
+	if (!MetadataCache.citusTaskStatusDoneId)
+	{
+		MetadataCache.citusTaskStatusDoneId =
+			LookupStringEnumValueId("citus_task_status", "done");
+	}
+
+	return MetadataCache.citusTaskStatusDoneId;
+}
+
+
+Oid
+CitusTaskStatusErrorId(void)
+{
+	if (!MetadataCache.citusTaskStatusErrorId)
+	{
+		MetadataCache.citusTaskStatusErrorId =
+			LookupStringEnumValueId("citus_task_status", "error");
+	}
+
+	return MetadataCache.citusTaskStatusErrorId;
+}
+
+
+Oid
+CitusTaskStatusUnscheduledId(void)
+{
+	if (!MetadataCache.citusTaskStatusUnscheduledId)
+	{
+		MetadataCache.citusTaskStatusUnscheduledId =
+			LookupStringEnumValueId("citus_task_status", "unscheduled");
+	}
+
+	return MetadataCache.citusTaskStatusUnscheduledId;
 }
 
 

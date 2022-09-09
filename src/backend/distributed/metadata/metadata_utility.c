@@ -25,11 +25,13 @@
 #include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
+#include "catalog/pg_authid.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
+#include "commands/sequence.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/citus_nodes.h"
@@ -44,6 +46,9 @@
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/pg_dist_background_job.h"
+#include "distributed/pg_dist_background_task.h"
+#include "distributed/pg_dist_backrgound_task_depend.h"
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
@@ -59,10 +64,12 @@
 #include "nodes/makefuncs.h"
 #include "parser/scansup.h"
 #include "storage/lmgr.h"
+#include "storage/procarray.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/datum.h"
 #include "utils/fmgroids.h"
+#include "utils/fmgrprotos.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
@@ -99,6 +106,21 @@ static void AppendShardSizeQuery(StringInfo selectQuery, ShardInterval *shardInt
 static HeapTuple CreateDiskSpaceTuple(TupleDesc tupleDesc, uint64 availableBytes,
 									  uint64 totalBytes);
 static bool GetLocalDiskSpaceStats(uint64 *availableBytes, uint64 *totalBytes);
+static BackgroundTask * DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor,
+													  HeapTuple taskTuple);
+
+static bool SetFieldValue(int attno, Datum values[], bool isnull[], bool replace[],
+						  Datum newValue);
+static bool SetFieldText(int attno, Datum values[], bool isnull[], bool replace[],
+						 const char *newValue);
+static bool SetFieldNull(int attno, Datum values[], bool isnull[], bool replace[]);
+
+#define InitFieldValue(attno, values, isnull, initValue) \
+	(void) SetFieldValue((attno), (values), (isnull), NULL, (initValue))
+#define InitFieldText(attno, values, isnull, initValue) \
+	(void) SetFieldText((attno), (values), (isnull), NULL, (initValue))
+#define InitFieldNull(attno, values, isnull) \
+	(void) SetFieldNull((attno), (values), (isnull), NULL)
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(citus_local_disk_space_stats);
@@ -2356,4 +2378,1749 @@ bool
 IsForeignTable(Oid relationId)
 {
 	return get_rel_relkind(relationId) == RELKIND_FOREIGN_TABLE;
+}
+
+
+/*
+ * HasRunnableBackgroundTask looks in the catalog if there are any tasks that can be run.
+ * For a task to be able to run the following conditions apply:
+ *  - Task is in Running state. This could happen when a Background Tasks Queue Monitor
+ *    had crashed or is otherwise restarted. To recover from such a failure tasks in
+ *    Running state are deeed Runnable.
+ *  - Task is in Runnable state with either _no_ value set in not_before, or a value that
+ *    has currently passed. If the not_before field is set to a time in the future the
+ *    task is currently not ready to be started.
+ */
+bool
+HasRunnableBackgroundTask()
+{
+	Relation pgDistBackgroundTasks =
+		table_open(DistBackgroundTaskRelationId(), AccessShareLock);
+
+	/* find any job in states listed here */
+	BackgroundTaskStatus taskStatus[] = {
+		BACKGROUND_TASK_STATUS_RUNNABLE,
+		BACKGROUND_TASK_STATUS_RUNNING
+	};
+
+	bool hasScheduledTask = false;
+	for (int i = 0; !hasScheduledTask && i < lengthof(taskStatus); i++)
+	{
+		const int scanKeyCount = 1;
+		ScanKeyData scanKey[1] = { 0 };
+		const bool indexOK = true;
+
+		/* pg_dist_background_task.status == taskStatus[i] */
+		ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_status,
+					BTEqualStrategyNumber, F_OIDEQ,
+					ObjectIdGetDatum(BackgroundTaskStatusOid(taskStatus[i])));
+
+		SysScanDesc scanDescriptor =
+			systable_beginscan(pgDistBackgroundTasks,
+							   DistBackgroundTaskStatusTaskIdIndexId(),
+							   indexOK, NULL, scanKeyCount,
+							   scanKey);
+
+		HeapTuple taskTuple = NULL;
+		while (HeapTupleIsValid(taskTuple = systable_getnext(scanDescriptor)))
+		{
+			TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
+			BackgroundTask *task = DeformBackgroundTaskHeapTuple(tupleDescriptor,
+																 taskTuple);
+
+			if (task->not_before && *(task->not_before) > GetCurrentTimestamp())
+			{
+				continue;
+			}
+
+			hasScheduledTask = true;
+			break;
+		}
+
+		systable_endscan(scanDescriptor);
+	}
+
+	table_close(pgDistBackgroundTasks, NoLock);
+
+	return hasScheduledTask;
+}
+
+
+/*
+ * BackgroundJobStatusByOid returns the C enum representation of a BackgroundJobsStatus
+ * based on the Oid of the SQL enum value.
+ */
+BackgroundJobStatus
+BackgroundJobStatusByOid(Oid enumOid)
+{
+	if (enumOid == CitusJobStatusScheduledId())
+	{
+		return BACKGROUND_JOB_STATUS_SCHEDULED;
+	}
+	else if (enumOid == CitusJobStatusRunningId())
+	{
+		return BACKGROUND_JOB_STATUS_RUNNING;
+	}
+	else if (enumOid == CitusJobStatusFinishedId())
+	{
+		return BACKGROUND_JOB_STATUS_FINISHED;
+	}
+	else if (enumOid == CitusJobStatusCancelledId())
+	{
+		return BACKGROUND_JOB_STATUS_CANCELLED;
+	}
+	else if (enumOid == CitusJobStatusFailingId())
+	{
+		return BACKGROUND_JOB_STATUS_FAILING;
+	}
+	else if (enumOid == CitusJobStatusFailedId())
+	{
+		return BACKGROUND_JOB_STATUS_FAILED;
+	}
+	else if (enumOid == CitusJobStatusCancellingId())
+	{
+		return BACKGROUND_JOB_STATUS_CANCELLING;
+	}
+	elog(ERROR, "unknown enum value for citus_job_status");
+}
+
+
+/*
+ * BackgroundTaskStatusByOid returns the C enum representation of a BackgroundTaskStatus
+ * based on the Oid of the SQL enum value.
+ */
+BackgroundTaskStatus
+BackgroundTaskStatusByOid(Oid enumOid)
+{
+	if (enumOid == CitusTaskStatusDoneId())
+	{
+		return BACKGROUND_TASK_STATUS_DONE;
+	}
+	else if (enumOid == CitusTaskStatusRunnableId())
+	{
+		return BACKGROUND_TASK_STATUS_RUNNABLE;
+	}
+	else if (enumOid == CitusTaskStatusRunningId())
+	{
+		return BACKGROUND_TASK_STATUS_RUNNING;
+	}
+	else if (enumOid == CitusTaskStatusErrorId())
+	{
+		return BACKGROUND_TASK_STATUS_ERROR;
+	}
+	else if (enumOid == CitusTaskStatusUnscheduledId())
+	{
+		return BACKGROUND_TASK_STATUS_UNSCHEDULED;
+	}
+	else if (enumOid == CitusTaskStatusBlockedId())
+	{
+		return BACKGROUND_TASK_STATUS_BLOCKED;
+	}
+	else if (enumOid == CitusTaskStatusCancelledId())
+	{
+		return BACKGROUND_TASK_STATUS_CANCELLED;
+	}
+	else if (enumOid == CitusTaskStatusCancellingId())
+	{
+		return BACKGROUND_TASK_STATUS_CANCELLING;
+	}
+	ereport(ERROR, (errmsg("unknown enum value for citus_task_status")));
+}
+
+
+/*
+ * IsBackgroundJobStatusTerminal is a predicate returning if the BackgroundJobStatus
+ * passed is a terminal state of the Background Job state machine.
+ *
+ * For a Job to be in it's terminal state, all tasks from that job should also be in their
+ * terminal state.
+ */
+bool
+IsBackgroundJobStatusTerminal(BackgroundJobStatus status)
+{
+	switch (status)
+	{
+		case BACKGROUND_JOB_STATUS_CANCELLED:
+		case BACKGROUND_JOB_STATUS_FAILED:
+		case BACKGROUND_JOB_STATUS_FINISHED:
+		{
+			return true;
+		}
+
+		case BACKGROUND_JOB_STATUS_CANCELLING:
+		case BACKGROUND_JOB_STATUS_FAILING:
+		case BACKGROUND_JOB_STATUS_RUNNING:
+		case BACKGROUND_JOB_STATUS_SCHEDULED:
+		{
+			return false;
+		}
+
+			/* no default to make sure we explicitly add every state here */
+	}
+	elog(ERROR, "unknown BackgroundJobStatus");
+}
+
+
+/*
+ * IsBackgroundTaskStatusTerminal is a predicate returning if the BackgroundTaskStatus
+ * passed is a terminal state of the Background Task state machine.
+ */
+bool
+IsBackgroundTaskStatusTerminal(BackgroundTaskStatus status)
+{
+	switch (status)
+	{
+		case BACKGROUND_TASK_STATUS_CANCELLED:
+		case BACKGROUND_TASK_STATUS_DONE:
+		case BACKGROUND_TASK_STATUS_ERROR:
+		case BACKGROUND_TASK_STATUS_UNSCHEDULED:
+		{
+			return true;
+		}
+
+		case BACKGROUND_TASK_STATUS_BLOCKED:
+		case BACKGROUND_TASK_STATUS_CANCELLING:
+		case BACKGROUND_TASK_STATUS_RUNNABLE:
+		case BACKGROUND_TASK_STATUS_RUNNING:
+		{
+			return false;
+		}
+
+			/* no default to make sure we explicitly add every state here */
+	}
+	elog(ERROR, "unknown BackgroundTaskStatus");
+}
+
+
+/*
+ * BackgroundJobStatusOid returns the Oid corresponding to SQL enum value corresponding to
+ * the BackgroundJobStatus.
+ */
+Oid
+BackgroundJobStatusOid(BackgroundJobStatus status)
+{
+	switch (status)
+	{
+		case BACKGROUND_JOB_STATUS_SCHEDULED:
+		{
+			return CitusJobStatusScheduledId();
+		}
+
+		case BACKGROUND_JOB_STATUS_RUNNING:
+		{
+			return CitusJobStatusRunningId();
+		}
+
+		case BACKGROUND_JOB_STATUS_CANCELLING:
+		{
+			return CitusJobStatusCancellingId();
+		}
+
+		case BACKGROUND_JOB_STATUS_FINISHED:
+		{
+			return CitusJobStatusFinishedId();
+		}
+
+		case BACKGROUND_JOB_STATUS_CANCELLED:
+		{
+			return CitusJobStatusCancelledId();
+		}
+
+		case BACKGROUND_JOB_STATUS_FAILING:
+		{
+			return CitusJobStatusFailingId();
+		}
+
+		case BACKGROUND_JOB_STATUS_FAILED:
+		{
+			return CitusJobStatusFailedId();
+		}
+	}
+
+	elog(ERROR, "unknown BackgroundJobStatus");
+}
+
+
+/*
+ * BackgroundTaskStatusOid returns the Oid corresponding to SQL enum value corresponding to
+ * the BackgroundTaskStatus.
+ */
+Oid
+BackgroundTaskStatusOid(BackgroundTaskStatus status)
+{
+	switch (status)
+	{
+		case BACKGROUND_TASK_STATUS_BLOCKED:
+		{
+			return CitusTaskStatusBlockedId();
+		}
+
+		case BACKGROUND_TASK_STATUS_RUNNABLE:
+		{
+			return CitusTaskStatusRunnableId();
+		}
+
+		case BACKGROUND_TASK_STATUS_RUNNING:
+		{
+			return CitusTaskStatusRunningId();
+		}
+
+		case BACKGROUND_TASK_STATUS_DONE:
+		{
+			return CitusTaskStatusDoneId();
+		}
+
+		case BACKGROUND_TASK_STATUS_ERROR:
+		{
+			return CitusTaskStatusErrorId();
+		}
+
+		case BACKGROUND_TASK_STATUS_UNSCHEDULED:
+		{
+			return CitusTaskStatusUnscheduledId();
+		}
+
+		case BACKGROUND_TASK_STATUS_CANCELLED:
+		{
+			return CitusTaskStatusCancelledId();
+		}
+
+		case BACKGROUND_TASK_STATUS_CANCELLING:
+		{
+			return CitusTaskStatusCancellingId();
+		}
+	}
+
+	elog(ERROR, "unknown BackgroundTaskStatus");
+	return InvalidOid;
+}
+
+
+/*
+ * GetNextBackgroundJobsJobId reads and increments the SQL sequence associated with the
+ * background job's job_id. After incrementing the counter it returns the counter back to
+ * the caller.
+ *
+ * The return value is typically used to insert new jobs into the catalog.
+ */
+static int64
+GetNextBackgroundJobsJobId(void)
+{
+	return DatumGetInt64(nextval_internal(DistBackgroundJobJobIdSequenceId(), false));
+}
+
+
+/*
+ * GetNextBackgroundTaskTaskId reads and increments the SQL sequence associated with the
+ * background job tasks' task_id. After incrementing the counter it returns the counter
+ * back to the caller.
+ *
+ * The return value is typically used to insert new tasks into the catalog.
+ */
+static int64
+GetNextBackgroundTaskTaskId(void)
+{
+	return DatumGetInt64(nextval_internal(DistBackgroundTaskTaskIdSequenceId(), false));
+}
+
+
+/*
+ * CreateBackgroundJob is a helper function to insert a new Background Job into Citus'
+ * catalog. After inserting the new job's metadataa into the catalog it returns the job_id
+ * assigned to the new job. This is typically used to associate new tasks with the newly
+ * created job.
+ */
+int64
+CreateBackgroundJob(const char *jobType, const char *description)
+{
+	Relation pgDistBackgroundJobs =
+		table_open(DistBackgroundJobRelationId(), RowExclusiveLock);
+
+	/* insert new job */
+	Datum values[Natts_pg_dist_background_job] = { 0 };
+	bool isnull[Natts_pg_dist_background_job] = { 0 };
+	memset(isnull, true, sizeof(isnull));
+
+	int64 jobId = GetNextBackgroundJobsJobId();
+
+	InitFieldValue(Anum_pg_dist_background_job_job_id, values, isnull,
+				   Int64GetDatum(jobId));
+
+	InitFieldValue(Anum_pg_dist_background_job_state, values, isnull,
+				   ObjectIdGetDatum(CitusJobStatusScheduledId()));
+
+	if (jobType)
+	{
+		NameData jobTypeName = { 0 };
+		namestrcpy(&jobTypeName, jobType);
+		InitFieldValue(Anum_pg_dist_background_job_job_type, values, isnull,
+					   NameGetDatum(&jobTypeName));
+	}
+
+	if (description)
+	{
+		InitFieldText(Anum_pg_dist_background_job_description, values, isnull,
+					  description);
+	}
+
+	HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistBackgroundJobs),
+										 values, isnull);
+	CatalogTupleInsert(pgDistBackgroundJobs, newTuple);
+
+	CommandCounterIncrement();
+
+	table_close(pgDistBackgroundJobs, NoLock);
+
+	return jobId;
+}
+
+
+/*
+ * ScheduleBackgroundTask creates a new background task to be executed in the background.
+ *
+ * The new task is associated with an existing job based on it's id.
+ *
+ * Optionally the new task can depend on separate tasks associated with the same job. When
+ * a new task is created with dependencies on previous tasks we assume this task is
+ * blocked on its depending tasks.
+ */
+BackgroundTask *
+ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskCount,
+					   int64 dependingTaskIds[])
+{
+	BackgroundTask *task = NULL;
+
+	Relation pgDistBackgroundJob =
+		table_open(DistBackgroundJobRelationId(), ExclusiveLock);
+	Relation pgDistBackgroundTask =
+		table_open(DistBackgroundTaskRelationId(), ExclusiveLock);
+	Relation pgDistbackgroundTasksDepend = NULL;
+	if (dependingTaskCount > 0)
+	{
+		pgDistbackgroundTasksDepend =
+			table_open(DistBackgroundTaskDependRelationId(), ExclusiveLock);
+	}
+
+	/* 1. verify job exist */
+	{
+		ScanKeyData scanKey[1] = { 0 };
+		bool indexOK = true;
+
+		/* pg_dist_background_job.job_id == $jobId */
+		ScanKeyInit(&scanKey[0], Anum_pg_dist_background_job_job_id,
+					BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
+
+		SysScanDesc scanDescriptor =
+			systable_beginscan(pgDistBackgroundJob,
+							   DistBackgroundJobPKeyIndexId(),
+							   indexOK, NULL, lengthof(scanKey), scanKey);
+
+		HeapTuple jobTuple = systable_getnext(scanDescriptor);
+		if (!HeapTupleIsValid(jobTuple))
+		{
+			ereport(ERROR, (errmsg("job for newly created task does not exist.")));
+		}
+
+		systable_endscan(scanDescriptor);
+	}
+
+	/* 2. insert new task */
+	{
+		Datum values[Natts_pg_dist_background_task] = { 0 };
+		bool nulls[Natts_pg_dist_background_task] = { 0 };
+
+		memset(nulls, true, sizeof(nulls));
+
+		int64 taskId = GetNextBackgroundTaskTaskId();
+
+		values[Anum_pg_dist_background_task_job_id - 1] = Int64GetDatum(jobId);
+		nulls[Anum_pg_dist_background_task_job_id - 1] = false;
+
+		values[Anum_pg_dist_background_task_task_id - 1] = Int64GetDatum(taskId);
+		nulls[Anum_pg_dist_background_task_task_id - 1] = false;
+
+		values[Anum_pg_dist_background_task_owner - 1] = ObjectIdGetDatum(owner);
+		nulls[Anum_pg_dist_background_task_owner - 1] = false;
+
+		Oid statusOid = InvalidOid;
+		if (dependingTaskCount == 0)
+		{
+			statusOid = CitusTaskStatusRunnableId();
+		}
+		else
+		{
+			statusOid = CitusTaskStatusBlockedId();
+		}
+		values[Anum_pg_dist_background_task_status - 1] = ObjectIdGetDatum(statusOid);
+		nulls[Anum_pg_dist_background_task_status - 1] = false;
+
+		values[Anum_pg_dist_background_task_command - 1] = CStringGetTextDatum(command);
+		nulls[Anum_pg_dist_background_task_command - 1] = false;
+
+		values[Anum_pg_dist_background_task_message - 1] = CStringGetTextDatum("");
+		nulls[Anum_pg_dist_background_task_message - 1] = false;
+
+		HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistBackgroundTask),
+											 values, nulls);
+		CatalogTupleInsert(pgDistBackgroundTask, newTuple);
+
+		task = palloc0(sizeof(BackgroundTask));
+		task->taskid = taskId;
+		task->status = BACKGROUND_TASK_STATUS_RUNNABLE;
+		task->command = pstrdup(command);
+	}
+
+	/* 3. insert dependencies into catalog */
+	{
+		for (int i = 0; i < dependingTaskCount; i++)
+		{
+			/* 3.1 after verifying the task exists for this job */
+			{
+				ScanKeyData scanKey[2] = { 0 };
+				bool indexOK = true;
+
+				/* pg_dist_background_task.job_id == $jobId */
+				ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_job_id,
+							BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
+
+				/* pg_dist_background_task.task_id == $taskId */
+				ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_task_id,
+							BTEqualStrategyNumber, F_INT8EQ,
+							Int64GetDatum(dependingTaskIds[i]));
+
+				SysScanDesc scanDescriptor =
+					systable_beginscan(pgDistBackgroundTask,
+									   DistBackgroundTaskJobIdTaskIdIndexId(),
+									   indexOK, NULL, lengthof(scanKey), scanKey);
+
+				HeapTuple taskTuple = systable_getnext(scanDescriptor);
+				if (!HeapTupleIsValid(taskTuple))
+				{
+					ereport(ERROR, (errmsg("depending task for newly scheduled task does "
+										   "not exist")));
+				}
+
+				systable_endscan(scanDescriptor);
+			}
+
+			Assert(pgDistbackgroundTasksDepend != NULL);
+
+			Datum values[Natts_pg_dist_background_task_depend] = { 0 };
+			bool nulls[Natts_pg_dist_background_task_depend] = { 0 };
+			memset(nulls, true, sizeof(nulls));
+
+			values[Anum_pg_dist_background_task_depend_job_id - 1] =
+				Int64GetDatum(jobId);
+			nulls[Anum_pg_dist_background_task_depend_job_id - 1] = false;
+
+			values[Anum_pg_dist_background_task_depend_task_id - 1] =
+				Int64GetDatum(task->taskid);
+			nulls[Anum_pg_dist_background_task_depend_task_id - 1] = false;
+
+			values[Anum_pg_dist_background_task_depend_depends_on - 1] =
+				Int64GetDatum(dependingTaskIds[i]);
+			nulls[Anum_pg_dist_background_task_depend_depends_on - 1] = false;
+
+			HeapTuple newTuple = heap_form_tuple(
+				RelationGetDescr(pgDistbackgroundTasksDepend), values, nulls);
+			CatalogTupleInsert(pgDistbackgroundTasksDepend, newTuple);
+		}
+	}
+
+	if (pgDistbackgroundTasksDepend)
+	{
+		table_close(pgDistbackgroundTasksDepend, NoLock);
+	}
+	table_close(pgDistBackgroundTask, NoLock);
+	table_close(pgDistBackgroundJob, NoLock);
+
+	CommandCounterIncrement();
+
+	return task;
+}
+
+
+/*
+ * ResetRunningBackgroundTasks finds all tasks currently in Running state and resets their
+ * state back to runnable.
+ *
+ * While marking running tasks as runnable we check if the task might still be locked and
+ * the pid is managed by our current postmaster. If both are the case we terminate the
+ * backend. This will make sure that if a task was still running after a monitor crash or
+ * restart we stop the executor before we start a new one.
+ *
+ * Any pid associated with the running tasks will be cleared back to the NULL value.
+ */
+void
+ResetRunningBackgroundTasks(void)
+{
+	const int scanKeyCount = 1;
+	ScanKeyData scanKey[1];
+	const bool indexOK = true;
+
+	Relation pgDistBackgroundTasks =
+		table_open(DistBackgroundTaskRelationId(), ExclusiveLock);
+
+	/* pg_dist_background_task.status == 'running' */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_status,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(CitusTaskStatusRunningId()));
+
+	SysScanDesc scanDescriptor =
+		systable_beginscan(pgDistBackgroundTasks,
+						   DistBackgroundTaskStatusTaskIdIndexId(),
+						   indexOK, NULL, scanKeyCount,
+						   scanKey);
+
+	HeapTuple taskTuple = NULL;
+	List *taskIdsToWait = NIL;
+	while (HeapTupleIsValid(taskTuple = systable_getnext(scanDescriptor)))
+	{
+		Datum values[Natts_pg_dist_background_task] = { 0 };
+		bool isnull[Natts_pg_dist_background_task] = { 0 };
+		bool replace[Natts_pg_dist_background_task] = { 0 };
+
+		TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
+		heap_deform_tuple(taskTuple, tupleDescriptor, values, isnull);
+
+		values[Anum_pg_dist_background_task_status - 1] =
+			ObjectIdGetDatum(CitusTaskStatusRunnableId());
+		isnull[Anum_pg_dist_background_task_status - 1] = false;
+		replace[Anum_pg_dist_background_task_status - 1] = true;
+
+		/* if there is a pid we need to signal the backend to stop */
+		if (!isnull[Anum_pg_dist_background_task_pid - 1])
+		{
+			/*
+			 * Before signalling the pid we check if the task lock is held, otherwise we
+			 * might cancel an arbitrary postgres backend
+			 */
+
+			int64 taskId =
+				DatumGetInt64(values[Anum_pg_dist_background_task_task_id - 1]);
+
+			/* No need to release lock, will get unlocked once our changes commit */
+			LOCKTAG locktag = { 0 };
+			SET_LOCKTAG_BACKGROUND_TASK(locktag, taskId);
+			const bool sessionLock = false;
+			const bool dontWait = true;
+			LockAcquireResult locked = LockAcquire(&locktag, AccessExclusiveLock,
+												   sessionLock, dontWait);
+			if (locked == LOCKACQUIRE_NOT_AVAIL)
+			{
+				/*
+				 * There is still an executor holding the lock, needs a SIGTERM.
+				 */
+				Datum pidDatum = values[Anum_pg_dist_background_task_pid - 1];
+				const Datum timeoutDatum = Int64GetDatum(0);
+				Datum signalSuccessDatum = DirectFunctionCall2(pg_terminate_backend,
+															   pidDatum, timeoutDatum);
+				bool signalSuccess = DatumGetBool(signalSuccessDatum);
+				if (!signalSuccess)
+				{
+					/*
+					 * We run this backend as superuser, any failure will probably cause
+					 * long delays waiting on the task lock before we can commit.
+					 */
+					ereport(WARNING,
+							(errmsg("could not send signal to process %d: %m",
+									DatumGetInt32(pidDatum)),
+							 errdetail("failing to signal an old executor could cause "
+									   "delays starting the background task monitor")));
+				}
+
+				/*
+				 * Since we didn't already acquire the lock here we need to wait on this
+				 * lock before committing the change to the catalog. However, we first
+				 * want to signal all backends before waiting on the lock, hence we keep a
+				 * list for later
+				 */
+				int64 *taskIdTarget = palloc0(sizeof(int64));
+				*taskIdTarget = taskId;
+				taskIdsToWait = lappend(taskIdsToWait, taskIdTarget);
+			}
+		}
+
+		values[Anum_pg_dist_background_task_pid - 1] = InvalidOid;
+		isnull[Anum_pg_dist_background_task_pid - 1] = true;
+		replace[Anum_pg_dist_background_task_pid - 1] = true;
+
+		taskTuple = heap_modify_tuple(taskTuple, tupleDescriptor, values, isnull,
+									  replace);
+
+		CatalogTupleUpdate(pgDistBackgroundTasks, &taskTuple->t_self, taskTuple);
+	}
+
+	if (list_length(taskIdsToWait) > 0)
+	{
+		ereport(LOG, (errmsg("waiting till all tasks release their lock before "
+							 "continuing with the background task monitor")));
+
+		/* there are tasks that need to release their lock before we can continue */
+		int64 *taskId = NULL;
+		foreach_ptr(taskId, taskIdsToWait)
+		{
+			LOCKTAG locktag = { 0 };
+			SET_LOCKTAG_BACKGROUND_TASK(locktag, *taskId);
+			const bool sessionLock = false;
+			const bool dontWait = false;
+			(void) LockAcquire(&locktag, AccessExclusiveLock, sessionLock, dontWait);
+		}
+	}
+
+	CommandCounterIncrement();
+
+	systable_endscan(scanDescriptor);
+
+	table_close(pgDistBackgroundTasks, NoLock);
+}
+
+
+/*
+ * DeformBackgroundJobHeapTuple pareses a HeapTuple from pg_dist_background_job into its
+ * inmemory representation. This can be used while scanning a heap to quickly get access
+ * to all fields of a Job.
+ */
+static BackgroundJob *
+DeformBackgroundJobHeapTuple(TupleDesc tupleDescriptor, HeapTuple jobTuple)
+{
+	Datum values[Natts_pg_dist_background_job] = { 0 };
+	bool nulls[Natts_pg_dist_background_job] = { 0 };
+	heap_deform_tuple(jobTuple, tupleDescriptor, values, nulls);
+
+	BackgroundJob *job = palloc0(sizeof(BackgroundJob));
+	job->jobid = DatumGetInt64(values[Anum_pg_dist_background_job_job_id - 1]);
+	job->state = BackgroundJobStatusByOid(
+		DatumGetObjectId(values[Anum_pg_dist_background_job_state - 1]));
+
+	if (!nulls[Anum_pg_dist_background_job_job_type - 1])
+	{
+		Name jobTypeName = DatumGetName(values[Anum_pg_dist_background_job_job_type -
+											   1]);
+		job->jobType = pstrdup(NameStr(*jobTypeName));
+	}
+
+	if (!nulls[Anum_pg_dist_background_job_description - 1])
+	{
+		job->description = text_to_cstring(
+			DatumGetTextP(values[Anum_pg_dist_background_job_description - 1]));
+	}
+
+	if (!nulls[Anum_pg_dist_background_job_started_at - 1])
+	{
+		TimestampTz startedAt =
+			DatumGetTimestampTz(values[Anum_pg_dist_background_job_started_at - 1]);
+		SET_NULLABLE_FIELD(job, started_at, startedAt);
+	}
+
+	if (!nulls[Anum_pg_dist_background_job_finished_at - 1])
+	{
+		TimestampTz finishedAt =
+			DatumGetTimestampTz(values[Anum_pg_dist_background_job_finished_at - 1]);
+		SET_NULLABLE_FIELD(job, finished_at, finishedAt);
+	}
+
+	return job;
+}
+
+
+/*
+ * DeformBackgroundTaskHeapTuple parses a HeapTuple from pg_dist_background_task into its
+ * inmemory representation. This can be used while scanning a heap to quickly get access
+ * to all fields of a Task.
+ */
+static BackgroundTask *
+DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor, HeapTuple taskTuple)
+{
+	Datum values[Natts_pg_dist_background_task] = { 0 };
+	bool nulls[Natts_pg_dist_background_task] = { 0 };
+	heap_deform_tuple(taskTuple, tupleDescriptor, values, nulls);
+
+	BackgroundTask *task = palloc0(sizeof(BackgroundTask));
+	task->jobid = DatumGetInt64(values[Anum_pg_dist_background_task_job_id - 1]);
+	task->taskid = DatumGetInt64(values[Anum_pg_dist_background_task_task_id - 1]);
+	task->owner = DatumGetObjectId(values[Anum_pg_dist_background_task_owner - 1]);
+	if (!nulls[Anum_pg_dist_background_task_pid - 1])
+	{
+		int32 pid = DatumGetInt32(values[Anum_pg_dist_background_task_pid - 1]);
+		SET_NULLABLE_FIELD(task, pid, pid);
+	}
+	task->status = BackgroundTaskStatusByOid(
+		DatumGetObjectId(values[Anum_pg_dist_background_task_status - 1]));
+
+	task->command = text_to_cstring(
+		DatumGetTextP(values[Anum_pg_dist_background_task_command - 1]));
+
+	if (!nulls[Anum_pg_dist_background_task_retry_count - 1])
+	{
+		int32 retryCount =
+			DatumGetInt32(values[Anum_pg_dist_background_task_retry_count - 1]);
+		SET_NULLABLE_FIELD(task, retry_count, retryCount);
+	}
+
+	if (!nulls[Anum_pg_dist_background_task_not_before - 1])
+	{
+		TimestampTz notBefore =
+			DatumGetTimestampTz(values[Anum_pg_dist_background_task_not_before - 1]);
+		SET_NULLABLE_FIELD(task, not_before, notBefore);
+	}
+
+	if (!nulls[Anum_pg_dist_background_task_message - 1])
+	{
+		task->message =
+			TextDatumGetCString(values[Anum_pg_dist_background_task_message - 1]);
+	}
+
+	return task;
+}
+
+
+/*
+ * BackgroundTaskHasUmnetDependencies checks if a task from the given job has any unmet
+ * dependencies. An unmet dependency is a Task that the task in question depends on and
+ * has not reached its Done state.
+ */
+static bool
+BackgroundTaskHasUmnetDependencies(int64 jobId, int64 taskId)
+{
+	bool hasUnmetDependency = false;
+
+	Relation pgDistBackgroundTasksDepend =
+		table_open(DistBackgroundTaskDependRelationId(), AccessShareLock);
+
+	ScanKeyData scanKey[2] = { 0 };
+	bool indexOK = true;
+
+	/* pg_catalog.pg_dist_background_task_depend.job_id = jobId */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_depend_job_id,
+				BTEqualStrategyNumber, F_INT8EQ, jobId);
+
+	/* pg_catalog.pg_dist_background_task_depend.task_id = $taskId */
+	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_depend_task_id,
+				BTEqualStrategyNumber, F_INT8EQ, taskId);
+
+	SysScanDesc scanDescriptor =
+		systable_beginscan(pgDistBackgroundTasksDepend,
+						   DistBackgroundTaskDependTaskIdIndexId(),
+						   indexOK, NULL, lengthof(scanKey),
+						   scanKey);
+
+	HeapTuple dependTuple = NULL;
+	while (HeapTupleIsValid(dependTuple = systable_getnext(scanDescriptor)))
+	{
+		Form_pg_dist_background_task_depend depends =
+			(Form_pg_dist_background_task_depend) GETSTRUCT(dependTuple);
+
+		BackgroundTask *dependingJob = GetBackgroundTaskByTaskId(depends->depends_on);
+
+		/*
+		 * Only when the status of all depending jobs is done we clear this job and say
+		 * that is has no unmet dependencies.
+		 */
+		if (dependingJob->status == BACKGROUND_TASK_STATUS_DONE)
+		{
+			continue;
+		}
+
+		hasUnmetDependency = true;
+		break;
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistBackgroundTasksDepend, AccessShareLock);
+
+	return hasUnmetDependency;
+}
+
+
+/*
+ * BackgroundTaskReadyToRun checks if a task is ready to run. This consists of two checks
+ *  - the task has no unmet dependencies
+ *  - the task either has no not_before value set, or the not_before time has passed.
+ *
+ * Due to the costs of checking we check them in reverse order, but conceptually they
+ * should be thought of in the above order.
+ */
+static bool
+BackgroundTaskReadyToRun(BackgroundTask *task)
+{
+	if (task->not_before)
+	{
+		if (*(task->not_before) > GetCurrentTimestamp())
+		{
+			/* task should not yet be run */
+			return false;
+		}
+	}
+
+	if (BackgroundTaskHasUmnetDependencies(task->jobid, task->taskid))
+	{
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * GetRunnableBackgroundTask returns the first candidate for a task to be run. When a task
+ * is returned it has been checked for all the preconditions to hold.
+ *
+ * That means, if there is no task returned the background worker should close and let the
+ * maintenance daemon start a new background tasks queue monitor once task become
+ * available.
+ */
+BackgroundTask *
+GetRunnableBackgroundTask(void)
+{
+	Relation pgDistBackgroundTasks =
+		table_open(DistBackgroundTaskRelationId(), ExclusiveLock);
+
+	BackgroundTaskStatus taskStatus[] = {
+		BACKGROUND_TASK_STATUS_RUNNABLE
+	};
+
+	BackgroundTask *task = NULL;
+	for (int i = 0; !task && i < sizeof(taskStatus) / sizeof(taskStatus[0]); i++)
+	{
+		const int scanKeyCount = 1;
+		ScanKeyData scanKey[1] = { 0 };
+		const bool indexOK = true;
+
+		/* pg_dist_background_task.status == taskStatus[i] */
+		ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_status,
+					BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(
+						BackgroundTaskStatusOid(taskStatus[i])));
+
+		SysScanDesc scanDescriptor =
+			systable_beginscan(pgDistBackgroundTasks,
+							   DistBackgroundTaskStatusTaskIdIndexId(),
+							   indexOK, NULL, scanKeyCount,
+							   scanKey);
+
+		HeapTuple taskTuple = NULL;
+		TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
+		while (HeapTupleIsValid(taskTuple = systable_getnext(scanDescriptor)))
+		{
+			task = DeformBackgroundTaskHeapTuple(tupleDescriptor, taskTuple);
+			if (BackgroundTaskReadyToRun(task))
+			{
+				/* found task, close table and return */
+				break;
+			}
+			task = NULL;
+		}
+
+		systable_endscan(scanDescriptor);
+	}
+
+	table_close(pgDistBackgroundTasks, NoLock);
+
+	return task;
+}
+
+
+/*
+ * GetBackgroundJobByJobId loads a BackgroundJob from the catalog into memory. Return's a
+ * null pointer if no job exist with the given JobId.
+ */
+BackgroundJob *
+GetBackgroundJobByJobId(int64 jobId)
+{
+	ScanKeyData scanKey[1] = { 0 };
+	bool indexOK = true;
+
+	Relation pgDistBackgroundJobs =
+		table_open(DistBackgroundJobRelationId(), AccessShareLock);
+
+	/* pg_dist_background_task.job_id == $jobId */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_job_job_id,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
+
+	SysScanDesc scanDescriptor =
+		systable_beginscan(pgDistBackgroundJobs, DistBackgroundJobPKeyIndexId(),
+						   indexOK, NULL, lengthof(scanKey), scanKey);
+
+	HeapTuple taskTuple = systable_getnext(scanDescriptor);
+	BackgroundJob *job = NULL;
+	if (HeapTupleIsValid(taskTuple))
+	{
+		TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundJobs);
+		job = DeformBackgroundJobHeapTuple(tupleDescriptor, taskTuple);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistBackgroundJobs, AccessShareLock);
+
+	return job;
+}
+
+
+/*
+ * GetBackgroundTaskByTaskId loads a BackgroundTask from the catalog into memory. Return's
+ * a null pointer if no job exist with the given JobId and TaskId.
+ */
+BackgroundTask *
+GetBackgroundTaskByTaskId(int64 taskId)
+{
+	ScanKeyData scanKey[1] = { 0 };
+	bool indexOK = true;
+
+	Relation pgDistBackgroundTasks =
+		table_open(DistBackgroundTaskRelationId(), AccessShareLock);
+
+	/* pg_dist_background_task.task_id == $taskId */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_task_id,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(taskId));
+
+	SysScanDesc scanDescriptor =
+		systable_beginscan(pgDistBackgroundTasks,
+						   DistBackgroundTaskPKeyIndexId(),
+						   indexOK, NULL, lengthof(scanKey), scanKey);
+
+	HeapTuple taskTuple = systable_getnext(scanDescriptor);
+	BackgroundTask *task = NULL;
+	if (HeapTupleIsValid(taskTuple))
+	{
+		TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
+		task = DeformBackgroundTaskHeapTuple(tupleDescriptor, taskTuple);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistBackgroundTasks, AccessShareLock);
+
+	return task;
+}
+
+
+typedef struct JobTaskStatusCounts
+{
+	int blocked;
+	int runnable;
+	int running;
+	int done;
+	int error;
+	int unscheduled;
+	int cancelled;
+	int cancelling;
+} JobTaskStatusCounts;
+
+
+/*
+ * JobTasksStatusCount scans all tasks associated with the provided job and count's the
+ * number of tasks that are tracked in each state. Effectively grouping and counting the
+ * tasks by their state.
+ */
+static JobTaskStatusCounts
+JobTasksStatusCount(int64 jobId)
+{
+	Relation pgDistBackgroundTasks =
+		table_open(DistBackgroundTaskRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
+
+	ScanKeyData scanKey[1] = { 0 };
+	const bool indexOK = true;
+
+	/* WHERE job_id = $task->jobId */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_job_id,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
+
+	SysScanDesc scanDescriptor =
+		systable_beginscan(pgDistBackgroundTasks,
+						   DistBackgroundTaskJobIdTaskIdIndexId(),
+						   indexOK, NULL, lengthof(scanKey), scanKey);
+
+	JobTaskStatusCounts counts = { 0 };
+	HeapTuple heapTuple = NULL;
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		Datum values[Natts_pg_dist_background_task] = { 0 };
+		bool isnull[Natts_pg_dist_background_task] = { 0 };
+
+		heap_deform_tuple(heapTuple, tupleDescriptor, values, isnull);
+
+		Oid statusOid = DatumGetObjectId(values[Anum_pg_dist_background_task_status -
+												1]);
+		BackgroundTaskStatus status = BackgroundTaskStatusByOid(statusOid);
+
+		switch (status)
+		{
+			case BACKGROUND_TASK_STATUS_BLOCKED:
+			{
+				counts.blocked++;
+				break;
+			}
+
+			case BACKGROUND_TASK_STATUS_RUNNABLE:
+			{
+				counts.runnable++;
+				break;
+			}
+
+			case BACKGROUND_TASK_STATUS_RUNNING:
+			{
+				counts.running++;
+				break;
+			}
+
+			case BACKGROUND_TASK_STATUS_DONE:
+			{
+				counts.done++;
+				break;
+			}
+
+			case BACKGROUND_TASK_STATUS_ERROR:
+			{
+				counts.error++;
+				break;
+			}
+
+			case BACKGROUND_TASK_STATUS_UNSCHEDULED:
+			{
+				counts.unscheduled++;
+				break;
+			}
+
+			case BACKGROUND_TASK_STATUS_CANCELLED:
+			{
+				counts.cancelled++;
+				break;
+			}
+
+			case BACKGROUND_TASK_STATUS_CANCELLING:
+			{
+				counts.cancelling++;
+				break;
+			}
+
+			default:
+			{
+				elog(ERROR, "unknown state in pg_dist_background_task");
+			}
+		}
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistBackgroundTasks, NoLock);
+
+	return counts;
+}
+
+
+/*
+ * SetFieldValue populates values, isnull, replace according to the newValue passed,
+ * returning if the value has been updated or not. The replace argument can be omitted if
+ * we are simply initializing a field.
+ *
+ * suggested use would be:
+ *   bool updated = false;
+ *   updated |= SetFieldValue(Anum_...._...., isnull, replace, values, newValue);
+ *   updated |= SetFieldText(Anum_...._...., isnull, replace, values, "hello world");
+ *   updated |= SetFieldNull(Anum_...._...., isnull, replace, values);
+ *
+ * Only if updated is set in the end the tuple has to be updated in the catalog.
+ */
+static bool
+SetFieldValue(int attno, Datum values[], bool isnull[], bool replace[], Datum newValue)
+{
+	int idx = attno - 1;
+	bool updated = false;
+
+	if (!isnull[idx] && newValue == values[idx])
+	{
+		return updated;
+	}
+
+	values[idx] = newValue;
+	isnull[idx] = false;
+	updated = true;
+
+	if (replace)
+	{
+		replace[idx] = true;
+	}
+	return updated;
+}
+
+
+/*
+ * SetFieldText populates values, isnull, replace according to the newValue passed,
+ * returning if the value has been updated or not. The replace argument can be omitted if
+ * we are simply initializing a field.
+ *
+ * suggested use would be:
+ *   bool updated = false;
+ *   updated |= SetFieldValue(Anum_...._...., isnull, replace, values, newValue);
+ *   updated |= SetFieldText(Anum_...._...., isnull, replace, values, "hello world");
+ *   updated |= SetFieldNull(Anum_...._...., isnull, replace, values);
+ *
+ * Only if updated is set in the end the tuple has to be updated in the catalog.
+ */
+static bool
+SetFieldText(int attno, Datum values[], bool isnull[], bool replace[],
+			 const char *newValue)
+{
+	int idx = attno - 1;
+	bool updated = false;
+
+	if (!isnull[idx])
+	{
+		char *oldText = TextDatumGetCString(values[idx]);
+		if (strcmp(oldText, newValue) == 0)
+		{
+			return updated;
+		}
+	}
+
+	values[idx] = CStringGetTextDatum(newValue);
+	isnull[idx] = false;
+	updated = true;
+
+	if (replace)
+	{
+		replace[idx] = true;
+	}
+	return updated;
+}
+
+
+/*
+ * SetFieldNull populates values, isnull and replace according to a null value,
+ * returning if the value has been updated or not. The replace argument can be omitted if
+ * we are simply initializing a field.
+ *
+ * suggested use would be:
+ *   bool updated = false;
+ *   updated |= SetFieldValue(Anum_...._...., isnull, replace, values, newValue);
+ *   updated |= SetFieldText(Anum_...._...., isnull, replace, values, "hello world");
+ *   updated |= SetFieldNull(Anum_...._...., isnull, replace, values);
+ *
+ * Only if updated is set in the end the tuple has to be updated in the catalog.
+ */
+static bool
+SetFieldNull(int attno, Datum values[], bool isnull[], bool replace[])
+{
+	int idx = attno - 1;
+	bool updated = false;
+
+	if (isnull[idx])
+	{
+		return updated;
+	}
+
+	isnull[idx] = true;
+	values[idx] = InvalidOid;
+	updated = true;
+
+	if (replace)
+	{
+		replace[idx] = true;
+	}
+	return updated;
+}
+
+
+/*
+ * UpdateBackgroundJob updates the job's metadata based on the most recent status of all
+ * its associated tasks.
+ *
+ * Since the state of a job is a function of the state of all associated tasks this
+ * function projects the tasks states into the job's state.
+ *
+ * When Citus makes a change to any of the tasks associated with the job it should call
+ * this function to correctly project the task updates onto the jobs metadata.
+ */
+void
+UpdateBackgroundJob(int64 jobId)
+{
+	JobTaskStatusCounts counts = JobTasksStatusCount(jobId);
+	BackgroundJobStatus status = BACKGROUND_JOB_STATUS_RUNNING;
+
+	if (counts.cancelling > 0)
+	{
+		status = BACKGROUND_JOB_STATUS_CANCELLING;
+	}
+	else if (counts.cancelled > 0)
+	{
+		status = BACKGROUND_JOB_STATUS_CANCELLED;
+	}
+	else if (counts.blocked + counts.runnable + counts.running + counts.error +
+			 counts.unscheduled == 0)
+	{
+		/* all tasks are done, job is finished */
+		status = BACKGROUND_JOB_STATUS_FINISHED;
+	}
+	else if (counts.error + counts.unscheduled > 0)
+	{
+		/* we are either failing, or failed */
+		if (counts.blocked + counts.runnable + counts.running > 0)
+		{
+			/* failing, as there are still tasks to be run */
+			status = BACKGROUND_JOB_STATUS_FAILING;
+		}
+		else
+		{
+			status = BACKGROUND_JOB_STATUS_FAILED;
+		}
+	}
+	else if (counts.blocked + counts.runnable + counts.running > 0)
+	{
+		status = BACKGROUND_JOB_STATUS_RUNNING;
+	}
+	else
+	{
+		return;
+	}
+
+	Relation pgDistBackgroundJobs =
+		table_open(DistBackgroundJobRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundJobs);
+
+	ScanKeyData scanKey[1] = { 0 };
+	const bool indexOK = true;
+
+	/* WHERE job_id = $task->jobId */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_job_job_id,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
+
+	SysScanDesc scanDescriptor =
+		systable_beginscan(pgDistBackgroundJobs,
+						   DistBackgroundJobPKeyIndexId(),
+						   indexOK, NULL, lengthof(scanKey), scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find background jobs entry for job_id: "
+							   UINT64_FORMAT, jobId)));
+	}
+
+	Datum values[Natts_pg_dist_background_task] = { 0 };
+	bool isnull[Natts_pg_dist_background_task] = { 0 };
+	bool replace[Natts_pg_dist_background_task] = { 0 };
+
+	heap_deform_tuple(heapTuple, tupleDescriptor, values, isnull);
+
+	bool updated = false;
+
+	Oid stateOid = BackgroundJobStatusOid(status);
+	updated |= SetFieldValue(Anum_pg_dist_background_job_state, values, isnull, replace,
+							 ObjectIdGetDatum(stateOid));
+
+	if (status == BACKGROUND_JOB_STATUS_RUNNING)
+	{
+		if (isnull[Anum_pg_dist_background_job_started_at - 1])
+		{
+			/* first time status has been updated and was running, updating started_at */
+			TimestampTz startedAt = GetCurrentTimestamp();
+			updated |= SetFieldValue(Anum_pg_dist_background_job_started_at, values,
+									 isnull, replace, TimestampTzGetDatum(startedAt));
+		}
+	}
+
+	if (IsBackgroundJobStatusTerminal(status))
+	{
+		if (isnull[Anum_pg_dist_background_job_finished_at - 1])
+		{
+			/* didn't have a finished at time just yet, updating to now */
+			TimestampTz finishedAt = GetCurrentTimestamp();
+			updated |= SetFieldValue(Anum_pg_dist_background_job_finished_at, values,
+									 isnull, replace, TimestampTzGetDatum(finishedAt));
+		}
+	}
+
+	if (updated)
+	{
+		heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
+									  replace);
+
+		CatalogTupleUpdate(pgDistBackgroundJobs, &heapTuple->t_self, heapTuple);
+
+		CommandCounterIncrement();
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistBackgroundJobs, NoLock);
+}
+
+
+/*
+ * UpdateBackgroundTask updates the catalog entry for the passed task, preventing an
+ * actual update when the inmemory representation is the same as the one stored in the
+ * catalog.
+ */
+void
+UpdateBackgroundTask(BackgroundTask *task)
+{
+	Relation pgDistBackgroundTasks =
+		table_open(DistBackgroundTaskRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
+
+	ScanKeyData scanKey[1] = { 0 };
+	const bool indexOK = true;
+
+	/* WHERE task_id = $task->taskid */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_task_id,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(task->taskid));
+
+	SysScanDesc scanDescriptor =
+		systable_beginscan(pgDistBackgroundTasks,
+						   DistBackgroundTaskPKeyIndexId(),
+						   indexOK, NULL, lengthof(scanKey), scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find background task entry for :"
+							   "job_id/task_id: " UINT64_FORMAT "/" UINT64_FORMAT,
+							   task->jobid, task->taskid)));
+	}
+
+	Datum values[Natts_pg_dist_background_task] = { 0 };
+	bool isnull[Natts_pg_dist_background_task] = { 0 };
+	bool replace[Natts_pg_dist_background_task] = { 0 };
+
+	heap_deform_tuple(heapTuple, tupleDescriptor, values, isnull);
+
+	bool updated = false;
+
+	updated |= SetFieldValue(Anum_pg_dist_background_task_owner, values, isnull, replace,
+							 task->owner);
+
+	if (task->pid)
+	{
+		updated |= SetFieldValue(Anum_pg_dist_background_task_pid, values, isnull,
+								 replace, Int32GetDatum(*task->pid));
+	}
+	else
+	{
+		updated |= SetFieldNull(Anum_pg_dist_background_task_pid, values, isnull,
+								replace);
+	}
+
+	Oid statusOid = ObjectIdGetDatum(BackgroundTaskStatusOid(task->status));
+	updated |= SetFieldValue(Anum_pg_dist_background_task_status, values, isnull, replace,
+							 statusOid);
+
+	if (task->retry_count)
+	{
+		updated |= SetFieldValue(Anum_pg_dist_background_task_retry_count, values, isnull,
+								 replace, Int32GetDatum(*task->retry_count));
+	}
+	else
+	{
+		updated |= SetFieldNull(Anum_pg_dist_background_task_retry_count, values, isnull,
+								replace);
+	}
+
+	if (task->not_before)
+	{
+		updated |= SetFieldValue(Anum_pg_dist_background_task_not_before, values, isnull,
+								 replace, TimestampTzGetDatum(*task->not_before));
+	}
+	else
+	{
+		updated |= SetFieldNull(Anum_pg_dist_background_task_not_before, values, isnull,
+								replace);
+	}
+
+	if (task->message)
+	{
+		updated |= SetFieldText(Anum_pg_dist_background_task_message, values, isnull,
+								replace, task->message);
+	}
+	else
+	{
+		updated |= SetFieldNull(Anum_pg_dist_background_task_message, values, isnull,
+								replace);
+	}
+
+	if (updated)
+	{
+		heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
+									  replace);
+
+		CatalogTupleUpdate(pgDistBackgroundTasks, &heapTuple->t_self, heapTuple);
+
+		CommandCounterIncrement();
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistBackgroundTasks, NoLock);
+}
+
+
+/*
+ * GetDependantTasks returns a list of taskId's containing all tasks depending on the task
+ * passed via its arguments.
+ *
+ * Becasue tasks are int64 we allocate and return a List of int64 pointers.
+ */
+static List *
+GetDependantTasks(int64 jobId, int64 taskId)
+{
+	Relation pgDistBackgroundTasksDepends =
+		table_open(DistBackgroundTaskDependRelationId(), RowExclusiveLock);
+
+	ScanKeyData scanKey[2] = { 0 };
+	const bool indexOK = true;
+
+	/* pg_dist_background_task_depend.job_id = $jobId */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_depend_job_id,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobId));
+
+	/* pg_dist_background_task_depend.depends_on = $taskId */
+	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_depend_depends_on,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(taskId));
+
+	SysScanDesc scanDescriptor =
+		systable_beginscan(pgDistBackgroundTasksDepends,
+						   DistBackgroundTaskDependDependsOnIndexId(),
+						   indexOK,
+						   NULL, lengthof(scanKey), scanKey);
+
+	List *dependantTasks = NIL;
+	HeapTuple heapTuple = NULL;
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		Form_pg_dist_background_task_depend depend =
+			(Form_pg_dist_background_task_depend) GETSTRUCT(heapTuple);
+
+		int64 *dTaskId = palloc0(sizeof(int64));
+		*dTaskId = depend->task_id;
+
+		dependantTasks = lappend(dependantTasks, dTaskId);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistBackgroundTasksDepends, NoLock);
+
+	return dependantTasks;
+}
+
+
+/*
+ * CancelTasksForJob cancels all tasks associated with a job that are not currently
+ * running and are not already in their terminal state. Canceling these tasks consist of
+ * updating the status of the task in the catalog.
+ *
+ * For all other tasks, namely the ones that are currently running, it returns the list of
+ * Pid's of the tasks running. These backends should be signalled for cancellation.
+ *
+ * Since we are either signalling or changing the status of a task we perform appropriate
+ * permission checks. This currently includes the exact same checks pg_cancel_backend
+ * would perform.
+ */
+List *
+CancelTasksForJob(int64 jobid)
+{
+	Relation pgDistBackgroundTasks =
+		table_open(DistBackgroundTaskRelationId(), ExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
+
+	ScanKeyData scanKey[1] = { 0 };
+
+	/* WHERE jobId = $jobid */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_job_id,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobid));
+
+	const bool indexOK = true;
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistBackgroundTasks,
+													DistBackgroundTaskJobIdTaskIdIndexId(),
+													indexOK, NULL,
+													lengthof(scanKey), scanKey);
+
+	List *runningTaskPids = NIL;
+	HeapTuple taskTuple = NULL;
+	while (HeapTupleIsValid(taskTuple = systable_getnext(scanDescriptor)))
+	{
+		Datum values[Natts_pg_dist_background_task] = { 0 };
+		bool nulls[Natts_pg_dist_background_task] = { 0 };
+		bool replace[Natts_pg_dist_background_task] = { 0 };
+		heap_deform_tuple(taskTuple, tupleDescriptor, values, nulls);
+
+		Oid statusOid =
+			DatumGetObjectId(values[Anum_pg_dist_background_task_status - 1]);
+		BackgroundTaskStatus status = BackgroundTaskStatusByOid(statusOid);
+
+		if (IsBackgroundTaskStatusTerminal(status))
+		{
+			continue;
+		}
+
+		/* make sure the current user has the rights to cancel this task */
+		Oid taskOwner = DatumGetObjectId(values[Anum_pg_dist_background_task_owner]);
+		if (superuser_arg(taskOwner) && !superuser())
+		{
+			/* must be a superuser to cancel tasks owned by superuser */
+			ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+							errmsg("must be a superuser to cancel superuser tasks")));
+		}
+		else if (!has_privs_of_role(GetUserId(), taskOwner) &&
+#if PG_VERSION_NUM >= 140000
+				 !has_privs_of_role(GetUserId(), ROLE_PG_SIGNAL_BACKEND))
+#else
+				 !has_privs_of_role(GetUserId(), DEFAULT_ROLE_SIGNAL_BACKENDID))
+#endif
+		{
+			/* user doesn't have the permissions to cancel this job */
+			ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+							errmsg("must be a member of the role whose task is being "
+								   "canceled or member of pg_signal_backend")));
+		}
+
+		BackgroundTaskStatus newStatus = BACKGROUND_TASK_STATUS_CANCELLED;
+		if (status == BACKGROUND_TASK_STATUS_RUNNING)
+		{
+			if (!nulls[Anum_pg_dist_background_task_pid - 1])
+			{
+				int32 pid = DatumGetInt32(values[Anum_pg_dist_background_task_pid - 1]);
+				runningTaskPids = lappend_int(runningTaskPids, pid);
+				newStatus = BACKGROUND_TASK_STATUS_CANCELLING;
+			}
+		}
+
+		/* update task to new status */
+		nulls[Anum_pg_dist_background_task_status - 1] = false;
+		values[Anum_pg_dist_background_task_status - 1] = ObjectIdGetDatum(
+			BackgroundTaskStatusOid(newStatus));
+		replace[Anum_pg_dist_background_task_status - 1] = true;
+
+		taskTuple = heap_modify_tuple(taskTuple, tupleDescriptor, values, nulls,
+									  replace);
+		CatalogTupleUpdate(pgDistBackgroundTasks, &taskTuple->t_self, taskTuple);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistBackgroundTasks, NoLock);
+
+	CommandCounterIncrement();
+
+	return runningTaskPids;
+}
+
+
+/*
+ * UnscheduleDependentTasks follows the dependency tree of the provided task recursively
+ * to unschedule any task depending on the current task.
+ *
+ * This is useful to unschedule any task that can never run because it will never satisfy
+ * the unmet dependency constraint.
+ */
+void
+UnscheduleDependentTasks(BackgroundTask *task)
+{
+	Relation pgDistBackgroundTasks =
+		table_open(DistBackgroundTaskRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistBackgroundTasks);
+
+	List *dependantTasks = GetDependantTasks(task->jobid, task->taskid);
+	while (list_length(dependantTasks) > 0)
+	{
+		/* pop last item from stack */
+		int64 cTaskId = *(int64 *) llast(dependantTasks);
+		dependantTasks = list_delete_last(dependantTasks);
+
+		/* push new dependant tasks on to stack */
+		dependantTasks = list_concat(dependantTasks,
+									 GetDependantTasks(task->jobid, cTaskId));
+
+		/* unschedule current task */
+		{
+			ScanKeyData scanKey[1] = { 0 };
+
+			/* WHERE taskId = dependentTask->taskId */
+			ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_task_id,
+						BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(cTaskId));
+			const bool indexOK = true;
+			SysScanDesc scanDescriptor = systable_beginscan(pgDistBackgroundTasks,
+															DistBackgroundTaskPKeyIndexId(),
+															indexOK, NULL,
+															lengthof(scanKey), scanKey);
+
+			HeapTuple heapTuple = systable_getnext(scanDescriptor);
+			if (!HeapTupleIsValid(heapTuple))
+			{
+				ereport(ERROR, (errmsg("could not find background task entry for "
+									   "task_id: " UINT64_FORMAT, cTaskId)));
+			}
+
+			Datum values[Natts_pg_dist_background_task] = { 0 };
+			bool isnull[Natts_pg_dist_background_task] = { 0 };
+			bool replace[Natts_pg_dist_background_task] = { 0 };
+
+			values[Anum_pg_dist_background_task_status - 1] =
+				ObjectIdGetDatum(CitusTaskStatusUnscheduledId());
+			isnull[Anum_pg_dist_background_task_status - 1] = false;
+			replace[Anum_pg_dist_background_task_status - 1] = true;
+
+			heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
+										  replace);
+			CatalogTupleUpdate(pgDistBackgroundTasks, &heapTuple->t_self, heapTuple);
+
+			systable_endscan(scanDescriptor);
+		}
+	}
+
+	CommandCounterIncrement();
+
+	table_close(pgDistBackgroundTasks, NoLock);
+}
+
+
+/*
+ * UnblockDependingBackgroundTasks unblocks any depending task that now satisfies the
+ * constraaint that it doesn't have unmet dependencies anymore. For this to be done we
+ * will find all tasks depending on the current task. Per found task we check if it has
+ * any unmet dependencies. If no tasks are found that would block the execution of this
+ * task we transition the task to Runnable state.
+ */
+void
+UnblockDependingBackgroundTasks(BackgroundTask *task)
+{
+	Relation pgDistBackgroundTasksDepend =
+		table_open(DistBackgroundTaskDependRelationId(), RowExclusiveLock);
+
+	ScanKeyData scanKey[2] = { 0 };
+
+	/* WHERE jobId = $jobId */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_background_task_depend_job_id,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(task->jobid));
+
+	/* WHERE depends_on = $taskId */
+	ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_depend_depends_on,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(task->taskid));
+	const bool indexOK = true;
+	SysScanDesc scanDescriptor = systable_beginscan(
+		pgDistBackgroundTasksDepend, DistBackgroundTaskDependDependsOnIndexId(), indexOK,
+		NULL, lengthof(scanKey), scanKey);
+
+	HeapTuple heapTuple = NULL;
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		Form_pg_dist_background_task_depend depend =
+			(Form_pg_dist_background_task_depend) GETSTRUCT(heapTuple);
+
+		if (!BackgroundTaskHasUmnetDependencies(task->jobid, depend->task_id))
+		{
+			/*
+			 * The task does not have any unmet dependencies anymore and should become
+			 * runnable
+			 */
+
+			BackgroundTask *unblockedTask = GetBackgroundTaskByTaskId(depend->task_id);
+			if (unblockedTask->status == BACKGROUND_TASK_STATUS_CANCELLED)
+			{
+				continue;
+			}
+
+			Assert(unblockedTask->status == BACKGROUND_TASK_STATUS_BLOCKED);
+			unblockedTask->status = BACKGROUND_TASK_STATUS_RUNNABLE;
+			UpdateBackgroundTask(unblockedTask);
+		}
+	}
+
+	systable_endscan(scanDescriptor);
+
+	table_close(pgDistBackgroundTasksDepend, NoLock);
 }

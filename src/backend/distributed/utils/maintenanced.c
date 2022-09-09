@@ -27,11 +27,13 @@
 #include "access/xlog.h"
 #include "catalog/pg_extension.h"
 #include "citus_version.h"
+#include "catalog/pg_authid.h"
 #include "catalog/pg_namespace.h"
 #include "commands/async.h"
 #include "commands/extension.h"
 #include "libpq/pqsignal.h"
 #include "catalog/namespace.h"
+#include "distributed/background_jobs.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/maintenanced.h"
@@ -54,8 +56,10 @@
 #include "storage/lwlock.h"
 #include "tcop/tcopprot.h"
 #include "common/hashfn.h"
+#include "utils/builtins.h"
 #include "utils/memutils.h"
 #include "utils/lsyscache.h"
+#include "distributed/resource_lock.h"
 
 /*
  * Shared memory data for all maintenance workers.
@@ -93,6 +97,7 @@ typedef struct MaintenanceDaemonDBData
 double DistributedDeadlockDetectionTimeoutFactor = 2.0;
 int Recover2PCInterval = 60000;
 int DeferShardDeleteInterval = 15000;
+int BackgroundTaskQueueCheckInterval = 5000;
 
 /* config variables for metadata sync timeout */
 int MetadataSyncInterval = 60000;
@@ -119,7 +124,6 @@ static void MaintenanceDaemonShmemExit(int code, Datum arg);
 static void MaintenanceDaemonErrorContext(void *arg);
 static bool MetadataSyncTriggeredCheckAndReset(MaintenanceDaemonDBData *dbData);
 static void WarnMaintenanceDaemonNotStarted(void);
-
 
 /*
  * InitializeMaintenanceDaemon, called at server start, is responsible for
@@ -277,12 +281,15 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	TimestampTz nextStatsCollectionTime USED_WITH_LIBCURL_ONLY =
 		TimestampTzPlusMilliseconds(GetCurrentTimestamp(), 60 * 1000);
 	bool retryStatsCollection USED_WITH_LIBCURL_ONLY = false;
-	ErrorContextCallback errorCallback;
 	TimestampTz lastRecoveryTime = 0;
 	TimestampTz lastShardCleanTime = 0;
 	TimestampTz lastStatStatementsPurgeTime = 0;
 	TimestampTz nextMetadataSyncTime = 0;
 
+	/* state kept for the background tasks queue monitor */
+	TimestampTz lastBackgroundTaskQueueCheck = GetCurrentTimestamp();
+	BackgroundWorkerHandle *backgroundTasksQueueBgwHandle = NULL;
+	bool backgroundTasksQueueWarnedForLock = false;
 
 	/*
 	 * We do metadata sync in a separate background worker. We need its
@@ -354,6 +361,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	 * Do so before setting up signals etc, so we never exit without the
 	 * context setup.
 	 */
+	ErrorContextCallback errorCallback = { 0 };
 	memset(&errorCallback, 0, sizeof(errorCallback));
 	errorCallback.callback = MaintenanceDaemonErrorContext;
 	errorCallback.arg = (void *) myDbData;
@@ -680,6 +688,108 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 			/* make sure we don't wait too long, need to convert seconds to milliseconds */
 			timeout = Min(timeout, (StatStatementsPurgeInterval * 1000));
+		}
+
+		pid_t backgroundTaskQueueWorkerPid = 0;
+		BgwHandleStatus backgroundTaskQueueWorkerStatus =
+			backgroundTasksQueueBgwHandle != NULL ? GetBackgroundWorkerPid(
+				backgroundTasksQueueBgwHandle, &backgroundTaskQueueWorkerPid) :
+			BGWH_STOPPED;
+		if (!RecoveryInProgress() && BackgroundTaskQueueCheckInterval > 0 &&
+			TimestampDifferenceExceeds(lastBackgroundTaskQueueCheck,
+									   GetCurrentTimestamp(),
+									   BackgroundTaskQueueCheckInterval) &&
+			backgroundTaskQueueWorkerStatus == BGWH_STOPPED)
+		{
+			/* clear old background worker for task queue before checking for new tasks */
+			if (backgroundTasksQueueBgwHandle)
+			{
+				pfree(backgroundTasksQueueBgwHandle);
+				backgroundTasksQueueBgwHandle = NULL;
+			}
+
+			StartTransactionCommand();
+
+			bool shouldStartBackgroundTaskQueueBackgroundWorker = false;
+			if (!LockCitusExtension())
+			{
+				ereport(DEBUG1, (errmsg("could not lock the citus extension, "
+										"skipping stat statements purging")));
+			}
+			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
+			{
+				/* perform catalog precheck */
+				shouldStartBackgroundTaskQueueBackgroundWorker =
+					HasRunnableBackgroundTask();
+			}
+
+			CommitTransactionCommand();
+
+			if (shouldStartBackgroundTaskQueueBackgroundWorker)
+			{
+				/*
+				 * Before we start the background worker we want to check if an orphaned
+				 * one is still running. This could happen when the maintenance daemon
+				 * restarted in a way where the background task queue monitor wasn't
+				 * restarted.
+				 *
+				 * To check if an orphaned background task queue monitor is still running
+				 * we quickly acquire the lock without waiting. If we can't acquire the
+				 * lock this means that some other backed still has the lock. We prevent a
+				 * new backend from starting and log a warning that we found that another
+				 * process still holds the lock.
+				 */
+				LOCKTAG tag = { 0 };
+				SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_BACKGROUND_TASK_MONITOR);
+				const bool sessionLock = false;
+				const bool dontWait = true;
+				LockAcquireResult locked =
+					LockAcquire(&tag, AccessExclusiveLock, sessionLock, dontWait);
+
+				if (locked == LOCKACQUIRE_NOT_AVAIL)
+				{
+					if (!backgroundTasksQueueWarnedForLock)
+					{
+						ereport(WARNING, (errmsg("background task queue monitor already "
+												 "held"),
+										  errdetail("the background task queue monitor "
+													"lock is held by another backend, "
+													"indicating the maintenance daemon "
+													"has lost track of an already "
+													"running background task queue "
+													"monitor, not starting a new one")));
+						backgroundTasksQueueWarnedForLock = true;
+					}
+				}
+				else
+				{
+					LockRelease(&tag, AccessExclusiveLock, sessionLock);
+
+					/* we were able to acquire the lock, reset the warning tracker */
+					backgroundTasksQueueWarnedForLock = false;
+
+					/* spawn background worker */
+					ereport(LOG, (errmsg("found scheduled background tasks, starting new "
+										 "background task queue monitor")));
+
+					backgroundTasksQueueBgwHandle =
+						StartCitusBackgroundTaskQueueMonitor(MyDatabaseId,
+															 myDbData->userOid);
+
+					if (!backgroundTasksQueueBgwHandle ||
+						GetBackgroundWorkerPid(backgroundTasksQueueBgwHandle,
+											   &backgroundTaskQueueWorkerPid) ==
+						BGWH_STOPPED)
+					{
+						ereport(WARNING, (errmsg("unable to start background worker for "
+												 "background task execution")));
+					}
+				}
+			}
+
+			/* interval management */
+			lastBackgroundTaskQueueCheck = GetCurrentTimestamp();
+			timeout = Min(timeout, BackgroundTaskQueueCheckInterval);
 		}
 
 		/*
