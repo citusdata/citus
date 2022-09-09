@@ -75,6 +75,9 @@ static bool CanUseLogicalReplication(Oid relationId, char shardReplicationMode);
 static void ErrorIfTableCannotBeReplicated(Oid relationId);
 static void ErrorIfTargetNodeIsNotSafeToCopyTo(const char *targetNodeName,
 											   int targetNodePort);
+static void ErrorIfSameNode(char *sourceNodeName, int sourceNodePort,
+							char *targetNodeName, int targetNodePort,
+							const char *operationName);
 static void ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 											 int32 sourceNodePort, char *targetNodeName,
 											 int32 targetNodePort,
@@ -107,6 +110,8 @@ static void UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
 														   int32 sourceNodePort,
 														   char *targetNodeName,
 														   int32 targetNodePort);
+static bool IsShardListOnNode(List *colocatedShardList, char *targetNodeName,
+							  uint32 targetPort);
 static void CheckSpaceConstraints(MultiConnection *connection,
 								  uint64 colocationSizeInBytes);
 static void EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
@@ -236,6 +241,10 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	ListCell *colocatedTableCell = NULL;
 	ListCell *colocatedShardCell = NULL;
 
+	ErrorIfSameNode(sourceNodeName, sourceNodePort,
+					targetNodeName, targetNodePort,
+					"move");
+
 	Oid relationId = RelationIdForShard(shardId);
 	ErrorIfMoveUnsupportedTableType(relationId);
 	ErrorIfTargetNodeIsNotSafeToMove(targetNodeName, targetNodePort);
@@ -276,6 +285,20 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 
 	/* we sort colocatedShardList so that lock operations will not cause any deadlocks */
 	colocatedShardList = SortList(colocatedShardList, CompareShardIntervalsById);
+
+	/*
+	 * If there are no active placements on the source and only active placements on
+	 * the target node, we assume the copy to already be done.
+	 */
+	if (IsShardListOnNode(colocatedShardList, targetNodeName, targetNodePort) &&
+		!IsShardListOnNode(colocatedShardList, sourceNodeName, sourceNodePort))
+	{
+		ereport(WARNING, (errmsg("shard is already present on node %s:%d",
+								 targetNodeName, targetNodePort),
+						  errdetail("Move may have already completed.")));
+		PG_RETURN_VOID();
+	}
+
 	foreach(colocatedShardCell, colocatedShardList)
 	{
 		ShardInterval *colocatedShard = (ShardInterval *) lfirst(colocatedShardCell);
@@ -387,6 +410,39 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 
 	FinalizeCurrentProgressMonitor();
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * IsShardListOnNode determines whether a co-located shard list has
+ * active placements on a given node.
+ */
+static bool
+IsShardListOnNode(List *colocatedShardList, char *targetNodeName, uint32 targetNodePort)
+{
+	WorkerNode *workerNode = FindWorkerNode(targetNodeName, targetNodePort);
+	if (workerNode == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("Moving shards to a non-existing node is not supported")));
+	}
+
+	/*
+	 * We exhaustively search all co-located shards
+	 */
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, colocatedShardList)
+	{
+		uint64 shardId = shardInterval->shardId;
+		List *placementList = ActiveShardPlacementListOnGroup(shardId,
+															  workerNode->groupId);
+		if (placementList == NIL)
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 
@@ -548,6 +604,25 @@ ErrorIfTargetNodeIsNotSafeToMove(const char *targetNodeName, int targetNodePort)
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("Moving shards to a secondary (e.g., replica) node is "
 							   "not supported")));
+	}
+}
+
+
+/*
+ * ErrorIfSameNode throws an error if the two host:port combinations
+ * are the same.
+ */
+static void
+ErrorIfSameNode(char *sourceNodeName, int sourceNodePort,
+				char *targetNodeName, int targetNodePort,
+				const char *operationName)
+{
+	if (strncmp(sourceNodeName, targetNodeName, MAX_NODE_LENGTH) == 0 &&
+		sourceNodePort == targetNodePort)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("cannot %s shard to the same node",
+							   operationName)));
 	}
 }
 
@@ -886,6 +961,10 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid distributedTableId = shardInterval->relationId;
 
+	ErrorIfSameNode(sourceNodeName, sourceNodePort,
+					targetNodeName, targetNodePort,
+					"copy");
+
 	ErrorIfTableCannotBeReplicated(shardInterval->relationId);
 	ErrorIfTargetNodeIsNotSafeToCopyTo(targetNodeName, targetNodePort);
 	EnsureNoModificationsHaveBeenDone();
@@ -903,6 +982,19 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 	 * deadlocks.
 	 */
 	colocatedShardList = SortList(colocatedShardList, CompareShardIntervalsById);
+
+	/*
+	 * If there are active placements on both nodes, we assume the copy to already
+	 * be done.
+	 */
+	if (IsShardListOnNode(colocatedShardList, targetNodeName, targetNodePort) &&
+		IsShardListOnNode(colocatedShardList, sourceNodeName, sourceNodePort))
+	{
+		ereport(WARNING, (errmsg("shard is already present on node %s:%d",
+								 targetNodeName, targetNodePort),
+						  errdetail("Copy may have already completed.")));
+		return;
+	}
 
 	/*
 	 * At this point of the shard replication, we don't need to block the writes to
