@@ -309,7 +309,6 @@ extern void ErrorIfTargetNodeIsNotSafeToMove(const char *targetNodeName, int
 extern char LookupShardTransferMode(Oid shardReplicationModeOid);
 extern void BlockWritesToShardList(List *shardList);
 extern List * WorkerApplyShardDDLCommandList(List *ddlCommandList, int64 shardId);
-extern List * GetForeignConstraintCommandsToReferenceTable(ShardInterval *shardInterval);
 
 
 #endif   /* COORDINATOR_PROTOCOL_H */

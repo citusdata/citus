@@ -55,12 +55,6 @@ SELECT count(*) FROM referencing_table2;
 CALL citus_cleanup_orphaned_shards();
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_to_reference_shard_rebalance.%' AND refd_relid LIKE 'fkey_to_reference_shard_rebalance.%' ORDER BY 1,2,3;
 
--- create a function to show the
-CREATE FUNCTION get_foreign_key_to_reference_table_commands(Oid)
-    RETURNS SETOF text
-    LANGUAGE C STABLE STRICT
-    AS 'citus', $$get_foreign_key_to_reference_table_commands$$;
-
 CREATE TABLE reference_table_commands (id int UNIQUE);
 CREATE TABLE referenceing_dist_table (id int, col1 int, col2 int, col3 int);
 SELECT create_reference_table('reference_table_commands');
@@ -68,7 +62,6 @@ SELECT create_distributed_table('referenceing_dist_table', 'id');
 ALTER TABLE referenceing_dist_table ADD CONSTRAINT c1 FOREIGN KEY (col1) REFERENCES reference_table_commands(id) ON UPDATE CASCADE;
 ALTER TABLE referenceing_dist_table ADD CONSTRAINT c2 FOREIGN KEY (col2) REFERENCES reference_table_commands(id) ON UPDATE CASCADE NOT VALID;
 ALTER TABLE referenceing_dist_table ADD CONSTRAINT very_very_very_very_very_very_very_very_very_very_very_very_very_long FOREIGN KEY (col3) REFERENCES reference_table_commands(id) ON UPDATE CASCADE;
-SELECT * FROM get_foreign_key_to_reference_table_commands('referenceing_dist_table'::regclass);
 
 -- and show that rebalancer works fine
 SELECT master_move_shard_placement(15000018, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
