@@ -2638,7 +2638,6 @@ BackgroundJobStatusOid(BackgroundJobStatus status)
 	}
 
 	elog(ERROR, "unknown BackgroundJobStatus");
-	return InvalidOid;
 }
 
 
