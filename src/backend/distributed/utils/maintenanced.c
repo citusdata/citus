@@ -479,7 +479,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		{
 			if (metadataSyncBgwHandle)
 			{
-				TerminateBackgroundWorker(metadataSyncBgwHandle);
 				pfree(metadataSyncBgwHandle);
 				metadataSyncBgwHandle = NULL;
 			}
