@@ -177,5 +177,13 @@ extern void RecreateGroupedLogicalRepTargetsConnections(
 	char *user,
 	char *databaseName);
 extern void CloseGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash);
+extern void CompleteNonBlockingShardTransfer(List *shardList,
+											 MultiConnection *sourceConnection,
+											 HTAB *publicationInfoHash,
+											 List *logicalRepTargetList,
+											 HTAB *groupedLogicalRepTargetsHash,
+											 LogicalRepType type);
+extern void CreateUncheckedForeignKeyConstraints(List *logicalRepTargetList);
+extern void CreatePartitioningHierarchy(List *logicalRepTargetList);
 
 #endif /* MULTI_LOGICAL_REPLICATION_H_ */

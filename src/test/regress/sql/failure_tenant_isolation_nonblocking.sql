@@ -117,14 +117,6 @@ SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode 
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE SUBSCRIPTION").cancel(' || :pid || ')');
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode := 'force_logical');
 
--- failure on colocated table constraints
-SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_2 ADD CONSTRAINT").after(1).kill()');
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode := 'force_logical');
-
--- cancellation on colocated table constraints
-SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_2 ADD CONSTRAINT").after(2).cancel(' || :pid || ')');
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode := 'force_logical');
-
 -- failure on catching up LSN
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_current_wal_lsn").kill()');
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode := 'force_logical');
@@ -182,10 +174,6 @@ SET citus.defer_drop_after_shard_split TO ON;
 
 -- failure on foreign key creation
 SELECT citus.mitmproxy('conn.onQuery(query="ADD CONSTRAINT table_2_ref_id_fkey FOREIGN KEY").kill()');
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode := 'force_logical');
-
--- failure on foreign key creation
-SELECT citus.mitmproxy('conn.onQuery(query="ADD CONSTRAINT table_2_ref_id_fkey FOREIGN KEY").after(2).cancel(' || :pid || ')');
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode := 'force_logical');
 
 -- failure on shard split transaction
