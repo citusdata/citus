@@ -518,22 +518,16 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		StringInfoData message = { 0 };
 		initStringInfo(&message);
 
-		while (GetBackgroundWorkerPid(handle, &pid) != BGWH_STOPPED)
 		{
-			int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH;
-			int rc = WaitLatch(MyLatch, latchFlags, (long) 1000, PG_WAIT_EXTENSION);
-
-			if (rc & WL_LATCH_SET)
-			{
-				ResetLatch(MyLatch);
-				CHECK_FOR_INTERRUPTS();
-			}
-
 			shm_toc *toc = shm_toc_attach(CITUS_BACKGROUND_TASK_MAGIC,
 										  dsm_segment_address(seg));
 			shm_mq *mq = shm_toc_lookup(toc, CITUS_BACKGROUND_TASK_KEY_QUEUE, false);
 			shm_mq_handle *responseq = shm_mq_attach(mq, seg, NULL);
 
+			/*
+			 * We consume the complete shm_mq here as ConsumeTaskWorkerOutput loops till
+			 * it reaches a SHM_MQ_DETACHED response.
+			 */
 			ConsumeTaskWorkerOutput(responseq, &message, &hadError);
 
 			shm_mq_detach(responseq);
@@ -541,22 +535,6 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 		StartTransactionCommand();
 		PushActiveSnapshot(GetTransactionSnapshot());
-
-		/*
-		 * There is a small race condition between the last loop and the backend being
-		 * terminated. We re-consume the output of the process here again in case we have
-		 * missed a message.
-		 */
-		{
-			shm_toc *toc = shm_toc_attach(CITUS_BACKGROUND_TASK_MAGIC,
-										  dsm_segment_address(seg));
-			shm_mq *mq = shm_toc_lookup(toc, CITUS_BACKGROUND_TASK_KEY_QUEUE, false);
-			shm_mq_handle *responseq = shm_mq_attach(mq, seg, NULL);
-
-			ConsumeTaskWorkerOutput(responseq, &message, &hadError);
-
-			shm_mq_detach(responseq);
-		}
 
 		/*
 		 * Same as before, we need to lock pg_dist_background_task in a way where we can
