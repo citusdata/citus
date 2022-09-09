@@ -1181,6 +1181,9 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
 									 int32 sourceNodePort, char *targetNodeName,
 									 int32 targetNodePort)
 {
+	AcquireLogicalReplicationLock();
+	DropAllLogicalReplicationLeftovers(SHARD_MOVE);
+
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
 													   "CopyShardTablesViaLogicalReplication",
 													   ALLOCSET_DEFAULT_SIZES);

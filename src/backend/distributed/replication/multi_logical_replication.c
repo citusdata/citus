@@ -184,7 +184,6 @@ void
 LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePort,
 						 char *targetNodeName, int targetNodePort)
 {
-	AcquireLogicalReplicationLock();
 	char *superUser = CitusExtensionOwnerName();
 	char *databaseName = get_database_name(MyDatabaseId);
 	int connectionFlags = FORCE_NEW_CONNECTION;
@@ -195,8 +194,6 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 	{
 		return;
 	}
-
-	DropAllLogicalReplicationLeftovers(SHARD_MOVE);
 
 	MultiConnection *sourceConnection =
 		GetNodeUserDatabaseConnection(connectionFlags, sourceNodeName, sourceNodePort,

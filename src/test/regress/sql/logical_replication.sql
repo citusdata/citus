@@ -33,6 +33,7 @@ CREATE SUBSCRIPTION citus_shard_move_subscription_:postgres_oid
     CONNECTION :connection_string
     PUBLICATION citus_shard_move_publication_:postgres_oid
     WITH (enabled=false, slot_name=citus_shard_move_slot_:postgres_oid);
+DROP TABLE dist_6830000;
 
 
 SELECT count(*) from pg_subscription;
