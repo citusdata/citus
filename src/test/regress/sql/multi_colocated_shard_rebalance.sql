@@ -78,7 +78,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table2_
 \c - - - :master_port
 
 
--- copy colocated shards again to see error message
+-- copy colocated shards again to see warning
 SELECT citus_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
 
 
@@ -159,6 +159,9 @@ WHERE
     AND sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
 
+-- moving the shard again is idempotent
+SELECT citus_move_shard_placement(13000001, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'force_logical');
+
 -- also connect worker to verify we successfully moved given shard (and other colocated shards)
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table1_group1_13000001'::regclass;
@@ -222,7 +225,7 @@ ORDER BY s.shardid, sp.nodeport;
 
 
 -- try to move shard from wrong node
-SELECT master_move_shard_placement(13000021, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
+SELECT master_move_shard_placement(13000021, 'localhost', :master_port, 'localhost', :worker_1_port, 'force_logical');
 
 
 -- test shard move with foreign constraints

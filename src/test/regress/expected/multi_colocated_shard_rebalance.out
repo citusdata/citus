@@ -143,9 +143,15 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table2_
 (1 row)
 
 \c - - - :master_port
--- copy colocated shards again to see error message
+-- copy colocated shards again to see warning
 SELECT citus_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
-ERROR:  shard xxxxx already exists in the target node
+WARNING:  shard is already present on node localhost:xxxxx
+DETAIL:  Copy may have already completed.
+ citus_copy_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
 -- test copying NOT colocated shard
 -- status before shard copy
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport
@@ -300,6 +306,15 @@ ORDER BY s.shardid, sp.nodeport;
  13000011 | table2_group1 |    57638
 (14 rows)
 
+-- moving the shard again is idempotent
+SELECT citus_move_shard_placement(13000001, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'force_logical');
+WARNING:  shard is already present on node localhost:xxxxx
+DETAIL:  Move may have already completed.
+ citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
 -- also connect worker to verify we successfully moved given shard (and other colocated shards)
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table1_group1_13000001'::regclass;
@@ -412,8 +427,9 @@ ORDER BY s.shardid, sp.nodeport;
 (3 rows)
 
 -- try to move shard from wrong node
-SELECT master_move_shard_placement(13000021, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
-ERROR:  source placement must be in active state
+SELECT master_move_shard_placement(13000021, 'localhost', :master_port, 'localhost', :worker_1_port, 'force_logical');
+ERROR:  could not find placement matching "localhost:xxxxx"
+HINT:  Confirm the placement still exists and try again.
 -- test shard move with foreign constraints
 DROP TABLE IF EXISTS table1_group1, table2_group1;
 SET citus.shard_count TO 6;

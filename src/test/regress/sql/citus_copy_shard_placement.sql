@@ -48,7 +48,7 @@ SELECT citus_copy_shard_placement(
            'localhost', :worker_2_port,
            transfer_mode := 'block_writes');
 
--- verify we error out if target already contains a healthy placement
+-- verify we warn if target already contains a healthy placement
 SELECT citus_copy_shard_placement(
            (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
            'localhost', :worker_1_port,
