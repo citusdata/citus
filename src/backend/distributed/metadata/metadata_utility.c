@@ -3168,9 +3168,8 @@ DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor, HeapTuple taskTuple)
 
 	if (!nulls[Anum_pg_dist_background_task_message - 1])
 	{
-		text *messageText =
-			DatumGetTextP(values[Anum_pg_dist_background_task_message - 1]);
-		task->message = text_to_cstring(messageText);
+		task->message =
+			TextDatumGetCString(values[Anum_pg_dist_background_task_message - 1]);
 	}
 
 	return task;
