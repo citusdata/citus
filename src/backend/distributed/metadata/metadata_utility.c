@@ -2768,6 +2768,8 @@ CreateBackgroundJob(const char *jobType, const char *description)
 										 values, isnull);
 	CatalogTupleInsert(pgDistBackgroundJobs, newTuple);
 
+	CommandCounterIncrement();
+
 	table_close(pgDistBackgroundJobs, NoLock);
 
 	return jobId;
@@ -2884,7 +2886,8 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 
 				/* pg_dist_background_task.task_id == $taskId */
 				ScanKeyInit(&scanKey[1], Anum_pg_dist_background_task_task_id,
-							BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(task->taskid));
+							BTEqualStrategyNumber, F_INT8EQ,
+							Int64GetDatum(dependingTaskIds[i]));
 
 				SysScanDesc scanDescriptor =
 					systable_beginscan(pgDistBackgroundTask,
@@ -2931,6 +2934,8 @@ ScheduleBackgroundTask(int64 jobId, Oid owner, char *command, int dependingTaskC
 	}
 	table_close(pgDistBackgroundTask, NoLock);
 	table_close(pgDistBackgroundJob, NoLock);
+
+	CommandCounterIncrement();
 
 	return task;
 }
@@ -3163,8 +3168,9 @@ DeformBackgroundTaskHeapTuple(TupleDesc tupleDescriptor, HeapTuple taskTuple)
 
 	if (!nulls[Anum_pg_dist_background_task_message - 1])
 	{
-		task->message = pstrdup(
-			DatumGetCString(values[Anum_pg_dist_background_task_message - 1]));
+		text *messageText =
+			DatumGetTextP(values[Anum_pg_dist_background_task_message - 1]);
+		task->message = text_to_cstring(messageText);
 	}
 
 	return task;
