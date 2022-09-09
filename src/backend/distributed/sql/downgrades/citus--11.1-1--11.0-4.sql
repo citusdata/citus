@@ -105,7 +105,6 @@ DROP TABLE pg_catalog.pg_dist_cleanup;
 DROP SEQUENCE pg_catalog.pg_dist_operationid_seq;
 DROP SEQUENCE pg_catalog.pg_dist_cleanup_recordid_seq;
 DROP PROCEDURE pg_catalog.citus_cleanup_orphaned_resources();
-
 DROP FUNCTION pg_catalog.citus_job_cancel(bigint);
 DROP FUNCTION pg_catalog.citus_job_wait(bigint, pg_catalog.citus_job_status);
 DROP TABLE pg_catalog.pg_dist_background_task_depend;
@@ -113,3 +112,5 @@ DROP TABLE pg_catalog.pg_dist_background_task;
 DROP TYPE pg_catalog.citus_task_status;
 DROP TABLE pg_catalog.pg_dist_background_job;
 DROP TYPE pg_catalog.citus_job_status;
+DROP FUNCTION pg_catalog.citus_copy_shard_placement;
+#include "../udfs/citus_copy_shard_placement/10.0-1.sql"

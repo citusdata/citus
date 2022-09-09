@@ -1,6 +1,7 @@
 #include "udfs/citus_locks/11.1-1.sql"
 #include "udfs/create_distributed_table_concurrently/11.1-1.sql"
 #include "udfs/citus_internal_delete_partition_metadata/11.1-1.sql"
+#include "udfs/citus_copy_shard_placement/11.1-1.sql"
 
 DROP FUNCTION pg_catalog.worker_create_schema(bigint,text);
 DROP FUNCTION pg_catalog.worker_cleanup_job_schema_cache();

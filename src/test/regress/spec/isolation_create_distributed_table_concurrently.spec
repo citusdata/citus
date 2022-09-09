@@ -169,7 +169,7 @@ step "s4-print-waiting-advisory-locks"
 
 step "s4-print-colocations"
 {
-	SELECT * FROM pg_dist_colocation ORDER BY colocationid;
+	SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation ORDER BY colocationid;
 }
 
 // show concurrent insert is NOT blocked by create_distributed_table_concurrently

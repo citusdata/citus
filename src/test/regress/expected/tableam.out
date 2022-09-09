@@ -164,7 +164,7 @@ SELECT * FROM master_get_table_ddl_events('test_range_dist');
 (2 rows)
 
 --
--- Test master_copy_shard_placement with a fake_am table
+-- Test copy_copy_shard_placement with a fake_am table
 --
 select a.shardid, a.nodeport
 FROM pg_dist_shard b, pg_dist_shard_placement a
@@ -178,15 +178,14 @@ ORDER BY a.shardid, nodeport;
    60003 |    57638
 (4 rows)
 
--- Change repmodel to allow master_copy_shard_placement
+-- Change repmodel to allow copy_copy_shard_placement
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid = 'test_hash_dist'::regclass;
-SELECT master_copy_shard_placement(
+SELECT citus_copy_shard_placement(
            get_shard_id_for_distribution_column('test_hash_dist', '1'),
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
-           do_repair := false,
 		   transfer_mode := 'block_writes');
- master_copy_shard_placement
+ citus_copy_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)

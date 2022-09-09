@@ -43,10 +43,10 @@
 #include "distributed/pg_dist_rebalance_strategy.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
-#include "distributed/repair_shards.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_rebalancer.h"
 #include "distributed/shard_cleaner.h"
+#include "distributed/shard_transfer.h"
 #include "distributed/tuplestore.h"
 #include "distributed/utils/array_type.h"
 #include "distributed/worker_protocol.h"
@@ -1621,7 +1621,6 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	uint64 shardId = placementUpdateEvent->shardId;
 	WorkerNode *sourceNode = placementUpdateEvent->sourceNode;
 	WorkerNode *targetNode = placementUpdateEvent->targetNode;
-	const char *doRepair = "false";
 
 	Datum shardTranferModeLabelDatum =
 		DirectFunctionCall1(enum_out, shardReplicationModeOid);
@@ -1665,13 +1664,12 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	else if (updateType == PLACEMENT_UPDATE_COPY)
 	{
 		appendStringInfo(placementUpdateCommand,
-						 "SELECT citus_copy_shard_placement(%ld,%s,%u,%s,%u,%s,%s)",
+						 "SELECT citus_copy_shard_placement(%ld,%s,%u,%s,%u,%s)",
 						 shardId,
 						 quote_literal_cstr(sourceNode->workerName),
 						 sourceNode->workerPort,
 						 quote_literal_cstr(targetNode->workerName),
 						 targetNode->workerPort,
-						 doRepair,
 						 quote_literal_cstr(shardTranferModeLabel));
 	}
 	else

@@ -29,7 +29,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/shard_split.h"
 #include "distributed/reference_table_utils.h"
-#include "distributed/repair_shards.h"
+#include "distributed/shard_transfer.h"
 #include "distributed/resource_lock.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/worker_manager.h"
@@ -233,9 +233,7 @@ ErrorIfCannotSplitShard(SplitOperation splitOperation, ShardInterval *sourceShar
 									   "for the shard %lu",
 									   SplitOperationName[splitOperation],
 									   SplitTargetName[splitOperation],
-									   relationName, shardId),
-								errhint("Use master_copy_shard_placement UDF to "
-										"repair the inactive shard placement.")));
+									   relationName, shardId)));
 			}
 		}
 	}

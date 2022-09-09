@@ -787,7 +787,6 @@ SELECT citus_copy_shard_placement(
            (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
-           do_repair := false,
            transfer_mode := 'block_writes');
 ERROR:  Copying shards to a non-existing node is not supported
 HINT:  Add the target node via SELECT citus_add_node('localhost', 57638);
@@ -802,7 +801,6 @@ SELECT citus_copy_shard_placement(
            (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
-           do_repair := false,
            transfer_mode := 'block_writes');
 ERROR:  Copying shards to a secondary (e.g., replica) node is not supported
 SELECT citus_remove_node('localhost', :worker_2_port);
@@ -822,7 +820,6 @@ SELECT citus_copy_shard_placement(
            (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
-           do_repair := false,
            transfer_mode := 'block_writes');
 ERROR:  Copying shards to a non-active node is not supported
 HINT:  Activate the target node via SELECT citus_activate_node('localhost', 57638);
@@ -1005,7 +1002,7 @@ SELECT min(result) = max(result) AS consistent FROM run_command_on_placements('r
  t
 (1 row)
 
--- test that metadata is synced when master_copy_shard_placement replicates
+-- test that metadata is synced when citus_copy_shard_placement replicates
 -- reference table shards
 SET citus.replicate_reference_tables_on_activate TO off;
 SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
@@ -1021,13 +1018,12 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 (1 row)
 
 SET citus.shard_replication_factor TO 1;
-SELECT master_copy_shard_placement(
+SELECT citus_copy_shard_placement(
            :ref_table_shard,
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
-           do_repair := false,
            transfer_mode := 'block_writes');
- master_copy_shard_placement
+ citus_copy_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)

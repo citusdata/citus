@@ -38,7 +38,7 @@ SELECT master_create_distributed_table('table6_append', 'id', 'append');
 SELECT master_create_empty_shard('table6_append');
 SELECT master_create_empty_shard('table6_append');
 
--- Mark tables as non-mx tables, in order to be able to test master_copy_shard_placement
+-- Mark tables as non-mx tables, in order to be able to test citus_copy_shard_placement
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
     ('table1_group1'::regclass, 'table2_group1'::regclass, 'table5_groupX'::regclass);
 
@@ -56,10 +56,10 @@ WHERE
 ORDER BY s.shardid, sp.nodeport;
 
 -- try to copy colocated shards without a replica identity
-SELECT master_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, false);
+SELECT citus_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
 
 -- copy colocated shards
-SELECT master_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, false, 'force_logical');
+SELECT citus_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
 
 -- status after shard copy
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport
@@ -79,7 +79,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table2_
 
 
 -- copy colocated shards again to see error message
-SELECT master_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, false, 'force_logical');
+SELECT citus_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
 
 
 -- test copying NOT colocated shard
@@ -94,7 +94,7 @@ WHERE
 ORDER BY s.shardid, sp.nodeport;
 
 -- copy NOT colocated shard
-SELECT master_copy_shard_placement(13000012, 'localhost', :worker_1_port, 'localhost', :worker_2_port, false, 'force_logical');
+SELECT citus_copy_shard_placement(13000012, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
 
 -- status after shard copy
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport
@@ -119,7 +119,7 @@ WHERE
 ORDER BY s.shardid, sp.nodeport;
 
 -- copy shard in append distributed table
-SELECT master_copy_shard_placement(13000020, 'localhost', :worker_2_port, 'localhost', :worker_1_port, false, 'force_logical');
+SELECT citus_copy_shard_placement(13000020, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'force_logical');
 
 -- status after shard copy
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport
@@ -281,7 +281,7 @@ SELECT  "Constraint", "Definition" FROM table_fkeys
 
 -- test shard copy with foreign constraints
 -- we expect it to error out because we do not support foreign constraints with replication factor > 1
-SELECT master_copy_shard_placement(13000022, 'localhost', :worker_2_port, 'localhost', :worker_1_port, false);
+SELECT citus_copy_shard_placement(13000022, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
 
 
 -- lets also test that master_move_shard_placement doesn't break serials

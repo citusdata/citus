@@ -152,7 +152,7 @@ INSERT INTO collections_agg SELECT key, sum(key) FROM collections_1 GROUP BY key
 -- coordinator roll-up
 INSERT INTO collections_agg SELECT collection_id, sum(key) FROM collections_1 GROUP BY collection_id;
 
--- now make sure that repair functionality works fine
+-- now make sure that copy functionality works fine
 -- create a table and create its distribution metadata
 CREATE TABLE customer_engagements (id integer, event_id int) PARTITION BY LIST ( event_id );
 
@@ -173,7 +173,7 @@ CREATE INDEX ON customer_engagements (id, event_id);
 -- create a single shard on the first worker
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 2;
-SELECT create_distributed_table('customer_engagements', 'id', 'hash');
+SELECT create_distributed_table('customer_engagements', 'id', 'hash', colocate_with := 'none');
 
 -- ingest some data for the tests
 INSERT INTO customer_engagements VALUES (1, 1);
@@ -181,39 +181,29 @@ INSERT INTO customer_engagements VALUES (2, 1);
 INSERT INTO customer_engagements VALUES (1, 2);
 INSERT INTO customer_engagements VALUES (2, 2);
 
--- the following queries does the following:
--- (i)    create a new shard
--- (ii)   mark the second shard placements as unhealthy
--- (iii)  do basic checks i.e., only allow copy from healthy placement to unhealthy ones
--- (iv)   do a successful master_copy_shard_placement from the first placement to the second
--- (v)    mark the first placement as unhealthy and execute a query that is routed to the second placement
-
-SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
-SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
-
 -- get the newshardid
 SELECT shardid as newshardid FROM pg_dist_shard WHERE logicalrelid = 'customer_engagements'::regclass
 \gset
 
--- now, update the second placement as unhealthy
-UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = :newshardid
-  AND groupid = :worker_2_group;
+-- delete all the placements on the second node belonging to partitioning hierarchy
+DELETE FROM pg_dist_shard_placement p USING pg_dist_shard s
+WHERE s.shardid = p.shardid AND nodeport = :worker_2_port AND logicalrelid::text LIKE 'customer_engagements%';
 
--- cannot repair a shard after a modification (transaction still open during repair)
+-- cannot copy a shard after a modification (transaction still open during copy)
 BEGIN;
 INSERT INTO customer_engagements VALUES (1, 1);
-SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT citus_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port, transfer_mode := 'block_writes');
 ROLLBACK;
 
--- modifications after reparing a shard are fine (will use new metadata)
+-- modifications after copying a shard are fine (will use new metadata)
 BEGIN;
-SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT citus_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port, transfer_mode := 'block_writes');
 ALTER TABLE customer_engagements ADD COLUMN value float DEFAULT 1.0;
 SELECT * FROM customer_engagements ORDER BY 1,2,3;
 ROLLBACK;
 
 BEGIN;
-SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT citus_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port, transfer_mode := 'block_writes');
 INSERT INTO customer_engagements VALUES (1, 1);
 SELECT count(*) FROM customer_engagements;
 ROLLBACK;

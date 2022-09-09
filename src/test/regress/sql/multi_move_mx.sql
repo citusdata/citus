@@ -54,9 +54,9 @@ ORDER BY
 	logicalrelid, shardid;
 
 \c - - - :master_port
--- Check that master_copy_shard_placement cannot be run with MX tables
+-- Check that citus_copy_shard_placement cannot be run with MX tables
 SELECT
-	master_copy_shard_placement(shardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port, false, 'force_logical')
+	citus_copy_shard_placement(shardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical')
 FROM
 	pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE
@@ -146,7 +146,7 @@ ORDER BY
 
 -- Check that the UDFs cannot be called from the workers
 SELECT
-	master_copy_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, false, 'force_logical')
+	citus_copy_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'force_logical')
 FROM
 	pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE
