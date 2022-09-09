@@ -235,24 +235,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE SUBSCRIPTION").cancel(' || :p
 
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode := 'force_logical');
 ERROR:  canceling statement due to user request
--- failure on colocated table constraints
-SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_2 ADD CONSTRAINT").after(1).kill()');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode := 'force_logical');
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
--- cancellation on colocated table constraints
-SELECT citus.mitmproxy('conn.onQuery(query="ALTER TABLE tenant_isolation.table_2 ADD CONSTRAINT").after(2).cancel(' || :pid || ')');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode := 'force_logical');
-ERROR:  canceling statement due to user request
 -- failure on catching up LSN
 SELECT citus.mitmproxy('conn.onQuery(query="SELECT pg_current_wal_lsn").kill()');
  mitmproxy
@@ -382,15 +364,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="ADD CONSTRAINT table_2_ref_id_fkey F
 SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode := 'force_logical');
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
--- failure on foreign key creation
-SELECT citus.mitmproxy('conn.onQuery(query="ADD CONSTRAINT table_2_ref_id_fkey FOREIGN KEY").after(2).cancel(' || :pid || ')');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode := 'force_logical');
-ERROR:  canceling statement due to user request
 -- failure on shard split transaction
 SELECT citus.mitmproxy('conn.onQuery(query="BEGIN").kill()');
  mitmproxy
