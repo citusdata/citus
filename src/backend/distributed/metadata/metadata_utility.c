@@ -3526,21 +3526,18 @@ SetFieldValue(int attno, Datum values[], bool isnull[], bool replace[], Datum ne
 	int idx = attno - 1;
 	bool updated = false;
 
-	if (isnull[idx])
+	if (!isnull[idx] && newValue == values[idx])
 	{
-		isnull[idx] = false;
-		updated = true;
+		return updated;
 	}
 
-	if (newValue != values[idx])
-	{
-		values[idx] = newValue;
-		updated = true;
-	}
+	values[idx] = newValue;
+	isnull[idx] = false;
+	updated = true;
 
 	if (replace)
 	{
-		replace[idx] = updated;
+		replace[idx] = true;
 	}
 	return updated;
 }
@@ -3565,33 +3562,23 @@ SetFieldText(int attno, Datum values[], bool isnull[], bool replace[],
 {
 	int idx = attno - 1;
 	bool updated = false;
-	bool shouldSetText = false;
 
-	if (isnull[idx])
+	if (!isnull[idx])
 	{
-		isnull[idx] = false;
-		updated = true;
-		shouldSetText = true;
-	}
-	else
-	{
-		text *oldText = DatumGetTextP(values[idx]);
-		char *oldString = text_to_cstring(oldText);
-		if (strcmp(oldString, newValue) != 0)
+		char *oldText = TextDatumGetCString(values[idx]);
+		if (strcmp(oldText, newValue) == 0)
 		{
-			shouldSetText = true;
+			return updated;
 		}
 	}
 
-	if (shouldSetText)
-	{
-		values[idx] = CStringGetTextDatum(newValue);
-		updated = true;
-	}
+	values[idx] = CStringGetTextDatum(newValue);
+	isnull[idx] = false;
+	updated = true;
 
 	if (replace)
 	{
-		replace[idx] = updated;
+		replace[idx] = true;
 	}
 	return updated;
 }
@@ -3614,17 +3601,22 @@ static bool
 SetFieldNull(int attno, Datum values[], bool isnull[], bool replace[])
 {
 	int idx = attno - 1;
+	bool updated = false;
+
 	if (isnull[idx])
 	{
-		return false;
+		return updated;
 	}
+
 	isnull[idx] = true;
 	values[idx] = InvalidOid;
+	updated = true;
+
 	if (replace)
 	{
 		replace[idx] = true;
 	}
-	return true;
+	return updated;
 }
 
 
