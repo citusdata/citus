@@ -20,6 +20,4 @@ extern BackgroundWorkerHandle * StartCitusBackgroundTaskQueueMonitor(Oid databas
 extern void CitusBackgroundTaskQueueMonitorMain(Datum arg);
 extern void CitusBackgroundTaskExecuter(Datum main_arg);
 
-extern bool BackgroundTaskMonitorDebugDelay;
-
 #endif /*CITUS_BACKGROUND_JOBS_H */

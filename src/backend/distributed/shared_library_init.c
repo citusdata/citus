@@ -870,17 +870,6 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
-	/* TODO remove before merge */
-	DefineCustomBoolVariable(
-		"citus.background_task_monitor_debug_delay",
-		NULL,
-		NULL,
-		&BackgroundTaskMonitorDebugDelay,
-		false,
-		PGC_SIGHUP,
-		GUC_UNIT_MS,
-		NULL, NULL, NULL);
-
 	DefineCustomIntVariable(
 		"citus.background_task_queue_interval",
 		gettext_noop("Time to wait between checks for scheduled background tasks."),

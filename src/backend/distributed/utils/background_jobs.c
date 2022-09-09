@@ -62,8 +62,6 @@
 #include "distributed/shard_cleaner.h"
 #include "distributed/resource_lock.h"
 
-bool BackgroundTaskMonitorDebugDelay = false;
-
 /* Table-of-contents constants for our dynamic shared memory segment. */
 #define CITUS_BACKGROUND_TASK_MAGIC 0x51028081
 #define CITUS_BACKGROUND_TASK_KEY_DATABASE 0
@@ -278,6 +276,28 @@ StartCitusBackgroundTaskQueueMonitor(Oid database, Oid extensionOwner)
 
 
 /*
+ * context for any log/error messages emitted from the background task queue monitor.
+ */
+typedef struct CitusBackgroundTaskQueueMonitorErrorCallbackContext
+{
+	const char *database;
+} CitusBackgroundTaskQueueMonitorCallbackContext;
+
+
+/*
+ * CitusBackgroundTaskQueueMonitorErrorCallback is a callback handler that gets called for
+ * any ereport to add extra context to the message.
+ */
+static void
+CitusBackgroundTaskQueueMonitorErrorCallback(void *arg)
+{
+	CitusBackgroundTaskQueueMonitorCallbackContext *context =
+		(CitusBackgroundTaskQueueMonitorCallbackContext *) arg;
+	errcontext("Citus Background Task Queue Monitor: %s", context->database);
+}
+
+
+/*
  * CitusBackgroundTaskQueueMonitorMain is the main entry point for the background worker
  * running the background tasks queue monitor.
  *
@@ -302,6 +322,28 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 	/* connect to database, after that we can actually access catalogs */
 	BackgroundWorkerInitializeConnectionByOid(databaseOid, extensionOwner, 0);
+
+	StartTransactionCommand();
+	PushActiveSnapshot(GetTransactionSnapshot());
+
+	/* load database name and copy to a memory context that survives the transaction */
+	const char *databasename = get_database_name(MyDatabaseId);
+	MemoryContext oldContext = MemoryContextSwitchTo(TopMemoryContext);
+	databasename = pstrdup(databasename);
+	MemoryContextSwitchTo(oldContext);
+
+	/* setup error context to indicate the errors came from a running background task */
+	ErrorContextCallback errorCallback = { 0 };
+	struct CitusBackgroundTaskQueueMonitorErrorCallbackContext context = {
+		.database = databasename,
+	};
+	errorCallback.callback = CitusBackgroundTaskQueueMonitorErrorCallback;
+	errorCallback.arg = (void *) &context;
+	errorCallback.previous = error_context_stack;
+	error_context_stack = &errorCallback;
+
+	PopActiveSnapshot();
+	CommitTransactionCommand();
 
 	/*
 	 * There should be exactly one background task monitor running, running multiple would
@@ -329,12 +371,6 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 	pgstat_report_appname("citus background task queue monitor");
 
 	ereport(DEBUG1, (errmsg("started citus background task queue monitor")));
-
-	/* TODO this is here for debugging purposses, remove before merge. */
-	if (BackgroundTaskMonitorDebugDelay)
-	{
-		pg_usleep(30 * 1000 * 1000);
-	}
 
 	MemoryContext perTaskContext = AllocSetContextCreate(CurrentMemoryContext,
 														 "PerTaskContext",
@@ -379,7 +415,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		 * We need to load the task into the perTaskContext as we will switch contexts
 		 * later due to the committing and starting of new transactions
 		 */
-		MemoryContext oldContext = MemoryContextSwitchTo(perTaskContext);
+		oldContext = MemoryContextSwitchTo(perTaskContext);
 		BackgroundTask *task = GetRunnableBackgroundTask();
 
 		if (!task)
@@ -1133,7 +1169,6 @@ CitusBackgroundTaskExecuter(Datum main_arg)
 							   *taskId),
 						errdetail("this indicates that an other backend is already "
 								  "executing this task")));
-		exit(0);
 	}
 
 	/* Prepare to execute the query. */
