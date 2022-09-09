@@ -2724,6 +2724,59 @@ GetNextBackgroundTaskTaskId(void)
 }
 
 
+bool
+HasNonTerminalJobOfType(const char *jobType)
+{
+	Relation pgDistBackgroundJob =
+		table_open(DistBackgroundJobRelationId(), AccessShareLock);
+
+	/* find any job in states listed here */
+	BackgroundJobStatus jobStatus[] = {
+		BACKGROUND_JOB_STATUS_RUNNING,
+		BACKGROUND_JOB_STATUS_CANCELLING,
+		BACKGROUND_JOB_STATUS_FAILING,
+		BACKGROUND_JOB_STATUS_SCHEDULED
+	};
+
+	NameData jobTypeName = { 0 };
+	namestrcpy(&jobTypeName, jobType);
+
+	bool foundJob = false;
+	for (int i = 0; !foundJob && i < lengthof(jobStatus); i++)
+	{
+		ScanKeyData scanKey[2] = { 0 };
+		const bool indexOK = true;
+
+		/* pg_dist_background_job.status == jobStatus[i] */
+		ScanKeyInit(&scanKey[0], Anum_pg_dist_background_job_state,
+					BTEqualStrategyNumber, F_OIDEQ,
+					ObjectIdGetDatum(BackgroundJobStatusOid(jobStatus[i])));
+
+		/* pg_dist_background_job.job_type == jobType */
+		ScanKeyInit(&scanKey[1], Anum_pg_dist_background_job_job_type,
+					BTEqualStrategyNumber, F_NAMEEQ,
+					NameGetDatum(&jobTypeName));
+
+		SysScanDesc scanDescriptor =
+			systable_beginscan(pgDistBackgroundJob,
+							   InvalidOid,     /* TODO use an actual index here */
+							   indexOK, NULL, lengthof(scanKey), scanKey);
+
+		HeapTuple taskTuple = NULL;
+		if (HeapTupleIsValid(taskTuple = systable_getnext(scanDescriptor)))
+		{
+			foundJob = true;
+		}
+
+		systable_endscan(scanDescriptor);
+	}
+
+	table_close(pgDistBackgroundJob, NoLock);
+
+	return foundJob;
+}
+
+
 /*
  * CreateBackgroundJob is a helper function to insert a new Background Job into Citus'
  * catalog. After inserting the new job's metadataa into the catalog it returns the job_id

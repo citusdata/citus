@@ -247,6 +247,8 @@ static uint64 WorkerShardSize(HTAB *workerShardStatistics,
 static void AddToWorkerShardIdSet(HTAB *shardsByWorker, char *workerName, int workerPort,
 								  uint64 shardId);
 static HTAB * BuildShardSizesHash(ProgressMonitorData *monitor, HTAB *shardStatistics);
+static void ErrorOnConcurrentRebalance(void);
+
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(rebalance_table_shards);
@@ -821,6 +823,8 @@ SetupRebalanceMonitor(List *placementUpdateList,
 Datum
 rebalance_table_shards(PG_FUNCTION_ARGS)
 {
+	ErrorOnConcurrentRebalance();
+
 	CheckCitusVersion(ERROR);
 	List *relationIdList = NIL;
 	if (!PG_ARGISNULL(0))
@@ -1646,6 +1650,21 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 }
 
 
+static void
+ErrorOnConcurrentRebalance(void)
+{
+	bool hasConcurrentRebalance = false;
+
+	hasConcurrentRebalance |= HasNonTerminalJobOfType("rebalance");
+
+	if (hasConcurrentRebalance)
+	{
+		/* TODO find hint/detail messages to show */
+		ereport(ERROR, (errmsg("a rebalance is already running")));
+	}
+}
+
+
 /*
  * RebalanceTableShardsBackground rebalances the shards for the relations
  * inside the relationIdList across the different workers. It does so using our
@@ -1654,6 +1673,8 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 static void
 RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationModeOid)
 {
+	ErrorOnConcurrentRebalance();
+
 	if (list_length(options->relationIdList) == 0)
 	{
 		return;
