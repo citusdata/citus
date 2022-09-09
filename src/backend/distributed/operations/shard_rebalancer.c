@@ -1654,9 +1654,6 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 static void
 RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationModeOid)
 {
-	char transferMode = LookupShardTransferMode(shardReplicationModeOid);
-	EnsureReferenceTablesExistOnAllNodesExtended(transferMode);
-
 	if (list_length(options->relationIdList) == 0)
 	{
 		return;
@@ -1694,17 +1691,44 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 	/* schedule planned moves */
 	int64 jobId = CreateBackgroundJob("rebalance", "Rebalance colocation group ...");
 
-	PlacementUpdateEvent *move = NULL;
+	/* buffer used to construct the sql command for the tasks */
 	StringInfoData buf = { 0 };
 	initStringInfo(&buf);
+
+	/*
+	 * Currently we only have two tasks that any move can depend on:
+	 *  - replicating reference tables
+	 *  - the previous move
+	 *
+	 * prevJobIdx tells what slot to write the id of the task into. We only use both slots
+	 * if we are actually replicating reference tables.
+	 */
+	int64 prevJobId[2] = { 0 };
+	int prevJobIdx = 0;
+
+	if (true /* TODO check if replicating reference tables is required */)
+	{
+		/*
+		 * Reference tables need to be copied to (newly-added) nodes, this needs to be the
+		 * first task before we can move any other table.
+		 */
+		appendStringInfo(&buf,
+						 "SELECT pg_catalog.replicate_reference_tables(%s)",
+						 quote_literal_cstr(shardTranferModeLabel));
+		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
+													  prevJobIdx, prevJobId);
+		prevJobId[prevJobIdx] = task->taskid;
+		prevJobIdx++;
+	}
+
+	PlacementUpdateEvent *move = NULL;
 	bool first = true;
-	int64 prevJobId = 0;
 	foreach_ptr(move, placementUpdateList)
 	{
 		resetStringInfo(&buf);
 
 		appendStringInfo(&buf,
-						 "SELECT citus_move_shard_placement(%ld,%s,%u,%s,%u,%s)",
+						 "SELECT pg_catalog.citus_move_shard_placement(%ld,%s,%u,%s,%u,%s)",
 						 move->shardId,
 						 quote_literal_cstr(move->sourceNode->workerName),
 						 move->sourceNode->workerPort,
@@ -1713,18 +1737,11 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 						 quote_literal_cstr(shardTranferModeLabel));
 
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
-													  first ? 0 : 1, &prevJobId);
-		prevJobId = task->taskid;
+													  prevJobIdx + (first ? 0 : 1),
+													  prevJobId);
+		prevJobId[prevJobIdx] = task->taskid;
 		first = false;
 	}
-
-	/*
-	 * This uses the first relationId from the list, it's only used for display
-	 * purposes so it does not really matter which to show
-	 */
-
-	/* ExecutePlacementUpdates(placementUpdateList, shardReplicationModeOid, "Moving"); */
-	/* FinalizeCurrentProgressMonitor(); */
 }
 
 
