@@ -26,6 +26,7 @@
 #include "commands/dbcommands.h"
 #include "commands/sequence.h"
 #include "distributed/argutils.h"
+#include "distributed/background_jobs.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
@@ -261,6 +262,7 @@ PG_FUNCTION_INFO_V1(citus_shard_cost_by_disk_size);
 PG_FUNCTION_INFO_V1(citus_validate_rebalance_strategy_functions);
 PG_FUNCTION_INFO_V1(pg_dist_rebalance_strategy_enterprise_check);
 PG_FUNCTION_INFO_V1(citus_rebalance_start);
+PG_FUNCTION_INFO_V1(citus_rebalance_stop);
 
 bool RunningUnderIsolationTest = false;
 int MaxRebalancerLoggedIgnoredMoves = 5;
@@ -893,6 +895,26 @@ citus_rebalance_start(PG_FUNCTION_ARGS)
 		.improvementThreshold = strategy->improvementThreshold,
 	};
 	RebalanceTableShardsBackground(&options, shardTransferModeOid);
+	PG_RETURN_VOID();
+}
+
+
+/*
+ *
+ */
+Datum
+citus_rebalance_stop(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	int64 jobId = 0;
+	if (!HasNonTerminalJobOfType("rebalance", &jobId))
+	{
+		ereport(ERROR, (errmsg("no ongoing rebalance that can be stopped")));
+	}
+
+	DirectFunctionCall1(citus_job_cancel, Int64GetDatum(jobId));
+
 	PG_RETURN_VOID();
 }
 
@@ -1667,7 +1689,7 @@ HasConcurrentRebalance(void)
 	LockRelease(&locktag, ExclusiveLock, false);
 
 
-	if (HasNonTerminalJobOfType("rebalance"))
+	if (HasNonTerminalJobOfType("rebalance", NULL))
 	{
 		return true;
 	}

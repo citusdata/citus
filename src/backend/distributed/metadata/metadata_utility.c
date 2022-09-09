@@ -2725,7 +2725,7 @@ GetNextBackgroundTaskTaskId(void)
 
 
 bool
-HasNonTerminalJobOfType(const char *jobType)
+HasNonTerminalJobOfType(const char *jobType, int64 *jobIdOut)
 {
 	Relation pgDistBackgroundJob =
 		table_open(DistBackgroundJobRelationId(), AccessShareLock);
@@ -2766,6 +2766,17 @@ HasNonTerminalJobOfType(const char *jobType)
 		if (HeapTupleIsValid(taskTuple = systable_getnext(scanDescriptor)))
 		{
 			foundJob = true;
+
+			if (jobIdOut)
+			{
+				Datum values[Natts_pg_dist_background_job] = { 0 };
+				bool isnull[Natts_pg_dist_background_job] = { 0 };
+
+				TupleDesc tupleDesc = RelationGetDescr(pgDistBackgroundJob);
+				heap_deform_tuple(taskTuple, tupleDesc, values, isnull);
+
+				*jobIdOut = DatumGetInt64(values[Anum_pg_dist_background_job_job_id - 1]);
+			}
 		}
 
 		systable_endscan(scanDescriptor);
