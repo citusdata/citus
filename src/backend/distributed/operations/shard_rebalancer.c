@@ -823,8 +823,6 @@ SetupRebalanceMonitor(List *placementUpdateList,
 Datum
 rebalance_table_shards(PG_FUNCTION_ARGS)
 {
-	ErrorOnConcurrentRebalance();
-
 	CheckCitusVersion(ERROR);
 	List *relationIdList = NIL;
 	if (!PG_ARGISNULL(0))
@@ -1612,6 +1610,12 @@ NonColocatedDistRelationIdList(void)
 static void
 RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 {
+	ErrorOnConcurrentRebalance();
+
+	LOCKTAG locktag = { 0 };
+	SET_LOCKTAG_CITUS_OPERATION(locktag, CITUS_REBALANCE);
+	LockAcquire(&locktag, ExclusiveLock, false, false);
+
 	char transferMode = LookupShardTransferMode(shardReplicationModeOid);
 	EnsureReferenceTablesExistOnAllNodesExtended(transferMode);
 
@@ -1650,14 +1654,32 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 }
 
 
+static bool
+HasConcurrentRebalance(void)
+{
+	LOCKTAG locktag = { 0 };
+	SET_LOCKTAG_CITUS_OPERATION(locktag, CITUS_REBALANCE);
+	LockAcquireResult locked = LockAcquire(&locktag, ExclusiveLock, false, true);
+	if (locked == LOCKACQUIRE_NOT_AVAIL)
+	{
+		return true;
+	}
+	LockRelease(&locktag, ExclusiveLock, false);
+
+
+	if (HasNonTerminalJobOfType("rebalance"))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
 static void
 ErrorOnConcurrentRebalance(void)
 {
-	bool hasConcurrentRebalance = false;
-
-	hasConcurrentRebalance |= HasNonTerminalJobOfType("rebalance");
-
-	if (hasConcurrentRebalance)
+	if (HasConcurrentRebalance())
 	{
 		/* TODO find hint/detail messages to show */
 		ereport(ERROR, (errmsg("a rebalance is already running")));
