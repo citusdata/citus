@@ -12,6 +12,7 @@
 #ifndef WORKER_TRANSACTION_H
 #define WORKER_TRANSACTION_H
 
+#include "distributed/connection_management.h"
 #include "distributed/worker_manager.h"
 #include "storage/lockdefs.h"
 
@@ -74,6 +75,9 @@ extern void SendCommandListToWorkerOutsideTransaction(const char *nodeName,
 													  int32 nodePort,
 													  const char *nodeUser,
 													  List *commandList);
+extern void SendCommandListToWorkerInSeparateTransaction(
+	MultiConnection *workerConnection,
+	List *commandList);
 extern void SendMetadataCommandListToWorkerListInCoordinatedTransaction(
 	List *workerNodeList,
 	const char *

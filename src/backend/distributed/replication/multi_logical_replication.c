@@ -1162,10 +1162,8 @@ CreateForeignKeyConstraints(List *logicalRepTargetList)
 				list_make1("SET LOCAL citus.skip_constraint_validation TO ON;"),
 				commandList);
 
-			SendCommandListToWorkerOutsideTransaction(
-				target->superuserConnection->hostname,
-				target->superuserConnection->port,
-				target->superuserConnection->user,
+			SendCommandListToWorkerInSeparateTransaction(
+				target->superuserConnection,
 				commandList);
 
 			MemoryContextReset(localContext);
@@ -1544,8 +1542,8 @@ DropUser(MultiConnection *connection, char *username)
 	 * The DROP USER command should not propagate, so we temporarily disable
 	 * DDL propagation.
 	 */
-	SendCommandListToWorkerOutsideTransaction(
-		connection->hostname, connection->port, connection->user,
+	SendCommandListToWorkerInSeparateTransaction(
+		connection,
 		list_make2(
 			"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 			psprintf("DROP USER IF EXISTS %s",
@@ -1730,10 +1728,8 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 		 * create a user with SUPERUSER permissions and then alter it to NOSUPERUSER.
 		 * This prevents permission escalations.
 		 */
-		SendCommandListToWorkerOutsideTransaction(
-			target->superuserConnection->hostname,
-			target->superuserConnection->port,
-			target->superuserConnection->user,
+		SendCommandListToWorkerInSeparateTransaction(
+			target->superuserConnection,
 			list_make2(
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
@@ -1791,10 +1787,8 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 		 * The ALTER ROLE command should not propagate, so we temporarily
 		 * disable DDL propagation.
 		 */
-		SendCommandListToWorkerOutsideTransaction(
-			target->superuserConnection->hostname,
-			target->superuserConnection->port,
-			target->superuserConnection->user,
+		SendCommandListToWorkerInSeparateTransaction(
+			target->superuserConnection,
 			list_make2(
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(

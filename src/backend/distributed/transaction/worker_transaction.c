@@ -356,6 +356,34 @@ SendCommandListToWorkerOutsideTransaction(const char *nodeName, int32 nodePort,
 
 
 /*
+ * SendCommandListToWorkerInSeparateTransaction sends the command list over the
+ * connection in a separate connection. This opens a new transaction on the
+ * connection, thus it's important that no transaction is currently open on the
+ * given connection. This function is mainly useful to avoid opening an closing
+ * connections excessively by allowing reusing a single connection to send
+ * multiple separately committing transactions. The function raises an error if
+ * any of the queries fail.
+ */
+void
+SendCommandListToWorkerInSeparateTransaction(MultiConnection *workerConnection,
+											 List *commandList)
+{
+	MarkRemoteTransactionCritical(workerConnection);
+	RemoteTransactionBegin(workerConnection);
+
+	/* iterate over the commands and execute them in the same connection */
+	const char *commandString = NULL;
+	foreach_ptr(commandString, commandList)
+	{
+		ExecuteCriticalRemoteCommand(workerConnection, commandString);
+	}
+
+	RemoteTransactionCommit(workerConnection);
+	CloseRemoteTransaction(workerConnection);
+}
+
+
+/*
  * SendCommandListToWorkerInCoordinatedTransaction opens connection to the node
  * with the given nodeName and nodePort. The commands are sent as part of the
  * coordinated transaction. Any failures aborts the coordinated transaction.
