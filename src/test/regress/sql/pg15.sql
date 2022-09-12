@@ -298,6 +298,47 @@ ALTER TABLE copy_test2 RENAME COLUMN data_ TO data;
 COPY copy_test2 FROM :'temp_dir''copy_test.txt' WITH ( HEADER match, FORMAT text);
 SELECT count(*)=100 FROM copy_test2;
 
+
+-- allow foreign key columns to have SET NULL/DEFAULT on column basis
+-- currently only reference tables can support that
+CREATE TABLE PKTABLE (tid int, id int, PRIMARY KEY (tid, id));
+CREATE TABLE FKTABLE (
+  tid int, id int,
+  fk_id_del_set_null int,
+  fk_id_del_set_default int DEFAULT 0,
+  FOREIGN KEY (tid, fk_id_del_set_null) REFERENCES PKTABLE ON DELETE SET NULL (fk_id_del_set_null),
+  FOREIGN KEY (tid, fk_id_del_set_default) REFERENCES PKTABLE ON DELETE SET DEFAULT (fk_id_del_set_default)
+);
+
+SELECT create_reference_table('PKTABLE');
+
+-- ok, Citus could relax this constraint in the future
+SELECT create_distributed_table('FKTABLE', 'tid');
+
+-- with reference tables it should all work fine
+SELECT create_reference_table('FKTABLE');
+
+-- show that the definition is expected
+SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'fktable'::regclass::oid ORDER BY oid;
+
+\c - - - :worker_1_port
+
+SET search_path TO pg15;
+
+-- show that the definition is expected on the worker as well
+SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'fktable'::regclass::oid ORDER BY oid;
+
+-- also, make sure that it works as expected
+INSERT INTO PKTABLE VALUES (1, 0), (1, 1), (1, 2);
+INSERT INTO FKTABLE VALUES
+  (1, 1, 1, NULL),
+  (1, 2, NULL, 2);
+DELETE FROM PKTABLE WHERE id = 1 OR id = 2;
+SELECT * FROM FKTABLE ORDER BY id;
+
+
 -- Clean up
+\c - - - :master_port
+
 \set VERBOSITY terse
 DROP SCHEMA pg15 CASCADE;
