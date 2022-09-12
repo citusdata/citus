@@ -1781,11 +1781,6 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		DirectFunctionCall1(enum_out, shardReplicationModeOid);
 	char *shardTranferModeLabel = DatumGetCString(shardTranferModeLabelDatum);
 
-	if (list_length(placementUpdateList) == 0)
-	{
-		return;
-	}
-
 	/* schedule planned moves */
 	int64 jobId = CreateBackgroundJob("rebalance", "Rebalance colocation group ...");
 
