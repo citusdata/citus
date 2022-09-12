@@ -233,6 +233,30 @@ WHERE colocationid IN
 
 DROP TABLE replicate_reference_table_commit;
 
+-- exercise reference table replication in create_distributed_table_concurrently
+SELECT citus_remove_node('localhost', :worker_2_port);
+CREATE TABLE replicate_reference_table_cdtc(column1 int);
+SELECT create_reference_table('replicate_reference_table_cdtc');
+SELECT citus_add_node('localhost', :worker_2_port);
+
+-- required for create_distributed_table_concurrently
+SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
+SET citus.shard_replication_factor TO 1;
+
+CREATE TABLE distributed_table_cdtc(column1 int primary key);
+SELECT create_distributed_table_concurrently('distributed_table_cdtc', 'column1');
+
+RESET citus.shard_replication_factor;
+SELECT citus_remove_node('localhost', :master_port);
+
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement_view
+WHERE
+    nodeport = :worker_2_port
+ORDER BY shardid, nodeport;
+DROP TABLE replicate_reference_table_cdtc, distributed_table_cdtc;
 
 -- test adding new node + upgrading another hash distributed table to reference table + creating new reference table in TRANSACTION
 SELECT master_remove_node('localhost', :worker_2_port);

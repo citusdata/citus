@@ -564,8 +564,10 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 	 * such that we can create foreign keys and joins work immediately after creation.
 	 * We do this after applying all essential checks to error out early in case of
 	 * user error.
+	 *
+	 * Use force_logical since this function is meant to not block writes.
 	 */
-	EnsureReferenceTablesExistOnAllNodes();
+	EnsureReferenceTablesExistOnAllNodesExtended(TRANSFER_MODE_FORCE_LOGICAL);
 
 	/*
 	 * At this point, the table is a Citus local table, which means it does
