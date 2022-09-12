@@ -6,6 +6,6 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_rebalance_start(
     RETURNS VOID
     AS 'MODULE_PATHNAME'
     LANGUAGE C VOLATILE;
-COMMENT ON FUNCTION pg_catalog.citus_rebalance_start(float4, name, boolean, citus.shard_transfer_mode)
+COMMENT ON FUNCTION pg_catalog.citus_rebalance_start(name, boolean, citus.shard_transfer_mode)
     IS 'rebalance the shards in the cluster in the background';
-GRANT EXECUTE ON FUNCTION pg_catalog.citus_rebalance_start(float4, name, boolean, citus.shard_transfer_mode) TO PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_catalog.citus_rebalance_start(name, boolean, citus.shard_transfer_mode) TO PUBLIC;
