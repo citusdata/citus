@@ -74,6 +74,7 @@ typedef struct RebalanceOptions
 	bool drainOnly;
 	float4 improvementThreshold;
 	Form_pg_dist_rebalance_strategy rebalanceStrategy;
+	const char *operationName;
 } RebalanceOptions;
 
 
@@ -248,7 +249,7 @@ static uint64 WorkerShardSize(HTAB *workerShardStatistics,
 static void AddToWorkerShardIdSet(HTAB *shardsByWorker, char *workerName, int workerPort,
 								  uint64 shardId);
 static HTAB * BuildShardSizesHash(ProgressMonitorData *monitor, HTAB *shardStatistics);
-static void ErrorOnConcurrentRebalance(void);
+static void ErrorOnConcurrentRebalance(RebalanceOptions *);
 
 
 /* declarations for dynamic loading */
@@ -1632,12 +1633,6 @@ NonColocatedDistRelationIdList(void)
 static void
 RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 {
-	ErrorOnConcurrentRebalance();
-
-	LOCKTAG locktag = { 0 };
-	SET_LOCKTAG_CITUS_OPERATION(locktag, CITUS_REBALANCE);
-	LockAcquire(&locktag, ExclusiveLock, false, false);
-
 	char transferMode = LookupShardTransferMode(shardReplicationModeOid);
 	EnsureReferenceTablesExistOnAllNodesExtended(transferMode);
 
@@ -1646,17 +1641,14 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 		return;
 	}
 
-	Oid relationId = InvalidOid;
 	char *operationName = "rebalance";
 	if (options->drainOnly)
 	{
 		operationName = "move";
 	}
 
-	foreach_oid(relationId, options->relationIdList)
-	{
-		AcquireRebalanceColocationLock(relationId, operationName);
-	}
+	options->operationName = operationName;
+	ErrorOnConcurrentRebalance(options);
 
 	List *placementUpdateList = GetRebalanceSteps(options);
 
@@ -1677,18 +1669,8 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 
 
 static bool
-HasConcurrentRebalance(void)
+HasConcurrentRebalance(RebalanceOptions *options)
 {
-	LOCKTAG locktag = { 0 };
-	SET_LOCKTAG_CITUS_OPERATION(locktag, CITUS_REBALANCE);
-	LockAcquireResult locked = LockAcquire(&locktag, ExclusiveLock, false, true);
-	if (locked == LOCKACQUIRE_NOT_AVAIL)
-	{
-		return true;
-	}
-	LockRelease(&locktag, ExclusiveLock, false);
-
-
 	if (HasNonTerminalJobOfType("rebalance", NULL))
 	{
 		return true;
@@ -1699,9 +1681,16 @@ HasConcurrentRebalance(void)
 
 
 static void
-ErrorOnConcurrentRebalance(void)
+ErrorOnConcurrentRebalance(RebalanceOptions *options)
 {
-	if (HasConcurrentRebalance())
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, options->relationIdList)
+	{
+		/* this provides the legacy error when the lock can't be acquired */
+		AcquireRebalanceColocationLock(relationId, options->operationName);
+	}
+
+	if (HasConcurrentRebalance(options))
 	{
 		/* TODO find hint/detail messages to show */
 		ereport(ERROR, (errmsg("a rebalance is already running")));
@@ -1717,24 +1706,19 @@ ErrorOnConcurrentRebalance(void)
 static void
 RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationModeOid)
 {
-	ErrorOnConcurrentRebalance();
-
 	if (list_length(options->relationIdList) == 0)
 	{
 		return;
 	}
 
-	Oid relationId = InvalidOid;
 	char *operationName = "rebalance";
 	if (options->drainOnly)
 	{
 		operationName = "move";
 	}
 
-	foreach_oid(relationId, options->relationIdList)
-	{
-		AcquireRebalanceColocationLock(relationId, operationName);
-	}
+	options->operationName = operationName;
+	ErrorOnConcurrentRebalance(options);
 
 	List *placementUpdateList = GetRebalanceSteps(options);
 

@@ -54,8 +54,7 @@ typedef enum CitusOperations
 	CITUS_CREATE_DISTRIBUTED_TABLE_CONCURRENTLY = 2,
 	CITUS_CREATE_COLOCATION_DEFAULT = 3,
 	CITUS_SHARD_MOVE = 4,
-	CITUS_BACKGROUND_TASK_MONITOR = 5,
-	CITUS_REBALANCE = 6
+	CITUS_BACKGROUND_TASK_MONITOR = 5
 } CitusOperations;
 
 /* reuse advisory lock, but with different, unused field 4 (4)*/
