@@ -264,6 +264,7 @@ PG_FUNCTION_INFO_V1(citus_validate_rebalance_strategy_functions);
 PG_FUNCTION_INFO_V1(pg_dist_rebalance_strategy_enterprise_check);
 PG_FUNCTION_INFO_V1(citus_rebalance_start);
 PG_FUNCTION_INFO_V1(citus_rebalance_stop);
+PG_FUNCTION_INFO_V1(citus_rebalance_wait);
 
 bool RunningUnderIsolationTest = false;
 int MaxRebalancerLoggedIgnoredMoves = 5;
@@ -914,7 +915,28 @@ citus_rebalance_stop(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("no ongoing rebalance that can be stopped")));
 	}
 
-	DirectFunctionCall1(citus_job_cancel, Int64GetDatum(jobId));
+	citus_job_wait_internal(jobId, NULL);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ *
+ */
+Datum
+citus_rebalance_wait(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	int64 jobId = 0;
+	if (!HasNonTerminalJobOfType("rebalance", &jobId))
+	{
+		ereport(WARNING, (errmsg("no ongoing rebalance that can be waited on")));
+		PG_RETURN_VOID();
+	}
+
+	DirectFunctionCall1(citus_job_wait, Int64GetDatum(jobId));
 
 	PG_RETURN_VOID();
 }
