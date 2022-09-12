@@ -1767,6 +1767,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 
 	if (list_length(placementUpdateList) == 0)
 	{
+		ereport(NOTICE, (errmsg("No moves available for rebalancing")));
 		return;
 	}
 

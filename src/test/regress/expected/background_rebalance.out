@@ -19,6 +19,7 @@ SELECT create_distributed_table('t1', 'a', shard_count => 4, colocate_with => 'n
 -- verify the rebalance works - no-op - when the shards aer balanced. Noop is shown by wait complaining there is nothing
 -- to wait on.
 SELECT citus_rebalance_start();
+NOTICE:  No moves available for rebalancing
  citus_rebalance_start
 ---------------------------------------------------------------------
 
