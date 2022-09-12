@@ -133,7 +133,9 @@ isolate_tenant_to_new_shard(PG_FUNCTION_ARGS)
 	FmgrInfo *hashFunction = cacheEntry->hashFunction;
 
 	/* get hashed value of the distribution value */
-	Datum hashedValueDatum = FunctionCall1(hashFunction, tenantIdDatum);
+	Datum hashedValueDatum = FunctionCall1Coll(hashFunction,
+											   cacheEntry->partitionColumn->varcollid,
+											   tenantIdDatum);
 	int hashedValue = DatumGetInt32(hashedValueDatum);
 
 	List *shardSplitPointsList = NIL;
