@@ -157,6 +157,22 @@ citus_job_wait(PG_FUNCTION_ARGS)
 		desiredStatus = BackgroundJobStatusByOid(PG_GETARG_OID(1));
 	}
 
+	citus_job_wait_internal(jobid, hasDesiredStatus ? &desiredStatus : NULL);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_job_wait_internal imaplements the waiting on a job for reuse in other areas where
+ * we want to wait on jobs. eg the background rebalancer.
+ *
+ * When a desiredStatus is provided it will provide an error when a different state is
+ * reached and the state cannot ever reach the desired state anymore.
+ */
+void
+citus_job_wait_internal(int64 jobid, BackgroundJobStatus *desiredStatus)
+{
 	/*
 	 * Since we are wait polling we will actually allocate memory on every poll. To make
 	 * sure we don't put unneeded pressure on the memory we create a context that we clear
@@ -177,10 +193,9 @@ citus_job_wait(PG_FUNCTION_ARGS)
 		if (!job)
 		{
 			ereport(ERROR, (errmsg("no job found for job with jobid: %ld", jobid)));
-			PG_RETURN_VOID();
 		}
 
-		if (hasDesiredStatus && job->state == desiredStatus)
+		if (desiredStatus && job->state == *desiredStatus)
 		{
 			/* job has reached its desired status, done waiting */
 			break;
@@ -188,7 +203,7 @@ citus_job_wait(PG_FUNCTION_ARGS)
 
 		if (IsBackgroundJobStatusTerminal(job->state))
 		{
-			if (hasDesiredStatus)
+			if (desiredStatus)
 			{
 				/*
 				 * We have reached a terminal state, which is not the desired state we
@@ -201,7 +216,7 @@ citus_job_wait(PG_FUNCTION_ARGS)
 																   reachedStatusOid);
 				char *reachedStatusName = DatumGetCString(reachedStatusNameDatum);
 
-				Oid desiredStatusOid = BackgroundJobStatusOid(desiredStatus);
+				Oid desiredStatusOid = BackgroundJobStatusOid(*desiredStatus);
 				Datum desiredStatusNameDatum = DirectFunctionCall1(enum_out,
 																   desiredStatusOid);
 				char *desiredStatusName = DatumGetCString(desiredStatusNameDatum);
@@ -228,8 +243,6 @@ citus_job_wait(PG_FUNCTION_ARGS)
 
 	MemoryContextSwitchTo(oldContext);
 	MemoryContextDelete(waitContext);
-
-	PG_RETURN_VOID();
 }
 
 

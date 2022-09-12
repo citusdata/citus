@@ -294,6 +294,63 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 
 
 /*
+ * HasNodesWithMissingReferenceTables checks if all reference tables are already copied to
+ * all nodes. When a node doesn't have a copy of the reference tables we call them missing
+ * and this function will return true.
+ *
+ * The caller might be interested in the list of all reference tables after this check and
+ * this the list of tables is written to *referenceTableList if a non-null pointer is
+ * passed.
+ */
+bool
+HasNodesWithMissingReferenceTables(List **referenceTableList)
+{
+	int colocationId = GetReferenceTableColocationId();
+
+	if (colocationId == INVALID_COLOCATION_ID)
+	{
+		/* we have no reference table yet. */
+		return false;
+	}
+	LockColocationId(colocationId, AccessShareLock);
+
+	List *referenceTableIdList = CitusTableTypeIdList(REFERENCE_TABLE);
+	if (referenceTableList)
+	{
+		*referenceTableList = referenceTableIdList;
+	}
+
+	if (list_length(referenceTableIdList) <= 0)
+	{
+		return false;
+	}
+
+	Oid referenceTableId = linitial_oid(referenceTableIdList);
+	List *shardIntervalList = LoadShardIntervalList(referenceTableId);
+	if (list_length(shardIntervalList) == 0)
+	{
+		const char *referenceTableName = get_rel_name(referenceTableId);
+
+		/* check for corrupt metadata */
+		ereport(ERROR, (errmsg("reference table \"%s\" does not have a shard",
+							   referenceTableName)));
+	}
+
+	ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
+	uint64 shardId = shardInterval->shardId;
+	List *newWorkersList = WorkersWithoutReferenceTablePlacement(shardId,
+																 AccessShareLock);
+
+	if (list_length(newWorkersList) <= 0)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
  * AnyRelationsModifiedInTransaction returns true if any of the given relations
  * were modified in the current transaction.
  */
