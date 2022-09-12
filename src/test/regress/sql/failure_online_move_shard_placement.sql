@@ -90,7 +90,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").can
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 
 -- failure on dropping subscription
-SELECT citus.mitmproxy('conn.onQuery(query="ENABLE SUBSCRIPTION|DROP SUBSCRIPTION").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION").after(2).kill()');
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+SELECT citus.mitmproxy('conn.onQuery(query="nonexistingquery").kill()');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 
 -- cancellation on dropping subscription
