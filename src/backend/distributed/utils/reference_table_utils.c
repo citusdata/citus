@@ -293,6 +293,15 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 }
 
 
+/*
+ * HasNodesWithMissingReferenceTables checks if all reference tables are already copied to
+ * all nodes. When a node doesn't have a copy of the reference tables we call them missing
+ * and this function will return true.
+ *
+ * The caller might be interested in the list of all reference tables after this check and
+ * this the list of tables is written to *referenceTableList if a non-null pointer is
+ * passed.
+ */
 bool
 HasNodesWithMissingReferenceTables(List **referenceTableList)
 {

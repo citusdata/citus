@@ -163,6 +163,13 @@ citus_job_wait(PG_FUNCTION_ARGS)
 }
 
 
+/*
+ * citus_job_wait_internal imaplements the waiting on a job for reuse in other areas where
+ * we want to wait on jobs. eg the background rebalancer.
+ *
+ * When a desiredStatus is provided it will provide an error when a different state is
+ * reached and the state cannot ever reach the desired state anymore.
+ */
 void
 citus_job_wait_internal(int64 jobid, BackgroundJobStatus *desiredStatus)
 {
