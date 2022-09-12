@@ -42,7 +42,7 @@ SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localh
 SELECT citus_rebalance_start();
 NOTICE:  Scheduled 1 moves as job xxx
 DETAIL:  Rebalance scheduled as background job
-HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; AND SELECT * FROM get_rebalance_progress();
+HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; or SELECT * FROM get_rebalance_progress();
  citus_rebalance_start
 ---------------------------------------------------------------------
 
@@ -75,7 +75,7 @@ HINT:  If you wish to continue without a replica identity set the shard_transfer
 SELECT citus_rebalance_start(shard_transfer_mode => 'block_writes');
 NOTICE:  Scheduled 1 moves as job xxx
 DETAIL:  Rebalance scheduled as background job
-HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; AND SELECT * FROM get_rebalance_progress();
+HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; or SELECT * FROM get_rebalance_progress();
  citus_rebalance_start
 ---------------------------------------------------------------------
 
@@ -98,7 +98,7 @@ SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localh
 SELECT citus_rebalance_start();
 NOTICE:  Scheduled 1 moves as job xxx
 DETAIL:  Rebalance scheduled as background job
-HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; AND SELECT * FROM get_rebalance_progress();
+HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; or SELECT * FROM get_rebalance_progress();
  citus_rebalance_start
 ---------------------------------------------------------------------
 
@@ -134,7 +134,7 @@ DETAIL:  Move may have already completed.
 SELECT citus_rebalance_start();
 NOTICE:  Scheduled 1 moves as job xxx
 DETAIL:  Rebalance scheduled as background job
-HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; AND SELECT * FROM get_rebalance_progress();
+HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; or SELECT * FROM get_rebalance_progress();
  citus_rebalance_start
 ---------------------------------------------------------------------
 
@@ -143,7 +143,7 @@ HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job
 SELECT citus_rebalance_start();
 ERROR:  A rebalance is already running as job xxx
 DETAIL:  A rebalance was already scheduled as background job
-HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; AND SELECT * FROM get_rebalance_progress();
+HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; or SELECT * FROM get_rebalance_progress();
 SELECT citus_rebalance_wait();
  citus_rebalance_wait
 ---------------------------------------------------------------------
@@ -160,7 +160,7 @@ SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localh
 SELECT citus_rebalance_start();
 NOTICE:  Scheduled 1 moves as job xxx
 DETAIL:  Rebalance scheduled as background job
-HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; AND SELECT * FROM get_rebalance_progress();
+HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; or SELECT * FROM get_rebalance_progress();
  citus_rebalance_start
 ---------------------------------------------------------------------
 
@@ -169,7 +169,7 @@ HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job
 SELECT rebalance_table_shards();
 ERROR:  A rebalance is already running as job xxx
 DETAIL:  A rebalance was already scheduled as background job
-HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; AND SELECT * FROM get_rebalance_progress();
+HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; or SELECT * FROM get_rebalance_progress();
 SELECT citus_rebalance_wait();
  citus_rebalance_wait
 ---------------------------------------------------------------------

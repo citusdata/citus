@@ -1715,7 +1715,7 @@ ErrorOnConcurrentRebalance(RebalanceOptions *options)
 					errdetail("A rebalance was already scheduled as background job"),
 					errhint("To monitor progress, run: SELECT * FROM "
 							"pg_dist_background_task WHERE job_id = %ld ORDER BY task_id "
-							"ASC; AND SELECT * FROM get_rebalance_progress();",
+							"ASC; or SELECT * FROM get_rebalance_progress();",
 							jobId)));
 	}
 }
@@ -1847,7 +1847,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 			 errdetail("Rebalance scheduled as background job"),
 			 errhint("To monitor progress, run: "
 					 "SELECT * FROM pg_dist_background_task WHERE job_id = %ld ORDER BY "
-					 "task_id ASC; AND SELECT * FROM get_rebalance_progress();",
+					 "task_id ASC; or SELECT * FROM get_rebalance_progress();",
 					 jobId)));
 }
 
