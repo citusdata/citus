@@ -2724,6 +2724,15 @@ GetNextBackgroundTaskTaskId(void)
 }
 
 
+/*
+ * HasNonTerminalJobOfType returns true if there is a job of a given type that is not in
+ * its terminal state.
+ *
+ * Some jobs would want a single instance to be able to run at once. Before submitting a
+ * new job if could see if there is a job of their type already executing.
+ *
+ * If a job is found the options jobIdOut is populated with the jobId.
+ */
 bool
 HasNonTerminalJobOfType(const char *jobType, int64 *jobIdOut)
 {
