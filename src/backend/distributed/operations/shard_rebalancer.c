@@ -1776,6 +1776,8 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		return;
 	}
 
+	DropOrphanedShardsInSeparateTransaction();
+
 	/* find the name of the shard transfer mode to interpolate in the scheduled command */
 	Datum shardTranferModeLabelDatum =
 		DirectFunctionCall1(enum_out, shardReplicationModeOid);
@@ -1843,10 +1845,6 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 			prevJobIdx++;
 		}
 	}
-
-	(void) ScheduleBackgroundTask(jobId, GetUserId(),
-								  "CALL citus_cleanup_orphaned_shards()",
-								  prevJobIdx, prevJobId);
 }
 
 
