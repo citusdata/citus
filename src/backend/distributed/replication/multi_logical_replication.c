@@ -320,10 +320,11 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 * the constraints earlier.
 		 */
 		CreateForeignConstraintsToReferenceTable(logicalRepTargetList);
-		elog(LOG,"before drop subs - try");
+		elog(LOG, "before drop subs - try");
+
 		/* we're done, cleanup the publication and subscription */
 		DropSubscriptions(logicalRepTargetList);
-		elog(LOG,"after drop subs - try");
+		elog(LOG, "after drop subs - try");
 		DropReplicationSlots(sourceConnection, logicalRepTargetList);
 		DropPublications(sourceConnection, publicationInfoHash);
 
@@ -347,11 +348,13 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 */
 
 		/* reconnect if the connection failed or is waiting for a command */
-		// RecreateGroupedLogicalRepTargetsConnections(groupedLogicalRepTargetsHash,
-													// superUser, databaseName);
-		elog(LOG,"before drop subs - catch");
+		RecreateGroupedLogicalRepTargetsConnections(
+			groupedLogicalRepTargetsHash,
+			superUser, databaseName);
+		elog(LOG, "before drop subs - catch");
 		DropSubscriptions(logicalRepTargetList);
-		elog(LOG,"after drop subs - catch");
+		elog(LOG, "after drop subs - catch");
+
 		/* reconnect if the connection failed or is waiting for a command */
 		if (PQstatus(sourceConnection->pgConn) != CONNECTION_OK ||
 			PQisBusy(sourceConnection->pgConn))
@@ -1838,6 +1841,7 @@ void
 EnableSubscriptions(List *logicalRepTargetList)
 {
 	LogicalRepTarget *target = NULL;
+	elog(LOG, "before enable subscriptions");
 	foreach_ptr(target, logicalRepTargetList)
 	{
 		ExecuteCriticalRemoteCommand(target->superuserConnection, psprintf(
@@ -1845,6 +1849,7 @@ EnableSubscriptions(List *logicalRepTargetList)
 										 target->subscriptionName
 										 ));
 	}
+	elog(LOG, "after enable subscriptions");
 }
 
 

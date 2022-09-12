@@ -152,6 +152,63 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT min\(latest_end_lsn").cancel
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
+SET client_min_messages TO LOG;
+-- failure on dropping subscription
+SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* (ENABLE|DISABLE)").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+LOG:  before drop leftovers
+LOG:  after drop leftovers
+LOG:  before enable subscriptions
+LOG:  before drop subs - catch
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+-- try again
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+LOG:  before drop leftovers
+LOG:  after drop leftovers
+LOG:  before enable subscriptions
+LOG:  after enable subscriptions
+LOG:  The states of the relations belonging to the subscriptions became READY on the target node localhost:xxxxx
+LOG:  The states of all subscriptions have become READY
+LOG:  The LSN of the target subscriptions on node localhost:xxxxx have caught up with the source LSN
+LOG:  The LSN of the target subscriptions on node localhost:xxxxx have caught up with the source LSN
+LOG:  The LSN of the target subscriptions on node localhost:xxxxx have caught up with the source LSN
+LOG:  before drop subs - try
+LOG:  after drop subs - try
+ master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_move_shard_placement(101, 'localhost', :worker_2_proxy_port, 'localhost', :worker_1_port);
+LOG:  before drop leftovers
+LOG:  after drop leftovers
+LOG:  before enable subscriptions
+LOG:  after enable subscriptions
+LOG:  The states of the relations belonging to the subscriptions became READY on the target node localhost:xxxxx
+LOG:  The states of all subscriptions have become READY
+LOG:  The LSN of the target subscriptions on node localhost:xxxxx have caught up with the source LSN
+LOG:  The LSN of the target subscriptions on node localhost:xxxxx have caught up with the source LSN
+LOG:  The LSN of the target subscriptions on node localhost:xxxxx have caught up with the source LSN
+LOG:  before drop subs - try
+LOG:  after drop subs - try
+ master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+RESET client_min_messages;
 -- failure on disabling subscription (right before dropping it)
 SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").kill()');
  mitmproxy
@@ -171,16 +228,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").can
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
--- failure on dropping subscription
-SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").kill()');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-ERROR:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").cancel(' || :pid || ')');
  mitmproxy

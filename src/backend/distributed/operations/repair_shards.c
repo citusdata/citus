@@ -1182,9 +1182,6 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
 									 int32 targetNodePort)
 {
 	AcquireLogicalReplicationLock();
-elog(LOG,"before drop leftovers");
-	DropAllLogicalReplicationLeftovers(SHARD_MOVE);
-elog(LOG,"after drop leftovers");
 
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
 													   "CopyShardTablesViaLogicalReplication",
@@ -1212,6 +1209,10 @@ elog(LOG,"after drop leftovers");
 
 		MemoryContextReset(localContext);
 	}
+
+	elog(LOG, "before drop leftovers");
+	DropAllLogicalReplicationLeftovers(SHARD_MOVE);
+	elog(LOG, "after drop leftovers");
 
 	MemoryContextSwitchTo(oldContext);
 
