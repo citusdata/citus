@@ -902,7 +902,8 @@ citus_rebalance_start(PG_FUNCTION_ARGS)
 
 
 /*
- *
+ * citus_rebalance_stop stops any ongoing background rebalance that is executing.
+ * Raises an error when there is no backgound rebalance ongoing at the moment.
  */
 Datum
 citus_rebalance_stop(PG_FUNCTION_ARGS)
@@ -922,7 +923,8 @@ citus_rebalance_stop(PG_FUNCTION_ARGS)
 
 
 /*
- *
+ * citus_rebalance_wait waits till an ongoing background rebalance has finished execution.
+ * A warning will be displayed if no rebalance is ongoing.
  */
 Datum
 citus_rebalance_wait(PG_FUNCTION_ARGS)
