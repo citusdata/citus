@@ -11,13 +11,13 @@ SELECT create_distributed_table('t1', 'a', shard_count => 4, colocate_with => 'n
 
 -- verify the rebalance works - no-op - when the shards aer balanced. Noop is shown by wait complaining there is nothing
 -- to wait on.
-SELECT citus_rebalance_start();
+SELECT 1 FROM citus_rebalance_start();
 SELECT citus_rebalance_wait();
 
 SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode => 'block_writes');
 
 -- rebalance a table in the background
-SELECT citus_rebalance_start();
+SELECT 1 FROM citus_rebalance_start();
 SELECT citus_rebalance_wait();
 
 SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode => 'block_writes');
@@ -26,8 +26,8 @@ CREATE TABLE t2 (a int);
 SELECT create_distributed_table('t2', 'a' , colocate_with => 't1');
 
 -- show that we get an error when a table in the colocation group can't be moved non-blocking
-SELECT citus_rebalance_start();
-SELECT citus_rebalance_start(shard_transfer_mode => 'block_writes');
+SELECT 1 FROM citus_rebalance_start();
+SELECT 1 FROM citus_rebalance_start(shard_transfer_mode => 'block_writes');
 SELECT citus_rebalance_wait();
 
 DROP TABLE t2;
@@ -35,7 +35,7 @@ DROP TABLE t2;
 SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode => 'block_writes');
 
 -- show we can stop a rebalance, the stop causes the move to not have happened, eg, our move back below fails.
-SELECT citus_rebalance_start();
+SELECT 1 FROM citus_rebalance_start();
 SELECT citus_rebalance_stop();
 -- waiting on this rebalance is racy, as it sometimes sees no rebalance is ongoing while other times it actually sees it ongoing
 -- we simply sleep a bit here
@@ -49,13 +49,13 @@ SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localh
 
 
 -- show we can't start the rebalancer twice
-SELECT citus_rebalance_start();
-SELECT citus_rebalance_start();
+SELECT 1 FROM citus_rebalance_start();
+SELECT 1 FROM citus_rebalance_start();
 SELECT citus_rebalance_wait();
 
 -- show that the old rebalancer cannot be started with a background rebalance in progress
 SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode => 'block_writes');
-SELECT citus_rebalance_start();
+SELECT 1 FROM citus_rebalance_start();
 SELECT rebalance_table_shards();
 SELECT citus_rebalance_wait();
 

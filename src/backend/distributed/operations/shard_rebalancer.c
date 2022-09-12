@@ -229,8 +229,8 @@ static float4 NodeCapacity(WorkerNode *workerNode, void *context);
 static ShardCost GetShardCost(uint64 shardId, void *context);
 static List * NonColocatedDistRelationIdList(void);
 static void RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid);
-static void RebalanceTableShardsBackground(RebalanceOptions *options, Oid
-										   shardReplicationModeOid);
+static int64 RebalanceTableShardsBackground(RebalanceOptions *options, Oid
+											shardReplicationModeOid);
 static void AcquireRebalanceColocationLock(Oid relationId, const char *operationName);
 static void ExecutePlacementUpdates(List *placementUpdateList, Oid
 									shardReplicationModeOid, char *noticeOperation);
@@ -901,8 +901,13 @@ citus_rebalance_start(PG_FUNCTION_ARGS)
 		.rebalanceStrategy = strategy,
 		.improvementThreshold = strategy->improvementThreshold,
 	};
-	RebalanceTableShardsBackground(&options, shardTransferModeOid);
-	PG_RETURN_VOID();
+	int jobId = RebalanceTableShardsBackground(&options, shardTransferModeOid);
+
+	if (jobId == 0)
+	{
+		PG_RETURN_NULL();
+	}
+	PG_RETURN_INT64(jobId);
 }
 
 
@@ -1726,12 +1731,13 @@ ErrorOnConcurrentRebalance(RebalanceOptions *options)
  * inside the relationIdList across the different workers. It does so using our
  * background job+task infrastructure.
  */
-static void
+static int64
 RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationModeOid)
 {
 	if (list_length(options->relationIdList) == 0)
 	{
-		return;
+		ereport(NOTICE, (errmsg("No tables to rebalance")));
+		return 0;
 	}
 
 	char *operationName = "rebalance";
@@ -1768,7 +1774,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 	if (list_length(placementUpdateList) == 0)
 	{
 		ereport(NOTICE, (errmsg("No moves available for rebalancing")));
-		return;
+		return 0;
 	}
 
 	DropOrphanedShardsInSeparateTransaction();
@@ -1849,6 +1855,8 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 					 "SELECT * FROM pg_dist_background_task WHERE job_id = %ld ORDER BY "
 					 "task_id ASC; or SELECT * FROM get_rebalance_progress();",
 					 jobId)));
+
+	return jobId;
 }
 
 
