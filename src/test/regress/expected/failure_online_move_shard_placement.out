@@ -152,6 +152,35 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT min\(latest_end_lsn").cancel
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
+-- failure on dropping subscription
+SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* (ENABLE|DISABLE)").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+-- try again
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+ master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_move_shard_placement(101, 'localhost', :worker_2_proxy_port, 'localhost', :worker_1_port);
+ master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
 -- failure on disabling subscription (right before dropping it)
 SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").kill()');
  mitmproxy
@@ -171,16 +200,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").can
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
--- failure on dropping subscription
-SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").kill()');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-ERROR:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
 -- cancellation on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").cancel(' || :pid || ')');
  mitmproxy
