@@ -9,7 +9,7 @@ SELECT pg_reload_conf();
 CREATE TABLE t1 (a int PRIMARY KEY);
 SELECT create_distributed_table('t1', 'a', shard_count => 4, colocate_with => 'none');
 
--- verify the rebalance works - no-op - when the shards aer balanced. Noop is shown by wait complaining there is nothing
+-- verify the rebalance works - no-op - when the shards are balanced. Noop is shown by wait complaining there is nothing
 -- to wait on.
 SELECT 1 FROM citus_rebalance_start();
 SELECT citus_rebalance_wait();
