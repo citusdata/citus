@@ -452,11 +452,12 @@ SELECT citus_add_local_table_to_metadata('table_type_citus_local');
 
 CREATE TABLE table_type_pg_local (a INT);
 SELECT table_name, citus_table_type, distribution_column, shard_count, access_method FROM public.citus_tables WHERE table_name::text LIKE 'table\_type%' ORDER BY 1;
-   table_name    | citus_table_type | distribution_column | shard_count | access_method
+       table_name       | citus_table_type | distribution_column | shard_count | access_method
 ---------------------------------------------------------------------
- table_type_dist | distributed      | a                   |           4 | heap
- table_type_ref  | reference        | <none>              |           1 | heap
-(2 rows)
+ table_type_dist        | distributed      | a                   |           4 | heap
+ table_type_ref         | reference        | <none>              |           1 | heap
+ table_type_citus_local | local            | <none>              |           1 | heap
+(3 rows)
 
 SELECT c.relname, a.amname FROM pg_class c, pg_am a where c.relname SIMILAR TO 'table_type\D*' AND c.relnamespace = 'alter_table_set_access_method'::regnamespace AND c.relam = a.oid;
         relname         | amname
@@ -508,11 +509,12 @@ NOTICE:  renaming the new table to alter_table_set_access_method.table_type_citu
 (1 row)
 
 SELECT table_name, citus_table_type, distribution_column, shard_count, access_method FROM public.citus_tables WHERE table_name::text LIKE 'table\_type%' ORDER BY 1;
-   table_name    | citus_table_type | distribution_column | shard_count | access_method
+       table_name       | citus_table_type | distribution_column | shard_count | access_method
 ---------------------------------------------------------------------
- table_type_dist | distributed      | a                   |           4 | columnar
- table_type_ref  | reference        | <none>              |           1 | columnar
-(2 rows)
+ table_type_dist        | distributed      | a                   |           4 | columnar
+ table_type_ref         | reference        | <none>              |           1 | columnar
+ table_type_citus_local | local            | <none>              |           1 | columnar
+(3 rows)
 
 SELECT c.relname, a.amname FROM pg_class c, pg_am a where c.relname SIMILAR TO 'table_type\D*' AND c.relnamespace = 'alter_table_set_access_method'::regnamespace AND c.relam = a.oid;
         relname         |  amname
