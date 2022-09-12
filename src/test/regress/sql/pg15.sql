@@ -336,9 +336,49 @@ INSERT INTO FKTABLE VALUES
 DELETE FROM PKTABLE WHERE id = 1 OR id = 2;
 SELECT * FROM FKTABLE ORDER BY id;
 
-
--- Clean up
 \c - - - :master_port
 
+-- test NULL NOT DISTINCT clauses
+-- set the next shard id so that the error messages are easier to maintain
+SET citus.next_shard_id TO 960050;
+CREATE TABLE null_distinct_test(id INT, c1 INT, c2 INT, c3 VARCHAR(10)) ;
+SELECT create_distributed_table('null_distinct_test', 'id');
+
+CREATE UNIQUE INDEX idx1_null_distinct_test ON null_distinct_test(id, c1) NULLS DISTINCT ;
+CREATE UNIQUE INDEX idx2_null_distinct_test ON null_distinct_test(id, c2) NULLS NOT DISTINCT ;
+
+-- populate with some initial data
+INSERT INTO null_distinct_test VALUES (1, 1, 1, 'data1') ;
+INSERT INTO null_distinct_test VALUES (1, 2, NULL, 'data2') ;
+INSERT INTO null_distinct_test VALUES (1, NULL, 3, 'data3') ;
+
+-- should fail as we already have a null value in c2 column
+INSERT INTO null_distinct_test VALUES (1, NULL, NULL, 'data4') ;
+INSERT INTO null_distinct_test VALUES (1, NULL, NULL, 'data4') ON CONFLICT DO NOTHING;
+INSERT INTO null_distinct_test VALUES (1, NULL, NULL, 'data4') ON CONFLICT (id, c2) DO UPDATE SET c2=100 RETURNING *;
+
+-- should not fail as null values are distinct for c1 column
+INSERT INTO null_distinct_test VALUES (1, NULL, 5, 'data5') ;
+
+-- test that unique constraints also work properly
+-- since we have multiple (1,NULL) pairs for columns (id,c1) the first will work, second will fail
+ALTER TABLE null_distinct_test ADD CONSTRAINT uniq_distinct_c1 UNIQUE NULLS DISTINCT (id,c1);
+ALTER TABLE null_distinct_test ADD CONSTRAINT uniq_c1 UNIQUE NULLS NOT DISTINCT (id,c1);
+
+-- show all records in the table for fact checking
+SELECT * FROM null_distinct_test ORDER BY c3;
+
+-- test unique nulls not distinct constraints on a reference table
+CREATE TABLE reference_uniq_test (
+    x int, y int,
+    UNIQUE NULLS NOT DISTINCT (x, y)
+);
+SELECT create_reference_table('reference_uniq_test');
+INSERT INTO reference_uniq_test VALUES (1, 1), (1, NULL), (NULL, 1);
+-- the following will fail
+INSERT INTO reference_uniq_test VALUES (1, NULL);
+
+-- Clean up
 \set VERBOSITY terse
+SET client_min_messages TO ERROR;
 DROP SCHEMA pg15 CASCADE;
