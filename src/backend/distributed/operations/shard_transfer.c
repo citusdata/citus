@@ -996,6 +996,20 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 		return;
 	}
 
+	WorkerNode *sourceNode = FindWorkerNode(sourceNodeName, sourceNodePort);
+	WorkerNode *targetNode = FindWorkerNode(targetNodeName, targetNodePort);
+
+	Oid relationId = RelationIdForShard(shardId);
+	PlacementUpdateEvent *placementUpdateEvent = palloc0(
+		sizeof(PlacementUpdateEvent));
+	placementUpdateEvent->updateType = PLACEMENT_UPDATE_COPY;
+	placementUpdateEvent->shardId = shardId;
+	placementUpdateEvent->sourceNode = sourceNode;
+	placementUpdateEvent->targetNode = targetNode;
+	SetupRebalanceMonitor(list_make1(placementUpdateEvent), relationId,
+						  REBALANCE_PROGRESS_MOVING);
+
+
 	/*
 	 * At this point of the shard replication, we don't need to block the writes to
 	 * shards when logical replication is used.
@@ -1064,6 +1078,7 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 			SendCommandToWorkersWithMetadata(placementCommand);
 		}
 	}
+	FinalizeCurrentProgressMonitor();
 }
 
 

@@ -121,3 +121,4 @@ DROP TABLE pg_catalog.pg_dist_background_job;
 DROP TYPE pg_catalog.citus_job_status;
 DROP FUNCTION pg_catalog.citus_copy_shard_placement;
 #include "../udfs/citus_copy_shard_placement/10.0-1.sql"
+#include "../udfs/get_rebalance_progress/10.1-1.sql"

@@ -269,6 +269,11 @@ PG_FUNCTION_INFO_V1(citus_rebalance_wait);
 bool RunningUnderIsolationTest = false;
 int MaxRebalancerLoggedIgnoredMoves = 5;
 
+static const char *PlacementUpdateTypeNames[] = {
+	[PLACEMENT_UPDATE_INVALID_FIRST] = "unknown",
+	[PLACEMENT_UPDATE_MOVE] = "move",
+	[PLACEMENT_UPDATE_COPY] = "copy",
+};
 
 #ifdef USE_ASSERT_CHECKING
 
@@ -801,6 +806,7 @@ SetupRebalanceMonitor(List *placementUpdateList,
 		event->shardId = colocatedUpdate->shardId;
 		event->sourcePort = colocatedUpdate->sourceNode->workerPort;
 		event->targetPort = colocatedUpdate->targetNode->workerPort;
+		event->updateType = colocatedUpdate->updateType;
 		pg_atomic_init_u64(&event->progress, initialProgressState);
 
 		eventIndex++;
@@ -1234,8 +1240,8 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 				shardSize = shardSizesStat->totalSize;
 			}
 
-			Datum values[11];
-			bool nulls[11];
+			Datum values[12];
+			bool nulls[12];
 
 			memset(values, 0, sizeof(values));
 			memset(nulls, 0, sizeof(nulls));
@@ -1251,6 +1257,8 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 			values[8] = UInt64GetDatum(pg_atomic_read_u64(&step->progress));
 			values[9] = UInt64GetDatum(sourceSize);
 			values[10] = UInt64GetDatum(targetSize);
+			values[11] = PointerGetDatum(
+				cstring_to_text(PlacementUpdateTypeNames[step->updateType]));
 
 			tuplestore_putvalues(tupstore, tupdesc, values, nulls);
 		}
