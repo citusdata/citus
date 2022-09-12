@@ -922,7 +922,7 @@ citus_rebalance_stop(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("no ongoing rebalance that can be stopped")));
 	}
 
-	citus_job_wait_internal(jobId, NULL);
+	DirectFunctionCall1(citus_job_cancel, Int64GetDatum(jobId));
 
 	PG_RETURN_VOID();
 }
@@ -944,7 +944,7 @@ citus_rebalance_wait(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	DirectFunctionCall1(citus_job_wait, Int64GetDatum(jobId));
+	citus_job_wait_internal(jobId, NULL);
 
 	PG_RETURN_VOID();
 }
@@ -1759,6 +1759,11 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		{
 			List *colocatedTableList = ColocatedTableList(relationId);
 			VerifyTablesHaveReplicaIdentity(colocatedTableList);
+			Oid colocatedTableId = InvalidOid;
+			foreach_oid(colocatedTableId, colocatedTableList)
+			{
+				EnsureTableOwner(colocatedTableId);
+			}
 		}
 	}
 
