@@ -90,7 +90,7 @@ ORDER BY 1;
  function citus_pid_for_gpid(bigint)
  function citus_prepare_pg_upgrade()
  function citus_query_stats()
- function citus_rebalance_start(name,citus.shard_transfer_mode)
+ function citus_rebalance_start(real,name,boolean,citus.shard_transfer_mode)
  function citus_rebalance_stop()
  function citus_rebalance_wait()
  function citus_relation_size(regclass)
