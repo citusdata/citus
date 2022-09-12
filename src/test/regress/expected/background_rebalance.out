@@ -39,6 +39,9 @@ SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localh
 
 -- rebalance a table in the background
 SELECT citus_rebalance_start();
+NOTICE:  Scheduled 1 moves as job xxx
+DETAIL:  Rebalance scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; AND SELECT * FROM get_rebalance_progress();
  citus_rebalance_start
 ---------------------------------------------------------------------
 
@@ -69,6 +72,9 @@ ERROR:  cannot use logical replication to transfer shards of the relation t2 sin
 DETAIL:  UPDATE and DELETE commands on the shard will error out during logical replication unless there is a REPLICA IDENTITY or PRIMARY KEY.
 HINT:  If you wish to continue without a replica identity set the shard_transfer_mode to 'force_logical' or 'block_writes'.
 SELECT citus_rebalance_start(shard_transfer_mode => 'block_writes');
+NOTICE:  Scheduled 1 moves as job xxx
+DETAIL:  Rebalance scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; AND SELECT * FROM get_rebalance_progress();
  citus_rebalance_start
 ---------------------------------------------------------------------
 
@@ -89,6 +95,9 @@ SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localh
 
 -- show we can stop a rebalance, the stop causes the move to not have happened, eg, our move back below fails.
 SELECT citus_rebalance_start();
+NOTICE:  Scheduled 1 moves as job xxx
+DETAIL:  Rebalance scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; AND SELECT * FROM get_rebalance_progress();
  citus_rebalance_start
 ---------------------------------------------------------------------
 
@@ -117,13 +126,18 @@ ERROR:  could not find placement matching "localhost:xxxxx"
 HINT:  Confirm the placement still exists and try again.
 -- show we can't start the rebalancer twice
 SELECT citus_rebalance_start();
+NOTICE:  Scheduled 1 moves as job xxx
+DETAIL:  Rebalance scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; AND SELECT * FROM get_rebalance_progress();
  citus_rebalance_start
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT citus_rebalance_start();
-ERROR:  a rebalance is already running
+ERROR:  A rebalance is already running as job xxx
+DETAIL:  A rebalance was already scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; AND SELECT * FROM get_rebalance_progress();
 SELECT citus_rebalance_wait();
  citus_rebalance_wait
 ---------------------------------------------------------------------
@@ -138,13 +152,18 @@ SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localh
 (1 row)
 
 SELECT citus_rebalance_start();
+NOTICE:  Scheduled 1 moves as job xxx
+DETAIL:  Rebalance scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; AND SELECT * FROM get_rebalance_progress();
  citus_rebalance_start
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT rebalance_table_shards();
-ERROR:  a rebalance is already running
+ERROR:  A rebalance is already running as job xxx
+DETAIL:  A rebalance was already scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM pg_dist_background_task WHERE job_id = xxx ORDER BY task_id ASC; AND SELECT * FROM get_rebalance_progress();
 SELECT citus_rebalance_wait();
  citus_rebalance_wait
 ---------------------------------------------------------------------

@@ -1697,18 +1697,6 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 }
 
 
-static bool
-HasConcurrentRebalance(RebalanceOptions *options)
-{
-	if (HasNonTerminalJobOfType("rebalance", NULL))
-	{
-		return true;
-	}
-
-	return false;
-}
-
-
 static void
 ErrorOnConcurrentRebalance(RebalanceOptions *options)
 {
@@ -1719,10 +1707,16 @@ ErrorOnConcurrentRebalance(RebalanceOptions *options)
 		AcquireRebalanceColocationLock(relationId, options->operationName);
 	}
 
-	if (HasConcurrentRebalance(options))
+	int64 jobId = 0;
+	if (HasNonTerminalJobOfType("rebalance", &jobId))
 	{
-		/* TODO find hint/detail messages to show */
-		ereport(ERROR, (errmsg("a rebalance is already running")));
+		ereport(ERROR, (
+					errmsg("A rebalance is already running as job %ld", jobId),
+					errdetail("A rebalance was already scheduled as background job"),
+					errhint("To monitor progress, run: SELECT * FROM "
+							"pg_dist_background_task WHERE job_id = %ld ORDER BY task_id "
+							"ASC; AND SELECT * FROM get_rebalance_progress();",
+							jobId)));
 	}
 }
 
@@ -1845,6 +1839,15 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 			prevJobIdx++;
 		}
 	}
+
+	ereport(NOTICE,
+			(errmsg("Scheduled %d moves as job %ld",
+					list_length(placementUpdateList), jobId),
+			 errdetail("Rebalance scheduled as background job"),
+			 errhint("To monitor progress, run: "
+					 "SELECT * FROM pg_dist_background_task WHERE job_id = %ld ORDER BY "
+					 "task_id ASC; AND SELECT * FROM get_rebalance_progress();",
+					 jobId)));
 }
 
 

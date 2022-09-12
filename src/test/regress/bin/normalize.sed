@@ -283,3 +283,8 @@ s/^(DETAIL:  "[a-z\ ]+ )pg_temp_[0-9]+(\..*" will be created only locally)$/\1pg
 # will be replaced with
 #   WARNING:  "function func(bigint)" has dependency on unsupported object "schema pg_temp_xxx"
 s/^(WARNING|ERROR)(:  "[a-z\ ]+ .*" has dependency on unsupported object) "schema pg_temp_[0-9]+"$/\1\2 "schema pg_temp_xxx"/g
+
+# remove jobId's from the messages of the background rebalancer
+s/^ERROR:  A rebalance is already running as job [0-9]+$/ERROR:  A rebalance is already running as job xxx/g
+s/^NOTICE:  Scheduled ([0-9]+) moves as job [0-9]+$/NOTICE:  Scheduled \1 moves as job xxx/g
+s/^HINT: (.*) job_id = [0-9]+ (.*)$/HINT: \1 job_id = xxx \2/g
