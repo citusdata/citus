@@ -19,6 +19,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_partitioning_utils.h"
 
 
 static bool IsClusterStmtVerbose_compat(ClusterStmt *clusterStmt);
@@ -66,6 +67,27 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 	bool isCitusRelation = IsCitusTable(relationId);
 	if (!isCitusRelation)
 	{
+		return NIL;
+	}
+
+	/*
+	 * We do not support CLUSTER command on partitioned tables as it can not be run inside
+	 * transaction blocks. PostgreSQL currently does not support CLUSTER command on
+	 * partitioned tables in a transaction block. Although Citus can execute commands
+	 * outside of transaction block -- such as VACUUM -- we cannot do that here because
+	 * CLUSTER command is also not allowed from a function call as well. By default, Citus
+	 * uses `worker_apply_shard_ddl_command()`, where we should avoid it for this case.
+	 */
+	if (PartitionedTable(relationId))
+	{
+		if (EnableUnsupportedFeatureMessages)
+		{
+			ereport(WARNING, (errmsg("not propagating CLUSTER command for partitioned "
+									 "table to worker nodes"),
+							  errhint("Provide a child partition table names in order to "
+									  "CLUSTER distributed partitioned tables.")));
+		}
+
 		return NIL;
 	}
 

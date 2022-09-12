@@ -337,6 +337,7 @@ DELETE FROM PKTABLE WHERE id = 1 OR id = 2;
 SELECT * FROM FKTABLE ORDER BY id;
 
 \c - - - :master_port
+SET search_path TO pg15;
 
 -- test NULL NOT DISTINCT clauses
 -- set the next shard id so that the error messages are easier to maintain
@@ -378,7 +379,38 @@ INSERT INTO reference_uniq_test VALUES (1, 1), (1, NULL), (NULL, 1);
 -- the following will fail
 INSERT INTO reference_uniq_test VALUES (1, NULL);
 
+--
+-- PG15 introduces CLUSTER command support for partitioned tables. However, similar to
+-- CLUSTER commands with no table name, these queries can not be run inside a transaction
+-- block. Therefore, we do not propagate such queries.
+--
+
+-- Should print a warning that it will not be propagated to worker nodes.
+CLUSTER sale USING sale_pk;
+
+-- verify that we can cluster the partition tables only when replication factor is 1
+CLUSTER sale_newyork USING sale_newyork_pkey;
+
+-- create a new partitioned table with shard replicaiton factor 1
+SET citus.shard_replication_factor = 1;
+CREATE TABLE sale_repl_factor_1 ( LIKE sale )
+    PARTITION BY list (state_code);
+
+ALTER TABLE sale_repl_factor_1 ADD CONSTRAINT sale_repl_factor_1_pk PRIMARY KEY (state_code, sale_date);
+
+CREATE TABLE sale_newyork_repl_factor_1 PARTITION OF sale_repl_factor_1 FOR VALUES IN ('NY');
+CREATE TABLE sale_california_repl_factor_1 PARTITION OF sale_repl_factor_1 FOR VALUES IN ('CA');
+
+SELECT create_distributed_table('sale_repl_factor_1', 'state_code');
+
+-- Should print a warning that it will not be propagated to worker nodes.
+CLUSTER sale_repl_factor_1 USING sale_repl_factor_1_pk;
+
+-- verify that we can still cluster the partition tables now since replication factor is 1
+CLUSTER sale_newyork_repl_factor_1 USING sale_newyork_repl_factor_1_pkey;
+
 -- Clean up
+RESET citus.shard_replication_factor;
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
 DROP SCHEMA pg15 CASCADE;
