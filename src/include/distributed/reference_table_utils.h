@@ -20,6 +20,7 @@
 
 extern void EnsureReferenceTablesExistOnAllNodes(void);
 extern void EnsureReferenceTablesExistOnAllNodesExtended(char transferMode);
+extern List * GetShardCopyCommandsForMissingReferenceTablePlacements(char transferMode);
 extern uint32 CreateReferenceTableColocationId(void);
 extern uint32 GetReferenceTableColocationId(void);
 extern void DeleteAllReplicatedTablePlacementsFromNodeGroup(int32 groupId,

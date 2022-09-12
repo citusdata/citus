@@ -293,6 +293,60 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 }
 
 
+List *
+GetShardCopyCommandsForMissingReferenceTablePlacements(char transferMode)
+{
+	int colocationId = GetReferenceTableColocationId();
+	if (colocationId == INVALID_COLOCATION_ID)
+	{
+		/* we have no reference table yet. */
+		return NIL;
+	}
+
+	/* prevent destructive operations for reference tables */
+	LockColocationId(colocationId, AccessShareLock);
+
+	List *referenceTableIdList = CitusTableTypeIdList(REFERENCE_TABLE);
+	if (list_length(referenceTableIdList) <= 0)
+	{
+		/* no reference tables, means no missing ones to copy */
+		return NIL;
+	}
+
+	Oid referenceTableId = linitial_oid(referenceTableIdList);
+	List *shardIntervalList = LoadShardIntervalList(referenceTableId);
+	if (list_length(shardIntervalList) == 0)
+	{
+		const char *referenceTableName = get_rel_name(referenceTableId);
+
+		/* check for corrupt metadata */
+		ereport(ERROR, (errmsg("reference table \"%s\" does not have a shard",
+							   referenceTableName)));
+	}
+
+	ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
+	uint64 shardId = shardInterval->shardId;
+
+	List *newWorkersList = WorkersWithoutReferenceTablePlacement(shardId,
+																 AccessShareLock);
+
+	const bool missingOk = false;
+	ShardPlacement *sourceShardPlacement = ActiveShardPlacement(shardId, missingOk);
+
+	WorkerNode *newWorkerNode = NULL;
+	List *commandList = NIL;
+	foreach_ptr(newWorkerNode, newWorkersList)
+	{
+		StringInfo placementCopyCommand =
+			CopyShardPlacementToWorkerNodeQuery(sourceShardPlacement, newWorkerNode,
+												transferMode);
+		commandList = lappend(commandList, placementCopyCommand->data);
+	}
+
+	return commandList;
+}
+
+
 /*
  * AnyRelationsModifiedInTransaction returns true if any of the given relations
  * were modified in the current transaction.
