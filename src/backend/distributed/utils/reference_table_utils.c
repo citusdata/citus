@@ -27,6 +27,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
+#include "distributed/repair_shards.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/transaction_management.h"
@@ -329,6 +330,21 @@ GetShardCopyCommandsForMissingReferenceTablePlacements(char transferMode)
 
 	List *newWorkersList = WorkersWithoutReferenceTablePlacement(shardId,
 																 AccessShareLock);
+
+	if (list_length(newWorkersList) <= 0)
+	{
+		return NIL;
+	}
+
+
+	if (transferMode == TRANSFER_MODE_AUTOMATIC)
+	{
+		/*
+		 * When we want to copy reference tables non-blockingly we need to make sure they
+		 * have a replica identity
+		 */
+		VerifyTablesHaveReplicaIdentity(referenceTableIdList);
+	}
 
 	const bool missingOk = false;
 	ShardPlacement *sourceShardPlacement = ActiveShardPlacement(shardId, missingOk);

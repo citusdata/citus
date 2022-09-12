@@ -1750,6 +1750,18 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 	options->operationName = operationName;
 	ErrorOnConcurrentRebalance(options);
 
+	const char shardTransferMode = LookupShardTransferMode(shardReplicationModeOid);
+	if (shardTransferMode == TRANSFER_MODE_AUTOMATIC)
+	{
+		/* make sure that all tables included in the rebalance have a replica identity*/
+		Oid relationId = InvalidOid;
+		foreach_oid(relationId, options->relationIdList)
+		{
+			List *colocatedTableList = ColocatedTableList(relationId);
+			VerifyTablesHaveReplicaIdentity(colocatedTableList);
+		}
+	}
+
 	List *placementUpdateList = GetRebalanceSteps(options);
 
 	if (list_length(placementUpdateList) == 0)
@@ -1771,7 +1783,6 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 	int64 jobId = CreateBackgroundJob("rebalance", "Rebalance all colocation groups");
 
 	/* find all copy commands to be executed before we can move any shard to new worker */
-	const char shardTransferMode = LookupShardTransferMode(shardReplicationModeOid);
 	List *referenceTableCopyCommands =
 		GetShardCopyCommandsForMissingReferenceTablePlacements(shardTransferMode);
 
