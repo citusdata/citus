@@ -1785,7 +1785,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 	char *shardTranferModeLabel = DatumGetCString(shardTranferModeLabelDatum);
 
 	/* schedule planned moves */
-	int64 jobId = CreateBackgroundJob("rebalance", "Rebalance colocation group ...");
+	int64 jobId = CreateBackgroundJob("rebalance", "Rebalance all colocation groups");
 
 	/* buffer used to construct the sql command for the tasks */
 	StringInfoData buf = { 0 };
