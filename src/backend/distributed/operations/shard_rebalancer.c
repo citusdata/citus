@@ -1751,20 +1751,23 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 	ErrorOnConcurrentRebalance(options);
 
 	const char shardTransferMode = LookupShardTransferMode(shardReplicationModeOid);
+	List *colocatedTableList = NIL;
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, options->relationIdList)
+	{
+		colocatedTableList = list_concat(colocatedTableList,
+										 ColocatedTableList(relationId));
+	}
+	Oid colocatedTableId = InvalidOid;
+	foreach_oid(colocatedTableId, colocatedTableList)
+	{
+		EnsureTableOwner(colocatedTableId);
+	}
+
 	if (shardTransferMode == TRANSFER_MODE_AUTOMATIC)
 	{
 		/* make sure that all tables included in the rebalance have a replica identity*/
-		Oid relationId = InvalidOid;
-		foreach_oid(relationId, options->relationIdList)
-		{
-			List *colocatedTableList = ColocatedTableList(relationId);
-			VerifyTablesHaveReplicaIdentity(colocatedTableList);
-			Oid colocatedTableId = InvalidOid;
-			foreach_oid(colocatedTableId, colocatedTableList)
-			{
-				EnsureTableOwner(colocatedTableId);
-			}
-		}
+		VerifyTablesHaveReplicaIdentity(colocatedTableList);
 	}
 
 	List *placementUpdateList = GetRebalanceSteps(options);
@@ -1802,8 +1805,12 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 	int64 prevJobId[2] = { 0 };
 	int prevJobIdx = 0;
 
-	if (true /* TODO check if replicating reference tables is required */)
+	List *referenceTableIdList = NIL;
+
+	if (HasNodesWithMissingReferenceTables(&referenceTableIdList))
 	{
+		VerifyTablesHaveReplicaIdentity(referenceTableIdList);
+
 		/*
 		 * Reference tables need to be copied to (newly-added) nodes, this needs to be the
 		 * first task before we can move any other table.
