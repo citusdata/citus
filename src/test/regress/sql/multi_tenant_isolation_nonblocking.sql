@@ -318,6 +318,15 @@ SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1997-07-30';
 SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1998-01-15';
 SELECT count(*) FROM lineitem_date WHERE l_shipdate = '1997-08-08';
 
+-- test with text distribution column (because of collations)
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE text_column (tenant_id text, value jsonb);
+INSERT INTO text_column VALUES ('hello','{}');
+SELECT create_distributed_table('text_column','tenant_id');
+SELECT isolate_tenant_to_new_shard('text_column', 'hello', shard_transfer_mode => 'force_logical');
+SELECT * FROM text_column;
+CALL pg_catalog.citus_cleanup_orphaned_resources();
+
 -- test with invalid shard placements
 \c - postgres - :master_port
 SET search_path to "Tenant Isolation";
