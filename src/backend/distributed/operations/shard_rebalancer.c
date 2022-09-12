@@ -1702,6 +1702,10 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 }
 
 
+/*
+ * ErrorOnConcurrentRebalance raises an error with extra information when there is already
+ * a rebalance running.
+ */
 static void
 ErrorOnConcurrentRebalance(RebalanceOptions *options)
 {
