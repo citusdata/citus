@@ -155,16 +155,18 @@ SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 4;
 SELECT create_distributed_table('seg_test', 'x');
 
--- table should not show up in citus_tables
+-- table should not show up in citus_tables or citus_shards
 SELECT count(*) FROM citus_tables WHERE table_name = 'seg_test'::regclass;
+SELECT count(*) FROM citus_shards WHERE table_name = 'seg_test'::regclass;
 
 \c - - - :worker_1_port
 
 -- should be able to see contents from worker
 SELECT * FROM seg_test;
 
--- table should not show up in citus_tables
+-- table should not show up in citus_tables or citus_shards
 SELECT count(*) FROM citus_tables WHERE table_name = 'seg_test'::regclass;
+SELECT count(*) FROM citus_shards WHERE table_name = 'seg_test'::regclass;
 
 \c - - - :master_port
 

@@ -278,8 +278,14 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 
 (1 row)
 
--- table should not show up in citus_tables
+-- table should not show up in citus_tables or citus_shards
 SELECT count(*) FROM citus_tables WHERE table_name = 'seg_test'::regclass;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM citus_shards WHERE table_name = 'seg_test'::regclass;
  count
 ---------------------------------------------------------------------
      0
@@ -293,8 +299,14 @@ SELECT * FROM seg_test;
  42
 (1 row)
 
--- table should not show up in citus_tables
+-- table should not show up in citus_tables or citus_shards
 SELECT count(*) FROM citus_tables WHERE table_name = 'seg_test'::regclass;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM citus_shards WHERE table_name = 'seg_test'::regclass;
  count
 ---------------------------------------------------------------------
      0
