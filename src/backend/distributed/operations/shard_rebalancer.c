@@ -1785,44 +1785,38 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 	}
 
 	/* schedule planned moves */
-	int64 jobId = CreateBackgroundJob("rebalance", "Rebalance all colocation groups");
+	int64 jobId = CreateBackgroundJob("rebalance", "Rebalance colocation group ...");
 
-	/* find all copy commands to be executed before we can move any shard to new worker */
-	List *referenceTableCopyCommands =
-		GetShardCopyCommandsForMissingReferenceTablePlacements(shardTransferMode);
+	/* buffer used to construct the sql command for the tasks */
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
 
-	/* keep track of the copy commands as dependencies for subsequent moves */
-	int maxDependencies = 1 + list_length(referenceTableCopyCommands);
-	int64 *prevJobId = palloc0(sizeof(int64) * maxDependencies);
+	/*
+	 * Currently we only have two tasks that any move can depend on:
+	 *  - replicating reference tables
+	 *  - the previous move
+	 *
+	 * prevJobIdx tells what slot to write the id of the task into. We only use both slots
+	 * if we are actually replicating reference tables.
+	 */
+	int64 prevJobId[2] = { 0 };
 	int prevJobIdx = 0;
 
-	/* schedule tasks for all copies before we move any shards */
-	char *referenceTableCopyCommand = NULL;
-	foreach_ptr(referenceTableCopyCommand, referenceTableCopyCommands)
+	if (true /* TODO check if replicating reference tables is required */)
 	{
 		/*
-		 * Create copy tasks without adding them as dependencies to each other, they will
-		 * become a dependency for any of the move tasks to start.
-		 *
-		 * Ideally we would only add the copy task as a dependency for move tasks that
-		 * have the same target as the copy task, however that requires more book keeping
-		 * and only becomes relevant when we add parallelism to the tasks later.
-		 *
-		 * We should revisit this around that time.
+		 * Reference tables need to be copied to (newly-added) nodes, this needs to be the
+		 * first task before we can move any other table.
 		 */
-		BackgroundTask *task =
-			ScheduleBackgroundTask(jobId, GetUserId(), referenceTableCopyCommand,
-								   0, NULL);
-
+		appendStringInfo(&buf,
+						 "SELECT pg_catalog.replicate_reference_tables(%s)",
+						 quote_literal_cstr(shardTranferModeLabel));
+		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
+													  prevJobIdx, prevJobId);
 		prevJobId[prevJobIdx] = task->taskid;
 		prevJobIdx++;
 	}
 
-	/* buffer used to construct the sql command for the move tasks */
-	StringInfoData buf = { 0 };
-	initStringInfo(&buf);
-
-	/* schedule the move tasks for rebalancing */
 	PlacementUpdateEvent *move = NULL;
 	bool first = true;
 	foreach_ptr(move, placementUpdateList)
