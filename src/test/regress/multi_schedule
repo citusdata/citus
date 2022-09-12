@@ -55,7 +55,7 @@ test: subquery_in_targetlist subquery_in_where subquery_complex_target_list subq
 test: subquery_prepared_statements
 test: non_colocated_leaf_subquery_joins non_colocated_subquery_joins
 test: cte_inline recursive_view_local_table values sequences_with_different_types
-test: pg13 pg12 pg15_json json_table_select_only
+test: pg13 pg12
 # run pg14 sequentially as it syncs metadata
 test: pg14
 test: pg15
