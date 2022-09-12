@@ -873,7 +873,6 @@ rebalance_table_shards(PG_FUNCTION_ARGS)
  * SQL signature:
  *
  * citus_rebalance_start(
- *     threshold float4 DEFAULT NULL,
  *     rebalance_strategy name DEFAULT NULL,
  *     drain_only boolean DEFAULT false,
  *     shard_transfer_mode citus.shard_transfer_mode default 'auto'
@@ -885,17 +884,17 @@ citus_rebalance_start(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 	List *relationIdList = NonColocatedDistRelationIdList();
 	Form_pg_dist_rebalance_strategy strategy =
-		GetRebalanceStrategy(PG_GETARG_NAME_OR_NULL(1));
+		GetRebalanceStrategy(PG_GETARG_NAME_OR_NULL(0));
 
-	PG_ENSURE_ARGNOTNULL(2, "drain_only");
-	bool drainOnly = PG_GETARG_BOOL(2);
+	PG_ENSURE_ARGNOTNULL(1, "drain_only");
+	bool drainOnly = PG_GETARG_BOOL(1);
 
-	PG_ENSURE_ARGNOTNULL(3, "shard_transfer_mode");
-	Oid shardTransferModeOid = PG_GETARG_OID(3);
+	PG_ENSURE_ARGNOTNULL(2, "shard_transfer_mode");
+	Oid shardTransferModeOid = PG_GETARG_OID(2);
 
 	RebalanceOptions options = {
 		.relationIdList = relationIdList,
-		.threshold = PG_GETARG_FLOAT4_OR_DEFAULT(0, strategy->defaultThreshold),
+		.threshold = strategy->defaultThreshold,
 		.maxShardMoves = 10000000,
 		.excludedShardArray = construct_empty_array(INT4OID),
 		.drainOnly = drainOnly,

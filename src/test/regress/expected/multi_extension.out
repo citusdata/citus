@@ -1143,7 +1143,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                               | function citus_job_cancel(bigint) void
                                                                                                               | function citus_job_wait(bigint,citus_job_status) void
                                                                                                               | function citus_locks() SETOF record
-                                                                                                              | function citus_rebalance_start(real,name,boolean,citus.shard_transfer_mode) void
+                                                                                                              | function citus_rebalance_start(name,boolean,citus.shard_transfer_mode) void
                                                                                                               | function citus_rebalance_stop() void
                                                                                                               | function citus_rebalance_wait() void
                                                                                                               | function citus_split_shard_by_split_points(bigint,text[],integer[],citus.shard_transfer_mode) void

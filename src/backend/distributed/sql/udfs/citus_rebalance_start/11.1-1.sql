@@ -1,5 +1,4 @@
 CREATE OR REPLACE FUNCTION pg_catalog.citus_rebalance_start(
-        threshold float4 DEFAULT NULL,
         rebalance_strategy name DEFAULT NULL,
         drain_only boolean DEFAULT false,
         shard_transfer_mode citus.shard_transfer_mode default 'auto'

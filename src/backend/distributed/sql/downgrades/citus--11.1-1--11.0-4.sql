@@ -109,7 +109,7 @@ DROP SEQUENCE pg_catalog.pg_dist_operationid_seq;
 DROP SEQUENCE pg_catalog.pg_dist_cleanup_recordid_seq;
 DROP PROCEDURE pg_catalog.citus_cleanup_orphaned_resources();
 
-DROP FUNCTION pg_catalog.citus_rebalance_start(float4, name, bool, citus.shard_transfer_mode);
+DROP FUNCTION pg_catalog.citus_rebalance_start(name, bool, citus.shard_transfer_mode);
 DROP FUNCTION pg_catalog.citus_rebalance_stop();
 DROP FUNCTION pg_catalog.citus_rebalance_wait();
 DROP FUNCTION pg_catalog.citus_job_cancel(bigint);
