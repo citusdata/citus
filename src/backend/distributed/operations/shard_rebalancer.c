@@ -1826,6 +1826,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 
 	PlacementUpdateEvent *move = NULL;
 	bool first = true;
+	int prevMoveIndex = prevJobIdx;
 	foreach_ptr(move, placementUpdateList)
 	{
 		resetStringInfo(&buf);
@@ -1840,11 +1841,18 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 						 quote_literal_cstr(shardTranferModeLabel));
 
 		BackgroundTask *task = ScheduleBackgroundTask(jobId, GetUserId(), buf.data,
-													  prevJobIdx + (first ? 0 : 1),
-													  prevJobId);
-		prevJobId[prevJobIdx] = task->taskid;
-		first = false;
+													  prevJobIdx, prevJobId);
+		prevJobId[prevMoveIndex] = task->taskid;
+		if (first)
+		{
+			first = false;
+			prevJobIdx++;
+		}
 	}
+
+	(void) ScheduleBackgroundTask(jobId, GetUserId(),
+								  "CALL citus_cleanup_orphaned_shards()",
+								  prevJobIdx, prevJobId);
 }
 
 
