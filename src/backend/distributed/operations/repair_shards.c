@@ -91,7 +91,7 @@ static void CopyShardTablesViaLogicalReplication(List *shardIntervalList,
 												 int32 sourceNodePort,
 												 char *targetNodeName,
 												 int32 targetNodePort);
-
+static void AcquireLogicalReplicationLock(void);
 static void CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 										  int32 sourceNodePort,
 										  char *targetNodeName, int32 targetNodePort);
@@ -1182,7 +1182,9 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
 									 int32 targetNodePort)
 {
 	AcquireLogicalReplicationLock();
+elog(WARNING,"before drop leftovers");
 	DropAllLogicalReplicationLeftovers(SHARD_MOVE);
+elog(WARNING,"after drop leftovers");
 
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
 													   "CopyShardTablesViaLogicalReplication",
@@ -1232,6 +1234,25 @@ CreateShardCommandList(ShardInterval *shardInterval, List *ddlCommandList)
 	shardCommandList->ddlCommandList = ddlCommandList;
 
 	return shardCommandList;
+}
+
+
+/*
+ * AcquireLogicalReplicationLock tries to acquire a lock for logical
+ * replication. We need this lock, because at the start of logical replication
+ * we clean up old subscriptions and publications. Because of this cleanup it's
+ * not safe to run multiple logical replication based shard moves at the same
+ * time. If multiple logical replication moves would run at the same time, the
+ * second move might clean up subscriptions and publications that are in use by
+ * another move.
+ */
+static void
+AcquireLogicalReplicationLock(void)
+{
+	LOCKTAG tag;
+	SET_LOCKTAG_LOGICAL_REPLICATION(tag);
+
+	LockAcquire(&tag, ExclusiveLock, false, false);
 }
 
 

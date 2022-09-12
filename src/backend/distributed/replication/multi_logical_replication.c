@@ -148,7 +148,6 @@ static bool RelationSubscriptionsAreReady(
 static void WaitForMiliseconds(long timeout);
 static XLogRecPtr GetSubscriptionPosition(
 	GroupedLogicalRepTargets *groupedLogicalRepTargets);
-static void AcquireLogicalReplicationLock(void);
 static void DropSubscription(MultiConnection *connection,
 							 char *subscriptionName);
 static void DropPublication(MultiConnection *connection, char *publicationName);
@@ -321,9 +320,10 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 * the constraints earlier.
 		 */
 		CreateForeignConstraintsToReferenceTable(logicalRepTargetList);
-
+		elog(WARNING,"before drop subs - try");
 		/* we're done, cleanup the publication and subscription */
 		DropSubscriptions(logicalRepTargetList);
+		elog(WARNING,"after drop subs - try");
 		DropReplicationSlots(sourceConnection, logicalRepTargetList);
 		DropPublications(sourceConnection, publicationInfoHash);
 
@@ -347,11 +347,11 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 */
 
 		/* reconnect if the connection failed or is waiting for a command */
-		RecreateGroupedLogicalRepTargetsConnections(groupedLogicalRepTargetsHash,
-													superUser, databaseName);
-
+		// RecreateGroupedLogicalRepTargetsConnections(groupedLogicalRepTargetsHash,
+													// superUser, databaseName);
+		elog(WARNING,"before drop subs - catch");
 		DropSubscriptions(logicalRepTargetList);
-
+		elog(WARNING,"after drop subs - catch");
 		/* reconnect if the connection failed or is waiting for a command */
 		if (PQstatus(sourceConnection->pgConn) != CONNECTION_OK ||
 			PQisBusy(sourceConnection->pgConn))
@@ -495,25 +495,6 @@ CreateShardMoveLogicalRepTargetList(HTAB *publicationInfoHash, List *shardList)
 			publication->target->newShards, shardInterval);
 	}
 	return logicalRepTargetList;
-}
-
-
-/*
- * AcquireLogicalReplicationLock tries to acquire a lock for logical
- * replication. We need this lock, because at the start of logical replication
- * we clean up old subscriptions and publications. Because of this cleanup it's
- * not safe to run multiple logical replication based shard moves at the same
- * time. If multiple logical replication moves would run at the same time, the
- * second move might clean up subscriptions and publications that are in use by
- * another move.
- */
-static void
-AcquireLogicalReplicationLock(void)
-{
-	LOCKTAG tag;
-	SET_LOCKTAG_LOGICAL_REPLICATION(tag);
-
-	LockAcquire(&tag, ExclusiveLock, false, false);
 }
 
 
