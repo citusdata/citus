@@ -320,10 +320,10 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 * the constraints earlier.
 		 */
 		CreateForeignConstraintsToReferenceTable(logicalRepTargetList);
-		elog(WARNING,"before drop subs - try");
+		elog(LOG,"before drop subs - try");
 		/* we're done, cleanup the publication and subscription */
 		DropSubscriptions(logicalRepTargetList);
-		elog(WARNING,"after drop subs - try");
+		elog(LOG,"after drop subs - try");
 		DropReplicationSlots(sourceConnection, logicalRepTargetList);
 		DropPublications(sourceConnection, publicationInfoHash);
 
@@ -349,9 +349,9 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		/* reconnect if the connection failed or is waiting for a command */
 		// RecreateGroupedLogicalRepTargetsConnections(groupedLogicalRepTargetsHash,
 													// superUser, databaseName);
-		elog(WARNING,"before drop subs - catch");
+		elog(LOG,"before drop subs - catch");
 		DropSubscriptions(logicalRepTargetList);
-		elog(WARNING,"after drop subs - catch");
+		elog(LOG,"after drop subs - catch");
 		/* reconnect if the connection failed or is waiting for a command */
 		if (PQstatus(sourceConnection->pgConn) != CONNECTION_OK ||
 			PQisBusy(sourceConnection->pgConn))
