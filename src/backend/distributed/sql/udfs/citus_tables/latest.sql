@@ -21,6 +21,16 @@ citus_tables_create_query=$CTCQ$
         pg_class c ON (p.logicalrelid = c.oid)
     LEFT JOIN
         pg_am a ON (a.oid = c.relam)
+    WHERE
+        -- filter out tables owned by extensions
+        logicalrelid NOT IN (
+            SELECT
+                objid
+            FROM
+                pg_depend
+            WHERE
+                classid = 'pg_class'::regclass AND refclassid = 'pg_extension'::regclass AND deptype = 'e'
+        )
     ORDER BY
         logicalrelid::text;
 $CTCQ$;

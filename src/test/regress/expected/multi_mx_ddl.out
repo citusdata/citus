@@ -278,12 +278,26 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 
 (1 row)
 
+-- table should not show up in citus_tables
+SELECT count(*) FROM citus_tables WHERE table_name = 'seg_test'::regclass;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
 \c - - - :worker_1_port
 -- should be able to see contents from worker
 SELECT * FROM seg_test;
  x
 ---------------------------------------------------------------------
  42
+(1 row)
+
+-- table should not show up in citus_tables
+SELECT count(*) FROM citus_tables WHERE table_name = 'seg_test'::regclass;
+ count
+---------------------------------------------------------------------
+     0
 (1 row)
 
 \c - - - :master_port
