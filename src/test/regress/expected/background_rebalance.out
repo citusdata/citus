@@ -1,0 +1,155 @@
+CREATE SCHEMA background_rebalance;
+SET search_path TO background_rebalance;
+SET citus.next_shard_id TO 85674000;
+SET citus.shard_replication_factor TO 1;
+ALTER SYSTEM SET citus.background_task_queue_interval TO '1s';
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+CREATE TABLE t1 (a int PRIMARY KEY);
+SELECT create_distributed_table('t1', 'a', shard_count => 4, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify the rebalance works - no-op - when the shards aer balanced. Noop is shown by wait complaining there is nothing
+-- to wait on.
+SELECT citus_rebalance_start();
+ citus_rebalance_start
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_rebalance_wait();
+WARNING:  no ongoing rebalance that can be waited on
+ citus_rebalance_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode => 'block_writes');
+ citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+-- rebalance a table in the background
+SELECT citus_rebalance_start();
+ citus_rebalance_start
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_rebalance_wait();
+ citus_rebalance_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode => 'block_writes');
+ citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE t2 (a int);
+SELECT create_distributed_table('t2', 'a' , colocate_with => 't1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- show that we get an error when a table in the colocation group can't be moved non-blocking
+SELECT citus_rebalance_start();
+ERROR:  cannot use logical replication to transfer shards of the relation t2 since it doesn't have a REPLICA IDENTITY or PRIMARY KEY
+DETAIL:  UPDATE and DELETE commands on the shard will error out during logical replication unless there is a REPLICA IDENTITY or PRIMARY KEY.
+HINT:  If you wish to continue without a replica identity set the shard_transfer_mode to 'force_logical' or 'block_writes'.
+SELECT citus_rebalance_start(shard_transfer_mode => 'block_writes');
+ citus_rebalance_start
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_rebalance_wait();
+ citus_rebalance_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE t2;
+SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode => 'block_writes');
+ citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+-- show we can stop a rebalance, the stop causes the move to not have happened, eg, our move back below fails.
+SELECT citus_rebalance_start();
+ citus_rebalance_start
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_rebalance_stop();
+ citus_rebalance_stop
+---------------------------------------------------------------------
+
+(1 row)
+
+-- waiting on this rebalance is racy, as it sometimes sees no rebalance is ongoing while other times it actually sees it ongoing
+-- we simply sleep a bit here
+SELECT pg_sleep(1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+-- failing move due to a stopped rebalance, first clean orphans to make the error stable
+SET client_min_messages TO WARNING;
+CALL citus_cleanup_orphaned_shards();
+RESET client_min_messages;
+SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode => 'block_writes');
+ERROR:  could not find placement matching "localhost:xxxxx"
+HINT:  Confirm the placement still exists and try again.
+-- show we can't start the rebalancer twice
+SELECT citus_rebalance_start();
+ citus_rebalance_start
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_rebalance_start();
+ERROR:  a rebalance is already running
+SELECT citus_rebalance_wait();
+ citus_rebalance_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+-- show that the old rebalancer cannot be started with a background rebalance in progress
+SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode => 'block_writes');
+ citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_rebalance_start();
+ citus_rebalance_start
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT rebalance_table_shards();
+ERROR:  a rebalance is already running
+SELECT citus_rebalance_wait();
+ citus_rebalance_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA background_rebalance CASCADE;

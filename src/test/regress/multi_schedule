@@ -99,6 +99,7 @@ test: object_propagation_debug
 test: undistribute_table
 test: run_command_on_all_nodes
 test: background_task_queue_monitor
+test: background_rebalance
 
 
 # ---------
