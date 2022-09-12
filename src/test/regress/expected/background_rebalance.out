@@ -123,8 +123,13 @@ SET client_min_messages TO WARNING;
 CALL citus_cleanup_orphaned_shards();
 RESET client_min_messages;
 SELECT citus_move_shard_placement(85674000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode => 'block_writes');
-ERROR:  could not find placement matching "localhost:xxxxx"
-HINT:  Confirm the placement still exists and try again.
+WARNING:  shard is already present on node localhost:xxxxx
+DETAIL:  Move may have already completed.
+ citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
 -- show we can't start the rebalancer twice
 SELECT citus_rebalance_start();
 NOTICE:  Scheduled 1 moves as job xxx
