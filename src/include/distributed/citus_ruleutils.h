@@ -20,12 +20,6 @@
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
 
-
-#define CREATE_SEQUENCE_COMMAND \
-	"CREATE SEQUENCE IF NOT EXISTS %s AS %s INCREMENT BY " INT64_FORMAT \
-	" MINVALUE " INT64_FORMAT " MAXVALUE " INT64_FORMAT \
-	" START WITH " INT64_FORMAT " CACHE " INT64_FORMAT " %sCYCLE"
-
 /* Function declarations for version independent Citus ruleutils wrapper functions */
 extern char * pg_get_extensiondef_string(Oid tableRelationId);
 extern Oid get_extension_schema(Oid ext_oid);

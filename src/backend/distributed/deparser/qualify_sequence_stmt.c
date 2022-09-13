@@ -51,6 +51,37 @@ QualifyAlterSequenceOwnerStmt(Node *node)
 }
 
 
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+
+/*
+ * QualifyAlterSequencePersistenceStmt transforms a
+ * ALTER SEQUENCE .. SET LOGGED/UNLOGGED
+ * statement in place and makes the sequence name fully qualified.
+ */
+void
+QualifyAlterSequencePersistenceStmt(Node *node)
+{
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
+	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
+
+	RangeVar *seq = stmt->relation;
+
+	if (seq->schemaname == NULL)
+	{
+		Oid seqOid = RangeVarGetRelid(seq, NoLock, stmt->missing_ok);
+
+		if (OidIsValid(seqOid))
+		{
+			Oid schemaOid = get_rel_namespace(seqOid);
+			seq->schemaname = get_namespace_name(schemaOid);
+		}
+	}
+}
+
+
+#endif
+
+
 /*
  * QualifyAlterSequenceSchemaStmt transforms a
  * ALTER SEQUENCE .. SET SCHEMA ..

@@ -734,6 +734,17 @@ static DistributeObjectOps Sequence_AlterOwner = {
 	.address = AlterSequenceOwnerStmtObjectAddress,
 	.markDistributed = false,
 };
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+static DistributeObjectOps Sequence_AlterPersistence = {
+	.deparse = DeparseAlterSequencePersistenceStmt,
+	.qualify = QualifyAlterSequencePersistenceStmt,
+	.preprocess = PreprocessAlterSequencePersistenceStmt,
+	.postprocess = NULL,
+	.operationType = DIST_OPS_ALTER,
+	.address = AlterSequencePersistenceStmtObjectAddress,
+	.markDistributed = false,
+};
+#endif
 static DistributeObjectOps Sequence_Drop = {
 	.deparse = DeparseDropSequenceStmt,
 	.qualify = QualifyDropSequenceStmt,
@@ -1463,6 +1474,41 @@ GetDistributeObjectOps(Node *node)
 
 				case OBJECT_SEQUENCE:
 				{
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+					ListCell *cmdCell = NULL;
+					foreach(cmdCell, stmt->cmds)
+					{
+						AlterTableCmd *cmd = castNode(AlterTableCmd, lfirst(cmdCell));
+						switch (cmd->subtype)
+						{
+							case AT_ChangeOwner:
+							{
+								return &Sequence_AlterOwner;
+							}
+
+							case AT_SetLogged:
+							{
+								return &Sequence_AlterPersistence;
+							}
+
+							case AT_SetUnLogged:
+							{
+								return &Sequence_AlterPersistence;
+							}
+
+							default:
+							{
+								return &NoDistributeOps;
+							}
+						}
+					}
+#endif
+
+					/*
+					 * Prior to PG15, the only Alter Table statement
+					 * with Sequence as its object was an
+					 * Alter Owner statement
+					 */
 					return &Sequence_AlterOwner;
 				}
 

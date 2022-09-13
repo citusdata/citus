@@ -298,6 +298,137 @@ ALTER TABLE copy_test2 RENAME COLUMN data_ TO data;
 COPY copy_test2 FROM :'temp_dir''copy_test.txt' WITH ( HEADER match, FORMAT text);
 SELECT count(*)=100 FROM copy_test2;
 
+--
+-- In PG15, unlogged sequences are supported
+-- we support this for distributed sequences as well
+--
+
+CREATE SEQUENCE seq1;
+CREATE UNLOGGED SEQUENCE "pg15"."seq 2";
+
+-- first, test that sequence persistence is distributed correctly
+-- when the sequence is distributed
+
+SELECT relname,
+       CASE relpersistence
+            WHEN 'u' THEN 'unlogged'
+            WHEN 'p' then 'logged'
+            ELSE 'unknown'
+        END AS logged_info
+FROM pg_class
+WHERE relname IN ('seq1', 'seq 2') AND relnamespace='pg15'::regnamespace
+ORDER BY relname;
+
+CREATE TABLE "seq test"(a int, b int default nextval ('seq1'), c int default nextval ('"pg15"."seq 2"'));
+
+SELECT create_distributed_table('"pg15"."seq test"','a');
+
+\c - - - :worker_1_port
+SELECT relname,
+       CASE relpersistence
+            WHEN 'u' THEN 'unlogged'
+            WHEN 'p' then 'logged'
+            ELSE 'unknown'
+        END AS logged_info
+FROM pg_class
+WHERE relname IN ('seq1', 'seq 2') AND relnamespace='pg15'::regnamespace
+ORDER BY relname;
+
+\c - - - :master_port
+SET search_path TO pg15;
+
+-- now, check that we can change sequence persistence using ALTER SEQUENCE
+
+ALTER SEQUENCE seq1 SET UNLOGGED;
+-- use IF EXISTS
+ALTER SEQUENCE IF EXISTS "seq 2" SET LOGGED;
+-- check non-existent sequence as well
+ALTER SEQUENCE seq_non_exists SET LOGGED;
+ALTER SEQUENCE IF EXISTS seq_non_exists SET LOGGED;
+
+SELECT relname,
+       CASE relpersistence
+            WHEN 'u' THEN 'unlogged'
+            WHEN 'p' then 'logged'
+            ELSE 'unknown'
+        END AS logged_info
+FROM pg_class
+WHERE relname IN ('seq1', 'seq 2') AND relnamespace='pg15'::regnamespace
+ORDER BY relname;
+
+\c - - - :worker_1_port
+SELECT relname,
+       CASE relpersistence
+            WHEN 'u' THEN 'unlogged'
+            WHEN 'p' then 'logged'
+            ELSE 'unknown'
+        END AS logged_info
+FROM pg_class
+WHERE relname IN ('seq1', 'seq 2') AND relnamespace='pg15'::regnamespace
+ORDER BY relname;
+
+\c - - - :master_port
+SET search_path TO pg15;
+
+-- now, check that we can change sequence persistence using ALTER TABLE
+ALTER TABLE seq1 SET LOGGED;
+ALTER TABLE "seq 2" SET UNLOGGED;
+
+SELECT relname,
+       CASE relpersistence
+            WHEN 'u' THEN 'unlogged'
+            WHEN 'p' then 'logged'
+            ELSE 'unknown'
+        END AS logged_info
+FROM pg_class
+WHERE relname IN ('seq1', 'seq 2') AND relnamespace='pg15'::regnamespace
+ORDER BY relname;
+
+\c - - - :worker_1_port
+SELECT relname,
+       CASE relpersistence
+            WHEN 'u' THEN 'unlogged'
+            WHEN 'p' then 'logged'
+            ELSE 'unknown'
+        END AS logged_info
+FROM pg_class
+WHERE relname IN ('seq1', 'seq 2') AND relnamespace='pg15'::regnamespace
+ORDER BY relname;
+
+\c - - - :master_port
+SET search_path TO pg15;
+
+-- An identity/serial sequence now automatically gets and follows the
+-- persistence level (logged/unlogged) of its owning table.
+-- Test this behavior as well
+
+CREATE UNLOGGED TABLE test(a bigserial, b bigserial);
+SELECT create_distributed_table('test', 'a');
+
+-- show that associated sequence is unlooged
+SELECT relname,
+       CASE relpersistence
+            WHEN 'u' THEN 'unlogged'
+            WHEN 'p' then 'logged'
+            ELSE 'unknown'
+        END AS logged_info
+FROM pg_class
+WHERE relname IN ('test_a_seq', 'test_b_seq') AND relnamespace='pg15'::regnamespace
+ORDER BY relname;
+
+\c - - - :worker_1_port
+SELECT relname,
+       CASE relpersistence
+            WHEN 'u' THEN 'unlogged'
+            WHEN 'p' then 'logged'
+            ELSE 'unknown'
+        END AS logged_info
+FROM pg_class
+WHERE relname IN ('test_a_seq', 'test_b_seq') AND relnamespace='pg15'::regnamespace
+ORDER BY relname;
+
+\c - - - :master_port
+SET search_path TO pg15;
 
 -- allow foreign key columns to have SET NULL/DEFAULT on column basis
 -- currently only reference tables can support that
