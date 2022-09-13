@@ -106,6 +106,7 @@ typedef struct PlacementUpdateEventProgress
 	int sourcePort;
 	char targetName[255];
 	int targetPort;
+	PlacementUpdateType updateType;
 	pg_atomic_uint64 progress;
 } PlacementUpdateEventProgress;
 
