@@ -899,8 +899,9 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInfo message, bool *hadE
 				{
 					*hadError = true;
 				}
-				__attribute__((fallthrough));
 			}
+
+			/* FALLTHROUGH */
 
 			case 'N': /* NoticeResponse */
 			{
