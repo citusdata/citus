@@ -117,3 +117,28 @@ SELECT * FROM sale_triggers ORDER BY 1, 2;
 
 -- check that we can't rename child triggers on partitions of distributed tables
 ALTER TRIGGER another_trigger ON sale_newyork RENAME TO another_renamed_trigger;
+
+
+
+-- create parent table
+CREATE TABLE stxdinp(i int, a int, b int) PARTITION BY RANGE (i);
+
+-- create partition
+CREATE TABLE stxdinp1 PARTITION OF stxdinp FOR VALUES FROM (1) TO (100);
+
+-- populate table
+INSERT INTO stxdinp SELECT 1, a/100, a/100 FROM generate_series(1, 999) a;
+
+-- create extended statistics
+CREATE STATISTICS stxdinp ON a, b FROM stxdinp;
+
+-- distribute parent table
+SELECT create_distributed_table('stxdinp', 'i');
+
+-- run select query, works fine
+SELECT a, b FROM stxdinp GROUP BY 1, 2;
+
+VACUUM ANALYZE stxdinp;
+
+-- UNEXPECTED ERROR FACED
+SELECT a, b FROM stxdinp GROUP BY 1, 2;

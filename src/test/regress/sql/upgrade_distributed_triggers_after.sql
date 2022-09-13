@@ -74,4 +74,11 @@ ALTER TRIGGER "renamed_yet_another_trigger" ON "sale_alabama" RENAME TO "another
 SELECT count(*) FROM pg_trigger WHERE tgname like 'another_trigger_name%';
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_trigger WHERE tgname like 'another_trigger_name%';$$);
 
+
+VACUUM ANALYZE stxdinp;
+
+-- UNEXPECTED ERROR FACED
+SELECT a, b FROM stxdinp GROUP BY 1, 2;
+
+
 DROP SCHEMA upgrade_distributed_triggers CASCADE;
