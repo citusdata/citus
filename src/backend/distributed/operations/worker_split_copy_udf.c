@@ -43,6 +43,10 @@ static DestReceiver *  CreatePartitionedSplitCopyDestReceiver(EState *executor,
 															  List *splitCopyInfoList);
 static void BuildMinMaxRangeArrays(List *splitCopyInfoList, ArrayType **minValueArray,
 								   ArrayType **maxValueArray);
+static char * TraceWorkerSplitCopyUdf(char *sourceShardToCopySchemaName,
+									  char *sourceShardToCopyPrefix,
+									  char *sourceShardToCopyQualifiedName,
+									  List *splitCopyInfoList);
 
 /*
  * worker_split_copy(source_shard_id bigint, splitCopyInfo pg_catalog.split_copy_info[])
@@ -93,11 +97,17 @@ worker_split_copy(PG_FUNCTION_ARGS)
 	Oid sourceShardToCopySchemaOId = get_rel_namespace(
 		shardIntervalToSplitCopy->relationId);
 	char *sourceShardToCopySchemaName = get_namespace_name(sourceShardToCopySchemaOId);
-	char *sourceShardToCopyName = get_rel_name(shardIntervalToSplitCopy->relationId);
+	char *sourceShardPrefix = get_rel_name(shardIntervalToSplitCopy->relationId);
+	char *sourceShardToCopyName = pstrdup(sourceShardPrefix);
 	AppendShardIdToName(&sourceShardToCopyName, shardIdToSplitCopy);
 	char *sourceShardToCopyQualifiedName = quote_qualified_identifier(
 		sourceShardToCopySchemaName,
 		sourceShardToCopyName);
+
+	ereport(LOG, (errmsg("%s", TraceWorkerSplitCopyUdf(sourceShardToCopySchemaName,
+													   sourceShardPrefix,
+													   sourceShardToCopyQualifiedName,
+													   splitCopyInfoList))));
 
 	StringInfo selectShardQueryForCopy = makeStringInfo();
 	appendStringInfo(selectShardQueryForCopy,
@@ -110,6 +120,48 @@ worker_split_copy(PG_FUNCTION_ARGS)
 	FreeExecutorState(executor);
 
 	PG_RETURN_VOID();
+}
+
+
+/* Trace split copy udf */
+static char *
+TraceWorkerSplitCopyUdf(char *sourceShardToCopySchemaName,
+						char *sourceShardToCopyPrefix,
+						char *sourceShardToCopyQualifiedName,
+						List *splitCopyInfoList)
+{
+	StringInfo splitCopyTrace = makeStringInfo();
+	appendStringInfo(splitCopyTrace, "performing copy from shard %s to [",
+					 sourceShardToCopyQualifiedName);
+
+	/* split copy always has atleast two destinations */
+	int index = 1;
+	int splitWayCount = list_length(splitCopyInfoList);
+	SplitCopyInfo *splitCopyInfo = NULL;
+	foreach_ptr(splitCopyInfo, splitCopyInfoList)
+	{
+		char *shardNameCopy = pstrdup(sourceShardToCopyPrefix);
+		AppendShardIdToName(&shardNameCopy, splitCopyInfo->destinationShardId);
+
+		char *shardNameCopyQualifiedName = quote_qualified_identifier(
+			sourceShardToCopySchemaName,
+			shardNameCopy);
+
+		appendStringInfo(splitCopyTrace, "%s (nodeId: %u)", shardNameCopyQualifiedName,
+						 splitCopyInfo->destinationShardNodeId);
+		pfree(shardNameCopy);
+
+		if (index < splitWayCount)
+		{
+			appendStringInfo(splitCopyTrace, ", ");
+		}
+
+		index++;
+	}
+
+	appendStringInfo(splitCopyTrace, "]");
+
+	return splitCopyTrace->data;
 }
 
 

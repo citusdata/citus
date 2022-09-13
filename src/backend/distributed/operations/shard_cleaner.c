@@ -75,7 +75,8 @@ static int DropOrphanedShardsForMove(bool waitForLocks);
 static bool TryDropShardOutsideTransaction(OperationId operationId,
 										   char *qualifiedTableName,
 										   char *nodeName,
-										   int nodePort);
+										   int nodePort,
+										   bool logDropMessage);
 static bool TryLockRelationAndPlacementCleanup(Oid relationId, LOCKMODE lockmode);
 
 /* Functions for cleanup infrastructure */
@@ -298,10 +299,12 @@ DropOrphanedShardsForCleanup()
 			continue;
 		}
 
+		bool logDropMessage = true;
 		if (TryDropShardOutsideTransaction(record->operationId,
 										   qualifiedTableName,
 										   workerNode->workerName,
-										   workerNode->workerPort))
+										   workerNode->workerPort,
+										   logDropMessage))
 		{
 			/* delete the cleanup record */
 			DeleteCleanupRecordByRecordId(record->recordId);
@@ -391,10 +394,12 @@ DropOrphanedShardsForMove(bool waitForLocks)
 		ShardInterval *shardInterval = LoadShardInterval(placement->shardId);
 		char *qualifiedTableName = ConstructQualifiedShardName(shardInterval);
 
+		bool logDropMessage = true;
 		if (TryDropShardOutsideTransaction(INVALID_OPERATION_ID,
 										   qualifiedTableName,
 										   shardPlacement->nodeName,
-										   shardPlacement->nodePort))
+										   shardPlacement->nodePort,
+										   logDropMessage))
 		{
 			/* delete the actual placement */
 			DeleteShardPlacementRow(placement->placementId);
@@ -454,8 +459,9 @@ FinalizeOperationNeedingCleanupOnFailure()
 		/* We only supporting cleaning shards right now */
 		if (record->objectType != CLEANUP_OBJECT_SHARD_PLACEMENT)
 		{
-			ereport(WARNING, (errmsg("Invalid object type %d for cleanup record ",
-									 record->objectType)));
+			ereport(WARNING, (errmsg(
+								  "Invalid object type %d on failed operation cleanup",
+								  record->objectType)));
 			continue;
 		}
 
@@ -468,10 +474,12 @@ FinalizeOperationNeedingCleanupOnFailure()
 			 * For all resources of CurrentOperationId that are marked as 'CLEANUP_ALWAYS' or
 			 * 'CLEANUP_ON_FAILURE', drop resource and cleanup records.
 			 */
+			bool logDropMessage = false;
 			if (TryDropShardOutsideTransaction(CurrentOperationId,
 											   qualifiedTableName,
 											   workerNode->workerName,
-											   workerNode->workerPort))
+											   workerNode->workerPort,
+											   logDropMessage))
 			{
 				/*
 				 * Given the operation is failing and we will abort its transaction, we cannot delete
@@ -490,15 +498,17 @@ FinalizeOperationNeedingCleanupOnFailure()
 
 	if (list_length(currentOperationRecordList) > 0)
 	{
-		ereport(LOG, (errmsg("Removed %d orphaned shards out of %d",
-							 removedShardCountOnComplete, list_length(
-								 currentOperationRecordList))));
+		ereport(LOG, (errmsg(
+						  "Cleaned %d orphaned shards out of %d as part of failed operation",
+						  removedShardCountOnComplete, list_length(
+							  currentOperationRecordList))));
 
 		if (failedShardCountOnComplete > 0)
 		{
-			ereport(WARNING, (errmsg("Failed to cleanup %d shards out of %d",
-									 failedShardCountOnComplete, list_length(
-										 currentOperationRecordList))));
+			ereport(WARNING, (errmsg(
+								  "Failed to cleanup %d shards out of %d as part of failed operation",
+								  failedShardCountOnComplete, list_length(
+									  currentOperationRecordList))));
 		}
 	}
 }
@@ -527,8 +537,9 @@ FinalizeOperationNeedingCleanupOnSuccess()
 		/* We only supporting cleaning shards right now */
 		if (record->objectType != CLEANUP_OBJECT_SHARD_PLACEMENT)
 		{
-			ereport(WARNING, (errmsg("Invalid object type %d for cleanup record ",
-									 record->objectType)));
+			ereport(WARNING, (errmsg(
+								  "Invalid object type %d on operation cleanup",
+								  record->objectType)));
 			continue;
 		}
 
@@ -541,10 +552,12 @@ FinalizeOperationNeedingCleanupOnSuccess()
 			 * For all resources of CurrentOperationId that are marked as 'CLEANUP_ALWAYS'
 			 * drop resource and cleanup records.
 			 */
+			bool logDropMessage = false;
 			if (TryDropShardOutsideTransaction(CurrentOperationId,
 											   qualifiedTableName,
 											   workerNode->workerName,
-											   workerNode->workerPort))
+											   workerNode->workerPort,
+											   logDropMessage))
 			{
 				/*
 				 * Delete cleanup records outside transaction as:
@@ -572,15 +585,17 @@ FinalizeOperationNeedingCleanupOnSuccess()
 
 	if (list_length(currentOperationRecordList) > 0)
 	{
-		ereport(LOG, (errmsg("Removed %d orphaned shards out of %d",
-							 removedShardCountOnComplete, list_length(
-								 currentOperationRecordList))));
+		ereport(LOG, (errmsg(
+						  "Cleaned %d orphaned shards out of %d as part of operation",
+						  removedShardCountOnComplete, list_length(
+							  currentOperationRecordList))));
 
 		if (failedShardCountOnComplete > 0)
 		{
-			ereport(WARNING, (errmsg("Failed to cleanup %d shards out of %d",
-									 failedShardCountOnComplete, list_length(
-										 currentOperationRecordList))));
+			ereport(WARNING, (errmsg(
+								  "Failed to cleanup %d shards out of %d as part of operation",
+								  failedShardCountOnComplete, list_length(
+									  currentOperationRecordList))));
 		}
 	}
 }
@@ -727,17 +742,22 @@ TryLockRelationAndPlacementCleanup(Oid relationId, LOCKMODE lockmode)
  * true on success.
  */
 static bool
-TryDropShardOutsideTransaction(OperationId operationId, char *qualifiedTableName,
-							   char *nodeName, int nodePort)
+TryDropShardOutsideTransaction(OperationId operationId,
+							   char *qualifiedTableName,
+							   char *nodeName,
+							   int nodePort,
+							   bool logDropMessage)
 {
-	char *operation = (operationId == INVALID_OPERATION_ID) ? "move" : "cleanup";
-
-	ereport(LOG, (errmsg("cleaning up %s on %s:%d which was left "
-						 "after a %s",
-						 qualifiedTableName,
-						 nodeName,
-						 nodePort,
-						 operation)));
+	if (logDropMessage)
+	{
+		char *operation = (operationId == INVALID_OPERATION_ID) ? "move" : "operation";
+		ereport(LOG, (errmsg("cleaning up %s on %s:%d which was left "
+							 "after a %s",
+							 qualifiedTableName,
+							 nodeName,
+							 nodePort,
+							 operation)));
+	}
 
 	/* prepare sql query to execute to drop the shard */
 	StringInfo dropQuery = makeStringInfo();

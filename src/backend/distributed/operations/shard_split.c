@@ -169,6 +169,12 @@ static const char *const SplitOperationName[] =
 	[ISOLATE_TENANT_TO_NEW_SHARD] = "isolate",
 	[CREATE_DISTRIBUTED_TABLE] = "create"
 };
+static const char *const SplitOperationAPIName[] =
+{
+	[SHARD_SPLIT_API] = "citus_split_shard_by_split_points",
+	[ISOLATE_TENANT_TO_NEW_SHARD] = "isolate_tenant_to_new_shard",
+	[CREATE_DISTRIBUTED_TABLE] = "create_distributed_table_concurrently"
+};
 static const char *const SplitTargetName[] =
 {
 	[SHARD_SPLIT_API] = "shard",
@@ -526,6 +532,9 @@ SplitShard(SplitMode splitMode,
 
 	if (splitMode == BLOCKING_SPLIT)
 	{
+		ereport(LOG, (errmsg("performing blocking %s ",
+							 SplitOperationAPIName[splitOperation])));
+
 		BlockingShardSplit(
 			splitOperation,
 			splitWorkflowId,
@@ -536,6 +545,9 @@ SplitShard(SplitMode splitMode,
 	}
 	else
 	{
+		ereport(LOG, (errmsg("performing non-blocking %s ",
+							 SplitOperationAPIName[splitOperation])));
+
 		NonBlockingShardSplit(
 			splitOperation,
 			splitWorkflowId,
@@ -583,9 +595,15 @@ BlockingShardSplit(SplitOperation splitOperation,
 
 	PG_TRY();
 	{
+		ereport(LOG, (errmsg("creating child shards for %s",
+							 SplitOperationAPIName[splitOperation])));
+
 		/* Physically create split children. */
 		CreateSplitShardsForShardGroup(shardGroupSplitIntervalListList,
 									   workersForPlacementList);
+
+		ereport(LOG, (errmsg("performing copy for %s",
+							 SplitOperationAPIName[splitOperation])));
 
 		/* For Blocking split, copy isn't snapshotted */
 		char *snapshotName = NULL;
@@ -595,6 +613,10 @@ BlockingShardSplit(SplitOperation splitOperation,
 
 		/* Used for testing */
 		ConflictOnlyWithIsolationTesting();
+
+		ereport(LOG, (errmsg(
+						  "creating auxillary structures (indexes, stats, replicaindentities, triggers) for %s",
+						  SplitOperationAPIName[splitOperation])));
 
 		/* Create auxiliary structures (indexes, stats, replicaindentities, triggers) */
 		CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
@@ -617,10 +639,16 @@ BlockingShardSplit(SplitOperation splitOperation,
 		 */
 		if (DeferShardDeleteOnSplit)
 		{
+			ereport(LOG, (errmsg("marking deferred cleanup of source shard(s) for %s",
+								 SplitOperationAPIName[splitOperation])));
+
 			InsertDeferredDropCleanupRecordsForShards(sourceColocatedShardIntervalList);
 		}
 		else
 		{
+			ereport(LOG, (errmsg("performing cleanup of source shard(s) for %s",
+								 SplitOperationAPIName[splitOperation])));
+
 			DropShardList(sourceColocatedShardIntervalList);
 		}
 
@@ -634,6 +662,9 @@ BlockingShardSplit(SplitOperation splitOperation,
 		CreatePartitioningHierarchyForBlockingSplit(
 			shardGroupSplitIntervalListList,
 			workersForPlacementList);
+
+		ereport(LOG, (errmsg("creating foreign key constraints (if any) for %s",
+							 SplitOperationAPIName[splitOperation])));
 
 		/*
 		 * Create foreign keys if exists after the metadata changes happening in
@@ -1536,6 +1567,9 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 	/* Non-Blocking shard split workflow starts here */
 	PG_TRY();
 	{
+		ereport(LOG, (errmsg("creating child shards for %s",
+							 SplitOperationAPIName[splitOperation])));
+
 		/* 1) Physically create split children. */
 		CreateSplitShardsForShardGroup(shardGroupSplitIntervalListList,
 									   workersForPlacementList);
@@ -1564,6 +1598,10 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		 * target shards.
 		 */
 		CreateReplicaIdentitiesForDummyShards(mapOfPlacementToDummyShardList);
+
+		ereport(LOG, (errmsg(
+						  "creating replication artifacts (publications, replication slots, subscriptions for %s",
+						  SplitOperationAPIName[splitOperation])));
 
 		/* 4) Create Publications. */
 		CreatePublications(sourceConnection, publicationInfoHash);
@@ -1613,10 +1651,16 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 			databaseName,
 			logicalRepTargetList);
 
+		ereport(LOG, (errmsg("performing copy for %s",
+							 SplitOperationAPIName[splitOperation])));
+
 		/* 8) Do snapshotted Copy */
 		DoSplitCopy(sourceShardToCopyNode, sourceColocatedShardIntervalList,
 					shardGroupSplitIntervalListList, workersForPlacementList,
 					snapshot, distributionColumnOverrides);
+
+		ereport(LOG, (errmsg("replicating changes for %s",
+							 SplitOperationAPIName[splitOperation])));
 
 		/*
 		 * 9) Logically replicate all the changes and do most of the table DDL,
@@ -1638,10 +1682,16 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		 */
 		if (DeferShardDeleteOnSplit)
 		{
+			ereport(LOG, (errmsg("marking deferred cleanup of source shard(s) for %s",
+								 SplitOperationAPIName[splitOperation])));
+
 			InsertDeferredDropCleanupRecordsForShards(sourceColocatedShardIntervalList);
 		}
 		else
 		{
+			ereport(LOG, (errmsg("performing cleanup of source shard(s) for %s",
+								 SplitOperationAPIName[splitOperation])));
+
 			DropShardList(sourceColocatedShardIntervalList);
 		}
 
@@ -1689,6 +1739,9 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		 * uninvestigated reason otherwise.
 		 */
 		CreatePartitioningHierarchy(logicalRepTargetList);
+
+		ereport(LOG, (errmsg("creating foreign key constraints (if any) for %s",
+							 SplitOperationAPIName[splitOperation])));
 
 		/*
 		 * 14) Create foreign keys if exists after the metadata changes happening in

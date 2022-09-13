@@ -758,7 +758,7 @@ SET search_path to "Tenant Isolation";
 \set VERBOSITY terse
 SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_transfer_mode => 'block_writes');
 WARNING:  command DROP TABLE is disabled
-WARNING:  Failed to cleanup 1 shards out of 1
+WARNING:  Failed to cleanup 1 shards out of 1 as part of failed operation
 ERROR:  command CREATE TABLE is disabled
 \set VERBOSITY default
 \c - postgres - :worker_1_port
@@ -811,7 +811,7 @@ WARNING:  command DROP TABLE is disabled
 WARNING:  command DROP TABLE is disabled
 WARNING:  command DROP TABLE is disabled
 WARNING:  command DROP TABLE is disabled
-WARNING:  Failed to cleanup 6 shards out of 6
+WARNING:  Failed to cleanup 6 shards out of 6 as part of failed operation
 ERROR:  command DROP TABLE is disabled
 \set VERBOSITY default
 -- check if metadata is changed
