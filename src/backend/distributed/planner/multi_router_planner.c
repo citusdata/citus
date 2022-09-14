@@ -3692,7 +3692,7 @@ CopyRelationRestrictionContext(RelationRestrictionContext *oldContext)
 
 		newRestriction->index = oldRestriction->index;
 		newRestriction->relationId = oldRestriction->relationId;
-		newRestriction->distributedRelation = oldRestriction->distributedRelation;
+		newRestriction->citusTable = oldRestriction->citusTable;
 		newRestriction->rte = copyObject(oldRestriction->rte);
 
 		/* can't be copied, we copy (flatly) a RelOptInfo, and then decouple baserestrictinfo */
