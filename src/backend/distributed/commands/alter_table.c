@@ -1604,6 +1604,8 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 		}
 		else if (ShouldSyncTableMetadata(sourceId))
 		{
+			char *qualifiedTableName = quote_qualified_identifier(schemaName, sourceName);
+
 			/*
 			 * We are converting a citus local table to a distributed/reference table,
 			 * so we should prevent dropping the sequence on the table. Otherwise, we'd
@@ -1612,8 +1614,8 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 			StringInfo command = makeStringInfo();
 
 			appendStringInfo(command,
-							 "SELECT pg_catalog.worker_drop_sequence_dependency('%s');",
-							 quote_qualified_identifier(schemaName, sourceName));
+							 "SELECT pg_catalog.worker_drop_sequence_dependency(%s);",
+							 quote_literal_cstr(qualifiedTableName));
 
 			SendCommandToWorkersWithMetadata(command->data);
 		}
@@ -1903,11 +1905,17 @@ CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaName, char *sequ
 											char *sourceSchemaName, char *sourceName,
 											char *targetSchemaName, char *targetName)
 {
+	char *qualifiedSchemaName = quote_qualified_identifier(sequenceSchemaName,
+														   sequenceName);
+	char *qualifiedSourceName = quote_qualified_identifier(sourceSchemaName, sourceName);
+	char *qualifiedTargetName = quote_qualified_identifier(targetSchemaName, targetName);
+
 	StringInfo query = makeStringInfo();
-	appendStringInfo(query, "SELECT worker_change_sequence_dependency('%s', '%s', '%s')",
-					 quote_qualified_identifier(sequenceSchemaName, sequenceName),
-					 quote_qualified_identifier(sourceSchemaName, sourceName),
-					 quote_qualified_identifier(targetSchemaName, targetName));
+	appendStringInfo(query, "SELECT worker_change_sequence_dependency(%s, %s, %s)",
+					 quote_literal_cstr(qualifiedSchemaName),
+					 quote_literal_cstr(qualifiedSourceName),
+					 quote_literal_cstr(qualifiedTargetName));
+
 	return query->data;
 }
 
