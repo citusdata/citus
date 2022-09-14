@@ -62,7 +62,8 @@ extern bool SendOptionalCommandListToWorkerOutsideTransaction(const char *nodeNa
 															  List *commandList);
 extern bool SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
 	MultiConnection *workerConnection,
-	List *commandList);
+	List *
+	commandList);
 extern bool SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(const
 																			char *nodeName,
 																			int32 nodePort,

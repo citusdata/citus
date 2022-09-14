@@ -357,7 +357,7 @@ SendCommandListToWorkerOutsideTransaction(const char *nodeName, int32 nodePort,
  */
 void
 SendCommandListToWorkerOutsideTransactionWithConnection(MultiConnection *workerConnection,
-											 List *commandList)
+														List *commandList)
 {
 	MarkRemoteTransactionCritical(workerConnection);
 	RemoteTransactionBegin(workerConnection);
@@ -456,7 +456,8 @@ SendMetadataCommandListToWorkerListInCoordinatedTransaction(List *workerNodeList
  *
  */
 bool
-SendOptionalCommandListToWorkerOutsideTransactionWithConnection(MultiConnection *workerConnection, List *commandList)
+SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
+	MultiConnection *workerConnection, List *commandList)
 {
 	if (PQstatus(workerConnection->pgConn) != CONNECTION_OK)
 	{
@@ -490,6 +491,7 @@ SendOptionalCommandListToWorkerOutsideTransactionWithConnection(MultiConnection 
 	return !failed;
 }
 
+
 /*
  * SendOptionalCommandListToWorkerOutsideTransaction sends the given command
  * list to the given worker in a single transaction that is outside of the
@@ -505,8 +507,9 @@ SendOptionalCommandListToWorkerOutsideTransaction(const char *nodeName, int32 no
 	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
 																	  nodeName, nodePort,
 																	  nodeUser, NULL);
-	bool failed = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(workerConnection,
-																				 commandList);
+	bool failed = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
+		workerConnection,
+		commandList);
 	CloseConnection(workerConnection);
 
 	return !failed;

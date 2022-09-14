@@ -2245,7 +2245,8 @@ GetNextShardIdForSplitChild()
 	appendStringInfo(nextValueCommand, "SELECT nextval(%s);", quote_literal_cstr(
 						 "pg_catalog.pg_dist_shardid_seq"));
 
-	MultiConnection *connection = GetLocalConnectionForSubtransactionAsUser(CitusExtensionOwnerName());
+	MultiConnection *connection = GetLocalConnectionForSubtransactionAsUser(
+		CitusExtensionOwnerName());
 	PGresult *result = NULL;
 	int queryResult = ExecuteOptionalRemoteCommand(connection, nextValueCommand->data,
 												   &result);

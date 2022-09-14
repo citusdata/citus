@@ -670,9 +670,10 @@ InsertCleanupRecordInSubtransaction(CleanupObject objectType,
 					 nodeGroupId,
 					 policy);
 
-	MultiConnection *connection = GetLocalConnectionForSubtransactionAsUser(CitusExtensionOwnerName());
+	MultiConnection *connection = GetLocalConnectionForSubtransactionAsUser(
+		CitusExtensionOwnerName());
 	SendCommandListToWorkerOutsideTransactionWithConnection(connection,
-											  list_make1(command->data));
+															list_make1(command->data));
 }
 
 
@@ -690,9 +691,10 @@ DeleteCleanupRecordByRecordIdOutsideTransaction(uint64 recordId)
 					 PG_DIST_CLEANUP,
 					 recordId);
 
-	MultiConnection *connection = GetLocalConnectionForSubtransactionAsUser(CitusExtensionOwnerName());
+	MultiConnection *connection = GetLocalConnectionForSubtransactionAsUser(
+		CitusExtensionOwnerName());
 	SendCommandListToWorkerOutsideTransactionWithConnection(connection,
-											  list_make1(command->data));
+															list_make1(command->data));
 }
 
 
@@ -754,9 +756,11 @@ TryDropShardOutsideTransaction(OperationId operationId, char *qualifiedTableName
 									   dropQuery->data);
 
 	/* remove the shard from the node */
-	MultiConnection *connection = GetLocalConnectionForSubtransactionAsUser(CitusExtensionOwnerName());
-	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(connection,
-																	 dropCommandList);
+	MultiConnection *connection = GetLocalConnectionForSubtransactionAsUser(
+		CitusExtensionOwnerName());
+	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
+		connection,
+		dropCommandList);
 
 	return success;
 }
