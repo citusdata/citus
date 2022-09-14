@@ -57,6 +57,35 @@ ERROR:  cannot colocate tables nocolo and test
 DETAIL:  Distribution column types don't match for nocolo and test.
 select create_distributed_table_concurrently('test','key', colocate_with := 'noexists');
 ERROR:  relation "noexists" does not exist
+select citus_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', false);
+ citus_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+select citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
+ citus_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+select create_distributed_table_concurrently('test','key');
+NOTICE:  relation test does not have a REPLICA IDENTITY or PRIMARY KEY
+DETAIL:  UPDATE and DELETE commands on the relation will error out during create_distributed_table_concurrently unless there is a REPLICA IDENTITY or PRIMARY KEY. INSERT commands will still work.
+ERROR:  no worker nodes are available for placing shards
+HINT:  Add more worker nodes.
+select citus_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', true);
+ citus_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+select citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
+ citus_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
 -- use colocate_with "default"
 select create_distributed_table_concurrently('test','key', shard_count := 11);
 NOTICE:  relation test does not have a REPLICA IDENTITY or PRIMARY KEY
