@@ -34,6 +34,7 @@ SELECT * FROM shards_in_workers;
 
 -- failure on creating the subscription
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE SUBSCRIPTION").kill()');
+-- Log minimal messages to avoid printing the error message and make the test flaky
 SET client_min_messages TO ERROR;
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 RESET client_min_messages;
