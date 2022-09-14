@@ -214,6 +214,38 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 
 
 /*
+ * DefExprContainsNextVal returns true if column default expression at
+ * defExprIndex'th position of relation's defval array contains nextval().
+ *
+ * defExprIndex is based on relative order of the column in TupleDesc
+ * among other columns having a DEFAULT expressions.
+ */
+bool
+DefExprContainsNextVal(Oid relationId, uint16 defExprIndex)
+{
+	Relation relation = RelationIdGetRelation(relationId);
+
+	TupleDesc relTupDesc = RelationGetDescr(relation);
+	TupleConstr *relTupConstraints = relTupDesc->constr;
+
+	if (defExprIndex > relTupConstraints->num_defval)
+	{
+		/* be on the safe-side */
+		ereport(ERROR, (errmsg("relation definition has no such "
+							   "DEFAULT expression")));
+	}
+
+	AttrDefault *defValueArray = relTupConstraints->defval;
+	AttrDefault *defValue = &(defValueArray[defExprIndex]);
+	Node *defExpr = (Node *) stringToNode(defValue->adbin);
+
+	RelationClose(relation);
+
+	return contain_nextval_expression_walker(defExpr, NULL);
+}
+
+
+/*
  * PreprocessDropSequenceStmt gets called during the planning phase of a DROP SEQUENCE statement
  * and returns a list of DDLJob's that will drop any distributed sequences from the
  * workers.

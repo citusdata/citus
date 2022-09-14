@@ -87,8 +87,8 @@ static List * ReversedOidList(List *oidList);
 static void AppendExplicitIndexIdsToList(Form_pg_index indexForm,
 										 List **explicitIndexIdList,
 										 int flags);
-static void DropDefaultExpressionsAndMoveOwnedSequenceOwnerships(Oid sourceRelationId,
-																 Oid targetRelationId);
+static void DropNextValExprsAndMoveOwnedSeqOwnerships(Oid sourceRelationId,
+													  Oid targetRelationId);
 static void DropDefaultColumnDefinition(Oid relationId, char *columnName);
 static void TransferSequenceOwnership(Oid ownedSequenceId, Oid targetRelationId,
 									  char *columnName);
@@ -363,11 +363,11 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 
 	/*
 	 * Move sequence ownerships from shard table to shell table and also drop
-	 * DEFAULT expressions from shard relation as we should evaluate such columns
-	 * in shell table when needed.
+	 * DEFAULT expressions based on sequences from shard relation as we should
+	 * evaluate such columns in shell table when needed.
 	 */
-	DropDefaultExpressionsAndMoveOwnedSequenceOwnerships(shardRelationId,
-														 shellRelationId);
+	DropNextValExprsAndMoveOwnedSeqOwnerships(shardRelationId,
+											  shellRelationId);
 
 	InsertMetadataForCitusLocalTable(shellRelationId, shardId, autoConverted);
 
@@ -1158,27 +1158,62 @@ GetRenameStatsCommandList(List *statsOidList, uint64 shardId)
 
 
 /*
- * DropDefaultExpressionsAndMoveOwnedSequenceOwnerships drops default column
- * definitions for relation with sourceRelationId. Also, for each column that
- * defaults to an owned sequence, it grants ownership to the same named column
- * of the relation with targetRelationId.
+ * DropNextValExprsAndMoveOwnedSeqOwnerships drops default column definitions
+ * that are based on sequences for relation with sourceRelationId.
+ *
+ * Also, for each such column that owns a sequence, it grants ownership to the
+ * same named column of the relation with targetRelationId.
  */
 static void
-DropDefaultExpressionsAndMoveOwnedSequenceOwnerships(Oid sourceRelationId,
-													 Oid targetRelationId)
+DropNextValExprsAndMoveOwnedSeqOwnerships(Oid sourceRelationId,
+										  Oid targetRelationId)
 {
 	List *columnNameList = NIL;
 	List *ownedSequenceIdList = NIL;
 	ExtractDefaultColumnsAndOwnedSequences(sourceRelationId, &columnNameList,
 										   &ownedSequenceIdList);
 
+	uint16 sourceRelDefExprArrIndex = 0;
+
 	char *columnName = NULL;
 	Oid ownedSequenceId = InvalidOid;
 	forboth_ptr_oid(columnName, columnNameList, ownedSequenceId, ownedSequenceIdList)
 	{
-		DropDefaultColumnDefinition(sourceRelationId, columnName);
+		HeapTuple columnTuple = SearchSysCacheAttName(sourceRelationId, columnName);
+		if (!HeapTupleIsValid(columnTuple))
+		{
+			ereport(ERROR, (errcode(ERRCODE_UNDEFINED_COLUMN),
+							errmsg("column \"%s\" of relation \"%s\" does not exist",
+								   columnName, get_rel_name(sourceRelationId))));
+		}
 
-		/* column might not own a sequence */
+		Form_pg_attribute columnForm = (Form_pg_attribute) GETSTRUCT(columnTuple);
+		bool columnHasDefaultExpr = columnForm->atthasdef;
+
+		ReleaseSysCache(columnTuple);
+
+		if (columnHasDefaultExpr)
+		{
+			if (DefExprContainsNextVal(sourceRelationId, sourceRelDefExprArrIndex))
+			{
+				DropDefaultColumnDefinition(sourceRelationId, columnName);
+			}
+			else
+			{
+				/*
+				 * Since dropping a default expression means shifting rest of
+				 * the attributes to left by one, we don't increment
+				 * sourceRelDefExprArrIndex otherwise.
+				 */
+				sourceRelDefExprArrIndex++;
+			}
+		}
+
+		/*
+		 * Column might own a sequence without having a nextval() expr on it
+		 * --e.g., due to ALTER SEQUENCE OWNED BY .. --, so check if that is
+		 * the case even if the column doesn't have a DEFAULT.
+		 */
 		if (OidIsValid(ownedSequenceId))
 		{
 			TransferSequenceOwnership(ownedSequenceId, targetRelationId, columnName);

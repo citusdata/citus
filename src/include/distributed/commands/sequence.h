@@ -13,6 +13,7 @@
 #include "nodes/pg_list.h"
 
 
+extern bool DefExprContainsNextVal(Oid relationId, uint16 defExprIndex);
 extern void ExtractDefaultColumnsAndOwnedSequences(Oid relationId,
 												   List **columnNameList,
 												   List **ownedSequenceIdList);
