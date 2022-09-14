@@ -340,17 +340,7 @@ SendCommandListToWorkerOutsideTransaction(const char *nodeName, int32 nodePort,
 																	  nodeName, nodePort,
 																	  nodeUser, NULL);
 
-	MarkRemoteTransactionCritical(workerConnection);
-	RemoteTransactionBegin(workerConnection);
-
-	/* iterate over the commands and execute them in the same connection */
-	const char *commandString = NULL;
-	foreach_ptr(commandString, commandList)
-	{
-		ExecuteCriticalRemoteCommand(workerConnection, commandString);
-	}
-
-	RemoteTransactionCommit(workerConnection);
+	SendCommandListToWorkerInSeparateTransaction(workerConnection, commandList);
 	CloseConnection(workerConnection);
 }
 
