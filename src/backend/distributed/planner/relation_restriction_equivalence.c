@@ -224,7 +224,7 @@ ContextContainsLocalRelation(RelationRestrictionContext *restrictionContext)
 	{
 		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
 
-		if (!relationRestriction->distributedRelation)
+		if (!relationRestriction->citusTable)
 		{
 			return true;
 		}

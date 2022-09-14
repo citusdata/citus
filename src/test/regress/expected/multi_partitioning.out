@@ -4324,12 +4324,66 @@ WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%
 (6 rows)
 
 \c - - - :master_port
+SET search_path TO partitioning_schema;
+-- create parent table
+CREATE TABLE stxdinp(i int, a int, b int) PARTITION BY RANGE (i);
+-- create partition
+CREATE TABLE stxdinp1 PARTITION OF stxdinp FOR VALUES FROM (1) TO (100);
+-- populate table
+INSERT INTO stxdinp SELECT 1, a/100, a/100 FROM generate_series(1, 999) a;
+-- create extended statistics
+CREATE STATISTICS stxdinp ON a, b FROM stxdinp;
+-- distribute parent table
+SELECT create_distributed_table('stxdinp', 'i');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$partitioning_schema.stxdinp1$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- run select query, works fine
+SELECT a, b FROM stxdinp GROUP BY 1, 2;
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+ 3 | 3
+ 7 | 7
+ 2 | 2
+ 8 | 8
+ 0 | 0
+ 5 | 5
+ 6 | 6
+ 9 | 9
+ 4 | 4
+(10 rows)
+
+-- partitions are processed recursively for PG15+
+VACUUM ANALYZE stxdinp;
+SELECT a, b FROM stxdinp GROUP BY 1, 2;
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+ 3 | 3
+ 7 | 7
+ 2 | 2
+ 8 | 8
+ 0 | 0
+ 5 | 5
+ 6 | 6
+ 9 | 9
+ 4 | 4
+(10 rows)
+
 DROP SCHEMA partitioning_schema CASCADE;
-NOTICE:  drop cascades to 4 other objects
-DETAIL:  drop cascades to table partitioning_schema."schema-test"
-drop cascades to table partitioning_schema.another_distributed_table
-drop cascades to table partitioning_schema.distributed_parent_table
-drop cascades to table partitioning_schema.part_table_with_very_long_name
+NOTICE:  drop cascades to 5 other objects
+DETAIL:  drop cascades to table "schema-test"
+drop cascades to table another_distributed_table
+drop cascades to table distributed_parent_table
+drop cascades to table part_table_with_very_long_name
+drop cascades to table stxdinp
 RESET search_path;
 DROP TABLE IF EXISTS
 	partitioning_hash_test,

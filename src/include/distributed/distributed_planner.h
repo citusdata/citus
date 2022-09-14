@@ -56,7 +56,7 @@ typedef struct RelationRestriction
 {
 	Index index;
 	Oid relationId;
-	bool distributedRelation;
+	bool citusTable;
 	RangeTblEntry *rte;
 	RelOptInfo *relOptInfo;
 	PlannerInfo *plannerInfo;
