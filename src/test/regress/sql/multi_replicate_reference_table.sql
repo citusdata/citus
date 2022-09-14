@@ -233,6 +233,30 @@ WHERE colocationid IN
 
 DROP TABLE replicate_reference_table_commit;
 
+-- exercise reference table replication in create_distributed_table_concurrently
+SELECT citus_remove_node('localhost', :worker_2_port);
+CREATE TABLE replicate_reference_table_cdtc(column1 int);
+SELECT create_reference_table('replicate_reference_table_cdtc');
+SELECT citus_add_node('localhost', :worker_2_port);
+
+-- required for create_distributed_table_concurrently
+SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
+SET citus.shard_replication_factor TO 1;
+
+CREATE TABLE distributed_table_cdtc(column1 int primary key);
+SELECT create_distributed_table_concurrently('distributed_table_cdtc', 'column1');
+
+RESET citus.shard_replication_factor;
+SELECT citus_remove_node('localhost', :master_port);
+
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement_view
+WHERE
+    nodeport = :worker_2_port
+ORDER BY shardid, nodeport;
+DROP TABLE replicate_reference_table_cdtc, distributed_table_cdtc;
 
 -- test adding new node + upgrading another hash distributed table to reference table + creating new reference table in TRANSACTION
 SELECT master_remove_node('localhost', :worker_2_port);
@@ -515,7 +539,6 @@ SELECT citus_copy_shard_placement(
            (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
-           do_repair := false,
            transfer_mode := 'block_writes');
 
 -- verify direct call to citus_copy_shard_placement errors if target node is secondary
@@ -524,7 +547,6 @@ SELECT citus_copy_shard_placement(
            (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
-           do_repair := false,
            transfer_mode := 'block_writes');
 SELECT citus_remove_node('localhost', :worker_2_port);
 
@@ -534,7 +556,6 @@ SELECT citus_copy_shard_placement(
            (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
-           do_repair := false,
            transfer_mode := 'block_writes');
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
@@ -620,7 +641,7 @@ SELECT count(*) - :ref_table_placements FROM pg_dist_shard_placement WHERE shard
 
 SELECT min(result) = max(result) AS consistent FROM run_command_on_placements('ref_table', 'SELECT sum(a) FROM %s');
 
--- test that metadata is synced when master_copy_shard_placement replicates
+-- test that metadata is synced when citus_copy_shard_placement replicates
 -- reference table shards
 SET citus.replicate_reference_tables_on_activate TO off;
 SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
@@ -628,11 +649,10 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 SET citus.shard_replication_factor TO 1;
 
-SELECT master_copy_shard_placement(
+SELECT citus_copy_shard_placement(
            :ref_table_shard,
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
-           do_repair := false,
            transfer_mode := 'block_writes');
 
 SELECT result::int - :ref_table_placements

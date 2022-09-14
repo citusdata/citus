@@ -1,6 +1,6 @@
 Parsed test spec with 2 sessions
 
-starting permutation: s1-load-cache s1-insert s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-update s2-commit s1-commit s2-print-content
+starting permutation: s1-load-cache s1-insert s1-begin s1-select s2-delete-inactive s2-begin s2-repair-placement s1-update s2-commit s1-commit s2-print-content
 step s1-load-cache:
  TRUNCATE test_repair_placement_vs_modification;
 
@@ -19,16 +19,16 @@ count
     1
 (1 row)
 
-step s2-set-placement-inactive:
- UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+step s2-delete-inactive:
+ DELETE FROM pg_dist_shard_placement WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
 
 step s2-begin:
  BEGIN;
 
 step s2-repair-placement:
- SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+ SELECT citus_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, transfer_mode := 'block_writes');
 
-master_copy_shard_placement
+citus_copy_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
@@ -60,7 +60,7 @@ nodeport|success|result
 (2 rows)
 
 
-starting permutation: s1-load-cache s1-insert s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-delete s2-commit s1-commit s2-print-content
+starting permutation: s1-load-cache s1-insert s1-begin s1-select s2-delete-inactive s2-begin s2-repair-placement s1-delete s2-commit s1-commit s2-print-content
 step s1-load-cache:
  TRUNCATE test_repair_placement_vs_modification;
 
@@ -79,16 +79,16 @@ count
     1
 (1 row)
 
-step s2-set-placement-inactive:
- UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+step s2-delete-inactive:
+ DELETE FROM pg_dist_shard_placement WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
 
 step s2-begin:
  BEGIN;
 
 step s2-repair-placement:
- SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+ SELECT citus_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, transfer_mode := 'block_writes');
 
-master_copy_shard_placement
+citus_copy_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
@@ -120,7 +120,7 @@ nodeport|success|result
 (2 rows)
 
 
-starting permutation: s1-load-cache s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-insert s2-commit s1-commit s2-print-content
+starting permutation: s1-load-cache s1-begin s1-select s2-delete-inactive s2-begin s2-repair-placement s1-insert s2-commit s1-commit s2-print-content
 step s1-load-cache:
  TRUNCATE test_repair_placement_vs_modification;
 
@@ -136,16 +136,16 @@ count
     0
 (1 row)
 
-step s2-set-placement-inactive:
- UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+step s2-delete-inactive:
+ DELETE FROM pg_dist_shard_placement WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
 
 step s2-begin:
  BEGIN;
 
 step s2-repair-placement:
- SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+ SELECT citus_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, transfer_mode := 'block_writes');
 
-master_copy_shard_placement
+citus_copy_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
@@ -177,7 +177,7 @@ nodeport|success|result
 (2 rows)
 
 
-starting permutation: s1-load-cache s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-copy s2-commit s1-commit s2-print-content
+starting permutation: s1-load-cache s1-begin s1-select s2-delete-inactive s2-begin s2-repair-placement s1-copy s2-commit s1-commit s2-print-content
 step s1-load-cache:
  TRUNCATE test_repair_placement_vs_modification;
 
@@ -193,16 +193,16 @@ count
     0
 (1 row)
 
-step s2-set-placement-inactive:
- UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+step s2-delete-inactive:
+ DELETE FROM pg_dist_shard_placement WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
 
 step s2-begin:
  BEGIN;
 
 step s2-repair-placement:
- SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+ SELECT citus_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, transfer_mode := 'block_writes');
 
-master_copy_shard_placement
+citus_copy_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
@@ -234,7 +234,7 @@ nodeport|success|result
 (2 rows)
 
 
-starting permutation: s1-load-cache s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-ddl s2-commit s1-commit s2-print-index-count
+starting permutation: s1-load-cache s1-begin s1-select s2-delete-inactive s2-begin s2-repair-placement s1-ddl s2-commit s1-commit s2-print-index-count
 step s1-load-cache:
  TRUNCATE test_repair_placement_vs_modification;
 
@@ -250,16 +250,16 @@ count
     0
 (1 row)
 
-step s2-set-placement-inactive:
- UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+step s2-delete-inactive:
+ DELETE FROM pg_dist_shard_placement WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
 
 step s2-begin:
  BEGIN;
 
 step s2-repair-placement:
- SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+ SELECT citus_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, transfer_mode := 'block_writes');
 
-master_copy_shard_placement
+citus_copy_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
@@ -291,7 +291,7 @@ nodeport|success|result
 (4 rows)
 
 
-starting permutation: s1-insert s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-update s2-commit s1-commit s2-print-content
+starting permutation: s1-insert s1-begin s1-select s2-delete-inactive s2-begin s2-repair-placement s1-update s2-commit s1-commit s2-print-content
 step s1-insert:
  INSERT INTO test_repair_placement_vs_modification VALUES (5, 10);
 
@@ -307,16 +307,16 @@ count
     1
 (1 row)
 
-step s2-set-placement-inactive:
- UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+step s2-delete-inactive:
+ DELETE FROM pg_dist_shard_placement WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
 
 step s2-begin:
  BEGIN;
 
 step s2-repair-placement:
- SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+ SELECT citus_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, transfer_mode := 'block_writes');
 
-master_copy_shard_placement
+citus_copy_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
@@ -348,7 +348,7 @@ nodeport|success|result
 (2 rows)
 
 
-starting permutation: s1-insert s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-delete s2-commit s1-commit s2-print-content
+starting permutation: s1-insert s1-begin s1-select s2-delete-inactive s2-begin s2-repair-placement s1-delete s2-commit s1-commit s2-print-content
 step s1-insert:
  INSERT INTO test_repair_placement_vs_modification VALUES (5, 10);
 
@@ -364,16 +364,16 @@ count
     1
 (1 row)
 
-step s2-set-placement-inactive:
- UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+step s2-delete-inactive:
+ DELETE FROM pg_dist_shard_placement WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
 
 step s2-begin:
  BEGIN;
 
 step s2-repair-placement:
- SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+ SELECT citus_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, transfer_mode := 'block_writes');
 
-master_copy_shard_placement
+citus_copy_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
@@ -405,7 +405,7 @@ nodeport|success|result
 (2 rows)
 
 
-starting permutation: s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-insert s2-commit s1-commit s2-print-content
+starting permutation: s1-begin s1-select s2-delete-inactive s2-begin s2-repair-placement s1-insert s2-commit s1-commit s2-print-content
 step s1-begin:
     BEGIN;
  SET LOCAL citus.select_opens_transaction_block TO off;
@@ -418,16 +418,16 @@ count
     0
 (1 row)
 
-step s2-set-placement-inactive:
- UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+step s2-delete-inactive:
+ DELETE FROM pg_dist_shard_placement WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
 
 step s2-begin:
  BEGIN;
 
 step s2-repair-placement:
- SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+ SELECT citus_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, transfer_mode := 'block_writes');
 
-master_copy_shard_placement
+citus_copy_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
@@ -459,7 +459,7 @@ nodeport|success|result
 (2 rows)
 
 
-starting permutation: s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-copy s2-commit s1-commit s2-print-content
+starting permutation: s1-begin s1-select s2-delete-inactive s2-begin s2-repair-placement s1-copy s2-commit s1-commit s2-print-content
 step s1-begin:
     BEGIN;
  SET LOCAL citus.select_opens_transaction_block TO off;
@@ -472,16 +472,16 @@ count
     0
 (1 row)
 
-step s2-set-placement-inactive:
- UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+step s2-delete-inactive:
+ DELETE FROM pg_dist_shard_placement WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
 
 step s2-begin:
  BEGIN;
 
 step s2-repair-placement:
- SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+ SELECT citus_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, transfer_mode := 'block_writes');
 
-master_copy_shard_placement
+citus_copy_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
@@ -513,7 +513,7 @@ nodeport|success|result
 (2 rows)
 
 
-starting permutation: s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-ddl s2-commit s1-commit s2-print-index-count
+starting permutation: s1-begin s1-select s2-delete-inactive s2-begin s2-repair-placement s1-ddl s2-commit s1-commit s2-print-index-count
 step s1-begin:
     BEGIN;
  SET LOCAL citus.select_opens_transaction_block TO off;
@@ -526,16 +526,16 @@ count
     0
 (1 row)
 
-step s2-set-placement-inactive:
- UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+step s2-delete-inactive:
+ DELETE FROM pg_dist_shard_placement WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
 
 step s2-begin:
  BEGIN;
 
 step s2-repair-placement:
- SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+ SELECT citus_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, transfer_mode := 'block_writes');
 
-master_copy_shard_placement
+citus_copy_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)

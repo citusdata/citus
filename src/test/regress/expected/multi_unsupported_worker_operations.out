@@ -302,7 +302,7 @@ SELECT count(*) FROM mx_table;
      5
 (1 row)
 
--- master_copy_shard_placement
+-- citus_copy_shard_placement
 SELECT logicalrelid, shardid AS testshardid, nodename, nodeport
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid = 'mx_table'::regclass AND nodeport=:worker_1_port
@@ -311,7 +311,7 @@ LIMIT 1 \gset
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
 INSERT INTO pg_dist_placement (groupid, shardid, shardstate, shardlength)
 VALUES (:worker_2_group, :testshardid, 3, 0);
-SELECT master_copy_shard_placement(:testshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT citus_copy_shard_placement(:testshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
 SELECT shardid, nodename, nodeport, shardstate

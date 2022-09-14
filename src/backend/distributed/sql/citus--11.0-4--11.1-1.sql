@@ -1,6 +1,9 @@
 #include "udfs/citus_locks/11.1-1.sql"
+#include "udfs/citus_tables/11.1-1.sql"
+#include "udfs/citus_shards/11.1-1.sql"
 #include "udfs/create_distributed_table_concurrently/11.1-1.sql"
 #include "udfs/citus_internal_delete_partition_metadata/11.1-1.sql"
+#include "udfs/citus_copy_shard_placement/11.1-1.sql"
 
 DROP FUNCTION pg_catalog.worker_create_schema(bigint,text);
 DROP FUNCTION pg_catalog.worker_cleanup_job_schema_cache();
@@ -167,3 +170,7 @@ GRANT SELECT ON pg_catalog.pg_dist_background_task_depend TO PUBLIC;
 
 #include "udfs/citus_job_wait/11.1-1.sql"
 #include "udfs/citus_job_cancel/11.1-1.sql"
+#include "udfs/citus_rebalance_start/11.1-1.sql"
+#include "udfs/citus_rebalance_stop/11.1-1.sql"
+#include "udfs/citus_rebalance_wait/11.1-1.sql"
+#include "udfs/get_rebalance_progress/11.1-1.sql"

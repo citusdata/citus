@@ -35,7 +35,7 @@ ORDER BY 1;
  function citus_cleanup_orphaned_shards()
  function citus_conninfo_cache_invalidate()
  function citus_coordinator_nodeid()
- function citus_copy_shard_placement(bigint,text,integer,text,integer,boolean,citus.shard_transfer_mode)
+ function citus_copy_shard_placement(bigint,text,integer,text,integer,citus.shard_transfer_mode)
  function citus_create_restore_point(text)
  function citus_disable_node(text,integer,boolean)
  function citus_dist_local_group_cache_invalidate()
@@ -90,6 +90,9 @@ ORDER BY 1;
  function citus_pid_for_gpid(bigint)
  function citus_prepare_pg_upgrade()
  function citus_query_stats()
+ function citus_rebalance_start(name,boolean,citus.shard_transfer_mode)
+ function citus_rebalance_stop()
+ function citus_rebalance_wait()
  function citus_relation_size(regclass)
  function citus_remote_connection_stats()
  function citus_remove_node(text,integer)
@@ -283,5 +286,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(275 rows)
+(278 rows)
 

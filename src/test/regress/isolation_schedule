@@ -26,7 +26,6 @@ test: isolation_citus_dist_activity
 test: isolation_remove_coordinator
 
 test: isolation_insert_select_repartition
-test: isolation_dml_vs_repair
 test: isolation_copy_placement_vs_copy_placement
 
 test: isolation_concurrent_dml

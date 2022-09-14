@@ -58,10 +58,24 @@ step "s1-shard-move-c1-block-writes"
 	SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
 }
 
+step "s1-shard-copy-c1-block-writes"
+{
+	BEGIN;
+	UPDATE pg_dist_partition SET repmodel = 'c' WHERE logicalrelid IN ('colocated1', 'colocated2');
+	SELECT citus_copy_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, transfer_mode:='block_writes');
+}
+
 step "s1-shard-move-c1-online"
 {
 	BEGIN;
 	SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='force_logical');
+}
+
+step "s1-shard-copy-c1-online"
+{
+	BEGIN;
+	UPDATE pg_dist_partition SET repmodel = 'c' WHERE logicalrelid IN ('colocated1', 'colocated2');
+	SELECT citus_copy_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, transfer_mode:='force_logical');
 }
 
 step "s1-commit"
@@ -156,7 +170,8 @@ step "s7-get-progress"
 		targetname,
 		targetport,
 		target_shard_size,
-		progress
+		progress,
+		operation_type
 	FROM get_rebalance_progress();
 }
 
@@ -188,10 +203,15 @@ permutation "s7-grab-lock" "s1-shard-move-c1-online" "s7-get-progress" "s7-relea
 permutation "s2-lock-1-start" "s1-shard-move-c1-block-writes" "s7-get-progress" "s2-unlock-1-start" "s1-commit" "s7-get-progress" "enable-deferred-drop"
 permutation "s7-grab-lock" "s1-shard-move-c1-block-writes" "s7-get-progress" "s7-release-lock" "s1-commit" "s7-get-progress" "enable-deferred-drop"
 
+// blocking shard copy
+permutation "s2-lock-1-start" "s1-shard-copy-c1-block-writes" "s7-get-progress" "s2-unlock-1-start" "s1-commit"
+
 // online shard move
 permutation "s6-acquire-advisory-lock" "s1-shard-move-c1-online" "s7-get-progress" "s6-release-advisory-lock" "s1-commit" "s7-get-progress" "enable-deferred-drop"
 permutation "s7-grab-lock" "s1-shard-move-c1-online" "s7-get-progress" "s7-release-lock" "s1-commit" "s7-get-progress" "enable-deferred-drop"
 
+// online shard copy
+permutation "s6-acquire-advisory-lock" "s1-shard-copy-c1-online" "s7-get-progress" "s6-release-advisory-lock" "s1-commit"
 
 // parallel blocking shard move
 permutation "s2-lock-1-start" "s1-shard-move-c1-block-writes" "s4-shard-move-sep-block-writes" "s7-get-progress" "s2-unlock-1-start" "s1-commit" "s4-commit" "s7-get-progress" "enable-deferred-drop"

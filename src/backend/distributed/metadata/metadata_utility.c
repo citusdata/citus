@@ -2725,6 +2725,79 @@ GetNextBackgroundTaskTaskId(void)
 
 
 /*
+ * HasNonTerminalJobOfType returns true if there is a job of a given type that is not in
+ * its terminal state.
+ *
+ * Some jobs would want a single instance to be able to run at once. Before submitting a
+ * new job if could see if there is a job of their type already executing.
+ *
+ * If a job is found the options jobIdOut is populated with the jobId.
+ */
+bool
+HasNonTerminalJobOfType(const char *jobType, int64 *jobIdOut)
+{
+	Relation pgDistBackgroundJob =
+		table_open(DistBackgroundJobRelationId(), AccessShareLock);
+
+	/* find any job in states listed here */
+	BackgroundJobStatus jobStatus[] = {
+		BACKGROUND_JOB_STATUS_RUNNING,
+		BACKGROUND_JOB_STATUS_CANCELLING,
+		BACKGROUND_JOB_STATUS_FAILING,
+		BACKGROUND_JOB_STATUS_SCHEDULED
+	};
+
+	NameData jobTypeName = { 0 };
+	namestrcpy(&jobTypeName, jobType);
+
+	bool foundJob = false;
+	for (int i = 0; !foundJob && i < lengthof(jobStatus); i++)
+	{
+		ScanKeyData scanKey[2] = { 0 };
+		const bool indexOK = true;
+
+		/* pg_dist_background_job.status == jobStatus[i] */
+		ScanKeyInit(&scanKey[0], Anum_pg_dist_background_job_state,
+					BTEqualStrategyNumber, F_OIDEQ,
+					ObjectIdGetDatum(BackgroundJobStatusOid(jobStatus[i])));
+
+		/* pg_dist_background_job.job_type == jobType */
+		ScanKeyInit(&scanKey[1], Anum_pg_dist_background_job_job_type,
+					BTEqualStrategyNumber, F_NAMEEQ,
+					NameGetDatum(&jobTypeName));
+
+		SysScanDesc scanDescriptor =
+			systable_beginscan(pgDistBackgroundJob,
+							   InvalidOid,     /* TODO use an actual index here */
+							   indexOK, NULL, lengthof(scanKey), scanKey);
+
+		HeapTuple taskTuple = NULL;
+		if (HeapTupleIsValid(taskTuple = systable_getnext(scanDescriptor)))
+		{
+			foundJob = true;
+
+			if (jobIdOut)
+			{
+				Datum values[Natts_pg_dist_background_job] = { 0 };
+				bool isnull[Natts_pg_dist_background_job] = { 0 };
+
+				TupleDesc tupleDesc = RelationGetDescr(pgDistBackgroundJob);
+				heap_deform_tuple(taskTuple, tupleDesc, values, isnull);
+
+				*jobIdOut = DatumGetInt64(values[Anum_pg_dist_background_job_job_id - 1]);
+			}
+		}
+
+		systable_endscan(scanDescriptor);
+	}
+
+	table_close(pgDistBackgroundJob, NoLock);
+
+	return foundJob;
+}
+
+
+/*
  * CreateBackgroundJob is a helper function to insert a new Background Job into Citus'
  * catalog. After inserting the new job's metadataa into the catalog it returns the job_id
  * assigned to the new job. This is typically used to associate new tasks with the newly
@@ -3949,7 +4022,7 @@ CancelTasksForJob(int64 jobid)
 		}
 
 		/* make sure the current user has the rights to cancel this task */
-		Oid taskOwner = DatumGetObjectId(values[Anum_pg_dist_background_task_owner]);
+		Oid taskOwner = DatumGetObjectId(values[Anum_pg_dist_background_task_owner - 1]);
 		if (superuser_arg(taskOwner) && !superuser())
 		{
 			/* must be a superuser to cancel tasks owned by superuser */

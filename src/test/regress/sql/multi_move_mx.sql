@@ -54,9 +54,9 @@ ORDER BY
 	logicalrelid, shardid;
 
 \c - - - :master_port
--- Check that master_copy_shard_placement cannot be run with MX tables
+-- Check that citus_copy_shard_placement cannot be run with MX tables
 SELECT
-	master_copy_shard_placement(shardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port, false, 'force_logical')
+	citus_copy_shard_placement(shardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical')
 FROM
 	pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE
@@ -86,23 +86,7 @@ LIMIT 1;
 ALTER SYSTEM SET citus.node_conninfo TO 'sslrootcert=/non/existing/certificate.crt sslmode=verify-full';
 SELECT pg_reload_conf();
 
-\c - - - :master_port
-
-BEGIN;
-SELECT
-	master_move_shard_placement(shardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical')
-FROM
-	pg_dist_shard NATURAL JOIN pg_dist_shard_placement
-WHERE
-	logicalrelid = 'mx_table_1'::regclass
-	AND nodeport = :worker_1_port
-ORDER BY
-	shardid
-LIMIT 1;
-ROLLBACK;
-
 \c - - - :worker_2_port
-
 -- before reseting citus.node_conninfo, check that CREATE SUBSCRIPTION
 -- with citus_use_authinfo takes into account node_conninfo even when
 -- one of host, port, or user parameters are not specified.
@@ -146,7 +130,7 @@ ORDER BY
 
 -- Check that the UDFs cannot be called from the workers
 SELECT
-	master_copy_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, false, 'force_logical')
+	citus_copy_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'force_logical')
 FROM
 	pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE

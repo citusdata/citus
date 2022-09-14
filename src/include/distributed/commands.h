@@ -459,6 +459,13 @@ extern List * PostprocessAlterSequenceSchemaStmt(Node *node, const char *querySt
 extern List * PreprocessAlterSequenceOwnerStmt(Node *node, const char *queryString,
 											   ProcessUtilityContext processUtilityContext);
 extern List * PostprocessAlterSequenceOwnerStmt(Node *node, const char *queryString);
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+extern List * PreprocessAlterSequencePersistenceStmt(Node *node, const char *queryString,
+													 ProcessUtilityContext
+													 processUtilityContext);
+extern List * PreprocessSequenceAlterTableStmt(Node *node, const char *queryString,
+											   ProcessUtilityContext processUtilityContext);
+#endif
 extern List * PreprocessDropSequenceStmt(Node *node, const char *queryString,
 										 ProcessUtilityContext processUtilityContext);
 extern List * SequenceDropStmtObjectAddress(Node *stmt, bool missing_ok, bool
@@ -474,6 +481,10 @@ extern List * AlterSequenceSchemaStmtObjectAddress(Node *node, bool missing_ok, 
 												   isPostprocess);
 extern List * AlterSequenceOwnerStmtObjectAddress(Node *node, bool missing_ok, bool
 												  isPostprocess);
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+extern List * AlterSequencePersistenceStmtObjectAddress(Node *node, bool missing_ok, bool
+														isPostprocess);
+#endif
 extern List * RenameSequenceStmtObjectAddress(Node *node, bool missing_ok, bool
 											  isPostprocess);
 extern void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);

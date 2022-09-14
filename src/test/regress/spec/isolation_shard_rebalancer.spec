@@ -44,6 +44,12 @@ step "s1-replicate-nc"
 	select replicate_table_shards('non_colocated');
 }
 
+step "s1-rebalance-all"
+{
+    BEGIN;
+	select rebalance_table_shards();
+}
+
 step "s1-commit"
 {
 	COMMIT;
@@ -82,6 +88,11 @@ step "s2-drain"
 	select master_drain_node('localhost', 57638);
 }
 
+step "s2-citus-rebalance-start"
+{
+    SELECT 1 FROM citus_rebalance_start();
+}
+
 
 // disallowed because it's the same table
 permutation "s1-rebalance-nc" "s2-rebalance-nc" "s1-commit"
@@ -112,3 +123,6 @@ permutation "s1-rebalance-c1" "s2-drain" "s1-commit"
 permutation "s1-replicate-c1" "s2-drain" "s1-commit"
 permutation "s1-rebalance-nc" "s2-drain" "s1-commit"
 permutation "s1-replicate-nc" "s2-drain" "s1-commit"
+
+// disallow the background rebalancer to run when rebalance_table_shard rung
+permutation "s1-rebalance-all" "s2-citus-rebalance-start" "s1-commit"

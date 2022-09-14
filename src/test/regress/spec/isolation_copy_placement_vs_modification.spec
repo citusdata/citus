@@ -73,14 +73,14 @@ step "s2-begin"
 	BEGIN;
 }
 
-step "s2-set-placement-inactive"
+step "s2-delete-inactive"
 {
-	UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
+	DELETE FROM pg_dist_shard_placement WHERE shardid IN (SELECT * FROM selected_shard) AND nodeport = 57638;
 }
 
 step "s2-repair-placement"
 {
-	SELECT master_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+	SELECT citus_copy_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, transfer_mode := 'block_writes');
 }
 
 step "s2-commit"
@@ -113,16 +113,16 @@ step "s2-print-index-count"
 // repair a placement while concurrently performing an update/delete/insert/copy
 // note that at some points we use "s1-select" just after "s1-begin" given that BEGIN
 // may invalidate cache at certain cases
-permutation "s1-load-cache" "s1-insert" "s1-begin" "s1-select" "s2-set-placement-inactive" "s2-begin" "s2-repair-placement" "s1-update" "s2-commit" "s1-commit" "s2-print-content"
-permutation "s1-load-cache" "s1-insert" "s1-begin" "s1-select" "s2-set-placement-inactive" "s2-begin" "s2-repair-placement" "s1-delete" "s2-commit" "s1-commit" "s2-print-content"
-permutation "s1-load-cache" "s1-begin" "s1-select" "s2-set-placement-inactive" "s2-begin" "s2-repair-placement" "s1-insert" "s2-commit" "s1-commit" "s2-print-content"
-permutation "s1-load-cache" "s1-begin" "s1-select" "s2-set-placement-inactive" "s2-begin" "s2-repair-placement" "s1-copy" "s2-commit" "s1-commit" "s2-print-content"
-permutation "s1-load-cache" "s1-begin" "s1-select" "s2-set-placement-inactive" "s2-begin" "s2-repair-placement" "s1-ddl" "s2-commit" "s1-commit" "s2-print-index-count"
+permutation "s1-load-cache" "s1-insert" "s1-begin" "s1-select" "s2-delete-inactive" "s2-begin" "s2-repair-placement" "s1-update" "s2-commit" "s1-commit" "s2-print-content"
+permutation "s1-load-cache" "s1-insert" "s1-begin" "s1-select" "s2-delete-inactive" "s2-begin" "s2-repair-placement" "s1-delete" "s2-commit" "s1-commit" "s2-print-content"
+permutation "s1-load-cache" "s1-begin" "s1-select" "s2-delete-inactive" "s2-begin" "s2-repair-placement" "s1-insert" "s2-commit" "s1-commit" "s2-print-content"
+permutation "s1-load-cache" "s1-begin" "s1-select" "s2-delete-inactive" "s2-begin" "s2-repair-placement" "s1-copy" "s2-commit" "s1-commit" "s2-print-content"
+permutation "s1-load-cache" "s1-begin" "s1-select" "s2-delete-inactive" "s2-begin" "s2-repair-placement" "s1-ddl" "s2-commit" "s1-commit" "s2-print-index-count"
 
 
 // the same tests without loading the cache at first
-permutation "s1-insert" "s1-begin" "s1-select" "s2-set-placement-inactive" "s2-begin" "s2-repair-placement" "s1-update" "s2-commit" "s1-commit" "s2-print-content"
-permutation "s1-insert" "s1-begin" "s1-select" "s2-set-placement-inactive" "s2-begin" "s2-repair-placement" "s1-delete" "s2-commit" "s1-commit" "s2-print-content"
-permutation "s1-begin" "s1-select" "s2-set-placement-inactive" "s2-begin" "s2-repair-placement" "s1-insert" "s2-commit" "s1-commit" "s2-print-content"
-permutation "s1-begin" "s1-select" "s2-set-placement-inactive" "s2-begin" "s2-repair-placement" "s1-copy" "s2-commit" "s1-commit" "s2-print-content"
-permutation "s1-begin" "s1-select" "s2-set-placement-inactive" "s2-begin" "s2-repair-placement" "s1-ddl" "s2-commit" "s1-commit" "s2-print-index-count"
+permutation "s1-insert" "s1-begin" "s1-select" "s2-delete-inactive" "s2-begin" "s2-repair-placement" "s1-update" "s2-commit" "s1-commit" "s2-print-content"
+permutation "s1-insert" "s1-begin" "s1-select" "s2-delete-inactive" "s2-begin" "s2-repair-placement" "s1-delete" "s2-commit" "s1-commit" "s2-print-content"
+permutation "s1-begin" "s1-select" "s2-delete-inactive" "s2-begin" "s2-repair-placement" "s1-insert" "s2-commit" "s1-commit" "s2-print-content"
+permutation "s1-begin" "s1-select" "s2-delete-inactive" "s2-begin" "s2-repair-placement" "s1-copy" "s2-commit" "s1-commit" "s2-print-content"
+permutation "s1-begin" "s1-select" "s2-delete-inactive" "s2-begin" "s2-repair-placement" "s1-ddl" "s2-commit" "s1-commit" "s2-print-index-count"

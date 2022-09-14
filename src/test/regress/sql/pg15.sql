@@ -298,6 +298,250 @@ ALTER TABLE copy_test2 RENAME COLUMN data_ TO data;
 COPY copy_test2 FROM :'temp_dir''copy_test.txt' WITH ( HEADER match, FORMAT text);
 SELECT count(*)=100 FROM copy_test2;
 
+--
+-- In PG15, unlogged sequences are supported
+-- we support this for distributed sequences as well
+--
+
+CREATE SEQUENCE seq1;
+CREATE UNLOGGED SEQUENCE "pg15"."seq 2";
+
+-- first, test that sequence persistence is distributed correctly
+-- when the sequence is distributed
+
+SELECT relname,
+       CASE relpersistence
+            WHEN 'u' THEN 'unlogged'
+            WHEN 'p' then 'logged'
+            ELSE 'unknown'
+        END AS logged_info
+FROM pg_class
+WHERE relname IN ('seq1', 'seq 2') AND relnamespace='pg15'::regnamespace
+ORDER BY relname;
+
+CREATE TABLE "seq test"(a int, b int default nextval ('seq1'), c int default nextval ('"pg15"."seq 2"'));
+
+SELECT create_distributed_table('"pg15"."seq test"','a');
+
+\c - - - :worker_1_port
+SELECT relname,
+       CASE relpersistence
+            WHEN 'u' THEN 'unlogged'
+            WHEN 'p' then 'logged'
+            ELSE 'unknown'
+        END AS logged_info
+FROM pg_class
+WHERE relname IN ('seq1', 'seq 2') AND relnamespace='pg15'::regnamespace
+ORDER BY relname;
+
+\c - - - :master_port
+SET search_path TO pg15;
+
+-- now, check that we can change sequence persistence using ALTER SEQUENCE
+
+ALTER SEQUENCE seq1 SET UNLOGGED;
+-- use IF EXISTS
+ALTER SEQUENCE IF EXISTS "seq 2" SET LOGGED;
+-- check non-existent sequence as well
+ALTER SEQUENCE seq_non_exists SET LOGGED;
+ALTER SEQUENCE IF EXISTS seq_non_exists SET LOGGED;
+
+SELECT relname,
+       CASE relpersistence
+            WHEN 'u' THEN 'unlogged'
+            WHEN 'p' then 'logged'
+            ELSE 'unknown'
+        END AS logged_info
+FROM pg_class
+WHERE relname IN ('seq1', 'seq 2') AND relnamespace='pg15'::regnamespace
+ORDER BY relname;
+
+\c - - - :worker_1_port
+SELECT relname,
+       CASE relpersistence
+            WHEN 'u' THEN 'unlogged'
+            WHEN 'p' then 'logged'
+            ELSE 'unknown'
+        END AS logged_info
+FROM pg_class
+WHERE relname IN ('seq1', 'seq 2') AND relnamespace='pg15'::regnamespace
+ORDER BY relname;
+
+\c - - - :master_port
+SET search_path TO pg15;
+
+-- now, check that we can change sequence persistence using ALTER TABLE
+ALTER TABLE seq1 SET LOGGED;
+ALTER TABLE "seq 2" SET UNLOGGED;
+
+SELECT relname,
+       CASE relpersistence
+            WHEN 'u' THEN 'unlogged'
+            WHEN 'p' then 'logged'
+            ELSE 'unknown'
+        END AS logged_info
+FROM pg_class
+WHERE relname IN ('seq1', 'seq 2') AND relnamespace='pg15'::regnamespace
+ORDER BY relname;
+
+\c - - - :worker_1_port
+SELECT relname,
+       CASE relpersistence
+            WHEN 'u' THEN 'unlogged'
+            WHEN 'p' then 'logged'
+            ELSE 'unknown'
+        END AS logged_info
+FROM pg_class
+WHERE relname IN ('seq1', 'seq 2') AND relnamespace='pg15'::regnamespace
+ORDER BY relname;
+
+\c - - - :master_port
+SET search_path TO pg15;
+
+-- An identity/serial sequence now automatically gets and follows the
+-- persistence level (logged/unlogged) of its owning table.
+-- Test this behavior as well
+
+CREATE UNLOGGED TABLE test(a bigserial, b bigserial);
+SELECT create_distributed_table('test', 'a');
+
+-- show that associated sequence is unlooged
+SELECT relname,
+       CASE relpersistence
+            WHEN 'u' THEN 'unlogged'
+            WHEN 'p' then 'logged'
+            ELSE 'unknown'
+        END AS logged_info
+FROM pg_class
+WHERE relname IN ('test_a_seq', 'test_b_seq') AND relnamespace='pg15'::regnamespace
+ORDER BY relname;
+
+\c - - - :worker_1_port
+SELECT relname,
+       CASE relpersistence
+            WHEN 'u' THEN 'unlogged'
+            WHEN 'p' then 'logged'
+            ELSE 'unknown'
+        END AS logged_info
+FROM pg_class
+WHERE relname IN ('test_a_seq', 'test_b_seq') AND relnamespace='pg15'::regnamespace
+ORDER BY relname;
+
+\c - - - :master_port
+SET search_path TO pg15;
+
+-- allow foreign key columns to have SET NULL/DEFAULT on column basis
+-- currently only reference tables can support that
+CREATE TABLE PKTABLE (tid int, id int, PRIMARY KEY (tid, id));
+CREATE TABLE FKTABLE (
+  tid int, id int,
+  fk_id_del_set_null int,
+  fk_id_del_set_default int DEFAULT 0,
+  FOREIGN KEY (tid, fk_id_del_set_null) REFERENCES PKTABLE ON DELETE SET NULL (fk_id_del_set_null),
+  FOREIGN KEY (tid, fk_id_del_set_default) REFERENCES PKTABLE ON DELETE SET DEFAULT (fk_id_del_set_default)
+);
+
+SELECT create_reference_table('PKTABLE');
+
+-- ok, Citus could relax this constraint in the future
+SELECT create_distributed_table('FKTABLE', 'tid');
+
+-- with reference tables it should all work fine
+SELECT create_reference_table('FKTABLE');
+
+-- show that the definition is expected
+SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'fktable'::regclass::oid ORDER BY oid;
+
+\c - - - :worker_1_port
+
+SET search_path TO pg15;
+
+-- show that the definition is expected on the worker as well
+SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'fktable'::regclass::oid ORDER BY oid;
+
+-- also, make sure that it works as expected
+INSERT INTO PKTABLE VALUES (1, 0), (1, 1), (1, 2);
+INSERT INTO FKTABLE VALUES
+  (1, 1, 1, NULL),
+  (1, 2, NULL, 2);
+DELETE FROM PKTABLE WHERE id = 1 OR id = 2;
+SELECT * FROM FKTABLE ORDER BY id;
+
+\c - - - :master_port
+SET search_path TO pg15;
+
+-- test NULL NOT DISTINCT clauses
+-- set the next shard id so that the error messages are easier to maintain
+SET citus.next_shard_id TO 960050;
+CREATE TABLE null_distinct_test(id INT, c1 INT, c2 INT, c3 VARCHAR(10)) ;
+SELECT create_distributed_table('null_distinct_test', 'id');
+
+CREATE UNIQUE INDEX idx1_null_distinct_test ON null_distinct_test(id, c1) NULLS DISTINCT ;
+CREATE UNIQUE INDEX idx2_null_distinct_test ON null_distinct_test(id, c2) NULLS NOT DISTINCT ;
+
+-- populate with some initial data
+INSERT INTO null_distinct_test VALUES (1, 1, 1, 'data1') ;
+INSERT INTO null_distinct_test VALUES (1, 2, NULL, 'data2') ;
+INSERT INTO null_distinct_test VALUES (1, NULL, 3, 'data3') ;
+
+-- should fail as we already have a null value in c2 column
+INSERT INTO null_distinct_test VALUES (1, NULL, NULL, 'data4') ;
+INSERT INTO null_distinct_test VALUES (1, NULL, NULL, 'data4') ON CONFLICT DO NOTHING;
+INSERT INTO null_distinct_test VALUES (1, NULL, NULL, 'data4') ON CONFLICT (id, c2) DO UPDATE SET c2=100 RETURNING *;
+
+-- should not fail as null values are distinct for c1 column
+INSERT INTO null_distinct_test VALUES (1, NULL, 5, 'data5') ;
+
+-- test that unique constraints also work properly
+-- since we have multiple (1,NULL) pairs for columns (id,c1) the first will work, second will fail
+ALTER TABLE null_distinct_test ADD CONSTRAINT uniq_distinct_c1 UNIQUE NULLS DISTINCT (id,c1);
+ALTER TABLE null_distinct_test ADD CONSTRAINT uniq_c1 UNIQUE NULLS NOT DISTINCT (id,c1);
+
+-- show all records in the table for fact checking
+SELECT * FROM null_distinct_test ORDER BY c3;
+
+-- test unique nulls not distinct constraints on a reference table
+CREATE TABLE reference_uniq_test (
+    x int, y int,
+    UNIQUE NULLS NOT DISTINCT (x, y)
+);
+SELECT create_reference_table('reference_uniq_test');
+INSERT INTO reference_uniq_test VALUES (1, 1), (1, NULL), (NULL, 1);
+-- the following will fail
+INSERT INTO reference_uniq_test VALUES (1, NULL);
+
+--
+-- PG15 introduces CLUSTER command support for partitioned tables. However, similar to
+-- CLUSTER commands with no table name, these queries can not be run inside a transaction
+-- block. Therefore, we do not propagate such queries.
+--
+
+-- Should print a warning that it will not be propagated to worker nodes.
+CLUSTER sale USING sale_pk;
+
+-- verify that we can cluster the partition tables only when replication factor is 1
+CLUSTER sale_newyork USING sale_newyork_pkey;
+
+-- create a new partitioned table with shard replicaiton factor 1
+SET citus.shard_replication_factor = 1;
+CREATE TABLE sale_repl_factor_1 ( LIKE sale )
+    PARTITION BY list (state_code);
+
+ALTER TABLE sale_repl_factor_1 ADD CONSTRAINT sale_repl_factor_1_pk PRIMARY KEY (state_code, sale_date);
+
+CREATE TABLE sale_newyork_repl_factor_1 PARTITION OF sale_repl_factor_1 FOR VALUES IN ('NY');
+CREATE TABLE sale_california_repl_factor_1 PARTITION OF sale_repl_factor_1 FOR VALUES IN ('CA');
+
+SELECT create_distributed_table('sale_repl_factor_1', 'state_code');
+
+-- Should print a warning that it will not be propagated to worker nodes.
+CLUSTER sale_repl_factor_1 USING sale_repl_factor_1_pk;
+
+-- verify that we can still cluster the partition tables now since replication factor is 1
+CLUSTER sale_newyork_repl_factor_1 USING sale_newyork_repl_factor_1_pkey;
+
 -- Clean up
+RESET citus.shard_replication_factor;
 \set VERBOSITY terse
+SET client_min_messages TO ERROR;
 DROP SCHEMA pg15 CASCADE;

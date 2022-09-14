@@ -44,9 +44,9 @@
 #include "distributed/priority.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/remote_commands.h"
-#include "distributed/repair_shards.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_rebalancer.h"
+#include "distributed/shard_transfer.h"
 #include "distributed/version_compat.h"
 #include "nodes/bitmapset.h"
 #include "parser/scansup.h"
@@ -114,31 +114,20 @@ bool PlacementMovedUsingLogicalReplicationInTX = false;
 static int logicalReplicationProgressReportTimeout = 10 * 1000;
 
 
-static void CreateForeignKeyConstraints(List *logicalRepTargetList);
 static List * PrepareReplicationSubscriptionList(List *shardList);
 static List * GetReplicaIdentityCommandListForShard(Oid relationId, uint64 shardId);
 static List * GetIndexCommandListForShardBackingReplicaIdentity(Oid relationId,
 																uint64 shardId);
-static void CreatePostLogicalReplicationDataLoadObjects(List *shardList,
-														char *targetNodeName,
-														int32 targetNodePort);
-static void ExecuteCreateIndexCommands(List *shardList, char *targetNodeName,
-									   int targetNodePort);
-static void ExecuteCreateConstraintsBackedByIndexCommands(List *shardList,
-														  char *targetNodeName,
-														  int targetNodePort);
+static void CreatePostLogicalReplicationDataLoadObjects(List *logicalRepTargetList,
+														LogicalRepType type);
+static void ExecuteCreateIndexCommands(List *logicalRepTargetList);
+static void ExecuteCreateConstraintsBackedByIndexCommands(List *logicalRepTargetList);
 static List * ConvertNonExistingPlacementDDLCommandsToTasks(List *shardCommandList,
-															uint64 shardId,
 															char *targetNodeName,
 															int targetNodePort);
-static void ExecuteClusterOnCommands(List *shardList, char *targetNodeName,
-									 int targetNodePort);
-static void ExecuteCreateIndexStatisticsCommands(List *shardList, char *targetNodeName,
-												 int targetNodePort);
-static void ExecuteRemainingPostLoadTableCommands(List *shardList, char *targetNodeName,
-												  int targetNodePort);
-static void CreatePartitioningHierarchy(List *shardList, char *targetNodeName,
-										int targetNodePort);
+static void ExecuteClusterOnCommands(List *logicalRepTargetList);
+static void ExecuteCreateIndexStatisticsCommands(List *logicalRepTargetList);
+static void ExecuteRemainingPostLoadTableCommands(List *logicalRepTargetList);
 static char * escape_param_str(const char *str);
 static XLogRecPtr GetRemoteLSN(MultiConnection *connection, char *command);
 static bool RelationSubscriptionsAreReady(
@@ -208,10 +197,6 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 	 */
 	ClaimConnectionExclusively(sourceConnection);
 
-
-	MultiConnection *sourceReplicationConnection =
-		GetReplicationConnection(sourceNodeName, sourceNodePort);
-
 	WorkerNode *sourceNode = FindWorkerNode(sourceNodeName, sourceNodePort);
 	WorkerNode *targetNode = FindWorkerNode(targetNodeName, targetNodePort);
 
@@ -229,6 +214,9 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 
 	PG_TRY();
 	{
+		MultiConnection *sourceReplicationConnection =
+			GetReplicationConnection(sourceConnection->hostname, sourceConnection->port);
+
 		/* set up the publication on the source and subscription on the target */
 		CreatePublications(sourceConnection, publicationInfoHash);
 		char *snapshot = CreateReplicationSlots(
@@ -239,7 +227,7 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 
 		CreateSubscriptions(
 			sourceConnection,
-			databaseName,
+			sourceConnection->database,
 			logicalRepTargetList);
 
 		/* only useful for isolation testing, see the function comment for the details */
@@ -256,77 +244,14 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		CloseConnection(sourceReplicationConnection);
 
 		/*
-		 * We have to create the primary key (or any other replica identity)
-		 * before the update/delete operations that are queued will be
-		 * replicated. Because if the replica identity does not exist on the
-		 * target, the replication would fail.
-		 *
-		 * So we it right after the initial data COPY, but before enabling the
-		 * susbcriptions. We do it at this latest possible moment, because its
-		 * much cheaper to build an index at once than to create it
-		 * incrementally. So this way we create the primary key index in one go
-		 * for all data from the initial COPY.
+		 * Start the replication and copy all data
 		 */
-		CreateReplicaIdentities(logicalRepTargetList);
-
-		/* Start applying the changes from the replication slots to catch up. */
-		EnableSubscriptions(logicalRepTargetList);
-
-		/*
-		 * The following check is a leftover from when used subscriptions with
-		 * copy_data=true. It's probably not really necessary anymore, but it
-		 * seemed like a nice check to keep. At least for debugging issues it
-		 * seems nice to report differences between the subscription never
-		 * becoming ready and the subscriber not applying WAL. It's also not
-		 * entirely clear if the catchup check handles the case correctly where
-		 * the subscription is not in the ready state yet, because so far it
-		 * never had to.
-		 */
-		WaitForAllSubscriptionsToBecomeReady(groupedLogicalRepTargetsHash);
-
-		/*
-		 * Wait until all the subscriptions are caught up to changes that
-		 * happened after the initial COPY on the shards.
-		 */
-		WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
-
-		/*
-		 * Now lets create the post-load objects, such as the indexes, constraints
-		 * and partitioning hierarchy. Once they are done, wait until the replication
-		 * catches up again. So we don't block writes too long.
-		 */
-		CreatePostLogicalReplicationDataLoadObjects(shardList, targetNodeName,
-													targetNodePort);
-		WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
-
-		/*
-		 * We're almost done, we'll block the writes to the shards that we're
-		 * replicating and expect all the subscription to catch up quickly
-		 * afterwards.
-		 *
-		 * Notice that although shards in partitioned relation are excluded from
-		 * logical replication, they are still locked against modification, and
-		 * foreign constraints are created on them too.
-		 */
-		BlockWritesToShardList(shardList);
-
-		WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
-
-		/*
-		 * We're creating the foreign constraints to reference tables after the
-		 * data is already replicated and all the necessary locks are acquired.
-		 *
-		 * We prefer to do it here because the placements of reference tables
-		 * are always valid, and any modification during the shard move would
-		 * cascade to the hash distributed tables' shards if we had created
-		 * the constraints earlier.
-		 */
-		CreateForeignKeyConstraints(logicalRepTargetList);
-
-		/* we're done, cleanup the publication and subscription */
-		DropSubscriptions(logicalRepTargetList);
-		DropReplicationSlots(sourceConnection, logicalRepTargetList);
-		DropPublications(sourceConnection, publicationInfoHash);
+		CompleteNonBlockingShardTransfer(shardList,
+										 sourceConnection,
+										 publicationInfoHash,
+										 logicalRepTargetList,
+										 groupedLogicalRepTargetsHash,
+										 SHARD_MOVE);
 
 		/*
 		 * We use these connections exclusively for subscription management,
@@ -402,6 +327,104 @@ CreateGroupedLogicalRepTargetsHash(List *logicalRepTargetList)
 			lappend(groupedLogicalRepTargets->logicalRepTargetList, target);
 	}
 	return logicalRepTargetsHash;
+}
+
+
+/*
+ * CompleteNonBlockingShardTransfer uses logical replication to apply the changes
+ * made on the source to the target. It also runs all DDL on the target shards
+ * that need to be run after the data copy.
+ *
+ * For shard splits it skips the partition hierarchy and foreign key creation
+ * though, since those need to happen after the metadata is updated.
+ */
+void
+CompleteNonBlockingShardTransfer(List *shardList,
+								 MultiConnection *sourceConnection,
+								 HTAB *publicationInfoHash,
+								 List *logicalRepTargetList,
+								 HTAB *groupedLogicalRepTargetsHash,
+								 LogicalRepType type)
+{
+	/*
+	 * We have to create the primary key (or any other replica identity)
+	 * before the update/delete operations that are queued will be
+	 * replicated. Because if the replica identity does not exist on the
+	 * target, the replication would fail.
+	 *
+	 * So we it right after the initial data COPY, but before enabling the
+	 * susbcriptions. We do it at this latest possible moment, because its
+	 * much cheaper to build an index at once than to create it
+	 * incrementally. So this way we create the primary key index in one go
+	 * for all data from the initial COPY.
+	 */
+	CreateReplicaIdentities(logicalRepTargetList);
+
+	/* Start applying the changes from the replication slots to catch up. */
+	EnableSubscriptions(logicalRepTargetList);
+
+	/*
+	 * The following check is a leftover from when used subscriptions with
+	 * copy_data=true. It's probably not really necessary anymore, but it
+	 * seemed like a nice check to keep. At least for debugging issues it
+	 * seems nice to report differences between the subscription never
+	 * becoming ready and the subscriber not applying WAL. It's also not
+	 * entirely clear if the catchup check handles the case correctly where
+	 * the subscription is not in the ready state yet, because so far it
+	 * never had to.
+	 */
+	WaitForAllSubscriptionsToBecomeReady(groupedLogicalRepTargetsHash);
+
+	/*
+	 * Wait until all the subscriptions are caught up to changes that
+	 * happened after the initial COPY on the shards.
+	 */
+	WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
+
+	/*
+	 * Now lets create the post-load objects, such as the indexes, constraints
+	 * and partitioning hierarchy. Once they are done, wait until the replication
+	 * catches up again. So we don't block writes too long.
+	 */
+	CreatePostLogicalReplicationDataLoadObjects(logicalRepTargetList, type);
+	WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
+
+
+	/* only useful for isolation testing, see the function comment for the details */
+	ConflictOnlyWithIsolationTesting();
+
+	/*
+	 * We're almost done, we'll block the writes to the shards that we're
+	 * replicating and expect all the subscription to catch up quickly
+	 * afterwards.
+	 *
+	 * Notice that although shards in partitioned relation are excluded from
+	 * logical replication, they are still locked against modification, and
+	 * foreign constraints are created on them too.
+	 */
+	BlockWritesToShardList(shardList);
+
+	WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
+
+	if (type != SHARD_SPLIT)
+	{
+		/*
+		 * We're creating the foreign constraints to reference tables after the
+		 * data is already replicated and all the necessary locks are acquired.
+		 *
+		 * We prefer to do it here because the placements of reference tables
+		 * are always valid, and any modification during the shard move would
+		 * cascade to the hash distributed tables' shards if we had created
+		 * the constraints earlier. The same is true for foreign keys between
+		 * tables owned by different users.
+		 */
+		CreateUncheckedForeignKeyConstraints(logicalRepTargetList);
+	}
+
+	/* we're done, cleanup the publication and subscription */
+	DropSubscriptions(logicalRepTargetList);
+	DropReplicationSlots(sourceConnection, logicalRepTargetList);
+	DropPublications(sourceConnection, publicationInfoHash);
 }
 
 
@@ -742,8 +765,8 @@ GetReplicaIdentityCommandListForShard(Oid relationId, uint64 shardId)
  * the objects that can be created after the data is moved with logical replication.
  */
 static void
-CreatePostLogicalReplicationDataLoadObjects(List *shardList, char *targetNodeName,
-											int32 targetNodePort)
+CreatePostLogicalReplicationDataLoadObjects(List *logicalRepTargetList,
+											LogicalRepType type)
 {
 	/*
 	 * We create indexes in 4 steps.
@@ -759,20 +782,25 @@ CreatePostLogicalReplicationDataLoadObjects(List *shardList, char *targetNodeNam
 	 *  table and setting the statistics of indexes, depends on the indexes being
 	 *  created. That's why the execution is divided into four distinct stages.
 	 */
-	ExecuteCreateIndexCommands(shardList, targetNodeName, targetNodePort);
-	ExecuteCreateConstraintsBackedByIndexCommands(shardList, targetNodeName,
-												  targetNodePort);
-	ExecuteClusterOnCommands(shardList, targetNodeName, targetNodePort);
-	ExecuteCreateIndexStatisticsCommands(shardList, targetNodeName, targetNodePort);
+	ExecuteCreateIndexCommands(logicalRepTargetList);
+	ExecuteCreateConstraintsBackedByIndexCommands(logicalRepTargetList);
+	ExecuteClusterOnCommands(logicalRepTargetList);
+	ExecuteCreateIndexStatisticsCommands(logicalRepTargetList);
 
 	/*
 	 * Once the indexes are created, there are few more objects like triggers and table
 	 * statistics that should be created after the data move.
 	 */
-	ExecuteRemainingPostLoadTableCommands(shardList, targetNodeName, targetNodePort);
+	ExecuteRemainingPostLoadTableCommands(logicalRepTargetList);
 
-	/* create partitioning hierarchy, if any */
-	CreatePartitioningHierarchy(shardList, targetNodeName, targetNodePort);
+	/*
+	 * Creating the partitioning hierarchy errors out in shard splits when
+	 */
+	if (type != SHARD_SPLIT)
+	{
+		/* create partitioning hierarchy, if any */
+		CreatePartitioningHierarchy(logicalRepTargetList);
+	}
 }
 
 
@@ -784,27 +812,31 @@ CreatePostLogicalReplicationDataLoadObjects(List *shardList, char *targetNodeNam
  * commands fail.
  */
 static void
-ExecuteCreateIndexCommands(List *shardList, char *targetNodeName, int targetNodePort)
+ExecuteCreateIndexCommands(List *logicalRepTargetList)
 {
 	List *taskList = NIL;
-	ListCell *shardCell = NULL;
-	foreach(shardCell, shardList)
+	LogicalRepTarget *target = NULL;
+	foreach_ptr(target, logicalRepTargetList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardCell);
-		Oid relationId = shardInterval->relationId;
+		ShardInterval *shardInterval = NULL;
+		foreach_ptr(shardInterval, target->newShards)
+		{
+			Oid relationId = shardInterval->relationId;
 
-		List *tableCreateIndexCommandList =
-			GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(relationId,
-																	   INCLUDE_CREATE_INDEX_STATEMENTS);
+			List *tableCreateIndexCommandList =
+				GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(relationId,
+																		   INCLUDE_CREATE_INDEX_STATEMENTS);
 
-		List *shardCreateIndexCommandList =
-			WorkerApplyShardDDLCommandList(tableCreateIndexCommandList,
-										   shardInterval->shardId);
-		List *taskListForShard =
-			ConvertNonExistingPlacementDDLCommandsToTasks(shardCreateIndexCommandList,
-														  shardInterval->shardId,
-														  targetNodeName, targetNodePort);
-		taskList = list_concat(taskList, taskListForShard);
+			List *shardCreateIndexCommandList =
+				WorkerApplyShardDDLCommandList(tableCreateIndexCommandList,
+											   shardInterval->shardId);
+			List *taskListForShard =
+				ConvertNonExistingPlacementDDLCommandsToTasks(
+					shardCreateIndexCommandList,
+					target->superuserConnection->hostname,
+					target->superuserConnection->port);
+			taskList = list_concat(taskList, taskListForShard);
+		}
 	}
 
 	/*
@@ -819,8 +851,7 @@ ExecuteCreateIndexCommands(List *shardList, char *targetNodeName, int targetNode
 	 */
 
 	ereport(DEBUG1, (errmsg("Creating post logical replication objects "
-							"(indexes) on node %s:%d", targetNodeName,
-							targetNodePort)));
+							"(indexes)")));
 
 	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, taskList,
 									  MaxAdaptiveExecutorPoolSize,
@@ -836,45 +867,47 @@ ExecuteCreateIndexCommands(List *shardList, char *targetNodeName, int targetNode
  * commands fail.
  */
 static void
-ExecuteCreateConstraintsBackedByIndexCommands(List *shardList, char *targetNodeName,
-											  int targetNodePort)
+ExecuteCreateConstraintsBackedByIndexCommands(List *logicalRepTargetList)
 {
 	ereport(DEBUG1, (errmsg("Creating post logical replication objects "
-							"(constraints backed by indexes) on node %s:%d",
-							targetNodeName,
-							targetNodePort)));
+							"(constraints backed by indexes)")));
 
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
 													   "CreateConstraintsBackedByIndexContext",
 													   ALLOCSET_DEFAULT_SIZES);
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
-	ListCell *shardCell = NULL;
-	foreach(shardCell, shardList)
+	LogicalRepTarget *target = NULL;
+	foreach_ptr(target, logicalRepTargetList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardCell);
-		Oid relationId = shardInterval->relationId;
-
-		List *tableCreateConstraintCommandList =
-			GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(relationId,
-																	   INCLUDE_CREATE_CONSTRAINT_STATEMENTS);
-
-		if (tableCreateConstraintCommandList == NIL)
+		ShardInterval *shardInterval = NULL;
+		foreach_ptr(shardInterval, target->newShards)
 		{
-			/* no constraints backed by indexes, skip */
+			Oid relationId = shardInterval->relationId;
+
+			List *tableCreateConstraintCommandList =
+				GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(relationId,
+																		   INCLUDE_CREATE_CONSTRAINT_STATEMENTS);
+
+			if (tableCreateConstraintCommandList == NIL)
+			{
+				/* no constraints backed by indexes, skip */
+				MemoryContextReset(localContext);
+				continue;
+			}
+
+			List *shardCreateConstraintCommandList =
+				WorkerApplyShardDDLCommandList(tableCreateConstraintCommandList,
+											   shardInterval->shardId);
+
+			char *tableOwner = TableOwner(shardInterval->relationId);
+			SendCommandListToWorkerOutsideTransaction(
+				target->superuserConnection->hostname,
+				target->superuserConnection->port,
+				tableOwner,
+				shardCreateConstraintCommandList);
 			MemoryContextReset(localContext);
-			continue;
 		}
-
-		List *shardCreateConstraintCommandList =
-			WorkerApplyShardDDLCommandList(tableCreateConstraintCommandList,
-										   shardInterval->shardId);
-
-		char *tableOwner = TableOwner(shardInterval->relationId);
-		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
-												  tableOwner,
-												  shardCreateConstraintCommandList);
-		MemoryContextReset(localContext);
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -890,7 +923,6 @@ ExecuteCreateConstraintsBackedByIndexCommands(List *shardList, char *targetNodeN
  */
 static List *
 ConvertNonExistingPlacementDDLCommandsToTasks(List *shardCommandList,
-											  uint64 shardId,
 											  char *targetNodeName,
 											  int targetNodePort)
 {
@@ -911,7 +943,6 @@ ConvertNonExistingPlacementDDLCommandsToTasks(List *shardCommandList,
 		SetPlacementNodeMetadata(taskPlacement, workerNode);
 
 		task->taskPlacementList = list_make1(taskPlacement);
-		task->anchorShardId = shardId;
 
 		taskList = lappend(taskList, task);
 		taskId++;
@@ -929,34 +960,36 @@ ConvertNonExistingPlacementDDLCommandsToTasks(List *shardCommandList,
  * is aborted.
  */
 static void
-ExecuteClusterOnCommands(List *shardList, char *targetNodeName, int targetNodePort)
+ExecuteClusterOnCommands(List *logicalRepTargetList)
 {
 	List *taskList = NIL;
-	ListCell *shardCell;
-	foreach(shardCell, shardList)
+	LogicalRepTarget *target = NULL;
+	foreach_ptr(target, logicalRepTargetList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardCell);
-		Oid relationId = shardInterval->relationId;
+		ShardInterval *shardInterval = NULL;
+		foreach_ptr(shardInterval, target->newShards)
+		{
+			Oid relationId = shardInterval->relationId;
 
-		List *tableAlterTableClusterOnCommandList =
-			GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(relationId,
-																	   INCLUDE_INDEX_CLUSTERED_STATEMENTS);
+			List *tableAlterTableClusterOnCommandList =
+				GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(relationId,
+																		   INCLUDE_INDEX_CLUSTERED_STATEMENTS);
 
-		List *shardAlterTableClusterOnCommandList =
-			WorkerApplyShardDDLCommandList(tableAlterTableClusterOnCommandList,
-										   shardInterval->shardId);
+			List *shardAlterTableClusterOnCommandList =
+				WorkerApplyShardDDLCommandList(tableAlterTableClusterOnCommandList,
+											   shardInterval->shardId);
 
-		List *taskListForShard =
-			ConvertNonExistingPlacementDDLCommandsToTasks(
-				shardAlterTableClusterOnCommandList,
-				shardInterval->shardId,
-				targetNodeName, targetNodePort);
-		taskList = list_concat(taskList, taskListForShard);
+			List *taskListForShard =
+				ConvertNonExistingPlacementDDLCommandsToTasks(
+					shardAlterTableClusterOnCommandList,
+					target->superuserConnection->hostname,
+					target->superuserConnection->port);
+			taskList = list_concat(taskList, taskListForShard);
+		}
 	}
 
 	ereport(DEBUG1, (errmsg("Creating post logical replication objects "
-							"(CLUSTER ON) on node %s:%d", targetNodeName,
-							targetNodePort)));
+							"(CLUSTER ON)")));
 
 	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, taskList,
 									  MaxAdaptiveExecutorPoolSize,
@@ -972,48 +1005,51 @@ ExecuteClusterOnCommands(List *shardList, char *targetNodeName, int targetNodePo
  * is aborted.
  */
 static void
-ExecuteCreateIndexStatisticsCommands(List *shardList, char *targetNodeName, int
-									 targetNodePort)
+ExecuteCreateIndexStatisticsCommands(List *logicalRepTargetList)
 {
 	ereport(DEBUG1, (errmsg("Creating post logical replication objects "
-							"(index statistics) on node %s:%d", targetNodeName,
-							targetNodePort)));
+							"(index statistics)")));
 
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
 													   "CreateIndexStatisticsContext",
 													   ALLOCSET_DEFAULT_SIZES);
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
-	ListCell *shardCell;
-	foreach(shardCell, shardList)
+	LogicalRepTarget *target = NULL;
+	foreach_ptr(target, logicalRepTargetList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardCell);
-		Oid relationId = shardInterval->relationId;
-
-		List *tableAlterIndexSetStatisticsCommandList =
-			GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(relationId,
-																	   INCLUDE_INDEX_STATISTICS_STATEMENTTS);
-		List *shardAlterIndexSetStatisticsCommandList =
-			WorkerApplyShardDDLCommandList(tableAlterIndexSetStatisticsCommandList,
-										   shardInterval->shardId);
-
-		if (shardAlterIndexSetStatisticsCommandList == NIL)
+		ShardInterval *shardInterval = NULL;
+		foreach_ptr(shardInterval, target->newShards)
 		{
-			/* no index statistics exists, skip */
+			Oid relationId = shardInterval->relationId;
+
+			List *tableAlterIndexSetStatisticsCommandList =
+				GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(relationId,
+																		   INCLUDE_INDEX_STATISTICS_STATEMENTTS);
+			List *shardAlterIndexSetStatisticsCommandList =
+				WorkerApplyShardDDLCommandList(tableAlterIndexSetStatisticsCommandList,
+											   shardInterval->shardId);
+
+			if (shardAlterIndexSetStatisticsCommandList == NIL)
+			{
+				/* no index statistics exists, skip */
+				MemoryContextReset(localContext);
+				continue;
+			}
+
+			/*
+			 * These remaining operations do not require significant resources, so no
+			 * need to create them in parallel.
+			 */
+			char *tableOwner = TableOwner(shardInterval->relationId);
+			SendCommandListToWorkerOutsideTransaction(
+				target->superuserConnection->hostname,
+				target->superuserConnection->port,
+				tableOwner,
+				shardAlterIndexSetStatisticsCommandList);
+
 			MemoryContextReset(localContext);
-			continue;
 		}
-
-		/*
-		 * These remaining operations do not require significant resources, so no
-		 * need to create them in parallel.
-		 */
-		char *tableOwner = TableOwner(shardInterval->relationId);
-		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
-												  tableOwner,
-												  shardAlterIndexSetStatisticsCommandList);
-
-		MemoryContextReset(localContext);
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -1026,52 +1062,55 @@ ExecuteCreateIndexStatisticsCommands(List *shardList, char *targetNodeName, int
  * in the given target node.
  */
 static void
-ExecuteRemainingPostLoadTableCommands(List *shardList, char *targetNodeName, int
-									  targetNodePort)
+ExecuteRemainingPostLoadTableCommands(List *logicalRepTargetList)
 {
 	ereport(DEBUG1, (errmsg("Creating post logical replication objects "
-							"(triggers and table statistics) on node %s:%d",
-							targetNodeName,
-							targetNodePort)));
+							"(triggers and table statistics)"
+							)));
 
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
 													   "CreateTableStatisticsContext",
 													   ALLOCSET_DEFAULT_SIZES);
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
-	ListCell *shardCell = NULL;
-	foreach(shardCell, shardList)
+	LogicalRepTarget *target = NULL;
+	foreach_ptr(target, logicalRepTargetList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardCell);
-		Oid relationId = shardInterval->relationId;
-
-		bool includeIndexes = false;
-		bool includeReplicaIdentity = false;
-
-		List *tablePostLoadTableCommandList =
-			GetPostLoadTableCreationCommands(relationId, includeIndexes,
-											 includeReplicaIdentity);
-
-		List *shardPostLoadTableCommandList =
-			WorkerApplyShardDDLCommandList(tablePostLoadTableCommandList,
-										   shardInterval->shardId);
-
-		if (shardPostLoadTableCommandList == NIL)
+		ShardInterval *shardInterval = NULL;
+		foreach_ptr(shardInterval, target->newShards)
 		{
-			/* no index statistics exists, skip */
-			continue;
+			Oid relationId = shardInterval->relationId;
+
+			bool includeIndexes = false;
+			bool includeReplicaIdentity = false;
+
+			List *tablePostLoadTableCommandList =
+				GetPostLoadTableCreationCommands(relationId, includeIndexes,
+												 includeReplicaIdentity);
+
+			List *shardPostLoadTableCommandList =
+				WorkerApplyShardDDLCommandList(tablePostLoadTableCommandList,
+											   shardInterval->shardId);
+
+			if (shardPostLoadTableCommandList == NIL)
+			{
+				/* no index statistics exists, skip */
+				continue;
+			}
+
+			/*
+			 * These remaining operations do not require significant resources, so no
+			 * need to create them in parallel.
+			 */
+			char *tableOwner = TableOwner(shardInterval->relationId);
+			SendCommandListToWorkerOutsideTransaction(
+				target->superuserConnection->hostname,
+				target->superuserConnection->port,
+				tableOwner,
+				shardPostLoadTableCommandList);
+
+			MemoryContextReset(localContext);
 		}
-
-		/*
-		 * These remaining operations do not require significant resources, so no
-		 * need to create them in parallel.
-		 */
-		char *tableOwner = TableOwner(shardInterval->relationId);
-		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
-												  tableOwner,
-												  shardPostLoadTableCommandList);
-
-		MemoryContextReset(localContext);
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -1082,40 +1121,42 @@ ExecuteRemainingPostLoadTableCommands(List *shardList, char *targetNodeName, int
  * CreatePartitioningHierarchy gets a shardList and creates the partitioning
  * hierarchy between the shardList, if any,
  */
-static void
-CreatePartitioningHierarchy(List *shardList, char *targetNodeName, int targetNodePort)
+void
+CreatePartitioningHierarchy(List *logicalRepTargetList)
 {
 	ereport(DEBUG1, (errmsg("Creating post logical replication objects "
-							"(partitioning hierarchy) on node %s:%d", targetNodeName,
-							targetNodePort)));
+							"(partitioning hierarchy)")));
 
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
 													   "CreatePartitioningHierarchy",
 													   ALLOCSET_DEFAULT_SIZES);
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
-	ListCell *shardCell = NULL;
-	foreach(shardCell, shardList)
+	LogicalRepTarget *target = NULL;
+	foreach_ptr(target, logicalRepTargetList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardCell);
-
-		if (PartitionTable(shardInterval->relationId))
+		ShardInterval *shardInterval = NULL;
+		foreach_ptr(shardInterval, target->newShards)
 		{
-			char *attachPartitionCommand =
-				GenerateAttachShardPartitionCommand(shardInterval);
+			if (PartitionTable(shardInterval->relationId))
+			{
+				char *attachPartitionCommand =
+					GenerateAttachShardPartitionCommand(shardInterval);
 
-			char *tableOwner = TableOwner(shardInterval->relationId);
+				char *tableOwner = TableOwner(shardInterval->relationId);
 
-			/*
-			 * Attaching partition may acquire conflicting locks when created in
-			 * parallel, so create them sequentially. Also attaching partition
-			 * is a quick operation, so it is fine to execute sequentially.
-			 */
-			SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
-													  tableOwner,
-													  list_make1(
-														  attachPartitionCommand));
-			MemoryContextReset(localContext);
+				/*
+				 * Attaching partition may acquire conflicting locks when created in
+				 * parallel, so create them sequentially. Also attaching partition
+				 * is a quick operation, so it is fine to execute sequentially.
+				 */
+				SendCommandListToWorkerOutsideTransaction(
+					target->superuserConnection->hostname,
+					target->superuserConnection->port,
+					tableOwner,
+					list_make1(attachPartitionCommand));
+				MemoryContextReset(localContext);
+			}
 		}
 	}
 
@@ -1124,17 +1165,17 @@ CreatePartitioningHierarchy(List *shardList, char *targetNodeName, int targetNod
 
 
 /*
- * CreateForeignKeyConstraints is used to create the foreign constraints
- * on the logical replication target without checking that they are actually
- * valid.
+ * CreateUncheckedForeignKeyConstraints is used to create the foreign
+ * constraints on the logical replication target without checking that they are
+ * actually valid.
  *
  * We skip the validation phase of foreign keys to after a shard
  * move/copy/split because the validation is pretty costly and given that the
  * source placements are already valid, the validation in the target nodes is
  * useless.
  */
-static void
-CreateForeignKeyConstraints(List *logicalRepTargetList)
+void
+CreateUncheckedForeignKeyConstraints(List *logicalRepTargetList)
 {
 	MemoryContext localContext =
 		AllocSetContextCreate(CurrentMemoryContext,

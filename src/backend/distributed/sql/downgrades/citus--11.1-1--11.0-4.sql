@@ -93,6 +93,9 @@ DROP FUNCTION pg_catalog.get_all_active_transactions(OUT datid oid, OUT process_
 DROP VIEW pg_catalog.citus_locks;
 DROP FUNCTION pg_catalog.citus_locks();
 
+#include "../udfs/citus_tables/10.0-4.sql"
+#include "../udfs/citus_shards/10.1-1.sql"
+
 DROP FUNCTION pg_catalog.replicate_reference_tables(citus.shard_transfer_mode);
 #include "../udfs/replicate_reference_tables/9.3-2.sql"
 
@@ -106,6 +109,9 @@ DROP SEQUENCE pg_catalog.pg_dist_operationid_seq;
 DROP SEQUENCE pg_catalog.pg_dist_cleanup_recordid_seq;
 DROP PROCEDURE pg_catalog.citus_cleanup_orphaned_resources();
 
+DROP FUNCTION pg_catalog.citus_rebalance_start(name, bool, citus.shard_transfer_mode);
+DROP FUNCTION pg_catalog.citus_rebalance_stop();
+DROP FUNCTION pg_catalog.citus_rebalance_wait();
 DROP FUNCTION pg_catalog.citus_job_cancel(bigint);
 DROP FUNCTION pg_catalog.citus_job_wait(bigint, pg_catalog.citus_job_status);
 DROP TABLE pg_catalog.pg_dist_background_task_depend;
@@ -113,3 +119,6 @@ DROP TABLE pg_catalog.pg_dist_background_task;
 DROP TYPE pg_catalog.citus_task_status;
 DROP TABLE pg_catalog.pg_dist_background_job;
 DROP TYPE pg_catalog.citus_job_status;
+DROP FUNCTION pg_catalog.citus_copy_shard_placement;
+#include "../udfs/citus_copy_shard_placement/10.0-1.sql"
+#include "../udfs/get_rebalance_progress/10.1-1.sql"

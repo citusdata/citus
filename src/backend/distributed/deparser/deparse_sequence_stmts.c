@@ -27,6 +27,9 @@ static void AppendSequenceNameList(StringInfo buf, List *objects, ObjectType obj
 static void AppendRenameSequenceStmt(StringInfo buf, RenameStmt *stmt);
 static void AppendAlterSequenceSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
 static void AppendAlterSequenceOwnerStmt(StringInfo buf, AlterTableStmt *stmt);
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+static void AppendAlterSequencePersistenceStmt(StringInfo buf, AlterTableStmt *stmt);
+#endif
 static void AppendGrantOnSequenceStmt(StringInfo buf, GrantStmt *stmt);
 static void AppendGrantOnSequenceSequences(StringInfo buf, GrantStmt *stmt);
 
@@ -256,6 +259,96 @@ AppendAlterSequenceOwnerStmt(StringInfo buf, AlterTableStmt *stmt)
 		}
 	}
 }
+
+
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+
+/*
+ * DeparseAlterSequencePersistenceStmt builds and returns a string representing
+ * the AlterTableStmt consisting of changing the persistence of a sequence
+ */
+char *
+DeparseAlterSequencePersistenceStmt(Node *node)
+{
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
+
+	AppendAlterSequencePersistenceStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+/*
+ * AppendAlterSequencePersistenceStmt appends a string representing the
+ * AlterTableStmt to a buffer consisting of changing the persistence of a sequence
+ */
+static void
+AppendAlterSequencePersistenceStmt(StringInfo buf, AlterTableStmt *stmt)
+{
+	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
+
+	RangeVar *seq = stmt->relation;
+	char *qualifiedSequenceName = quote_qualified_identifier(seq->schemaname,
+															 seq->relname);
+	appendStringInfoString(buf, "ALTER SEQUENCE ");
+
+	if (stmt->missing_ok)
+	{
+		appendStringInfoString(buf, "IF EXISTS ");
+	}
+
+	appendStringInfoString(buf, qualifiedSequenceName);
+
+	ListCell *cmdCell = NULL;
+	foreach(cmdCell, stmt->cmds)
+	{
+		if (cmdCell != list_head(stmt->cmds))
+		{
+			/*
+			 * As of PG15, we cannot reach this code because ALTER SEQUENCE
+			 * is only supported for a single sequence. Still, let's be
+			 * defensive for future PG changes
+			 */
+			ereport(ERROR, (errmsg("More than one subcommand is not supported "
+								   "for ALTER SEQUENCE")));
+		}
+
+		AlterTableCmd *alterTableCmd = castNode(AlterTableCmd, lfirst(cmdCell));
+		switch (alterTableCmd->subtype)
+		{
+			case AT_SetLogged:
+			{
+				appendStringInfoString(buf, " SET LOGGED;");
+				break;
+			}
+
+			case AT_SetUnLogged:
+			{
+				appendStringInfoString(buf, " SET UNLOGGED;");
+				break;
+			}
+
+			default:
+			{
+				/*
+				 * normally we shouldn't ever reach this
+				 * because we enter this function after making sure this stmt is of the form
+				 * ALTER SEQUENCE .. SET LOGGED/UNLOGGED
+				 */
+				ereport(ERROR, (errmsg("unsupported subtype for alter sequence command"),
+								errdetail("sub command type: %d",
+										  alterTableCmd->subtype)));
+			}
+		}
+	}
+}
+
+
+#endif
 
 
 /*

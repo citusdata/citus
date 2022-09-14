@@ -614,7 +614,7 @@ CREATE OR REPLACE FUNCTION immutable_bleat(text) RETURNS int LANGUAGE plpgsql IM
 CREATE TABLE test_table (test_id integer NOT NULL, data text);
 SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 2;
-SELECT create_distributed_table('test_table', 'test_id', 'hash');
+SELECT create_distributed_table('test_table', 'test_id', 'hash', colocate_with := 'none');
 
 -- avoid 9.6+ only context messages
 \set VERBOSITY terse
@@ -627,19 +627,19 @@ EXECUTE countsome; -- should indicate planning
 EXECUTE countsome; -- no replanning
 
 -- invalidate half of the placements using SQL, should invalidate via trigger
-UPDATE pg_dist_shard_placement SET shardstate = '3'
+DELETE FROM pg_dist_shard_placement
 WHERE shardid IN (
         SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_table'::regclass)
     AND nodeport = :worker_1_port;
 EXECUTE countsome; -- should indicate replanning
 EXECUTE countsome; -- no replanning
 
--- repair shards, should invalidate via master_metadata_utility.c
-SELECT master_copy_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port)
+-- copy shards, should invalidate via master_metadata_utility.c
+SELECT citus_copy_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, transfer_mode := 'block_writes')
 FROM pg_dist_shard_placement
 WHERE shardid IN (
         SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_table'::regclass)
-    AND nodeport = :worker_1_port;
+    AND nodeport = :worker_2_port;
 EXECUTE countsome; -- should indicate replanning
 EXECUTE countsome; -- no replanning
 

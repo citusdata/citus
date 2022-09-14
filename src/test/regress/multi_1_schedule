@@ -180,7 +180,7 @@ test: multi_modifications
 test: multi_distribution_metadata
 test: multi_prune_shard_list
 test: multi_upsert multi_simple_queries multi_data_types
-test: master_copy_shard_placement
+test: citus_copy_shard_placement
 # multi_utilities cannot be run in parallel with other tests because it checks
 # global locks
 test: multi_utilities
@@ -188,7 +188,7 @@ test: foreign_key_to_reference_table validate_constraint
 test: multi_repartition_udt multi_repartitioned_subquery_udf multi_subtransactions
 
 test: multi_modifying_xacts
-test: multi_generate_ddl_commands multi_repair_shards
+test: multi_generate_ddl_commands
 test: multi_create_shards
 test: multi_transaction_recovery
 
@@ -253,10 +253,8 @@ test: multi_truncate
 
 # ----------
 # multi_colocation_utils tests utility functions written for co-location feature & internal API
-# multi_colocated_shard_transfer tests master_copy_shard_placement with colocated tables.
 # ----------
 test: multi_colocation_utils
-test: multi_colocated_shard_transfer
 
 # ----------
 # node_conninfo_reload tests that node_conninfo changes take effect

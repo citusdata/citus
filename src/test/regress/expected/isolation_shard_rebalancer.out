@@ -575,3 +575,31 @@ master_set_node_property
 
 (1 row)
 
+
+starting permutation: s1-rebalance-all s2-citus-rebalance-start s1-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-rebalance-all:
+    BEGIN;
+	select rebalance_table_shards();
+
+rebalance_table_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-citus-rebalance-start:
+    SELECT 1 FROM citus_rebalance_start();
+
+ERROR:  could not acquire the lock required to rebalance public.colocated1
+step s1-commit:
+	COMMIT;
+
+master_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+

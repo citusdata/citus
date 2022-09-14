@@ -19,12 +19,12 @@ SELECT citus_add_local_table_to_metadata('citus_local_table');
 -- isolate_tenant_to_new_shard is not supported
 SELECT isolate_tenant_to_new_shard('citus_local_table', 100, shard_transfer_mode => 'block_writes');
 
--- master_copy_shard_placement is not supported
-SELECT master_copy_shard_placement(shardid, 'localhost', :master_port, 'localhost', :worker_1_port, false)
+-- citus_copy_shard_placement is not supported
+SELECT citus_copy_shard_placement(shardid, 'localhost', :master_port, 'localhost', :worker_1_port, false)
 FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='citus_local_table'::regclass) as shardid;
 
--- master_move_shard_placement is not supported
-SELECT master_move_shard_placement(shardid, 'localhost', :master_port, 'localhost', :worker_1_port)
+-- citus_move_shard_placement is not supported
+SELECT citus_move_shard_placement(shardid, 'localhost', :master_port, 'localhost', :worker_1_port)
 FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='citus_local_table'::regclass) as shardid;
 
 -- replicate_table_shards is not suported

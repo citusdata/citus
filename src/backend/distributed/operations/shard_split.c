@@ -29,7 +29,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/shard_split.h"
 #include "distributed/reference_table_utils.h"
-#include "distributed/repair_shards.h"
+#include "distributed/shard_transfer.h"
 #include "distributed/resource_lock.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/worker_manager.h"
@@ -132,8 +132,9 @@ static void UpdateDistributionColumnsForShardGroup(List *colocatedShardList,
 												   uint32 colocationId);
 static void InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 											 List *workersForPlacementList);
-static void CreatePartitioningHierarchy(List *shardGroupSplitIntervalListList,
-										List *workersForPlacementList);
+static void CreatePartitioningHierarchyForBlockingSplit(
+	List *shardGroupSplitIntervalListList,
+	List *workersForPlacementList);
 static void CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 										List *workersForPlacementList);
 static Task * CreateTaskForDDLCommandList(List *ddlCommandList, WorkerNode *workerNode);
@@ -233,9 +234,7 @@ ErrorIfCannotSplitShard(SplitOperation splitOperation, ShardInterval *sourceShar
 									   "for the shard %lu",
 									   SplitOperationName[splitOperation],
 									   SplitTargetName[splitOperation],
-									   relationName, shardId),
-								errhint("Use master_copy_shard_placement UDF to "
-										"repair the inactive shard placement.")));
+									   relationName, shardId)));
 			}
 		}
 	}
@@ -632,8 +631,9 @@ BlockingShardSplit(SplitOperation splitOperation,
 										 workersForPlacementList);
 
 		/* create partitioning hierarchy, if any */
-		CreatePartitioningHierarchy(shardGroupSplitIntervalListList,
-									workersForPlacementList);
+		CreatePartitioningHierarchyForBlockingSplit(
+			shardGroupSplitIntervalListList,
+			workersForPlacementList);
 
 		/*
 		 * Create foreign keys if exists after the metadata changes happening in
@@ -1220,8 +1220,8 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
  * hierarchy between the shardList, if any.
  */
 static void
-CreatePartitioningHierarchy(List *shardGroupSplitIntervalListList,
-							List *workersForPlacementList)
+CreatePartitioningHierarchyForBlockingSplit(List *shardGroupSplitIntervalListList,
+											List *workersForPlacementList)
 {
 	/* Create partition heirarchy between shards */
 	List *shardIntervalList = NIL;
@@ -1612,51 +1612,18 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 					snapshot, distributionColumnOverrides);
 
 		/*
-		 * 9) Create replica identities, this needs to be done before enabling
-		 * the subscriptions.
+		 * 9) Logically replicate all the changes and do most of the table DDL,
+		 * like index and foreign key creation.
 		 */
-		CreateReplicaIdentities(logicalRepTargetList);
+		CompleteNonBlockingShardTransfer(sourceColocatedShardIntervalList,
+										 sourceConnection,
+										 publicationInfoHash,
+										 logicalRepTargetList,
+										 groupedLogicalRepTargetsHash,
+										 SHARD_SPLIT);
 
 		/*
-		 * 10) Enable the subscriptions: Start the catchup phase
-		 */
-		EnableSubscriptions(logicalRepTargetList);
-
-		/* 11) Wait for subscriptions to be ready */
-		WaitForAllSubscriptionsToBecomeReady(groupedLogicalRepTargetsHash);
-
-		/* 12) Wait for subscribers to catchup till source LSN */
-		WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
-
-		/* 13) Create Auxilary structures */
-		CreateAuxiliaryStructuresForShardGroup(shardGroupSplitIntervalListList,
-											   workersForPlacementList,
-											   false /* includeReplicaIdentity*/);
-
-		/* 14) Wait for subscribers to catchup till source LSN */
-		WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
-
-		/* Used for testing */
-		ConflictOnlyWithIsolationTesting();
-
-		/* 15) Block writes on source shards */
-		BlockWritesToShardList(sourceColocatedShardIntervalList);
-
-		/* 16) Wait for subscribers to catchup till source LSN */
-		WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
-
-		/* 17) Drop Subscribers */
-		DropSubscriptions(logicalRepTargetList);
-
-		/* 18) Drop replication slots
-		 */
-		DropReplicationSlots(sourceConnection, logicalRepTargetList);
-
-		/* 19) Drop Publications */
-		DropPublications(sourceConnection, publicationInfoHash);
-
-		/*
-		 * 20) Delete old shards metadata and either mark the shards as
+		 * 10) Delete old shards metadata and either mark the shards as
 		 * to be deferred drop or physically delete them.
 		 * Have to do that before creating the new shard metadata,
 		 * because there's cross-checks preventing inconsistent metadata
@@ -1674,7 +1641,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		DropShardListMetadata(sourceColocatedShardIntervalList);
 
 		/*
-		 * 21) In case of create_distributed_table_concurrently, which converts
+		 * 11) In case of create_distributed_table_concurrently, which converts
 		 * a Citus local table to a distributed table, update the distributed
 		 * table metadata now.
 		 *
@@ -1706,34 +1673,36 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 												   targetColocationId);
 		}
 
-		/* 22) Insert new shard and placement metdata */
+		/* 12) Insert new shard and placement metdata */
 		InsertSplitChildrenShardMetadata(shardGroupSplitIntervalListList,
 										 workersForPlacementList);
 
-		CreatePartitioningHierarchy(shardGroupSplitIntervalListList,
-									workersForPlacementList);
+		/* 13) create partitioning hierarchy, if any, this needs to be done
+		 * after the metadata is correct, because it fails for some
+		 * uninvestigated reason otherwise.
+		 */
+		CreatePartitioningHierarchy(logicalRepTargetList);
 
 		/*
-		 * 23) Create foreign keys if exists after the metadata changes happening in
+		 * 14) Create foreign keys if exists after the metadata changes happening in
 		 * DropShardList() and InsertSplitChildrenShardMetadata() because the foreign
 		 * key creation depends on the new metadata.
 		 */
-		CreateForeignKeyConstraints(shardGroupSplitIntervalListList,
-									workersForPlacementList);
+		CreateUncheckedForeignKeyConstraints(logicalRepTargetList);
 
 		/*
-		 * 24) Release shared memory allocated by worker_split_shard_replication_setup udf
+		 * 15) Release shared memory allocated by worker_split_shard_replication_setup udf
 		 * at source node.
 		 */
 		ExecuteSplitShardReleaseSharedMemory(sourceShardToCopyNode);
 
-		/* 25) Close source connection */
+		/* 16) Close source connection */
 		CloseConnection(sourceConnection);
 
-		/* 26) Close all subscriber connections */
+		/* 17) Close all subscriber connections */
 		CloseGroupedLogicalRepTargetsConnections(groupedLogicalRepTargetsHash);
 
-		/* 27) Close connection of template replication slot */
+		/* 18) Close connection of template replication slot */
 		CloseConnection(sourceReplicationConnection);
 	}
 	PG_CATCH();

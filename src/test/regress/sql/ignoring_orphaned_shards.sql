@@ -82,16 +82,8 @@ SELECT logicalrelid FROM pg_dist_partition WHERE colocationid = 92448300 ORDER B
 SELECT update_distributed_table_colocation('rep2', 'rep1');
 SELECT logicalrelid FROM pg_dist_partition WHERE colocationid = 92448300 ORDER BY 1;
 
-UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = 92448300 AND groupid = 0;
-SELECT shardid, shardstate, nodeport FROM pg_dist_shard_placement WHERE shardid = 92448300 ORDER BY placementid;
-
 -- cannot copy from an orphaned shard
 SELECT * FROM citus_copy_shard_placement(92448300, 'localhost', :worker_1_port, 'localhost', :master_port);
--- cannot copy to an orphaned shard
-SELECT * FROM citus_copy_shard_placement(92448300, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
--- can still copy to an inactive shard
-SELECT * FROM citus_copy_shard_placement(92448300, 'localhost', :worker_2_port, 'localhost', :master_port);
-SELECT shardid, shardstate, nodeport FROM pg_dist_shard_placement WHERE shardid = 92448300 ORDER BY placementid;
 
 -- Make sure we don't send a query to the orphaned shard
 BEGIN;

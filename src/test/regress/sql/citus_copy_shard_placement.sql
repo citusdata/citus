@@ -1,4 +1,4 @@
--- Tests for master_copy_shard_placement, which can be used for adding replicas in statement-based replication
+-- Tests for citus_copy_shard_placement, which can be used for adding replicas in statement-based replication
 CREATE SCHEMA mcsp;
 SET search_path TO mcsp;
 SET citus.next_shard_id TO 8139000;
@@ -24,7 +24,7 @@ CREATE TABLE history_p1 PARTITION OF history FOR VALUES FROM ('2019-01-01') TO (
 CREATE TABLE history_p2 PARTITION OF history FOR VALUES FROM ('2020-01-01') TO ('2021-01-01');
 SELECT create_distributed_table('history','key');
 
--- Mark tables as non-mx tables, in order to be able to test master_copy_shard_placement
+-- Mark tables as non-mx tables, in order to be able to test citus_copy_shard_placement
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
 	('data'::regclass, 'history'::regclass);
 
@@ -35,47 +35,42 @@ INSERT INTO history VALUES ('key-1', '2020-02-01', 'old');
 INSERT INTO history VALUES ('key-1', '2019-10-01', 'older');
 
 -- verify we error out if no healthy placement exists at source
-SELECT master_copy_shard_placement(
+SELECT citus_copy_shard_placement(
            get_shard_id_for_distribution_column('data', 'key-1'),
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
-           do_repair := false,
            transfer_mode := 'block_writes');
 
 -- verify we error out if source and destination are the same
-SELECT master_copy_shard_placement(
+SELECT citus_copy_shard_placement(
            get_shard_id_for_distribution_column('data', 'key-1'),
            'localhost', :worker_2_port,
            'localhost', :worker_2_port,
-           do_repair := false,
            transfer_mode := 'block_writes');
 
--- verify we error out if target already contains a healthy placement
-SELECT master_copy_shard_placement(
+-- verify we warn if target already contains a healthy placement
+SELECT citus_copy_shard_placement(
            (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
-           do_repair := false,
            transfer_mode := 'block_writes');
 
 -- verify we error out if table has foreign key constraints
 INSERT INTO ref_table SELECT 1, value FROM data;
 
 ALTER TABLE data ADD CONSTRAINT distfk FOREIGN KEY (value) REFERENCES ref_table (b) MATCH FULL;
-SELECT master_copy_shard_placement(
+SELECT citus_copy_shard_placement(
            get_shard_id_for_distribution_column('data', 'key-1'),
            'localhost', :worker_2_port,
-           'localhost', :worker_1_port,
-           do_repair := false);
+           'localhost', :worker_1_port);
 
 ALTER TABLE data DROP CONSTRAINT distfk;
 
 -- replicate shard that contains key-1
-SELECT master_copy_shard_placement(
+SELECT citus_copy_shard_placement(
            get_shard_id_for_distribution_column('data', 'key-1'),
            'localhost', :worker_2_port,
            'localhost', :worker_1_port,
-           do_repair := false,
            transfer_mode := 'block_writes');
 
 -- forcefully mark the old replica as inactive
@@ -102,11 +97,10 @@ RESET client_min_messages;
 CREATE TABLE mx_table(a int);
 SELECT create_distributed_table('mx_table', 'a');
 
-SELECT master_copy_shard_placement(
+SELECT citus_copy_shard_placement(
            get_shard_id_for_distribution_column('mx_table', '1'),
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
-           do_repair := false,
            transfer_mode := 'block_writes');
 
 SET client_min_messages TO ERROR;

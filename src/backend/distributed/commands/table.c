@@ -733,20 +733,40 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 
 	/*
 	 * check whether we are dealing with a sequence or view here
-	 * if yes, it must be ALTER TABLE .. OWNER TO .. command
-	 * since this is the only ALTER command of a sequence or view that
-	 * passes through an AlterTableStmt
 	 */
 	char relKind = get_rel_relkind(leftRelationId);
 	if (relKind == RELKIND_SEQUENCE)
 	{
 		AlterTableStmt *stmtCopy = copyObject(alterTableStatement);
 		AlterTableStmtObjType_compat(stmtCopy) = OBJECT_SEQUENCE;
+#if (PG_VERSION_NUM >= PG_VERSION_15)
+
+		/*
+		 * it must be ALTER TABLE .. OWNER TO ..
+		 * or ALTER TABLE .. SET LOGGED/UNLOGGED command
+		 * since these are the only ALTER commands of a sequence that
+		 * pass through an AlterTableStmt
+		 */
+		return PreprocessSequenceAlterTableStmt((Node *) stmtCopy, alterTableCommand,
+												processUtilityContext);
+#else
+
+		/*
+		 * it must be ALTER TABLE .. OWNER TO .. command
+		 * since this is the only ALTER command of a sequence that
+		 * passes through an AlterTableStmt
+		 */
 		return PreprocessAlterSequenceOwnerStmt((Node *) stmtCopy, alterTableCommand,
 												processUtilityContext);
+#endif
 	}
 	else if (relKind == RELKIND_VIEW)
 	{
+		/*
+		 * it must be ALTER TABLE .. OWNER TO .. command
+		 * since this is the only ALTER command of a view that
+		 * passes through an AlterTableStmt
+		 */
 		AlterTableStmt *stmtCopy = copyObject(alterTableStatement);
 		AlterTableStmtObjType_compat(stmtCopy) = OBJECT_VIEW;
 		return PreprocessAlterViewStmt((Node *) stmtCopy, alterTableCommand,

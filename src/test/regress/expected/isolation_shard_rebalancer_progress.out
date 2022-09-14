@@ -28,15 +28,16 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|                0|       1
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|                0|       1
-colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       0
-colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       0
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|                0|       1|move
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|                0|       1|move
+colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       0|move
+colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       0|move
 (4 rows)
 
 step s2-unlock-1-start:
@@ -71,10 +72,11 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -109,15 +111,16 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     73728|localhost |     57637|                0|localhost |     57638|            73728|       2
-colocated2|1500005|    401408|localhost |     57637|                0|localhost |     57638|           401408|       2
-colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       1
-colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       1
+colocated1|1500001|     73728|localhost |     57637|                0|localhost |     57638|            73728|       2|move
+colocated2|1500005|    401408|localhost |     57637|                0|localhost |     57638|           401408|       2|move
+colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       1|move
+colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       1|move
 (4 rows)
 
 step s3-unlock-2-start:
@@ -152,10 +155,11 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -202,15 +206,16 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1
-colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       0
-colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       0
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1|move
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1|move
+colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       0|move
+colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       0|move
 (4 rows)
 
 step s7-release-lock:
@@ -245,10 +250,11 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -287,15 +293,16 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|             8192|       1
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|             8192|       1
-colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       0
-colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       0
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|             8192|       1|move
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|             8192|       1|move
+colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       0|move
+colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       0|move
 (4 rows)
 
 step s6-release-advisory-lock:
@@ -335,10 +342,11 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -384,13 +392,14 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1|move
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1|move
 (2 rows)
 
 step s7-release-lock:
@@ -417,10 +426,11 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -455,13 +465,14 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|                0|       1
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|                0|       1
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|                0|       1|move
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|                0|       1|move
 (2 rows)
 
 step s2-unlock-1-start:
@@ -488,10 +499,11 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -537,13 +549,14 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1|move
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1|move
 (2 rows)
 
 step s7-release-lock:
@@ -570,15 +583,67 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
 (0 rows)
 
 step enable-deferred-drop:
  ALTER SYSTEM RESET citus.defer_drop_after_shard_move;
+
+
+starting permutation: s2-lock-1-start s1-shard-copy-c1-block-writes s7-get-progress s2-unlock-1-start s1-commit
+master_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-lock-1-start:
+ BEGIN;
+ DELETE FROM colocated1 WHERE test_id = 1;
+ DELETE FROM separate WHERE test_id = 1;
+
+step s1-shard-copy-c1-block-writes:
+ BEGIN;
+ UPDATE pg_dist_partition SET repmodel = 'c' WHERE logicalrelid IN ('colocated1', 'colocated2');
+ SELECT citus_copy_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, transfer_mode:='block_writes');
+ <waiting ...>
+step s7-get-progress: 
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress,
+  operation_type
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+---------------------------------------------------------------------
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|                0|       1|copy
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|                0|       1|copy
+(2 rows)
+
+step s2-unlock-1-start:
+ ROLLBACK;
+
+step s1-shard-copy-c1-block-writes: <... completed>
+citus_copy_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-commit:
+ COMMIT;
 
 
 starting permutation: s6-acquire-advisory-lock s1-shard-move-c1-online s7-get-progress s6-release-advisory-lock s1-commit s7-get-progress enable-deferred-drop
@@ -611,13 +676,14 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|             8192|       1
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|             8192|       1
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|             8192|       1|move
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|             8192|       1|move
 (2 rows)
 
 step s6-release-advisory-lock:
@@ -649,10 +715,11 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -698,13 +765,14 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1|move
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1|move
 (2 rows)
 
 step s7-release-lock:
@@ -731,15 +799,75 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
 (0 rows)
 
 step enable-deferred-drop:
  ALTER SYSTEM RESET citus.defer_drop_after_shard_move;
+
+
+starting permutation: s6-acquire-advisory-lock s1-shard-copy-c1-online s7-get-progress s6-release-advisory-lock s1-commit
+master_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+step s6-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-shard-copy-c1-online:
+ BEGIN;
+ UPDATE pg_dist_partition SET repmodel = 'c' WHERE logicalrelid IN ('colocated1', 'colocated2');
+ SELECT citus_copy_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, transfer_mode:='force_logical');
+ <waiting ...>
+step s7-get-progress: 
+ set LOCAL client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress,
+  operation_type
+ FROM get_rebalance_progress();
+
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+---------------------------------------------------------------------
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|             8192|       1|copy
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|             8192|       1|copy
+(2 rows)
+
+step s6-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-shard-copy-c1-online: <... completed>
+citus_copy_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-commit:
+ COMMIT;
 
 
 starting permutation: s2-lock-1-start s1-shard-move-c1-block-writes s4-shard-move-sep-block-writes s7-get-progress s2-unlock-1-start s1-commit s4-commit s7-get-progress enable-deferred-drop
@@ -773,14 +901,15 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|                0|       1
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|                0|       1
-separate  |1500009|    122880|localhost |     57637|           122880|localhost |     57638|                0|       1
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|                0|       1|move
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|                0|       1|move
+separate  |1500009|    122880|localhost |     57637|           122880|localhost |     57638|                0|       1|move
 (3 rows)
 
 step s2-unlock-1-start:
@@ -816,10 +945,11 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -869,14 +999,15 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1
-separate  |1500009|    122880|localhost |     57637|           122880|localhost |     57638|           147456|       1
+colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1|move
+colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1|move
+separate  |1500009|    122880|localhost |     57637|           122880|localhost |     57638|           147456|       1|move
 (3 rows)
 
 step s7-release-lock:
@@ -912,10 +1043,11 @@ step s7-get-progress:
   targetname,
   targetport,
   target_shard_size,
-  progress
+  progress,
+  operation_type
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
 (0 rows)
 
