@@ -1,0 +1,667 @@
+Parsed test spec with 3 sessions
+
+starting permutation: s2-print-cluster-1 s3-acquire-advisory-lock s2-begin s1-alter-table s1-set-factor-1 s1-create-distributed-table-observations_with_pk-concurrently s2-insert-observations_with_pk s2-update-observations_with_pk s2-end s2-print-cluster-1 s3-release-advisory-lock s2-print-cluster-1
+step s2-print-cluster-1:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('observations_with_pk', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ SELECT *
+ FROM
+  observations_with_pk
+ ORDER BY
+ measurement_id;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+(0 rows)
+
+tenant_id|dummy|measurement_id|payload|observation_time
+---------------------------------------------------------------------
+(0 rows)
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-begin:
+    BEGIN;
+
+step s1-alter-table:
+ ALTER TABLE observations_with_pk DROP COLUMN dummy;
+ ALTER TABLE observations_with_full_replica_identity DROP COLUMN dummy;
+
+step s1-set-factor-1:
+ SET citus.shard_replication_factor TO 1;
+ SELECT citus_set_coordinator_host('localhost');
+
+citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-create-distributed-table-observations_with_pk-concurrently:
+ SELECT create_distributed_table_concurrently('observations_with_pk','tenant_id');
+ <waiting ...>
+step s2-insert-observations_with_pk: 
+ INSERT INTO observations_with_pk(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+ INSERT INTO observations_with_pk(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+ INSERT INTO observations_with_pk(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+ INSERT INTO observations_with_pk(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+
+step s2-update-observations_with_pk:
+ UPDATE observations_with_pk set observation_time='03/11/2019 02:00:00'::TIMESTAMP where tenant_id = 'tenant_id' and measurement_id = 3;
+
+step s2-end:
+   COMMIT;
+
+step s2-print-cluster-1:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('observations_with_pk', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ SELECT *
+ FROM
+  observations_with_pk
+ ORDER BY
+ measurement_id;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57636|1500004|t      |     4
+(1 row)
+
+tenant_id|measurement_id|payload       |observation_time
+---------------------------------------------------------------------
+tenant_id|             1|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             2|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             3|{"name": 29.3}|Mon Mar 11 02:00:00 2019 PDT
+tenant_id|             4|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+(4 rows)
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-create-distributed-table-observations_with_pk-concurrently: <... completed>
+create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-print-cluster-1:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('observations_with_pk', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ SELECT *
+ FROM
+  observations_with_pk
+ ORDER BY
+ measurement_id;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500006|t      |     4
+   57637|1500008|t      |     0
+   57638|1500005|t      |     0
+   57638|1500007|t      |     0
+(4 rows)
+
+tenant_id|measurement_id|payload       |observation_time
+---------------------------------------------------------------------
+tenant_id|             1|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             2|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             3|{"name": 29.3}|Mon Mar 11 02:00:00 2019 PDT
+tenant_id|             4|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+(4 rows)
+
+
+starting permutation: s2-print-cluster-1 s3-acquire-advisory-lock s2-begin s1-alter-table s1-set-factor-1 s1-create-distributed-table-observations_with_pk-concurrently s2-insert-observations_with_pk s2-update-primary-key-observations_with_pk s2-end s2-print-cluster-1 s3-release-advisory-lock s2-print-cluster-1
+step s2-print-cluster-1:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('observations_with_pk', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ SELECT *
+ FROM
+  observations_with_pk
+ ORDER BY
+ measurement_id;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+(0 rows)
+
+tenant_id|dummy|measurement_id|payload|observation_time
+---------------------------------------------------------------------
+(0 rows)
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-begin:
+    BEGIN;
+
+step s1-alter-table:
+ ALTER TABLE observations_with_pk DROP COLUMN dummy;
+ ALTER TABLE observations_with_full_replica_identity DROP COLUMN dummy;
+
+step s1-set-factor-1:
+ SET citus.shard_replication_factor TO 1;
+ SELECT citus_set_coordinator_host('localhost');
+
+citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-create-distributed-table-observations_with_pk-concurrently:
+ SELECT create_distributed_table_concurrently('observations_with_pk','tenant_id');
+ <waiting ...>
+step s2-insert-observations_with_pk: 
+ INSERT INTO observations_with_pk(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+ INSERT INTO observations_with_pk(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+ INSERT INTO observations_with_pk(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+ INSERT INTO observations_with_pk(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+
+step s2-update-primary-key-observations_with_pk:
+ UPDATE observations_with_pk set measurement_id=100 where tenant_id = 'tenant_id' and measurement_id = 4 ;
+
+step s2-end:
+   COMMIT;
+
+step s2-print-cluster-1:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('observations_with_pk', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ SELECT *
+ FROM
+  observations_with_pk
+ ORDER BY
+ measurement_id;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57636|1500009|t      |     4
+(1 row)
+
+tenant_id|measurement_id|payload       |observation_time
+---------------------------------------------------------------------
+tenant_id|             1|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             2|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             3|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|           100|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+(4 rows)
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-create-distributed-table-observations_with_pk-concurrently: <... completed>
+create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-print-cluster-1:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('observations_with_pk', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ SELECT *
+ FROM
+  observations_with_pk
+ ORDER BY
+ measurement_id;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500011|t      |     4
+   57637|1500013|t      |     0
+   57638|1500010|t      |     0
+   57638|1500012|t      |     0
+(4 rows)
+
+tenant_id|measurement_id|payload       |observation_time
+---------------------------------------------------------------------
+tenant_id|             1|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             2|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             3|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|           100|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+(4 rows)
+
+
+starting permutation: s2-print-cluster-1 s3-acquire-advisory-lock s2-begin s1-alter-table s1-set-factor-1 s1-create-distributed-table-observations_with_pk-concurrently s2-insert-observations_with_pk s2-update-observations_with_pk s2-delete-observations_with_pk s2-end s2-print-cluster-1 s3-release-advisory-lock s2-print-cluster-1
+step s2-print-cluster-1:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('observations_with_pk', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ SELECT *
+ FROM
+  observations_with_pk
+ ORDER BY
+ measurement_id;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+(0 rows)
+
+tenant_id|dummy|measurement_id|payload|observation_time
+---------------------------------------------------------------------
+(0 rows)
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-begin:
+    BEGIN;
+
+step s1-alter-table:
+ ALTER TABLE observations_with_pk DROP COLUMN dummy;
+ ALTER TABLE observations_with_full_replica_identity DROP COLUMN dummy;
+
+step s1-set-factor-1:
+ SET citus.shard_replication_factor TO 1;
+ SELECT citus_set_coordinator_host('localhost');
+
+citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-create-distributed-table-observations_with_pk-concurrently:
+ SELECT create_distributed_table_concurrently('observations_with_pk','tenant_id');
+ <waiting ...>
+step s2-insert-observations_with_pk: 
+ INSERT INTO observations_with_pk(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+ INSERT INTO observations_with_pk(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+ INSERT INTO observations_with_pk(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+ INSERT INTO observations_with_pk(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+
+step s2-update-observations_with_pk:
+ UPDATE observations_with_pk set observation_time='03/11/2019 02:00:00'::TIMESTAMP where tenant_id = 'tenant_id' and measurement_id = 3;
+
+step s2-delete-observations_with_pk:
+ DELETE FROM observations_with_pk where tenant_id = 'tenant_id' and measurement_id = 3 ;
+
+step s2-end:
+   COMMIT;
+
+step s2-print-cluster-1:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('observations_with_pk', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ SELECT *
+ FROM
+  observations_with_pk
+ ORDER BY
+ measurement_id;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57636|1500014|t      |     3
+(1 row)
+
+tenant_id|measurement_id|payload       |observation_time
+---------------------------------------------------------------------
+tenant_id|             1|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             2|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             4|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+(3 rows)
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-create-distributed-table-observations_with_pk-concurrently: <... completed>
+create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-print-cluster-1:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('observations_with_pk', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ SELECT *
+ FROM
+  observations_with_pk
+ ORDER BY
+ measurement_id;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500016|t      |     3
+   57637|1500018|t      |     0
+   57638|1500015|t      |     0
+   57638|1500017|t      |     0
+(4 rows)
+
+tenant_id|measurement_id|payload       |observation_time
+---------------------------------------------------------------------
+tenant_id|             1|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             2|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             4|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+(3 rows)
+
+
+starting permutation: s2-print-cluster-2 s3-acquire-advisory-lock s2-begin s1-alter-table s1-set-factor-1 s1-create-distributed-table-observations-2-concurrently s2-insert-observations_with_full_replica_identity s2-update-observations_with_full_replica_identity s2-end s2-print-cluster-2 s3-release-advisory-lock s2-print-cluster-2
+step s2-print-cluster-2:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('observations_with_full_replica_identity', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ SELECT *
+ FROM
+  observations_with_full_replica_identity
+ ORDER BY
+ measurement_id;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+(0 rows)
+
+tenant_id|dummy|measurement_id|payload|observation_time
+---------------------------------------------------------------------
+(0 rows)
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-begin:
+    BEGIN;
+
+step s1-alter-table:
+ ALTER TABLE observations_with_pk DROP COLUMN dummy;
+ ALTER TABLE observations_with_full_replica_identity DROP COLUMN dummy;
+
+step s1-set-factor-1:
+ SET citus.shard_replication_factor TO 1;
+ SELECT citus_set_coordinator_host('localhost');
+
+citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-create-distributed-table-observations-2-concurrently:
+ SELECT create_distributed_table_concurrently('observations_with_full_replica_identity','tenant_id');
+ <waiting ...>
+step s2-insert-observations_with_full_replica_identity: 
+ INSERT INTO observations_with_full_replica_identity(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+ INSERT INTO observations_with_full_replica_identity(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+ INSERT INTO observations_with_full_replica_identity(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+
+step s2-update-observations_with_full_replica_identity:
+ UPDATE observations_with_full_replica_identity set observation_time='03/11/2019 02:00:00'::TIMESTAMP where tenant_id = 'tenant_id' and measurement_id = 3;
+
+step s2-end:
+   COMMIT;
+
+step s2-print-cluster-2:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('observations_with_full_replica_identity', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ SELECT *
+ FROM
+  observations_with_full_replica_identity
+ ORDER BY
+ measurement_id;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57636|1500019|t      |     3
+(1 row)
+
+tenant_id|measurement_id|payload       |observation_time
+---------------------------------------------------------------------
+tenant_id|             1|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             2|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             3|{"name": 29.3}|Mon Mar 11 02:00:00 2019 PDT
+(3 rows)
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-create-distributed-table-observations-2-concurrently: <... completed>
+create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-print-cluster-2:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('observations_with_full_replica_identity', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ SELECT *
+ FROM
+  observations_with_full_replica_identity
+ ORDER BY
+ measurement_id;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500021|t      |     3
+   57637|1500023|t      |     0
+   57638|1500020|t      |     0
+   57638|1500022|t      |     0
+(4 rows)
+
+tenant_id|measurement_id|payload       |observation_time
+---------------------------------------------------------------------
+tenant_id|             1|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             2|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             3|{"name": 29.3}|Mon Mar 11 02:00:00 2019 PDT
+(3 rows)
+
+
+starting permutation: s2-print-cluster-2 s3-acquire-advisory-lock s2-begin s1-alter-table s1-set-factor-1 s1-create-distributed-table-observations-2-concurrently s2-insert-observations_with_full_replica_identity s2-update-observations_with_full_replica_identity s2-delete-observations_with_full_replica_identity s2-end s2-print-cluster-2 s3-release-advisory-lock s2-print-cluster-2
+step s2-print-cluster-2:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('observations_with_full_replica_identity', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ SELECT *
+ FROM
+  observations_with_full_replica_identity
+ ORDER BY
+ measurement_id;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+(0 rows)
+
+tenant_id|dummy|measurement_id|payload|observation_time
+---------------------------------------------------------------------
+(0 rows)
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-begin:
+    BEGIN;
+
+step s1-alter-table:
+ ALTER TABLE observations_with_pk DROP COLUMN dummy;
+ ALTER TABLE observations_with_full_replica_identity DROP COLUMN dummy;
+
+step s1-set-factor-1:
+ SET citus.shard_replication_factor TO 1;
+ SELECT citus_set_coordinator_host('localhost');
+
+citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-create-distributed-table-observations-2-concurrently:
+ SELECT create_distributed_table_concurrently('observations_with_full_replica_identity','tenant_id');
+ <waiting ...>
+step s2-insert-observations_with_full_replica_identity: 
+ INSERT INTO observations_with_full_replica_identity(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+ INSERT INTO observations_with_full_replica_identity(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+ INSERT INTO observations_with_full_replica_identity(tenant_id, payload) SELECT 'tenant_id', jsonb_build_object('name', 29.3);
+
+step s2-update-observations_with_full_replica_identity:
+ UPDATE observations_with_full_replica_identity set observation_time='03/11/2019 02:00:00'::TIMESTAMP where tenant_id = 'tenant_id' and measurement_id = 3;
+
+step s2-delete-observations_with_full_replica_identity:
+ DELETE FROM observations_with_full_replica_identity where tenant_id = 'tenant_id' and measurement_id = 3 ;
+
+step s2-end:
+   COMMIT;
+
+step s2-print-cluster-2:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('observations_with_full_replica_identity', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ SELECT *
+ FROM
+  observations_with_full_replica_identity
+ ORDER BY
+ measurement_id;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57636|1500024|t      |     2
+(1 row)
+
+tenant_id|measurement_id|payload       |observation_time
+---------------------------------------------------------------------
+tenant_id|             1|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             2|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+(2 rows)
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-create-distributed-table-observations-2-concurrently: <... completed>
+create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-print-cluster-2:
+ -- row count per shard
+ SELECT
+  nodeport, shardid, success, result
+ FROM
+  run_command_on_placements('observations_with_full_replica_identity', 'select count(*) from %s')
+ ORDER BY
+  nodeport, shardid;
+ SELECT *
+ FROM
+  observations_with_full_replica_identity
+ ORDER BY
+ measurement_id;
+
+nodeport|shardid|success|result
+---------------------------------------------------------------------
+   57637|1500026|t      |     2
+   57637|1500028|t      |     0
+   57638|1500025|t      |     0
+   57638|1500027|t      |     0
+(4 rows)
+
+tenant_id|measurement_id|payload       |observation_time
+---------------------------------------------------------------------
+tenant_id|             1|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+tenant_id|             2|{"name": 29.3}|Sun Mar 11 03:00:00 2018 PDT
+(2 rows)
+
