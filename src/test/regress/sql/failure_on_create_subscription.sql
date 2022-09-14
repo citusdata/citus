@@ -34,7 +34,9 @@ SELECT * FROM shards_in_workers;
 
 -- failure on creating the subscription
 SELECT citus.mitmproxy('conn.onQuery(query="CREATE SUBSCRIPTION").kill()');
+SET client_min_messages TO ERROR;
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+RESET client_min_messages;
 
 -- Verify that the shard is not moved and the number of rows are still 100k
 SELECT * FROM shards_in_workers;
