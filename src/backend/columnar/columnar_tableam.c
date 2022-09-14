@@ -732,6 +732,7 @@ columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 					  int options, BulkInsertState bistate)
 {
 	CheckCitusColumnarVersion(ERROR);
+
 	/*
 	 * Setting the original relation's columnar options to the new relation
 	 * so that the original data is compressed with the same option
@@ -739,9 +740,9 @@ columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 
 	ColumnarOptions columnarOptions;
 	Relation oldRel = relation_open(slot->tts_tableOid, AccessShareLock);
-    ReadColumnarOptions(oldRel->rd_id, &columnarOptions);
-    SetColumnarOptions(relation->rd_id, &columnarOptions);
-    relation_close(oldRel, AccessShareLock);
+	ReadColumnarOptions(oldRel->rd_id, &columnarOptions);
+	SetColumnarOptions(relation->rd_id, &columnarOptions);
+	relation_close(oldRel, AccessShareLock);
 
 	/*
 	 * columnar_init_write_state allocates the write state in a longer
@@ -894,7 +895,7 @@ columnar_relation_set_new_filenode(Relation rel,
 	ColumnarOptions options;
 	ReadColumnarOptions(rel->rd_id, &options);
 	SetColumnarOptions(newRel->rd_id, &options);
-	//InitColumnarOptions(newRel->rd_id);
+	/*InitColumnarOptions(newRel->rd_id); */
 	relation_close(newRel, AccessShareLock);
 	smgrclose(srel);
 
