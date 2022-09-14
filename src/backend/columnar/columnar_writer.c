@@ -79,6 +79,24 @@ static Datum DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength);
 static StringInfo CopyStringInfo(StringInfo sourceString);
 
 /*
+ * ColumnarSetWriteStateOptions gives the ability to update the writestate's
+ * columnar.options outside of columnar_writer.c. This is used when a ALTER TABLE ...
+ * SET/RESET is called and the temporary table does not have the old table's options.
+ */
+bool
+ColumnarSetWriteStateOptions(ColumnarWriteState *writeState, ColumnarOptions options)
+{
+	if (writeState == false)
+	{
+		return false;
+	}
+
+	writeState->options = options;
+	return true;
+}
+
+
+/*
  * ColumnarBeginWrite initializes a columnar data load operation and returns a table
  * handle. This handle should be used for adding the row values and finishing the
  * data load operation.

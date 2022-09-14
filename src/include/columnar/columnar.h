@@ -234,6 +234,10 @@ extern void ColumnarEndWrite(ColumnarWriteState *state);
 extern bool ContainsPendingWrites(ColumnarWriteState *state);
 extern MemoryContext ColumnarWritePerTupleContext(ColumnarWriteState *state);
 
+/* Function declaration for updating Columnar.options */
+extern bool ColumnarSetWriteStateOptions(ColumnarWriteState *writeState, ColumnarOptions
+										 options);
+
 /* Function declarations for reading from columnar table */
 
 /* functions applicable for both sequential and random access */

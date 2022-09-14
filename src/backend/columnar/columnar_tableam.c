@@ -734,23 +734,25 @@ columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	CheckCitusColumnarVersion(ERROR);
 
 	/*
-	 * Setting the original relation's columnar options to the new relation
-	 * so that the original data is compressed with the same option
-	 */
-
-	ColumnarOptions columnarOptions;
-	Relation oldRel = relation_open(slot->tts_tableOid, AccessShareLock);
-	ReadColumnarOptions(oldRel->rd_id, &columnarOptions);
-	SetColumnarOptions(relation->rd_id, &columnarOptions);
-	relation_close(oldRel, AccessShareLock);
-
-	/*
 	 * columnar_init_write_state allocates the write state in a longer
 	 * lasting context, so no need to worry about it.
 	 */
 	ColumnarWriteState *writeState = columnar_init_write_state(relation,
 															   RelationGetDescr(relation),
 															   GetCurrentSubTransactionId());
+
+	/*
+	 * Setting the original relation's columnar options to the new relation
+	 * so that the original data is compressed with the same option in case of
+	 * an ALTER rewrite
+	 */
+	if (slot->tts_tableOid != relation->rd_id)
+	{
+		ColumnarOptions columnarOptions;
+		ReadColumnarOptions(slot->tts_tableOid, &columnarOptions);
+		ColumnarSetWriteStateOptions(writeState, columnarOptions);
+	}
+
 	MemoryContext oldContext = MemoryContextSwitchTo(ColumnarWritePerTupleContext(
 														 writeState));
 
@@ -890,13 +892,10 @@ columnar_relation_set_new_filenode(Relation rel,
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
 	SMgrRelation srel = RelationCreateStorage_compat(*newrnode, persistence, true);
+
 	ColumnarStorageInit(srel, ColumnarMetadataNewStorageId());
-	Relation newRel = relation_open(newrnode->relNode, AccessShareLock);
-	ColumnarOptions options;
-	ReadColumnarOptions(rel->rd_id, &options);
-	SetColumnarOptions(newRel->rd_id, &options);
-	/*InitColumnarOptions(newRel->rd_id); */
-	relation_close(newRel, AccessShareLock);
+	InitColumnarOptions(rel->rd_id);
+
 	smgrclose(srel);
 
 	/* we will lazily initialize metadata in first stripe reservation */
