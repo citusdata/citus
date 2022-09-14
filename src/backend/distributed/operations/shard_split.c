@@ -1016,10 +1016,14 @@ CreateObjectOnPlacement(List *objectCreationCommandList,
 						WorkerNode *workerPlacementNode)
 {
 	char *currentUser = CurrentUserName();
-	SendCommandListToWorkerOutsideTransaction(workerPlacementNode->workerName,
-											  workerPlacementNode->workerPort,
-											  currentUser,
-											  objectCreationCommandList);
+	int connectionFlags = 0;
+
+	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
+			workerPlacementNode->workerName, workerPlacementNode->workerPort,
+			currentUser, NULL);
+
+	SendCommandListToWorkerInSeparateTransaction(workerConnection,
+											  	 objectCreationCommandList);
 }
 
 
@@ -2245,7 +2249,7 @@ GetNextShardIdForSplitChild()
 	appendStringInfo(nextValueCommand, "SELECT nextval(%s);", quote_literal_cstr(
 						 "pg_catalog.pg_dist_shardid_seq"));
 
-	int connectionFlag = FORCE_NEW_CONNECTION;
+	int connectionFlag = 0;
 	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlag,
 																LocalHostName,
 																PostPortNumber,
@@ -2269,7 +2273,9 @@ GetNextShardIdForSplitChild()
 	}
 
 	shardId = SafeStringToUint64(PQgetvalue(result, 0, 0 /* nodeId column*/));
-	CloseConnection(connection);
+	//CloseConnection(connection);
+	PQclear(result);
+	ForgetResults(connection);
 
 	return shardId;
 }
