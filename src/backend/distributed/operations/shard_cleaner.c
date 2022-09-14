@@ -756,10 +756,15 @@ TryDropShardOutsideTransaction(OperationId operationId, char *qualifiedTableName
 									   dropQuery->data);
 
 	/* remove the shard from the node */
-	MultiConnection *connection = GetLocalConnectionForSubtransactionAsUser(
-		CitusExtensionOwnerName());
+	int connectionFlags = OUTSIDE_TRANSACTION;
+	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
+																	  nodeName, nodePort,
+																	  CurrentUserName(),
+																	  NULL);
+	workerConnection->forceCloseAtTransactionEnd = true;
+
 	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
-		connection,
+		workerConnection,
 		dropCommandList);
 
 	return success;
