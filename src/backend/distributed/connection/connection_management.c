@@ -16,7 +16,7 @@
 #include "miscadmin.h"
 
 #include "safe_lib.h"
-
+#include "postmaster/postmaster.h"
 #include "access/hash.h"
 #include "commands/dbcommands.h"
 #include "distributed/backend_data.h"
@@ -239,6 +239,27 @@ GetNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	Assert(connection != NULL);
 
 	FinishConnectionEstablishment(connection);
+
+	return connection;
+}
+
+
+/*
+ * GetLocalConnectionForSubtransaction establishes a localhost connection.
+ * To avoid creating excessive connections, we try to reuse an existing connection.
+ */
+MultiConnection*
+GetLocalConnectionForSubtransactionAsUser(char *userName)
+{
+	int connectionFlag = OUTSIDE_TRANSACTION;
+	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlag,
+																LocalHostName,
+																PostPortNumber,
+																userName,
+																get_database_name(
+																	MyDatabaseId));
+	/* Don't cache connection for the lifetime of the entire session. */
+	connection->forceCloseAtTransactionEnd = true;
 
 	return connection;
 }

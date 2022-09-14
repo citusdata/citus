@@ -289,6 +289,7 @@ extern MultiConnection * StartNodeConnection(uint32 flags, const char *hostname,
 extern MultiConnection * GetNodeUserDatabaseConnection(uint32 flags, const char *hostname,
 													   int32 port, const char *user,
 													   const char *database);
+extern MultiConnection* GetLocalConnectionForSubtransactionAsUser(char* userName);
 extern MultiConnection * StartNodeUserDatabaseConnection(uint32 flags,
 														 const char *hostname,
 														 int32 port,

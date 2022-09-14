@@ -2245,14 +2245,7 @@ GetNextShardIdForSplitChild()
 	appendStringInfo(nextValueCommand, "SELECT nextval(%s);", quote_literal_cstr(
 						 "pg_catalog.pg_dist_shardid_seq"));
 
-	int connectionFlag = FORCE_NEW_CONNECTION;
-	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlag,
-																LocalHostName,
-																PostPortNumber,
-																CitusExtensionOwnerName(),
-																get_database_name(
-																	MyDatabaseId));
-
+	MultiConnection *connection = GetLocalConnectionForSubtransactionAsUser(CitusExtensionOwnerName());
 	PGresult *result = NULL;
 	int queryResult = ExecuteOptionalRemoteCommand(connection, nextValueCommand->data,
 												   &result);
@@ -2269,7 +2262,8 @@ GetNextShardIdForSplitChild()
 	}
 
 	shardId = SafeStringToUint64(PQgetvalue(result, 0, 0 /* nodeId column*/));
-	CloseConnection(connection);
+	PQclear(result);
+	ForgetResults(connection);
 
 	return shardId;
 }
