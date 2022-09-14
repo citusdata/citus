@@ -670,10 +670,15 @@ CheckIfRelationWithSameNameExists(ShardInterval *shardInterval, WorkerNode *work
 	AppendShardIdToName(&shardName, shardInterval->shardId);
 
 	StringInfo checkShardExistsQuery = makeStringInfo();
+
+	/*
+	 * We pass schemaName and shardName without quote_identifier, since
+	 * they are used as strings here.
+	 */
 	appendStringInfo(checkShardExistsQuery,
-					 "SELECT EXISTS (SELECT FROM pg_catalog.pg_tables WHERE schemaname = '%s' AND tablename = '%s');",
-					 schemaName,
-					 shardName);
+					 "SELECT EXISTS (SELECT FROM pg_catalog.pg_tables WHERE schemaname = %s AND tablename = %s);",
+					 quote_literal_cstr(schemaName),
+					 quote_literal_cstr(shardName));
 
 	int connectionFlags = 0;
 	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,
@@ -691,11 +696,13 @@ CheckIfRelationWithSameNameExists(ShardInterval *shardInterval, WorkerNode *work
 		ReportResultError(connection, result, ERROR);
 	}
 
-	char *checkExists = PQgetvalue(result, 0, 0);
+	char *existsString = PQgetvalue(result, 0, 0);
+	bool tableExists = strcmp(existsString, "t") == 0;
+
 	PQclear(result);
 	ForgetResults(connection);
 
-	return strcmp(checkExists, "t") == 0;
+	return tableExists;
 }
 
 
