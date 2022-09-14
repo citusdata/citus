@@ -2002,6 +2002,30 @@ SELECT tablename, indexname FROM pg_indexes
 WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%' ORDER BY 1, 2;
 
 \c - - - :master_port
+SET search_path TO partitioning_schema;
+
+-- create parent table
+CREATE TABLE stxdinp(i int, a int, b int) PARTITION BY RANGE (i);
+
+-- create partition
+CREATE TABLE stxdinp1 PARTITION OF stxdinp FOR VALUES FROM (1) TO (100);
+
+-- populate table
+INSERT INTO stxdinp SELECT 1, a/100, a/100 FROM generate_series(1, 999) a;
+
+-- create extended statistics
+CREATE STATISTICS stxdinp ON a, b FROM stxdinp;
+
+-- distribute parent table
+SELECT create_distributed_table('stxdinp', 'i');
+
+-- run select query, works fine
+SELECT a, b FROM stxdinp GROUP BY 1, 2;
+
+-- partitions are processed recursively for PG15+
+VACUUM ANALYZE stxdinp;
+SELECT a, b FROM stxdinp GROUP BY 1, 2;
+
 DROP SCHEMA partitioning_schema CASCADE;
 RESET search_path;
 DROP TABLE IF EXISTS
