@@ -34,6 +34,10 @@ static Oid FindTargetRelationOid(Relation sourceShardRelation,
 								 HeapTuple tuple,
 								 char *currentSlotName);
 
+static HeapTuple GetTupleForTargetSchema(HeapTuple sourceRelationTuple,
+										 TupleDesc sourceTupleDesc,
+										 TupleDesc targetTupleDesc);
+
 /*
  * Postgres uses 'pgoutput' as default plugin for logical replication.
  * We want to reuse Postgres pgoutput's functionality as much as possible.
@@ -129,6 +133,71 @@ split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 	}
 
 	Relation targetRelation = RelationIdGetRelation(targetRelationOid);
+
+	/*
+	 * If any columns from source relation have been dropped, then the tuple needs to
+	 * be formatted according to the target relation.
+	 */
+	TupleDesc sourceRelationDesc = RelationGetDescr(relation);
+	TupleDesc targetRelationDesc = RelationGetDescr(targetRelation);
+	if (sourceRelationDesc->natts > targetRelationDesc->natts)
+	{
+		switch (change->action)
+		{
+			case REORDER_BUFFER_CHANGE_INSERT:
+			{
+				HeapTuple sourceRelationNewTuple = &(change->data.tp.newtuple->tuple);
+				HeapTuple targetRelationNewTuple = GetTupleForTargetSchema(
+					sourceRelationNewTuple, sourceRelationDesc, targetRelationDesc);
+
+				change->data.tp.newtuple->tuple = *targetRelationNewTuple;
+				break;
+			}
+
+			case REORDER_BUFFER_CHANGE_UPDATE:
+			{
+				HeapTuple sourceRelationNewTuple = &(change->data.tp.newtuple->tuple);
+				HeapTuple targetRelationNewTuple = GetTupleForTargetSchema(
+					sourceRelationNewTuple, sourceRelationDesc, targetRelationDesc);
+
+				change->data.tp.newtuple->tuple = *targetRelationNewTuple;
+
+				/*
+				 * Format oldtuple according to the target relation. If the column values of replica
+				 * identiy change, then the old tuple is non-null and needs to be formatted according
+				 * to the target relation schema.
+				 */
+				if (change->data.tp.oldtuple != NULL)
+				{
+					HeapTuple sourceRelationOldTuple = &(change->data.tp.oldtuple->tuple);
+					HeapTuple targetRelationOldTuple = GetTupleForTargetSchema(
+						sourceRelationOldTuple,
+						sourceRelationDesc,
+						targetRelationDesc);
+
+					change->data.tp.oldtuple->tuple = *targetRelationOldTuple;
+				}
+				break;
+			}
+
+			case REORDER_BUFFER_CHANGE_DELETE:
+			{
+				HeapTuple sourceRelationOldTuple = &(change->data.tp.oldtuple->tuple);
+				HeapTuple targetRelationOldTuple = GetTupleForTargetSchema(
+					sourceRelationOldTuple, sourceRelationDesc, targetRelationDesc);
+
+				change->data.tp.oldtuple->tuple = *targetRelationOldTuple;
+				break;
+			}
+
+			/* Only INSERT/DELETE/UPDATE actions are visible in the replication path of split shard */
+			default:
+				ereport(ERROR, errmsg(
+							"Unexpected Action :%d. Expected action is INSERT/DELETE/UPDATE",
+							change->action));
+		}
+	}
+
 	pgoutputChangeCB(ctx, txn, targetRelation, change);
 	RelationClose(targetRelation);
 }
@@ -222,4 +291,52 @@ GetHashValueForIncomingTuple(Relation sourceShardRelation,
 											   partitionColumnValue);
 
 	return DatumGetInt32(hashedValueDatum);
+}
+
+
+/*
+ * GetTupleForTargetSchema returns a tuple with the schema of the target relation.
+ * If some columns within the source relations are dropped, we would have to reformat
+ * the tuple to match the schema of the target relation.
+ *
+ * Consider the below scenario:
+ * Session1 : Drop column followed by create_distributed_table_concurrently
+ * Session2 : Concurrent insert workload
+ *
+ * The child shards created by create_distributed_table_concurrently will have less columns
+ * than the source shard because some column were dropped.
+ * The incoming tuple from session2 will have more columns as the writes
+ * happened on source shard. But now the tuple needs to be applied on child shard. So we need to format
+ * it according to child schema.
+ */
+static HeapTuple
+GetTupleForTargetSchema(HeapTuple sourceRelationTuple,
+						TupleDesc sourceRelDesc,
+						TupleDesc targetRelDesc)
+{
+	/* Deform the tuple */
+	Datum *oldValues = (Datum *) palloc0(sourceRelDesc->natts * sizeof(Datum));
+	bool *oldNulls = (bool *) palloc0(sourceRelDesc->natts * sizeof(bool));
+	heap_deform_tuple(sourceRelationTuple, sourceRelDesc, oldValues,
+					  oldNulls);
+
+
+	/* Create new tuple by skipping dropped columns */
+	int nextAttributeIndex = 0;
+	Datum *newValues = (Datum *) palloc0(targetRelDesc->natts * sizeof(Datum));
+	bool *newNulls = (bool *) palloc0(targetRelDesc->natts * sizeof(bool));
+	for (int i = 0; i < sourceRelDesc->natts; i++)
+	{
+		if (TupleDescAttr(sourceRelDesc, i)->attisdropped)
+		{
+			continue;
+		}
+
+		newValues[nextAttributeIndex] = oldValues[i];
+		newNulls[nextAttributeIndex] = oldNulls[i];
+		nextAttributeIndex++;
+	}
+
+	HeapTuple targetRelationTuple = heap_form_tuple(targetRelDesc, newValues, newNulls);
+	return targetRelationTuple;
 }
