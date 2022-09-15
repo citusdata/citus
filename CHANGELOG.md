@@ -1,120 +1,114 @@
 ### citus v11.1.0 (September 15, 2022) ###
 
-* Fixes floating exception during create_distributed_table_concurrently.
+* Fixes floating exception during create_distributed_table_concurrently
 
-* Fixes a bug in query escaping in undistribute_table and alter_distributed_table
+* Fixes a bug in query escaping in `undistribute_table()` and `alter_distributed_table()`
 
-* Show citus_copy_shard_placement progress in get_rebalance_progres
+* Shows `citus_copy_shard_placement()` progress in `get_rebalance_progres()`
 
 * Adds support for unlogged distributed sequences
 
-* Adds support for NULLS NOT DISTINCT clauses for indexes
+* Adds support for `NULLS NOT DISTINCT` clauses for indexes
 
-* Add a rebalancer that uses background tasks for its execution
+* Adds a rebalancer that uses background tasks for its execution
 
-* Show Citus local tables in citus_tables
+* Shows local tables added to metadata in `citus_tables`
 
-* Hide tables owned by extensions from citus_tables and citus_shards
+* Hides tables owned by extensions from `citus_tables` and `citus_shards`
 
-* Fix bug preventing isolate_tenant_to_new_shard with text column
+* Fixes a bug preventing the usage of `isolate_tenant_to_new_shard()` with text column
 
-* citus_move_shard_placement becomes a noop if shard already exists on node
+* `citus_move_shard_placement()` becomes a noop if shard already exists on node
 
-* Remove do_repair option from citus_copy_shard_placement
+* Removes `do_repair` option from `citus_copy_shard_placement()`
 
-* Create all foreign keys quickly at the end of a shard mov
+* Creates all foreign keys quickly at the end of a shard move
 
-* Introduce GUC `citus.skip_constraint_validation`
+* Introduces GUC `citusskip_constraint_validation`
 
-* Makes sure that `SELECT .. FOR UPDATE `opens a transaction block when used in a function call
+* Makes sure that `SELECT . FOR UPDATE `opens a transaction block when used in a function call
 
 * Makes sure to disallow usage of SQL functions referencing to a distributed table and prevents a segfault
 
-* Checks existence of the shards before insert, delete, and update.
+* Checks existence of the shards before insert, delete, and update
 
-* Disallows distribution by a numeric with negative scale
+* Adds `create_distributed_table_concurrently()` which distributes tables without blocking writes
 
-* Add create_distributed_table_concurrently which distributes tables without blocking
+* Makes non-partitioned table size calculation quicker
 
-* Adds SUM for calculating non-partitioned table sizes
+* Adds an `allow_unsafe_constraints` flag for constraints without distribution column
 
-* Add an allow_unsafe_constraints flag for constraints without distribution column
-
-* Fixes a bug that prevents setting colocation group of a partitioned distributed table to 'none'
+* Fixes a bug that prevents setting colocation group of a partitioned distributed table to `none`
 
 * Adds support for PostgreSQL 15beta3
 
-* Creates new colocation entries when colocate_with => 'none'.
+* `create_distributed_table()` creates new colocation entries when using `colocate_with => 'none'`
 
-* Fixes an issue can cause logical reference table replication to fail
+* Fixes an issue that can cause logical reference table replication to fail
 
-* Stops creating colocation entry at EnsureReferenceTablesExistOnAllNodes.
+* Prevents creating a new colocation entry when replicating reference tables
 
-* Fix compilation warning on PG13 + OpenSSL 3.0
+* Fixes a bug that caused `GRANT` to propagate within `CREATE EXTENSION`
 
-* Fixes a bug that caused GRANT to propagate within CREATE EXTENSION
+* Only shows shards in moving state in `get_rebalance_progress()`
 
-* Only show shards in moving state in get_rebalance_progress
+* Changes the default mode for shard splitting to 'auto' from 'block_writes'
 
-* Default mode for shard splitting is changed to 'auto' from 'block_writes'.
+* Adds support for non-blocking tenant isolation
 
-* Supports non blocking tenant isolation.
+* Supports changing CPU priorities for backends and shard moves
 
-* Support changing CPU priorities for backends and shard moves
+* Fixes several small memory leaks
 
-* Fix several small memory leaks
+* Support logical replication in `replicate_reference_tables()`
 
-* Support logical replication in replicate_reference_tables()
+* Fixes a segfault in `citus_copy_shard_placement()`
 
-* Fixes a segfault in citus_copy_shard_placement
+* Uses a faster custom copy logic for non-blocking shard moves
 
-* Use faster custom copy logic for non-blocking shard moves
+* `isolate_tenant_to_new_shard()` drops support for replicated tables
 
-* isolate_tenant_to_new_shard drops support for replicated tables
+* `isolate_tenant_to_new_shard()` now fails when run concurrently with itself
 
-* isolate_tenant_to_new_shard now fails when run concurrently with itself
+* `isolate_tenant_to_new_shard()` adds support for partitioned tables
 
-* isolate_tenant_to_new_shard adds support for partitioned tables
+* `isolate_tenant_to_new_shard()` adds support for columnar tables
 
-* isolate_tenant_to_new_shard adds support for columnar tables
+* Fixes the transaction timestamp column of the `get_current_transaction_id()` on coordinator
 
-* Fixes the transaction timestamp column of the get_current_transaction_id() on coordinator.
+* Adds support for `GRANT/REVOKE` ON aggregates
 
-* Adds support for GRANT/REVOKE ON aggregates.
+* Improves performance of blocking shard moves
 
-* Improve performance of blocking shard moves
-
-* Adds the GUC enable_unsupported_feature_messages to control some of the citus related messages.
+* Adds the GUC `enable_unsupported_feature_messages` to control some of the citus related messages
 
 * Introduces `citus_locks` view
 
-* Adds a `citus_split_shard_by_split_points` function
+* Adds `citus_split_shard_by_split_points()` function
 
-* Separate columnar storage AM into a separate logical extension
+* Separates columnar storage AM into a separate logical extension
 
 * Fixes a bug that prevents promoting read-replicas as primaries
 
-* Fixes a bug that prevents using auto option for VACUUM (INDEX_CLEANUP) operation
+* Fixes a bug that prevents using `auto` option for `VACUUM (INDEX_CLEANUP)` operation
 
-* VACUUM and ANALYZE commands are propagated to worker nodes.
+* Propagates `VACUUM` and `ANALYZE` to worker nodes
 
-* Columnar: tighten security and improve visibility
+* Tightens security and improves visibility for columnar table access method
 
-* Columnar: support relation options with ALTER TABLE.
+* Adds support for setting relation options for columnar tables using `ALTER TABLE`
 
-* LOCK commands on distributed tables are supported from worker nodes
+* Fixes schema name qualification for `RENAME SEQUENCE` statement
 
-* Fix schema name qualification for rename sequence statement
+* Maps any unused parameters to a generic type in prepared statements
 
-* In prepared statements, map any unused parameters to a generic type.
+* Replaces `citus.hide_shards_from_app_name_prefixes` GUC with `citus.show_shards_for_app_name_prefixes`
 
-* Convert citus.hide_shards_from_app_name_prefixes to citus.show_shards_for_app_name_prefixes
-
-* Fixes a bug that marks metadatasynced of coordinator
+* Fixes a bug that causes incorrectly marking `metadatasynced` flag for coordinator
 
 * Fixes a bug that may cause Citus not to create function in transaction block properly
 
-* Removes deprecated re-partitioning functions like worker_hash_partition_table
+* Removes deprecated re-partitioning functions like `worker_hash_partition_table()`
 
 ### citus v10.2.8 (August 19, 2022) ###
 
