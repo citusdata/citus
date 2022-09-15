@@ -54,11 +54,11 @@ SELECT result FROM run_command_on_all_nodes('
 SELECT result FROM run_command_on_all_nodes('
     SELECT colliculocale FROM pg_collation WHERE collname = ''german_phonebook_test'';
 ');
- result
+     result
 ---------------------------------------------------------------------
-de-u-co-phonebk
-de-u-co-phonebk
-de-u-co-phonebk
+ de-u-co-phonebk
+ de-u-co-phonebk
+ de-u-co-phonebk
 (3 rows)
 
 -- with non-icu provider, colliculocale will be null, collcollate and collctype will be set
@@ -878,8 +878,113 @@ WARNING:  not propagating CLUSTER command for partitioned table to worker nodes
 HINT:  Provide a child partition table names in order to CLUSTER distributed partitioned tables.
 -- verify that we can still cluster the partition tables now since replication factor is 1
 CLUSTER sale_newyork_repl_factor_1 USING sale_newyork_repl_factor_1_pkey;
+create table reservations ( room_id integer not null, booked_during daterange );
+insert into reservations values
+-- 1: has a meets and a gap
+(1, daterange('2018-07-01', '2018-07-07')),
+(1, daterange('2018-07-07', '2018-07-14')),
+(1, daterange('2018-07-20', '2018-07-22')),
+-- 2: just a single row
+(2, daterange('2018-07-01', '2018-07-03')),
+-- 3: one null range
+(3, NULL),
+-- 4: two null ranges
+(4, NULL),
+(4, NULL),
+-- 5: a null range and a non-null range
+(5, NULL),
+(5, daterange('2018-07-01', '2018-07-03')),
+-- 6: has overlap
+(6, daterange('2018-07-01', '2018-07-07')),
+(6, daterange('2018-07-05', '2018-07-10')),
+-- 7: two ranges that meet: no gap or overlap
+(7, daterange('2018-07-01', '2018-07-07')),
+(7, daterange('2018-07-07', '2018-07-14')),
+-- 8: an empty range
+(8, 'empty'::daterange);
+SELECT create_distributed_table('reservations', 'room_id');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg15.reservations$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- should be fine to pushdown range_agg
+SELECT   room_id, range_agg(booked_during ORDER BY booked_during)
+FROM     reservations
+GROUP BY room_id
+ORDER BY room_id;
+ room_id |                     range_agg
+---------------------------------------------------------------------
+       1 | {[07-01-2018,07-14-2018),[07-20-2018,07-22-2018)}
+       2 | {[07-01-2018,07-03-2018)}
+       3 |
+       4 |
+       5 | {[07-01-2018,07-03-2018)}
+       6 | {[07-01-2018,07-10-2018)}
+       7 | {[07-01-2018,07-14-2018)}
+       8 | {}
+(8 rows)
+
+-- should be fine to apply range_agg on the coordinator
+SELECT   room_id + 1, range_agg(booked_during ORDER BY booked_during)
+FROM     reservations
+GROUP BY room_id + 1
+ORDER BY room_id + 1;
+ ?column? |                     range_agg
+---------------------------------------------------------------------
+        2 | {[07-01-2018,07-14-2018),[07-20-2018,07-22-2018)}
+        3 | {[07-01-2018,07-03-2018)}
+        4 |
+        5 |
+        6 | {[07-01-2018,07-03-2018)}
+        7 | {[07-01-2018,07-10-2018)}
+        8 | {[07-01-2018,07-14-2018)}
+        9 | {}
+(8 rows)
+
+-- min() and max() for xid8
+create table xid8_t1 (x xid8, y int);
+insert into xid8_t1 values ('0', 1), ('010', 2), ('42', 3), ('0xffffffffffffffff', 4), ('-1', 5);
+SELECT create_distributed_table('xid8_t1', 'x');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg15.xid8_t1$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+select min(x), max(x) from xid8_t1 ORDER BY 1,2;
+ min |         max
+---------------------------------------------------------------------
+   0 | 18446744073709551615
+(1 row)
+
+select min(x), max(x) from xid8_t1 GROUP BY x ORDER BY 1,2;
+         min          |         max
+---------------------------------------------------------------------
+                    0 |                    0
+                    8 |                    8
+                   42 |                   42
+ 18446744073709551615 | 18446744073709551615
+(4 rows)
+
+select min(x), max(x) from xid8_t1 GROUP BY y ORDER BY 1,2;
+         min          |         max
+---------------------------------------------------------------------
+                    0 |                    0
+                    8 |                    8
+                   42 |                   42
+ 18446744073709551615 | 18446744073709551615
+ 18446744073709551615 | 18446744073709551615
+(5 rows)
+
 -- Clean up
-RESET citus.shard_replication_factor;
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
 DROP SCHEMA pg15 CASCADE;
