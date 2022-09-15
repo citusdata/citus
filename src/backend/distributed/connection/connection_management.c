@@ -437,7 +437,8 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 		MultiConnection *connection =
 			dlist_container(MultiConnection, connectionNode, iter.cur);
 
-		if (flags & OUTSIDE_TRANSACTION)
+		bool outsideCoordinatedTx = (flags & OUTSIDE_TRANSACTION);
+		if (outsideCoordinatedTx)
 		{
 			/* don't return connections that are used in transactions */
 			if (connection->remoteTransaction.transactionState !=
@@ -490,6 +491,12 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 			metadataConnectionCandidateList =
 				lappend(metadataConnectionCandidateList, connection);
 			continue;
+		}
+
+		if (outsideCoordinatedTx)
+		{
+			connection->remoteTransaction.transactionState =
+				REMOTE_TRANS_OUTSIDE_COORDINATED_TX;
 		}
 
 		return connection;

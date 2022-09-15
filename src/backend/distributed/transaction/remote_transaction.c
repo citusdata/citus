@@ -62,10 +62,14 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 {
 	RemoteTransaction *transaction = &connection->remoteTransaction;
 
-	Assert(transaction->transactionState == REMOTE_TRANS_NOT_STARTED);
+	Assert(transaction->transactionState == REMOTE_TRANS_NOT_STARTED ||
+		   transaction->transactionState == REMOTE_TRANS_OUTSIDE_COORDINATED_TX);
 
 	/* remember transaction as being in-progress */
-	dlist_push_tail(&InProgressTransactions, &connection->transactionNode);
+	if (transaction->transactionState != REMOTE_TRANS_OUTSIDE_COORDINATED_TX)
+	{
+		dlist_push_tail(&InProgressTransactions, &connection->transactionNode);
+	}
 
 	transaction->transactionState = REMOTE_TRANS_STARTING;
 
@@ -761,10 +765,9 @@ CloseRemoteTransaction(struct MultiConnection *connection)
 	RemoteTransaction *transaction = &connection->remoteTransaction;
 
 	/* unlink from list of open transactions, if necessary */
-	if (transaction->transactionState != REMOTE_TRANS_NOT_STARTED)
+	if (transaction->transactionState != REMOTE_TRANS_NOT_STARTED &&
+		transaction->transactionState != REMOTE_TRANS_OUTSIDE_COORDINATED_TX)
 	{
-		/* XXX: Should we error out for a critical transaction? */
-
 		dlist_delete(&connection->transactionNode);
 	}
 }
