@@ -1,6 +1,6 @@
 ### citus v11.1.0 (September 15, 2022) ###
 
-* Adds support for PostgreSQL 15beta3
+* Adds support for PostgreSQL 15beta4
 
 * Adds a rebalancer that uses background tasks for its execution
 
@@ -11,13 +11,13 @@
 
 * Adds support for non-blocking tenant isolation
 
-* Separates columnar storage AM into a separate logical extension
+* Separates columnar table access method into a separate logical extension
 
-* Supports logical replication in `replicate_reference_tables()`
+* Adds support for logical replication in `replicate_reference_tables()`
 
 * Improves performance of blocking shard moves
 
-* Uses a faster custom copy logic for non-blocking shard moves
+* Improves non-blocking shard moves with a faster custom copy logic
 
 * `isolate_tenant_to_new_shard()` adds support for columnar tables
 
@@ -27,8 +27,8 @@
 
 * `isolate_tenant_to_new_shard()` now fails when run concurrently with itself
 
-* Adds an `allow_unsafe_constraints` flag for constraints without distribution
-  column
+* Adds the GUC `allow_unsafe_constraints` to allow constraints without
+  distribution column
 
 * Adds support for `GRANT/REVOKE` on aggregates
 
@@ -53,7 +53,7 @@
 
 * Makes non-partitioned table size calculation quicker
 
-* Only shows shards in moving state in `get_rebalance_progress()`
+* Limits `get_rebalance_progress()` to show shards in moving state
 
 * Removes `do_repair` option from `citus_copy_shard_placement()`
 
@@ -65,7 +65,7 @@
 
 * Shows `citus_copy_shard_placement()` progress in `get_rebalance_progres()`
 
-* Shows local tables added to metadata in `citus_tables`
+* Improves `citus_tables` view by showing local tables added to metadata
 
 * Supports changing CPU priorities for backends and shard moves
 
@@ -73,14 +73,14 @@
 
 * `citus_move_shard_placement()` becomes a noop if shard already exists on node
 
-* `create_distributed_table()` creates new colocation entries when using
-  `colocate_with => 'none'`
+* Improves `create_distributed_table()` by creating new colocation entries when
+  using `colocate_with => 'none'`
 
-* Makes sure that `SELECT . FOR UPDATE `opens a transaction block when used in
+* Ensures that `SELECT .. FOR UPDATE` opens a transaction block when used in
   a function call
 
-* Makes sure to disallow usage of SQL functions referencing to a distributed
-  table and prevents a segfault
+* Prevents a segfault by disallowing usage of SQL functions referencing to a
+  distributed table
 
 * Prevents creating a new colocation entry when replicating reference tables
 
@@ -90,20 +90,20 @@
 * Fixes a bug preventing the usage of `isolate_tenant_to_new_shard()` with text
   column
 
-* Fixes a bug that caused `GRANT` to propagate within `CREATE EXTENSION`
+* Fixes a bug that may cause `GRANT` to propagate within `CREATE EXTENSION`
 
 * Fixes a bug that causes incorrectly marking `metadatasynced` flag for
   coordinator
 
-* Fixes a bug that may cause Citus not to create function in transaction block
-  properly
+* Fixes a bug that may prevent Citus from creating function in transaction
+  block properly
 
 * Fixes a bug that prevents promoting read-replicas as primaries
 
 * Fixes a bug that prevents setting colocation group of a partitioned
   distributed table to `none`
 
-* Fixes a bug that prevents using `auto` option for `VACUUM (INDEX_CLEANUP)`
+* Fixes a bug that prevents using `AUTO` option for `VACUUM (INDEX_CLEANUP)`
   operation
 
 * Fixes a segfault in `citus_copy_shard_placement()`
