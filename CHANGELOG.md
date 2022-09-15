@@ -113,8 +113,6 @@
 
 * Fixes an issue that can cause logical reference table replication to fail
 
-* Fixes floating exception during `create_distributed_table_concurrently()`
-
 * Fixes schema name qualification for `RENAME SEQUENCE` statement
 
 * Fixes several small memory leaks
