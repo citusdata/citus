@@ -4,7 +4,8 @@
 
 * Adds a rebalancer that uses background tasks for its execution
 
-* Adds `create_distributed_table_concurrently()` which distributes tables without blocking writes
+* Adds `create_distributed_table_concurrently()` which distributes tables
+  without blocking writes
 
 * Adds `citus_split_shard_by_split_points()` function
 
@@ -26,17 +27,20 @@
 
 * `isolate_tenant_to_new_shard()` now fails when run concurrently with itself
 
-* Adds an `allow_unsafe_constraints` flag for constraints without distribution column
+* Adds an `allow_unsafe_constraints` flag for constraints without distribution
+  column
 
 * Adds support for `GRANT/REVOKE` ON aggregates
 
 * Adds support for `NULLS NOT DISTINCT` clauses for indexes
 
-* Adds support for setting relation options for columnar tables using `ALTER TABLE`
+* Adds support for setting relation options for columnar tables using
+  `ALTER TABLE`
 
 * Adds support for unlogged distributed sequences
 
-* Adds the GUC `enable_unsupported_feature_messages` to control some of the citus related messages
+* Adds the GUC `enable_unsupported_feature_messages` to control some of the
+  Citus related messages
 
 * Checks existence of the shards before insert, delete, and update
 
@@ -56,9 +60,11 @@
 
 * Removes `do_repair` option from `citus_copy_shard_placement()`
 
-* Removes deprecated re-partitioning functions like `worker_hash_partition_table()`
+* Removes deprecated re-partitioning functions like
+  `worker_hash_partition_table()`
 
-* Replaces `citus.hide_shards_from_app_name_prefixes` GUC with `citus.show_shards_for_app_name_prefixes`
+* Replaces `citus.hide_shards_from_app_name_prefixes` GUC with
+  `citus.show_shards_for_app_name_prefixes`
 
 * Shows `citus_copy_shard_placement()` progress in `get_rebalance_progres()`
 
@@ -70,41 +76,51 @@
 
 * `citus_move_shard_placement()` becomes a noop if shard already exists on node
 
-* `create_distributed_table()` creates new colocation entries when using `colocate_with => 'none'`
+* `create_distributed_table()` creates new colocation entries when using
+  `colocate_with => 'none'`
 
-* Makes sure that `SELECT . FOR UPDATE `opens a transaction block when used in a function call
+* Makes sure that `SELECT . FOR UPDATE `opens a transaction block when used in
+  a function call
 
-* Makes sure to disallow usage of SQL functions referencing to a distributed table and prevents a segfault
+* Makes sure to disallow usage of SQL functions referencing to a distributed
+  table and prevents a segfault
 
 * Prevents creating a new colocation entry when replicating reference tables
 
-* Fixes a bug in query escaping in `undistribute_table()` and `alter_distributed_table()`
+* Fixes a bug in query escaping in `undistribute_table()` and
+  `alter_distributed_table()`
 
-* Fixes a bug preventing the usage of `isolate_tenant_to_new_shard()` with text column
+* Fixes a bug preventing the usage of `isolate_tenant_to_new_shard()` with text
+  column
 
 * Fixes a bug that caused `GRANT` to propagate within `CREATE EXTENSION`
 
-* Fixes a bug that causes incorrectly marking `metadatasynced` flag for coordinator
+* Fixes a bug that causes incorrectly marking `metadatasynced` flag for
+  coordinator
 
-* Fixes a bug that may cause Citus not to create function in transaction block properly
+* Fixes a bug that may cause Citus not to create function in transaction block
+  properly
 
 * Fixes a bug that prevents promoting read-replicas as primaries
 
-* Fixes a bug that prevents setting colocation group of a partitioned distributed table to `none`
+* Fixes a bug that prevents setting colocation group of a partitioned
+  distributed table to `none`
 
-* Fixes a bug that prevents using `auto` option for `VACUUM (INDEX_CLEANUP)` operation
+* Fixes a bug that prevents using `auto` option for `VACUUM (INDEX_CLEANUP)`
+  operation
 
 * Fixes a segfault in `citus_copy_shard_placement()`
 
 * Fixes an issue that can cause logical reference table replication to fail
 
-* Fixes floating exception during create_distributed_table_concurrently
+* Fixes floating exception during `create_distributed_table_concurrently()`
 
 * Fixes schema name qualification for `RENAME SEQUENCE` statement
 
 * Fixes several small memory leaks
 
-* Fixes the transaction timestamp column of the `get_current_transaction_id()` on coordinator
+* Fixes the transaction timestamp column of the `get_current_transaction_id()`
+  on coordinator
 
 * Maps any unused parameters to a generic type in prepared statements
 
