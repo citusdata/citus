@@ -1,3 +1,87 @@
+### citus v11.1.0 (September 15, 2022) ###
+
+* Fixes qualify CREATE STATISTICS statements
+
+* Fixes a bug that could cause unqualified DROP DOMAIN IF EXISTS to fail
+
+* Fixes a bug that could cause leaking files when mat. view refreshed
+
+* Introduce a citus_finish_citus_upgrade() procedure
+
+* Prevents alter table functions from dropping extensions
+
+* honor enable_metadata_sync in node operations
+
+* Fix `invalid read of size 1` memory error with citus_add_node
+
+* Propagate views when syncing Citus table metadata
+
+* Fix columnar freezing/wraparound bug.
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that could cause wrong schema and ownership after alter_distributed_table
+
+* Parallelize metadata syncing on node activat
+
+* Columnar: tighten security and improve visibility
+
+* Improve nested execution checks and add GUC to disable
+
+* Columnar: support relation options with ALTER TABLE.
+
+* Enable distributed execution from run_command_on_* functions 
+
+* LOCK commands on distributed tables are supported from worker nodes
+
+* Add a run_command_on_coordinator function
+
+* Fix schema name qualification for rename sequence statement
+
+* Adds "synchronous" option to citus_disable_node() UDF
+
+* Fixes a bug that prevents dropping/altering indexes
+
+* Fixes schema name qualification for ALTER and DROP SEQUENCE
+
+* In prepared statements, map any unused parameters to a generic type.
+
+* Adds support for propagating ALTER VIEW commands
+
+* Add a citus_is_coordinator function to check whether a node is the coordinator
+
+* Fixes schema name qualification for ALTER and DROP STATISTICS
+
+* `lock_table_if_exits` no longer raises an error when called outside of a xact
+
+* Adds support for distributing CREATE/DROP VIEW commands
+
+* Refrain reading the metadata cache for all tables during upgrade
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Convert citus.hide_shards_from_app_name_prefixes to citus.show_shards_for_app_name_prefixes
+
+* Fixes a bug that marks metadatasynced of coordinator
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that cause false positive distributed deadlocks due to local execution
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that may cause Citus not to create function in transaction block properly
+
+* Allow adding a unique constraint with an index
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that could cause invalid JSON when running EXPLAIN ANALYZE with subplans
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that could cause EXPLAIN ANALYZE to fail for prepared statements with custom type
+
+* Removes deprecated re-partitioning functions like worker_hash_partition_table
+
+* Add TABLESAMPLE support
+
+* Fixes a bug that prevents non-client backends to access shards
+
 ### citus v10.2.8 (August 19, 2022) ###
 
 * Fixes compilation warning caused by latest upgrade script changes
