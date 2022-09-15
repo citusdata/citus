@@ -300,6 +300,7 @@ extern void CloseNodeConnectionsAfterTransaction(char *nodeName, int nodePort);
 extern MultiConnection * ConnectionAvailableToNode(char *hostName, int nodePort,
 												   const char *userName,
 												   const char *database);
+extern void ResetConnection(MultiConnection *connection);
 extern void CloseConnection(MultiConnection *connection);
 extern void ShutdownAllConnections(void);
 extern void ShutdownConnection(MultiConnection *connection);

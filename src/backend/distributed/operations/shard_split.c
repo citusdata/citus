@@ -1015,11 +1015,17 @@ static void
 CreateObjectOnPlacement(List *objectCreationCommandList,
 						WorkerNode *workerPlacementNode)
 {
-	char *currentUser = CurrentUserName();
-	SendCommandListToWorkerOutsideTransaction(workerPlacementNode->workerName,
-											  workerPlacementNode->workerPort,
-											  currentUser,
-											  objectCreationCommandList);
+	int connectionFlags = OUTSIDE_TRANSACTION;
+	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
+																	  workerPlacementNode
+																	  ->workerName,
+																	  workerPlacementNode
+																	  ->workerPort,
+																	  CurrentUserName(),
+																	  NULL);
+
+	SendCommandListToWorkerOutsideTransactionWithConnection(workerConnection,
+															objectCreationCommandList);
 }
 
 

@@ -1150,11 +1150,19 @@ CreatePartitioningHierarchy(List *logicalRepTargetList)
 				 * parallel, so create them sequentially. Also attaching partition
 				 * is a quick operation, so it is fine to execute sequentially.
 				 */
-				SendCommandListToWorkerOutsideTransaction(
-					target->superuserConnection->hostname,
-					target->superuserConnection->port,
+				int connectionFlags = OUTSIDE_TRANSACTION;
+				MultiConnection *workerConnection = GetNodeUserDatabaseConnection(
+					connectionFlags,
+					target->
+					superuserConnection->hostname,
+					target->
+					superuserConnection->port,
 					tableOwner,
-					list_make1(attachPartitionCommand));
+					NULL);
+				SendCommandListToWorkerOutsideTransactionWithConnection(workerConnection,
+																		list_make1(
+																			attachPartitionCommand));
+
 				MemoryContextReset(localContext);
 			}
 		}

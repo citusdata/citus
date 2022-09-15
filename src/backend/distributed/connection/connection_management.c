@@ -63,7 +63,6 @@ static void FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry);
 static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
 static bool ShouldShutdownConnection(MultiConnection *connection, const int
 									 cachedConnectionCount);
-static void ResetConnection(MultiConnection *connection);
 static bool RemoteTransactionIdle(MultiConnection *connection);
 static int EventSetSizeForConnectionList(List *connections);
 
@@ -252,12 +251,9 @@ MultiConnection *
 GetLocalConnectionForSubtransactionAsUser(char *userName)
 {
 	int connectionFlag = OUTSIDE_TRANSACTION;
-	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlag,
-																LocalHostName,
-																PostPortNumber,
-																userName,
-																get_database_name(
-																	MyDatabaseId));
+	MultiConnection *connection =
+		GetNodeUserDatabaseConnection(connectionFlag, LocalHostName,
+									  PostPortNumber, userName, NULL);
 
 	/* Don't cache connection for the lifetime of the entire session. */
 	connection->forceCloseAtTransactionEnd = true;
@@ -1508,7 +1504,7 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
  * ResetConnection preserves the given connection for later usage by
  * resetting its states.
  */
-static void
+void
 ResetConnection(MultiConnection *connection)
 {
 	/* reset per-transaction state */
