@@ -340,6 +340,25 @@ SendCommandListToWorkerOutsideTransaction(const char *nodeName, int32 nodePort,
 																	  nodeName, nodePort,
 																	  nodeUser, NULL);
 
+	SendCommandListToWorkerOutsideTransactionWithConnection(workerConnection,
+															commandList);
+	CloseConnection(workerConnection);
+}
+
+
+/*
+ * SendCommandListToWorkerOutsideTransactionWithConnection sends the command list
+ * over the specified connection. This opens a new transaction on the
+ * connection, thus it's important that no transaction is currently open.
+ * This function is mainly useful to avoid opening an closing
+ * connections excessively by allowing reusing a single connection to send
+ * multiple separately committing transactions. The function raises an error if
+ * any of the queries fail.
+ */
+void
+SendCommandListToWorkerOutsideTransactionWithConnection(MultiConnection *workerConnection,
+														List *commandList)
+{
 	MarkRemoteTransactionCritical(workerConnection);
 	RemoteTransactionBegin(workerConnection);
 
@@ -351,7 +370,7 @@ SendCommandListToWorkerOutsideTransaction(const char *nodeName, int32 nodePort,
 	}
 
 	RemoteTransactionCommit(workerConnection);
-	CloseConnection(workerConnection);
+	CloseRemoteTransaction(workerConnection);
 }
 
 
@@ -430,21 +449,18 @@ SendMetadataCommandListToWorkerListInCoordinatedTransaction(List *workerNodeList
 
 
 /*
- * SendOptionalCommandListToWorkerOutsideTransaction sends the given command
- * list to the given worker in a single transaction that is outside of the
- * coordinated tranaction. If any of the commands fail, it rollbacks the
- * transaction, and otherwise commits.
+ * SendOptionalCommandListToWorkerOutsideTransactionWithConnection sends the
+ * given command list over a specified connection in a single transaction that
+ * is outside of the coordinated tranaction.
+ *
+ * If any of the commands fail, it rollbacks the transaction, and otherwise commits.
+ * A successful commit is indicated by returning true, and a failed commit by returning
+ * false.
  */
 bool
-SendOptionalCommandListToWorkerOutsideTransaction(const char *nodeName, int32 nodePort,
-												  const char *nodeUser, List *commandList)
+SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
+	MultiConnection *workerConnection, List *commandList)
 {
-	int connectionFlags = FORCE_NEW_CONNECTION;
-	bool failed = false;
-
-	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
-																	  nodeName, nodePort,
-																	  nodeUser, NULL);
 	if (PQstatus(workerConnection->pgConn) != CONNECTION_OK)
 	{
 		return false;
@@ -452,6 +468,7 @@ SendOptionalCommandListToWorkerOutsideTransaction(const char *nodeName, int32 no
 	RemoteTransactionBegin(workerConnection);
 
 	/* iterate over the commands and execute them in the same connection */
+	bool failed = false;
 	const char *commandString = NULL;
 	foreach_ptr(commandString, commandList)
 	{
@@ -471,6 +488,30 @@ SendOptionalCommandListToWorkerOutsideTransaction(const char *nodeName, int32 no
 		RemoteTransactionCommit(workerConnection);
 	}
 
+	CloseRemoteTransaction(workerConnection);
+
+	return !failed;
+}
+
+
+/*
+ * SendOptionalCommandListToWorkerOutsideTransaction sends the given command
+ * list to the given worker in a single transaction that is outside of the
+ * coordinated tranaction. If any of the commands fail, it rollbacks the
+ * transaction, and otherwise commits.
+ */
+bool
+SendOptionalCommandListToWorkerOutsideTransaction(const char *nodeName, int32 nodePort,
+												  const char *nodeUser, List *commandList)
+{
+	int connectionFlags = FORCE_NEW_CONNECTION;
+
+	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
+																	  nodeName, nodePort,
+																	  nodeUser, NULL);
+	bool failed = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
+		workerConnection,
+		commandList);
 	CloseConnection(workerConnection);
 
 	return !failed;
