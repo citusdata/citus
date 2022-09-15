@@ -39,9 +39,6 @@
 
 * Adds support for unlogged distributed sequences
 
-* Adds the GUC `enable_unsupported_feature_messages` to control some of the
-  Citus related messages
-
 * Checks existence of the shards before insert, delete, and update
 
 * Creates all foreign keys quickly at the end of a shard move
