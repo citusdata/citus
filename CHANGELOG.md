@@ -30,7 +30,7 @@
 * Adds an `allow_unsafe_constraints` flag for constraints without distribution
   column
 
-* Adds support for `GRANT/REVOKE` ON aggregates
+* Adds support for `GRANT/REVOKE` on aggregates
 
 * Adds support for `NULLS NOT DISTINCT` clauses for indexes
 
