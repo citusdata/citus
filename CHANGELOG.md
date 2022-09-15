@@ -4,12 +4,19 @@
 
 * Adds a rebalancer that uses background tasks for its execution
 
-* Adds `create_distributed_table_concurrently()` which distributes tables
+* Adds `create_distributed_table_concurrently()` UDF to distribute tables
   without blocking writes
 
-* Adds `citus_split_shard_by_split_points()` function
+* Adds `citus_split_shard_by_split_points()` UDF that allows
+  splitting a shard to specified set of nodes without blocking writes
+  and based on given split points
 
 * Adds support for non-blocking tenant isolation
+
+* Adds support for isolation tenants that use partitioned tables
+  or columnar tables
+
+* Drops support for isolation tenants that use replicated tables
 
 * Separates columnar table access method into a separate logical extension
 
@@ -19,16 +26,26 @@
 
 * Improves non-blocking shard moves with a faster custom copy logic
 
-* `isolate_tenant_to_new_shard()` adds support for columnar tables
-
-* `isolate_tenant_to_new_shard()` adds support for partitioned tables
-
-* `isolate_tenant_to_new_shard()` drops support for replicated tables
-
-* `isolate_tenant_to_new_shard()` now fails when run concurrently with itself
-
 * Adds the GUC `allow_unsafe_constraints` to allow constraints without
   distribution column
+
+* Introduces GUC `citus.skip_constraint_validation`
+
+* Replaces `citus.hide_shards_from_app_name_prefixes` GUC with
+  `citus.show_shards_for_app_name_prefixes`
+
+* Introduces `citus_locks` view
+
+* Improves `citus_tables` view by showing local tables added to metadata
+
+* Improves columnar table access method by moving old catalog tables into
+  an internal schema and introduces more secure & informative views based
+  on them
+
+* Removes `do_repair` option from `citus_copy_shard_placement()`
+
+* Removes deprecated re-partitioning functions like
+  `worker_hash_partition_table()`
 
 * Adds support for `GRANT/REVOKE` on aggregates
 
@@ -45,9 +62,7 @@
 
 * Hides tables owned by extensions from `citus_tables` and `citus_shards`
 
-* Introduces GUC `citus.skip_constraint_validation`
-
-* Introduces `citus_locks` view
+* Shows `citus_copy_shard_placement()` progress in `get_rebalance_progres()`
 
 * Propagates `VACUUM` and `ANALYZE` to worker nodes
 
@@ -55,23 +70,10 @@
 
 * Limits `get_rebalance_progress()` to show shards in moving state
 
-* Removes `do_repair` option from `citus_copy_shard_placement()`
-
-* Removes deprecated re-partitioning functions like
-  `worker_hash_partition_table()`
-
-* Replaces `citus.hide_shards_from_app_name_prefixes` GUC with
-  `citus.show_shards_for_app_name_prefixes`
-
-* Shows `citus_copy_shard_placement()` progress in `get_rebalance_progres()`
-
-* Improves `citus_tables` view by showing local tables added to metadata
-
 * Supports changing CPU priorities for backends and shard moves
 
-* Tightens security and improves visibility for columnar table access method
-
-* `citus_move_shard_placement()` becomes a noop if shard already exists on node
+* Makes `citus_move_shard_placement()` idempotent if shard already exists
+  on target node
 
 * Improves `create_distributed_table()` by creating new colocation entries when
   using `colocate_with => 'none'`
