@@ -382,7 +382,6 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 							   "citus.shard_replication_factor > 1")));
 	}
 
-	EnsureCoordinatorIsInMetadata();
 	EnsureCitusTableCanBeCreated(relationId);
 
 	EnsureValidDistributionColumn(relationId, distributionColumnName);

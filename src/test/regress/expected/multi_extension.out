@@ -1521,6 +1521,66 @@ SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenanc
      1
 (1 row)
 
+-- confirm that we can create a distributed table concurrently on an empty node
+DROP EXTENSION citus;
+CREATE EXTENSION citus;
+CREATE TABLE test (x int, y int);
+INSERT INTO test VALUES (1,2);
+SET citus.shard_replication_factor TO 1;
+SET citus.defer_drop_after_shard_split TO off;
+SELECT create_distributed_table_concurrently('test','x');
+NOTICE:  relation test does not have a REPLICA IDENTITY or PRIMARY KEY
+DETAIL:  UPDATE and DELETE commands on the relation will error out during create_distributed_table_concurrently unless there is a REPLICA IDENTITY or PRIMARY KEY. INSERT commands will still work.
+ create_distributed_table_concurrently
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE test;
+TRUNCATE pg_dist_node;
+-- confirm that we can create a distributed table on an empty node
+CREATE TABLE test (x int, y int);
+INSERT INTO test VALUES (1,2);
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('test','x');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.test$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE test;
+TRUNCATE pg_dist_node;
+-- confirm that we can create a reference table on an empty node
+CREATE TABLE test (x int, y int);
+INSERT INTO test VALUES (1,2);
+SELECT create_reference_table('test');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.test$$)
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE test;
+TRUNCATE pg_dist_node;
+-- confirm that we can create a local table on an empty node
+CREATE TABLE test (x int, y int);
+INSERT INTO test VALUES (1,2);
+SELECT citus_add_local_table_to_metadata('test');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE test;
+DROP EXTENSION citus;
+CREATE EXTENSION citus;
 DROP TABLE version_mismatch_table;
 DROP SCHEMA multi_extension;
 ERROR:  cannot drop schema multi_extension because other objects depend on it

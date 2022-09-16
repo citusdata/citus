@@ -128,6 +128,9 @@ citus_add_local_table_to_metadata_internal(Oid relationId, bool cascadeViaForeig
 {
 	CheckCitusVersion(ERROR);
 
+	/* enable citus_add_local_table_to_metadata on an empty node */
+	InsertCoordinatorIfClusterEmpty();
+
 	bool autoConverted = false;
 	CreateCitusLocalTable(relationId, cascadeViaForeignKeys, autoConverted);
 }
