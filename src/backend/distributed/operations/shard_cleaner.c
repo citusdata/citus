@@ -303,21 +303,40 @@ DropOrphanedShardsForCleanup()
 										   workerNode->workerName,
 										   workerNode->workerPort))
 		{
+			if (record->policy == CLEANUP_DEFERRED_ON_SUCCESS)
+			{
+				ereport(LOG, (errmsg("deferred drop of orphaned shard %s on %s:%d "
+									 "completed",
+									 qualifiedTableName,
+									 workerNode->workerName, workerNode->workerPort)));
+			}
+			else
+			{
+				ereport(LOG, (errmsg("cleaned up orphaned shard %s on %s:%d which "
+									 "was left behind after a failed operation",
+									 qualifiedTableName,
+									 workerNode->workerName, workerNode->workerPort)));
+			}
+
 			/* delete the cleanup record */
 			DeleteCleanupRecordByRecordId(record->recordId);
 			removedShardCountForCleanup++;
 		}
 		else
 		{
+			/*
+			 * We log failures at the end, since they occur repeatedly
+			 * for a large number of objects.
+			 */
 			failedShardCountForCleanup++;
 		}
 	}
 
 	if (failedShardCountForCleanup > 0)
 	{
-		ereport(WARNING, (errmsg("Failed to cleanup %d shards out of %d",
-								 failedShardCountForCleanup, list_length(
-									 cleanupRecordList))));
+		ereport(WARNING, (errmsg("failed to clean up %d orphaned shards out of %d",
+								 failedShardCountForCleanup,
+								 list_length(cleanupRecordList))));
 	}
 
 	return removedShardCountForCleanup;
@@ -396,19 +415,29 @@ DropOrphanedShardsForMove(bool waitForLocks)
 										   shardPlacement->nodeName,
 										   shardPlacement->nodePort))
 		{
+			ereport(LOG, (errmsg("deferred drop of orphaned shard %s on %s:%d "
+								 "after a move completed",
+								 qualifiedTableName,
+								 shardPlacement->nodeName,
+								 shardPlacement->nodePort)));
+
 			/* delete the actual placement */
 			DeleteShardPlacementRow(placement->placementId);
 			removedShardCount++;
 		}
 		else
 		{
+			/*
+			 * We log failures at the end, since they occur repeatedly
+			 * for a large number of objects.
+			 */
 			failedShardDropCount++;
 		}
 	}
 
 	if (failedShardDropCount > 0)
 	{
-		ereport(WARNING, (errmsg("Failed to drop %d orphaned shards out of %d",
+		ereport(WARNING, (errmsg("failed to clean up %d orphaned shards out of %d",
 								 failedShardDropCount, list_length(shardPlacementList))));
 	}
 
@@ -436,7 +465,7 @@ RegisterOperationNeedingCleanup(void)
  * completion with failure. This will trigger cleanup of appropriate resources.
  */
 void
-FinalizeOperationNeedingCleanupOnFailure()
+FinalizeOperationNeedingCleanupOnFailure(const char *operationName)
 {
 	/* We must have a valid OperationId. Any operation requring cleanup
 	 * will call RegisterOperationNeedingCleanup.
@@ -454,8 +483,9 @@ FinalizeOperationNeedingCleanupOnFailure()
 		/* We only supporting cleaning shards right now */
 		if (record->objectType != CLEANUP_OBJECT_SHARD_PLACEMENT)
 		{
-			ereport(WARNING, (errmsg("Invalid object type %d for cleanup record ",
-									 record->objectType)));
+			ereport(WARNING, (errmsg(
+								  "Invalid object type %d on failed operation cleanup",
+								  record->objectType)));
 			continue;
 		}
 
@@ -473,6 +503,12 @@ FinalizeOperationNeedingCleanupOnFailure()
 											   workerNode->workerName,
 											   workerNode->workerPort))
 			{
+				ereport(LOG, (errmsg("cleaned up orphaned shard %s on %s:%d after a "
+									 "%s operation failed",
+									 qualifiedTableName,
+									 workerNode->workerName, workerNode->workerPort,
+									 operationName)));
+
 				/*
 				 * Given the operation is failing and we will abort its transaction, we cannot delete
 				 * records in the current transaction. Delete these records outside of the
@@ -483,23 +519,22 @@ FinalizeOperationNeedingCleanupOnFailure()
 			}
 			else
 			{
+				/*
+				 * We log failures at the end, since they occur repeatedly
+				 * for a large number of objects.
+				 */
 				failedShardCountOnComplete++;
 			}
 		}
 	}
 
-	if (list_length(currentOperationRecordList) > 0)
+	if (failedShardCountOnComplete > 0)
 	{
-		ereport(LOG, (errmsg("Removed %d orphaned shards out of %d",
-							 removedShardCountOnComplete, list_length(
-								 currentOperationRecordList))));
-
-		if (failedShardCountOnComplete > 0)
-		{
-			ereport(WARNING, (errmsg("Failed to cleanup %d shards out of %d",
-									 failedShardCountOnComplete, list_length(
-										 currentOperationRecordList))));
-		}
+		ereport(WARNING, (errmsg("failed to clean up %d orphaned shards out of %d after "
+								 "a %s operation failed",
+								 failedShardCountOnComplete,
+								 list_length(currentOperationRecordList),
+								 operationName)));
 	}
 }
 
@@ -509,7 +544,7 @@ FinalizeOperationNeedingCleanupOnFailure()
  * completion with success. This will trigger cleanup of appropriate resources.
  */
 void
-FinalizeOperationNeedingCleanupOnSuccess()
+FinalizeOperationNeedingCleanupOnSuccess(const char *operationName)
 {
 	/* We must have a valid OperationId. Any operation requring cleanup
 	 * will call RegisterOperationNeedingCleanup.
@@ -527,8 +562,9 @@ FinalizeOperationNeedingCleanupOnSuccess()
 		/* We only supporting cleaning shards right now */
 		if (record->objectType != CLEANUP_OBJECT_SHARD_PLACEMENT)
 		{
-			ereport(WARNING, (errmsg("Invalid object type %d for cleanup record ",
-									 record->objectType)));
+			ereport(WARNING, (errmsg(
+								  "Invalid object type %d on operation cleanup",
+								  record->objectType)));
 			continue;
 		}
 
@@ -546,6 +582,12 @@ FinalizeOperationNeedingCleanupOnSuccess()
 											   workerNode->workerName,
 											   workerNode->workerPort))
 			{
+				ereport(LOG, (errmsg("cleaned up orphaned shard %s on %s:%d after a "
+									 "%s operation completed",
+									 qualifiedTableName,
+									 workerNode->workerName, workerNode->workerPort,
+									 operationName)));
+
 				/*
 				 * Delete cleanup records outside transaction as:
 				 * The resources are marked as 'CLEANUP_ALWAYS' and should be cleaned no matter
@@ -556,6 +598,10 @@ FinalizeOperationNeedingCleanupOnSuccess()
 			}
 			else
 			{
+				/*
+				 * We log failures at the end, since they occur repeatedly
+				 * for a large number of objects.
+				 */
 				failedShardCountOnComplete++;
 			}
 		}
@@ -570,18 +616,14 @@ FinalizeOperationNeedingCleanupOnSuccess()
 		}
 	}
 
-	if (list_length(currentOperationRecordList) > 0)
+	if (failedShardCountOnComplete > 0)
 	{
-		ereport(LOG, (errmsg("Removed %d orphaned shards out of %d",
-							 removedShardCountOnComplete, list_length(
-								 currentOperationRecordList))));
-
-		if (failedShardCountOnComplete > 0)
-		{
-			ereport(WARNING, (errmsg("Failed to cleanup %d shards out of %d",
-									 failedShardCountOnComplete, list_length(
-										 currentOperationRecordList))));
-		}
+		ereport(WARNING, (errmsg(
+							  "failed to clean up %d orphaned shards out of %d after "
+							  "a %s operation completed",
+							  failedShardCountOnComplete,
+							  list_length(currentOperationRecordList),
+							  operationName)));
 	}
 }
 
@@ -727,18 +769,11 @@ TryLockRelationAndPlacementCleanup(Oid relationId, LOCKMODE lockmode)
  * true on success.
  */
 static bool
-TryDropShardOutsideTransaction(OperationId operationId, char *qualifiedTableName,
-							   char *nodeName, int nodePort)
+TryDropShardOutsideTransaction(OperationId operationId,
+							   char *qualifiedTableName,
+							   char *nodeName,
+							   int nodePort)
 {
-	char *operation = (operationId == INVALID_OPERATION_ID) ? "move" : "cleanup";
-
-	ereport(LOG, (errmsg("cleaning up %s on %s:%d which was left "
-						 "after a %s",
-						 qualifiedTableName,
-						 nodeName,
-						 nodePort,
-						 operation)));
-
 	/* prepare sql query to execute to drop the shard */
 	StringInfo dropQuery = makeStringInfo();
 	appendStringInfo(dropQuery, DROP_REGULAR_TABLE_COMMAND, qualifiedTableName);
