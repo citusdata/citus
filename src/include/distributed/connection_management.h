@@ -303,6 +303,7 @@ extern MultiConnection * ConnectionAvailableToNode(char *hostName, int nodePort,
 extern void CloseConnection(MultiConnection *connection);
 extern void ShutdownAllConnections(void);
 extern void ShutdownConnection(MultiConnection *connection);
+extern void ResetConnection(MultiConnection *connection);
 
 /* dealing with a connection */
 extern void FinishConnectionListEstablishment(List *multiConnectionList);

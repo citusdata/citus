@@ -766,18 +766,9 @@ CloseRemoteTransaction(struct MultiConnection *connection)
 		/* XXX: Should we error out for a critical transaction? */
 
 		dlist_delete(&connection->transactionNode);
-
-		/*
-		 * If the transaction was completed, we have now cleaned it up, so we
-		 * can reset the state to REMOTE_TRANS_NOT_STARTED. This allows us to
-		 * start a new transaction without running into errors.
-		 */
-		if (transaction->transactionState == REMOTE_TRANS_ABORTED ||
-			transaction->transactionState == REMOTE_TRANS_COMMITTED)
-		{
-			transaction->transactionState = REMOTE_TRANS_NOT_STARTED;
-		}
 	}
+
+	ResetConnection(connection);
 }
 
 
