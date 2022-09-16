@@ -1,3 +1,8 @@
+### citus v11.1.1 (September 16, 2022) ###
+
+* Fixes a bug that prevents `create_distributed_table_concurrently()` working
+  on an empty node
+
 ### citus v11.1.0 (September 15, 2022) ###
 
 * Adds support for PostgreSQL 15beta4
