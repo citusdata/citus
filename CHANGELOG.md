@@ -35,8 +35,8 @@
 
 * Supports changing CPU priorities for backends and shard moves
 
-* Adds the GUC `citus.allow_unsafe_constraints` to allow constraints without
-  distribution column
+* Adds the GUC `citus.allow_unsafe_constraints` to allow unique/exclusion/
+  primary key constraints without distribution column
 
 * Introduces GUC `citus.skip_constraint_validation`
 
