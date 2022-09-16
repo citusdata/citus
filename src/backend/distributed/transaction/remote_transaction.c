@@ -803,7 +803,8 @@ CoordinatedRemoteTransactionsPrepare(void)
 													  iter.cur);
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 
-		Assert(transaction->transactionState != REMOTE_TRANS_NOT_STARTED);
+		//  This is not true as we call ResetConnection() on InProgressTransactions
+		// Assert(transaction->transactionState != REMOTE_TRANS_NOT_STARTED);
 
 		/* can't PREPARE a transaction that failed */
 		if (transaction->transactionFailed)

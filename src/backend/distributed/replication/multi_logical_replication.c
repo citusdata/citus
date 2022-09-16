@@ -1211,8 +1211,10 @@ CreateUncheckedForeignKeyConstraints(List *logicalRepTargetList)
 				list_make1("SET LOCAL citus.skip_constraint_validation TO ON;"),
 				commandList);
 
-			SendCommandListToWorkerOutsideTransactionWithConnection(
-				target->superuserConnection,
+			SendCommandListToWorkerOutsideTransaction(
+				target->superuserConnection->hostname,
+				target->superuserConnection->port,
+				target->superuserConnection->user,
 				commandList);
 
 			MemoryContextReset(localContext);
@@ -1591,8 +1593,8 @@ DropUser(MultiConnection *connection, char *username)
 	 * The DROP USER command should not propagate, so we temporarily disable
 	 * DDL propagation.
 	 */
-	SendCommandListToWorkerOutsideTransactionWithConnection(
-		connection,
+	SendCommandListToWorkerOutsideTransaction(
+		connection->hostname, connection->port, connection->user,
 		list_make2(
 			"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 			psprintf("DROP USER IF EXISTS %s",
@@ -1777,8 +1779,10 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 		 * create a user with SUPERUSER permissions and then alter it to NOSUPERUSER.
 		 * This prevents permission escalations.
 		 */
-		SendCommandListToWorkerOutsideTransactionWithConnection(
-			target->superuserConnection,
+		SendCommandListToWorkerOutsideTransaction(
+			target->superuserConnection->hostname,
+			target->superuserConnection->port,
+			target->superuserConnection->user,
 			list_make2(
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
@@ -1836,8 +1840,10 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 		 * The ALTER ROLE command should not propagate, so we temporarily
 		 * disable DDL propagation.
 		 */
-		SendCommandListToWorkerOutsideTransactionWithConnection(
-			target->superuserConnection,
+		SendCommandListToWorkerOutsideTransaction(
+			target->superuserConnection->hostname,
+			target->superuserConnection->port,
+			target->superuserConnection->user,
 			list_make2(
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
