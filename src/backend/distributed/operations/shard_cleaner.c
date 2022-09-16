@@ -670,8 +670,8 @@ InsertCleanupRecordInSubtransaction(CleanupObject objectType,
 					 nodeGroupId,
 					 policy);
 
-	MultiConnection *connection = GetLocalConnectionForSubtransactionAsUser(
-		CitusExtensionOwnerName());
+	MultiConnection *connection =
+		GetLocalConnectionForSubtransactionAsUser(CitusExtensionOwnerName());
 	SendCommandListToWorkerOutsideTransactionWithConnection(connection,
 															list_make1(command->data));
 }
@@ -761,8 +761,6 @@ TryDropShardOutsideTransaction(OperationId operationId, char *qualifiedTableName
 																	  nodeName, nodePort,
 																	  CurrentUserName(),
 																	  NULL);
-	workerConnection->forceCloseAtTransactionEnd = true;
-
 	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
 		workerConnection,
 		dropCommandList);

@@ -1150,11 +1150,15 @@ CreatePartitioningHierarchy(List *logicalRepTargetList)
 				 * parallel, so create them sequentially. Also attaching partition
 				 * is a quick operation, so it is fine to execute sequentially.
 				 */
-				SendCommandListToWorkerOutsideTransaction(
-					target->superuserConnection->hostname,
-					target->superuserConnection->port,
-					tableOwner,
-					list_make1(attachPartitionCommand));
+
+				MultiConnection *c =
+					GetNodeUserDatabaseConnection(OUTSIDE_TRANSACTION,
+												  target->superuserConnection->hostname,
+												  target->superuserConnection->port,
+												  tableOwner, NULL);
+				SendCommandListToWorkerOutsideTransactionWithConnection(c, list_make1(
+																			attachPartitionCommand));
+
 				MemoryContextReset(localContext);
 			}
 		}
@@ -1587,7 +1591,7 @@ DropUser(MultiConnection *connection, char *username)
 		connection,
 		list_make2(
 			"SET LOCAL citus.enable_ddl_propagation TO OFF;",
-			psprintf("DROP USER IF EXISTS %s",
+			psprintf("DROP USER IF EXISTS %s;",
 					 quote_identifier(username))));
 }
 
