@@ -1,3 +1,123 @@
+### citus v11.1.0 (September 15, 2022) ###
+
+* Adds support for PostgreSQL 15beta4
+
+* Adds ability to run shard rebalancer in the background
+
+* Adds `create_distributed_table_concurrently()` UDF to distribute tables
+  without interrupting the application
+
+* Adds `citus_split_shard_by_split_points()` UDF that allows
+  splitting a shard to specified set of nodes without blocking writes
+  and based on given split points
+
+* Adds support for non-blocking tenant isolation
+
+* Adds support for isolation tenants that use partitioned tables
+  or columnar tables
+
+* Separates columnar table access method into a separate logical extension
+
+* Adds support for online replication in `replicate_reference_tables()`
+
+* Improves performance of blocking shard moves
+
+* Improves non-blocking shard moves with a faster custom copy logic
+
+* Creates all foreign keys quickly at the end of a shard move
+
+* Limits `get_rebalance_progress()` to show shards in moving state
+
+* Makes `citus_move_shard_placement()` idempotent if shard already exists
+  on target node
+
+* Shows `citus_copy_shard_placement()` progress in `get_rebalance_progres()`
+
+* Supports changing CPU priorities for backends and shard moves
+
+* Adds the GUC `citus.allow_unsafe_constraints` to allow unique/exclusion/
+  primary key constraints without distribution column
+
+* Introduces GUC `citus.skip_constraint_validation`
+
+* Introduces `citus_locks` view
+
+* Improves `citus_tables` view by showing local tables added to metadata
+
+* Improves columnar table access method by moving old catalog tables into
+  an internal schema and introduces more secure & informative views based
+  on them
+
+* Adds support for `GRANT/REVOKE` on aggregates
+
+* Adds support for `NULLS NOT DISTINCT` clauses for indexes for PG15+
+
+* Adds support for setting relation options for columnar tables using
+  `ALTER TABLE`
+
+* Adds support for unlogged distributed sequences
+
+* Removes `do_repair` option from `citus_copy_shard_placement()`
+
+* Removes deprecated re-partitioning functions like
+  `worker_hash_partition_table()`
+
+* Drops support for isolation tenants that use replicated tables
+
+* Checks existence of the shards before insert, delete, and update
+
+* Hides tables owned by extensions from `citus_tables` and `citus_shards`
+
+* Propagates `VACUUM` and `ANALYZE` to worker nodes
+
+* Makes non-partitioned table size calculation quicker
+
+* Improves `create_distributed_table()` by creating new colocation entries when
+  using `colocate_with => 'none'`
+
+* Ensures that `SELECT .. FOR UPDATE` opens a transaction block when used in
+  a function call
+
+* Prevents a segfault by disallowing usage of SQL functions referencing to a
+  distributed table
+
+* Prevents creating a new colocation entry when replicating reference tables
+
+* Fixes a bug in query escaping in `undistribute_table()` and
+  `alter_distributed_table()`
+
+* Fixes a bug preventing the usage of `isolate_tenant_to_new_shard()` with text
+  column
+
+* Fixes a bug that may cause `GRANT` to propagate within `CREATE EXTENSION`
+
+* Fixes a bug that causes incorrectly marking `metadatasynced` flag for
+  coordinator
+
+* Fixes a bug that may prevent Citus from creating function in transaction
+  block properly
+
+* Fixes a bug that prevents promoting read-replicas as primaries
+
+* Fixes a bug that prevents setting colocation group of a partitioned
+  distributed table to `none`
+
+* Fixes a bug that prevents using `AUTO` option for `VACUUM (INDEX_CLEANUP)`
+  operation
+
+* Fixes a segfault in `citus_copy_shard_placement()`
+
+* Fixes an issue that can cause logical reference table replication to fail
+
+* Fixes schema name qualification for `RENAME SEQUENCE` statement
+
+* Fixes several small memory leaks
+
+* Fixes the transaction timestamp column of the `get_current_transaction_id()`
+  on coordinator
+
+* Maps any unused parameters to a generic type in prepared statements
+
 ### citus v10.2.8 (August 19, 2022) ###
 
 * Fixes compilation warning caused by latest upgrade script changes
