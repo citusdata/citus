@@ -2,10 +2,10 @@
 
 * Adds support for PostgreSQL 15beta4
 
-* Adds a rebalancer that uses background tasks for its execution
+* Adds ability to run shard rebalancer in the background
 
 * Adds `create_distributed_table_concurrently()` UDF to distribute tables
-  without blocking writes
+  without interrupting the application
 
 * Adds `citus_split_shard_by_split_points()` UDF that allows
   splitting a shard to specified set of nodes without blocking writes
@@ -16,23 +16,29 @@
 * Adds support for isolation tenants that use partitioned tables
   or columnar tables
 
-* Drops support for isolation tenants that use replicated tables
-
 * Separates columnar table access method into a separate logical extension
 
-* Adds support for logical replication in `replicate_reference_tables()`
+* Adds support for online replication in `replicate_reference_tables()`
 
 * Improves performance of blocking shard moves
 
 * Improves non-blocking shard moves with a faster custom copy logic
 
-* Adds the GUC `allow_unsafe_constraints` to allow constraints without
+* Creates all foreign keys quickly at the end of a shard move
+
+* Limits `get_rebalance_progress()` to show shards in moving state
+
+* Makes `citus_move_shard_placement()` idempotent if shard already exists
+  on target node
+
+* Shows `citus_copy_shard_placement()` progress in `get_rebalance_progres()`
+
+* Supports changing CPU priorities for backends and shard moves
+
+* Adds the GUC `citus.allow_unsafe_constraints` to allow constraints without
   distribution column
 
 * Introduces GUC `citus.skip_constraint_validation`
-
-* Replaces `citus.hide_shards_from_app_name_prefixes` GUC with
-  `citus.show_shards_for_app_name_prefixes`
 
 * Introduces `citus_locks` view
 
@@ -42,38 +48,29 @@
   an internal schema and introduces more secure & informative views based
   on them
 
-* Removes `do_repair` option from `citus_copy_shard_placement()`
-
-* Removes deprecated re-partitioning functions like
-  `worker_hash_partition_table()`
-
 * Adds support for `GRANT/REVOKE` on aggregates
 
-* Adds support for `NULLS NOT DISTINCT` clauses for indexes
+* Adds support for `NULLS NOT DISTINCT` clauses for indexes for PG15+
 
 * Adds support for setting relation options for columnar tables using
   `ALTER TABLE`
 
 * Adds support for unlogged distributed sequences
 
+* Removes `do_repair` option from `citus_copy_shard_placement()`
+
+* Removes deprecated re-partitioning functions like
+  `worker_hash_partition_table()`
+
+* Drops support for isolation tenants that use replicated tables
+
 * Checks existence of the shards before insert, delete, and update
 
-* Creates all foreign keys quickly at the end of a shard move
-
 * Hides tables owned by extensions from `citus_tables` and `citus_shards`
-
-* Shows `citus_copy_shard_placement()` progress in `get_rebalance_progres()`
 
 * Propagates `VACUUM` and `ANALYZE` to worker nodes
 
 * Makes non-partitioned table size calculation quicker
-
-* Limits `get_rebalance_progress()` to show shards in moving state
-
-* Supports changing CPU priorities for backends and shard moves
-
-* Makes `citus_move_shard_placement()` idempotent if shard already exists
-  on target node
 
 * Improves `create_distributed_table()` by creating new colocation entries when
   using `colocate_with => 'none'`
