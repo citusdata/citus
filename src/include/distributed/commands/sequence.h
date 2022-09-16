@@ -14,6 +14,7 @@
 #include "nodes/pg_list.h"
 
 
+List * RelationGetDefaultNextValAttrs(Oid relationId);
 extern bool ColumnDefaultsToNextVal(Oid relationId, AttrNumber attrNumber);
 extern void ExtractDefaultColumnsAndOwnedSequences(Oid relationId,
 												   List **columnNameList,

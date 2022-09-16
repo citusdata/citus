@@ -215,6 +215,43 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 
 
 /*
+ * RelationGetDefaultNextValAttrs returns a list of AttrNumbers for the
+ * columns that default to nextval().
+ */
+List *
+RelationGetDefaultNextValAttrs(Oid relationId)
+{
+	List *defaultNextValAttrs = NIL;
+
+	Relation relation = RelationIdGetRelation(relationId);
+
+	TupleDesc relTupDesc = RelationGetDescr(relation);
+	TupleConstr *relTupConstraints = relTupDesc->constr;
+	if (relTupConstraints == NULL)
+	{
+		RelationClose(relation);
+		return NIL;
+	}
+
+	for (uint16 defExprIndex = 0; defExprIndex < relTupConstraints->num_defval;
+		 defExprIndex++)
+	{
+		AttrDefault *defValue = &(relTupConstraints->defval[defExprIndex]);
+		Node *defExpr = (Node *) stringToNode(defValue->adbin);
+
+		if (contain_nextval_expression_walker(defExpr, NULL))
+		{
+			defaultNextValAttrs = lappend_int(defaultNextValAttrs, defValue->adnum);
+		}
+	}
+
+	RelationClose(relation);
+
+	return defaultNextValAttrs;
+}
+
+
+/*
  * ColumnDefaultsToNextVal returns true if the column with attrNumber
  * has a default expression that contains nextval().
  */

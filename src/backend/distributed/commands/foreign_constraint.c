@@ -23,12 +23,14 @@
 #include "catalog/pg_type.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
+#include "distributed/commands/sequence.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/listutils.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/namespace_utils.h"
 #include "distributed/reference_table_utils.h"
+#include "distributed/utils/array_type.h"
 #include "distributed/version_compat.h"
 #include "miscadmin.h"
 #include "utils/builtins.h"
@@ -57,6 +59,8 @@ typedef bool (*CheckRelationFunc)(Oid);
 /* Local functions forward declarations */
 static void EnsureReferencingTableNotReplicated(Oid referencingTableId);
 static void EnsureSupportedFKeyOnDistKey(Form_pg_constraint constraintForm);
+static bool ForeignKeySetsNextValColumnToDefault(HeapTuple pgConstraintTuple);
+static List * ForeignKeyGetDefaultingAttrs(HeapTuple pgConstraintTuple);
 static void EnsureSupportedFKeyBetweenCitusLocalAndRefTable(Form_pg_constraint
 															constraintForm,
 															char
@@ -256,6 +260,16 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 			referencedReplicationModel = referencingReplicationModel;
 		}
 
+		if (ForeignKeySetsNextValColumnToDefault(heapTuple))
+		{
+			ereport(ERROR, (errmsg("cannot create foreign key constraint "
+								   "since ON DELETE / UPDATE SET DEFAULT "
+								   "actions on the columns that default "
+								   "to sequences are not supported for "
+								   "distributed tables and local tables "
+								   "added into metadata")));
+		}
+
 		bool referencingIsCitusLocalOrRefTable =
 			(referencingDistMethod == DISTRIBUTE_BY_NONE);
 		bool referencedIsCitusLocalOrRefTable =
@@ -354,6 +368,100 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		EnsureReferencingTableNotReplicated(referencingTableId);
 
 		ReleaseSysCache(heapTuple);
+	}
+}
+
+
+/*
+ * ForeignKeySetsNextValColumnToDefault returns true if at least one of the
+ * columns specified in ON DELETE / UPDATE SET DEFAULT clauses default to
+ * nextval().
+ */
+static bool
+ForeignKeySetsNextValColumnToDefault(HeapTuple pgConstraintTuple)
+{
+	Form_pg_constraint pgConstraintForm =
+		(Form_pg_constraint) GETSTRUCT(pgConstraintTuple);
+
+	List *onDeleteSetDefaultAttrs =
+		ForeignKeyGetDefaultingAttrs(pgConstraintTuple);
+	List *defaultSetNextValAttrs =
+		RelationGetDefaultNextValAttrs(pgConstraintForm->conrelid);
+
+	return list_length(list_intersection_int(onDeleteSetDefaultAttrs,
+											 defaultSetNextValAttrs)) > 0;
+}
+
+
+/*
+ * ForeignKeyGetDefaultingAttrs returns a list of AttrNumbers
+ * might be set to default ON DELETE or ON UPDATE.
+ *
+ * For example; if the foreign key has SET DEFAULT clause for
+ * both actions, then returns a superset of the attributes that
+ * might be set to DEFAULT on either of those actions.
+ */
+static List *
+ForeignKeyGetDefaultingAttrs(HeapTuple pgConstraintTuple)
+{
+	bool isNull = false;
+	Datum referencingColumnsDatum = SysCacheGetAttr(CONSTROID, pgConstraintTuple,
+													Anum_pg_constraint_conkey, &isNull);
+	if (isNull)
+	{
+		ereport(ERROR, (errmsg("got NULL conkey from catalog")));
+	}
+
+	List *referencingColumns =
+		IntegerArrayTypeToList(DatumGetArrayTypeP(referencingColumnsDatum));
+
+	Form_pg_constraint pgConstraintForm =
+		(Form_pg_constraint) GETSTRUCT(pgConstraintTuple);
+	if (pgConstraintForm->confupdtype == FKCONSTR_ACTION_SETDEFAULT)
+	{
+		/*
+		 * Postgres doesn't allow specifying SET DEFAULT for a subset of
+		 * the referencing columns for ON UPDATE action, so in that case
+		 * we return all referencing columns regardless of what ON DELETE
+		 * action says.
+		 */
+		return referencingColumns;
+	}
+
+	if (pgConstraintForm->confdeltype != FKCONSTR_ACTION_SETDEFAULT)
+	{
+		return NIL;
+	}
+
+	List *onDeleteSetDefColumnList = NIL;
+#if PG_VERSION_NUM >= PG_VERSION_15
+	Datum onDeleteSetDefColumnsDatum = SysCacheGetAttr(CONSTROID, pgConstraintTuple,
+													   Anum_pg_constraint_confdelsetcols,
+													   &isNull);
+
+	/*
+	 * confdelsetcols being NULL means that "ON DELETE SET DEFAULT" doesn't
+	 * specify which subset of columns should be set to DEFAULT, so fetching
+	 * NULL from the catalog is also possible.
+	 */
+	if (!isNull)
+	{
+		onDeleteSetDefColumnList =
+			IntegerArrayTypeToList(DatumGetArrayTypeP(onDeleteSetDefColumnsDatum));
+	}
+#endif
+
+	if (list_length(onDeleteSetDefColumnList) == 0)
+	{
+		/*
+		 * That means that all referencing columns need to be set to
+		 * DEFAULT.
+		 */
+		return referencingColumns;
+	}
+	else
+	{
+		return onDeleteSetDefColumnList;
 	}
 }
 

@@ -749,6 +749,56 @@ RESET ROLE;
 -- supported in Citus when the query view contains citus tables
 UPDATE sec_invoker_view SET event_id = 5;
 
+CREATE TABLE set_on_default_test_referenced(
+    col_1 int, col_2 int, col_3 int, col_4 int,
+    unique (col_1, col_3)
+);
+SELECT create_reference_table('set_on_default_test_referenced');
+
+CREATE TABLE set_on_default_test_referencing(
+    col_1 int, col_2 int, col_3 serial, col_4 int,
+    FOREIGN KEY(col_1, col_3)
+    REFERENCES set_on_default_test_referenced(col_1, col_3)
+    ON DELETE SET DEFAULT (col_1)
+    ON UPDATE SET DEFAULT
+);
+
+-- should error since col_3 defaults to a sequence
+SELECT create_reference_table('set_on_default_test_referencing');
+
+DROP TABLE set_on_default_test_referencing;
+CREATE TABLE set_on_default_test_referencing(
+    col_1 int, col_2 int, col_3 serial, col_4 int,
+    FOREIGN KEY(col_1, col_3)
+    REFERENCES set_on_default_test_referenced(col_1, col_3)
+    ON DELETE SET DEFAULT (col_1)
+);
+
+-- should not error since this doesn't set any sequence based columns to default
+SELECT create_reference_table('set_on_default_test_referencing');
+
+INSERT INTO set_on_default_test_referenced (col_1, col_3) VALUES (1, 1);
+INSERT INTO set_on_default_test_referencing (col_1, col_3) VALUES (1, 1);
+DELETE FROM set_on_default_test_referenced;
+
+SELECT * FROM set_on_default_test_referencing ORDER BY 1,2;
+
+DROP TABLE set_on_default_test_referencing;
+
+SET client_min_messages to ERROR;
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
+RESET client_min_messages;
+
+-- should error since col_3 defaults to a sequence
+CREATE TABLE set_on_default_test_referencing(
+    col_1 int, col_2 int, col_3 serial, col_4 int,
+    FOREIGN KEY(col_1, col_3)
+    REFERENCES set_on_default_test_referenced(col_1, col_3)
+    ON DELETE SET DEFAULT (col_3)
+);
+
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
+
 -- Clean up
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;

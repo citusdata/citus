@@ -159,5 +159,44 @@ BEGIN;
 	CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT);
 ROLLBACK;
 
+CREATE TABLE set_on_default_test_referenced(
+    col_1 int, col_2 int, col_3 int, col_4 int,
+    unique (col_1, col_3)
+);
+SELECT create_reference_table('set_on_default_test_referenced');
+
+-- from citus local to reference - 1
+CREATE TABLE set_on_default_test_referencing(
+    col_1 int, col_2 int, col_3 serial, col_4 int,
+    FOREIGN KEY(col_1, col_3)
+    REFERENCES set_on_default_test_referenced(col_1, col_3)
+    ON UPDATE SET DEFAULT
+);
+
+CREATE TABLE set_on_default_test_referencing(
+    col_1 serial, col_2 int, col_3 int, col_4 int
+);
+
+-- from citus local to reference - 2
+ALTER TABLE set_on_default_test_referencing ADD CONSTRAINT fkey
+FOREIGN KEY(col_1, col_3) REFERENCES set_on_default_test_referenced(col_1, col_3)
+ON DELETE SET DEFAULT;
+
+DROP TABLE set_on_default_test_referencing, set_on_default_test_referenced;
+
+CREATE TABLE set_on_default_test_referenced(
+    col_1 int, col_2 int, col_3 int, col_4 int,
+    unique (col_1, col_3)
+);
+SELECT citus_add_local_table_to_metadata('set_on_default_test_referenced');
+
+-- from citus local to citus local
+CREATE TABLE set_on_default_test_referencing(
+    col_1 int, col_2 int, col_3 serial, col_4 int,
+    FOREIGN KEY(col_1, col_3)
+    REFERENCES set_on_default_test_referenced(col_1, col_3)
+    ON DELETE SET DEFAULT
+);
+
 -- cleanup at exit
 DROP SCHEMA ref_citus_local_fkeys CASCADE;

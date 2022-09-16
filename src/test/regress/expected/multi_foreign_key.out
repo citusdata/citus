@@ -1172,5 +1172,108 @@ SELECT create_distributed_table ('dropfkeytest2', 'x', colocate_with:='none');
 
 (1 row)
 
+CREATE TABLE set_on_default_test_referenced(
+    col_1 int, col_2 int, col_3 int, col_4 int,
+    unique (col_1, col_3)
+);
+SELECT create_reference_table('set_on_default_test_referenced');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE set_on_default_test_referencing(
+    col_1 int, col_2 int, col_3 serial, col_4 int,
+    FOREIGN KEY(col_1, col_3)
+    REFERENCES set_on_default_test_referenced(col_1, col_3)
+    ON UPDATE SET DEFAULT
+);
+-- from distributed / reference to reference, fkey exists before calling the UDFs
+SELECT create_distributed_table('set_on_default_test_referencing', 'col_1');
+ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+SELECT create_reference_table('set_on_default_test_referencing');
+ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+DROP TABLE set_on_default_test_referencing;
+CREATE TABLE set_on_default_test_referencing(
+    col_1 serial, col_2 int, col_3 int, col_4 int
+);
+SELECT create_reference_table('set_on_default_test_referencing');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- from reference to reference, fkey doesn't exist before calling the UDFs
+ALTER TABLE set_on_default_test_referencing ADD CONSTRAINT fkey
+FOREIGN KEY(col_1, col_3) REFERENCES set_on_default_test_referenced(col_1, col_3)
+ON DELETE SET DEFAULT;
+ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+DROP TABLE set_on_default_test_referencing;
+CREATE TABLE set_on_default_test_referencing(
+    col_1 int, col_2 serial, col_3 int, col_4 bigserial
+);
+SELECT create_reference_table('set_on_default_test_referencing');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- ok since referencing columns are not based on sequences
+ALTER TABLE set_on_default_test_referencing ADD CONSTRAINT fkey
+FOREIGN KEY(col_1, col_3) REFERENCES set_on_default_test_referenced(col_1, col_3)
+ON DELETE SET DEFAULT;
+DROP TABLE set_on_default_test_referencing;
+CREATE SEQUENCE test_sequence;
+CREATE TABLE set_on_default_test_referencing(
+    col_1 int, col_2 int, col_3 int DEFAULT nextval('test_sequence'), col_4 int
+);
+SELECT create_distributed_table('set_on_default_test_referencing', 'col_1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- from distributed to reference, fkey doesn't exist before calling the UDFs
+ALTER TABLE set_on_default_test_referencing ADD CONSTRAINT fkey
+FOREIGN KEY(col_1, col_3) REFERENCES set_on_default_test_referenced(col_1, col_3)
+ON DELETE SET DEFAULT ON UPDATE SET DEFAULT;
+ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+DROP TABLE set_on_default_test_referenced;
+CREATE TABLE set_on_default_test_referenced(
+    col_1 int, col_2 int, col_3 int, col_4 int,
+    unique (col_1, col_3)
+);
+SELECT create_distributed_table('set_on_default_test_referenced', 'col_1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE set_on_default_test_referencing;
+CREATE TABLE set_on_default_test_referencing(
+    col_1 bigserial, col_2 int, col_3 int DEFAULT nextval('test_sequence'), col_4 int,
+    FOREIGN KEY(col_1, col_3)
+    REFERENCES set_on_default_test_referenced(col_1, col_3)
+    ON DELETE SET DEFAULT
+);
+-- from distributed to distributed, fkey exists before calling the UDFs
+SELECT create_distributed_table('set_on_default_test_referencing', 'col_1');
+ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+DROP TABLE set_on_default_test_referencing;
+CREATE TABLE set_on_default_test_referencing(
+    col_1 int DEFAULT nextval('test_sequence'), col_2 int, col_3 int, col_4 int
+);
+SELECT create_distributed_table('set_on_default_test_referencing', 'col_1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- from distributed to distributed, fkey doesn't exist before calling the UDFs
+ALTER TABLE set_on_default_test_referencing ADD CONSTRAINT fkey
+FOREIGN KEY(col_1, col_3) REFERENCES set_on_default_test_referenced(col_1, col_3)
+ON DELETE SET DEFAULT;
+ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
 -- we no longer need those tables
-DROP TABLE referenced_by_reference_table, references_to_reference_table, reference_table, reference_table_second, referenced_local_table, self_referencing_reference_table, dropfkeytest2;
+DROP TABLE referenced_by_reference_table, references_to_reference_table, reference_table, reference_table_second, referenced_local_table, self_referencing_reference_table, dropfkeytest2,
+           set_on_default_test_referenced, set_on_default_test_referencing;

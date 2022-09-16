@@ -250,6 +250,52 @@ BEGIN;
 	CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT);
 ERROR:  cannot switch local execution status from local execution disabled to local execution enabled since it can cause visibility problems in the current transaction
 ROLLBACK;
+CREATE TABLE set_on_default_test_referenced(
+    col_1 int, col_2 int, col_3 int, col_4 int,
+    unique (col_1, col_3)
+);
+SELECT create_reference_table('set_on_default_test_referenced');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- from citus local to reference - 1
+CREATE TABLE set_on_default_test_referencing(
+    col_1 int, col_2 int, col_3 serial, col_4 int,
+    FOREIGN KEY(col_1, col_3)
+    REFERENCES set_on_default_test_referenced(col_1, col_3)
+    ON UPDATE SET DEFAULT
+);
+ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+CREATE TABLE set_on_default_test_referencing(
+    col_1 serial, col_2 int, col_3 int, col_4 int
+);
+-- from citus local to reference - 2
+ALTER TABLE set_on_default_test_referencing ADD CONSTRAINT fkey
+FOREIGN KEY(col_1, col_3) REFERENCES set_on_default_test_referenced(col_1, col_3)
+ON DELETE SET DEFAULT;
+ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+DROP TABLE set_on_default_test_referencing, set_on_default_test_referenced;
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS ref_citus_local_fkeys.set_on_default_test_referenced_xxxxx CASCADE
+CREATE TABLE set_on_default_test_referenced(
+    col_1 int, col_2 int, col_3 int, col_4 int,
+    unique (col_1, col_3)
+);
+SELECT citus_add_local_table_to_metadata('set_on_default_test_referenced');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+-- from citus local to citus local
+CREATE TABLE set_on_default_test_referencing(
+    col_1 int, col_2 int, col_3 serial, col_4 int,
+    FOREIGN KEY(col_1, col_3)
+    REFERENCES set_on_default_test_referenced(col_1, col_3)
+    ON DELETE SET DEFAULT
+);
+ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
 -- cleanup at exit
 DROP SCHEMA ref_citus_local_fkeys CASCADE;
-NOTICE:  drop cascades to 6 other objects
+NOTICE:  drop cascades to 8 other objects
