@@ -1,8 +1,8 @@
-| **<br/>Citus is now 100% open source and supports querying from any node.<br/><img width=1000/><br/>Read about it on the [Citus 11.0 release blog](https://www.citusdata.com/blog/2022/06/17/citus-11-goes-fully-open-source/) and the [Citus Updates page](https://www.citusdata.com/updates/).<br/><br/>** |
+| **<br/>The Citus database is 100% open source.<br/><img width=1000/><br/>Learn what's new in the [Citus 11.1 release blog](https://www.citusdata.com/blog/2022/09/19/citus-11-1-shards-postgres-tables-without-interruption/) and the [Citus Updates page](https://www.citusdata.com/updates/).<br/><br/>**|
 |---|
 <br/>
 
-<br/>
+
 
 ![Citus Banner](/citus-readme-banner.png)
 
@@ -93,14 +93,14 @@ Install packages on Ubuntu / Debian:
 ```bash
 curl https://install.citusdata.com/community/deb.sh > add-citus-repo.sh
 sudo bash add-citus-repo.sh
-sudo apt-get -y install postgresql-14-citus-11.0
+sudo apt-get -y install postgresql-14-citus-11.1
 ```
 
 Install packages on CentOS / Fedora / Red Hat:
 ```bash
 curl https://install.citusdata.com/community/rpm.sh > add-citus-repo.sh
 sudo bash add-citus-repo.sh
-sudo yum install -y citus110_14
+sudo yum install -y citus111_14
 ```
 
 To add Citus to your local PostgreSQL database, add the following to `postgresql.conf`:
@@ -234,6 +234,41 @@ Time: 209.961 ms
 
 Co-location also helps you scale [INSERT..SELECT](https://docs.citusdata.com/en/stable/articles/aggregation.html), [stored procedures](https://www.citusdata.com/blog/2020/11/21/making-postgres-stored-procedures-9x-faster-in-citus/), and [distributed transactions](https://www.citusdata.com/blog/2017/06/02/scaling-complex-sql-transactions/).
 
+### Distributing Tables without interrupting the application
+
+
+Some of you already start with Postgres, and decide to distribute tables later on while your application using the tables. In that case, you want to avoid downtime for both reads and writes. `create_distributed_table` command block writes (e.g., DML commands) on the table until the command is finished. Instead, with `create_distributed_table_concurrently` command, your application can continue to read and write the data even during the command.
+
+
+```sql
+CREATE TABLE device_logs (
+  device_id bigint primary key,
+  log text
+);
+
+-- insert device logs
+INSERT INTO device_logs (device_id, log)
+SELECT s, 'device log:'||s FROM generate_series(0, 99) s;
+
+-- convert device_logs into a distributed table without interrupting the application
+SELECT create_distributed_table_concurrently('device_logs', 'device_id', colocate_with := 'devices');
+
+
+-- get the count of the logs, parallelized across shards
+SELECT count(*) FROM device_logs;
+
+┌───────┐
+│ count │
+├───────┤
+│   100 │
+└───────┘
+(1 row)
+
+Time: 48.734 ms
+```
+
+
+
 ### Creating Reference Tables
 
 When you need fast joins or foreign keys that do not include the distribution column, you can use `create_reference_table` to replicate a table across all nodes in the cluster.
@@ -327,7 +362,7 @@ Data in distributed tables is stored in “shards”, which are actually just re
 
 When you send a query in which all (co-located) distributed tables have the same filter on the distribution column, Citus will automatically detect that and send the whole query to the worker node that stores the data. That way, arbitrarily complex queries are supported with minimal routing overhead, which is especially useful for scaling transactional workloads. If queries do not have a specific filter, each shard is queried in parallel, which is especially useful in analytical workloads. The Citus distributed executor is adaptive and is designed to handle both query types at the same time on the same system under high concurrency, which enables large-scale mixed workloads.
 
-As of Citus 11.0, the schema and metadata of distributed tables and reference tables are automatically synchronized to all the nodes in the cluster. That way, you can connect to any node to run distributed queries. Schema changes and cluster administration still need to go through the coordinator.
+The schema and metadata of distributed tables and reference tables are automatically synchronized to all the nodes in the cluster. That way, you can connect to any node to run distributed queries. Schema changes and cluster administration still need to go through the coordinator.
 
 ## When to use Citus
 
