@@ -1044,7 +1044,7 @@ SELECT * FROM get_rebalance_table_shards_plan('colocated_rebalance_test', rebala
 
 -- Check that we can call this function
 SELECT * FROM get_rebalance_progress();
- sessionid | table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport | progress | source_shard_size | target_shard_size | operation_type
+ sessionid | table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport | progress | source_shard_size | target_shard_size | operation_type | source_lsn | target_lsn
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -1058,7 +1058,7 @@ SELECT * FROM rebalance_table_shards('colocated_rebalance_test', threshold := 0,
 CALL citus_cleanup_orphaned_shards();
 -- Check that we can call this function without a crash
 SELECT * FROM get_rebalance_progress();
- sessionid | table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport | progress | source_shard_size | target_shard_size | operation_type
+ sessionid | table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport | progress | source_shard_size | target_shard_size | operation_type | source_lsn | target_lsn
 ---------------------------------------------------------------------
 (0 rows)
 

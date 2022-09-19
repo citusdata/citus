@@ -1,3 +1,1 @@
--- citus--11.1-1--11.2-1
-
--- bump version to 11.2-1
+#include "udfs/get_rebalance_progress/11.2-1.sql"
