@@ -768,7 +768,12 @@ CloseRemoteTransaction(struct MultiConnection *connection)
 		dlist_delete(&connection->transactionNode);
 	}
 
-	ResetConnection(connection);
+	/* reset per-transaction state */
+	ResetRemoteTransaction(connection);
+	ResetShardPlacementAssociation(connection);
+
+	/* reset copy state */
+	connection->copyBytesWrittenSinceLastFlush = 0;
 }
 
 

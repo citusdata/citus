@@ -1458,7 +1458,7 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 			/*
 			 * reset healthy session lifespan connections.
 			 */
-			ResetConnection(connection);
+			CloseRemoteTransaction(connection);
 
 			UnclaimConnection(connection);
 
@@ -1497,22 +1497,6 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 		   (MaxCachedConnectionLifetime >= 0 &&
 			MillisecondsToTimeout(connection->connectionEstablishmentStart,
 								  MaxCachedConnectionLifetime) <= 0);
-}
-
-
-/*
- * ResetConnection preserves the given connection for later usage by
- * resetting its states.
- */
-void
-ResetConnection(MultiConnection *connection)
-{
-	/* reset per-transaction state */
-	ResetRemoteTransaction(connection);
-	ResetShardPlacementAssociation(connection);
-
-	/* reset copy state */
-	connection->copyBytesWrittenSinceLastFlush = 0;
 }
 
 
