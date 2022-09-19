@@ -370,7 +370,7 @@ SendCommandListToWorkerOutsideTransactionWithConnection(MultiConnection *workerC
 	}
 
 	RemoteTransactionCommit(workerConnection);
-	CloseRemoteTransaction(workerConnection);
+	ResetRemoteTransaction(workerConnection);
 }
 
 
@@ -488,7 +488,7 @@ SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
 		RemoteTransactionCommit(workerConnection);
 	}
 
-	CloseRemoteTransaction(workerConnection);
+	ResetRemoteTransaction(workerConnection);
 
 	return !failed;
 }
