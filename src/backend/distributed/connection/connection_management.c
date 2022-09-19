@@ -703,7 +703,7 @@ CloseConnection(MultiConnection *connection)
 		dlist_delete(&connection->connectionNode);
 
 		/* same for transaction state and shard/placement machinery */
-		CloseRemoteTransaction(connection);
+		ResetRemoteTransaction(connection);
 		CloseShardPlacementAssociation(connection);
 
 		/* we leave the per-host entry alive */
@@ -1458,7 +1458,7 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 			/*
 			 * reset healthy session lifespan connections.
 			 */
-			CloseRemoteTransaction(connection);
+			ResetRemoteTransaction(connection);
 
 			UnclaimConnection(connection);
 
