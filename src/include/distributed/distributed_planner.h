@@ -36,6 +36,8 @@ extern int PlannerLevel;
 
 typedef struct RelationRestrictionContext
 {
+	bool hasView;
+	Oid viewOwnerId;
 	bool allReferenceTables;
 	List *relationRestrictionList;
 } RelationRestrictionContext;
@@ -148,6 +150,9 @@ typedef struct RTEListProperties
 	bool hasCitusTable;
 
 	bool hasMaterializedView;
+
+	bool hasView;
+	Oid viewId;
 } RTEListProperties;
 
 

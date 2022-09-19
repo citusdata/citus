@@ -1156,6 +1156,28 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 */
 	CheckNodeIsDumpable((Node *) logicalPlan);
 
+	RTEListProperties *checkForViews = GetRTEListPropertiesForQuery(originalQuery);
+
+	if (checkForViews->hasView)
+	{
+		HeapTuple tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(
+											  checkForViews->viewId));
+		if (!HeapTupleIsValid(tuple))
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_TABLE),
+					 errmsg("relation with OID %u does not exist",
+							checkForViews->viewId)));
+		}
+
+		Oid ownerId = ((Form_pg_class) GETSTRUCT(tuple))->relowner;
+
+		ReleaseSysCache(tuple);
+
+		plannerRestrictionContext->relationRestrictionContext->hasView = true;
+		plannerRestrictionContext->relationRestrictionContext->viewOwnerId = ownerId;
+	}
+
 	/* Create the physical plan */
 	distributedPlan = CreatePhysicalDistributedPlan(logicalPlan,
 													plannerRestrictionContext);
@@ -2497,6 +2519,8 @@ GetRTEListProperties(List *rangeTableList)
 			 * Skip over views, distributed tables within (regular) views are
 			 * already in rangeTableList.
 			 */
+			rteListProperties->hasView = true;
+			rteListProperties->viewId = rangeTableEntry->relid;
 			continue;
 		}
 

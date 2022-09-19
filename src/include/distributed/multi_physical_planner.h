@@ -136,6 +136,7 @@ typedef struct Job
 	CitusNode type;
 	uint64 jobId;
 	Query *jobQuery;
+	Oid userId;
 	List *taskList;
 	List *dependentJobList;
 	bool subqueryPushdown;

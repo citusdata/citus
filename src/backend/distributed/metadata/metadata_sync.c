@@ -122,7 +122,6 @@ static List * GrantOnSequenceDDLCommands(Oid sequenceOid);
 static List * GenerateGrantOnSequenceQueriesFromAclItem(Oid sequenceOid,
 														AclItem *aclItem);
 static void SetLocalReplicateReferenceTablesOnActivate(bool state);
-static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
 static void MetadataSyncSigAlrmHandler(SIGNAL_ARGS);
 
@@ -2484,7 +2483,7 @@ SetLocalReplicateReferenceTablesOnActivate(bool state)
 }
 
 
-static char *
+char *
 GenerateSetRoleQuery(Oid roleOid)
 {
 	StringInfo buf = makeStringInfo();

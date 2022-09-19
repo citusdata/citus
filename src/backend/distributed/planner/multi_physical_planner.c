@@ -42,6 +42,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
@@ -2074,6 +2075,11 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 	for (int32 jobIndex = (flattenedJobCount - 1); jobIndex >= 0; jobIndex--)
 	{
 		Job *job = (Job *) list_nth(flattenedJobList, jobIndex);
+		if (plannerRestrictionContext->relationRestrictionContext->hasView)
+		{
+			job->userId =
+				plannerRestrictionContext->relationRestrictionContext->viewOwnerId;
+		}
 		List *sqlTaskList = NIL;
 		ListCell *assignedSqlTaskCell = NULL;
 
@@ -2713,6 +2719,12 @@ SqlTaskList(Job *job)
 
 		Task *sqlTask = CreateBasicTask(jobId, taskIdIndex, READ_TASK,
 										sqlQueryString->data);
+		if (job->userId != InvalidOid)
+		{
+			List *cmds = list_make2(GenerateSetRoleQuery(job->userId),
+									sqlQueryString->data);
+			SetTaskQueryStringList(sqlTask, cmds);
+		}
 		sqlTask->dependentTaskList = dataFetchTaskList;
 		sqlTask->relationShardList = BuildRelationShardList(fragmentRangeTableList,
 															fragmentCombination);

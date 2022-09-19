@@ -181,7 +181,7 @@ EnsureIntermediateSizeLimitNotExceeded(TupleDestinationStats *tupleDestinationSt
 static TupleDesc
 TupleStoreTupleDestTupleDescForQuery(TupleDestination *self, int queryNumber)
 {
-	Assert(queryNumber == 0);
+	/*Assert(queryNumber == 0); */
 
 	TupleStoreTupleDestination *tupleDest = (TupleStoreTupleDestination *) self;
 
