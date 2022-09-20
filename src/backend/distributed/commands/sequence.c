@@ -214,34 +214,42 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 
 
 /*
- * DefExprContainsNextVal returns true if column default expression at
- * defExprIndex'th position of relation's defval array contains nextval().
- *
- * defExprIndex is based on relative order of the column in TupleDesc
- * among other columns having a DEFAULT expressions.
+ * ColumnDefaultsToNextVal returns true if the column with attrNumber
+ * has a default expression that contains nextval().
  */
 bool
-DefExprContainsNextVal(Oid relationId, uint16 defExprIndex)
+ColumnDefaultsToNextVal(Oid relationId, AttrNumber attrNumber)
 {
 	Relation relation = RelationIdGetRelation(relationId);
 
 	TupleDesc relTupDesc = RelationGetDescr(relation);
 	TupleConstr *relTupConstraints = relTupDesc->constr;
-
-	if (defExprIndex > relTupConstraints->num_defval)
+	if (relTupConstraints == NULL)
 	{
-		/* be on the safe-side */
-		ereport(ERROR, (errmsg("relation definition has no such "
-							   "DEFAULT expression")));
+		/* none of the columns have a DEFAULT expression */
+		RelationClose(relation);
+		return false;
 	}
 
-	AttrDefault *defValueArray = relTupConstraints->defval;
-	AttrDefault *defValue = &(defValueArray[defExprIndex]);
-	Node *defExpr = (Node *) stringToNode(defValue->adbin);
+	for (uint16 defExprIndex = 0; defExprIndex < relTupConstraints->num_defval;
+		 defExprIndex++)
+	{
+		AttrDefault *defValue = &(relTupConstraints->defval[defExprIndex]);
+		if (defValue->adnum != attrNumber)
+		{
+			continue;
+		}
 
+		Node *defExpr = (Node *) stringToNode(defValue->adbin);
+
+		RelationClose(relation);
+
+		return contain_nextval_expression_walker(defExpr, NULL);
+	}
+
+	/* column doesn't have a DEFAULT expression */
 	RelationClose(relation);
-
-	return contain_nextval_expression_walker(defExpr, NULL);
+	return false;
 }
 
 

@@ -1173,8 +1173,6 @@ DropNextValExprsAndMoveOwnedSeqOwnerships(Oid sourceRelationId,
 	ExtractDefaultColumnsAndOwnedSequences(sourceRelationId, &columnNameList,
 										   &ownedSequenceIdList);
 
-	uint16 sourceRelDefExprArrIndex = 0;
-
 	char *columnName = NULL;
 	Oid ownedSequenceId = InvalidOid;
 	forboth_ptr_oid(columnName, columnNameList, ownedSequenceId, ownedSequenceIdList)
@@ -1188,25 +1186,13 @@ DropNextValExprsAndMoveOwnedSeqOwnerships(Oid sourceRelationId,
 		}
 
 		Form_pg_attribute columnForm = (Form_pg_attribute) GETSTRUCT(columnTuple);
-		bool columnHasDefaultExpr = columnForm->atthasdef;
+		AttrNumber columnAttrNumber = columnForm->attnum;
 
 		ReleaseSysCache(columnTuple);
 
-		if (columnHasDefaultExpr)
+		if (ColumnDefaultsToNextVal(sourceRelationId, columnAttrNumber))
 		{
-			if (DefExprContainsNextVal(sourceRelationId, sourceRelDefExprArrIndex))
-			{
-				DropDefaultColumnDefinition(sourceRelationId, columnName);
-			}
-			else
-			{
-				/*
-				 * Since dropping a default expression means shifting rest of
-				 * the attributes to left by one, we don't increment
-				 * sourceRelDefExprArrIndex otherwise.
-				 */
-				sourceRelDefExprArrIndex++;
-			}
+			DropDefaultColumnDefinition(sourceRelationId, columnName);
 		}
 
 		/*
