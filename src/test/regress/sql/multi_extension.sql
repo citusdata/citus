@@ -795,5 +795,39 @@ FROM test.maintenance_worker();
 -- confirm that there is only one maintenance daemon
 SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';
 
+-- confirm that we can create a distributed table concurrently on an empty node
+DROP EXTENSION citus;
+CREATE EXTENSION citus;
+CREATE TABLE test (x int, y int);
+INSERT INTO test VALUES (1,2);
+SET citus.shard_replication_factor TO 1;
+SET citus.defer_drop_after_shard_split TO off;
+SELECT create_distributed_table_concurrently('test','x');
+DROP TABLE test;
+TRUNCATE pg_dist_node;
+
+-- confirm that we can create a distributed table on an empty node
+CREATE TABLE test (x int, y int);
+INSERT INTO test VALUES (1,2);
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('test','x');
+DROP TABLE test;
+TRUNCATE pg_dist_node;
+
+-- confirm that we can create a reference table on an empty node
+CREATE TABLE test (x int, y int);
+INSERT INTO test VALUES (1,2);
+SELECT create_reference_table('test');
+DROP TABLE test;
+TRUNCATE pg_dist_node;
+
+-- confirm that we can create a local table on an empty node
+CREATE TABLE test (x int, y int);
+INSERT INTO test VALUES (1,2);
+SELECT citus_add_local_table_to_metadata('test');
+DROP TABLE test;
+DROP EXTENSION citus;
+CREATE EXTENSION citus;
+
 DROP TABLE version_mismatch_table;
 DROP SCHEMA multi_extension;

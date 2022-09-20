@@ -38,6 +38,12 @@ select create_distributed_table_concurrently('nocolo','x');
 select create_distributed_table_concurrently('test','key', colocate_with := 'nocolo');
 select create_distributed_table_concurrently('test','key', colocate_with := 'noexists');
 
+select citus_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', false);
+select citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
+select create_distributed_table_concurrently('test','key');
+select citus_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', true);
+select citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
+
 -- use colocate_with "default"
 select create_distributed_table_concurrently('test','key', shard_count := 11);
 

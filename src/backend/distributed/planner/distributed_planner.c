@@ -1897,14 +1897,14 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	MemoryContext restrictionsMemoryContext = plannerRestrictionContext->memoryContext;
 	MemoryContext oldMemoryContext = MemoryContextSwitchTo(restrictionsMemoryContext);
 
-	bool distributedTable = IsCitusTable(rte->relid);
+	bool isCitusTable = IsCitusTable(rte->relid);
 
 	RelationRestriction *relationRestriction = palloc0(sizeof(RelationRestriction));
 	relationRestriction->index = restrictionIndex;
 	relationRestriction->relationId = rte->relid;
 	relationRestriction->rte = rte;
 	relationRestriction->relOptInfo = relOptInfo;
-	relationRestriction->distributedRelation = distributedTable;
+	relationRestriction->citusTable = isCitusTable;
 	relationRestriction->plannerInfo = root;
 
 	/* see comments on GetVarFromAssignedParam() */
@@ -1919,9 +1919,41 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	 * We're also keeping track of whether all participant
 	 * tables are reference tables.
 	 */
-	if (distributedTable)
+	if (isCitusTable)
 	{
 		cacheEntry = GetCitusTableCacheEntry(rte->relid);
+
+		/*
+		 * The statistics objects of the distributed table are not relevant
+		 * for the distributed planning, so we can override it.
+		 *
+		 * Normally, we should not need this. However, the combination of
+		 * Postgres commit 269b532aef55a579ae02a3e8e8df14101570dfd9 and
+		 * Citus function AdjustPartitioningForDistributedPlanning()
+		 * forces us to do this. The commit expects statistics objects
+		 * of partitions to have "inh" flag set properly. Whereas, the
+		 * function overrides "inh" flag. To avoid Postgres to throw error,
+		 * we override statlist such that Postgres does not try to process
+		 * any statistics objects during the standard_planner() on the
+		 * coordinator. In the end, we do not need the standard_planner()
+		 * on the coordinator to generate an optimized plan. We call
+		 * into standard_planner() for other purposes, such as generating the
+		 * relationRestrictionContext here.
+		 *
+		 * AdjustPartitioningForDistributedPlanning() is a hack that we use
+		 * to prevent Postgres' standard_planner() to expand all the partitions
+		 * for the distributed planning when a distributed partitioned table
+		 * is queried. It is required for both correctness and performance
+		 * reasons. Although we can eliminate the use of the function for
+		 * the correctness (e.g., make sure that rest of the planner can handle
+		 * partitions), it's performance implication is hard to avoid. Certain
+		 * planning logic of Citus (such as router or query pushdown) relies
+		 * heavily on the relationRestrictionList. If
+		 * AdjustPartitioningForDistributedPlanning() is removed, all the
+		 * partitions show up in the, causing high planning times for
+		 * such queries.
+		 */
+		relOptInfo->statlist = NIL;
 
 		relationRestrictionContext->allReferenceTables &=
 			IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE);

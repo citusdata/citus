@@ -382,7 +382,6 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 							   "citus.shard_replication_factor > 1")));
 	}
 
-	EnsureCoordinatorIsInMetadata();
 	EnsureCitusTableCanBeCreated(relationId);
 
 	EnsureValidDistributionColumn(relationId, distributionColumnName);
@@ -528,6 +527,14 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 		colocatedTableId = ColocatedTableId(colocationId);
 	}
 
+	List *workerNodeList = DistributedTablePlacementNodeList(NoLock);
+	if (workerNodeList == NIL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("no worker nodes are available for placing shards"),
+						errhint("Add more worker nodes.")));
+	}
+
 	List *workersForPlacementList;
 	List *shardSplitPointsList;
 
@@ -555,7 +562,6 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 		/*
 		 * Place shards in a round-robin fashion across all data nodes.
 		 */
-		List *workerNodeList = DistributedTablePlacementNodeList(NoLock);
 		workersForPlacementList = RoundRobinWorkerNodeList(workerNodeList, shardCount);
 	}
 
@@ -856,6 +862,8 @@ WorkerNodesForShardList(List *shardList)
 static List *
 RoundRobinWorkerNodeList(List *workerNodeList, int listLength)
 {
+	Assert(workerNodeList != NIL);
+
 	List *nodeIdList = NIL;
 
 	for (int idx = 0; idx < listLength; idx++)

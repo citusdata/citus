@@ -4022,7 +4022,7 @@ CancelTasksForJob(int64 jobid)
 		}
 
 		/* make sure the current user has the rights to cancel this task */
-		Oid taskOwner = DatumGetObjectId(values[Anum_pg_dist_background_task_owner]);
+		Oid taskOwner = DatumGetObjectId(values[Anum_pg_dist_background_task_owner - 1]);
 		if (superuser_arg(taskOwner) && !superuser())
 		{
 			/* must be a superuser to cancel tasks owned by superuser */

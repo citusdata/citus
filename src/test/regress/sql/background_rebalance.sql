@@ -59,6 +59,24 @@ SELECT 1 FROM citus_rebalance_start();
 SELECT rebalance_table_shards();
 SELECT citus_rebalance_wait();
 
+DROP TABLE t1;
+
+
+-- make sure a non-super user can stop rebalancing
+CREATE USER non_super_user_rebalance WITH LOGIN;
+GRANT ALL ON SCHEMA background_rebalance TO non_super_user_rebalance;
+
+SET ROLE non_super_user_rebalance;
+
+CREATE TABLE non_super_user_t1 (a int PRIMARY KEY);
+SELECT create_distributed_table('non_super_user_t1', 'a', shard_count => 4, colocate_with => 'none');
+SELECT citus_move_shard_placement(85674008, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode => 'block_writes');
+
+SELECT 1 FROM citus_rebalance_start();
+SELECT citus_rebalance_stop();
+
+RESET ROLE;
+
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA background_rebalance CASCADE;
