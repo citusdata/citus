@@ -566,10 +566,9 @@ DropAllLogicalReplicationLeftovers(LogicalRepType type)
 	char *databaseName = get_database_name(MyDatabaseId);
 
 	/*
-	 * We open new connections to all nodes. The reason for this is that
-	 * operations on subscriptions, publications and replication slotscannot be
-	 * run in a transaction. By forcing a new connection we make sure no
-	 * transaction is active on the connection.
+	 * We need connections that are not currently inside a transaction. The
+	 * reason for this is that operations on subscriptions, publications and
+	 * replication slots cannot be run in a transaction.
 	 */
 	int connectionFlags = OUTSIDE_TRANSACTION;
 
@@ -607,7 +606,9 @@ DropAllLogicalReplicationLeftovers(LogicalRepType type)
 		/*
 		 * We close all connections that we opened for the dropping here. That
 		 * way we don't keep these connections open unnecessarily during the
-		 * 'LogicalRepType' operation (which can take a long time).
+		 * 'LogicalRepType' operation (which can take a long time). We might
+		 * need to reopen a few later on, but that seems better than keeping
+		 * many open for no reason for a long time.
 		 */
 		CloseConnection(cleanupConnection);
 	}
