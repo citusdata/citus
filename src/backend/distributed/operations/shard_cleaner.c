@@ -713,7 +713,7 @@ InsertCleanupRecordInSubtransaction(CleanupObject objectType,
 					 policy);
 
 	MultiConnection *connection =
-		GetLocalConnectionForSubtransactionAsUser(CitusExtensionOwnerName());
+		GetConnectionForLocalQueriesOutsideTransaction(CitusExtensionOwnerName());
 	SendCommandListToWorkerOutsideTransactionWithConnection(connection,
 															list_make1(command->data));
 }
@@ -733,7 +733,7 @@ DeleteCleanupRecordByRecordIdOutsideTransaction(uint64 recordId)
 					 PG_DIST_CLEANUP,
 					 recordId);
 
-	MultiConnection *connection = GetLocalConnectionForSubtransactionAsUser(
+	MultiConnection *connection = GetConnectionForLocalQueriesOutsideTransaction(
 		CitusExtensionOwnerName());
 	SendCommandListToWorkerOutsideTransactionWithConnection(connection,
 															list_make1(command->data));
@@ -839,13 +839,8 @@ GetNextOperationId()
 	appendStringInfo(nextValueCommand, "SELECT nextval(%s);",
 					 quote_literal_cstr(sequenceName->data));
 
-	int connectionFlag = FORCE_NEW_CONNECTION;
-	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlag,
-																LocalHostName,
-																PostPortNumber,
-																CitusExtensionOwnerName(),
-																get_database_name(
-																	MyDatabaseId));
+	MultiConnection *connection = GetConnectionForLocalQueriesOutsideTransaction(
+		CitusExtensionOwnerName());
 
 	PGresult *result = NULL;
 	int queryResult = ExecuteOptionalRemoteCommand(connection, nextValueCommand->data,
@@ -860,7 +855,6 @@ GetNextOperationId()
 
 	PQclear(result);
 	ForgetResults(connection);
-	CloseConnection(connection);
 
 	return operationdId;
 }

@@ -151,7 +151,7 @@ static List * ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 												   List *destinationWorkerNodesList,
 												   DistributionColumnMap *
 												   distributionColumnOverrides);
-static void ExecuteSplitShardReleaseSharedMemory(WorkerNode *sourceWorkerNode);
+static void ExecuteSplitShardReleaseSharedMemory(MultiConnection *sourceConnection);
 static void AddDummyShardEntryInMap(HTAB *mapOfPlacementToDummyShardList, uint32
 									targetNodeId,
 									ShardInterval *shardInterval);
@@ -1778,7 +1778,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		 * 15) Release shared memory allocated by worker_split_shard_replication_setup udf
 		 * at source node.
 		 */
-		ExecuteSplitShardReleaseSharedMemory(sourceShardToCopyNode);
+		ExecuteSplitShardReleaseSharedMemory(sourceConnection);
 
 		/* 16) Close source connection */
 		CloseConnection(sourceConnection);
@@ -2075,19 +2075,8 @@ ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
  * shared memory to store split information. This has to be released after split completes(or fails).
  */
 static void
-ExecuteSplitShardReleaseSharedMemory(WorkerNode *sourceWorkerNode)
+ExecuteSplitShardReleaseSharedMemory(MultiConnection *sourceConnection)
 {
-	char *superUser = CitusExtensionOwnerName();
-	char *databaseName = get_database_name(MyDatabaseId);
-
-	int connectionFlag = FORCE_NEW_CONNECTION;
-	MultiConnection *sourceConnection = GetNodeUserDatabaseConnection(
-		connectionFlag,
-		sourceWorkerNode->workerName,
-		sourceWorkerNode->workerPort,
-		superUser,
-		databaseName);
-
 	StringInfo splitShardReleaseMemoryUDF = makeStringInfo();
 	appendStringInfo(splitShardReleaseMemoryUDF,
 					 "SELECT pg_catalog.worker_split_shard_release_dsm();");
@@ -2302,7 +2291,7 @@ GetNextShardIdForSplitChild()
 	appendStringInfo(nextValueCommand, "SELECT nextval(%s);", quote_literal_cstr(
 						 "pg_catalog.pg_dist_shardid_seq"));
 
-	MultiConnection *connection = GetLocalConnectionForSubtransactionAsUser(
+	MultiConnection *connection = GetConnectionForLocalQueriesOutsideTransaction(
 		CitusExtensionOwnerName());
 	PGresult *result = NULL;
 	int queryResult = ExecuteOptionalRemoteCommand(connection, nextValueCommand->data,

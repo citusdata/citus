@@ -571,7 +571,7 @@ DropAllLogicalReplicationLeftovers(LogicalRepType type)
 	 * run in a transaction. By forcing a new connection we make sure no
 	 * transaction is active on the connection.
 	 */
-	int connectionFlags = FORCE_NEW_CONNECTION;
+	int connectionFlags = OUTSIDE_TRANSACTION;
 
 	List *workerNodeList = ActivePrimaryNodeList(AccessShareLock);
 	List *cleanupConnectionList = NIL;
@@ -1158,13 +1158,13 @@ CreatePartitioningHierarchy(List *logicalRepTargetList)
 				 * is a quick operation, so it is fine to execute sequentially.
 				 */
 
-				MultiConnection *c =
+				MultiConnection *connection =
 					GetNodeUserDatabaseConnection(OUTSIDE_TRANSACTION,
 												  target->superuserConnection->hostname,
 												  target->superuserConnection->port,
 												  tableOwner, NULL);
-				SendCommandListToWorkerOutsideTransactionWithConnection(c, list_make1(
-																			attachPartitionCommand));
+				SendCommandListToWorkerOutsideTransactionWithConnection(
+					connection, list_make1(attachPartitionCommand));
 
 				MemoryContextReset(localContext);
 			}
@@ -2063,10 +2063,11 @@ RecreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
 	GroupedLogicalRepTargets *groupedLogicalRepTargets = NULL;
 	foreach_htab(groupedLogicalRepTargets, &status, groupedLogicalRepTargetsHash)
 	{
-		if (groupedLogicalRepTargets->superuserConnection &&
-			PQstatus(groupedLogicalRepTargets->superuserConnection->pgConn) ==
-			CONNECTION_OK &&
-			!PQisBusy(groupedLogicalRepTargets->superuserConnection->pgConn)
+		MultiConnection *superuserConnection =
+			groupedLogicalRepTargets->superuserConnection;
+		if (superuserConnection &&
+			PQstatus(superuserConnection->pgConn) == CONNECTION_OK &&
+			!PQisBusy(superuserConnection->pgConn)
 			)
 		{
 			continue;
@@ -2074,12 +2075,12 @@ RecreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
 		WorkerNode *targetWorkerNode = FindNodeWithNodeId(
 			groupedLogicalRepTargets->nodeId,
 			false);
-		MultiConnection *superuserConnection =
-			GetNodeUserDatabaseConnection(connectionFlags,
-										  targetWorkerNode->workerName,
-										  targetWorkerNode->workerPort,
-										  user,
-										  databaseName);
+		superuserConnection = GetNodeUserDatabaseConnection(
+			connectionFlags,
+			targetWorkerNode->workerName,
+			targetWorkerNode->workerPort,
+			user,
+			databaseName);
 
 		/*
 		 * Operations on subscriptions cannot run in a transaction block. We

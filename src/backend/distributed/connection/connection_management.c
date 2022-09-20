@@ -244,11 +244,12 @@ GetNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 
 
 /*
- * GetLocalConnectionForSubtransaction returns a localhost connection for subtransaction.
- * To avoid creating excessive connections, we reuse an existing connection.
+ * GetConnectionForLocalQueriesOutsideTransaction returns a localhost connection for
+ * subtransaction. To avoid creating excessive connections, we reuse an
+ * existing connection.
  */
 MultiConnection *
-GetLocalConnectionForSubtransactionAsUser(char *userName)
+GetConnectionForLocalQueriesOutsideTransaction(char *userName)
 {
 	int connectionFlag = OUTSIDE_TRANSACTION;
 	MultiConnection *connection =
@@ -703,8 +704,8 @@ CloseConnection(MultiConnection *connection)
 		dlist_delete(&connection->connectionNode);
 
 		/* same for transaction state and shard/placement machinery */
-		ResetRemoteTransaction(connection);
 		CloseShardPlacementAssociation(connection);
+		ResetRemoteTransaction(connection);
 
 		/* we leave the per-host entry alive */
 		pfree(connection);
