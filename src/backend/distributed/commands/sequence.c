@@ -27,6 +27,7 @@
 #include "nodes/makefuncs.h"
 #include "distributed/worker_create_or_replace.h"
 #include "nodes/parsenodes.h"
+#include "rewrite/rewriteHandler.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 
@@ -221,35 +222,16 @@ bool
 ColumnDefaultsToNextVal(Oid relationId, AttrNumber attrNumber)
 {
 	Relation relation = RelationIdGetRelation(relationId);
+	Node *defExpr = build_column_default(relation, attrNumber);
+	RelationClose(relation);
 
-	TupleDesc relTupDesc = RelationGetDescr(relation);
-	TupleConstr *relTupConstraints = relTupDesc->constr;
-	if (relTupConstraints == NULL)
+	if (defExpr == NULL)
 	{
-		/* none of the columns have a DEFAULT expression */
-		RelationClose(relation);
+		/* column doesn't have a DEFAULT expression */
 		return false;
 	}
 
-	for (uint16 defExprIndex = 0; defExprIndex < relTupConstraints->num_defval;
-		 defExprIndex++)
-	{
-		AttrDefault *defValue = &(relTupConstraints->defval[defExprIndex]);
-		if (defValue->adnum != attrNumber)
-		{
-			continue;
-		}
-
-		Node *defExpr = (Node *) stringToNode(defValue->adbin);
-
-		RelationClose(relation);
-
-		return contain_nextval_expression_walker(defExpr, NULL);
-	}
-
-	/* column doesn't have a DEFAULT expression */
-	RelationClose(relation);
-	return false;
+	return contain_nextval_expression_walker(defExpr, NULL);
 }
 
 

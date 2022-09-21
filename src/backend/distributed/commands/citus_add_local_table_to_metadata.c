@@ -1180,19 +1180,14 @@ DropNextValExprsAndMoveOwnedSeqOwnerships(Oid sourceRelationId,
 	Oid ownedSequenceId = InvalidOid;
 	forboth_ptr_oid(columnName, columnNameList, ownedSequenceId, ownedSequenceIdList)
 	{
-		HeapTuple columnTuple = SearchSysCacheAttName(sourceRelationId, columnName);
-		if (!HeapTupleIsValid(columnTuple))
-		{
-			ereport(ERROR, (errcode(ERRCODE_UNDEFINED_COLUMN),
-							errmsg("column \"%s\" of relation \"%s\" does not exist",
-								   columnName, get_rel_name(sourceRelationId))));
-		}
-
-		Form_pg_attribute columnForm = (Form_pg_attribute) GETSTRUCT(columnTuple);
-		AttrNumber columnAttrNumber = columnForm->attnum;
-
-		ReleaseSysCache(columnTuple);
-
+		/*
+		 * We drop column default expression only if it defaults to nextval()
+		 * (i.e., to a sequence).
+		 *
+		 * Otherwise, we still want to be able to evaluate DEFAULT expression
+		 * on shards, e.g., for foreign key - SET DEFAULT actions.
+		 */
+		AttrNumber columnAttrNumber = get_attnum(sourceRelationId, columnName);
 		if (ColumnDefaultsToNextVal(sourceRelationId, columnAttrNumber))
 		{
 			DropDefaultColumnDefinition(sourceRelationId, columnName);
