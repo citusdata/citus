@@ -1332,9 +1332,10 @@ DropReplicationSlot(MultiConnection *connection, char *replicationSlotName)
 			 * - Or, we have made enough number of retries (currently 20), but didn't work
 			 */
 			ReportResultError(connection, result, ERROR);
-			PQclear(result);
-			ForgetResults(connection);
 		}
+
+		PQclear(result);
+		ForgetResults(connection);
 	}
 
 	PQclear(result);
