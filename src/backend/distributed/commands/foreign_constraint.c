@@ -383,13 +383,17 @@ ForeignKeySetsNextValColumnToDefault(HeapTuple pgConstraintTuple)
 	Form_pg_constraint pgConstraintForm =
 		(Form_pg_constraint) GETSTRUCT(pgConstraintTuple);
 
-	List *onDeleteSetDefaultAttrs =
-		ForeignKeyGetDefaultingAttrs(pgConstraintTuple);
-	List *defaultSetNextValAttrs =
-		RelationGetDefaultNextValAttrs(pgConstraintForm->conrelid);
+	List *setDefaultAttrs = ForeignKeyGetDefaultingAttrs(pgConstraintTuple);
+	AttrNumber setDefaultAttr = InvalidAttrNumber;
+	foreach_int(setDefaultAttr, setDefaultAttrs)
+	{
+		if (ColumnDefaultsToNextVal(pgConstraintForm->conrelid, setDefaultAttr))
+		{
+			return true;
+		}
+	}
 
-	return list_length(list_intersection_int(onDeleteSetDefaultAttrs,
-											 defaultSetNextValAttrs)) > 0;
+	return false;
 }
 
 
