@@ -260,6 +260,15 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 			referencedReplicationModel = referencingReplicationModel;
 		}
 
+		/*
+		 * Given that we drop DEFAULT nextval('sequence') expressions from
+		 * shard relation columns, allowing ON DELETE/UPDATE SET DEFAULT
+		 * on such columns causes inserting NULL values to referencing relation
+		 * as a result of a delete/update operation on referenced relation.
+		 *
+		 * For this reason, we disallow ON DELETE/UPDATE SET DEFAULT actions
+		 * on columns that default to sequences.
+		 */
 		if (ForeignKeySetsNextValColumnToDefault(heapTuple))
 		{
 			ereport(ERROR, (errmsg("cannot create foreign key constraint "
