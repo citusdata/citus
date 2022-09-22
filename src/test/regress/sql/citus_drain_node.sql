@@ -20,7 +20,7 @@ SELECT nodename, nodeport
  WHERE placement.groupid = node.groupid
    AND node.noderole = 'primary' GROUP BY nodename, nodeport;
 
-SELECT * FROM citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false); 
+SELECT * FROM citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
 SELECT * from citus_drain_node('localhost', :worker_1_port, shard_transfer_mode :='force_logical');
 
 CALL citus_cleanup_orphaned_shards();
@@ -30,9 +30,9 @@ SELECT nodename, nodeport
        pg_dist_node AS node
  WHERE placement.groupid = node.groupid
    AND node.noderole = 'primary' GROUP BY nodename, nodeport;
-   
-SELECT * FROM citus_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', true); 
-SELECT * FROM citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true); 
+
+SELECT * FROM citus_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', true);
+SELECT * FROM citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
 
 SELECT * FROM rebalance_table_shards(shard_transfer_mode :='force_logical');
 
@@ -44,7 +44,7 @@ SELECT nodename, nodeport
  WHERE placement.groupid = node.groupid
    AND node.noderole = 'primary' GROUP BY nodename, nodeport;
 
-SELECT * FROM citus_set_node_property('localhost', :master_port, 'shouldhaveshards', false); 
+SELECT * FROM citus_set_node_property('localhost', :master_port, 'shouldhaveshards', false);
 
 SELECT * FROM rebalance_table_shards(shard_transfer_mode :='force_logical');
 
