@@ -75,6 +75,7 @@ typedef struct RebalanceOptions
 	float4 improvementThreshold;
 	Form_pg_dist_rebalance_strategy rebalanceStrategy;
 	const char *operationName;
+	WorkerNode *workerNode;
 } RebalanceOptions;
 
 
@@ -460,6 +461,13 @@ GetRebalanceSteps(RebalanceOptions *options)
 														  options->excludedShardArray);
 		List *activeShardPlacementListForRelation =
 			FilterShardPlacementList(shardPlacementList, IsActiveShardPlacement);
+
+		if (options->workerNode != NULL)
+		{
+			activeShardPlacementListForRelation = FilterActiveShardPlacementListByNode(
+				shardPlacementList, options->workerNode);
+		}
+
 		activeShardPlacementListList =
 			lappend(activeShardPlacementListList, activeShardPlacementListForRelation);
 	}
@@ -1043,6 +1051,10 @@ citus_drain_node(PG_FUNCTION_ARGS)
 	};
 
 	char *nodeName = text_to_cstring(nodeNameText);
+	if (nodePort != 0 && (nodeName != NULL && strlen(nodeName) > 0))
+	{
+		options.workerNode = FindWorkerNode(nodeName, nodePort);
+	}
 
 	/*
 	 * This is done in a separate session. This way it's not undone if the
