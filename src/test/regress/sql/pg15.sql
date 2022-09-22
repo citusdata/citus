@@ -586,6 +586,128 @@ select min(x), max(x) from xid8_t1 ORDER BY 1,2;
 select min(x), max(x) from xid8_t1 GROUP BY x ORDER BY 1,2;
 select min(x), max(x) from xid8_t1 GROUP BY y ORDER BY 1,2;
 
+--
+-- PG15 introduces security invoker views
+-- Citus supports these views because permissions in the shards
+-- are already checked for the view invoker
+--
+
+-- create a distributed table and populate it
+CREATE TABLE events (tenant_id int, event_id int, descr text);
+SELECT create_distributed_table('events','tenant_id');
+INSERT INTO events VALUES (1, 1, 'push');
+INSERT INTO events VALUES (2, 2, 'push');
+
+-- create a security invoker view with underlying distributed table
+-- the view will be distributed with security_invoker option as well
+CREATE VIEW sec_invoker_view WITH (security_invoker=true) AS SELECT * FROM events;
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class
+WHERE relname = 'sec_invoker_view' AND relnamespace = 'pg15'::regnamespace;
+
+\c - - - :master_port
+SET search_path TO pg15;
+
+-- test altering the security_invoker flag
+ALTER VIEW sec_invoker_view SET (security_invoker = false);
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class
+WHERE relname = 'sec_invoker_view' AND relnamespace = 'pg15'::regnamespace;
+
+\c - - - :master_port
+SET search_path TO pg15;
+
+ALTER VIEW sec_invoker_view SET (security_invoker = true);
+
+-- create a new user but don't give select permission to events table
+-- only give select permission to the view
+CREATE ROLE rls_tenant_1 WITH LOGIN;
+GRANT USAGE ON SCHEMA pg15 TO rls_tenant_1;
+GRANT SELECT ON sec_invoker_view TO rls_tenant_1;
+
+-- this user shouldn't be able to query the view
+-- because the view is security invoker
+-- which means it will check the invoker's rights
+-- against the view's underlying tables
+SET ROLE rls_tenant_1;
+SELECT * FROM sec_invoker_view ORDER BY event_id;
+RESET ROLE;
+
+-- now grant select on the underlying distributed table
+-- and try again
+-- now it should work!
+GRANT SELECT ON TABLE events TO rls_tenant_1;
+SET ROLE rls_tenant_1;
+SELECT * FROM sec_invoker_view ORDER BY event_id;
+RESET ROLE;
+
+-- Enable row level security
+ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+
+-- Create policy for tenants to read access their own rows
+CREATE POLICY user_mod ON events
+  FOR SELECT TO rls_tenant_1
+  USING (current_user = 'rls_tenant_' || tenant_id::text);
+
+-- all rows should be visible because we are querying with
+-- the table owner user now
+SELECT * FROM sec_invoker_view ORDER BY event_id;
+
+-- Switch user that has been granted rights,
+-- should be able to see rows that the policy allows
+SET ROLE rls_tenant_1;
+SELECT * FROM sec_invoker_view ORDER BY event_id;
+RESET ROLE;
+
+-- ordinary view on top of security invoker view permissions
+-- ordinary means security definer view
+-- The PG expected behavior is that this doesn't change anything!!!
+-- Can't escape security invoker views by defining a security definer view on top of it!
+CREATE VIEW sec_definer_view AS SELECT * FROM sec_invoker_view ORDER BY event_id;
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class
+WHERE relname = 'sec_definer_view' AND relnamespace = 'pg15'::regnamespace;
+
+\c - - - :master_port
+SET search_path TO pg15;
+
+CREATE ROLE rls_tenant_2 WITH LOGIN;
+GRANT USAGE ON SCHEMA pg15 TO rls_tenant_2;
+GRANT SELECT ON sec_definer_view TO rls_tenant_2;
+
+-- it doesn't matter that the parent view is security definer
+-- still the security invoker view will check the invoker's permissions
+-- and will not allow rls_tenant_2 to query the view
+SET ROLE rls_tenant_2;
+SELECT * FROM sec_definer_view ORDER BY event_id;
+RESET ROLE;
+
+-- grant select rights to rls_tenant_2
+GRANT SELECT ON TABLE events TO rls_tenant_2;
+
+-- we still have row level security so rls_tenant_2
+-- will be able to query but won't be able to see anything
+SET ROLE rls_tenant_2;
+SELECT * FROM sec_definer_view ORDER BY event_id;
+RESET ROLE;
+
+-- give some rights to rls_tenant_2
+CREATE POLICY user_mod_1 ON events
+  FOR SELECT TO rls_tenant_2
+  USING (current_user = 'rls_tenant_' || tenant_id::text);
+
+-- Row level security will be applied as well! We are safe!
+SET ROLE rls_tenant_2;
+SELECT * FROM sec_definer_view ORDER BY event_id;
+RESET ROLE;
+
+-- no need to test updatable views because they are currently not
+-- supported in Citus when the query view contains citus tables
+UPDATE sec_invoker_view SET event_id = 5;
+
 -- Clean up
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
