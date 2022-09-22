@@ -28,7 +28,7 @@ SELECT nodename, nodeport
   FROM pg_dist_placement AS placement,
        pg_dist_node AS node
  WHERE placement.groupid = node.groupid
-   AND node.noderole = 'primary' GROUP BY nodename, nodeport;
+   AND node.noderole = 'primary' GROUP BY nodename, nodeport ORDER BY 1,2;
  nodename  | nodeport
 ---------------------------------------------------------------------
  localhost |    57636
@@ -53,13 +53,12 @@ SELECT nodename, nodeport
   FROM pg_dist_placement AS placement,
        pg_dist_node AS node
  WHERE placement.groupid = node.groupid
-   AND node.noderole = 'primary' GROUP BY nodename, nodeport;
+   AND node.noderole = 'primary' GROUP BY nodename, nodeport ORDER BY 1,2;
  nodename  | nodeport
 ---------------------------------------------------------------------
  localhost |    57636
  localhost |    57638
 (2 rows)
-
 
 SELECT * FROM citus_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', true);
  citus_set_node_property
@@ -84,7 +83,7 @@ SELECT nodename, nodeport
   FROM pg_dist_placement AS placement,
        pg_dist_node AS node
  WHERE placement.groupid = node.groupid
-   AND node.noderole = 'primary' GROUP BY nodename, nodeport;
+   AND node.noderole = 'primary' GROUP BY nodename, nodeport ORDER BY 1,2;
  nodename  | nodeport
 ---------------------------------------------------------------------
  localhost |    57636
@@ -109,7 +108,7 @@ SELECT nodename, nodeport
   FROM pg_dist_placement AS placement,
        pg_dist_node AS node
  WHERE placement.groupid = node.groupid
-   AND node.noderole = 'primary' GROUP BY nodename, nodeport;
+   AND node.noderole = 'primary' GROUP BY nodename, nodeport ORDER BY 1,2;
  nodename  | nodeport
 ---------------------------------------------------------------------
  localhost |    57637

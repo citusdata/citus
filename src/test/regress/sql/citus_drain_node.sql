@@ -18,7 +18,7 @@ SELECT nodename, nodeport
   FROM pg_dist_placement AS placement,
        pg_dist_node AS node
  WHERE placement.groupid = node.groupid
-   AND node.noderole = 'primary' GROUP BY nodename, nodeport;
+   AND node.noderole = 'primary' GROUP BY nodename, nodeport ORDER BY 1,2;
 
 SELECT * FROM citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
 SELECT * from citus_drain_node('localhost', :worker_1_port, shard_transfer_mode :='force_logical');
@@ -29,7 +29,7 @@ SELECT nodename, nodeport
   FROM pg_dist_placement AS placement,
        pg_dist_node AS node
  WHERE placement.groupid = node.groupid
-   AND node.noderole = 'primary' GROUP BY nodename, nodeport;
+   AND node.noderole = 'primary' GROUP BY nodename, nodeport ORDER BY 1,2;
 
 SELECT * FROM citus_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', true);
 SELECT * FROM citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
@@ -42,7 +42,7 @@ SELECT nodename, nodeport
   FROM pg_dist_placement AS placement,
        pg_dist_node AS node
  WHERE placement.groupid = node.groupid
-   AND node.noderole = 'primary' GROUP BY nodename, nodeport;
+   AND node.noderole = 'primary' GROUP BY nodename, nodeport ORDER BY 1,2;
 
 SELECT * FROM citus_set_node_property('localhost', :master_port, 'shouldhaveshards', false);
 
@@ -54,7 +54,7 @@ SELECT nodename, nodeport
   FROM pg_dist_placement AS placement,
        pg_dist_node AS node
  WHERE placement.groupid = node.groupid
-   AND node.noderole = 'primary' GROUP BY nodename, nodeport;
+   AND node.noderole = 'primary' GROUP BY nodename, nodeport ORDER BY 1,2;
 
 RESET search_path;
 
