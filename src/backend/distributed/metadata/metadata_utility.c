@@ -1425,6 +1425,30 @@ FilterShardPlacementList(List *shardPlacementList, bool (*filter)(ShardPlacement
 
 
 /*
+ * FilterActiveShardPlacementListByNode filters a list of active shard placements based on given nodeName and nodePort.
+ */
+List *
+FilterActiveShardPlacementListByNode(List *shardPlacementList, WorkerNode *workerNode)
+{
+	List *activeShardPlacementList = FilterShardPlacementList(shardPlacementList,
+															  IsActiveShardPlacement);
+	List *filteredShardPlacementList = NIL;
+	ShardPlacement *shardPlacement = NULL;
+
+	foreach_ptr(shardPlacement, activeShardPlacementList)
+	{
+		if (IsPlacementOnWorkerNode(shardPlacement, workerNode))
+		{
+			filteredShardPlacementList = lappend(filteredShardPlacementList,
+												 shardPlacement);
+		}
+	}
+
+	return filteredShardPlacementList;
+}
+
+
+/*
  * ActiveShardPlacementListOnGroup returns a list of active shard placements
  * that are sitting on group with groupId for given shardId.
  */

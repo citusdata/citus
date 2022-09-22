@@ -292,6 +292,8 @@ extern bool IsActiveShardPlacement(ShardPlacement *ShardPlacement);
 extern bool IsPlacementOnWorkerNode(ShardPlacement *placement, WorkerNode *workerNode);
 extern List * FilterShardPlacementList(List *shardPlacementList, bool (*filter)(
 										   ShardPlacement *));
+extern List * FilterActiveShardPlacementListByNode(List *shardPlacementList,
+												   WorkerNode *workerNode);
 extern List * ActiveShardPlacementListOnGroup(uint64 shardId, int32 groupId);
 extern List * ActiveShardPlacementList(uint64 shardId);
 extern List * ShardPlacementListWithoutOrphanedPlacements(uint64 shardId);
