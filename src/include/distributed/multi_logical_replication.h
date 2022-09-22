@@ -133,6 +133,9 @@ extern void LogicallyReplicateShards(List *shardList, char *sourceNodeName,
 
 extern void ConflictOnlyWithIsolationTesting(void);
 extern void CreateReplicaIdentities(List *subscriptionInfoList);
+extern List * CreateReplicaIdentitiesOnNodeTasks(List *shardList,
+												 char *nodeName,
+												 int32 nodePort);
 extern void CreateReplicaIdentitiesOnNode(List *shardList,
 										  char *nodeName,
 										  int32 nodePort);
