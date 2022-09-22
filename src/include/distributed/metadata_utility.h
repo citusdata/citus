@@ -289,6 +289,7 @@ extern uint64 ShardLength(uint64 shardId);
 extern bool NodeGroupHasShardPlacements(int32 groupId,
 										bool onlyConsiderActivePlacements);
 extern bool IsActiveShardPlacement(ShardPlacement *ShardPlacement);
+extern bool IsPlacementOnWorkerNode(ShardPlacement *placement, WorkerNode *workerNode);
 extern List * FilterShardPlacementList(List *shardPlacementList, bool (*filter)(
 										   ShardPlacement *));
 extern List * ActiveShardPlacementListOnGroup(uint64 shardId, int32 groupId);

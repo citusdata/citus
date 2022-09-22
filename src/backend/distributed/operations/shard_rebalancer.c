@@ -205,7 +205,6 @@ static bool WorkerNodeListContains(List *workerNodeList, const char *workerName,
 								   uint32 workerPort);
 static void UpdateColocatedShardPlacementProgress(uint64 shardId, char *sourceName,
 												  int sourcePort, uint64 progress);
-static bool IsPlacementOnWorkerNode(ShardPlacement *placement, WorkerNode *workerNode);
 static NodeFillState * FindFillStateForPlacement(RebalanceState *state,
 												 ShardPlacement *placement);
 static RebalanceState * InitRebalanceState(List *workerNodeList, List *shardPlacementList,
@@ -2209,21 +2208,6 @@ FindFillStateForPlacement(RebalanceState *state, ShardPlacement *placement)
 		}
 	}
 	return NULL;
-}
-
-
-/*
- * IsPlacementOnWorkerNode checks if the shard placement is for to the given
- * workenode.
- */
-static bool
-IsPlacementOnWorkerNode(ShardPlacement *placement, WorkerNode *workerNode)
-{
-	if (strncmp(workerNode->workerName, placement->nodeName, WORKER_LENGTH) != 0)
-	{
-		return false;
-	}
-	return workerNode->workerPort == placement->nodePort;
 }
 
 
