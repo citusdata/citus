@@ -581,8 +581,53 @@ CLUSTER sale_repl_factor_1 USING sale_repl_factor_1_pk;
 -- verify that we can still cluster the partition tables now since replication factor is 1
 CLUSTER sale_newyork_repl_factor_1 USING sale_newyork_repl_factor_1_pkey;
 
+create table reservations ( room_id integer not null, booked_during daterange );
+insert into reservations values
+-- 1: has a meets and a gap
+(1, daterange('2018-07-01', '2018-07-07')),
+(1, daterange('2018-07-07', '2018-07-14')),
+(1, daterange('2018-07-20', '2018-07-22')),
+-- 2: just a single row
+(2, daterange('2018-07-01', '2018-07-03')),
+-- 3: one null range
+(3, NULL),
+-- 4: two null ranges
+(4, NULL),
+(4, NULL),
+-- 5: a null range and a non-null range
+(5, NULL),
+(5, daterange('2018-07-01', '2018-07-03')),
+-- 6: has overlap
+(6, daterange('2018-07-01', '2018-07-07')),
+(6, daterange('2018-07-05', '2018-07-10')),
+-- 7: two ranges that meet: no gap or overlap
+(7, daterange('2018-07-01', '2018-07-07')),
+(7, daterange('2018-07-07', '2018-07-14')),
+-- 8: an empty range
+(8, 'empty'::daterange);
+SELECT create_distributed_table('reservations', 'room_id');
+
+-- should be fine to pushdown range_agg
+SELECT   room_id, range_agg(booked_during ORDER BY booked_during)
+FROM     reservations
+GROUP BY room_id
+ORDER BY room_id;
+
+-- should be fine to apply range_agg on the coordinator
+SELECT   room_id + 1, range_agg(booked_during ORDER BY booked_during)
+FROM     reservations
+GROUP BY room_id + 1
+ORDER BY room_id + 1;
+
+-- min() and max() for xid8
+create table xid8_t1 (x xid8, y int);
+insert into xid8_t1 values ('0', 1), ('010', 2), ('42', 3), ('0xffffffffffffffff', 4), ('-1', 5);
+SELECT create_distributed_table('xid8_t1', 'x');
+select min(x), max(x) from xid8_t1 ORDER BY 1,2;
+select min(x), max(x) from xid8_t1 GROUP BY x ORDER BY 1,2;
+select min(x), max(x) from xid8_t1 GROUP BY y ORDER BY 1,2;
+
 -- Clean up
-RESET citus.shard_replication_factor;
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
 DROP SCHEMA pg15 CASCADE;
