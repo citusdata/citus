@@ -1656,6 +1656,26 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 			databaseName,
 			logicalRepTargetList);
 
+		/*
+		 * We have to create the primary key (or any other replica identity)
+		 * before the update/delete operations that are queued will be
+		 * replicated. Because if the replica identity does not exist on the
+		 * target, the replication would fail.
+		 *
+		 * So the latest possible moment we could do this is right after the
+		 * initial data COPY, but before enabling the susbcriptions. It might
+		 * seem like a good idea to it after the initial data COPY, since
+		 * it's generally the rule that it's cheaper to build an index at once
+		 * than to create it incrementally. This general rule, is why we create
+		 * all the regular indexes as late during the move as possible.
+		 *
+		 * But as it turns out in practice it's not as clear cut, and we saw a
+		 * speed degradation in the time it takes to move shards when doing the
+		 * replica identity creation after the initial COPY. So, instead we
+		 * keep it before the COPY.
+		 */
+		CreateReplicaIdentities(logicalRepTargetList);
+
 		ereport(LOG, (errmsg("performing copy for %s", operationName)));
 
 		/* 8) Do snapshotted Copy */
