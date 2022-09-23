@@ -221,6 +221,8 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 bool
 ColumnDefaultsToNextVal(Oid relationId, AttrNumber attrNumber)
 {
+	AssertArg(AttributeNumberIsValid(attrNumber));
+
 	Relation relation = RelationIdGetRelation(relationId);
 	Node *defExpr = build_column_default(relation, attrNumber);
 	RelationClose(relation);

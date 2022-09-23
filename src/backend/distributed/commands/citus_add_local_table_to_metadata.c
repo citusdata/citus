@@ -1181,10 +1181,13 @@ DropNextValExprsAndMoveOwnedSeqOwnerships(Oid sourceRelationId,
 	forboth_ptr_oid(columnName, columnNameList, ownedSequenceId, ownedSequenceIdList)
 	{
 		/*
-		 * We drop column default expression only if it defaults to nextval()
-		 * (i.e., to a sequence).
+		 * We drop nextval() expressions because Citus currently evaluates
+		 * nextval() on the shell table, not on the shards. Hence, there is
+		 * no reason for keeping nextval(). Also, distributed/reference table
+		 * shards do not have - so be consistent with those.
 		 *
-		 * Otherwise, we still want to be able to evaluate DEFAULT expression
+		 * Note that we keep other kind of DEFAULT expressions on shards
+		 * because we still want to be able to evaluate DEFAULT expression
 		 * on shards, e.g., for foreign key - SET DEFAULT actions.
 		 */
 		AttrNumber columnAttrNumber = get_attnum(sourceRelationId, columnName);
