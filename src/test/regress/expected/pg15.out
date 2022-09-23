@@ -930,6 +930,72 @@ WARNING:  not propagating CLUSTER command for partitioned table to worker nodes
 HINT:  Provide a child partition table names in order to CLUSTER distributed partitioned tables.
 -- verify that we can still cluster the partition tables now since replication factor is 1
 CLUSTER sale_newyork_repl_factor_1 USING sale_newyork_repl_factor_1_pkey;
+CREATE TABLE set_on_default_test_referenced(
+    col_1 int, col_2 int, col_3 int, col_4 int,
+    unique (col_1, col_3)
+);
+SELECT create_reference_table('set_on_default_test_referenced');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE set_on_default_test_referencing(
+    col_1 int, col_2 int, col_3 serial, col_4 int,
+    FOREIGN KEY(col_1, col_3)
+    REFERENCES set_on_default_test_referenced(col_1, col_3)
+    ON DELETE SET DEFAULT (col_1)
+    ON UPDATE SET DEFAULT
+);
+-- should error since col_3 defaults to a sequence
+SELECT create_reference_table('set_on_default_test_referencing');
+ERROR:  cannot create foreign key constraint since Citus does not support ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences
+DROP TABLE set_on_default_test_referencing;
+CREATE TABLE set_on_default_test_referencing(
+    col_1 int, col_2 int, col_3 serial, col_4 int,
+    FOREIGN KEY(col_1, col_3)
+    REFERENCES set_on_default_test_referenced(col_1, col_3)
+    ON DELETE SET DEFAULT (col_1)
+);
+-- should not error since this doesn't set any sequence based columns to default
+SELECT create_reference_table('set_on_default_test_referencing');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO set_on_default_test_referenced (col_1, col_3) VALUES (1, 1);
+INSERT INTO set_on_default_test_referencing (col_1, col_3) VALUES (1, 1);
+DELETE FROM set_on_default_test_referenced;
+SELECT * FROM set_on_default_test_referencing ORDER BY 1,2;
+ col_1 | col_2 | col_3 | col_4
+---------------------------------------------------------------------
+       |       |     1 |
+(1 row)
+
+DROP TABLE set_on_default_test_referencing;
+SET client_min_messages to ERROR;
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+RESET client_min_messages;
+-- should error since col_3 defaults to a sequence
+CREATE TABLE set_on_default_test_referencing(
+    col_1 int, col_2 int, col_3 serial, col_4 int,
+    FOREIGN KEY(col_1, col_3)
+    REFERENCES set_on_default_test_referenced(col_1, col_3)
+    ON DELETE SET DEFAULT (col_3)
+);
+ERROR:  cannot create foreign key constraint since Citus does not support ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 -- Clean up
 RESET citus.shard_replication_factor;
 \set VERBOSITY terse
