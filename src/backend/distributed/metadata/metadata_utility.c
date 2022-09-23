@@ -1142,6 +1142,30 @@ LoadShardIntervalList(Oid relationId)
 
 
 /*
+ * LoadShardIntervalListWithRetry reloads the shards of given relation after acquiring
+ * metadata locks for the shards with specified lockmode.
+ *
+ * That method is supposed to be called in case a concurrent shard modification might happen
+ * and we want to minimize the errors related to missing shards.
+ */
+List *
+LoadShardIntervalListWithRetry(Oid relationId, LOCKMODE lockmode)
+{
+	List *shardList = LoadShardIntervalList(relationId);
+
+	/*
+	 * We block until all locks for shards are released and then reload shards to minimize 'missing shards'
+	 * errors. (We cannot remove the error completely but reduce the possibility with reload)
+	 */
+	LockShardListMetadata(shardList, lockmode);
+
+	shardList = LoadShardIntervalList(relationId);
+
+	return shardList;
+}
+
+
+/*
  * LoadUnsortedShardIntervalListViaCatalog returns a list of shard intervals related for a
  * given distributed table. The function returns an empty list if no shards can be found
  * for the given relation.

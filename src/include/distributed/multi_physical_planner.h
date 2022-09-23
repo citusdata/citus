@@ -457,6 +457,13 @@ typedef struct DistributedPlan
 	 * or if prepared statement parameters prevented successful planning.
 	 */
 	DeferredErrorMessage *planningError;
+
+	/*
+	 * will be used to replan the query in case of missing shards in any task
+	 * just before execution. We try to replan to succeed the query instead of showing
+	 * the user unfriendly 'shard missing' errors.
+	 */
+	TopLevelQueryContext *topLevelQueryContext;
 } DistributedPlan;
 
 
