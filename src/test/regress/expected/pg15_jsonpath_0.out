@@ -1,0 +1,10 @@
+--
+-- PG15 jsonpath tests
+-- Relevant pg commit: e26114c817b610424010cfbe91a743f591246ff1
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
+\gset
+\if :server_version_ge_15
+\else
+\q
