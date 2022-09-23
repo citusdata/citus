@@ -1187,8 +1187,9 @@ DropNextValExprsAndMoveOwnedSeqOwnerships(Oid sourceRelationId,
 		 * shards do not have - so be consistent with those.
 		 *
 		 * Note that we keep other kind of DEFAULT expressions on shards
-		 * because we still want to be able to evaluate DEFAULT expression
-		 * on shards, e.g., for foreign key - SET DEFAULT actions.
+		 * because we still want to be able to evaluate DEFAULT expressions
+		 * that are not based on sequences on shards, e.g., for foreign key
+		 * - SET DEFAULT actions.
 		 */
 		AttrNumber columnAttrNumber = get_attnum(sourceRelationId, columnName);
 		if (ColumnDefaultsToNextVal(sourceRelationId, columnAttrNumber))
