@@ -87,8 +87,8 @@ static List * ReversedOidList(List *oidList);
 static void AppendExplicitIndexIdsToList(Form_pg_index indexForm,
 										 List **explicitIndexIdList,
 										 int flags);
-static void DropDefaultExpressionsAndMoveOwnedSequenceOwnerships(Oid sourceRelationId,
-																 Oid targetRelationId);
+static void DropNextValExprsAndMoveOwnedSeqOwnerships(Oid sourceRelationId,
+													  Oid targetRelationId);
 static void DropDefaultColumnDefinition(Oid relationId, char *columnName);
 static void TransferSequenceOwnership(Oid ownedSequenceId, Oid targetRelationId,
 									  char *columnName);
@@ -363,11 +363,11 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 
 	/*
 	 * Move sequence ownerships from shard table to shell table and also drop
-	 * DEFAULT expressions from shard relation as we should evaluate such columns
-	 * in shell table when needed.
+	 * DEFAULT expressions based on sequences from shard relation as we should
+	 * evaluate such columns in shell table when needed.
 	 */
-	DropDefaultExpressionsAndMoveOwnedSequenceOwnerships(shardRelationId,
-														 shellRelationId);
+	DropNextValExprsAndMoveOwnedSeqOwnerships(shardRelationId,
+											  shellRelationId);
 
 	InsertMetadataForCitusLocalTable(shellRelationId, shardId, autoConverted);
 
@@ -1153,14 +1153,15 @@ GetRenameStatsCommandList(List *statsOidList, uint64 shardId)
 
 
 /*
- * DropDefaultExpressionsAndMoveOwnedSequenceOwnerships drops default column
- * definitions for relation with sourceRelationId. Also, for each column that
- * defaults to an owned sequence, it grants ownership to the same named column
- * of the relation with targetRelationId.
+ * DropNextValExprsAndMoveOwnedSeqOwnerships drops default column definitions
+ * that are based on sequences for relation with sourceRelationId.
+ *
+ * Also, for each such column that owns a sequence, it grants ownership to the
+ * same named column of the relation with targetRelationId.
  */
 static void
-DropDefaultExpressionsAndMoveOwnedSequenceOwnerships(Oid sourceRelationId,
-													 Oid targetRelationId)
+DropNextValExprsAndMoveOwnedSeqOwnerships(Oid sourceRelationId,
+										  Oid targetRelationId)
 {
 	List *columnNameList = NIL;
 	List *ownedSequenceIdList = NIL;
@@ -1171,9 +1172,28 @@ DropDefaultExpressionsAndMoveOwnedSequenceOwnerships(Oid sourceRelationId,
 	Oid ownedSequenceId = InvalidOid;
 	forboth_ptr_oid(columnName, columnNameList, ownedSequenceId, ownedSequenceIdList)
 	{
-		DropDefaultColumnDefinition(sourceRelationId, columnName);
+		/*
+		 * We drop nextval() expressions because Citus currently evaluates
+		 * nextval() on the shell table, not on the shards. Hence, there is
+		 * no reason for keeping nextval(). Also, distributed/reference table
+		 * shards do not have - so be consistent with those.
+		 *
+		 * Note that we keep other kind of DEFAULT expressions on shards
+		 * because we still want to be able to evaluate DEFAULT expressions
+		 * that are not based on sequences on shards, e.g., for foreign key
+		 * - SET DEFAULT actions.
+		 */
+		AttrNumber columnAttrNumber = get_attnum(sourceRelationId, columnName);
+		if (ColumnDefaultsToNextVal(sourceRelationId, columnAttrNumber))
+		{
+			DropDefaultColumnDefinition(sourceRelationId, columnName);
+		}
 
-		/* column might not own a sequence */
+		/*
+		 * Column might own a sequence without having a nextval() expr on it
+		 * --e.g., due to ALTER SEQUENCE OWNED BY .. --, so check if that is
+		 * the case even if the column doesn't have a DEFAULT.
+		 */
 		if (OidIsValid(ownedSequenceId))
 		{
 			TransferSequenceOwnership(ownedSequenceId, targetRelationId, columnName);
