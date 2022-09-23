@@ -27,6 +27,7 @@
 #include "nodes/makefuncs.h"
 #include "distributed/worker_create_or_replace.h"
 #include "nodes/parsenodes.h"
+#include "rewrite/rewriteHandler.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 
@@ -210,6 +211,29 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 	}
 
 	relation_close(relation, NoLock);
+}
+
+
+/*
+ * ColumnDefaultsToNextVal returns true if the column with attrNumber
+ * has a default expression that contains nextval().
+ */
+bool
+ColumnDefaultsToNextVal(Oid relationId, AttrNumber attrNumber)
+{
+	AssertArg(AttributeNumberIsValid(attrNumber));
+
+	Relation relation = RelationIdGetRelation(relationId);
+	Node *defExpr = build_column_default(relation, attrNumber);
+	RelationClose(relation);
+
+	if (defExpr == NULL)
+	{
+		/* column doesn't have a DEFAULT expression */
+		return false;
+	}
+
+	return contain_nextval_expression_walker(defExpr, NULL);
 }
 
 

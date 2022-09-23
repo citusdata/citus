@@ -213,6 +213,47 @@ WHEN MATCHED THEN DELETE;
 -- now, both distributed, not works
 SELECT undistribute_table('tbl1');
 SELECT undistribute_table('tbl2');
+
+-- Make sure that we allow foreign key columns on local tables added to
+-- metadata to have SET NULL/DEFAULT on column basis.
+
+CREATE TABLE PKTABLE_local (tid int, id int, PRIMARY KEY (tid, id));
+CREATE TABLE FKTABLE_local (
+  tid int, id int,
+  fk_id_del_set_null int,
+  fk_id_del_set_default int DEFAULT 0,
+  FOREIGN KEY (tid, fk_id_del_set_null) REFERENCES PKTABLE_local ON DELETE SET NULL (fk_id_del_set_null),
+  FOREIGN KEY (tid, fk_id_del_set_default) REFERENCES PKTABLE_local ON DELETE SET DEFAULT (fk_id_del_set_default)
+);
+
+SELECT citus_add_local_table_to_metadata('FKTABLE_local', cascade_via_foreign_keys=>true);
+
+-- show that the definition is expected
+SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'FKTABLE_local'::regclass::oid ORDER BY oid;
+
+\c - - - :worker_1_port
+
+SET search_path TO pg15;
+
+-- show that the definition is expected on the worker as well
+SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'FKTABLE_local'::regclass::oid ORDER BY oid;
+
+-- also, make sure that it works as expected
+INSERT INTO PKTABLE_local VALUES (1, 0), (1, 1), (1, 2);
+INSERT INTO FKTABLE_local VALUES
+  (1, 1, 1, NULL),
+  (1, 2, NULL, 2);
+DELETE FROM PKTABLE_local WHERE id = 1 OR id = 2;
+SELECT * FROM FKTABLE_local ORDER BY id;
+
+\c - - - :master_port
+
+SET search_path TO pg15;
+
+SET client_min_messages to ERROR;
+DROP TABLE FKTABLE_local, PKTABLE_local;
+RESET client_min_messages;
+
 SELECT 1 FROM citus_remove_node('localhost', :master_port);
 
 SELECT create_distributed_table('tbl1', 'x');
