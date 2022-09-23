@@ -272,11 +272,9 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		if (ForeignKeySetsNextValColumnToDefault(heapTuple))
 		{
 			ereport(ERROR, (errmsg("cannot create foreign key constraint "
-								   "since ON DELETE / UPDATE SET DEFAULT "
-								   "actions on the columns that default "
-								   "to sequences are not supported for "
-								   "distributed tables and local tables "
-								   "added into metadata")));
+								   "since Citus does not support ON DELETE "
+                                   "/ UPDATE SET DEFAULT actions on the "
+                                   "columns that default to sequences")));
 		}
 
 		bool referencingIsCitusLocalOrRefTable =

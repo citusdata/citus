@@ -1190,9 +1190,9 @@ CREATE TABLE set_on_default_test_referencing(
 );
 -- from distributed / reference to reference, fkey exists before calling the UDFs
 SELECT create_distributed_table('set_on_default_test_referencing', 'col_1');
-ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+ERROR:  cannot create foreign key constraint since Citus does not support ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences
 SELECT create_reference_table('set_on_default_test_referencing');
-ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+ERROR:  cannot create foreign key constraint since Citus does not support ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences
 DROP TABLE set_on_default_test_referencing;
 CREATE TABLE set_on_default_test_referencing(
     col_1 serial, col_2 int, col_3 int, col_4 int
@@ -1207,7 +1207,7 @@ SELECT create_reference_table('set_on_default_test_referencing');
 ALTER TABLE set_on_default_test_referencing ADD CONSTRAINT fkey
 FOREIGN KEY(col_1, col_3) REFERENCES set_on_default_test_referenced(col_1, col_3)
 ON DELETE SET DEFAULT;
-ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+ERROR:  cannot create foreign key constraint since Citus does not support ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences
 DROP TABLE set_on_default_test_referencing;
 CREATE TABLE set_on_default_test_referencing(
     col_1 int, col_2 serial, col_3 int, col_4 bigserial
@@ -1237,7 +1237,7 @@ SELECT create_distributed_table('set_on_default_test_referencing', 'col_1');
 ALTER TABLE set_on_default_test_referencing ADD CONSTRAINT fkey
 FOREIGN KEY(col_1, col_3) REFERENCES set_on_default_test_referenced(col_1, col_3)
 ON DELETE SET DEFAULT ON UPDATE SET DEFAULT;
-ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+ERROR:  cannot create foreign key constraint since Citus does not support ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences
 DROP TABLE set_on_default_test_referenced;
 CREATE TABLE set_on_default_test_referenced(
     col_1 int, col_2 int, col_3 int, col_4 int,
@@ -1258,7 +1258,7 @@ CREATE TABLE set_on_default_test_referencing(
 );
 -- from distributed to distributed, fkey exists before calling the UDFs
 SELECT create_distributed_table('set_on_default_test_referencing', 'col_1');
-ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+ERROR:  cannot create foreign key constraint since Citus does not support ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences
 DROP TABLE set_on_default_test_referencing;
 CREATE TABLE set_on_default_test_referencing(
     col_1 int DEFAULT nextval('test_sequence'), col_2 int, col_3 int, col_4 int
@@ -1273,7 +1273,7 @@ SELECT create_distributed_table('set_on_default_test_referencing', 'col_1');
 ALTER TABLE set_on_default_test_referencing ADD CONSTRAINT fkey
 FOREIGN KEY(col_1, col_3) REFERENCES set_on_default_test_referenced(col_1, col_3)
 ON DELETE SET DEFAULT;
-ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+ERROR:  cannot create foreign key constraint since Citus does not support ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences
 -- we no longer need those tables
 DROP TABLE referenced_by_reference_table, references_to_reference_table, reference_table, reference_table_second, referenced_local_table, self_referencing_reference_table, dropfkeytest2,
            set_on_default_test_referenced, set_on_default_test_referencing;

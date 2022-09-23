@@ -1200,7 +1200,7 @@ CREATE TABLE set_on_default_test_referencing(
 );
 -- should error since col_3 defaults to a sequence
 SELECT create_reference_table('set_on_default_test_referencing');
-ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+ERROR:  cannot create foreign key constraint since Citus does not support ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences
 DROP TABLE set_on_default_test_referencing;
 CREATE TABLE set_on_default_test_referencing(
     col_1 int, col_2 int, col_3 serial, col_4 int,
@@ -1240,7 +1240,7 @@ CREATE TABLE set_on_default_test_referencing(
     REFERENCES set_on_default_test_referenced(col_1, col_3)
     ON DELETE SET DEFAULT (col_3)
 );
-ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+ERROR:  cannot create foreign key constraint since Citus does not support ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences
 SELECT 1 FROM citus_remove_node('localhost', :master_port);
  ?column?
 ---------------------------------------------------------------------

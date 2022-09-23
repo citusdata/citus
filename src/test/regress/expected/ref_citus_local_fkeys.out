@@ -267,7 +267,7 @@ CREATE TABLE set_on_default_test_referencing(
     REFERENCES set_on_default_test_referenced(col_1, col_3)
     ON UPDATE SET DEFAULT
 );
-ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+ERROR:  cannot create foreign key constraint since Citus does not support ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences
 CREATE TABLE set_on_default_test_referencing(
     col_1 serial, col_2 int, col_3 int, col_4 int
 );
@@ -275,7 +275,7 @@ CREATE TABLE set_on_default_test_referencing(
 ALTER TABLE set_on_default_test_referencing ADD CONSTRAINT fkey
 FOREIGN KEY(col_1, col_3) REFERENCES set_on_default_test_referenced(col_1, col_3)
 ON DELETE SET DEFAULT;
-ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+ERROR:  cannot create foreign key constraint since Citus does not support ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences
 DROP TABLE set_on_default_test_referencing, set_on_default_test_referenced;
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS ref_citus_local_fkeys.set_on_default_test_referenced_xxxxx CASCADE
 CREATE TABLE set_on_default_test_referenced(
@@ -295,7 +295,7 @@ CREATE TABLE set_on_default_test_referencing(
     REFERENCES set_on_default_test_referenced(col_1, col_3)
     ON DELETE SET DEFAULT
 );
-ERROR:  cannot create foreign key constraint since ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences are not supported for distributed tables and local tables added into metadata
+ERROR:  cannot create foreign key constraint since Citus does not support ON DELETE / UPDATE SET DEFAULT actions on the columns that default to sequences
 -- cleanup at exit
 DROP SCHEMA ref_citus_local_fkeys CASCADE;
 NOTICE:  drop cascades to 8 other objects
