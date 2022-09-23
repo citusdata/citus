@@ -58,7 +58,7 @@ test: cte_inline recursive_view_local_table values sequences_with_different_type
 test: pg13 pg12
 # run pg14 sequentially as it syncs metadata
 test: pg14
-test: pg15
+test: pg15 pg15_jsonpath
 test: drop_column_partitioned_table
 test: tableam
 

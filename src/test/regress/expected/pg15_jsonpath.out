@@ -1,0 +1,409 @@
+--
+-- PG15 jsonpath tests
+-- Relevant pg commit: e26114c817b610424010cfbe91a743f591246ff1
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15
+\gset
+\if :server_version_ge_15
+\else
+\q
+\endif
+CREATE SCHEMA jsonpath;
+SET search_path TO jsonpath;
+CREATE TABLE jsonpath_test (id serial, sample text);
+SELECT create_distributed_table('jsonpath_test', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\COPY jsonpath_test(sample) FROM STDIN
+-- Cast the text into jsonpath on the worker nodes.
+SELECT sample, sample::jsonpath FROM jsonpath_test ORDER BY id;
+                            sample                            |                              sample
+---------------------------------------------------------------------
+ $                                                            | $
+ strict $                                                     | strict $
+ lax $                                                        | $
+ $.a                                                          | $."a"
+ $.a.v                                                        | $."a"."v"
+ $.a.*                                                        | $."a".*
+ $.*[*]                                                       | $.*[*]
+ $.a[*]                                                       | $."a"[*]
+ $.a[*][*]                                                    | $."a"[*][*]
+ $[*]                                                         | $[*]
+ $[0]                                                         | $[0]
+ $[*][0]                                                      | $[*][0]
+ $[*].a                                                       | $[*]."a"
+ $[*][0].a.b                                                  | $[*][0]."a"."b"
+ $.a.**.b                                                     | $."a".**."b"
+ $.a.**{2}.b                                                  | $."a".**{2}."b"
+ $.a.**{2 to 2}.b                                             | $."a".**{2}."b"
+ $.a.**{2 to 5}.b                                             | $."a".**{2 to 5}."b"
+ $.a.**{0 to 5}.b                                             | $."a".**{0 to 5}."b"
+ $.a.**{5 to last}.b                                          | $."a".**{5 to last}."b"
+ $.a.**{last}.b                                               | $."a".**{last}."b"
+ $.a.**{last to 5}.b                                          | $."a".**{last to 5}."b"
+ $+1                                                          | ($ + 1)
+ $-1                                                          | ($ - 1)
+ $--+1                                                        | ($ - -1)
+ $.a/+-1                                                      | ($."a" / -1)
+ 1 * 2 + 4 % -3 != false                                      | (1 * 2 + 4 % -3 != false)
+ $.g ? ($.a == 1)                                             | $."g"?($."a" == 1)
+ $.g ? (@ == 1)                                               | $."g"?(@ == 1)
+ $.g ? (@.a == 1)                                             | $."g"?(@."a" == 1)
+ $.g ? (@.a == 1 || @.a == 4)                                 | $."g"?(@."a" == 1 || @."a" == 4)
+ $.g ? (@.a == 1 && @.a == 4)                                 | $."g"?(@."a" == 1 && @."a" == 4)
+ $.g ? (@.a == 1 || @.a == 4 && @.b == 7)                     | $."g"?(@."a" == 1 || @."a" == 4 && @."b" == 7)
+ $.g ? (@.a == 1 || !(@.a == 4) && @.b == 7)                  | $."g"?(@."a" == 1 || !(@."a" == 4) && @."b" == 7)
+ $.g ? (@.a == 1 || !(@.x >= 123 || @.a == 4) && @.b == 7)    | $."g"?(@."a" == 1 || !(@."x" >= 123 || @."a" == 4) && @."b" == 7)
+ $.g ? (@.x >= @[*]?(@.a > "abc"))                            | $."g"?(@."x" >= @[*]?(@."a" > "abc"))
+ $.g ? ((@.x >= 123 || @.a == 4) is unknown)                  | $."g"?((@."x" >= 123 || @."a" == 4) is unknown)
+ $.g ? (exists (@.x))                                         | $."g"?(exists (@."x"))
+ $.g ? (exists (@.x ? (@ == 14)))                             | $."g"?(exists (@."x"?(@ == 14)))
+ $.g ? ((@.x >= 123 || @.a == 4) && exists (@.x ? (@ == 14))) | $."g"?((@."x" >= 123 || @."a" == 4) && exists (@."x"?(@ == 14)))
+ $.g ? (+@.x >= +-(+@.a + 2))                                 | $."g"?(+@."x" >= +(-(+@."a" + 2)))
+ $a                                                           | $"a"
+ $a.b                                                         | $"a"."b"
+ $a[*]                                                        | $"a"[*]
+ $.g ? (@.zip == $zip)                                        | $."g"?(@."zip" == $"zip")
+ $.a[1,2, 3 to 16]                                            | $."a"[1,2,3 to 16]
+ $.a[$a + 1, ($b[*]) to -($[0] * 2)]                          | $."a"[$"a" + 1,$"b"[*] to -($[0] * 2)]
+ $.a[$.a.size() - 3]                                          | $."a"[$."a".size() - 3]
+ "last"                                                       | "last"
+ $.last                                                       | $."last"
+ $[last]                                                      | $[last]
+ $[$[0] ? (last > 0)]                                         | $[$[0]?(last > 0)]
+ null.type()                                                  | null.type()
+ (1).type()                                                   | (1).type()
+ 1.2.type()                                                   | (1.2).type()
+ "aaa".type()                                                 | "aaa".type()
+ true.type()                                                  | true.type()
+ $.double().floor().ceiling().abs()                           | $.double().floor().ceiling().abs()
+ $.keyvalue().key                                             | $.keyvalue()."key"
+ $.datetime()                                                 | $.datetime()
+ $.datetime("datetime template")                              | $.datetime("datetime template")
+ $ ? (@ starts with "abc")                                    | $?(@ starts with "abc")
+ $ ? (@ starts with $var)                                     | $?(@ starts with $"var")
+ $ ? (@ like_regex "pattern")                                 | $?(@ like_regex "pattern")
+ $ ? (@ like_regex "pattern" flag "")                         | $?(@ like_regex "pattern")
+ $ ? (@ like_regex "pattern" flag "i")                        | $?(@ like_regex "pattern" flag "i")
+ $ ? (@ like_regex "pattern" flag "is")                       | $?(@ like_regex "pattern" flag "is")
+ $ ? (@ like_regex "pattern" flag "isim")                     | $?(@ like_regex "pattern" flag "ism")
+ $ ? (@ like_regex "pattern" flag "q")                        | $?(@ like_regex "pattern" flag "q")
+ $ ? (@ like_regex "pattern" flag "iq")                       | $?(@ like_regex "pattern" flag "iq")
+ $ ? (@ like_regex "pattern" flag "smixq")                    | $?(@ like_regex "pattern" flag "ismxq")
+ $ < 1                                                        | ($ < 1)
+ ($ < 1) || $.a.b <= $x                                       | ($ < 1 || $."a"."b" <= $"x")
+ ($).a.b                                                      | $."a"."b"
+ ($.a.b).c.d                                                  | $."a"."b"."c"."d"
+ ($.a.b + -$.x.y).c.d                                         | ($."a"."b" + -$."x"."y")."c"."d"
+ (-+$.a.b).c.d                                                | (-(+$."a"."b"))."c"."d"
+ 1 + ($.a.b + 2).c.d                                          | (1 + ($."a"."b" + 2)."c"."d")
+ 1 + ($.a.b > 2).c.d                                          | (1 + ($."a"."b" > 2)."c"."d")
+ ($)                                                          | $
+ (($))                                                        | $
+ ((($ + 1)).a + ((2)).b ? ((((@ > 1)) || (exists(@.c)))))     | (($ + 1)."a" + (2)."b"?(@ > 1 || exists (@."c")))
+ $ ? (@.a < 1)                                                | $?(@."a" < 1)
+ $ ? (@.a < -1)                                               | $?(@."a" < -1)
+ $ ? (@.a < +1)                                               | $?(@."a" < 1)
+ $ ? (@.a < .1)                                               | $?(@."a" < 0.1)
+ $ ? (@.a < -.1)                                              | $?(@."a" < -0.1)
+ $ ? (@.a < +.1)                                              | $?(@."a" < 0.1)
+ $ ? (@.a < 0.1)                                              | $?(@."a" < 0.1)
+ $ ? (@.a < -0.1)                                             | $?(@."a" < -0.1)
+ $ ? (@.a < +0.1)                                             | $?(@."a" < 0.1)
+ $ ? (@.a < 10.1)                                             | $?(@."a" < 10.1)
+ $ ? (@.a < -10.1)                                            | $?(@."a" < -10.1)
+ $ ? (@.a < +10.1)                                            | $?(@."a" < 10.1)
+ $ ? (@.a < 1e1)                                              | $?(@."a" < 10)
+ $ ? (@.a < -1e1)                                             | $?(@."a" < -10)
+ $ ? (@.a < +1e1)                                             | $?(@."a" < 10)
+ $ ? (@.a < .1e1)                                             | $?(@."a" < 1)
+ $ ? (@.a < -.1e1)                                            | $?(@."a" < -1)
+ $ ? (@.a < +.1e1)                                            | $?(@."a" < 1)
+ $ ? (@.a < 0.1e1)                                            | $?(@."a" < 1)
+ $ ? (@.a < -0.1e1)                                           | $?(@."a" < -1)
+ $ ? (@.a < +0.1e1)                                           | $?(@."a" < 1)
+ $ ? (@.a < 10.1e1)                                           | $?(@."a" < 101)
+ $ ? (@.a < -10.1e1)                                          | $?(@."a" < -101)
+ $ ? (@.a < +10.1e1)                                          | $?(@."a" < 101)
+ $ ? (@.a < 1e-1)                                             | $?(@."a" < 0.1)
+ $ ? (@.a < -1e-1)                                            | $?(@."a" < -0.1)
+ $ ? (@.a < +1e-1)                                            | $?(@."a" < 0.1)
+ $ ? (@.a < .1e-1)                                            | $?(@."a" < 0.01)
+ $ ? (@.a < -.1e-1)                                           | $?(@."a" < -0.01)
+ $ ? (@.a < +.1e-1)                                           | $?(@."a" < 0.01)
+ $ ? (@.a < 0.1e-1)                                           | $?(@."a" < 0.01)
+ $ ? (@.a < -0.1e-1)                                          | $?(@."a" < -0.01)
+ $ ? (@.a < +0.1e-1)                                          | $?(@."a" < 0.01)
+ $ ? (@.a < 10.1e-1)                                          | $?(@."a" < 1.01)
+ $ ? (@.a < -10.1e-1)                                         | $?(@."a" < -1.01)
+ $ ? (@.a < +10.1e-1)                                         | $?(@."a" < 1.01)
+ $ ? (@.a < 1e+1)                                             | $?(@."a" < 10)
+ $ ? (@.a < -1e+1)                                            | $?(@."a" < -10)
+ $ ? (@.a < +1e+1)                                            | $?(@."a" < 10)
+ $ ? (@.a < .1e+1)                                            | $?(@."a" < 1)
+ $ ? (@.a < -.1e+1)                                           | $?(@."a" < -1)
+ $ ? (@.a < +.1e+1)                                           | $?(@."a" < 1)
+ $ ? (@.a < 0.1e+1)                                           | $?(@."a" < 1)
+ $ ? (@.a < -0.1e+1)                                          | $?(@."a" < -1)
+ $ ? (@.a < +0.1e+1)                                          | $?(@."a" < 1)
+ $ ? (@.a < 10.1e+1)                                          | $?(@."a" < 101)
+ $ ? (@.a < -10.1e+1)                                         | $?(@."a" < -101)
+ $ ? (@.a < +10.1e+1)                                         | $?(@."a" < 101)
+ 0                                                            | 0
+ 0.0                                                          | 0.0
+ 0.000                                                        | 0.000
+ 0.000e1                                                      | 0.00
+ 0.000e2                                                      | 0.0
+ 0.000e3                                                      | 0
+ 0.0010                                                       | 0.0010
+ 0.0010e-1                                                    | 0.00010
+ 0.0010e+1                                                    | 0.010
+ 0.0010e+2                                                    | 0.10
+ .001                                                         | 0.001
+ .001e1                                                       | 0.01
+ 1.                                                           | 1
+ 1.e1                                                         | 10
+ 1.2.e                                                        | (1.2)."e"
+ (1.2).e                                                      | (1.2)."e"
+ 1e3                                                          | 1000
+ 1.e3                                                         | 1000
+ 1.e3.e                                                       | (1000)."e"
+ 1.e3.e4                                                      | (1000)."e4"
+ 1.2e3                                                        | 1200
+ 1.2.e3                                                       | (1.2)."e3"
+ (1.2).e3                                                     | (1.2)."e3"
+ 1..e                                                         | (1)."e"
+ 1..e3                                                        | (1)."e3"
+ (1.).e                                                       | (1)."e"
+ (1.).e3                                                      | (1)."e3"
+ 1?(2>3)                                                      | (1)?(2 > 3)
+(158 rows)
+
+-- Pull the data, and cast on the coordinator node
+WITH samples as (SELECT id, sample FROM jsonpath_test OFFSET 0)
+SELECT sample, sample::jsonpath FROM samples ORDER BY id;
+                            sample                            |                              sample
+---------------------------------------------------------------------
+ $                                                            | $
+ strict $                                                     | strict $
+ lax $                                                        | $
+ $.a                                                          | $."a"
+ $.a.v                                                        | $."a"."v"
+ $.a.*                                                        | $."a".*
+ $.*[*]                                                       | $.*[*]
+ $.a[*]                                                       | $."a"[*]
+ $.a[*][*]                                                    | $."a"[*][*]
+ $[*]                                                         | $[*]
+ $[0]                                                         | $[0]
+ $[*][0]                                                      | $[*][0]
+ $[*].a                                                       | $[*]."a"
+ $[*][0].a.b                                                  | $[*][0]."a"."b"
+ $.a.**.b                                                     | $."a".**."b"
+ $.a.**{2}.b                                                  | $."a".**{2}."b"
+ $.a.**{2 to 2}.b                                             | $."a".**{2}."b"
+ $.a.**{2 to 5}.b                                             | $."a".**{2 to 5}."b"
+ $.a.**{0 to 5}.b                                             | $."a".**{0 to 5}."b"
+ $.a.**{5 to last}.b                                          | $."a".**{5 to last}."b"
+ $.a.**{last}.b                                               | $."a".**{last}."b"
+ $.a.**{last to 5}.b                                          | $."a".**{last to 5}."b"
+ $+1                                                          | ($ + 1)
+ $-1                                                          | ($ - 1)
+ $--+1                                                        | ($ - -1)
+ $.a/+-1                                                      | ($."a" / -1)
+ 1 * 2 + 4 % -3 != false                                      | (1 * 2 + 4 % -3 != false)
+ $.g ? ($.a == 1)                                             | $."g"?($."a" == 1)
+ $.g ? (@ == 1)                                               | $."g"?(@ == 1)
+ $.g ? (@.a == 1)                                             | $."g"?(@."a" == 1)
+ $.g ? (@.a == 1 || @.a == 4)                                 | $."g"?(@."a" == 1 || @."a" == 4)
+ $.g ? (@.a == 1 && @.a == 4)                                 | $."g"?(@."a" == 1 && @."a" == 4)
+ $.g ? (@.a == 1 || @.a == 4 && @.b == 7)                     | $."g"?(@."a" == 1 || @."a" == 4 && @."b" == 7)
+ $.g ? (@.a == 1 || !(@.a == 4) && @.b == 7)                  | $."g"?(@."a" == 1 || !(@."a" == 4) && @."b" == 7)
+ $.g ? (@.a == 1 || !(@.x >= 123 || @.a == 4) && @.b == 7)    | $."g"?(@."a" == 1 || !(@."x" >= 123 || @."a" == 4) && @."b" == 7)
+ $.g ? (@.x >= @[*]?(@.a > "abc"))                            | $."g"?(@."x" >= @[*]?(@."a" > "abc"))
+ $.g ? ((@.x >= 123 || @.a == 4) is unknown)                  | $."g"?((@."x" >= 123 || @."a" == 4) is unknown)
+ $.g ? (exists (@.x))                                         | $."g"?(exists (@."x"))
+ $.g ? (exists (@.x ? (@ == 14)))                             | $."g"?(exists (@."x"?(@ == 14)))
+ $.g ? ((@.x >= 123 || @.a == 4) && exists (@.x ? (@ == 14))) | $."g"?((@."x" >= 123 || @."a" == 4) && exists (@."x"?(@ == 14)))
+ $.g ? (+@.x >= +-(+@.a + 2))                                 | $."g"?(+@."x" >= +(-(+@."a" + 2)))
+ $a                                                           | $"a"
+ $a.b                                                         | $"a"."b"
+ $a[*]                                                        | $"a"[*]
+ $.g ? (@.zip == $zip)                                        | $."g"?(@."zip" == $"zip")
+ $.a[1,2, 3 to 16]                                            | $."a"[1,2,3 to 16]
+ $.a[$a + 1, ($b[*]) to -($[0] * 2)]                          | $."a"[$"a" + 1,$"b"[*] to -($[0] * 2)]
+ $.a[$.a.size() - 3]                                          | $."a"[$."a".size() - 3]
+ "last"                                                       | "last"
+ $.last                                                       | $."last"
+ $[last]                                                      | $[last]
+ $[$[0] ? (last > 0)]                                         | $[$[0]?(last > 0)]
+ null.type()                                                  | null.type()
+ (1).type()                                                   | (1).type()
+ 1.2.type()                                                   | (1.2).type()
+ "aaa".type()                                                 | "aaa".type()
+ true.type()                                                  | true.type()
+ $.double().floor().ceiling().abs()                           | $.double().floor().ceiling().abs()
+ $.keyvalue().key                                             | $.keyvalue()."key"
+ $.datetime()                                                 | $.datetime()
+ $.datetime("datetime template")                              | $.datetime("datetime template")
+ $ ? (@ starts with "abc")                                    | $?(@ starts with "abc")
+ $ ? (@ starts with $var)                                     | $?(@ starts with $"var")
+ $ ? (@ like_regex "pattern")                                 | $?(@ like_regex "pattern")
+ $ ? (@ like_regex "pattern" flag "")                         | $?(@ like_regex "pattern")
+ $ ? (@ like_regex "pattern" flag "i")                        | $?(@ like_regex "pattern" flag "i")
+ $ ? (@ like_regex "pattern" flag "is")                       | $?(@ like_regex "pattern" flag "is")
+ $ ? (@ like_regex "pattern" flag "isim")                     | $?(@ like_regex "pattern" flag "ism")
+ $ ? (@ like_regex "pattern" flag "q")                        | $?(@ like_regex "pattern" flag "q")
+ $ ? (@ like_regex "pattern" flag "iq")                       | $?(@ like_regex "pattern" flag "iq")
+ $ ? (@ like_regex "pattern" flag "smixq")                    | $?(@ like_regex "pattern" flag "ismxq")
+ $ < 1                                                        | ($ < 1)
+ ($ < 1) || $.a.b <= $x                                       | ($ < 1 || $."a"."b" <= $"x")
+ ($).a.b                                                      | $."a"."b"
+ ($.a.b).c.d                                                  | $."a"."b"."c"."d"
+ ($.a.b + -$.x.y).c.d                                         | ($."a"."b" + -$."x"."y")."c"."d"
+ (-+$.a.b).c.d                                                | (-(+$."a"."b"))."c"."d"
+ 1 + ($.a.b + 2).c.d                                          | (1 + ($."a"."b" + 2)."c"."d")
+ 1 + ($.a.b > 2).c.d                                          | (1 + ($."a"."b" > 2)."c"."d")
+ ($)                                                          | $
+ (($))                                                        | $
+ ((($ + 1)).a + ((2)).b ? ((((@ > 1)) || (exists(@.c)))))     | (($ + 1)."a" + (2)."b"?(@ > 1 || exists (@."c")))
+ $ ? (@.a < 1)                                                | $?(@."a" < 1)
+ $ ? (@.a < -1)                                               | $?(@."a" < -1)
+ $ ? (@.a < +1)                                               | $?(@."a" < 1)
+ $ ? (@.a < .1)                                               | $?(@."a" < 0.1)
+ $ ? (@.a < -.1)                                              | $?(@."a" < -0.1)
+ $ ? (@.a < +.1)                                              | $?(@."a" < 0.1)
+ $ ? (@.a < 0.1)                                              | $?(@."a" < 0.1)
+ $ ? (@.a < -0.1)                                             | $?(@."a" < -0.1)
+ $ ? (@.a < +0.1)                                             | $?(@."a" < 0.1)
+ $ ? (@.a < 10.1)                                             | $?(@."a" < 10.1)
+ $ ? (@.a < -10.1)                                            | $?(@."a" < -10.1)
+ $ ? (@.a < +10.1)                                            | $?(@."a" < 10.1)
+ $ ? (@.a < 1e1)                                              | $?(@."a" < 10)
+ $ ? (@.a < -1e1)                                             | $?(@."a" < -10)
+ $ ? (@.a < +1e1)                                             | $?(@."a" < 10)
+ $ ? (@.a < .1e1)                                             | $?(@."a" < 1)
+ $ ? (@.a < -.1e1)                                            | $?(@."a" < -1)
+ $ ? (@.a < +.1e1)                                            | $?(@."a" < 1)
+ $ ? (@.a < 0.1e1)                                            | $?(@."a" < 1)
+ $ ? (@.a < -0.1e1)                                           | $?(@."a" < -1)
+ $ ? (@.a < +0.1e1)                                           | $?(@."a" < 1)
+ $ ? (@.a < 10.1e1)                                           | $?(@."a" < 101)
+ $ ? (@.a < -10.1e1)                                          | $?(@."a" < -101)
+ $ ? (@.a < +10.1e1)                                          | $?(@."a" < 101)
+ $ ? (@.a < 1e-1)                                             | $?(@."a" < 0.1)
+ $ ? (@.a < -1e-1)                                            | $?(@."a" < -0.1)
+ $ ? (@.a < +1e-1)                                            | $?(@."a" < 0.1)
+ $ ? (@.a < .1e-1)                                            | $?(@."a" < 0.01)
+ $ ? (@.a < -.1e-1)                                           | $?(@."a" < -0.01)
+ $ ? (@.a < +.1e-1)                                           | $?(@."a" < 0.01)
+ $ ? (@.a < 0.1e-1)                                           | $?(@."a" < 0.01)
+ $ ? (@.a < -0.1e-1)                                          | $?(@."a" < -0.01)
+ $ ? (@.a < +0.1e-1)                                          | $?(@."a" < 0.01)
+ $ ? (@.a < 10.1e-1)                                          | $?(@."a" < 1.01)
+ $ ? (@.a < -10.1e-1)                                         | $?(@."a" < -1.01)
+ $ ? (@.a < +10.1e-1)                                         | $?(@."a" < 1.01)
+ $ ? (@.a < 1e+1)                                             | $?(@."a" < 10)
+ $ ? (@.a < -1e+1)                                            | $?(@."a" < -10)
+ $ ? (@.a < +1e+1)                                            | $?(@."a" < 10)
+ $ ? (@.a < .1e+1)                                            | $?(@."a" < 1)
+ $ ? (@.a < -.1e+1)                                           | $?(@."a" < -1)
+ $ ? (@.a < +.1e+1)                                           | $?(@."a" < 1)
+ $ ? (@.a < 0.1e+1)                                           | $?(@."a" < 1)
+ $ ? (@.a < -0.1e+1)                                          | $?(@."a" < -1)
+ $ ? (@.a < +0.1e+1)                                          | $?(@."a" < 1)
+ $ ? (@.a < 10.1e+1)                                          | $?(@."a" < 101)
+ $ ? (@.a < -10.1e+1)                                         | $?(@."a" < -101)
+ $ ? (@.a < +10.1e+1)                                         | $?(@."a" < 101)
+ 0                                                            | 0
+ 0.0                                                          | 0.0
+ 0.000                                                        | 0.000
+ 0.000e1                                                      | 0.00
+ 0.000e2                                                      | 0.0
+ 0.000e3                                                      | 0
+ 0.0010                                                       | 0.0010
+ 0.0010e-1                                                    | 0.00010
+ 0.0010e+1                                                    | 0.010
+ 0.0010e+2                                                    | 0.10
+ .001                                                         | 0.001
+ .001e1                                                       | 0.01
+ 1.                                                           | 1
+ 1.e1                                                         | 10
+ 1.2.e                                                        | (1.2)."e"
+ (1.2).e                                                      | (1.2)."e"
+ 1e3                                                          | 1000
+ 1.e3                                                         | 1000
+ 1.e3.e                                                       | (1000)."e"
+ 1.e3.e4                                                      | (1000)."e4"
+ 1.2e3                                                        | 1200
+ 1.2.e3                                                       | (1.2)."e3"
+ (1.2).e3                                                     | (1.2)."e3"
+ 1..e                                                         | (1)."e"
+ 1..e3                                                        | (1)."e3"
+ (1.).e                                                       | (1)."e"
+ (1.).e3                                                      | (1)."e3"
+ 1?(2>3)                                                      | (1)?(2 > 3)
+(158 rows)
+
+-- now test some cases where trailing junk causes errors
+\COPY jsonpath_test(sample) FROM STDIN
+-- the following tests try to evaluate type casting on worker, followed by coordinator
+SELECT sample, sample::jsonpath FROM jsonpath_test WHERE sample = '';
+ERROR:  invalid input syntax for type jsonpath: ""
+CONTEXT:  while executing command on localhost:xxxxx
+WITH samples as (SELECT id, sample FROM jsonpath_test WHERE sample = '' OFFSET 0)
+SELECT sample, sample::jsonpath FROM samples;
+ERROR:  invalid input syntax for type jsonpath: ""
+SELECT sample, sample::jsonpath FROM jsonpath_test WHERE sample = 'last';
+ERROR:  LAST is allowed only in array subscripts
+CONTEXT:  while executing command on localhost:xxxxx
+WITH samples as (SELECT id, sample FROM jsonpath_test WHERE sample = 'last' OFFSET 0)
+SELECT sample, sample::jsonpath FROM samples;
+ERROR:  LAST is allowed only in array subscripts
+SELECT sample, sample::jsonpath FROM jsonpath_test WHERE sample = '1.type()';
+ERROR:  trailing junk after numeric literal at or near "1.t" of jsonpath input
+CONTEXT:  while executing command on localhost:xxxxx
+WITH samples as (SELECT id, sample FROM jsonpath_test WHERE sample = '1.type()' OFFSET 0)
+SELECT sample, sample::jsonpath FROM samples;
+ERROR:  trailing junk after numeric literal at or near "1.t" of jsonpath input
+SELECT sample, sample::jsonpath FROM jsonpath_test WHERE sample = '$ ? (@ like_regex "(invalid pattern")';
+ERROR:  invalid regular expression: parentheses () not balanced
+CONTEXT:  while executing command on localhost:xxxxx
+WITH samples as (SELECT id, sample FROM jsonpath_test WHERE sample = '$ ? (@ like_regex "(invalid pattern")' OFFSET 0)
+SELECT sample, sample::jsonpath FROM samples;
+ERROR:  invalid regular expression: parentheses () not balanced
+SELECT sample, sample::jsonpath FROM jsonpath_test WHERE sample = '$ ? (@ like_regex "pattern" flag "xsms")';
+ERROR:  XQuery "x" flag (expanded regular expressions) is not implemented
+CONTEXT:  while executing command on localhost:xxxxx
+WITH samples as (SELECT id, sample FROM jsonpath_test WHERE sample = '$ ? (@ like_regex "pattern" flag "xsms")' OFFSET 0)
+SELECT sample, sample::jsonpath FROM samples;
+ERROR:  XQuery "x" flag (expanded regular expressions) is not implemented
+SELECT sample, sample::jsonpath FROM jsonpath_test WHERE sample = '@ + 1';
+ERROR:  @ is not allowed in root expressions
+CONTEXT:  while executing command on localhost:xxxxx
+WITH samples as (SELECT id, sample FROM jsonpath_test WHERE sample = '@ + 1' OFFSET 0)
+SELECT sample, sample::jsonpath FROM samples;
+ERROR:  @ is not allowed in root expressions
+SELECT sample, sample::jsonpath FROM jsonpath_test WHERE sample = '00';
+ERROR:  trailing junk after numeric literal at or near "00" of jsonpath input
+CONTEXT:  while executing command on localhost:xxxxx
+WITH samples as (SELECT id, sample FROM jsonpath_test WHERE sample = '00' OFFSET 0)
+SELECT sample, sample::jsonpath FROM samples;
+ERROR:  trailing junk after numeric literal at or near "00" of jsonpath input
+SELECT sample, sample::jsonpath FROM jsonpath_test WHERE sample = '1.e';
+ERROR:  trailing junk after numeric literal at or near "1.e" of jsonpath input
+CONTEXT:  while executing command on localhost:xxxxx
+WITH samples as (SELECT id, sample FROM jsonpath_test WHERE sample = '1.e' OFFSET 0)
+SELECT sample, sample::jsonpath FROM samples;
+ERROR:  trailing junk after numeric literal at or near "1.e" of jsonpath input
+SELECT sample, sample::jsonpath FROM jsonpath_test WHERE sample = '1.2e3a';
+ERROR:  trailing junk after numeric literal at or near "1.2e3a" of jsonpath input
+CONTEXT:  while executing command on localhost:xxxxx
+WITH samples as (SELECT id, sample FROM jsonpath_test WHERE sample = '1.2e3a' OFFSET 0)
+SELECT sample, sample::jsonpath FROM samples;
+ERROR:  trailing junk after numeric literal at or near "1.2e3a" of jsonpath input
+DROP SCHEMA jsonpath CASCADE;
+NOTICE:  drop cascades to table jsonpath_test
