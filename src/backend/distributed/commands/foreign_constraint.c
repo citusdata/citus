@@ -273,8 +273,8 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		{
 			ereport(ERROR, (errmsg("cannot create foreign key constraint "
 								   "since Citus does not support ON DELETE "
-                                   "/ UPDATE SET DEFAULT actions on the "
-                                   "columns that default to sequences")));
+								   "/ UPDATE SET DEFAULT actions on the "
+								   "columns that default to sequences")));
 		}
 
 		bool referencingIsCitusLocalOrRefTable =
