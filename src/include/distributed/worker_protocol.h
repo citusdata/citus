@@ -118,6 +118,7 @@ extern StringInfo InitTaskDirectory(uint64 jobId, uint32 taskId);
 extern void RemoveJobSchema(StringInfo schemaName);
 extern Datum * DeconstructArrayObject(ArrayType *arrayObject);
 extern int32 ArrayObjectCount(ArrayType *arrayObject);
+extern List * IntegerArrayTypeToList(ArrayType *arrayObject);
 extern FmgrInfo * GetFunctionInfo(Oid typeId, Oid accessMethodId, int16 procedureId);
 extern uint64 ExtractShardIdFromTableName(const char *tableName, bool missingOk);
 extern void RepartitionCleanupJobDirectories(void);

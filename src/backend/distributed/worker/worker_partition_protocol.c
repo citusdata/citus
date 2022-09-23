@@ -420,6 +420,26 @@ ArrayObjectCount(ArrayType *arrayObject)
 
 
 /*
+ * Converts ArrayType to List.
+ */
+List *
+IntegerArrayTypeToList(ArrayType *arrayObject)
+{
+	List *list = NULL;
+	Datum *datumObjectArray = DeconstructArrayObject(arrayObject);
+	int arrayObjectCount = ArrayObjectCount(arrayObject);
+
+	for (int index = 0; index < arrayObjectCount; index++)
+	{
+		int32 intObject = DatumGetInt32(datumObjectArray[index]);
+		list = lappend_int(list, intObject);
+	}
+
+	return list;
+}
+
+
+/*
  * InitTaskDirectory creates a job and task directory using given identifiers,
  * if these directories do not already exist. The function then returns the task
  * directory's name.
