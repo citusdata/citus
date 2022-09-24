@@ -808,6 +808,81 @@ CREATE TABLE set_on_default_test_referencing(
 
 SELECT 1 FROM citus_remove_node('localhost', :master_port);
 
+--
+-- PG15 has suppressed some casts on constants when querying foreign tables
+-- For example, we can use text to represent a type that's an enum on the remote side
+-- A comparison on such a column will get shipped as "var = 'foo'::text"
+-- But there's no enum = text operator on the remote side
+-- If we leave off the explicit cast, the comparison will work
+-- Test we behave in the same way with a Citus foreign table
+-- Reminder: foreign tables cannot be distributed/reference, can only be Citus local
+-- Relevant PG commit:
+-- f8abb0f5e114d8c309239f0faa277b97f696d829
+--
+
+\set VERBOSITY terse
+SET citus.next_shard_id TO 960200;
+SET citus.enable_local_execution TO ON;
+-- add the foreign table to metadata with the guc
+SET citus.use_citus_managed_tables TO ON;
+
+SET client_min_messages to ERROR;
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
+RESET client_min_messages;
+
+CREATE TYPE user_enum AS ENUM ('foo', 'bar', 'buz');
+
+CREATE TABLE foreign_table_test (c0 integer NOT NULL, c1 user_enum);
+INSERT INTO foreign_table_test VALUES (1, 'foo');
+
+CREATE EXTENSION postgres_fdw;
+
+CREATE SERVER foreign_server
+        FOREIGN DATA WRAPPER postgres_fdw
+        OPTIONS (host 'localhost', port :'master_port', dbname 'regression');
+
+CREATE USER MAPPING FOR CURRENT_USER
+        SERVER foreign_server
+        OPTIONS (user 'postgres');
+
+CREATE FOREIGN TABLE foreign_table (
+        c0 integer NOT NULL,
+        c1 user_enum
+)
+        SERVER foreign_server
+        OPTIONS (schema_name 'pg15', table_name 'foreign_table_test');
+
+-- check that the foreign table is a citus local table
+SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass ORDER BY logicalrelid;
+
+-- same tests as in the relevant PG commit
+ALTER FOREIGN TABLE foreign_table ALTER COLUMN c1 TYPE text;
+
+-- Check that Remote SQL in the EXPLAIN doesn't contain casting
+EXPLAIN (VERBOSE, COSTS OFF)
+SELECT * FROM foreign_table WHERE c1 = 'foo' LIMIT 1;
+SELECT * FROM foreign_table WHERE c1 = 'foo' LIMIT 1;
+
+-- Check that Remote SQL in the EXPLAIN doesn't contain casting
+EXPLAIN (VERBOSE, COSTS OFF)
+SELECT * FROM foreign_table WHERE 'foo' = c1 LIMIT 1;
+SELECT * FROM foreign_table WHERE 'foo' = c1 LIMIT 1;
+
+-- we declared c1 to be text locally, but it's still the same type on
+-- the remote which will balk if we try to do anything incompatible
+-- with that remote type
+SELECT * FROM foreign_table WHERE c1 LIKE 'foo' LIMIT 1; -- ERROR
+SELECT * FROM foreign_table WHERE c1::text LIKE 'foo' LIMIT 1; -- ERROR; cast not pushed down
+
+ALTER FOREIGN TABLE foreign_table ALTER COLUMN c1 TYPE user_enum;
+
+-- Clean up foreign table test
+DROP FOREIGN TABLE foreign_table;
+DROP TABLE foreign_table_test;
+\set VERBOSITY default
+RESET citus.use_citus_managed_tables;
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
+
 -- Clean up
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
