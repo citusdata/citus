@@ -157,6 +157,10 @@ static void WaitForGroupedLogicalRepTargetsToBecomeReady(
 static void WaitForGroupedLogicalRepTargetsToCatchUp(XLogRecPtr sourcePosition,
 													 GroupedLogicalRepTargets *
 													 groupedLogicalRepTargets);
+static void RecreateGroupedLogicalRepTargetsConnections(
+	HTAB *groupedLogicalRepTargetsHash,
+	char *user,
+	char *databaseName);
 
 /*
  * LogicallyReplicateShards replicates a list of shards from one node to another
@@ -568,9 +572,10 @@ DropAllLogicalReplicationLeftovers(LogicalRepType type)
 	/*
 	 * We need connections that are not currently inside a transaction. The
 	 * reason for this is that operations on subscriptions, publications and
-	 * replication slots cannot be run in a transaction.
+	 * replication slots cannot be run in a transaction. By forcing a new
+	 * connection we make sure no transaction is active on the connection.
 	 */
-	int connectionFlags = OUTSIDE_TRANSACTION;
+	int connectionFlags = FORCE_NEW_CONNECTION;
 
 	List *workerNodeList = ActivePrimaryNodeList(AccessShareLock);
 	List *cleanupConnectionList = NIL;
@@ -1164,8 +1169,7 @@ CreatePartitioningHierarchy(List *logicalRepTargetList)
 												  target->superuserConnection->hostname,
 												  target->superuserConnection->port,
 												  tableOwner, NULL);
-				SendCommandListToWorkerOutsideTransactionWithConnection(
-					connection, list_make1(attachPartitionCommand));
+				ExecuteCriticalRemoteCommand(connection, attachPartitionCommand);
 
 				MemoryContextReset(localContext);
 			}
@@ -1832,7 +1836,7 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 			list_make2(
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
-					"CREATE USER %s SUPERUSER IN ROLE %s",
+					"CREATE USER %s SUPERUSER IN ROLE %s;",
 					target->subscriptionOwnerName,
 					GetUserNameFromId(ownerId, false)
 					)));
@@ -1891,7 +1895,7 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 			list_make2(
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
-					"ALTER ROLE %s NOSUPERUSER",
+					"ALTER ROLE %s NOSUPERUSER;",
 					target->subscriptionOwnerName
 					)));
 	}
@@ -2053,8 +2057,12 @@ CreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
  * RecreateGroupedLogicalRepTargetsConnections recreates connections for all of the
  * nodes in the groupedLogicalRepTargetsHash where the old connection is broken or
  * currently running a query.
+ *
+ * IMPORTANT: When it recreates the connection, it doesn't close the existing
+ * connection. This means that this function should only be called when we know
+ * we'll throw an error afterwards, otherwise we would leak these connections.
  */
-void
+static void
 RecreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
 											char *user,
 											char *databaseName)

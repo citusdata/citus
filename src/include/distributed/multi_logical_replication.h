@@ -172,10 +172,6 @@ extern HTAB * CreateGroupedLogicalRepTargetsHash(List *subscriptionInfoList);
 extern void CreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
 													  char *user,
 													  char *databaseName);
-extern void RecreateGroupedLogicalRepTargetsConnections(
-	HTAB *groupedLogicalRepTargetsHash,
-	char *user,
-	char *databaseName);
 extern void CloseGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash);
 extern void CompleteNonBlockingShardTransfer(List *shardList,
 											 MultiConnection *sourceConnection,

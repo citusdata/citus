@@ -1056,12 +1056,13 @@ static void
 CreateObjectOnPlacement(List *objectCreationCommandList,
 						WorkerNode *workerPlacementNode)
 {
-	MultiConnection *c =
+	MultiConnection *connection =
 		GetNodeUserDatabaseConnection(OUTSIDE_TRANSACTION,
 									  workerPlacementNode->workerName,
 									  workerPlacementNode->workerPort,
 									  NULL, NULL);
-	SendCommandListToWorkerOutsideTransactionWithConnection(c, objectCreationCommandList);
+	SendCommandListToWorkerOutsideTransactionWithConnection(connection,
+															objectCreationCommandList);
 }
 
 
