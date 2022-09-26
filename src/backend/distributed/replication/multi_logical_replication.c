@@ -157,6 +157,10 @@ static void WaitForGroupedLogicalRepTargetsToBecomeReady(
 static void WaitForGroupedLogicalRepTargetsToCatchUp(XLogRecPtr sourcePosition,
 													 GroupedLogicalRepTargets *
 													 groupedLogicalRepTargets);
+static void RecreateGroupedLogicalRepTargetsConnections(
+	HTAB *groupedLogicalRepTargetsHash,
+	char *user,
+	char *databaseName);
 
 /*
  * LogicallyReplicateShards replicates a list of shards from one node to another
@@ -566,10 +570,10 @@ DropAllLogicalReplicationLeftovers(LogicalRepType type)
 	char *databaseName = get_database_name(MyDatabaseId);
 
 	/*
-	 * We open new connections to all nodes. The reason for this is that
-	 * operations on subscriptions, publications and replication slotscannot be
-	 * run in a transaction. By forcing a new connection we make sure no
-	 * transaction is active on the connection.
+	 * We need connections that are not currently inside a transaction. The
+	 * reason for this is that operations on subscriptions, publications and
+	 * replication slots cannot be run in a transaction. By forcing a new
+	 * connection we make sure no transaction is active on the connection.
 	 */
 	int connectionFlags = FORCE_NEW_CONNECTION;
 
@@ -607,7 +611,9 @@ DropAllLogicalReplicationLeftovers(LogicalRepType type)
 		/*
 		 * We close all connections that we opened for the dropping here. That
 		 * way we don't keep these connections open unnecessarily during the
-		 * 'LogicalRepType' operation (which can take a long time).
+		 * 'LogicalRepType' operation (which can take a long time). We might
+		 * need to reopen a few later on, but that seems better than keeping
+		 * many open for no reason for a long time.
 		 */
 		CloseConnection(cleanupConnection);
 	}
@@ -1157,11 +1163,14 @@ CreatePartitioningHierarchy(List *logicalRepTargetList)
 				 * parallel, so create them sequentially. Also attaching partition
 				 * is a quick operation, so it is fine to execute sequentially.
 				 */
-				SendCommandListToWorkerOutsideTransaction(
-					target->superuserConnection->hostname,
-					target->superuserConnection->port,
-					tableOwner,
-					list_make1(attachPartitionCommand));
+
+				MultiConnection *connection =
+					GetNodeUserDatabaseConnection(OUTSIDE_TRANSACTION,
+												  target->superuserConnection->hostname,
+												  target->superuserConnection->port,
+												  tableOwner, NULL);
+				ExecuteCriticalRemoteCommand(connection, attachPartitionCommand);
+
 				MemoryContextReset(localContext);
 			}
 		}
@@ -1210,10 +1219,8 @@ CreateUncheckedForeignKeyConstraints(List *logicalRepTargetList)
 				list_make1("SET LOCAL citus.skip_constraint_validation TO ON;"),
 				commandList);
 
-			SendCommandListToWorkerOutsideTransaction(
-				target->superuserConnection->hostname,
-				target->superuserConnection->port,
-				target->superuserConnection->user,
+			SendCommandListToWorkerOutsideTransactionWithConnection(
+				target->superuserConnection,
 				commandList);
 
 			MemoryContextReset(localContext);
@@ -1638,11 +1645,11 @@ DropUser(MultiConnection *connection, char *username)
 	 * The DROP USER command should not propagate, so we temporarily disable
 	 * DDL propagation.
 	 */
-	SendCommandListToWorkerOutsideTransaction(
-		connection->hostname, connection->port, connection->user,
+	SendCommandListToWorkerOutsideTransactionWithConnection(
+		connection,
 		list_make2(
 			"SET LOCAL citus.enable_ddl_propagation TO OFF;",
-			psprintf("DROP USER IF EXISTS %s",
+			psprintf("DROP USER IF EXISTS %s;",
 					 quote_identifier(username))));
 }
 
@@ -1824,14 +1831,12 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 		 * create a user with SUPERUSER permissions and then alter it to NOSUPERUSER.
 		 * This prevents permission escalations.
 		 */
-		SendCommandListToWorkerOutsideTransaction(
-			target->superuserConnection->hostname,
-			target->superuserConnection->port,
-			target->superuserConnection->user,
+		SendCommandListToWorkerOutsideTransactionWithConnection(
+			target->superuserConnection,
 			list_make2(
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
-					"CREATE USER %s SUPERUSER IN ROLE %s",
+					"CREATE USER %s SUPERUSER IN ROLE %s;",
 					target->subscriptionOwnerName,
 					GetUserNameFromId(ownerId, false)
 					)));
@@ -1885,14 +1890,12 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 		 * The ALTER ROLE command should not propagate, so we temporarily
 		 * disable DDL propagation.
 		 */
-		SendCommandListToWorkerOutsideTransaction(
-			target->superuserConnection->hostname,
-			target->superuserConnection->port,
-			target->superuserConnection->user,
+		SendCommandListToWorkerOutsideTransactionWithConnection(
+			target->superuserConnection,
 			list_make2(
 				"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 				psprintf(
-					"ALTER ROLE %s NOSUPERUSER",
+					"ALTER ROLE %s NOSUPERUSER;",
 					target->subscriptionOwnerName
 					)));
 	}
@@ -2054,8 +2057,12 @@ CreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
  * RecreateGroupedLogicalRepTargetsConnections recreates connections for all of the
  * nodes in the groupedLogicalRepTargetsHash where the old connection is broken or
  * currently running a query.
+ *
+ * IMPORTANT: When it recreates the connection, it doesn't close the existing
+ * connection. This means that this function should only be called when we know
+ * we'll throw an error afterwards, otherwise we would leak these connections.
  */
-void
+static void
 RecreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
 											char *user,
 											char *databaseName)
@@ -2065,10 +2072,11 @@ RecreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
 	GroupedLogicalRepTargets *groupedLogicalRepTargets = NULL;
 	foreach_htab(groupedLogicalRepTargets, &status, groupedLogicalRepTargetsHash)
 	{
-		if (groupedLogicalRepTargets->superuserConnection &&
-			PQstatus(groupedLogicalRepTargets->superuserConnection->pgConn) ==
-			CONNECTION_OK &&
-			!PQisBusy(groupedLogicalRepTargets->superuserConnection->pgConn)
+		MultiConnection *superuserConnection =
+			groupedLogicalRepTargets->superuserConnection;
+		if (superuserConnection &&
+			PQstatus(superuserConnection->pgConn) == CONNECTION_OK &&
+			!PQisBusy(superuserConnection->pgConn)
 			)
 		{
 			continue;
@@ -2076,12 +2084,12 @@ RecreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
 		WorkerNode *targetWorkerNode = FindNodeWithNodeId(
 			groupedLogicalRepTargets->nodeId,
 			false);
-		MultiConnection *superuserConnection =
-			GetNodeUserDatabaseConnection(connectionFlags,
-										  targetWorkerNode->workerName,
-										  targetWorkerNode->workerPort,
-										  user,
-										  databaseName);
+		superuserConnection = GetNodeUserDatabaseConnection(
+			connectionFlags,
+			targetWorkerNode->workerName,
+			targetWorkerNode->workerPort,
+			user,
+			databaseName);
 
 		/*
 		 * Operations on subscriptions cannot run in a transaction block. We
