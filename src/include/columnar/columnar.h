@@ -234,10 +234,6 @@ extern void ColumnarEndWrite(ColumnarWriteState *state);
 extern bool ContainsPendingWrites(ColumnarWriteState *state);
 extern MemoryContext ColumnarWritePerTupleContext(ColumnarWriteState *state);
 
-/* Function declaration for updating Columnar.options */
-extern bool ColumnarSetWriteStateOptions(ColumnarWriteState *writeState, ColumnarOptions
-										 options);
-
 /* Function declarations for reading from columnar table */
 
 /* functions applicable for both sequential and random access */
@@ -318,6 +314,7 @@ extern Datum columnar_relation_storageid(PG_FUNCTION_ARGS);
 /* write_state_management.c */
 extern ColumnarWriteState * columnar_init_write_state(Relation relation, TupleDesc
 													  tupdesc,
+													  Oid tupSlotRelationId,
 													  SubTransactionId currentSubXid);
 extern void FlushWriteStateForRelfilenode(Oid relfilenode, SubTransactionId
 										  currentSubXid);

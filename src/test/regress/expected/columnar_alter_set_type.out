@@ -50,6 +50,9 @@ SELECT * FROM test_alter_table ORDER BY a;
 (4 rows)
 
 DROP TABLE test_alter_table;
+--  Make sure that the correct table options are used when rewriting the table.
+-- This is reflected by the VACUUM VERBOSE output right after a rewrite showing
+-- that all chunks are compressed with the configured compression algorithm
 -- https://github.com/citusdata/citus/issues/5927
 CREATE TABLE test(i int) USING columnar;
 ALTER TABLE test SET (columnar.compression = lz4);
