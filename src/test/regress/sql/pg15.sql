@@ -749,6 +749,15 @@ RESET ROLE;
 -- supported in Citus when the query view contains citus tables
 UPDATE sec_invoker_view SET event_id = 5;
 
+--
+-- Not allow ON DELETE/UPDATE SET DEFAULT actions on columns that
+-- default to sequences
+-- Adding a special test here since in PG15 we can
+-- specify column list for foreign key ON DELETE SET actions
+-- Relevant PG commit:
+-- d6f96ed94e73052f99a2e545ed17a8b2fdc1fb8a
+--
+
 CREATE TABLE set_on_default_test_referenced(
     col_1 int, col_2 int, col_3 int, col_4 int,
     unique (col_1, col_3)
