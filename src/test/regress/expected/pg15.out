@@ -171,7 +171,7 @@ SELECT * FROM sale_triggers ORDER BY 1, 2;
 -- test that we can't rename a distributed clone trigger
 ALTER TRIGGER "new_record_sale_trigger" ON "pg15"."sale_newyork" RENAME TO "another_trigger_name";
 ERROR:  cannot rename trigger "new_record_sale_trigger" on table "sale_newyork"
-HINT:  Rename trigger on partitioned table "sale" instead.
+HINT:  Rename the trigger on the partitioned table "sale" instead.
 --
 -- In PG15, For GENERATED columns, all dependencies of the generation
 -- expression are recorded as NORMAL dependencies of the column itself.
