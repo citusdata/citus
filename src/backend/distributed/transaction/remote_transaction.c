@@ -751,12 +751,11 @@ MarkRemoteTransactionCritical(struct MultiConnection *connection)
 
 
 /*
- * CloseRemoteTransaction handles closing a connection that, potentially, is
- * part of a coordinated transaction.  This should only ever be called from
- * connection_management.c, while closing a connection during a transaction.
+ * ResetRemoteTransaction resets the state of the transaction after the end of
+ * the main transaction, if the connection is being reused.
  */
 void
-CloseRemoteTransaction(struct MultiConnection *connection)
+ResetRemoteTransaction(struct MultiConnection *connection)
 {
 	RemoteTransaction *transaction = &connection->remoteTransaction;
 
@@ -767,20 +766,14 @@ CloseRemoteTransaction(struct MultiConnection *connection)
 
 		dlist_delete(&connection->transactionNode);
 	}
-}
-
-
-/*
- * ResetRemoteTransaction resets the state of the transaction after the end of
- * the main transaction, if the connection is being reused.
- */
-void
-ResetRemoteTransaction(struct MultiConnection *connection)
-{
-	RemoteTransaction *transaction = &connection->remoteTransaction;
 
 	/* just reset the entire state, relying on 0 being invalid/false */
 	memset(transaction, 0, sizeof(*transaction));
+
+	ResetShardPlacementAssociation(connection);
+
+	/* reset copy state */
+	connection->copyBytesWrittenSinceLastFlush = 0;
 }
 
 

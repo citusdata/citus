@@ -16,7 +16,7 @@
 #include "miscadmin.h"
 
 #include "safe_lib.h"
-
+#include "postmaster/postmaster.h"
 #include "access/hash.h"
 #include "commands/dbcommands.h"
 #include "distributed/backend_data.h"
@@ -63,7 +63,6 @@ static void FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry);
 static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
 static bool ShouldShutdownConnection(MultiConnection *connection, const int
 									 cachedConnectionCount);
-static void ResetConnection(MultiConnection *connection);
 static bool RemoteTransactionIdle(MultiConnection *connection);
 static int EventSetSizeForConnectionList(List *connections);
 
@@ -239,6 +238,23 @@ GetNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	Assert(connection != NULL);
 
 	FinishConnectionEstablishment(connection);
+
+	return connection;
+}
+
+
+/*
+ * GetConnectionForLocalQueriesOutsideTransaction returns a localhost connection for
+ * subtransaction. To avoid creating excessive connections, we reuse an
+ * existing connection.
+ */
+MultiConnection *
+GetConnectionForLocalQueriesOutsideTransaction(char *userName)
+{
+	int connectionFlag = OUTSIDE_TRANSACTION;
+	MultiConnection *connection =
+		GetNodeUserDatabaseConnection(connectionFlag, LocalHostName, PostPortNumber,
+									  userName, get_database_name(MyDatabaseId));
 
 	return connection;
 }
@@ -688,8 +704,8 @@ CloseConnection(MultiConnection *connection)
 		dlist_delete(&connection->connectionNode);
 
 		/* same for transaction state and shard/placement machinery */
-		CloseRemoteTransaction(connection);
 		CloseShardPlacementAssociation(connection);
+		ResetRemoteTransaction(connection);
 
 		/* we leave the per-host entry alive */
 		pfree(connection);
@@ -1443,7 +1459,10 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 			/*
 			 * reset healthy session lifespan connections.
 			 */
-			ResetConnection(connection);
+			ResetRemoteTransaction(connection);
+
+			UnclaimConnection(connection);
+
 
 			cachedConnectionCount++;
 		}
@@ -1479,24 +1498,6 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 		   (MaxCachedConnectionLifetime >= 0 &&
 			MillisecondsToTimeout(connection->connectionEstablishmentStart,
 								  MaxCachedConnectionLifetime) <= 0);
-}
-
-
-/*
- * ResetConnection preserves the given connection for later usage by
- * resetting its states.
- */
-static void
-ResetConnection(MultiConnection *connection)
-{
-	/* reset per-transaction state */
-	ResetRemoteTransaction(connection);
-	ResetShardPlacementAssociation(connection);
-
-	/* reset copy state */
-	connection->copyBytesWrittenSinceLastFlush = 0;
-
-	UnclaimConnection(connection);
 }
 
 
