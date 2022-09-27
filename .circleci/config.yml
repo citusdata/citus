@@ -6,7 +6,7 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-v0eef34d'
+    default: '-vcd9d3a2'
   pg13_version:
     type: string
     default: '13.8'
