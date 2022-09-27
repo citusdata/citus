@@ -873,6 +873,11 @@ SELECT undistribute_table('foreign_table_test');
 SELECT 1 FROM citus_remove_node('localhost', :master_port);
 DROP SERVER foreign_server CASCADE;
 
+-- PG15 now supports specifying oid on CREATE DATABASE
+-- verify that we print meaningful notice messages.
+CREATE DATABASE db_with_oid OID 987654;
+DROP DATABASE db_with_oid;
+
 -- Clean up
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
