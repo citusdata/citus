@@ -1371,6 +1371,11 @@ SELECT 1 FROM citus_remove_node('localhost', :master_port);
 
 DROP SERVER foreign_server CASCADE;
 NOTICE:  drop cascades to 2 other objects
+-- PG15 now supports specifying oid on CREATE DATABASE
+-- verify that we print meaningful notice messages.
+CREATE DATABASE db_with_oid OID 987654;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DROP DATABASE db_with_oid;
 -- Clean up
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
