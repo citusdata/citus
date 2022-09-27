@@ -1363,14 +1363,166 @@ NOTICE:  renaming the new table to pg15.foreign_table_test
 
 (1 row)
 
+DROP SERVER foreign_server CASCADE;
+NOTICE:  drop cascades to 2 other objects
+\set VERBOSITY default
+--
+-- PG15 allows specifying both the tables and schemas for a publication. For example:
+-- CREATE PUBLICATION pub1 FOR TABLE t1,t2,t3, ALL TABLES IN SCHEMA s1,s2;
+-- ALTER PUBLICATION pub1 ADD TABLE t1,t2,t3, ALL TABLES IN SCHEMA s1,s2;
+-- Adding some simple tests where some tables are distributed
+-- There is a variety of combinations we can try here but I am not including them all
+-- Relevant PG commit: 5a2832465fd8984d089e8c44c094e6900d987fcd
+--
+CREATE SCHEMA pub_test_0;
+CREATE SCHEMA pub_test_1;
+CREATE TABLE pub_test_0.dist_table (a int, b int);
+SELECT create_distributed_table('pub_test_0.dist_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE pub_test_0.ref_table (c int);
+SELECT create_reference_table('pub_test_0.ref_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE pub_test_1.citus_local_table(d int);
+SELECT citus_add_local_table_to_metadata('pub_test_1.citus_local_table');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE pub_test_0.non_citus_table (e int);
+CREATE TABLE pub_test_1.non_citus_table (e int);
+CREATE PUBLICATION pub1 FOR TABLE pub_test_1.citus_local_table, ALL TABLES IN SCHEMA pub_test_0;
+SELECT pubname AS publication_name, prrelid::regclass AS table_name
+FROM pg_publication p JOIN pg_publication_rel pr ON p.oid = pr.prpubid
+WHERE pubname = 'pub1' ORDER BY 2;
+ publication_name |          table_name
+---------------------------------------------------------------------
+ pub1             | pub_test_1.citus_local_table
+(1 row)
+
+SELECT pubname AS publication_name, pnnspid::regnamespace AS schema_name
+FROM pg_publication p JOIN pg_publication_namespace pn ON p.oid = pn.pnpubid
+WHERE pubname = 'pub1' ORDER BY 2;
+ publication_name | schema_name
+---------------------------------------------------------------------
+ pub1             | pub_test_0
+(1 row)
+
+ALTER PUBLICATION pub1 ADD TABLE pub_test_1.non_citus_table;
+SELECT pubname AS publication_name, prrelid::regclass AS table_name
+FROM pg_publication p JOIN pg_publication_rel pr ON p.oid = pr.prpubid
+WHERE pubname = 'pub1' ORDER BY 2;
+ publication_name |          table_name
+---------------------------------------------------------------------
+ pub1             | pub_test_1.citus_local_table
+ pub1             | pub_test_1.non_citus_table
+(2 rows)
+
+-- errors out, all pub_test_1 schema is not part of publication
+ALTER PUBLICATION pub1 DROP ALL TABLES IN SCHEMA pub_test_1;
+ERROR:  tables from schema "pub_test_1" are not part of the publication
+-- errors out, should specify TABLE
+ALTER PUBLICATION pub1 DROP pub_test_1.citus_local_table;
+ERROR:  invalid publication object list
+DETAIL:  One of TABLE or ALL TABLES IN SCHEMA must be specified before a standalone table or schema name.
+-- now it works
+ALTER PUBLICATION pub1 DROP TABLE pub_test_1.citus_local_table;
+SELECT pubname AS publication_name, prrelid::regclass AS table_name
+FROM pg_publication p JOIN pg_publication_rel pr ON p.oid = pr.prpubid
+WHERE pubname = 'pub1' ORDER BY 2;
+ publication_name |         table_name
+---------------------------------------------------------------------
+ pub1             | pub_test_1.non_citus_table
+(1 row)
+
+ALTER PUBLICATION pub1 DROP ALL TABLES IN SCHEMA pub_test_0;
+SELECT pubname AS publication_name, pnnspid::regnamespace AS schema_name
+FROM pg_publication p JOIN pg_publication_namespace pn ON p.oid = pn.pnpubid
+WHERE pubname = 'pub1' ORDER BY 2;
+ publication_name | schema_name
+---------------------------------------------------------------------
+(0 rows)
+
+-- it's not supported to add all tables in pub_test_1 if the publication
+-- already has some tables as part of that schema
+-- so, errors out
+ALTER PUBLICATION pub1 ADD ALL TABLES IN SCHEMA pub_test_0, pub_test_1;
+ERROR:  cannot add schema "pub_test_1" to publication
+DETAIL:  Table "non_citus_table" in schema "pub_test_1" is already part of the publication, adding the same schema is not supported.
+-- now it should work
+ALTER PUBLICATION pub1 DROP TABLE pub_test_1.non_citus_table;
+ALTER PUBLICATION pub1 ADD ALL TABLES IN SCHEMA pub_test_0, pub_test_1;
+-- should be empty
+SELECT pubname AS publication_name, prrelid::regclass AS table_name
+FROM pg_publication p JOIN pg_publication_rel pr ON p.oid = pr.prpubid
+WHERE pubname = 'pub1' ORDER BY 2;
+ publication_name | table_name
+---------------------------------------------------------------------
+(0 rows)
+
+-- two schemas
+SELECT pubname AS publication_name, pnnspid::regnamespace AS schema_name
+FROM pg_publication p JOIN pg_publication_namespace pn ON p.oid = pn.pnpubid
+WHERE pubname = 'pub1' ORDER BY 2;
+ publication_name | schema_name
+---------------------------------------------------------------------
+ pub1             | pub_test_0
+ pub1             | pub_test_1
+(2 rows)
+
+ALTER PUBLICATION pub1 DROP ALL TABLES IN SCHEMA pub_test_0, pub_test_1;
+-- errors out because table's schema is already specified in schema list
+ALTER PUBLICATION pub1 ADD TABLE pub_test_0.ref_table, pub_test_0.non_citus_table, ALL TABLES IN SCHEMA pub_test_0;
+ERROR:  cannot add relation "pub_test_0.ref_table" to publication
+DETAIL:  Table's schema "pub_test_0" is already part of the publication or part of the specified schema list.
+-- works because table's schema is different from schema list
+ALTER PUBLICATION pub1 ADD TABLE pub_test_0.ref_table, pub_test_0.non_citus_table, ALL TABLES IN SCHEMA pub_test_1;
+-- should see the two tables
+SELECT pubname AS publication_name, prrelid::regclass AS table_name
+FROM pg_publication p JOIN pg_publication_rel pr ON p.oid = pr.prpubid
+WHERE pubname = 'pub1' ORDER BY 2;
+ publication_name |         table_name
+---------------------------------------------------------------------
+ pub1             | pub_test_0.ref_table
+ pub1             | pub_test_0.non_citus_table
+(2 rows)
+
+-- should see pub_test_1 schema
+SELECT pubname AS publication_name, pnnspid::regnamespace AS schema_name
+FROM pg_publication p JOIN pg_publication_namespace pn ON p.oid = pn.pnpubid
+WHERE pubname = 'pub1' ORDER BY 2;
+ publication_name | schema_name
+---------------------------------------------------------------------
+ pub1             | pub_test_1
+(1 row)
+
+-- publication test clean up
+DROP PUBLICATION pub1;
+DROP SCHEMA pub_test_0 CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to table pub_test_0.dist_table
+drop cascades to table pub_test_0.ref_table
+drop cascades to table pub_test_0.ref_table_960206
+drop cascades to table pub_test_0.non_citus_table
+DROP SCHEMA pub_test_1 CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to table pub_test_1.citus_local_table_960207
+drop cascades to table pub_test_1.citus_local_table
+drop cascades to table pub_test_1.non_citus_table
 SELECT 1 FROM citus_remove_node('localhost', :master_port);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
-DROP SERVER foreign_server CASCADE;
-NOTICE:  drop cascades to 2 other objects
 -- Clean up
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;
