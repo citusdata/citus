@@ -8,16 +8,19 @@
 
 setup
 {
+    -- setup involves a lot of DDL inside a single tx block, so use sequential mode
+    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+
     SET citus.max_cached_conns_per_worker to 0;
     SET citus.next_shard_id TO 1234000;
 	SET citus.shard_count TO 4;
 	SET citus.shard_replication_factor TO 1;
 
-    CREATE USER new_user;
-    GRANT ALL ON SCHEMA public TO new_user;
-
     CREATE TABLE dist(column1 int PRIMARY KEY, column2 int);
     SELECT create_distributed_table('dist', 'column1');
+
+    CREATE USER new_user;
+    GRANT ALL ON SCHEMA public TO new_user;
 
 	SELECT get_shard_id_for_distribution_column('dist', 23) INTO selected_shard;
     GRANT ALL ON TABLE selected_shard TO new_user;
