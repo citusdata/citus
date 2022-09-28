@@ -915,6 +915,19 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function worker_fix_partition_shard_index_names(regclass,text,text) void
 (4 rows)
 
+-- There was a bug when downgrading to 10.2-2 from 10.2-4
+-- Test that we do not have any issues with this particular downgrade
+ALTER EXTENSION citus UPDATE TO '10.2-2';
+ERROR:  cannot drop constraint stripe_first_row_number_idx on table columnar.stripe because other objects depend on it
+DETAIL:  access method columnar depends on index columnar.stripe_first_row_number_idx
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+ALTER EXTENSION citus UPDATE TO '10.2-4';
+NOTICE:  version "10.2-4" of extension "citus" is already installed
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
 -- Test downgrade to 10.2-4 from 10.2-5
 ALTER EXTENSION citus UPDATE TO '10.2-5';
 ALTER EXTENSION citus UPDATE TO '10.2-4';
