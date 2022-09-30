@@ -1,5 +1,7 @@
 ### citus v11.1.2 (September 30, 2022) ###
 
+* Adds support for PostgreSQL 15rc1
+
 * Disallows having `ON DELETE/UPDATE SET DEFAULT` actions on columns that
   default to sequences
 
