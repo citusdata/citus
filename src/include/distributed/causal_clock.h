@@ -14,6 +14,8 @@
 
 extern size_t LogicalClockShmemSize(void);
 
+typedef uint64 ClusterClockNative;
+
 /*
  * Clock components - Unsigned 64 bit <LC, C>
  * Logical clock   (LC): 42 bits
@@ -32,7 +34,7 @@ extern size_t LogicalClockShmemSize(void);
 #define GET_COUNTER(x) ((x) & LOGICAL_MASK)
 
 /* concatenate logical and counter to form a 64 bit clock value */
-#define SET_CLOCK(var, lc, c) var = (((lc) << COUNTER_BITS) | (c))
+#define SET_CLOCK(var, lc, c) (var) = (((lc) << COUNTER_BITS) | ((c) & LOGICAL_MASK))
 
 extern bool EnableClusterClock;
 extern void LogicalClockShmemInit(void);

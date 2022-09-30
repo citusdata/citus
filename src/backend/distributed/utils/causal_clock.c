@@ -38,6 +38,8 @@
 #include "distributed/remote_commands.h"
 #include "distributed/type_utils.h"
 
+PG_FUNCTION_INFO_V1(citus_cluster_clock_native_in);
+PG_FUNCTION_INFO_V1(citus_cluster_clock_native_out);
 PG_FUNCTION_INFO_V1(citus_get_cluster_clock);
 PG_FUNCTION_INFO_V1(citus_internal_adjust_local_clock_to_remote);
 PG_FUNCTION_INFO_V1(citus_is_clock_after);
@@ -82,6 +84,82 @@ static uint64 * ExecuteQueryAndReturnBigIntCols(char *query, int resultSize, int
 static bool IsClockAfter(uint64 logicalClock1, uint32 counterClock1,
 						 uint64 logicalClock2, uint32 counterClock2);
 bool EnableClusterClock = false;
+
+#define LDELIM '('
+#define RDELIM ')'
+#define DELIM ','
+#define NTIDARGS 2
+
+Datum
+citus_cluster_clock_native_in(PG_FUNCTION_ARGS)
+{
+	char *str = PG_GETARG_CSTRING(0);
+	char *p;
+	char *coord[NTIDARGS];
+	int i;
+	ClusterClockNative *result;
+	char *badp;
+
+	for (i = 0, p = str; *p && i < NTIDARGS && *p != RDELIM; p++)
+	{
+		if (*p == DELIM || (*p == LDELIM && !i))
+		{
+			coord[i++] = p + 1;
+		}
+	}
+
+	if (i < NTIDARGS)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+				 errmsg("invalid input syntax for type %s: \"%s\"",
+						"cluster_clock_native", str)));
+	}
+
+	errno = 0;
+	uint64 logical = strtou64(coord[0], &badp, 10);
+	if (errno || *badp != DELIM)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+				 errmsg("invalid input syntax for type %s: \"%s\"",
+						"cluster_clock_native", str)));
+	}
+
+	uint32 counter = strtoul(coord[1], &badp, 10);
+	if (errno || *badp != RDELIM ||
+		counter > MAX_COUNTER || counter < 0)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+				 errmsg("invalid input syntax for type %s: \"%s\"",
+						"tid", str)));
+	}
+
+
+	result = (ClusterClockNative *) palloc(sizeof(ClusterClockNative));
+
+	SET_CLOCK(*result, logical, counter);
+
+	return PointerGetDatum(result);
+}
+
+
+Datum
+citus_cluster_clock_native_out(PG_FUNCTION_ARGS)
+{
+	ClusterClockNative *clockPtr =
+		(ClusterClockNative *) DatumGetPointer(PG_GETARG_DATUM(0));
+
+	uint64 logical = GET_LOGICAL(*clockPtr);
+	uint32 counter = GET_COUNTER(*clockPtr);
+
+	/* Perhaps someday we should output this as a record. */
+	char buf[32] = { 0 };
+	snprintf(buf, sizeof(buf), "(%lu,%u)", logical, counter);
+
+	PG_RETURN_CSTRING(pstrdup(buf));
+}
 
 
 /*

@@ -176,6 +176,26 @@ GRANT SELECT ON pg_catalog.pg_dist_background_task_depend TO PUBLIC;
 CREATE TYPE citus.cluster_clock AS (logical bigint, counter int);
 ALTER TYPE citus.cluster_clock SET SCHEMA pg_catalog;
 
+CREATE TYPE citus.cluster_clock_native;
+
+CREATE OR REPLACE FUNCTION pg_catalog.citus_cluster_clock_native_in(pg_catalog.cstring)
+    RETURNS citus.cluster_clock_native
+    LANGUAGE C IMMUTABLE
+    AS 'MODULE_PATHNAME',$$citus_cluster_clock_native_in$$;
+
+CREATE OR REPLACE FUNCTION pg_catalog.citus_cluster_clock_native_out(citus.cluster_clock_native)
+    RETURNS pg_catalog.cstring
+    LANGUAGE C IMMUTABLE
+    AS 'MODULE_PATHNAME',$$citus_cluster_clock_native_out$$;
+
+CREATE TYPE citus.cluster_clock_native (
+    INPUT = pg_catalog.citus_cluster_clock_native_in,
+    OUTPUT = pg_catalog.citus_cluster_clock_native_out,
+    INTERNALLENGTH = 8
+);
+
+ALTER TYPE citus.cluster_clock_native SET SCHEMA pg_catalog;
+
 CREATE TABLE citus.pg_dist_commit_transaction(
     transaction_id TEXT NOT NULL CONSTRAINT pg_dist_commit_transactionId_unique_constraint UNIQUE,
     cluster_clock_value cluster_clock NOT NULL,
