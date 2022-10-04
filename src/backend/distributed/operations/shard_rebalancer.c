@@ -1051,10 +1051,7 @@ citus_drain_node(PG_FUNCTION_ARGS)
 	};
 
 	char *nodeName = text_to_cstring(nodeNameText);
-	if (nodePort != 0 && (nodeName != NULL && strlen(nodeName) > 0))
-	{
-		options.workerNode = FindWorkerNode(nodeName, nodePort);
-	}
+	options.workerNode = FindWorkerNodeOrError(nodeName, nodePort);
 
 	/*
 	 * This is done in a separate session. This way it's not undone if the
