@@ -18,26 +18,27 @@ step s1-rebalance-c1-block-writes:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|                0|       1|move
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|                0|       1|move
-colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       0|move
-colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       0|move
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|                0|       1|move
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|                0|       1|move
+colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move
+colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move
 (4 rows)
 
 step s2-unlock-1-start:
@@ -62,16 +63,17 @@ step s1-commit:
 
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
@@ -101,26 +103,27 @@ step s1-rebalance-c1-block-writes:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     73728|localhost |     57637|                0|localhost |     57638|            73728|       2|move
-colocated2|1500005|    401408|localhost |     57637|                0|localhost |     57638|           401408|       2|move
-colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       1|move
-colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       1|move
+colocated1|1500001|     50000|localhost |     57637|                0|localhost |     57638|            50000|       2|move
+colocated2|1500005|    400000|localhost |     57637|                0|localhost |     57638|           400000|       2|move
+colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       1|move
+colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       1|move
 (4 rows)
 
 step s3-unlock-2-start:
@@ -145,16 +148,17 @@ step s1-commit:
 
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
@@ -196,26 +200,27 @@ step s1-rebalance-c1-block-writes:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1|move
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1|move
-colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       0|move
-colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       0|move
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|            50000|       1|move
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|           400000|       1|move
+colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move
+colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move
 (4 rows)
 
 step s7-release-lock:
@@ -240,16 +245,17 @@ step s1-commit:
 
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
@@ -283,26 +289,27 @@ step s1-rebalance-c1-online:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|             8192|       1|move
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|             8192|       1|move
-colocated1|1500002|    196608|localhost |     57637|           196608|localhost |     57638|                0|       0|move
-colocated2|1500006|      8192|localhost |     57637|             8192|localhost |     57638|                0|       0|move
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|             8000|       1|move
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|             8000|       1|move
+colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move
+colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move
 (4 rows)
 
 step s6-release-advisory-lock:
@@ -332,100 +339,17 @@ step s1-commit:
 
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
-  progress,
-  operation_type
- FROM get_rebalance_progress();
-
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
----------------------------------------------------------------------
-(0 rows)
-
-step enable-deferred-drop:
- ALTER SYSTEM RESET citus.defer_drop_after_shard_move;
-
-
-starting permutation: s7-grab-lock s1-shard-move-c1-online s7-get-progress s7-release-lock s1-commit s7-get-progress enable-deferred-drop
-master_set_node_property
----------------------------------------------------------------------
-
-(1 row)
-
-step s7-grab-lock:
- BEGIN;
- SET LOCAL citus.max_adaptive_executor_pool_size = 1;
- SELECT 1 FROM colocated1 LIMIT 1;
- SELECT 1 FROM separate LIMIT 1;
-
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
-step s1-shard-move-c1-online:
- BEGIN;
- SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='force_logical');
- <waiting ...>
-step s7-get-progress: 
- set LOCAL client_min_messages=NOTICE;
- SELECT
-  table_name,
-  shardid,
-  shard_size,
-  sourcename,
-  sourceport,
-  source_shard_size,
-  targetname,
-  targetport,
-  target_shard_size,
-  progress,
-  operation_type
- FROM get_rebalance_progress();
-
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
----------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1|move
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1|move
-(2 rows)
-
-step s7-release-lock:
- COMMIT;
-
-step s1-shard-move-c1-online: <... completed>
-citus_move_shard_placement
----------------------------------------------------------------------
-
-(1 row)
-
-step s1-commit:
- COMMIT;
-
-step s7-get-progress:
- set LOCAL client_min_messages=NOTICE;
- SELECT
-  table_name,
-  shardid,
-  shard_size,
-  sourcename,
-  sourceport,
-  source_shard_size,
-  targetname,
-  targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
@@ -455,24 +379,25 @@ step s1-shard-move-c1-block-writes:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|                0|       1|move
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|                0|       1|move
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|                0|       1|move
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|                0|       1|move
 (2 rows)
 
 step s2-unlock-1-start:
@@ -489,16 +414,17 @@ step s1-commit:
 
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
@@ -539,24 +465,25 @@ step s1-shard-move-c1-block-writes:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1|move
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1|move
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|            50000|       1|move
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|           400000|       1|move
 (2 rows)
 
 step s7-release-lock:
@@ -573,16 +500,17 @@ step s1-commit:
 
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
@@ -613,24 +541,25 @@ step s1-shard-copy-c1-block-writes:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|                0|       1|copy
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|                0|       1|copy
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|                0|       1|copy
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|                0|       1|copy
 (2 rows)
 
 step s2-unlock-1-start:
@@ -666,24 +595,25 @@ step s1-shard-move-c1-online:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|             8192|       1|move
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|             8192|       1|move
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|             8000|       1|move
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|             8000|       1|move
 (2 rows)
 
 step s6-release-advisory-lock:
@@ -705,100 +635,17 @@ step s1-commit:
 
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
-  progress,
-  operation_type
- FROM get_rebalance_progress();
-
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
----------------------------------------------------------------------
-(0 rows)
-
-step enable-deferred-drop:
- ALTER SYSTEM RESET citus.defer_drop_after_shard_move;
-
-
-starting permutation: s7-grab-lock s1-shard-move-c1-online s7-get-progress s7-release-lock s1-commit s7-get-progress enable-deferred-drop
-master_set_node_property
----------------------------------------------------------------------
-
-(1 row)
-
-step s7-grab-lock:
- BEGIN;
- SET LOCAL citus.max_adaptive_executor_pool_size = 1;
- SELECT 1 FROM colocated1 LIMIT 1;
- SELECT 1 FROM separate LIMIT 1;
-
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
-step s1-shard-move-c1-online:
- BEGIN;
- SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='force_logical');
- <waiting ...>
-step s7-get-progress: 
- set LOCAL client_min_messages=NOTICE;
- SELECT
-  table_name,
-  shardid,
-  shard_size,
-  sourcename,
-  sourceport,
-  source_shard_size,
-  targetname,
-  targetport,
-  target_shard_size,
-  progress,
-  operation_type
- FROM get_rebalance_progress();
-
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
----------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1|move
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1|move
-(2 rows)
-
-step s7-release-lock:
- COMMIT;
-
-step s1-shard-move-c1-online: <... completed>
-citus_move_shard_placement
----------------------------------------------------------------------
-
-(1 row)
-
-step s1-commit:
- COMMIT;
-
-step s7-get-progress:
- set LOCAL client_min_messages=NOTICE;
- SELECT
-  table_name,
-  shardid,
-  shard_size,
-  sourcename,
-  sourceport,
-  source_shard_size,
-  targetname,
-  targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
@@ -832,24 +679,25 @@ step s1-shard-copy-c1-online:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|             8192|       1|copy
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|             8192|       1|copy
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|             8000|       1|copy
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|             8000|       1|copy
 (2 rows)
 
 step s6-release-advisory-lock:
@@ -891,25 +739,26 @@ step s4-shard-move-sep-block-writes:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|                0|       1|move
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|                0|       1|move
-separate  |1500009|    122880|localhost |     57637|           122880|localhost |     57638|                0|       1|move
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|                0|       1|move
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|                0|       1|move
+separate  |1500009|     50000|localhost |     57637|            50000|localhost |     57638|                0|       1|move
 (3 rows)
 
 step s2-unlock-1-start:
@@ -935,16 +784,17 @@ step s4-commit:
 
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
@@ -989,25 +839,26 @@ step s4-shard-move-sep-block-writes:
  <waiting ...>
 step s7-get-progress: 
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
 ---------------------------------------------------------------------
-colocated1|1500001|     49152|localhost |     57637|            49152|localhost |     57638|            73728|       1|move
-colocated2|1500005|    376832|localhost |     57637|           376832|localhost |     57638|           401408|       1|move
-separate  |1500009|    122880|localhost |     57637|           122880|localhost |     57638|           147456|       1|move
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|            50000|       1|move
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|           400000|       1|move
+separate  |1500009|     50000|localhost |     57637|            50000|localhost |     57638|           200000|       1|move
 (3 rows)
 
 step s7-release-lock:
@@ -1033,16 +884,17 @@ step s4-commit:
 
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
+ WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
   table_name,
   shardid,
-  shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
   sourcename,
   sourceport,
-  source_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
   targetname,
   targetport,
-  target_shard_size,
+  ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
   operation_type
  FROM get_rebalance_progress();
