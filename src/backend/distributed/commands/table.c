@@ -962,6 +962,8 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		}
 		else if (alterTableType == AT_AddColumn)
 		{
+			deparseAT = true;
+
 			/*
 			 * TODO: This code path is nothing beneficial since we do not
 			 * support ALTER TABLE %s ADD COLUMN %s [constraint] for foreign keys.
@@ -1010,7 +1012,6 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 
 						if (contain_nextval_expression_walker(expr, NULL))
 						{
-							deparseAT = true;
 							useInitialDDLCommandString = false;
 
 							/* the new column definition will have no constraint */
@@ -1041,8 +1042,6 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 					strcmp(typeName, "bigserial") == 0 ||
 					strcmp(typeName, "serial8") == 0)
 				{
-					deparseAT = true;
-
 					ColumnDef *newColDef = copyObject(columnDefinition);
 					newColDef->is_not_null = false;
 
