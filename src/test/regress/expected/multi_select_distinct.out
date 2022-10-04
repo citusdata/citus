@@ -3,13 +3,6 @@
 --
 -- Tests select distinct, and select distinct on features.
 --
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15;
- server_version_ge_15
----------------------------------------------------------------------
- t
-(1 row)
-
 ANALYZE lineitem_hash_part;
 -- function calls are supported
 SELECT DISTINCT l_orderkey, now() FROM lineitem_hash_part LIMIT 0;
@@ -443,13 +436,12 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY 1,2
 		LIMIT 10;
-                                                      QUERY PLAN
+                                                       QUERY PLAN
 ---------------------------------------------------------------------
  Limit
-   ->  Sort
-         Sort Key: remote_scan.l_suppkey, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1)))
-         ->  HashAggregate
-               Group Key: remote_scan.l_suppkey, (pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1))
+   ->  Unique
+         ->  Sort
+               Sort Key: remote_scan.l_suppkey, ((pg_catalog.sum(remote_scan.avg) / pg_catalog.sum(remote_scan.avg_1)))
                ->  HashAggregate
                      Group Key: remote_scan.l_suppkey, remote_scan.worker_column_4
                      ->  Custom Scan (Citus Adaptive)
@@ -460,7 +452,7 @@ EXPLAIN (COSTS FALSE)
                                  ->  HashAggregate
                                        Group Key: l_suppkey, l_linenumber
                                        ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
-(15 rows)
+(14 rows)
 
 -- check the plan if the hash aggreate is disabled. This explain errors out due
 -- to a bug right now, expectation must be corrected after fixing it.
@@ -595,13 +587,12 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY 1
 		LIMIT 10;
-                                               QUERY PLAN
+                                                QUERY PLAN
 ---------------------------------------------------------------------
  Limit
-   ->  Sort
-         Sort Key: ((sum(remote_scan.avg) / (pg_catalog.sum(remote_scan.avg_1))::double precision))
-         ->  HashAggregate
-               Group Key: (sum(remote_scan.avg) / (pg_catalog.sum(remote_scan.avg_1))::double precision)
+   ->  Unique
+         ->  Sort
+               Sort Key: ((sum(remote_scan.avg) / (pg_catalog.sum(remote_scan.avg_1))::double precision))
                ->  HashAggregate
                      Group Key: remote_scan.worker_column_3, remote_scan.worker_column_4
                      ->  Custom Scan (Citus Adaptive)
@@ -612,7 +603,7 @@ EXPLAIN (COSTS FALSE)
                                  ->  HashAggregate
                                        Group Key: l_suppkey, l_linenumber
                                        ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
-(15 rows)
+(14 rows)
 
 -- check the plan if the hash aggreate is disabled. This explain errors out due
 -- to a bug right now, expectation must be corrected after fixing it.
@@ -671,13 +662,12 @@ EXPLAIN (COSTS FALSE)
 		GROUP BY l_suppkey, l_linenumber
 		ORDER BY 1
 		LIMIT 10;
-                                                                QUERY PLAN
+                                                                 QUERY PLAN
 ---------------------------------------------------------------------
  Limit
-   ->  Sort
-         Sort Key: (((pg_catalog.sum(remote_scan.dis))::bigint + COALESCE((pg_catalog.sum(remote_scan.dis_1))::bigint, '0'::bigint)))
-         ->  HashAggregate
-               Group Key: ((pg_catalog.sum(remote_scan.dis))::bigint + COALESCE((pg_catalog.sum(remote_scan.dis_1))::bigint, '0'::bigint))
+   ->  Unique
+         ->  Sort
+               Sort Key: (((pg_catalog.sum(remote_scan.dis))::bigint + COALESCE((pg_catalog.sum(remote_scan.dis_1))::bigint, '0'::bigint)))
                ->  HashAggregate
                      Group Key: remote_scan.worker_column_3, remote_scan.worker_column_4
                      ->  Custom Scan (Citus Adaptive)
@@ -688,7 +678,7 @@ EXPLAIN (COSTS FALSE)
                                  ->  HashAggregate
                                        Group Key: l_suppkey, l_linenumber
                                        ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
-(15 rows)
+(14 rows)
 
 -- check the plan if the hash aggreate is disabled. This explain errors out due
 -- to a bug right now, expectation must be corrected after fixing it.
