@@ -172,6 +172,7 @@ typedef struct RebalancePlanFunctions
 	void *context;
 } RebalancePlanFunctions;
 
+extern char *VariablesToBePassedToNewConnections;
 extern int MaxRebalancerLoggedIgnoredMoves;
 extern bool RunningUnderIsolationTest;
 
@@ -194,6 +195,7 @@ extern List * RebalancePlacementUpdates(List *workerNodeList,
 extern List * ReplicationPlacementUpdates(List *workerNodeList, List *shardPlacementList,
 										  int shardReplicationFactor);
 extern void ExecuteRebalancerCommandInSeparateTransaction(char *command);
+extern StringInfo GetSetStatementsForNewConnections(void);
 extern void AcquirePlacementColocationLock(Oid relationId, int lockMode,
 										   const char *operationName);
 

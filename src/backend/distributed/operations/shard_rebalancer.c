@@ -62,7 +62,7 @@
 #include "utils/memutils.h"
 #include "utils/syscache.h"
 #include "common/hashfn.h"
-
+#include "utils/varlena.h"
 
 /* RebalanceOptions are the options used to control the rebalance algorithm */
 typedef struct RebalanceOptions
@@ -184,6 +184,7 @@ typedef struct WorkerShardStatistics
 	HTAB *statistics;
 } WorkerShardStatistics;
 
+char *VariablesToBePassedToNewConnections = NULL;
 
 /* static declarations for main logic */
 static int ShardActivePlacementCount(HTAB *activePlacementsHash, uint64 shardId,
@@ -1971,13 +1972,42 @@ ExecuteRebalancerCommandInSeparateTransaction(char *command)
 	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
 													PostPortNumber);
 	StringInfo setApplicationName = makeStringInfo();
-	appendStringInfo(setApplicationName, "SET application_name TO %s",
+	appendStringInfo(setApplicationName, "SET application_name TO %s;",
 					 CITUS_REBALANCER_NAME);
+
+	StringInfo setStatements = GetSetStatementsForNewConnections();
+	appendStringInfoString(setApplicationName, setStatements->data);
 
 	ExecuteCriticalRemoteCommand(connection, setApplicationName->data);
 	ExecuteCriticalRemoteCommand(connection, command);
 
 	CloseConnection(connection);
+}
+
+
+StringInfo
+GetSetStatementsForNewConnections(void)
+{
+	StringInfo setStatements = makeStringInfo();
+
+	List *variableList = NIL;
+	char *splitCopy = pstrdup(VariablesToBePassedToNewConnections);
+
+	if (!SplitGUCList(splitCopy, ',', &variableList))
+	{
+		GUC_check_errdetail("not a valid list of identifiers");
+		return false;
+	}
+
+	char *variableName = NULL;
+	foreach_ptr(variableName, variableList)
+	{
+		const char *variableValue = GetConfigOption(variableName, true, true);
+		appendStringInfo(setStatements, "SET %s TO %s;",
+						 variableName, variableValue);
+	}
+
+	return setStatements;
 }
 
 
