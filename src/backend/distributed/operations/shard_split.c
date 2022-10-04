@@ -151,7 +151,7 @@ static List * ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 												   List *destinationWorkerNodesList,
 												   DistributionColumnMap *
 												   distributionColumnOverrides);
-static void ExecuteSplitShardReleaseSharedMemory(WorkerNode *sourceWorkerNode);
+static void ExecuteSplitShardReleaseSharedMemory(MultiConnection *sourceConnection);
 static void AddDummyShardEntryInMap(HTAB *mapOfPlacementToDummyShardList, uint32
 									targetNodeId,
 									ShardInterval *shardInterval);
@@ -1056,11 +1056,13 @@ static void
 CreateObjectOnPlacement(List *objectCreationCommandList,
 						WorkerNode *workerPlacementNode)
 {
-	char *currentUser = CurrentUserName();
-	SendCommandListToWorkerOutsideTransaction(workerPlacementNode->workerName,
-											  workerPlacementNode->workerPort,
-											  currentUser,
-											  objectCreationCommandList);
+	MultiConnection *connection =
+		GetNodeUserDatabaseConnection(OUTSIDE_TRANSACTION,
+									  workerPlacementNode->workerName,
+									  workerPlacementNode->workerPort,
+									  NULL, NULL);
+	SendCommandListToWorkerOutsideTransactionWithConnection(connection,
+															objectCreationCommandList);
 }
 
 
@@ -1656,6 +1658,26 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 			databaseName,
 			logicalRepTargetList);
 
+		/*
+		 * We have to create the primary key (or any other replica identity)
+		 * before the update/delete operations that are queued will be
+		 * replicated. Because if the replica identity does not exist on the
+		 * target, the replication would fail.
+		 *
+		 * So the latest possible moment we could do this is right after the
+		 * initial data COPY, but before enabling the susbcriptions. It might
+		 * seem like a good idea to it after the initial data COPY, since
+		 * it's generally the rule that it's cheaper to build an index at once
+		 * than to create it incrementally. This general rule, is why we create
+		 * all the regular indexes as late during the move as possible.
+		 *
+		 * But as it turns out in practice it's not as clear cut, and we saw a
+		 * speed degradation in the time it takes to move shards when doing the
+		 * replica identity creation after the initial COPY. So, instead we
+		 * keep it before the COPY.
+		 */
+		CreateReplicaIdentities(logicalRepTargetList);
+
 		ereport(LOG, (errmsg("performing copy for %s", operationName)));
 
 		/* 8) Do snapshotted Copy */
@@ -1757,7 +1779,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		 * 15) Release shared memory allocated by worker_split_shard_replication_setup udf
 		 * at source node.
 		 */
-		ExecuteSplitShardReleaseSharedMemory(sourceShardToCopyNode);
+		ExecuteSplitShardReleaseSharedMemory(sourceConnection);
 
 		/* 16) Close source connection */
 		CloseConnection(sourceConnection);
@@ -2054,19 +2076,8 @@ ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
  * shared memory to store split information. This has to be released after split completes(or fails).
  */
 static void
-ExecuteSplitShardReleaseSharedMemory(WorkerNode *sourceWorkerNode)
+ExecuteSplitShardReleaseSharedMemory(MultiConnection *sourceConnection)
 {
-	char *superUser = CitusExtensionOwnerName();
-	char *databaseName = get_database_name(MyDatabaseId);
-
-	int connectionFlag = FORCE_NEW_CONNECTION;
-	MultiConnection *sourceConnection = GetNodeUserDatabaseConnection(
-		connectionFlag,
-		sourceWorkerNode->workerName,
-		sourceWorkerNode->workerPort,
-		superUser,
-		databaseName);
-
 	StringInfo splitShardReleaseMemoryUDF = makeStringInfo();
 	appendStringInfo(splitShardReleaseMemoryUDF,
 					 "SELECT pg_catalog.worker_split_shard_release_dsm();");
@@ -2281,14 +2292,8 @@ GetNextShardIdForSplitChild()
 	appendStringInfo(nextValueCommand, "SELECT nextval(%s);", quote_literal_cstr(
 						 "pg_catalog.pg_dist_shardid_seq"));
 
-	int connectionFlag = FORCE_NEW_CONNECTION;
-	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlag,
-																LocalHostName,
-																PostPortNumber,
-																CitusExtensionOwnerName(),
-																get_database_name(
-																	MyDatabaseId));
-
+	MultiConnection *connection = GetConnectionForLocalQueriesOutsideTransaction(
+		CitusExtensionOwnerName());
 	PGresult *result = NULL;
 	int queryResult = ExecuteOptionalRemoteCommand(connection, nextValueCommand->data,
 												   &result);
@@ -2305,7 +2310,8 @@ GetNextShardIdForSplitChild()
 	}
 
 	shardId = SafeStringToUint64(PQgetvalue(result, 0, 0 /* nodeId column*/));
-	CloseConnection(connection);
+	PQclear(result);
+	ForgetResults(connection);
 
 	return shardId;
 }

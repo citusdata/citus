@@ -213,6 +213,47 @@ WHEN MATCHED THEN DELETE;
 -- now, both distributed, not works
 SELECT undistribute_table('tbl1');
 SELECT undistribute_table('tbl2');
+
+-- Make sure that we allow foreign key columns on local tables added to
+-- metadata to have SET NULL/DEFAULT on column basis.
+
+CREATE TABLE PKTABLE_local (tid int, id int, PRIMARY KEY (tid, id));
+CREATE TABLE FKTABLE_local (
+  tid int, id int,
+  fk_id_del_set_null int,
+  fk_id_del_set_default int DEFAULT 0,
+  FOREIGN KEY (tid, fk_id_del_set_null) REFERENCES PKTABLE_local ON DELETE SET NULL (fk_id_del_set_null),
+  FOREIGN KEY (tid, fk_id_del_set_default) REFERENCES PKTABLE_local ON DELETE SET DEFAULT (fk_id_del_set_default)
+);
+
+SELECT citus_add_local_table_to_metadata('FKTABLE_local', cascade_via_foreign_keys=>true);
+
+-- show that the definition is expected
+SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'FKTABLE_local'::regclass::oid ORDER BY oid;
+
+\c - - - :worker_1_port
+
+SET search_path TO pg15;
+
+-- show that the definition is expected on the worker as well
+SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'FKTABLE_local'::regclass::oid ORDER BY oid;
+
+-- also, make sure that it works as expected
+INSERT INTO PKTABLE_local VALUES (1, 0), (1, 1), (1, 2);
+INSERT INTO FKTABLE_local VALUES
+  (1, 1, 1, NULL),
+  (1, 2, NULL, 2);
+DELETE FROM PKTABLE_local WHERE id = 1 OR id = 2;
+SELECT * FROM FKTABLE_local ORDER BY id;
+
+\c - - - :master_port
+
+SET search_path TO pg15;
+
+SET client_min_messages to ERROR;
+DROP TABLE FKTABLE_local, PKTABLE_local;
+RESET client_min_messages;
+
 SELECT 1 FROM citus_remove_node('localhost', :master_port);
 
 SELECT create_distributed_table('tbl1', 'x');
@@ -585,6 +626,257 @@ SELECT create_distributed_table('xid8_t1', 'x');
 select min(x), max(x) from xid8_t1 ORDER BY 1,2;
 select min(x), max(x) from xid8_t1 GROUP BY x ORDER BY 1,2;
 select min(x), max(x) from xid8_t1 GROUP BY y ORDER BY 1,2;
+
+--
+-- PG15 introduces security invoker views
+-- Citus supports these views because permissions in the shards
+-- are already checked for the view invoker
+--
+
+-- create a distributed table and populate it
+CREATE TABLE events (tenant_id int, event_id int, descr text);
+SELECT create_distributed_table('events','tenant_id');
+INSERT INTO events VALUES (1, 1, 'push');
+INSERT INTO events VALUES (2, 2, 'push');
+
+-- create a security invoker view with underlying distributed table
+-- the view will be distributed with security_invoker option as well
+CREATE VIEW sec_invoker_view WITH (security_invoker=true) AS SELECT * FROM events;
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class
+WHERE relname = 'sec_invoker_view' AND relnamespace = 'pg15'::regnamespace;
+
+\c - - - :master_port
+SET search_path TO pg15;
+
+-- test altering the security_invoker flag
+ALTER VIEW sec_invoker_view SET (security_invoker = false);
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class
+WHERE relname = 'sec_invoker_view' AND relnamespace = 'pg15'::regnamespace;
+
+\c - - - :master_port
+SET search_path TO pg15;
+
+ALTER VIEW sec_invoker_view SET (security_invoker = true);
+
+-- create a new user but don't give select permission to events table
+-- only give select permission to the view
+CREATE ROLE rls_tenant_1 WITH LOGIN;
+GRANT USAGE ON SCHEMA pg15 TO rls_tenant_1;
+GRANT SELECT ON sec_invoker_view TO rls_tenant_1;
+
+-- this user shouldn't be able to query the view
+-- because the view is security invoker
+-- which means it will check the invoker's rights
+-- against the view's underlying tables
+SET ROLE rls_tenant_1;
+SELECT * FROM sec_invoker_view ORDER BY event_id;
+RESET ROLE;
+
+-- now grant select on the underlying distributed table
+-- and try again
+-- now it should work!
+GRANT SELECT ON TABLE events TO rls_tenant_1;
+SET ROLE rls_tenant_1;
+SELECT * FROM sec_invoker_view ORDER BY event_id;
+RESET ROLE;
+
+-- Enable row level security
+ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+
+-- Create policy for tenants to read access their own rows
+CREATE POLICY user_mod ON events
+  FOR SELECT TO rls_tenant_1
+  USING (current_user = 'rls_tenant_' || tenant_id::text);
+
+-- all rows should be visible because we are querying with
+-- the table owner user now
+SELECT * FROM sec_invoker_view ORDER BY event_id;
+
+-- Switch user that has been granted rights,
+-- should be able to see rows that the policy allows
+SET ROLE rls_tenant_1;
+SELECT * FROM sec_invoker_view ORDER BY event_id;
+RESET ROLE;
+
+-- ordinary view on top of security invoker view permissions
+-- ordinary means security definer view
+-- The PG expected behavior is that this doesn't change anything!!!
+-- Can't escape security invoker views by defining a security definer view on top of it!
+CREATE VIEW sec_definer_view AS SELECT * FROM sec_invoker_view ORDER BY event_id;
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class
+WHERE relname = 'sec_definer_view' AND relnamespace = 'pg15'::regnamespace;
+
+\c - - - :master_port
+SET search_path TO pg15;
+
+CREATE ROLE rls_tenant_2 WITH LOGIN;
+GRANT USAGE ON SCHEMA pg15 TO rls_tenant_2;
+GRANT SELECT ON sec_definer_view TO rls_tenant_2;
+
+-- it doesn't matter that the parent view is security definer
+-- still the security invoker view will check the invoker's permissions
+-- and will not allow rls_tenant_2 to query the view
+SET ROLE rls_tenant_2;
+SELECT * FROM sec_definer_view ORDER BY event_id;
+RESET ROLE;
+
+-- grant select rights to rls_tenant_2
+GRANT SELECT ON TABLE events TO rls_tenant_2;
+
+-- we still have row level security so rls_tenant_2
+-- will be able to query but won't be able to see anything
+SET ROLE rls_tenant_2;
+SELECT * FROM sec_definer_view ORDER BY event_id;
+RESET ROLE;
+
+-- give some rights to rls_tenant_2
+CREATE POLICY user_mod_1 ON events
+  FOR SELECT TO rls_tenant_2
+  USING (current_user = 'rls_tenant_' || tenant_id::text);
+
+-- Row level security will be applied as well! We are safe!
+SET ROLE rls_tenant_2;
+SELECT * FROM sec_definer_view ORDER BY event_id;
+RESET ROLE;
+
+-- no need to test updatable views because they are currently not
+-- supported in Citus when the query view contains citus tables
+UPDATE sec_invoker_view SET event_id = 5;
+
+--
+-- Not allow ON DELETE/UPDATE SET DEFAULT actions on columns that
+-- default to sequences
+-- Adding a special test here since in PG15 we can
+-- specify column list for foreign key ON DELETE SET actions
+-- Relevant PG commit:
+-- d6f96ed94e73052f99a2e545ed17a8b2fdc1fb8a
+--
+
+CREATE TABLE set_on_default_test_referenced(
+    col_1 int, col_2 int, col_3 int, col_4 int,
+    unique (col_1, col_3)
+);
+SELECT create_reference_table('set_on_default_test_referenced');
+
+CREATE TABLE set_on_default_test_referencing(
+    col_1 int, col_2 int, col_3 serial, col_4 int,
+    FOREIGN KEY(col_1, col_3)
+    REFERENCES set_on_default_test_referenced(col_1, col_3)
+    ON DELETE SET DEFAULT (col_1)
+    ON UPDATE SET DEFAULT
+);
+
+-- should error since col_3 defaults to a sequence
+SELECT create_reference_table('set_on_default_test_referencing');
+
+DROP TABLE set_on_default_test_referencing;
+CREATE TABLE set_on_default_test_referencing(
+    col_1 int, col_2 int, col_3 serial, col_4 int,
+    FOREIGN KEY(col_1, col_3)
+    REFERENCES set_on_default_test_referenced(col_1, col_3)
+    ON DELETE SET DEFAULT (col_1)
+);
+
+-- should not error since this doesn't set any sequence based columns to default
+SELECT create_reference_table('set_on_default_test_referencing');
+
+INSERT INTO set_on_default_test_referenced (col_1, col_3) VALUES (1, 1);
+INSERT INTO set_on_default_test_referencing (col_1, col_3) VALUES (1, 1);
+DELETE FROM set_on_default_test_referenced;
+
+SELECT * FROM set_on_default_test_referencing ORDER BY 1,2;
+
+DROP TABLE set_on_default_test_referencing;
+
+SET client_min_messages to ERROR;
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
+RESET client_min_messages;
+
+-- should error since col_3 defaults to a sequence
+CREATE TABLE set_on_default_test_referencing(
+    col_1 int, col_2 int, col_3 serial, col_4 int,
+    FOREIGN KEY(col_1, col_3)
+    REFERENCES set_on_default_test_referenced(col_1, col_3)
+    ON DELETE SET DEFAULT (col_3)
+);
+
+--
+-- PG15 has suppressed some casts on constants when querying foreign tables
+-- For example, we can use text to represent a type that's an enum on the remote side
+-- A comparison on such a column will get shipped as "var = 'foo'::text"
+-- But there's no enum = text operator on the remote side
+-- If we leave off the explicit cast, the comparison will work
+-- Test we behave in the same way with a Citus foreign table
+-- Reminder: foreign tables cannot be distributed/reference, can only be Citus local
+-- Relevant PG commit:
+-- f8abb0f5e114d8c309239f0faa277b97f696d829
+--
+
+\set VERBOSITY terse
+SET citus.next_shard_id TO 960200;
+SET citus.enable_local_execution TO ON;
+-- add the foreign table to metadata with the guc
+SET citus.use_citus_managed_tables TO ON;
+
+CREATE TYPE user_enum AS ENUM ('foo', 'bar', 'buz');
+
+CREATE TABLE foreign_table_test (c0 integer NOT NULL, c1 user_enum);
+INSERT INTO foreign_table_test VALUES (1, 'foo');
+
+CREATE EXTENSION postgres_fdw;
+
+CREATE SERVER foreign_server
+        FOREIGN DATA WRAPPER postgres_fdw
+        OPTIONS (host 'localhost', port :'master_port', dbname 'regression');
+
+CREATE USER MAPPING FOR CURRENT_USER
+        SERVER foreign_server
+        OPTIONS (user 'postgres');
+
+CREATE FOREIGN TABLE foreign_table (
+        c0 integer NOT NULL,
+        c1 text
+)
+        SERVER foreign_server
+        OPTIONS (schema_name 'pg15', table_name 'foreign_table_test');
+
+-- check that the foreign table is a citus local table
+SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass ORDER BY logicalrelid;
+
+-- same tests as in the relevant PG commit
+-- Check that Remote SQL in the EXPLAIN doesn't contain casting
+EXPLAIN (VERBOSE, COSTS OFF)
+SELECT * FROM foreign_table WHERE c1 = 'foo' LIMIT 1;
+SELECT * FROM foreign_table WHERE c1 = 'foo' LIMIT 1;
+
+-- Check that Remote SQL in the EXPLAIN doesn't contain casting
+EXPLAIN (VERBOSE, COSTS OFF)
+SELECT * FROM foreign_table WHERE 'foo' = c1 LIMIT 1;
+SELECT * FROM foreign_table WHERE 'foo' = c1 LIMIT 1;
+
+-- we declared c1 to be text locally, but it's still the same type on
+-- the remote which will balk if we try to do anything incompatible
+-- with that remote type
+SELECT * FROM foreign_table WHERE c1 LIKE 'foo' LIMIT 1; -- ERROR
+SELECT * FROM foreign_table WHERE c1::text LIKE 'foo' LIMIT 1; -- ERROR; cast not pushed down
+
+-- Clean up foreign table test
+RESET citus.use_citus_managed_tables;
+SELECT undistribute_table('foreign_table');
+SELECT undistribute_table('foreign_table_test');
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
+DROP SERVER foreign_server CASCADE;
+
+-- PG15 now supports specifying oid on CREATE DATABASE
+-- verify that we print meaningful notice messages.
+CREATE DATABASE db_with_oid OID 987654;
+DROP DATABASE db_with_oid;
 
 -- Clean up
 \set VERBOSITY terse

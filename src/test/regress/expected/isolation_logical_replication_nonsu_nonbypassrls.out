@@ -1,0 +1,170 @@
+Parsed test spec with 3 sessions
+
+starting permutation: s1-table-owner-new_user s1-table-enable-rls s1-get-shard-distribution s1-user-spec s3-acquire-advisory-lock s1-begin s1-set-role s1-move-placement s2-insert s3-release-advisory-lock s1-reset-role s1-end s1-select s1-get-shard-distribution
+step s1-table-owner-new_user:
+    ALTER TABLE dist OWNER TO new_user;
+
+step s1-table-enable-rls:
+    ALTER TABLE dist ENABLE ROW LEVEL SECURITY;
+
+step s1-get-shard-distribution:
+    SELECT shardid, nodeport FROM pg_dist_placement INNER JOIN pg_dist_node ON (pg_dist_placement.groupid = pg_dist_node.groupid) WHERE shardstate != 4 AND shardid IN (SELECT * FROM selected_shard) ORDER BY nodeport;
+
+shardid|nodeport
+---------------------------------------------------------------------
+1234003|   57638
+(1 row)
+
+step s1-user-spec:
+    SELECT rolname, rolsuper, rolbypassrls FROM pg_authid WHERE rolname = 'new_user';
+
+rolname |rolsuper|rolbypassrls
+---------------------------------------------------------------------
+new_user|f       |f
+(1 row)
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s1-set-role:
+    SET ROLE new_user;
+
+step s1-move-placement:
+    SELECT citus_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637);
+ <waiting ...>
+step s2-insert: 
+    INSERT INTO dist VALUES (23, 23);
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-move-placement: <... completed>
+citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-reset-role:
+ RESET ROLE;
+
+step s1-end:
+ COMMIT;
+
+step s1-select:
+    SELECT * FROM dist ORDER BY column1;
+
+column1|column2
+---------------------------------------------------------------------
+     23|     23
+(1 row)
+
+step s1-get-shard-distribution:
+    SELECT shardid, nodeport FROM pg_dist_placement INNER JOIN pg_dist_node ON (pg_dist_placement.groupid = pg_dist_node.groupid) WHERE shardstate != 4 AND shardid IN (SELECT * FROM selected_shard) ORDER BY nodeport;
+
+shardid|nodeport
+---------------------------------------------------------------------
+1234003|   57637
+(1 row)
+
+
+starting permutation: s1-no-connection-cache s2-no-connection-cache s3-no-connection-cache s1-table-owner-new_user s1-table-force-rls s1-get-shard-distribution s1-user-spec s3-acquire-advisory-lock s1-begin s1-set-role s1-move-placement s2-insert s3-release-advisory-lock s1-reset-role s1-end s1-select s1-get-shard-distribution
+step s1-no-connection-cache:
+ SET citus.max_cached_conns_per_worker to 0;
+
+step s2-no-connection-cache:
+ SET citus.max_cached_conns_per_worker to 0;
+
+step s3-no-connection-cache:
+ SET citus.max_cached_conns_per_worker to 0;
+
+step s1-table-owner-new_user:
+    ALTER TABLE dist OWNER TO new_user;
+
+step s1-table-force-rls:
+    ALTER TABLE dist FORCE ROW LEVEL SECURITY;
+
+step s1-get-shard-distribution:
+    SELECT shardid, nodeport FROM pg_dist_placement INNER JOIN pg_dist_node ON (pg_dist_placement.groupid = pg_dist_node.groupid) WHERE shardstate != 4 AND shardid IN (SELECT * FROM selected_shard) ORDER BY nodeport;
+
+shardid|nodeport
+---------------------------------------------------------------------
+1234003|   57638
+(1 row)
+
+step s1-user-spec:
+    SELECT rolname, rolsuper, rolbypassrls FROM pg_authid WHERE rolname = 'new_user';
+
+rolname |rolsuper|rolbypassrls
+---------------------------------------------------------------------
+new_user|f       |f
+(1 row)
+
+step s3-acquire-advisory-lock:
+    SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+ BEGIN;
+
+step s1-set-role:
+    SET ROLE new_user;
+
+step s1-move-placement:
+    SELECT citus_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637);
+ <waiting ...>
+step s2-insert: 
+    INSERT INTO dist VALUES (23, 23);
+
+step s3-release-advisory-lock:
+    SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-move-placement: <... completed>
+citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-reset-role:
+ RESET ROLE;
+
+step s1-end:
+ COMMIT;
+
+step s1-select:
+    SELECT * FROM dist ORDER BY column1;
+
+column1|column2
+---------------------------------------------------------------------
+     23|     23
+(1 row)
+
+step s1-get-shard-distribution:
+    SELECT shardid, nodeport FROM pg_dist_placement INNER JOIN pg_dist_node ON (pg_dist_placement.groupid = pg_dist_node.groupid) WHERE shardstate != 4 AND shardid IN (SELECT * FROM selected_shard) ORDER BY nodeport;
+
+shardid|nodeport
+---------------------------------------------------------------------
+1234003|   57637
+(1 row)
+

@@ -1,3 +1,23 @@
+### citus v11.1.2 (September 30, 2022) ###
+
+* Adds support for PostgreSQL 15rc1
+
+* Disallows having `ON DELETE/UPDATE SET DEFAULT` actions on columns that
+  default to sequences
+
+* Fixes a bug that might cause inserting incorrect `DEFAULT` values when
+  applying foreign key actions
+
+* Fixes a performance issue related to shard-moves by creating replica
+  identities before copying shards
+
+* Improves logging during shard-splits and resource cleanup
+
+* Makes sure to reuse connections for shard-splits and logical replication
+
+* Makes sure to try dropping replication slots a few more times after a failure
+  at the end of the shard-split
+
 ### citus v11.1.1 (September 16, 2022) ###
 
 * Fixes a bug that prevents `create_distributed_table_concurrently()` working
