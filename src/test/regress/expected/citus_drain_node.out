@@ -24,16 +24,16 @@ SELECT create_distributed_table('test','x');
 (1 row)
 
 CALL citus_cleanup_orphaned_shards();
-SELECT nodename, nodeport
+SELECT nodename, nodeport, COUNT(*)
   FROM pg_dist_placement AS placement,
        pg_dist_node AS node
  WHERE placement.groupid = node.groupid
    AND node.noderole = 'primary' GROUP BY nodename, nodeport ORDER BY 1,2;
- nodename  | nodeport
+ nodename  | nodeport | count
 ---------------------------------------------------------------------
- localhost |    57636
- localhost |    57637
- localhost |    57638
+ localhost |    57636 |     2
+ localhost |    57637 |     1
+ localhost |    57638 |     1
 (3 rows)
 
 SELECT * FROM citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
@@ -49,15 +49,15 @@ SELECT * from citus_drain_node('localhost', :worker_1_port, shard_transfer_mode 
 (1 row)
 
 CALL citus_cleanup_orphaned_shards();
-SELECT nodename, nodeport
+SELECT nodename, nodeport, COUNT(*)
   FROM pg_dist_placement AS placement,
        pg_dist_node AS node
  WHERE placement.groupid = node.groupid
    AND node.noderole = 'primary' GROUP BY nodename, nodeport ORDER BY 1,2;
- nodename  | nodeport
+ nodename  | nodeport | count
 ---------------------------------------------------------------------
- localhost |    57636
- localhost |    57638
+ localhost |    57636 |     3
+ localhost |    57638 |     1
 (2 rows)
 
 SELECT * FROM citus_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', true);
@@ -79,16 +79,16 @@ SELECT * FROM rebalance_table_shards(shard_transfer_mode :='force_logical');
 (1 row)
 
 CALL citus_cleanup_orphaned_shards();
-SELECT nodename, nodeport
+SELECT nodename, nodeport, COUNT(*)
   FROM pg_dist_placement AS placement,
        pg_dist_node AS node
  WHERE placement.groupid = node.groupid
    AND node.noderole = 'primary' GROUP BY nodename, nodeport ORDER BY 1,2;
- nodename  | nodeport
+ nodename  | nodeport | count
 ---------------------------------------------------------------------
- localhost |    57636
- localhost |    57637
- localhost |    57638
+ localhost |    57636 |     2
+ localhost |    57637 |     1
+ localhost |    57638 |     1
 (3 rows)
 
 SELECT * FROM citus_set_node_property('localhost', :master_port, 'shouldhaveshards', false);
@@ -104,15 +104,15 @@ SELECT * FROM rebalance_table_shards(shard_transfer_mode :='force_logical');
 (1 row)
 
 CALL citus_cleanup_orphaned_shards();
-SELECT nodename, nodeport
+SELECT nodename, nodeport, COUNT(*)
   FROM pg_dist_placement AS placement,
        pg_dist_node AS node
  WHERE placement.groupid = node.groupid
    AND node.noderole = 'primary' GROUP BY nodename, nodeport ORDER BY 1,2;
- nodename  | nodeport
+ nodename  | nodeport | count
 ---------------------------------------------------------------------
- localhost |    57637
- localhost |    57638
+ localhost |    57637 |     2
+ localhost |    57638 |     2
 (2 rows)
 
 RESET search_path;
