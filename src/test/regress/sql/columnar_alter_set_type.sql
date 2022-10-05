@@ -29,3 +29,17 @@ ALTER TABLE test_alter_table ALTER COLUMN b TYPE float USING (b::float + 0.5);
 SELECT * FROM test_alter_table ORDER BY a;
 
 DROP TABLE test_alter_table;
+
+-- Make sure that the correct table options are used when rewriting the table.
+-- This is reflected by the VACUUM VERBOSE output right after a rewrite showing
+-- that all chunks are compressed with the configured compression algorithm
+-- https://github.com/citusdata/citus/issues/5927
+CREATE TABLE test(i int) USING columnar;
+SELECT alter_columnar_table_set('test', compression => 'lz4');
+INSERT INTO test VALUES(1);
+VACUUM VERBOSE test;
+
+ALTER TABLE test ALTER COLUMN i TYPE int8;
+VACUUM VERBOSE test;
+
+DROP TABLE test;
