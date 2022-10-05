@@ -30,15 +30,18 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
-colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|                0|       1|move
-colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|                0|       1|move
-colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move
-colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|                0|       1|move          |t               |t                   |f
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|                0|       1|move          |t               |t                   |f
+colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move          |t               |t                   |f
+colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move          |t               |t                   |f
 (4 rows)
 
 step s2-unlock-1-start:
@@ -75,10 +78,13 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -115,15 +121,18 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
-colocated1|1500001|     50000|localhost |     57637|                0|localhost |     57638|            50000|       2|move
-colocated2|1500005|    400000|localhost |     57637|                0|localhost |     57638|           400000|       2|move
-colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       1|move
-colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       1|move
+colocated1|1500001|     50000|localhost |     57637|                0|localhost |     57638|            50000|       2|move          |t               |t                   |f
+colocated2|1500005|    400000|localhost |     57637|                0|localhost |     57638|           400000|       2|move          |t               |t                   |f
+colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       1|move          |t               |t                   |f
+colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       1|move          |t               |t                   |f
 (4 rows)
 
 step s3-unlock-2-start:
@@ -160,10 +169,13 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -212,15 +224,18 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
-colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|            50000|       1|move
-colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|           400000|       1|move
-colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move
-colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|            50000|       1|move          |t               |t                   |f
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|           400000|       1|move          |t               |t                   |f
+colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move          |t               |t                   |f
+colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move          |t               |t                   |f
 (4 rows)
 
 step s7-release-lock:
@@ -257,10 +272,13 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -301,15 +319,18 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
-colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|             8000|       1|move
-colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|             8000|       1|move
-colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move
-colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|             8000|       1|move          |t               |t                   |f
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|             8000|       1|move          |t               |t                   |f
+colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move          |t               |t                   |f
+colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move          |t               |t                   |f
 (4 rows)
 
 step s6-release-advisory-lock:
@@ -351,10 +372,13 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -391,13 +415,16 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
-colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|                0|       1|move
-colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|                0|       1|move
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|                0|       1|move          |t               |t                   |f
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|                0|       1|move          |t               |t                   |f
 (2 rows)
 
 step s2-unlock-1-start:
@@ -426,10 +453,13 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -477,13 +507,16 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
-colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|            50000|       1|move
-colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|           400000|       1|move
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|            50000|       1|move          |t               |t                   |f
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|           400000|       1|move          |t               |t                   |f
 (2 rows)
 
 step s7-release-lock:
@@ -512,10 +545,13 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -553,13 +589,16 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
-colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|                0|       1|copy
-colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|                0|       1|copy
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|                0|       1|copy          |t               |t                   |f
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|                0|       1|copy          |t               |t                   |f
 (2 rows)
 
 step s2-unlock-1-start:
@@ -607,13 +646,16 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
-colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|             8000|       1|move
-colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|             8000|       1|move
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|             8000|       1|move          |t               |t                   |f
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|             8000|       1|move          |t               |t                   |f
 (2 rows)
 
 step s6-release-advisory-lock:
@@ -647,10 +689,13 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -691,13 +736,16 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
-colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|             8000|       1|copy
-colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|             8000|       1|copy
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|             8000|       1|copy          |t               |t                   |f
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|             8000|       1|copy          |t               |t                   |f
 (2 rows)
 
 step s6-release-advisory-lock:
@@ -751,14 +799,17 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
-colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|                0|       1|move
-colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|                0|       1|move
-separate  |1500009|     50000|localhost |     57637|            50000|localhost |     57638|                0|       1|move
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|                0|       1|move          |t               |t                   |f
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|                0|       1|move          |t               |t                   |f
+separate  |1500009|     50000|localhost |     57637|            50000|localhost |     57638|                0|       1|move          |t               |t                   |f
 (3 rows)
 
 step s2-unlock-1-start:
@@ -796,10 +847,13 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -851,14 +905,17 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
-colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|            50000|       1|move
-colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|           400000|       1|move
-separate  |1500009|     50000|localhost |     57637|            50000|localhost |     57638|           200000|       1|move
+colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|            50000|       1|move          |t               |t                   |f
+colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|           400000|       1|move          |t               |t                   |f
+separate  |1500009|     50000|localhost |     57637|            50000|localhost |     57638|           200000|       1|move          |t               |t                   |f
 (3 rows)
 
 step s7-release-lock:
@@ -896,10 +953,13 @@ step s7-get-progress:
   targetport,
   ( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
   progress,
-  operation_type
+  operation_type,
+  source_lsn >= target_lsn as lsn_sanity_check,
+  source_lsn > '0/0' as source_lsn_available,
+  target_lsn > '0/0' as target_lsn_available
  FROM get_rebalance_progress();
 
-table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type
+table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
 (0 rows)
 
