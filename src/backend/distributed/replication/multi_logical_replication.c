@@ -236,7 +236,7 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 			logicalRepTargetList);
 
 		/* only useful for isolation testing, see the function comment for the details */
-		ConflictOnlyWithIsolationTesting();
+		ConflictWithIsolationTestingBeforeCopy();
 
 		/*
 		 * We have to create the primary key (or any other replica identity)
@@ -427,7 +427,7 @@ CompleteNonBlockingShardTransfer(List *shardList,
 
 
 	/* only useful for isolation testing, see the function comment for the details */
-	ConflictOnlyWithIsolationTesting();
+	ConflictWithIsolationTestingAfterCopy();
 
 	/*
 	 * We're almost done, we'll block the writes to the shards that we're
@@ -1269,18 +1269,16 @@ CreateUncheckedForeignKeyConstraints(List *logicalRepTargetList)
 
 
 /*
- * ConflictOnlyWithIsolationTesting is only useful for testing and should
- * not be called by any code-path except for LogicallyReplicateShards().
- *
- * Since logically replicating shards does eventually block modifications,
- * it becomes tricky to use isolation tester to show concurrent behaviour
- * of online shard rebalancing and modification queries.
+ * ConflictWithIsolationTestingBeforeCopy is only useful to test
+ * get_rebalance_progress by pausing before doing the actual copy. This way we
+ * can see the state of the tables at that point. This should not be called by
+ * any code-path except for code paths to move and split shards().
  *
  * Note that since the cost of calling this function is pretty low, we prefer
  * to use it in non-assert builds as well not to diverge in the behaviour.
  */
 extern void
-ConflictOnlyWithIsolationTesting()
+ConflictWithIsolationTestingBeforeCopy(void)
 {
 	LOCKTAG tag;
 	const bool sessionLock = false;
@@ -1288,11 +1286,46 @@ ConflictOnlyWithIsolationTesting()
 
 	if (RunningUnderIsolationTest)
 	{
-		/* we've picked random keys */
-		SET_LOCKTAG_ADVISORY(tag, MyDatabaseId, SHARD_MOVE_ADVISORY_LOCK_FIRST_KEY,
+		SET_LOCKTAG_ADVISORY(tag, MyDatabaseId,
+							 SHARD_MOVE_ADVISORY_LOCK_SECOND_KEY,
+							 SHARD_MOVE_ADVISORY_LOCK_FIRST_KEY, 2);
+
+		/* uses sharelock so concurrent moves don't conflict with eachother */
+		(void) LockAcquire(&tag, ShareLock, sessionLock, dontWait);
+	}
+}
+
+
+/*
+ * ConflictWithIsolationTestingAfterCopy is only useful for two types of tests.
+ * 1. Testing the output of get_rebalance_progress after the copy is completed,
+ *    but before the move is completely finished. Because finishing the move
+ *    will clear the contents of get_rebalance_progress.
+ * 2. To test that our non-blocking shard moves/splits actually don't block
+ *    writes. Since logically replicating shards does eventually block
+ *    modifications, it becomes tricky to use isolation tester to show
+ *    concurrent behaviour of online shard rebalancing and modification
+ *    queries. So, during logical replication we call this function at
+ *    the end of the catchup, right before blocking writes.
+ *
+ * Note that since the cost of calling this function is pretty low, we prefer
+ * to use it in non-assert builds as well not to diverge in the behaviour.
+ */
+extern void
+ConflictWithIsolationTestingAfterCopy(void)
+{
+	LOCKTAG tag;
+	const bool sessionLock = false;
+	const bool dontWait = false;
+
+	if (RunningUnderIsolationTest)
+	{
+		SET_LOCKTAG_ADVISORY(tag, MyDatabaseId,
+							 SHARD_MOVE_ADVISORY_LOCK_FIRST_KEY,
 							 SHARD_MOVE_ADVISORY_LOCK_SECOND_KEY, 2);
 
-		(void) LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
+		/* uses sharelock so concurrent moves don't conflict with eachother */
+		(void) LockAcquire(&tag, ShareLock, sessionLock, dontWait);
 	}
 }
 

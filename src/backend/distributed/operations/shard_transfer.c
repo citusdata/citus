@@ -1289,7 +1289,9 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		sourceNodePort,
 		PLACEMENT_UPDATE_STATUS_COPYING_DATA);
 
+	ConflictWithIsolationTestingBeforeCopy();
 	CopyShardsToNode(sourceNode, targetNode, shardIntervalList, NULL);
+	ConflictWithIsolationTestingAfterCopy();
 
 	UpdatePlacementUpdateStatusForShardIntervalList(
 		shardIntervalList,
