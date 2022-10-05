@@ -1258,6 +1258,7 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 	}
 
 	CopyShardsToNode(sourceNode, targetNode, shardIntervalList, NULL);
+	ConflictOnlyWithIsolationTesting(false);
 
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
