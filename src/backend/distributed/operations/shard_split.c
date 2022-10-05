@@ -615,7 +615,7 @@ BlockingShardSplit(SplitOperation splitOperation,
 					snapshotName, distributionColumnOverrides);
 
 		/* Used for testing */
-		ConflictOnlyWithIsolationTesting();
+		ConflictOnlyWithIsolationTesting(false);
 
 		ereport(LOG, (errmsg(
 						  "creating auxillary structures (indexes, stats, replicaindentities, triggers) for %s",
