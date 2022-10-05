@@ -43,6 +43,7 @@
 
 
 /* local function forward declarations */
+static char * GetDisableTriggerCommand(Oid triggerId);
 static bool IsCreateCitusTruncateTriggerStmt(CreateTrigStmt *createTriggerStmt);
 static String * GetAlterTriggerDependsTriggerNameValue(AlterObjectDependsStmt *
 													   alterTriggerDependsStmt);
@@ -53,6 +54,7 @@ static void ExtractDropStmtTriggerAndRelationName(DropStmt *dropTriggerStmt,
 												  char **relationName);
 static void ErrorIfDropStmtDropsMultipleTriggers(DropStmt *dropTriggerStmt);
 static int16 GetTriggerTypeById(Oid triggerId);
+static bool TriggerIsDisabled(Oid triggerId);
 #if (PG_VERSION_NUM < PG_VERSION_15)
 static void ErrorOutIfCloneTrigger(Oid tgrelid, const char *tgname);
 #endif
@@ -99,12 +101,47 @@ GetExplicitTriggerCommandList(Oid relationId)
 		createTriggerCommandList = lappend(
 			createTriggerCommandList,
 			makeTableDDLCommandString(createTriggerCommand));
+
+		/*
+		 * Appends the commands for the trigger settings that are not
+		 * covered by CREATE TRIGGER command.
+		 */
+
+		if (TriggerIsDisabled(triggerId))
+		{
+			createTriggerCommandList = lappend(
+				createTriggerCommandList,
+				makeTableDDLCommandString(GetDisableTriggerCommand(triggerId)));
+		}
 	}
 
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
 
 	return createTriggerCommandList;
+}
+
+
+/*
+ * GetDisableTriggerCommand returns the DDL command to disable given trigger.
+ */
+static char *
+GetDisableTriggerCommand(Oid triggerId)
+{
+	bool missingOk = false;
+	HeapTuple trigTup = GetTriggerTupleById(triggerId, missingOk);
+	Form_pg_trigger trigForm = (Form_pg_trigger) GETSTRUCT(trigTup);
+
+	char *qualifiedRelName = generate_qualified_relation_name(trigForm->tgrelid);
+	const char *quotedTrigName = quote_identifier(NameStr(trigForm->tgname));
+
+	heap_freetuple(trigTup);
+
+	StringInfo disableTrigCommand = makeStringInfo();
+	appendStringInfo(disableTrigCommand, "ALTER TABLE %s DISABLE TRIGGER %s;",
+					 qualifiedRelName, quotedTrigName);
+
+	return disableTrigCommand->data;
 }
 
 
@@ -889,4 +926,22 @@ GetTriggerFunctionId(Oid triggerId)
 	heap_freetuple(triggerTuple);
 
 	return functionId;
+}
+
+
+/*
+ * TriggerIsDisabled returns true if given trigger is enabled if such a
+ * trigger exists. Otherwise, errors out.
+ */
+static bool
+TriggerIsDisabled(Oid triggerId)
+{
+	bool missingOk = false;
+	HeapTuple triggerTuple = GetTriggerTupleById(triggerId, missingOk);
+
+	Form_pg_trigger triggerForm = (Form_pg_trigger) GETSTRUCT(triggerTuple);
+	bool isDisabled = (triggerForm->tgenabled == TRIGGER_DISABLED);
+	heap_freetuple(triggerTuple);
+
+	return isDisabled;
 }

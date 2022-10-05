@@ -473,7 +473,51 @@ SELECT * FROM distributed_table_change;
 SELECT tgrelid::regclass::text, tgname FROM pg_trigger WHERE tgname like 'insert_99_trigger%' ORDER BY 1,2;
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_trigger WHERE tgname like 'insert_99_trigger%'$$);
 
-RESET client_min_messages;
+CREATE TABLE dist_table(a int);
+
+CREATE FUNCTION trigger_func()
+  RETURNS trigger
+  LANGUAGE plpgsql
+AS $function$
+BEGIN
+	RETURN NULL;
+END;
+$function$;
+
+CREATE TRIGGER my_trigger
+AFTER UPDATE OR DELETE ON dist_table
+FOR STATEMENT EXECUTE FUNCTION trigger_func();
+
+ALTER TABLE dist_table DISABLE trigger my_trigger;
+
+SELECT create_distributed_table('dist_table', 'a');
+
+SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'my_trigger%';
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'my_trigger%'$$);
+
+CREATE TABLE citus_local(a int);
+
+CREATE FUNCTION citus_local_trig_func()
+  RETURNS trigger
+  LANGUAGE plpgsql
+AS $function$
+BEGIN
+	RETURN NULL;
+END;
+$function$;
+
+CREATE TRIGGER citus_local_trig
+AFTER UPDATE OR DELETE ON citus_local
+FOR STATEMENT EXECUTE FUNCTION citus_local_trig_func();
+
+ALTER TABLE citus_local DISABLE trigger citus_local_trig;
+
+SELECT citus_add_local_table_to_metadata('citus_local');
+
+SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'citus_local_trig%';
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'citus_local_trig%'$$);
+
+SET client_min_messages TO ERROR;
 RESET citus.enable_unsafe_triggers;
 SELECT run_command_on_workers('ALTER SYSTEM RESET citus.enable_unsafe_triggers;');
 SELECT run_command_on_workers('SELECT pg_reload_conf();');
