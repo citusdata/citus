@@ -510,6 +510,9 @@ CREATE TRIGGER citus_local_trig
 AFTER UPDATE OR DELETE ON citus_local
 FOR STATEMENT EXECUTE FUNCTION citus_local_trig_func();
 
+-- make sure that trigger is initially not disabled
+SELECT tgenabled = 'D' FROM pg_trigger WHERE tgname LIKE 'citus_local_trig%';
+
 ALTER TABLE citus_local DISABLE trigger citus_local_trig;
 
 SELECT citus_add_local_table_to_metadata('citus_local');

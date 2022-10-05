@@ -109,9 +109,11 @@ GetExplicitTriggerCommandList(Oid relationId)
 
 		if (TriggerIsDisabled(triggerId))
 		{
+            char * disableTriggerCommand = GetDisableTriggerCommand(triggerId);
+
 			createTriggerCommandList = lappend(
 				createTriggerCommandList,
-				makeTableDDLCommandString(GetDisableTriggerCommand(triggerId)));
+				makeTableDDLCommandString(disableTriggerCommand));
 		}
 	}
 
