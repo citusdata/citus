@@ -302,6 +302,7 @@ extern Datum columnar_relation_storageid(PG_FUNCTION_ARGS);
 /* write_state_management.c */
 extern ColumnarWriteState * columnar_init_write_state(Relation relation, TupleDesc
 													  tupdesc,
+													  Oid tupSlotRelationId,
 													  SubTransactionId currentSubXid);
 extern void FlushWriteStateForRelfilenode(Oid relfilenode, SubTransactionId
 										  currentSubXid);
