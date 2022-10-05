@@ -484,16 +484,50 @@ BEGIN
 END;
 $function$;
 
-CREATE TRIGGER my_trigger
+CREATE TRIGGER default_mode_trigger
 AFTER UPDATE OR DELETE ON dist_table
 FOR STATEMENT EXECUTE FUNCTION trigger_func();
 
-ALTER TABLE dist_table DISABLE trigger my_trigger;
+CREATE TRIGGER disabled_trigger
+AFTER UPDATE OR DELETE ON dist_table
+FOR STATEMENT EXECUTE FUNCTION trigger_func();
+
+ALTER TABLE dist_table DISABLE trigger disabled_trigger;
+
+CREATE TRIGGER replica_trigger
+AFTER UPDATE OR DELETE ON dist_table
+FOR STATEMENT EXECUTE FUNCTION trigger_func();
+
+ALTER TABLE dist_table ENABLE REPLICA trigger replica_trigger;
+
+CREATE TRIGGER always_enabled_trigger
+AFTER UPDATE OR DELETE ON dist_table
+FOR STATEMENT EXECUTE FUNCTION trigger_func();
+
+ALTER TABLE dist_table ENABLE ALWAYS trigger always_enabled_trigger;
+
+CREATE TRIGGER noop_enabled_trigger
+AFTER UPDATE OR DELETE ON dist_table
+FOR STATEMENT EXECUTE FUNCTION trigger_func();
+
+ALTER TABLE dist_table ENABLE trigger noop_enabled_trigger;
 
 SELECT create_distributed_table('dist_table', 'a');
 
-SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'my_trigger%';
-SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'my_trigger%'$$);
+SELECT bool_and(tgenabled = 'O') FROM pg_trigger WHERE tgname LIKE 'default_mode_trigger%';
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'O') FROM pg_trigger WHERE tgname LIKE 'default_mode_trigger%'$$);
+
+SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'disabled_trigger%';
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'disabled_trigger%'$$);
+
+SELECT bool_and(tgenabled = 'R') FROM pg_trigger WHERE tgname LIKE 'replica_trigger%';
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'R') FROM pg_trigger WHERE tgname LIKE 'replica_trigger%'$$);
+
+SELECT bool_and(tgenabled = 'A') FROM pg_trigger WHERE tgname LIKE 'always_enabled_trigger%';
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'A') FROM pg_trigger WHERE tgname LIKE 'always_enabled_trigger%'$$);
+
+SELECT bool_and(tgenabled = 'O') FROM pg_trigger WHERE tgname LIKE 'noop_enabled_trigger%';
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'O') FROM pg_trigger WHERE tgname LIKE 'noop_enabled_trigger%'$$);
 
 CREATE TABLE citus_local(a int);
 

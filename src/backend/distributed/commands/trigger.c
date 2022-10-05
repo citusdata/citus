@@ -43,7 +43,7 @@
 
 
 /* local function forward declarations */
-static char * GetDisableTriggerCommand(Oid triggerId);
+static char * GetEnableDisableTriggerCommand(Oid triggerId);
 static bool IsCreateCitusTruncateTriggerStmt(CreateTrigStmt *createTriggerStmt);
 static String * GetAlterTriggerDependsTriggerNameValue(AlterObjectDependsStmt *
 													   alterTriggerDependsStmt);
@@ -54,7 +54,6 @@ static void ExtractDropStmtTriggerAndRelationName(DropStmt *dropTriggerStmt,
 												  char **relationName);
 static void ErrorIfDropStmtDropsMultipleTriggers(DropStmt *dropTriggerStmt);
 static int16 GetTriggerTypeById(Oid triggerId);
-static bool TriggerIsDisabled(Oid triggerId);
 #if (PG_VERSION_NUM < PG_VERSION_15)
 static void ErrorOutIfCloneTrigger(Oid tgrelid, const char *tgname);
 #endif
@@ -103,18 +102,16 @@ GetExplicitTriggerCommandList(Oid relationId)
 			makeTableDDLCommandString(createTriggerCommand));
 
 		/*
-		 * Appends the commands for the trigger settings that are not
-		 * covered by CREATE TRIGGER command.
+		 * Appends the commands for the trigger settings that are not covered
+		 * by CREATE TRIGGER command, such as ALTER TABLE ENABLE/DISABLE <trigger>.
 		 */
 
-		if (TriggerIsDisabled(triggerId))
-		{
-            char * disableTriggerCommand = GetDisableTriggerCommand(triggerId);
+		char *enableDisableTriggerCommand =
+			GetEnableDisableTriggerCommand(triggerId);
 
-			createTriggerCommandList = lappend(
-				createTriggerCommandList,
-				makeTableDDLCommandString(disableTriggerCommand));
-		}
+		createTriggerCommandList = lappend(
+			createTriggerCommandList,
+			makeTableDDLCommandString(enableDisableTriggerCommand));
 	}
 
 	/* revert back to original search_path */
@@ -125,25 +122,63 @@ GetExplicitTriggerCommandList(Oid relationId)
 
 
 /*
- * GetDisableTriggerCommand returns the DDL command to disable given trigger.
+ * GetEnableDisableTriggerCommand returns the DDL command to set enable/disable
+ * state for given trigger. Throws an error if no such trigger exists.
  */
 static char *
-GetDisableTriggerCommand(Oid triggerId)
+GetEnableDisableTriggerCommand(Oid triggerId)
 {
+	StringInfo enableDisableTrigCommand = makeStringInfo();
+
 	bool missingOk = false;
-	HeapTuple trigTup = GetTriggerTupleById(triggerId, missingOk);
-	Form_pg_trigger trigForm = (Form_pg_trigger) GETSTRUCT(trigTup);
+	HeapTuple triggerTuple = GetTriggerTupleById(triggerId, missingOk);
 
-	char *qualifiedRelName = generate_qualified_relation_name(trigForm->tgrelid);
-	const char *quotedTrigName = quote_identifier(NameStr(trigForm->tgname));
+	Form_pg_trigger triggerForm = (Form_pg_trigger) GETSTRUCT(triggerTuple);
 
-	heap_freetuple(trigTup);
+	char *qualifiedRelName = generate_qualified_relation_name(triggerForm->tgrelid);
+	const char *quotedTrigName = quote_identifier(NameStr(triggerForm->tgname));
+	char enableDisableState = triggerForm->tgenabled;
 
-	StringInfo disableTrigCommand = makeStringInfo();
-	appendStringInfo(disableTrigCommand, "ALTER TABLE %s DISABLE TRIGGER %s;",
-					 qualifiedRelName, quotedTrigName);
+	heap_freetuple(triggerTuple);
 
-	return disableTrigCommand->data;
+	const char *enableDisableStateStr = NULL;
+	switch (enableDisableState)
+	{
+		case TRIGGER_FIRES_ON_ORIGIN:
+		{
+			/* default mode */
+			enableDisableStateStr = "ENABLE";
+			break;
+		}
+
+		case TRIGGER_FIRES_ALWAYS:
+		{
+			enableDisableStateStr = "ENABLE ALWAYS";
+			break;
+		}
+
+		case TRIGGER_FIRES_ON_REPLICA:
+		{
+			enableDisableStateStr = "ENABLE REPLICA";
+			break;
+		}
+
+		case TRIGGER_DISABLED:
+		{
+			enableDisableStateStr = "DISABLE";
+			break;
+		}
+
+		default:
+		{
+			elog(ERROR, "unexpected trigger state");
+		}
+	}
+
+	appendStringInfo(enableDisableTrigCommand, "ALTER TABLE %s %s TRIGGER %s;",
+					 qualifiedRelName, enableDisableStateStr, quotedTrigName);
+
+	return enableDisableTrigCommand->data;
 }
 
 
@@ -928,22 +963,4 @@ GetTriggerFunctionId(Oid triggerId)
 	heap_freetuple(triggerTuple);
 
 	return functionId;
-}
-
-
-/*
- * TriggerIsDisabled returns true if given trigger is enabled if such a
- * trigger exists. Otherwise, errors out.
- */
-static bool
-TriggerIsDisabled(Oid triggerId)
-{
-	bool missingOk = false;
-	HeapTuple triggerTuple = GetTriggerTupleById(triggerId, missingOk);
-
-	Form_pg_trigger triggerForm = (Form_pg_trigger) GETSTRUCT(triggerTuple);
-	bool isDisabled = (triggerForm->tgenabled == TRIGGER_DISABLED);
-	heap_freetuple(triggerTuple);
-
-	return isDisabled;
 }
