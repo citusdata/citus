@@ -473,7 +473,7 @@ SELECT * FROM distributed_table_change;
 SELECT tgrelid::regclass::text, tgname FROM pg_trigger WHERE tgname like 'insert_99_trigger%' ORDER BY 1,2;
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_trigger WHERE tgname like 'insert_99_trigger%'$$);
 
-CREATE TABLE dist_table(a int);
+CREATE TABLE "dist_\'table"(a int);
 
 CREATE FUNCTION trigger_func()
   RETURNS trigger
@@ -485,34 +485,34 @@ END;
 $function$;
 
 CREATE TRIGGER default_mode_trigger
-AFTER UPDATE OR DELETE ON dist_table
+AFTER UPDATE OR DELETE ON "dist_\'table"
 FOR STATEMENT EXECUTE FUNCTION trigger_func();
 
-CREATE TRIGGER disabled_trigger
-AFTER UPDATE OR DELETE ON dist_table
+CREATE TRIGGER "disabled_trigger\'"
+AFTER UPDATE OR DELETE ON "dist_\'table"
 FOR STATEMENT EXECUTE FUNCTION trigger_func();
 
-ALTER TABLE dist_table DISABLE trigger disabled_trigger;
+ALTER TABLE "dist_\'table" DISABLE trigger "disabled_trigger\'";
 
 CREATE TRIGGER replica_trigger
-AFTER UPDATE OR DELETE ON dist_table
+AFTER UPDATE OR DELETE ON "dist_\'table"
 FOR STATEMENT EXECUTE FUNCTION trigger_func();
 
-ALTER TABLE dist_table ENABLE REPLICA trigger replica_trigger;
+ALTER TABLE "dist_\'table" ENABLE REPLICA trigger replica_trigger;
 
 CREATE TRIGGER always_enabled_trigger
-AFTER UPDATE OR DELETE ON dist_table
+AFTER UPDATE OR DELETE ON "dist_\'table"
 FOR STATEMENT EXECUTE FUNCTION trigger_func();
 
-ALTER TABLE dist_table ENABLE ALWAYS trigger always_enabled_trigger;
+ALTER TABLE "dist_\'table" ENABLE ALWAYS trigger always_enabled_trigger;
 
 CREATE TRIGGER noop_enabled_trigger
-AFTER UPDATE OR DELETE ON dist_table
+AFTER UPDATE OR DELETE ON "dist_\'table"
 FOR STATEMENT EXECUTE FUNCTION trigger_func();
 
-ALTER TABLE dist_table ENABLE trigger noop_enabled_trigger;
+ALTER TABLE "dist_\'table" ENABLE trigger noop_enabled_trigger;
 
-SELECT create_distributed_table('dist_table', 'a');
+SELECT create_distributed_table('dist_\''table', 'a');
 
 SELECT bool_and(tgenabled = 'O') FROM pg_trigger WHERE tgname LIKE 'default_mode_trigger%';
 SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'O') FROM pg_trigger WHERE tgname LIKE 'default_mode_trigger%'$$);
