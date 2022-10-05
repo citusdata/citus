@@ -236,7 +236,7 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 			logicalRepTargetList);
 
 		/* only useful for isolation testing, see the function comment for the details */
-		ConflictOnlyWithIsolationTesting();
+		ConflictOnlyWithIsolationTesting(true);
 
 		/*
 		 * We have to create the primary key (or any other replica identity)
@@ -402,7 +402,7 @@ CompleteNonBlockingShardTransfer(List *shardList,
 
 
 	/* only useful for isolation testing, see the function comment for the details */
-	ConflictOnlyWithIsolationTesting();
+	ConflictOnlyWithIsolationTesting(false);
 
 	/*
 	 * We're almost done, we'll block the writes to the shards that we're
@@ -1241,9 +1241,14 @@ CreateUncheckedForeignKeyConstraints(List *logicalRepTargetList)
  *
  * Note that since the cost of calling this function is pretty low, we prefer
  * to use it in non-assert builds as well not to diverge in the behaviour.
+ *
+ * Depending on its argument it takes a different lock. It can take either a
+ * lock that is taken before the data copy is started, or it takes a lock
+ * after the copy (while logical replication is happening). Both of these locks
+ * are useful to run tests at different moments.
  */
 extern void
-ConflictOnlyWithIsolationTesting()
+ConflictOnlyWithIsolationTesting(bool beforeCopy)
 {
 	LOCKTAG tag;
 	const bool sessionLock = false;
@@ -1252,8 +1257,18 @@ ConflictOnlyWithIsolationTesting()
 	if (RunningUnderIsolationTest)
 	{
 		/* we've picked random keys */
-		SET_LOCKTAG_ADVISORY(tag, MyDatabaseId, SHARD_MOVE_ADVISORY_LOCK_FIRST_KEY,
-							 SHARD_MOVE_ADVISORY_LOCK_SECOND_KEY, 2);
+		if (beforeCopy)
+		{
+			SET_LOCKTAG_ADVISORY(tag, MyDatabaseId,
+								 SHARD_MOVE_ADVISORY_LOCK_SECOND_KEY,
+								 SHARD_MOVE_ADVISORY_LOCK_FIRST_KEY, 2);
+		}
+		else
+		{
+			SET_LOCKTAG_ADVISORY(tag, MyDatabaseId,
+								 SHARD_MOVE_ADVISORY_LOCK_FIRST_KEY,
+								 SHARD_MOVE_ADVISORY_LOCK_SECOND_KEY, 2);
+		}
 
 		(void) LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
 	}

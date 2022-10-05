@@ -1,13 +1,9 @@
 setup
 {
-	-- We disable deffered drop, so we can easily trigger blocking the shard
-	-- move at the end of the move. This is done in a separate setup step,
-	-- because this cannot run in a transaction.
-	ALTER SYSTEM SET citus.defer_drop_after_shard_move TO OFF;
+	CALL citus_cleanup_orphaned_shards();
 }
 setup
 {
-	SELECT pg_reload_conf();
 	ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1500001;
 	SET citus.shard_count TO 4;
 	SET citus.shard_replication_factor TO 1;
@@ -30,7 +26,6 @@ setup
 
 teardown
 {
-	SELECT pg_reload_conf();
 	DROP TABLE colocated2;
 	DROP TABLE colocated1;
 	DROP TABLE separate;
@@ -40,48 +35,37 @@ session "s1"
 
 step "s1-rebalance-c1-block-writes"
 {
-	BEGIN;
-	SELECT * FROM get_rebalance_table_shards_plan('colocated1');
 	SELECT rebalance_table_shards('colocated1', shard_transfer_mode:='block_writes');
 }
 
 step "s1-rebalance-c1-online"
 {
-	BEGIN;
-	SELECT * FROM get_rebalance_table_shards_plan('colocated1');
 	SELECT rebalance_table_shards('colocated1', shard_transfer_mode:='force_logical');
 }
 
 step "s1-shard-move-c1-block-writes"
 {
-	BEGIN;
 	SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
 }
 
 step "s1-shard-copy-c1-block-writes"
 {
-	BEGIN;
 	UPDATE pg_dist_partition SET repmodel = 'c' WHERE logicalrelid IN ('colocated1', 'colocated2');
 	SELECT citus_copy_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, transfer_mode:='block_writes');
 }
 
 step "s1-shard-move-c1-online"
 {
-	BEGIN;
 	SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='force_logical');
 }
 
 step "s1-shard-copy-c1-online"
 {
-	BEGIN;
 	UPDATE pg_dist_partition SET repmodel = 'c' WHERE logicalrelid IN ('colocated1', 'colocated2');
 	SELECT citus_copy_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, transfer_mode:='force_logical');
 }
 
-step "s1-commit"
-{
-	COMMIT;
-}
+step "s1-wait" {}
 
 session "s2"
 
@@ -118,10 +102,37 @@ step "s4-shard-move-sep-block-writes"
 	SELECT citus_move_shard_placement(1500009, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
 }
 
+// Running two shard moves at the same time can cause racy behaviour over who
+// gets the lock. For the test where this move is used in we don't rely on the
+// advisory locks. So we disable taking the advisory lock there to avoid the
+// racy lock acquisition with the other concurretn move.
+step "s4-shard-move-sep-block-writes-without-advisory-locks"
+{
+	BEGIN;
+	SET LOCAL citus.running_under_isolation_test = false;
+	SELECT citus_move_shard_placement(1500009, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
+}
+
 step "s4-commit"
 {
 	COMMIT;
 }
+
+session "s5"
+
+// this advisory lock with (almost) random values are only used
+// for testing purposes. For details, check Citus' logical replication
+// source code
+step "s5-acquire-advisory-lock"
+{
+    SELECT pg_advisory_lock(55152, 44000);
+}
+
+step "s5-release-advisory-lock"
+{
+    SELECT pg_advisory_unlock(55152, 44000);
+}
+
 
 session "s6"
 
@@ -140,22 +151,6 @@ step "s6-release-advisory-lock"
 
 
 session "s7"
-
-// get_rebalance_progress internally calls pg_total_relation_size on all the
-// shards. This means that it takes AccessShareLock on those shards. Because we
-// run with deferred drop that means that get_rebalance_progress actually waits
-// for the shard move to complete the drop. But we want to get the progress
-// before the shards are dropped. So we grab the locks first with a simple
-// query that reads from all shards. We force using a single connection because
-// get_rebalance_progress isn't smart enough to reuse the right connection for
-// the right shards and will simply use a single one for all of them.
-step "s7-grab-lock"
-{
-	BEGIN;
-	SET LOCAL citus.max_adaptive_executor_pool_size = 1;
-	SELECT 1 FROM colocated1 LIMIT 1;
-	SELECT 1 FROM separate LIMIT 1;
-}
 
 step "s7-get-progress"
 {
@@ -179,46 +174,57 @@ step "s7-get-progress"
 	FROM get_rebalance_progress();
 }
 
-step "s7-release-lock"
+// When getting progress from multiple monitors at the same time it can result
+// in random order of the tuples, because there's no defined order of the
+// monitors. So in those cases we need to order the output for consistent results.
+step "s7-get-progress-ordered"
 {
-	COMMIT;
+	set LOCAL client_min_messages=NOTICE;
+	WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+	SELECT
+		table_name,
+		shardid,
+		( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
+		sourcename,
+		sourceport,
+		( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
+		targetname,
+		targetport,
+		( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
+		progress,
+		operation_type,
+		source_lsn >= target_lsn as lsn_sanity_check,
+		source_lsn > '0/0' as source_lsn_available,
+		target_lsn > '0/0' as target_lsn_available
+	FROM get_rebalance_progress()
+	ORDER BY 1, 2, 3, 4, 5;
 }
 
-session "s8"
-
-// After running these tests we want to enable deferred-drop again. Sadly
-// the isolation tester framework does not support multiple teardown steps
-// and this cannot be run in a transaction. So we need to do it manually at
-// the end of the last test.
-step "enable-deferred-drop"
-{
-	ALTER SYSTEM RESET citus.defer_drop_after_shard_move;
-}
 // blocking rebalancer does what it should
-permutation "s2-lock-1-start" "s1-rebalance-c1-block-writes" "s7-get-progress" "s2-unlock-1-start" "s1-commit" "s7-get-progress" "enable-deferred-drop"
-permutation "s3-lock-2-start" "s1-rebalance-c1-block-writes" "s7-get-progress" "s3-unlock-2-start" "s1-commit" "s7-get-progress" "enable-deferred-drop"
-permutation "s7-grab-lock" "s1-rebalance-c1-block-writes" "s7-get-progress" "s7-release-lock" "s1-commit" "s7-get-progress" "enable-deferred-drop"
+permutation "s2-lock-1-start" "s1-rebalance-c1-block-writes" "s7-get-progress" "s2-unlock-1-start" "s1-wait" "s7-get-progress"
+permutation "s3-lock-2-start" "s1-rebalance-c1-block-writes" "s7-get-progress" "s3-unlock-2-start" "s1-wait" "s7-get-progress"
+permutation "s6-acquire-advisory-lock" "s1-rebalance-c1-block-writes" "s7-get-progress" "s6-release-advisory-lock" "s1-wait" "s7-get-progress"
 
 // online rebalancer
-permutation "s6-acquire-advisory-lock" "s1-rebalance-c1-online" "s7-get-progress" "s6-release-advisory-lock" "s1-commit" "s7-get-progress" "enable-deferred-drop"
-// Commented out due to flakyness
-// permutation "s7-grab-lock" "s1-rebalance-c1-online" "s7-get-progress" "s7-release-lock" "s1-commit" "s7-get-progress" "enable-deferred-drop"
+permutation "s5-acquire-advisory-lock" "s1-rebalance-c1-online" "s7-get-progress" "s5-release-advisory-lock" "s1-wait" "s7-get-progress"
+permutation "s6-acquire-advisory-lock" "s1-rebalance-c1-online" "s7-get-progress" "s6-release-advisory-lock" "s1-wait" "s7-get-progress"
 
 // blocking shard move
-permutation "s2-lock-1-start" "s1-shard-move-c1-block-writes" "s7-get-progress" "s2-unlock-1-start" "s1-commit" "s7-get-progress" "enable-deferred-drop"
-permutation "s7-grab-lock" "s1-shard-move-c1-block-writes" "s7-get-progress" "s7-release-lock" "s1-commit" "s7-get-progress" "enable-deferred-drop"
+permutation "s2-lock-1-start" "s1-shard-move-c1-block-writes" "s7-get-progress" "s2-unlock-1-start" "s1-wait" "s7-get-progress"
+permutation "s6-acquire-advisory-lock" "s1-shard-move-c1-block-writes" "s7-get-progress" "s6-release-advisory-lock" "s1-wait" "s7-get-progress"
 
 // blocking shard copy
-permutation "s2-lock-1-start" "s1-shard-copy-c1-block-writes" "s7-get-progress" "s2-unlock-1-start" "s1-commit"
+permutation "s2-lock-1-start" "s1-shard-copy-c1-block-writes" "s7-get-progress" "s2-unlock-1-start" "s1-wait"
+permutation "s6-acquire-advisory-lock" "s1-shard-copy-c1-block-writes" "s7-get-progress" "s6-release-advisory-lock" "s1-wait" "s7-get-progress"
 
 // online shard move
-permutation "s6-acquire-advisory-lock" "s1-shard-move-c1-online" "s7-get-progress" "s6-release-advisory-lock" "s1-commit" "s7-get-progress" "enable-deferred-drop"
-// Commented out due to flakyness
-// permutation "s7-grab-lock" "s1-shard-move-c1-online" "s7-get-progress" "s7-release-lock" "s1-commit" "s7-get-progress" "enable-deferred-drop"
+permutation "s5-acquire-advisory-lock" "s1-shard-move-c1-online" "s7-get-progress" "s5-release-advisory-lock" "s1-wait" "s7-get-progress"
+permutation "s6-acquire-advisory-lock" "s1-shard-move-c1-online" "s7-get-progress" "s6-release-advisory-lock" "s1-wait" "s7-get-progress"
 
 // online shard copy
-permutation "s6-acquire-advisory-lock" "s1-shard-copy-c1-online" "s7-get-progress" "s6-release-advisory-lock" "s1-commit"
+permutation "s5-acquire-advisory-lock" "s1-shard-copy-c1-online" "s7-get-progress" "s5-release-advisory-lock" "s1-wait"
+permutation "s6-acquire-advisory-lock" "s1-shard-copy-c1-online" "s7-get-progress" "s6-release-advisory-lock" "s1-wait" "s7-get-progress"
 
 // parallel blocking shard move
-permutation "s2-lock-1-start" "s1-shard-move-c1-block-writes" "s4-shard-move-sep-block-writes"("s1-shard-move-c1-block-writes") "s7-get-progress" "s2-unlock-1-start" "s1-commit" "s4-commit" "s7-get-progress" "enable-deferred-drop"
-permutation "s7-grab-lock" "s1-shard-move-c1-block-writes" "s4-shard-move-sep-block-writes"("s1-shard-move-c1-block-writes") "s7-get-progress" "s7-release-lock" "s1-commit" "s4-commit" "s7-get-progress" "enable-deferred-drop"
+permutation "s2-lock-1-start" "s1-shard-move-c1-block-writes" "s4-shard-move-sep-block-writes-without-advisory-locks"("s1-shard-move-c1-block-writes") "s7-get-progress-ordered" "s2-unlock-1-start" "s1-wait" "s4-commit" "s7-get-progress-ordered"
+permutation "s6-acquire-advisory-lock" "s1-shard-move-c1-block-writes" "s4-shard-move-sep-block-writes"("s1-shard-move-c1-block-writes") "s7-get-progress-ordered" "s6-release-advisory-lock"  "s1-wait" "s4-commit" "s7-get-progress-ordered"
