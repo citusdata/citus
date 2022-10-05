@@ -38,7 +38,7 @@ ERROR:  triggers are not supported on distributed tables when "citus.enable_unsa
 CREATE TRIGGER update_value_ref
 AFTER INSERT ON reference_table
 FOR EACH ROW EXECUTE FUNCTION update_value();
-ERROR:  triggers are not supported on reference tables
+ERROR:  triggers are not supported on reference tables when "citus.enable_unsafe_triggers" is set to "false"
 ---------------------------------------------------------------------
 -- show that we error out for trigger commands on distributed & reference tables
 ---------------------------------------------------------------------
@@ -75,23 +75,23 @@ ALTER TABLE distributed_table ENABLE TRIGGER update_value_dist;
 ERROR:  triggers are not supported on distributed tables when "citus.enable_unsafe_triggers" is set to "false"
 -- below all should error out
 ALTER TRIGGER update_value_ref ON reference_table RENAME TO update_value_ref1;
-ERROR:  triggers are not supported on reference tables
+ERROR:  triggers are not supported on reference tables when "citus.enable_unsafe_triggers" is set to "false"
 ALTER TRIGGER update_value_ref ON reference_table DEPENDS ON EXTENSION seg;
 ERROR:  Triggers "update_value_ref" on distributed tables and local tables added to metadata are not allowed to depend on an extension
 DROP TRIGGER update_value_ref ON reference_table;
-ERROR:  triggers are not supported on reference tables
+ERROR:  triggers are not supported on reference tables when "citus.enable_unsafe_triggers" is set to "false"
 ALTER TABLE reference_table DISABLE TRIGGER ALL;
-ERROR:  triggers are not supported on reference tables
+ERROR:  triggers are not supported on reference tables when "citus.enable_unsafe_triggers" is set to "false"
 ALTER TABLE reference_table DISABLE TRIGGER USER;
-ERROR:  triggers are not supported on reference tables
+ERROR:  triggers are not supported on reference tables when "citus.enable_unsafe_triggers" is set to "false"
 ALTER TABLE reference_table DISABLE TRIGGER update_value_ref;
-ERROR:  triggers are not supported on reference tables
+ERROR:  triggers are not supported on reference tables when "citus.enable_unsafe_triggers" is set to "false"
 ALTER TABLE reference_table ENABLE TRIGGER ALL;
-ERROR:  triggers are not supported on reference tables
+ERROR:  triggers are not supported on reference tables when "citus.enable_unsafe_triggers" is set to "false"
 ALTER TABLE reference_table ENABLE TRIGGER USER;
-ERROR:  triggers are not supported on reference tables
+ERROR:  triggers are not supported on reference tables when "citus.enable_unsafe_triggers" is set to "false"
 ALTER TABLE reference_table ENABLE TRIGGER update_value_ref;
-ERROR:  triggers are not supported on reference tables
+ERROR:  triggers are not supported on reference tables when "citus.enable_unsafe_triggers" is set to "false"
 ---------------------------------------------------------------------
 -- show that we do not allow creating citus tables if the
 -- table has already triggers

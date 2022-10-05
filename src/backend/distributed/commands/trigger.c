@@ -709,7 +709,9 @@ ErrorOutForTriggerIfNotSupported(Oid relationId)
 	}
 	else if (IsCitusTableType(relationId, REFERENCE_TABLE))
 	{
-		ereport(ERROR, (errmsg("triggers are not supported on reference tables")));
+		ereport(ERROR, (errmsg("triggers are not supported on reference tables "
+							   "when \"citus.enable_unsafe_triggers\" is set to "
+							   "\"false\"")));
 	}
 	else if (IsCitusTableType(relationId, DISTRIBUTED_TABLE))
 	{
