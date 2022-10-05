@@ -48,11 +48,13 @@ static bool IsCreateCitusTruncateTriggerStmt(CreateTrigStmt *createTriggerStmt);
 static String * GetAlterTriggerDependsTriggerNameValue(AlterObjectDependsStmt *
 													   alterTriggerDependsStmt);
 static void ErrorIfUnsupportedDropTriggerCommand(DropStmt *dropTriggerStmt);
+static void ErrorOutForTriggerDependsOnExtension(char *triggerName);
 static RangeVar * GetDropTriggerStmtRelation(DropStmt *dropTriggerStmt);
 static void ExtractDropStmtTriggerAndRelationName(DropStmt *dropTriggerStmt,
 												  char **triggerName,
 												  char **relationName);
 static void ErrorIfDropStmtDropsMultipleTriggers(DropStmt *dropTriggerStmt);
+static char * GetTriggerNameById(Oid triggerId);
 static int16 GetTriggerTypeById(Oid triggerId);
 #if (PG_VERSION_NUM < PG_VERSION_15)
 static void ErrorOutIfCloneTrigger(Oid tgrelid, const char *tgname);
@@ -542,13 +544,11 @@ PreprocessAlterTriggerDependsStmt(Node *node, const char *queryString,
 
 	String *triggerNameValue =
 		GetAlterTriggerDependsTriggerNameValue(alterTriggerDependsStmt);
-	ereport(ERROR, (errmsg(
-						"Triggers \"%s\" on distributed tables and local tables added to metadata "
-						"are not allowed to depend on an extension", strVal(
-							triggerNameValue)),
-					errdetail(
-						"Triggers from extensions are expected to be created on the workers "
-						"by the extension they depend on.")));
+
+	ErrorOutForTriggerDependsOnExtension(strVal(triggerNameValue));
+
+	/* not reachable, keep compiler happy */
+	return NIL;
 }
 
 
@@ -721,6 +721,49 @@ ErrorOutForTriggerIfNotSupported(Oid relationId)
 	}
 
 	/* we always support triggers on citus local tables */
+}
+
+
+/*
+ * ErrorIfRelationHasUnsupportedTrigger throws an error if given relation has
+ * a trigger that is not supported by Citus.
+ */
+void
+ErrorIfRelationHasUnsupportedTrigger(Oid relationId)
+{
+	List *relationTriggerList = GetExplicitTriggerIdList(relationId);
+
+	Oid triggerId = InvalidOid;
+	foreach_oid(triggerId, relationTriggerList)
+	{
+		ObjectAddress triggerObjectAddress = InvalidObjectAddress;
+		ObjectAddressSet(triggerObjectAddress, TriggerRelationId, triggerId);
+
+		/* triggers that depend on extensions are not supported */
+		if (ObjectAddressDependsOnExtension(&triggerObjectAddress))
+		{
+			ErrorOutForTriggerDependsOnExtension(GetTriggerNameById(triggerId));
+		}
+	}
+}
+
+
+/*
+ * ErrorOutForTriggerDependsOnExtension throws an error for given trigger that
+ * that presumably depends on an extension.
+ *
+ * Moved into a function to make the error message consistent.
+ */
+static void
+ErrorOutForTriggerDependsOnExtension(char *triggerName)
+{
+	ereport(ERROR, (errmsg("trigger %s depends on an extension and this "
+						   "is not supported for distributed tables and "
+						   "local tables added to metadata",
+						   triggerName),
+					errdetail("Triggers from extensions are expected to be "
+							  "created on the workers by the extension they "
+							  "depend on.")));
 }
 
 
@@ -929,6 +972,24 @@ CitusCreateTriggerCommandDDLJob(Oid relationId, char *triggerName,
 	}
 
 	return list_make1(ddlJob);
+}
+
+
+/*
+ * GetTriggerNameById returns name of given trigger if such a trigger exists.
+ * Otherwise, errors out.
+ */
+static char *
+GetTriggerNameById(Oid triggerId)
+{
+	bool missingOk = false;
+	HeapTuple triggerTuple = GetTriggerTupleById(triggerId, missingOk);
+
+	Form_pg_trigger triggerForm = (Form_pg_trigger) GETSTRUCT(triggerTuple);
+	char *triggerName = pstrdup(NameStr(triggerForm->tgname));
+	heap_freetuple(triggerTuple);
+
+	return triggerName;
 }
 
 

@@ -554,6 +554,27 @@ SELECT citus_add_local_table_to_metadata('citus_local');
 SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'citus_local_trig%';
 SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'citus_local_trig%'$$);
 
+CREATE TABLE dist_trigger_depends_on_test(a int);
+
+CREATE FUNCTION dist_trigger_depends_on_test_func()
+  RETURNS trigger
+  LANGUAGE plpgsql
+AS $function$
+BEGIN
+	RETURN NULL;
+END;
+$function$;
+
+CREATE TRIGGER dist_trigger_depends_on_test_trig
+AFTER UPDATE OR DELETE ON dist_trigger_depends_on_test
+FOR STATEMENT EXECUTE FUNCTION dist_trigger_depends_on_test_func();
+
+ALTER trigger dist_trigger_depends_on_test_trig ON dist_trigger_depends_on_test DEPENDS ON EXTENSION seg;
+
+SELECT create_distributed_table('dist_trigger_depends_on_test', 'a');
+SELECT create_reference_table('dist_trigger_depends_on_test');
+SELECT citus_add_local_table_to_metadata('dist_trigger_depends_on_test');
+
 SET client_min_messages TO ERROR;
 RESET citus.enable_unsafe_triggers;
 SELECT run_command_on_workers('ALTER SYSTEM RESET citus.enable_unsafe_triggers;');

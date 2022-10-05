@@ -691,6 +691,7 @@ extern void AlterTriggerDependsEventExtendNames(
 	AlterObjectDependsStmt *alterTriggerDependsStmt,
 	char *schemaName, uint64 shardId);
 extern void ErrorOutForTriggerIfNotSupported(Oid relationId);
+extern void ErrorIfRelationHasUnsupportedTrigger(Oid relationId);
 extern List * PreprocessDropTriggerStmt(Node *node, const char *queryString,
 										ProcessUtilityContext processUtilityContext);
 extern void DropTriggerEventExtendNames(DropStmt *dropTriggerStmt, char *schemaName,

@@ -196,7 +196,7 @@ FOR EACH STATEMENT EXECUTE FUNCTION dummy_function();')
 CREATE EXTENSION seg;
 -- ALTER TRIGGER DEPENDS ON
 ALTER TRIGGER "trigger\'name" ON "interesting!schema"."citus_local!_table" DEPENDS ON EXTENSION seg;
-ERROR:  Triggers "trigger\'name" on distributed tables and local tables added to metadata are not allowed to depend on an extension
+ERROR:  trigger trigger\'name depends on an extension and this is not supported for distributed tables and local tables added to metadata
 BEGIN;
     -- show that triggers on both shell relation and shard relation are not depending on seg
     SELECT tgname FROM pg_depend, pg_trigger, pg_extension

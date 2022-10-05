@@ -1671,7 +1671,10 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	{
 		EnsureRelationHasNoTriggers(relationId);
 	}
-
+	else
+	{
+		ErrorIfRelationHasUnsupportedTrigger(relationId);
+	}
 
 	/* we assume callers took necessary locks */
 	Relation relation = relation_open(relationId, NoLock);
