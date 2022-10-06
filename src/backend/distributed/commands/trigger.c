@@ -43,7 +43,7 @@
 
 
 /* local function forward declarations */
-static char * GetEnableDisableTriggerCommand(Oid triggerId);
+static char * GetAlterTriggerStateCommand(Oid triggerId);
 static bool IsCreateCitusTruncateTriggerStmt(CreateTrigStmt *createTriggerStmt);
 static String * GetAlterTriggerDependsTriggerNameValue(AlterObjectDependsStmt *
 													   alterTriggerDependsStmt);
@@ -106,12 +106,12 @@ GetExplicitTriggerCommandList(Oid relationId)
 		 * by CREATE TRIGGER command, such as ALTER TABLE ENABLE/DISABLE <trigger>.
 		 */
 
-		char *enableDisableTriggerCommand =
-			GetEnableDisableTriggerCommand(triggerId);
+		char *alterTriggerStateCommand =
+			GetAlterTriggerStateCommand(triggerId);
 
 		createTriggerCommandList = lappend(
 			createTriggerCommandList,
-			makeTableDDLCommandString(enableDisableTriggerCommand));
+			makeTableDDLCommandString(alterTriggerStateCommand));
 	}
 
 	/* revert back to original search_path */
@@ -122,13 +122,13 @@ GetExplicitTriggerCommandList(Oid relationId)
 
 
 /*
- * GetEnableDisableTriggerCommand returns the DDL command to set enable/disable
+ * GetAlterTriggerStateCommand returns the DDL command to set enable/disable
  * state for given trigger. Throws an error if no such trigger exists.
  */
 static char *
-GetEnableDisableTriggerCommand(Oid triggerId)
+GetAlterTriggerStateCommand(Oid triggerId)
 {
-	StringInfo enableDisableTrigCommand = makeStringInfo();
+	StringInfo alterTriggerStateCommand = makeStringInfo();
 
 	bool missingOk = false;
 	HeapTuple triggerTuple = GetTriggerTupleById(triggerId, missingOk);
@@ -141,31 +141,31 @@ GetEnableDisableTriggerCommand(Oid triggerId)
 
 	heap_freetuple(triggerTuple);
 
-	const char *enableDisableStateStr = NULL;
+	const char *alterTriggerStateStr = NULL;
 	switch (enableDisableState)
 	{
 		case TRIGGER_FIRES_ON_ORIGIN:
 		{
 			/* default mode */
-			enableDisableStateStr = "ENABLE";
+			alterTriggerStateStr = "ENABLE";
 			break;
 		}
 
 		case TRIGGER_FIRES_ALWAYS:
 		{
-			enableDisableStateStr = "ENABLE ALWAYS";
+			alterTriggerStateStr = "ENABLE ALWAYS";
 			break;
 		}
 
 		case TRIGGER_FIRES_ON_REPLICA:
 		{
-			enableDisableStateStr = "ENABLE REPLICA";
+			alterTriggerStateStr = "ENABLE REPLICA";
 			break;
 		}
 
 		case TRIGGER_DISABLED:
 		{
-			enableDisableStateStr = "DISABLE";
+			alterTriggerStateStr = "DISABLE";
 			break;
 		}
 
@@ -175,10 +175,10 @@ GetEnableDisableTriggerCommand(Oid triggerId)
 		}
 	}
 
-	appendStringInfo(enableDisableTrigCommand, "ALTER TABLE %s %s TRIGGER %s;",
-					 qualifiedRelName, enableDisableStateStr, quotedTrigName);
+	appendStringInfo(alterTriggerStateCommand, "ALTER TABLE %s %s TRIGGER %s;",
+					 qualifiedRelName, alterTriggerStateStr, quotedTrigName);
 
-	return enableDisableTrigCommand->data;
+	return alterTriggerStateCommand->data;
 }
 
 
