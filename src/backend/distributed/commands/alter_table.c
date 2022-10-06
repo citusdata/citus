@@ -1216,8 +1216,15 @@ CreateDistributedTableLike(TableConversionState *con)
 		newShardCount = con->shardCount;
 	}
 
+	/*
+	 * To get the correct column name, we use the original relation id, not the
+	 * new relation id. The reason is that the cached attributes of the original
+	 * and newly created tables are not the same if the original table has
+	 * dropped columns (dropped columns are still present in the attribute cache)
+	 * Detailed example in https://github.com/citusdata/citus/pull/6387
+	 */
 	char *distributionColumnName =
-		ColumnToColumnName(con->newRelationId, (Node *) newDistributionKey);
+		ColumnToColumnName(con->relationId, (Node *) newDistributionKey);
 
 	Oid originalRelationId = con->relationId;
 	if (con->originalDistributionKey != NULL && PartitionTable(originalRelationId))

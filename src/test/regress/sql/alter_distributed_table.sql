@@ -37,6 +37,95 @@ SELECT table_name, citus_table_type, distribution_column, shard_count FROM publi
 SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables
     WHERE table_name IN ('dist_table', 'colocation_table', 'colocation_table_2') GROUP BY colocation_id ORDER BY 1;
 
+-- right now dist_table has columns a, b, dist_column is b, it has 6 shards
+-- column cache is: a pos 1, b pos 2
+
+-- let's add another column
+ALTER TABLE dist_table ADD COLUMN c int DEFAULT 1;
+
+-- right now column cache is: a pos 1, b pos 2, c pos 3
+
+-- test using alter_distributed_table to change shard count after dropping one column
+ALTER TABLE dist_table DROP COLUMN a;
+
+-- right now column cache is: a pos 1 attisdropped=true, b pos 2, c pos 3
+
+-- let's try changing the shard count
+SELECT alter_distributed_table('dist_table', shard_count := 7, cascade_to_colocated := false);
+
+-- right now column cache is: b pos 1, c pos 2 because a new table has been created
+-- check that b is still distribution column
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables
+    WHERE table_name = 'dist_table'::regclass;
+
+-- let's add another column
+ALTER TABLE dist_table ADD COLUMN d int DEFAULT 2;
+
+-- right now column cache is: b pos 1, c pos 2, d pos 3, dist_column is b
+
+-- test using alter_distributed_table to change dist. column after dropping one column
+ALTER TABLE dist_table DROP COLUMN c;
+
+-- right now column cache is: b pos 1, c pos 2 attisdropped=true, d pos 3
+
+-- let's try changing the distribution column
+SELECT alter_distributed_table('dist_table', distribution_column := 'd');
+
+-- right now column cache is: b pos 1, d pos 2 because a new table has been created
+-- check that d is the distribution column
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables
+    WHERE table_name = 'dist_table'::regclass;
+
+-- add another column and undistribute
+ALTER TABLE dist_table ADD COLUMN e int DEFAULT 3;
+SELECT undistribute_table('dist_table');
+
+-- right now column cache is: b pos 1, d pos 2, e pos 3, table is not Citus table
+-- try dropping column and then distributing
+
+ALTER TABLE dist_table DROP COLUMN b;
+
+-- right now column cache is: b pos 1 attisdropped=true, d pos 2, e pos 3
+
+-- distribute with d
+SELECT create_distributed_table ('dist_table', 'd', colocate_with := 'none');
+
+-- check that d is the distribution column
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables
+    WHERE table_name = 'dist_table'::regclass;
+
+-- alter distribution column to e
+SELECT alter_distributed_table('dist_table', distribution_column := 'e');
+
+-- right now column cache is: d pos 1, e pos 2
+-- check that e is the distribution column
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables
+    WHERE table_name = 'dist_table'::regclass;
+
+ALTER TABLE dist_table ADD COLUMN a int DEFAULT 4;
+ALTER TABLE dist_table ADD COLUMN b int DEFAULT 5;
+
+-- right now column cache is: d pos 1, e pos 2, a pos 3, b pos 4
+
+-- alter distribution column to a
+SELECT alter_distributed_table('dist_table', distribution_column := 'a');
+
+-- right now column cache hasn't changed
+-- check that a is the distribution column
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables
+    WHERE table_name = 'dist_table'::regclass;
+
+ALTER TABLE dist_table DROP COLUMN d;
+ALTER TABLE dist_table DROP COLUMN e;
+-- right now column cache is: d pos 1 attisdropped=true, e pos 2 attisdropped=true, a pos 3, b pos 4
+
+-- alter distribution column to b
+SELECT alter_distributed_table('dist_table', distribution_column := 'b');
+-- column cache is: a pos 1, b pos 2 -> configuration with which we started these drop column tests
+-- check that b is the distribution column
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables
+    WHERE table_name = 'dist_table'::regclass;
+
 -- test altering colocation, note that shard count will also change
 SELECT alter_distributed_table('dist_table', colocate_with := 'alter_distributed_table.colocation_table');
 SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables
