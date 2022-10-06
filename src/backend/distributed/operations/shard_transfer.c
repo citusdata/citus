@@ -338,7 +338,8 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 		placementUpdateEvent->sourceNode = sourceNode;
 		placementUpdateEvent->targetNode = targetNode;
 		SetupRebalanceMonitor(list_make1(placementUpdateEvent), relationId,
-							  REBALANCE_PROGRESS_MOVING);
+							  REBALANCE_PROGRESS_MOVING,
+							  PLACEMENT_UPDATE_STATUS_SETTING_UP);
 	}
 
 	/*
@@ -1007,7 +1008,8 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 	placementUpdateEvent->sourceNode = sourceNode;
 	placementUpdateEvent->targetNode = targetNode;
 	SetupRebalanceMonitor(list_make1(placementUpdateEvent), relationId,
-						  REBALANCE_PROGRESS_MOVING);
+						  REBALANCE_PROGRESS_MOVING,
+						  PLACEMENT_UPDATE_STATUS_SETTING_UP);
 
 
 	/*
@@ -1257,7 +1259,19 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 												  tableOwner, ddlCommandList);
 	}
 
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardIntervalList,
+		sourceNodeName,
+		sourceNodePort,
+		PLACEMENT_UPDATE_STATUS_COPYING_DATA);
+
 	CopyShardsToNode(sourceNode, targetNode, shardIntervalList, NULL);
+
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardIntervalList,
+		sourceNodeName,
+		sourceNodePort,
+		PLACEMENT_UPDATE_STATUS_EXECUTING_DDL_COMMANDS);
 
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
@@ -1291,6 +1305,12 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		}
 	}
 
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardIntervalList,
+		sourceNodeName,
+		sourceNodePort,
+		PLACEMENT_UPDATE_STATUS_CREATING_FOREIGN_KEYS);
+
 	/*
 	 * Iterate through the colocated shards and create DDL commamnds
 	 * to create the foreign constraints.
@@ -1321,6 +1341,12 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 												  tableOwner,
 												  shardCommandList->ddlCommandList);
 	}
+
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardIntervalList,
+		sourceNodeName,
+		sourceNodePort,
+		PLACEMENT_UPDATE_STATUS_COMPLETING);
 
 	MemoryContextReset(localContext);
 	MemoryContextSwitchTo(oldContext);
@@ -1936,4 +1962,44 @@ WorkerApplyShardDDLCommandList(List *ddlCommandList, int64 shardId)
 	}
 
 	return applyDDLCommandList;
+}
+
+
+void
+UpdatePlacementUpdateStatusForShardIntervalList(List *shardIntervalList,
+												char *sourceName, int sourcePort,
+												PlacementUpdateStatus status)
+{
+	ProgressMonitorData *header = GetCurrentProgressMonitor();
+
+	if (header == NULL)
+	{
+		return;
+	}
+
+	PlacementUpdateEventProgress *steps = ProgressMonitorSteps(header);
+
+	for (int moveIndex = 0; moveIndex < header->stepCount; moveIndex++)
+	{
+		PlacementUpdateEventProgress *step = steps + moveIndex;
+		uint64 currentShardId = step->shardId;
+		bool foundInList = false;
+
+		ShardInterval *candidateShard = NULL;
+		foreach_ptr(candidateShard, shardIntervalList)
+		{
+			if (candidateShard->shardId == currentShardId)
+			{
+				foundInList = true;
+				break;
+			}
+		}
+
+		if (foundInList &&
+			strcmp(step->sourceName, sourceName) == 0 &&
+			step->sourcePort == sourcePort)
+		{
+			step->updateStatus = status;
+		}
+	}
 }

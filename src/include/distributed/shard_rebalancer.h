@@ -85,6 +85,29 @@ typedef enum
 	PLACEMENT_UPDATE_COPY = 2
 } PlacementUpdateType;
 
+typedef enum
+{
+	PLACEMENT_UPDATE_STATUS_INVALID_FIRST = 0,
+	PLACEMENT_UPDATE_STATUS_SETTING_UP = 1,
+	PLACEMENT_UPDATE_STATUS_COPYING_DATA = 2,
+	PLACEMENT_UPDATE_STATUS_CATCHING_UP = 3,
+	PLACEMENT_UPDATE_STATUS_CREATING_INDEXES = 4,
+	PLACEMENT_UPDATE_STATUS_CREATING_INDEX_CONSTRAINTS = 5,
+	PLACEMENT_UPDATE_STATUS_EXECUTING_CLUSTER_ON_COMMANDS = 6,
+	PLACEMENT_UPDATE_STATUS_CREATING_INDEX_STATISTICS = 7,
+	PLACEMENT_UPDATE_STATUS_CREATING_REMAINING_OBJECTS = 8,
+	PLACEMENT_UPDATE_STATUS_FINAL_CATCH_UP = 9,
+	PLACEMENT_UPDATE_STATUS_CREATING_FOREIGN_KEYS = 10,
+	PLACEMENT_UPDATE_STATUS_COMPLETING = 11,
+
+	/*
+	 * Only if moving via blocking writes:
+	 * - Represents all phases from 4 to 8 included.
+	 * - Do not use 3 and 9, as we don't have catchup for the blocking writes method
+	 */
+	PLACEMENT_UPDATE_STATUS_EXECUTING_DDL_COMMANDS = 12
+} PlacementUpdateStatus;
+
 
 /*
  * PlacementUpdateEvent represents a logical unit of work that copies or
@@ -108,6 +131,7 @@ typedef struct PlacementUpdateEventProgress
 	int targetPort;
 	PlacementUpdateType updateType;
 	pg_atomic_uint64 progress;
+	PlacementUpdateStatus updateStatus;
 } PlacementUpdateEventProgress;
 
 typedef struct NodeFillState
@@ -199,6 +223,7 @@ extern void AcquirePlacementColocationLock(Oid relationId, int lockMode,
 
 extern void SetupRebalanceMonitor(List *placementUpdateList,
 								  Oid relationId,
-								  uint64 initialProgressState);
+								  uint64 initialProgressState,
+								  PlacementUpdateStatus initialStatus);
 
 #endif   /* SHARD_REBALANCER_H */

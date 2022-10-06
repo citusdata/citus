@@ -283,6 +283,23 @@ static const char *PlacementUpdateTypeNames[] = {
 	[PLACEMENT_UPDATE_COPY] = "copy",
 };
 
+static const char *PlacementUpdateStatusNames[] = {
+	[PLACEMENT_UPDATE_STATUS_INVALID_FIRST] = "unknown",
+	[PLACEMENT_UPDATE_STATUS_SETTING_UP] = "Setting Up",
+	[PLACEMENT_UPDATE_STATUS_COPYING_DATA] = "Copying Data",
+	[PLACEMENT_UPDATE_STATUS_CATCHING_UP] = "Catching Up",
+	[PLACEMENT_UPDATE_STATUS_CREATING_INDEXES] = "Creating Indexes",
+	[PLACEMENT_UPDATE_STATUS_CREATING_INDEX_CONSTRAINTS] = "Creating Index Constraints",
+	[PLACEMENT_UPDATE_STATUS_EXECUTING_CLUSTER_ON_COMMANDS] =
+		"Executing Cluster On Commands",
+	[PLACEMENT_UPDATE_STATUS_CREATING_INDEX_STATISTICS] = "Creating Index Statistics",
+	[PLACEMENT_UPDATE_STATUS_CREATING_REMAINING_OBJECTS] = "Creating Remaining Objects",
+	[PLACEMENT_UPDATE_STATUS_FINAL_CATCH_UP] = "Final Catchup",
+	[PLACEMENT_UPDATE_STATUS_CREATING_FOREIGN_KEYS] = "Creating Foreign Keys",
+	[PLACEMENT_UPDATE_STATUS_COMPLETING] = "Completing",
+	[PLACEMENT_UPDATE_STATUS_EXECUTING_DDL_COMMANDS] = "Executing DDL Commands",
+};
+
 #ifdef USE_ASSERT_CHECKING
 
 /*
@@ -797,7 +814,8 @@ ExecutePlacementUpdates(List *placementUpdateList, Oid shardReplicationModeOid,
 void
 SetupRebalanceMonitor(List *placementUpdateList,
 					  Oid relationId,
-					  uint64 initialProgressState)
+					  uint64 initialProgressState,
+					  PlacementUpdateStatus initialStatus)
 {
 	List *colocatedUpdateList = GetColocatedRebalanceSteps(placementUpdateList);
 	ListCell *colocatedUpdateCell = NULL;
@@ -822,6 +840,7 @@ SetupRebalanceMonitor(List *placementUpdateList,
 		event->sourcePort = colocatedUpdate->sourceNode->workerPort;
 		event->targetPort = colocatedUpdate->targetNode->workerPort;
 		event->updateType = colocatedUpdate->updateType;
+		event->updateStatus = initialStatus;
 		pg_atomic_init_u64(&event->progress, initialProgressState);
 
 		eventIndex++;
@@ -1261,8 +1280,8 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 				shardSize = shardSizesStat->totalSize;
 			}
 
-			Datum values[14];
-			bool nulls[14];
+			Datum values[15];
+			bool nulls[15];
 
 			memset(values, 0, sizeof(values));
 			memset(nulls, 0, sizeof(nulls));
@@ -1282,6 +1301,8 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 				cstring_to_text(PlacementUpdateTypeNames[step->updateType]));
 			values[12] = LSNGetDatum(sourceLSN);
 			values[13] = LSNGetDatum(targetLSN);
+			values[14] = PointerGetDatum(
+				cstring_to_text(PlacementUpdateStatusNames[step->updateStatus]));
 
 			tuplestore_putvalues(tupstore, tupdesc, values, nulls);
 		}
@@ -1794,7 +1815,8 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 	 * purposes so it does not really matter which to show
 	 */
 	SetupRebalanceMonitor(placementUpdateList, linitial_oid(options->relationIdList),
-						  REBALANCE_PROGRESS_WAITING);
+						  REBALANCE_PROGRESS_WAITING,
+						  PLACEMENT_UPDATE_STATUS_SETTING_UP);
 	ExecutePlacementUpdates(placementUpdateList, shardReplicationModeOid, "Moving");
 	FinalizeCurrentProgressMonitor();
 }
