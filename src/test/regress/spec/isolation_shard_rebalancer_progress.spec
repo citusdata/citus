@@ -1,9 +1,5 @@
 setup
 {
-	CALL citus_cleanup_orphaned_shards();
-}
-setup
-{
 	ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1500001;
 	SET citus.shard_count TO 4;
 	SET citus.shard_replication_factor TO 1;
