@@ -902,7 +902,145 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_trigger WHERE tgname lik
  (localhost,57638,t,1)
 (2 rows)
 
-RESET client_min_messages;
+CREATE TABLE "dist_\'table"(a int);
+CREATE FUNCTION trigger_func()
+  RETURNS trigger
+  LANGUAGE plpgsql
+AS $function$
+BEGIN
+	RETURN NULL;
+END;
+$function$;
+CREATE TRIGGER default_mode_trigger
+AFTER UPDATE OR DELETE ON "dist_\'table"
+FOR STATEMENT EXECUTE FUNCTION trigger_func();
+CREATE TRIGGER "disabled_trigger\'"
+AFTER UPDATE OR DELETE ON "dist_\'table"
+FOR STATEMENT EXECUTE FUNCTION trigger_func();
+ALTER TABLE "dist_\'table" DISABLE trigger "disabled_trigger\'";
+CREATE TRIGGER replica_trigger
+AFTER UPDATE OR DELETE ON "dist_\'table"
+FOR STATEMENT EXECUTE FUNCTION trigger_func();
+ALTER TABLE "dist_\'table" ENABLE REPLICA trigger replica_trigger;
+CREATE TRIGGER always_enabled_trigger
+AFTER UPDATE OR DELETE ON "dist_\'table"
+FOR STATEMENT EXECUTE FUNCTION trigger_func();
+ALTER TABLE "dist_\'table" ENABLE ALWAYS trigger always_enabled_trigger;
+CREATE TRIGGER noop_enabled_trigger
+AFTER UPDATE OR DELETE ON "dist_\'table"
+FOR STATEMENT EXECUTE FUNCTION trigger_func();
+ALTER TABLE "dist_\'table" ENABLE trigger noop_enabled_trigger;
+SELECT create_distributed_table('dist_\''table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT bool_and(tgenabled = 'O') FROM pg_trigger WHERE tgname LIKE 'default_mode_trigger%';
+ bool_and
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'O') FROM pg_trigger WHERE tgname LIKE 'default_mode_trigger%'$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,t)
+ (localhost,57638,t,t)
+(2 rows)
+
+SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'disabled_trigger%';
+ bool_and
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'disabled_trigger%'$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,t)
+ (localhost,57638,t,t)
+(2 rows)
+
+SELECT bool_and(tgenabled = 'R') FROM pg_trigger WHERE tgname LIKE 'replica_trigger%';
+ bool_and
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'R') FROM pg_trigger WHERE tgname LIKE 'replica_trigger%'$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,t)
+ (localhost,57638,t,t)
+(2 rows)
+
+SELECT bool_and(tgenabled = 'A') FROM pg_trigger WHERE tgname LIKE 'always_enabled_trigger%';
+ bool_and
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'A') FROM pg_trigger WHERE tgname LIKE 'always_enabled_trigger%'$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,t)
+ (localhost,57638,t,t)
+(2 rows)
+
+SELECT bool_and(tgenabled = 'O') FROM pg_trigger WHERE tgname LIKE 'noop_enabled_trigger%';
+ bool_and
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'O') FROM pg_trigger WHERE tgname LIKE 'noop_enabled_trigger%'$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,t)
+ (localhost,57638,t,t)
+(2 rows)
+
+CREATE TABLE citus_local(a int);
+CREATE FUNCTION citus_local_trig_func()
+  RETURNS trigger
+  LANGUAGE plpgsql
+AS $function$
+BEGIN
+	RETURN NULL;
+END;
+$function$;
+CREATE TRIGGER citus_local_trig
+AFTER UPDATE OR DELETE ON citus_local
+FOR STATEMENT EXECUTE FUNCTION citus_local_trig_func();
+-- make sure that trigger is initially not disabled
+SELECT tgenabled = 'D' FROM pg_trigger WHERE tgname LIKE 'citus_local_trig%';
+ ?column?
+---------------------------------------------------------------------
+ f
+(1 row)
+
+ALTER TABLE citus_local DISABLE trigger citus_local_trig;
+SELECT citus_add_local_table_to_metadata('citus_local');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'citus_local_trig%';
+ bool_and
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'citus_local_trig%'$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,t)
+ (localhost,57638,t,t)
+(2 rows)
+
+SET client_min_messages TO ERROR;
 RESET citus.enable_unsafe_triggers;
 SELECT run_command_on_workers('ALTER SYSTEM RESET citus.enable_unsafe_triggers;');
        run_command_on_workers
@@ -920,25 +1058,3 @@ SELECT run_command_on_workers('SELECT pg_reload_conf();');
 
 SET citus.log_remote_commands TO off;
 DROP SCHEMA distributed_triggers CASCADE;
-NOTICE:  drop cascades to 21 other objects
-DETAIL:  drop cascades to table data
-drop cascades to function record_change()
-drop cascades to function insert_delete_document(text,text)
-drop cascades to function bad_shardkey_record_change()
-drop cascades to function remote_shardkey_record_change()
-drop cascades to function insert_document(text,text)
-drop cascades to table emptest
-drop cascades to table emptest_audit
-drop cascades to function process_emp_audit()
-drop cascades to view emp_triggers
-drop cascades to table record_op
-drop cascades to function record_emp()
-drop cascades to table data_changes
-drop cascades to table sale
-drop cascades to table record_sale
-drop cascades to function record_sale()
-drop cascades to view sale_triggers
-drop cascades to extension seg
-drop cascades to table distributed_table
-drop cascades to table distributed_table_change
-drop cascades to function insert_99()

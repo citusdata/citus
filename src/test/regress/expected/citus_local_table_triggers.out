@@ -232,6 +232,30 @@ SELECT * FROM citus_local_table_triggers
  truncate_trigger_xxxxxxx  | "interesting!schema"."citus_local!_table"         | O
 (3 rows)
 
+-- ALTER TABLE ENABLE REPLICA trigger
+ALTER TABLE "interesting!schema"."citus_local!_table" ENABLE REPLICA TRIGGER "trigger\'name22";
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1507008, 'interesting!schema', E'ALTER TABLE "interesting!schema"."citus_local!_table" ENABLE REPLICA TRIGGER "trigger\\''name22";')
+SELECT * FROM citus_local_table_triggers
+    WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
+         tgname          |                      tgrelid                      | tgenabled
+---------------------------------------------------------------------
+ trigger\'name22         | "interesting!schema"."citus_local!_table"         | R
+ trigger\'name22_1507008 | "interesting!schema"."citus_local!_table_1507008" | R
+ truncate_trigger_xxxxxxx  | "interesting!schema"."citus_local!_table"         | O
+(3 rows)
+
+-- ALTER TABLE ENABLE ALWAYS trigger
+ALTER TABLE "interesting!schema"."citus_local!_table" ENABLE ALWAYS TRIGGER "trigger\'name22";
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1507008, 'interesting!schema', E'ALTER TABLE "interesting!schema"."citus_local!_table" ENABLE ALWAYS TRIGGER "trigger\\''name22";')
+SELECT * FROM citus_local_table_triggers
+    WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
+         tgname          |                      tgrelid                      | tgenabled
+---------------------------------------------------------------------
+ trigger\'name22         | "interesting!schema"."citus_local!_table"         | A
+ trigger\'name22_1507008 | "interesting!schema"."citus_local!_table_1507008" | A
+ truncate_trigger_xxxxxxx  | "interesting!schema"."citus_local!_table"         | O
+(3 rows)
+
 -- ALTER TABLE DISABLE trigger
 ALTER TABLE "interesting!schema"."citus_local!_table" DISABLE TRIGGER "trigger\'name22";
 NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1507008, 'interesting!schema', E'ALTER TABLE "interesting!schema"."citus_local!_table" DISABLE TRIGGER "trigger\\''name22";')
