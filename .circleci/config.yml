@@ -24,10 +24,10 @@ parameters:
     default: '0.8.18'
   flaky_test:
     type: string
-    default: ''
+    default: 'isolation_shard_rebalancer_progress'
   flaky_test_make:
     type: string
-    default: check-minimal
+    default: check-isolation-base
 
 
 jobs:
