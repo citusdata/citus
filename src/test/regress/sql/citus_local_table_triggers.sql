@@ -185,6 +185,16 @@ ALTER TRIGGER "trigger\'name" ON "interesting!schema"."citus_local!_table" RENAM
 SELECT * FROM citus_local_table_triggers
     WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
 
+-- ALTER TABLE ENABLE REPLICA trigger
+ALTER TABLE "interesting!schema"."citus_local!_table" ENABLE REPLICA TRIGGER "trigger\'name22";
+SELECT * FROM citus_local_table_triggers
+    WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
+
+-- ALTER TABLE ENABLE ALWAYS trigger
+ALTER TABLE "interesting!schema"."citus_local!_table" ENABLE ALWAYS TRIGGER "trigger\'name22";
+SELECT * FROM citus_local_table_triggers
+    WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
+
 -- ALTER TABLE DISABLE trigger
 ALTER TABLE "interesting!schema"."citus_local!_table" DISABLE TRIGGER "trigger\'name22";
 SELECT * FROM citus_local_table_triggers
