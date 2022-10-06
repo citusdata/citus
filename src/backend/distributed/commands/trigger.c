@@ -43,6 +43,7 @@
 
 
 /* local function forward declarations */
+static char * GetAlterTriggerStateCommand(Oid triggerId);
 static bool IsCreateCitusTruncateTriggerStmt(CreateTrigStmt *createTriggerStmt);
 static String * GetAlterTriggerDependsTriggerNameValue(AlterObjectDependsStmt *
 													   alterTriggerDependsStmt);
@@ -99,12 +100,85 @@ GetExplicitTriggerCommandList(Oid relationId)
 		createTriggerCommandList = lappend(
 			createTriggerCommandList,
 			makeTableDDLCommandString(createTriggerCommand));
+
+		/*
+		 * Appends the commands for the trigger settings that are not covered
+		 * by CREATE TRIGGER command, such as ALTER TABLE ENABLE/DISABLE <trigger>.
+		 */
+
+		char *alterTriggerStateCommand =
+			GetAlterTriggerStateCommand(triggerId);
+
+		createTriggerCommandList = lappend(
+			createTriggerCommandList,
+			makeTableDDLCommandString(alterTriggerStateCommand));
 	}
 
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
 
 	return createTriggerCommandList;
+}
+
+
+/*
+ * GetAlterTriggerStateCommand returns the DDL command to set enable/disable
+ * state for given trigger. Throws an error if no such trigger exists.
+ */
+static char *
+GetAlterTriggerStateCommand(Oid triggerId)
+{
+	StringInfo alterTriggerStateCommand = makeStringInfo();
+
+	bool missingOk = false;
+	HeapTuple triggerTuple = GetTriggerTupleById(triggerId, missingOk);
+
+	Form_pg_trigger triggerForm = (Form_pg_trigger) GETSTRUCT(triggerTuple);
+
+	char *qualifiedRelName = generate_qualified_relation_name(triggerForm->tgrelid);
+	const char *quotedTrigName = quote_identifier(NameStr(triggerForm->tgname));
+	char enableDisableState = triggerForm->tgenabled;
+
+	heap_freetuple(triggerTuple);
+
+	const char *alterTriggerStateStr = NULL;
+	switch (enableDisableState)
+	{
+		case TRIGGER_FIRES_ON_ORIGIN:
+		{
+			/* default mode */
+			alterTriggerStateStr = "ENABLE";
+			break;
+		}
+
+		case TRIGGER_FIRES_ALWAYS:
+		{
+			alterTriggerStateStr = "ENABLE ALWAYS";
+			break;
+		}
+
+		case TRIGGER_FIRES_ON_REPLICA:
+		{
+			alterTriggerStateStr = "ENABLE REPLICA";
+			break;
+		}
+
+		case TRIGGER_DISABLED:
+		{
+			alterTriggerStateStr = "DISABLE";
+			break;
+		}
+
+		default:
+		{
+			elog(ERROR, "unexpected trigger state");
+		}
+	}
+
+	appendStringInfo(alterTriggerStateCommand, "ALTER TABLE %s %s TRIGGER %s;",
+					 qualifiedRelName, alterTriggerStateStr, quotedTrigName);
+
+	return alterTriggerStateCommand->data;
 }
 
 
