@@ -1435,7 +1435,7 @@ ActiveShardPlacementListOnGroup(uint64 shardId, int32 groupId)
 
 /*
  * ActiveShardPlacementList finds shard placements for the given shardId from
- * system catalogs, chooses placements that are in active state, and returns
+ * metadata cache, chooses placements that are in active state, and returns
  * these shard placements in a new list.
  */
 List *

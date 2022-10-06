@@ -1171,8 +1171,44 @@ LookupNodeForGroup(int32 groupId)
 
 
 /*
- * ShardPlacementList returns the list of placements for the given shard from
- * the cache. This list includes placements that are orphaned, because they
+ * ShardPlacementListIncludingOrphanedPlacementsViaCatalog returns the list of placements
+ * for the given shard from the catalog table for placements, and caches for nodes. This
+ * list includes placements that are orphaned, because they their deletion is postponed to
+ * a later point (shardstate = 4).
+ *
+ * This function is intended for DROP operations can potentially drop placements, and
+ * therefore invalidate caches for placements. We continue accessing caches for worker
+ * nodes, and expect that they will not get invalidated by a concurrent process.
+ */
+List *
+ShardPlacementListIncludingOrphanedPlacementsViaCatalog(uint64 shardId)
+{
+	List *groupShardPlacementList = BuildShardPlacementList(shardId);
+	List *shardPlacementList = NIL;
+
+	GroupShardPlacement *groupShardPlacement = NULL;
+	foreach_ptr(groupShardPlacement, groupShardPlacementList)
+	{
+		WorkerNode *worker = LookupNodeForGroup(groupShardPlacement->groupId);
+		ShardPlacement *placement = CitusMakeNode(ShardPlacement);
+		placement->shardId = groupShardPlacement->shardId;
+		placement->shardLength = groupShardPlacement->shardLength;
+		placement->shardState = groupShardPlacement->shardState;
+		placement->nodeId = worker->nodeId;
+		placement->nodeName = pstrdup(worker->workerName);
+		placement->nodePort = worker->workerPort;
+		placement->placementId = groupShardPlacement->placementId;
+
+		shardPlacementList = lappend(shardPlacementList, placement);
+	}
+
+	return SortList(shardPlacementList, CompareShardPlacements);
+}
+
+
+/*
+ * ShardPlacementListIncludingOrphanedPlacements returns the list of placements for the
+ * given shard from the cache. This list includes placements that are orphaned, because
  * their deletion is postponed to a later point (shardstate = 4).
  *
  * The returned list is deep copied from the cache and thus can be modified

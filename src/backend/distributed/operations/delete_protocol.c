@@ -374,7 +374,7 @@ DropTaskList(Oid relationId, char *schemaName, char *relationName,
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = shardId;
 		task->taskPlacementList =
-			ShardPlacementListIncludingOrphanedPlacements(shardId);
+			ShardPlacementListIncludingOrphanedPlacementsViaCatalog(shardId);
 
 		taskList = lappend(taskList, task);
 	}
