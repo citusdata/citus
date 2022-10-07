@@ -34,6 +34,7 @@ extern void RegisterProgressMonitor(uint64 progressTypeMagicNumber,
 									dsm_handle dsmHandle);
 extern ProgressMonitorData * GetCurrentProgressMonitor(void);
 extern void FinalizeCurrentProgressMonitor(void);
+extern uint64 GetCurrentProgressDSMHandle(void);
 extern List * ProgressMonitorList(uint64 commandTypeMagicNumber,
 								  List **attachedDSMSegmentList);
 extern void DetachFromDSMSegments(List *dsmSegmentList);

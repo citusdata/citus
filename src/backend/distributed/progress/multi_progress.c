@@ -134,6 +134,17 @@ FinalizeCurrentProgressMonitor(void)
 
 
 /*
+ * GetCurrentProgressDSMHandle is the getter function for static variable
+ * currentProgressDSMHandle
+ */
+uint64
+GetCurrentProgressDSMHandle(void)
+{
+	return currentProgressDSMHandle;
+}
+
+
+/*
  * ProgressMonitorList returns the addresses of monitors of ongoing commands, associated
  * with the given identifier magic number. The function takes a pass in
  * pg_stat_get_progress_info output, filters the rows according to the given magic number,

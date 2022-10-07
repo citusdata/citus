@@ -1971,8 +1971,17 @@ UpdatePlacementUpdateStatusForShardIntervalList(List *shardIntervalList,
 												PlacementUpdateStatus status)
 {
 	List *segmentList = NIL;
-	List *rebalanceMonitorList = ProgressMonitorList(REBALANCE_ACTIVITY_MAGIC_NUMBER,
-													 &segmentList);
+	List *rebalanceMonitorList = NULL;
+
+	if (GetCurrentProgressDSMHandle() == DSM_HANDLE_INVALID)
+	{
+		rebalanceMonitorList = ProgressMonitorList(REBALANCE_ACTIVITY_MAGIC_NUMBER,
+												   &segmentList);
+	}
+	else
+	{
+		rebalanceMonitorList = list_make1(GetCurrentProgressMonitor());
+	}
 
 	ProgressMonitorData *monitor = NULL;
 	foreach_ptr(monitor, rebalanceMonitorList)
