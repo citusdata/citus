@@ -174,6 +174,32 @@ step "s7-get-progress"
 	FROM get_rebalance_progress();
 }
 
+// When getting progress from multiple monitors at the same time it can result
+// in random order of the tuples, because there's no defined order of the
+// monitors. So in those cases we need to order the output for consistent results.
+step "s7-get-progress-ordered"
+{
+	set LOCAL client_min_messages=NOTICE;
+	WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
+	SELECT
+		table_name,
+		shardid,
+		( SELECT size FROM possible_sizes WHERE ABS(size - shard_size) = (SELECT MIN(ABS(size - shard_size)) FROM possible_sizes )) shard_size,
+		sourcename,
+		sourceport,
+		( SELECT size FROM possible_sizes WHERE ABS(size - source_shard_size) = (SELECT MIN(ABS(size - source_shard_size)) FROM possible_sizes )) source_shard_size,
+		targetname,
+		targetport,
+		( SELECT size FROM possible_sizes WHERE ABS(size - target_shard_size) = (SELECT MIN(ABS(size - target_shard_size)) FROM possible_sizes )) target_shard_size,
+		progress,
+		operation_type,
+		source_lsn >= target_lsn as lsn_sanity_check,
+		source_lsn > '0/0' as source_lsn_available,
+		target_lsn > '0/0' as target_lsn_available
+	FROM get_rebalance_progress()
+	ORDER BY 1, 2, 3, 4, 5;
+}
+
 // blocking rebalancer does what it should
 permutation "s2-lock-1-start" "s1-rebalance-c1-block-writes" "s7-get-progress" "s2-unlock-1-start" "s1-wait" "s7-get-progress"
 permutation "s3-lock-2-start" "s1-rebalance-c1-block-writes" "s7-get-progress" "s3-unlock-2-start" "s1-wait" "s7-get-progress"
@@ -200,5 +226,5 @@ permutation "s5-acquire-advisory-lock" "s1-shard-copy-c1-online" "s7-get-progres
 permutation "s6-acquire-advisory-lock" "s1-shard-copy-c1-online" "s7-get-progress" "s6-release-advisory-lock" "s1-wait" "s7-get-progress"
 
 // parallel blocking shard move
-permutation "s2-lock-1-start" "s1-shard-move-c1-block-writes" "s4-shard-move-sep-block-writes-without-advisory-locks"("s1-shard-move-c1-block-writes") "s7-get-progress" "s2-unlock-1-start" "s1-wait" "s4-commit" "s7-get-progress"
-permutation "s6-acquire-advisory-lock" "s1-shard-move-c1-block-writes" "s4-shard-move-sep-block-writes"("s1-shard-move-c1-block-writes") "s7-get-progress" "s6-release-advisory-lock"  "s1-wait" "s4-commit" "s7-get-progress"
+permutation "s2-lock-1-start" "s1-shard-move-c1-block-writes" "s4-shard-move-sep-block-writes-without-advisory-locks"("s1-shard-move-c1-block-writes") "s7-get-progress-ordered" "s2-unlock-1-start" "s1-wait" "s4-commit" "s7-get-progress-ordered"
+permutation "s6-acquire-advisory-lock" "s1-shard-move-c1-block-writes" "s4-shard-move-sep-block-writes"("s1-shard-move-c1-block-writes") "s7-get-progress-ordered" "s6-release-advisory-lock"  "s1-wait" "s4-commit" "s7-get-progress-ordered"
