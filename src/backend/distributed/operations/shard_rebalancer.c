@@ -288,16 +288,10 @@ static const char *PlacementUpdateStatusNames[] = {
 	[PLACEMENT_UPDATE_STATUS_SETTING_UP] = "Setting Up",
 	[PLACEMENT_UPDATE_STATUS_COPYING_DATA] = "Copying Data",
 	[PLACEMENT_UPDATE_STATUS_CATCHING_UP] = "Catching Up",
-	[PLACEMENT_UPDATE_STATUS_CREATING_INDEXES] = "Creating Indexes",
-	[PLACEMENT_UPDATE_STATUS_CREATING_INDEX_CONSTRAINTS] = "Creating Index Constraints",
-	[PLACEMENT_UPDATE_STATUS_EXECUTING_CLUSTER_ON_COMMANDS] =
-		"Executing Cluster On Commands",
-	[PLACEMENT_UPDATE_STATUS_CREATING_INDEX_STATISTICS] = "Creating Index Statistics",
-	[PLACEMENT_UPDATE_STATUS_CREATING_REMAINING_OBJECTS] = "Creating Remaining Objects",
+	[PLACEMENT_UPDATE_STATUS_CREATING_CONSTRAINTS] = "Creating Constraints",
 	[PLACEMENT_UPDATE_STATUS_FINAL_CATCH_UP] = "Final Catchup",
 	[PLACEMENT_UPDATE_STATUS_CREATING_FOREIGN_KEYS] = "Creating Foreign Keys",
 	[PLACEMENT_UPDATE_STATUS_COMPLETING] = "Completing",
-	[PLACEMENT_UPDATE_STATUS_EXECUTING_DDL_COMMANDS] = "Executing DDL Commands",
 };
 
 #ifdef USE_ASSERT_CHECKING
@@ -840,7 +834,7 @@ SetupRebalanceMonitor(List *placementUpdateList,
 		event->sourcePort = colocatedUpdate->sourceNode->workerPort;
 		event->targetPort = colocatedUpdate->targetNode->workerPort;
 		event->updateType = colocatedUpdate->updateType;
-		event->updateStatus = initialStatus;
+		pg_atomic_init_u64(&event->updateStatus, initialStatus);
 		pg_atomic_init_u64(&event->progress, initialProgressState);
 
 		eventIndex++;
@@ -1301,8 +1295,10 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 				cstring_to_text(PlacementUpdateTypeNames[step->updateType]));
 			values[12] = LSNGetDatum(sourceLSN);
 			values[13] = LSNGetDatum(targetLSN);
-			values[14] = PointerGetDatum(
-				cstring_to_text(PlacementUpdateStatusNames[step->updateStatus]));
+			values[14] = PointerGetDatum(cstring_to_text(
+											 PlacementUpdateStatusNames[pg_atomic_read_u64(
+																			&step->
+																			updateStatus)]));
 
 			tuplestore_putvalues(tupstore, tupdesc, values, nulls);
 		}

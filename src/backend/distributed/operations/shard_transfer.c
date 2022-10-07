@@ -1271,7 +1271,7 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		shardIntervalList,
 		sourceNodeName,
 		sourceNodePort,
-		PLACEMENT_UPDATE_STATUS_EXECUTING_DDL_COMMANDS);
+		PLACEMENT_UPDATE_STATUS_CREATING_CONSTRAINTS);
 
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
@@ -1970,36 +1970,39 @@ UpdatePlacementUpdateStatusForShardIntervalList(List *shardIntervalList,
 												char *sourceName, int sourcePort,
 												PlacementUpdateStatus status)
 {
-	ProgressMonitorData *header = GetCurrentProgressMonitor();
+	List *segmentList = NIL;
+	List *rebalanceMonitorList = ProgressMonitorList(REBALANCE_ACTIVITY_MAGIC_NUMBER,
+													 &segmentList);
 
-	if (header == NULL)
+	ProgressMonitorData *monitor = NULL;
+	foreach_ptr(monitor, rebalanceMonitorList)
 	{
-		return;
-	}
+		PlacementUpdateEventProgress *steps = ProgressMonitorSteps(monitor);
 
-	PlacementUpdateEventProgress *steps = ProgressMonitorSteps(header);
-
-	for (int moveIndex = 0; moveIndex < header->stepCount; moveIndex++)
-	{
-		PlacementUpdateEventProgress *step = steps + moveIndex;
-		uint64 currentShardId = step->shardId;
-		bool foundInList = false;
-
-		ShardInterval *candidateShard = NULL;
-		foreach_ptr(candidateShard, shardIntervalList)
+		for (int moveIndex = 0; moveIndex < monitor->stepCount; moveIndex++)
 		{
-			if (candidateShard->shardId == currentShardId)
+			PlacementUpdateEventProgress *step = steps + moveIndex;
+			uint64 currentShardId = step->shardId;
+			bool foundInList = false;
+
+			ShardInterval *candidateShard = NULL;
+			foreach_ptr(candidateShard, shardIntervalList)
 			{
-				foundInList = true;
-				break;
+				if (candidateShard->shardId == currentShardId)
+				{
+					foundInList = true;
+					break;
+				}
+			}
+
+			if (foundInList &&
+				strcmp(step->sourceName, sourceName) == 0 &&
+				step->sourcePort == sourcePort)
+			{
+				pg_atomic_write_u64(&step->updateStatus, status);
 			}
 		}
-
-		if (foundInList &&
-			strcmp(step->sourceName, sourceName) == 0 &&
-			step->sourcePort == sourcePort)
-		{
-			step->updateStatus = status;
-		}
 	}
+
+	DetachFromDSMSegments(segmentList);
 }

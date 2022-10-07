@@ -408,7 +408,7 @@ CompleteNonBlockingShardTransfer(List *shardList,
 		shardList,
 		sourceConnection->hostname,
 		sourceConnection->port,
-		PLACEMENT_UPDATE_STATUS_EXECUTING_DDL_COMMANDS);
+		PLACEMENT_UPDATE_STATUS_CREATING_CONSTRAINTS);
 
 	/*
 	 * Now lets create the post-load objects, such as the indexes, constraints
