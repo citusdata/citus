@@ -994,7 +994,12 @@ citus_backend_gpid(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
-	PG_RETURN_UINT64(GetGlobalPID());
+	if (PG_ARGISNULL(0))
+	{
+		PG_RETURN_UINT64(GetGlobalPID());
+	}
+
+	PG_RETURN_UINT64(CalculateGlobalPID(GetLocalNodeId(), PG_GETARG_INT32(0)));
 }
 
 

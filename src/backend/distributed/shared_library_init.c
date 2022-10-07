@@ -148,6 +148,7 @@ DEFINE_COLUMNAR_PASSTHROUGH_FUNC(test_columnar_storage_write_new_page)
 static char *CitusVersion = CITUS_VERSION;
 static char *DeprecatedEmptyString = "";
 static char *MitmfifoEmptyString = "";
+static bool IsolationTestCheckAllBlocks = false;
 
 /* deprecated GUC value that should not be used anywhere outside this file */
 static int ReplicationModel = REPLICATION_MODEL_STREAMING;
@@ -1505,6 +1506,16 @@ RegisterCitusConfigVariables(void)
 		&DeprecatedEmptyString,
 		"",
 		PGC_SUSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.isolation_test_check_all_blocks",
+		NULL,
+		NULL,
+		&IsolationTestCheckAllBlocks,
+		false,
+		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 

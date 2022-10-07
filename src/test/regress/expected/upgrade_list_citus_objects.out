@@ -26,7 +26,7 @@ ORDER BY 1;
  function citus_add_node(text,integer,integer,noderole,name)
  function citus_add_rebalance_strategy(name,regproc,regproc,regproc,real,real,real)
  function citus_add_secondary_node(text,integer,text,integer,name)
- function citus_backend_gpid()
+ function citus_backend_gpid(integer)
  function citus_blocking_pids(integer)
  function citus_calculate_gpid(integer,integer)
  function citus_check_cluster_node_health()

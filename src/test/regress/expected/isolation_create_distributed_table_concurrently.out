@@ -1,5 +1,5 @@
 unused step name: s1-create-concurrently-table_2
-Parsed test spec with 4 sessions
+Parsed test spec with 5 sessions
 
 starting permutation: s1-truncate s3-acquire-split-advisory-lock s1-settings s2-settings s1-create-concurrently-table_1 s2-begin s2-insert s2-commit s3-release-split-advisory-lock s2-print-status
 step s1-truncate:
@@ -665,7 +665,18 @@ citus_remove_node
 (1 row)
 
 
-starting permutation: s2-begin s2-create-table_2 s1-create-concurrently-table_none_colocated s4-print-waiting-advisory-locks s2-commit s4-print-colocations
+starting permutation: show-all-blocks reload-conf s2-begin s2-create-table_2 s1-create-concurrently-table_none_colocated s4-print-waiting-advisory-locks s2-commit s4-print-colocations reset-show-all-blocks reload-conf
+step show-all-blocks:
+ ALTER SYSTEM SET citus.isolation_test_check_all_blocks = true;
+
+step reload-conf:
+ SELECT pg_reload_conf();
+
+pg_reload_conf
+---------------------------------------------------------------------
+t
+(1 row)
+
 step s2-begin:
  BEGIN;
 
@@ -708,13 +719,35 @@ shardcount|replicationfactor|distributioncolumntype|distributioncolumncollation
          4|                1|                    23|                          0
 (2 rows)
 
+step reset-show-all-blocks:
+ ALTER SYSTEM RESET citus.isolation_test_check_all_blocks;
+
+step reload-conf:
+ SELECT pg_reload_conf();
+
+pg_reload_conf
+---------------------------------------------------------------------
+t
+(1 row)
+
 citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 
-starting permutation: s2-begin s2-create-table_2-none s1-create-concurrently-table_none_colocated s4-print-waiting-advisory-locks s2-commit s4-print-colocations
+starting permutation: show-all-blocks reload-conf s2-begin s2-create-table_2-none s1-create-concurrently-table_none_colocated s4-print-waiting-advisory-locks s2-commit s4-print-colocations reset-show-all-blocks reload-conf
+step show-all-blocks:
+ ALTER SYSTEM SET citus.isolation_test_check_all_blocks = true;
+
+step reload-conf:
+ SELECT pg_reload_conf();
+
+pg_reload_conf
+---------------------------------------------------------------------
+t
+(1 row)
+
 step s2-begin:
  BEGIN;
 
@@ -755,6 +788,17 @@ shardcount|replicationfactor|distributioncolumntype|distributioncolumncollation
          4|                1|                    21|                          0
          4|                1|                    23|                          0
 (2 rows)
+
+step reset-show-all-blocks:
+ ALTER SYSTEM RESET citus.isolation_test_check_all_blocks;
+
+step reload-conf:
+ SELECT pg_reload_conf();
+
+pg_reload_conf
+---------------------------------------------------------------------
+t
+(1 row)
 
 citus_remove_node
 ---------------------------------------------------------------------

@@ -1,6 +1,6 @@
 Parsed test spec with 4 sessions
 
-starting permutation: add-node s1-begin s2-begin s1-update-dist-table s2-lock-ref-table-placement-on-coordinator s1-lock-ref-table-placement-on-coordinator s2-update-dist-table deadlock-checker-call s1-end s2-end
+starting permutation: add-node s1-begin s2-begin s1-update-dist-table s2-lock-ref-table-placement-on-coordinator s1-lock-ref-table-placement-on-coordinator show-all-blocks reload-conf s2-update-dist-table deadlock-checker-call s1-end s2-end reset-show-all-blocks reload-conf
 create_distributed_table
 ---------------------------------------------------------------------
 
@@ -41,7 +41,18 @@ step s1-lock-ref-table-placement-on-coordinator:
       END
     $$;
  <waiting ...>
-step s2-update-dist-table: 
+step show-all-blocks: 
+ ALTER SYSTEM SET citus.isolation_test_check_all_blocks = true;
+
+step reload-conf:
+ SELECT pg_reload_conf();
+
+pg_reload_conf
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-update-dist-table:
     update dist_table set b = 2 where a = 1;
  <waiting ...>
 step deadlock-checker-call: 
@@ -60,6 +71,17 @@ step s1-end:
 
 step s2-end:
     END;
+
+step reset-show-all-blocks:
+ ALTER SYSTEM RESET citus.isolation_test_check_all_blocks;
+
+step reload-conf:
+ SELECT pg_reload_conf();
+
+pg_reload_conf
+---------------------------------------------------------------------
+t
+(1 row)
 
 master_remove_node
 ---------------------------------------------------------------------
@@ -101,14 +123,14 @@ pg_sleep
 step s2-view-dist:
         SELECT query, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE backend_type = 'client backend' AND query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%pg_isolation_test_session_is_blocked%'), ('%BEGIN%'), ('%add_node%')) ORDER BY query DESC;
 
-query                                    |state              |wait_event_type|wait_event|usename |datname
+query                                |state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
 
-  SELECT check_distributed_deadlocks();
-|idle               |Client         |ClientRead|postgres|regression
+ SELECT pg_reload_conf();
+          |idle               |Client         |ClientRead|postgres|regression
 
     update ref_table set a = a + 1;
-    |idle in transaction|Client         |ClientRead|postgres|regression
+|idle in transaction|Client         |ClientRead|postgres|regression
 (2 rows)
 
 step s2-view-worker:

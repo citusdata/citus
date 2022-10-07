@@ -2,6 +2,11 @@
 
 setup
 {
+	ALTER SYSTEM SET citus.isolation_test_check_all_blocks = true;
+}
+setup
+{
+	SELECT pg_reload_conf();
 	SELECT citus_set_coordinator_host('localhost', 57636);
 
 	CREATE TABLE dist_table(a int);
@@ -42,6 +47,7 @@ setup
 
 teardown
 {
+	SELECT pg_reload_conf();
 	DROP VIEW main_view;
 	DROP VIEW sub_view;
 	DROP TABLE dist_table;
@@ -220,22 +226,29 @@ step "w2-stop-connection"
 	SELECT stop_session_level_connection_to_node();
 }
 
-permutation "coor-begin" "coor-acquire-aggresive-lock-on-dist-table" "w1-start-session-level-connection" "w1-begin" "w1-read-dist-table" "coor-rollback" "w1-rollback" "w1-stop-connection"
-permutation "coor-begin" "coor-acquire-aggresive-lock-on-dist-table" "w1-start-session-level-connection" "w1-begin" "w1-acquire-aggressive-lock-dist-table" "coor-rollback" "coor-read-dist-table" "w1-rollback" "w1-stop-connection"
-permutation "w1-start-session-level-connection" "w1-begin" "w1-acquire-aggressive-lock-dist-table" "coor-begin" "coor-acquire-aggresive-lock-on-dist-table-nowait" "coor-rollback" "w1-rollback" "w1-stop-connection"
-permutation "w1-start-session-level-connection" "w1-begin" "w2-start-session-level-connection" "w2-begin" "w1-acquire-aggressive-lock-dist-table" "w2-acquire-aggressive-lock-dist-table" "w1-rollback" "w1-read-dist-table" "w2-rollback" "w1-stop-connection" "w2-stop-connection"
-permutation "coor-begin" "coor-acquire-weak-lock-on-dist-table" "w1-start-session-level-connection" "w1-begin" "w1-read-dist-table" "w1-acquire-aggressive-lock-dist-table" "coor-rollback" "w1-rollback" "w1-stop-connection"
-permutation "w1-start-session-level-connection" "w1-begin" "w1-lock-reference-table" "coor-begin" "coor-read-ref-table" "w1-rollback" "coor-rollback" "w1-stop-connection"
-permutation "coor-begin" "coor-acquire-aggresive-lock-on-view" "w1-start-session-level-connection" "w1-begin" "w1-read-dist-table" "coor-rollback" "w1-rollback" "w1-stop-connection"
-permutation "coor-begin" "coor-acquire-aggresive-lock-on-view" "w1-start-session-level-connection" "w1-begin" "w1-acquire-aggressive-lock-dist-table" "coor-rollback" "w1-rollback" "w1-stop-connection"
-permutation "coor-begin" "coor-acquire-aggresive-lock-on-view" "w1-start-session-level-connection" "w1-begin" "w1-read-ref-table" "coor-rollback" "w1-rollback" "w1-stop-connection"
-permutation "coor-begin" "coor-acquire-aggresive-lock-on-only-view" "w1-start-session-level-connection" "w1-begin" "w1-read-ref-table" "coor-rollback" "w1-rollback" "w1-stop-connection"
-permutation "w1-start-session-level-connection" "w1-begin" "w1-acquire-aggressive-lock-dist-table" "coor-begin" "coor-acquire-aggresive-lock-on-view-nowait" "coor-rollback" "w1-rollback" "w1-stop-connection"
-permutation "coor-begin" "coor-lock-all" "w1-start-session-level-connection" "w1-begin" "w1-read-citus-local-table" "coor-rollback" "w1-rollback" "w1-stop-connection"
-permutation "coor-begin" "coor-acquire-aggresive-lock-on-partitioned-table" "w1-start-session-level-connection" "w1-begin" "w1-read-partitioned-table" "coor-rollback" "w1-rollback" "w1-stop-connection"
-permutation "coor-begin" "coor-acquire-aggresive-lock-on-partitioned-table" "w1-start-session-level-connection" "w1-begin" "w1-read-partition-of-partitioned-table" "coor-rollback" "w1-rollback" "w1-stop-connection"
-permutation "coor-begin" "coor-acquire-aggresive-lock-on-partitioned-table-with-*-syntax" "w1-start-session-level-connection" "w1-begin" "w1-read-partition-of-partitioned-table" "coor-rollback" "w1-rollback" "w1-stop-connection"
-permutation "coor-begin" "coor-acquire-aggresive-lock-on-only-partitioned-table" "w1-start-session-level-connection" "w1-begin" "w1-read-partitioned-table" "coor-rollback" "w1-rollback" "w1-stop-connection"
-permutation "coor-begin" "coor-acquire-aggresive-lock-on-only-partitioned-table" "w1-start-session-level-connection" "w1-begin" "w1-read-partition-of-partitioned-table" "coor-rollback" "w1-rollback" "w1-stop-connection"
-permutation "coor-begin" "coor-acquire-aggresive-lock-on-ref-table" "w1-start-session-level-connection" "w1-begin" "w1-read-main-view" "coor-rollback" "w1-rollback" "w1-stop-connection"
-permutation "coor-begin" "coor-read-dist-table" "w2-start-session-level-connection" "w2-begin" "w1-start-session-level-connection" "w1-begin" "w2-acquire-aggressive-lock-dist-table" "w1-acquire-aggressive-lock-dist-table" "coor-rollback" "w2-rollback" "w1-rollback" "w1-stop-connection" "w2-stop-connection"
+session "admin"
+
+step "teardown"
+{
+	ALTER SYSTEM RESET citus.isolation_test_check_all_blocks;
+}
+
+permutation "coor-begin" "coor-acquire-aggresive-lock-on-dist-table" "w1-start-session-level-connection" "w1-begin" "w1-read-dist-table" "coor-rollback" "w1-rollback" "w1-stop-connection" "teardown"
+permutation "coor-begin" "coor-acquire-aggresive-lock-on-dist-table" "w1-start-session-level-connection" "w1-begin" "w1-acquire-aggressive-lock-dist-table" "coor-rollback" "coor-read-dist-table" "w1-rollback" "w1-stop-connection" "teardown"
+permutation "w1-start-session-level-connection" "w1-begin" "w1-acquire-aggressive-lock-dist-table" "coor-begin" "coor-acquire-aggresive-lock-on-dist-table-nowait" "coor-rollback" "w1-rollback" "w1-stop-connection" "teardown"
+permutation "w1-start-session-level-connection" "w1-begin" "w2-start-session-level-connection" "w2-begin" "w1-acquire-aggressive-lock-dist-table" "w2-acquire-aggressive-lock-dist-table" "w1-rollback" "w1-read-dist-table" "w2-rollback" "w1-stop-connection" "w2-stop-connection" "teardown"
+permutation "coor-begin" "coor-acquire-weak-lock-on-dist-table" "w1-start-session-level-connection" "w1-begin" "w1-read-dist-table" "w1-acquire-aggressive-lock-dist-table" "coor-rollback" "w1-rollback" "w1-stop-connection" "teardown"
+permutation "w1-start-session-level-connection" "w1-begin" "w1-lock-reference-table" "coor-begin" "coor-read-ref-table" "w1-rollback" "coor-rollback" "w1-stop-connection" "teardown"
+permutation "coor-begin" "coor-acquire-aggresive-lock-on-view" "w1-start-session-level-connection" "w1-begin" "w1-read-dist-table" "coor-rollback" "w1-rollback" "w1-stop-connection" "teardown"
+permutation "coor-begin" "coor-acquire-aggresive-lock-on-view" "w1-start-session-level-connection" "w1-begin" "w1-acquire-aggressive-lock-dist-table" "coor-rollback" "w1-rollback" "w1-stop-connection" "teardown"
+permutation "coor-begin" "coor-acquire-aggresive-lock-on-view" "w1-start-session-level-connection" "w1-begin" "w1-read-ref-table" "coor-rollback" "w1-rollback" "w1-stop-connection" "teardown"
+permutation "coor-begin" "coor-acquire-aggresive-lock-on-only-view" "w1-start-session-level-connection" "w1-begin" "w1-read-ref-table" "coor-rollback" "w1-rollback" "w1-stop-connection" "teardown"
+permutation "w1-start-session-level-connection" "w1-begin" "w1-acquire-aggressive-lock-dist-table" "coor-begin" "coor-acquire-aggresive-lock-on-view-nowait" "coor-rollback" "w1-rollback" "w1-stop-connection" "teardown"
+permutation "coor-begin" "coor-lock-all" "w1-start-session-level-connection" "w1-begin" "w1-read-citus-local-table" "coor-rollback" "w1-rollback" "w1-stop-connection" "teardown"
+permutation "coor-begin" "coor-acquire-aggresive-lock-on-partitioned-table" "w1-start-session-level-connection" "w1-begin" "w1-read-partitioned-table" "coor-rollback" "w1-rollback" "w1-stop-connection" "teardown"
+permutation "coor-begin" "coor-acquire-aggresive-lock-on-partitioned-table" "w1-start-session-level-connection" "w1-begin" "w1-read-partition-of-partitioned-table" "coor-rollback" "w1-rollback" "w1-stop-connection" "teardown"
+permutation "coor-begin" "coor-acquire-aggresive-lock-on-partitioned-table-with-*-syntax" "w1-start-session-level-connection" "w1-begin" "w1-read-partition-of-partitioned-table" "coor-rollback" "w1-rollback" "w1-stop-connection" "teardown"
+permutation "coor-begin" "coor-acquire-aggresive-lock-on-only-partitioned-table" "w1-start-session-level-connection" "w1-begin" "w1-read-partitioned-table" "coor-rollback" "w1-rollback" "w1-stop-connection" "teardown"
+permutation "coor-begin" "coor-acquire-aggresive-lock-on-only-partitioned-table" "w1-start-session-level-connection" "w1-begin" "w1-read-partition-of-partitioned-table" "coor-rollback" "w1-rollback" "w1-stop-connection" "teardown"
+permutation "coor-begin" "coor-acquire-aggresive-lock-on-ref-table" "w1-start-session-level-connection" "w1-begin" "w1-read-main-view" "coor-rollback" "w1-rollback" "w1-stop-connection" "teardown"
+permutation "coor-begin" "coor-read-dist-table" "w2-start-session-level-connection" "w2-begin" "w1-start-session-level-connection" "w1-begin" "w2-acquire-aggressive-lock-dist-table" "w1-acquire-aggressive-lock-dist-table" "coor-rollback" "w2-rollback" "w1-rollback" "w1-stop-connection" "w2-stop-connection" "teardown"

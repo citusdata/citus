@@ -1,5 +1,6 @@
 setup
 {
+	select setval('pg_dist_shardid_seq', GREATEST(1400292, nextval('pg_dist_shardid_seq')-1));
 	-- make sure coordinator is in metadata
 	SELECT citus_set_coordinator_host('localhost', 57636);
   	CREATE TABLE table_1(id int PRIMARY KEY);
@@ -172,6 +173,21 @@ step "s4-print-colocations"
 	SELECT shardcount, replicationfactor, distributioncolumntype, distributioncolumncollation FROM pg_dist_colocation ORDER BY colocationid;
 }
 
+session "admin"
+step "show-all-blocks"
+{
+	ALTER SYSTEM SET citus.isolation_test_check_all_blocks = true;
+}
+step "reset-show-all-blocks"
+{
+	ALTER SYSTEM RESET citus.isolation_test_check_all_blocks;
+}
+step "reload-conf"
+{
+	SELECT pg_reload_conf();
+}
+
+
 // show concurrent insert is NOT blocked by create_distributed_table_concurrently
 permutation "s1-truncate" "s3-acquire-split-advisory-lock" "s1-settings" "s2-settings" "s1-create-concurrently-table_1" "s2-begin" "s2-insert" "s2-commit" "s3-release-split-advisory-lock" "s2-print-status"
 
@@ -215,7 +231,7 @@ permutation "s2-begin" "s2-create-table_2" "s1-create-concurrently-table_default
 permutation "s1-create-concurrently-table_default_colocated" "s3-acquire-split-advisory-lock" "s1-create-concurrently-table_1" "s2-create-table_2" "s4-print-waiting-advisory-locks" "s3-release-split-advisory-lock" "s4-print-colocations"
 
 // show concurrent colocate_with => 'default' and colocate_with => 'none' are allowed.
-permutation "s2-begin" "s2-create-table_2" "s1-create-concurrently-table_none_colocated" "s4-print-waiting-advisory-locks" "s2-commit" "s4-print-colocations"
+permutation "show-all-blocks" "reload-conf" "s2-begin" "s2-create-table_2" "s1-create-concurrently-table_none_colocated" "s4-print-waiting-advisory-locks" "s2-commit" "s4-print-colocations" "reset-show-all-blocks" "reload-conf"
 
 // show concurrent colocate_with => 'none' and colocate_with => 'none' are allowed.
-permutation "s2-begin" "s2-create-table_2-none" "s1-create-concurrently-table_none_colocated" "s4-print-waiting-advisory-locks" "s2-commit" "s4-print-colocations"
+permutation "show-all-blocks" "reload-conf" "s2-begin" "s2-create-table_2-none" "s1-create-concurrently-table_none_colocated" "s4-print-waiting-advisory-locks" "s2-commit" "s4-print-colocations" "reset-show-all-blocks" "reload-conf"
