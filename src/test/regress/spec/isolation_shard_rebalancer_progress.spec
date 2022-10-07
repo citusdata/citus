@@ -175,7 +175,8 @@ step "s7-get-progress"
 		operation_type,
 		source_lsn >= target_lsn as lsn_sanity_check,
 		source_lsn > '0/0' as source_lsn_available,
-		target_lsn > '0/0' as target_lsn_available
+		target_lsn > '0/0' as target_lsn_available,
+		status
 	FROM get_rebalance_progress();
 }
 
