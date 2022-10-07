@@ -24,14 +24,16 @@ RETURNS boolean AS $$
         FROM get_all_active_transactions() WHERE process_id = pBlockedPid;
     END IF;
 
-    FOR r IN select a1.query blocking_query, a2.query waiting_query from citus_internal_global_blocked_processes() p join pg_stat_activity a1 on p.blocking_pid = a1.pid join  pg_stat_activity a2 on p.waiting_pid = a2.pid WHERE waiting_global_pid = mBlockedGlobalPid
+    RAISE WARNING E'DETECTING BLOCKS FOR %', mBlockedGlobalPid;
+    FOR r IN select p.blocking_global_pid, a1.query blocking_query, p.waiting_global_pid, a2.query waiting_query from citus_internal_global_blocked_processes() p join pg_stat_activity a1 on p.blocking_pid = a1.pid join  pg_stat_activity a2 on p.waiting_pid = a2.pid WHERE waiting_global_pid = mBlockedGlobalPid
     LOOP
-        RAISE WARNING E'%\nBLOCKS\n%', r.blocking_query, r.waiting_query;
+        RAISE WARNING E'GPID: % %\nBLOCKS\nGPID: % %', r.blocking_global_pid,  r.blocking_query, r.waiting_global_pid, r.waiting_query;
     END LOOP;
 
     RETURN EXISTS (
       SELECT 1 FROM citus_internal_global_blocked_processes()
         WHERE waiting_global_pid = mBlockedGlobalPid
+        AND blocking_global_pid in (SELECT citus_backend_gpid(pid) FROM unnest(pInterestingPids) pid)
     );
   END;
 $$ LANGUAGE plpgsql;
