@@ -1012,7 +1012,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 (0 rows)
 
 
-starting permutation: s2-lock-1-start s1-shard-move-c1-block-writes s4-shard-move-sep-block-writes-without-advisory-locks s7-get-progress s2-unlock-1-start s1-wait s4-commit s7-get-progress
+starting permutation: s2-lock-1-start s1-shard-move-c1-block-writes s4-shard-move-sep-block-writes-without-advisory-locks s7-get-progress-ordered s2-unlock-1-start s1-wait s4-commit s7-get-progress-ordered
 master_set_node_property
 ---------------------------------------------------------------------
 
@@ -1031,7 +1031,7 @@ step s4-shard-move-sep-block-writes-without-advisory-locks:
  SET LOCAL citus.running_under_isolation_test = false;
  SELECT citus_move_shard_placement(1500009, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
  <waiting ...>
-step s7-get-progress: 
+step s7-get-progress-ordered: 
  set LOCAL client_min_messages=NOTICE;
  WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
@@ -1049,7 +1049,8 @@ step s7-get-progress:
   source_lsn >= target_lsn as lsn_sanity_check,
   source_lsn > '0/0' as source_lsn_available,
   target_lsn > '0/0' as target_lsn_available
- FROM get_rebalance_progress();
+ FROM get_rebalance_progress()
+ ORDER BY 1, 2, 3, 4, 5;
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
@@ -1077,7 +1078,7 @@ step s1-wait:
 step s4-commit:
  COMMIT;
 
-step s7-get-progress:
+step s7-get-progress-ordered:
  set LOCAL client_min_messages=NOTICE;
  WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
@@ -1095,14 +1096,15 @@ step s7-get-progress:
   source_lsn >= target_lsn as lsn_sanity_check,
   source_lsn > '0/0' as source_lsn_available,
   target_lsn > '0/0' as target_lsn_available
- FROM get_rebalance_progress();
+ FROM get_rebalance_progress()
+ ORDER BY 1, 2, 3, 4, 5;
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
 (0 rows)
 
 
-starting permutation: s6-acquire-advisory-lock s1-shard-move-c1-block-writes s4-shard-move-sep-block-writes s7-get-progress s6-release-advisory-lock s1-wait s4-commit s7-get-progress
+starting permutation: s6-acquire-advisory-lock s1-shard-move-c1-block-writes s4-shard-move-sep-block-writes s7-get-progress-ordered s6-release-advisory-lock s1-wait s4-commit s7-get-progress-ordered
 master_set_node_property
 ---------------------------------------------------------------------
 
@@ -1123,7 +1125,7 @@ step s4-shard-move-sep-block-writes:
  BEGIN;
  SELECT citus_move_shard_placement(1500009, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
  <waiting ...>
-step s7-get-progress: 
+step s7-get-progress-ordered: 
  set LOCAL client_min_messages=NOTICE;
  WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
@@ -1141,7 +1143,8 @@ step s7-get-progress:
   source_lsn >= target_lsn as lsn_sanity_check,
   source_lsn > '0/0' as source_lsn_available,
   target_lsn > '0/0' as target_lsn_available
- FROM get_rebalance_progress();
+ FROM get_rebalance_progress()
+ ORDER BY 1, 2, 3, 4, 5;
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
@@ -1174,7 +1177,7 @@ step s1-wait:
 step s4-commit:
  COMMIT;
 
-step s7-get-progress:
+step s7-get-progress-ordered:
  set LOCAL client_min_messages=NOTICE;
  WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
  SELECT
@@ -1192,7 +1195,8 @@ step s7-get-progress:
   source_lsn >= target_lsn as lsn_sanity_check,
   source_lsn > '0/0' as source_lsn_available,
   target_lsn > '0/0' as target_lsn_available
- FROM get_rebalance_progress();
+ FROM get_rebalance_progress()
+ ORDER BY 1, 2, 3, 4, 5;
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available
 ---------------------------------------------------------------------
