@@ -1965,6 +1965,10 @@ WorkerApplyShardDDLCommandList(List *ddlCommandList, int64 shardId)
 }
 
 
+/*
+ * UpdatePlacementUpdateStatusForShardIntervalList updates the status field for shards
+ * in the given shardInterval list.
+ */
 void
 UpdatePlacementUpdateStatusForShardIntervalList(List *shardIntervalList,
 												char *sourceName, int sourcePort,
