@@ -92,6 +92,18 @@ typedef enum CitusBackendType
 	EXTERNAL_CLIENT_BACKEND
 } CitusBackendType;
 
+static const char *citusBackendPrefixes[] = {
+	CITUS_APPLICATION_NAME_PREFIX,
+	CITUS_REBALANCER_APPLICATION_NAME_PREFIX,
+	CITUS_RUN_COMMAND_APPLICATION_NAME_PREFIX,
+};
+
+static const CitusBackendType citusBackendTypes[] = {
+	CITUS_INTERNAL_BACKEND,
+	CITUS_REBALANCER_BACKEND,
+	CITUS_RUN_COMMAND_BACKEND,
+};
+
 
 static void StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc
 									   tupleDescriptor);
@@ -1066,26 +1078,30 @@ ExtractGlobalPID(const char *applicationName)
 	/* we create our own copy of application name incase the original changes */
 	char *applicationNameCopy = pstrdup(applicationName);
 
-	uint64 prefixLength = strlen(CITUS_APPLICATION_NAME_PREFIX);
-
-	/* does application name start with Citus's application name prefix */
-	if (strncmp(applicationNameCopy, CITUS_APPLICATION_NAME_PREFIX, prefixLength) != 0)
+	for (int i = 0; i < lengthof(citusBackendPrefixes); i++)
 	{
-		return INVALID_CITUS_INTERNAL_BACKEND_GPID;
-	}
+		uint64 prefixLength = strlen(citusBackendPrefixes[i]);
 
-	char *globalPIDString = &applicationNameCopy[prefixLength];
-	uint64 globalPID = strtoul(globalPIDString, NULL, 10);
-	if (globalPID == 0)
-	{
-		/*
-		 * INVALID_CITUS_INTERNAL_BACKEND_GPID is 0, but just to be explicit
-		 * about how we handle strtoul errors.
-		 */
-		return INVALID_CITUS_INTERNAL_BACKEND_GPID;
-	}
+		/* does application name start with this prefix prefix */
+		if (strncmp(applicationNameCopy, citusBackendPrefixes[i], prefixLength) != 0)
+		{
+			continue;
+		}
 
-	return globalPID;
+		char *globalPIDString = &applicationNameCopy[prefixLength];
+		uint64 globalPID = strtoul(globalPIDString, NULL, 10);
+		if (globalPID == 0)
+		{
+			/*
+			 * INVALID_CITUS_INTERNAL_BACKEND_GPID is 0, but just to be explicit
+			 * about how we handle strtoul errors.
+			 */
+			return INVALID_CITUS_INTERNAL_BACKEND_GPID;
+		}
+
+		return globalPID;
+	}
+	return INVALID_CITUS_INTERNAL_BACKEND_GPID;
 }
 
 
@@ -1438,21 +1454,20 @@ IsExternalClientBackend(void)
 void
 DetermineCitusBackendType(const char *applicationName)
 {
-	if (ExtractGlobalPID(applicationName) != INVALID_CITUS_INTERNAL_BACKEND_GPID)
+	if (applicationName &&
+		ExtractGlobalPID(applicationName) != INVALID_CITUS_INTERNAL_BACKEND_GPID)
 	{
-		CurrentBackendType = CITUS_INTERNAL_BACKEND;
+		for (int i = 0; i < lengthof(citusBackendPrefixes); i++)
+		{
+			uint64 prefixLength = strlen(citusBackendPrefixes[i]);
+
+			/* does application name start with this prefix prefix */
+			if (strncmp(applicationName, citusBackendPrefixes[i], prefixLength) == 0)
+			{
+				CurrentBackendType = citusBackendTypes[i];
+				return;
+			}
+		}
 	}
-	else if (applicationName && strcmp(applicationName, CITUS_REBALANCER_NAME) == 0)
-	{
-		CurrentBackendType = CITUS_REBALANCER_BACKEND;
-	}
-	else if (applicationName &&
-			 strcmp(applicationName, CITUS_RUN_COMMAND_APPLICATION_NAME) == 0)
-	{
-		CurrentBackendType = CITUS_RUN_COMMAND_BACKEND;
-	}
-	else
-	{
-		CurrentBackendType = EXTERNAL_CLIENT_BACKEND;
-	}
+	CurrentBackendType = EXTERNAL_CLIENT_BACKEND;
 }
