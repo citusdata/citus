@@ -203,7 +203,10 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 
 	if (distributedPlan->subPlanList != NIL)
 	{
+		/* ExplainSubPlans calls ExplainOnePlan which uses the ActiveSnapshot.*/
+		PushActiveSnapshot(executorState->es_snapshot);
 		ExplainSubPlans(distributedPlan, es);
+		PopActiveSnapshot();
 	}
 
 	ExplainJob(scanState, distributedPlan->workerJob, es, params);
