@@ -35,48 +35,37 @@ session "s1"
 
 step "s1-rebalance-c1-block-writes"
 {
-	BEGIN;
-	SELECT * FROM get_rebalance_table_shards_plan('colocated1');
 	SELECT rebalance_table_shards('colocated1', shard_transfer_mode:='block_writes');
 }
 
 step "s1-rebalance-c1-online"
 {
-	BEGIN;
-	SELECT * FROM get_rebalance_table_shards_plan('colocated1');
 	SELECT rebalance_table_shards('colocated1', shard_transfer_mode:='force_logical');
 }
 
 step "s1-shard-move-c1-block-writes"
 {
-	BEGIN;
 	SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
 }
 
 step "s1-shard-copy-c1-block-writes"
 {
-	BEGIN;
 	UPDATE pg_dist_partition SET repmodel = 'c' WHERE logicalrelid IN ('colocated1', 'colocated2');
 	SELECT citus_copy_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, transfer_mode:='block_writes');
 }
 
 step "s1-shard-move-c1-online"
 {
-	BEGIN;
 	SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='force_logical');
 }
 
 step "s1-shard-copy-c1-online"
 {
-	BEGIN;
 	UPDATE pg_dist_partition SET repmodel = 'c' WHERE logicalrelid IN ('colocated1', 'colocated2');
 	SELECT citus_copy_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, transfer_mode:='force_logical');
 }
 
-step "s1-commit"
-{
-	COMMIT;
-}
+step "s1-wait" {}
 
 session "s2"
 
@@ -186,30 +175,30 @@ step "s7-get-progress"
 }
 
 // blocking rebalancer does what it should
-permutation "s2-lock-1-start" "s1-rebalance-c1-block-writes" "s7-get-progress" "s2-unlock-1-start" "s1-commit" "s7-get-progress"
-permutation "s3-lock-2-start" "s1-rebalance-c1-block-writes" "s7-get-progress" "s3-unlock-2-start" "s1-commit" "s7-get-progress"
-permutation "s6-acquire-advisory-lock" "s1-rebalance-c1-block-writes" "s7-get-progress" "s6-release-advisory-lock" "s1-commit" "s7-get-progress"
+permutation "s2-lock-1-start" "s1-rebalance-c1-block-writes" "s7-get-progress" "s2-unlock-1-start" "s1-wait" "s7-get-progress"
+permutation "s3-lock-2-start" "s1-rebalance-c1-block-writes" "s7-get-progress" "s3-unlock-2-start" "s1-wait" "s7-get-progress"
+permutation "s6-acquire-advisory-lock" "s1-rebalance-c1-block-writes" "s7-get-progress" "s6-release-advisory-lock" "s1-wait" "s7-get-progress"
 
 // online rebalancer
-permutation "s5-acquire-advisory-lock" "s1-rebalance-c1-online" "s7-get-progress" "s5-release-advisory-lock" "s1-commit" "s7-get-progress"
-permutation "s6-acquire-advisory-lock" "s1-rebalance-c1-online" "s7-get-progress" "s6-release-advisory-lock" "s1-commit" "s7-get-progress"
+permutation "s5-acquire-advisory-lock" "s1-rebalance-c1-online" "s7-get-progress" "s5-release-advisory-lock" "s1-wait" "s7-get-progress"
+permutation "s6-acquire-advisory-lock" "s1-rebalance-c1-online" "s7-get-progress" "s6-release-advisory-lock" "s1-wait" "s7-get-progress"
 
 // blocking shard move
-permutation "s2-lock-1-start" "s1-shard-move-c1-block-writes" "s7-get-progress" "s2-unlock-1-start" "s1-commit" "s7-get-progress"
-permutation "s6-acquire-advisory-lock" "s1-shard-move-c1-block-writes" "s7-get-progress" "s6-release-advisory-lock" "s1-commit" "s7-get-progress"
+permutation "s2-lock-1-start" "s1-shard-move-c1-block-writes" "s7-get-progress" "s2-unlock-1-start" "s1-wait" "s7-get-progress"
+permutation "s6-acquire-advisory-lock" "s1-shard-move-c1-block-writes" "s7-get-progress" "s6-release-advisory-lock" "s1-wait" "s7-get-progress"
 
 // blocking shard copy
-permutation "s2-lock-1-start" "s1-shard-copy-c1-block-writes" "s7-get-progress" "s2-unlock-1-start" "s1-commit"
-permutation "s6-acquire-advisory-lock" "s1-shard-copy-c1-block-writes" "s7-get-progress" "s6-release-advisory-lock" "s1-commit" "s7-get-progress"
+permutation "s2-lock-1-start" "s1-shard-copy-c1-block-writes" "s7-get-progress" "s2-unlock-1-start" "s1-wait"
+permutation "s6-acquire-advisory-lock" "s1-shard-copy-c1-block-writes" "s7-get-progress" "s6-release-advisory-lock" "s1-wait" "s7-get-progress"
 
 // online shard move
-permutation "s5-acquire-advisory-lock" "s1-shard-move-c1-online" "s7-get-progress" "s5-release-advisory-lock" "s1-commit" "s7-get-progress"
-permutation "s6-acquire-advisory-lock" "s1-shard-move-c1-online" "s7-get-progress" "s6-release-advisory-lock" "s1-commit" "s7-get-progress"
+permutation "s5-acquire-advisory-lock" "s1-shard-move-c1-online" "s7-get-progress" "s5-release-advisory-lock" "s1-wait" "s7-get-progress"
+permutation "s6-acquire-advisory-lock" "s1-shard-move-c1-online" "s7-get-progress" "s6-release-advisory-lock" "s1-wait" "s7-get-progress"
 
 // online shard copy
-permutation "s5-acquire-advisory-lock" "s1-shard-copy-c1-online" "s7-get-progress" "s5-release-advisory-lock" "s1-commit"
-permutation "s6-acquire-advisory-lock" "s1-shard-copy-c1-online" "s7-get-progress" "s6-release-advisory-lock" "s1-commit" "s7-get-progress"
+permutation "s5-acquire-advisory-lock" "s1-shard-copy-c1-online" "s7-get-progress" "s5-release-advisory-lock" "s1-wait"
+permutation "s6-acquire-advisory-lock" "s1-shard-copy-c1-online" "s7-get-progress" "s6-release-advisory-lock" "s1-wait" "s7-get-progress"
 
 // parallel blocking shard move
-permutation "s2-lock-1-start" "s1-shard-move-c1-block-writes" "s4-shard-move-sep-block-writes-without-advisory-locks"("s1-shard-move-c1-block-writes") "s7-get-progress" "s2-unlock-1-start" "s1-commit" "s4-commit" "s7-get-progress"
-permutation "s6-acquire-advisory-lock" "s1-shard-move-c1-block-writes" "s4-shard-move-sep-block-writes"("s1-shard-move-c1-block-writes") "s7-get-progress" "s6-release-advisory-lock"  "s1-commit" "s4-commit" "s7-get-progress"
+permutation "s2-lock-1-start" "s1-shard-move-c1-block-writes" "s4-shard-move-sep-block-writes-without-advisory-locks"("s1-shard-move-c1-block-writes") "s7-get-progress" "s2-unlock-1-start" "s1-wait" "s4-commit" "s7-get-progress"
+permutation "s6-acquire-advisory-lock" "s1-shard-move-c1-block-writes" "s4-shard-move-sep-block-writes"("s1-shard-move-c1-block-writes") "s7-get-progress" "s6-release-advisory-lock"  "s1-wait" "s4-commit" "s7-get-progress"
