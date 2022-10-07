@@ -1,6 +1,6 @@
 Parsed test spec with 7 sessions
 
-starting permutation: s2-lock-1-start s1-rebalance-c1-block-writes s7-get-progress s2-unlock-1-start s1-commit s7-get-progress
+starting permutation: s2-lock-1-start s1-rebalance-c1-block-writes s7-get-progress s2-unlock-1-start s1-wait s7-get-progress
 master_set_node_property
 ---------------------------------------------------------------------
 
@@ -12,8 +12,6 @@ step s2-lock-1-start:
  DELETE FROM separate WHERE test_id = 1;
 
 step s1-rebalance-c1-block-writes:
- BEGIN;
- SELECT * FROM get_rebalance_table_shards_plan('colocated1');
  SELECT rebalance_table_shards('colocated1', shard_transfer_mode:='block_writes');
  <waiting ...>
 step s7-get-progress: 
@@ -48,22 +46,12 @@ step s2-unlock-1-start:
  ROLLBACK;
 
 step s1-rebalance-c1-block-writes: <... completed>
-table_name|shardid|shard_size|sourcename|sourceport|targetname|targetport
----------------------------------------------------------------------
-colocated1|1500001|         0|localhost |     57637|localhost |     57638
-colocated2|1500005|         0|localhost |     57637|localhost |     57638
-colocated1|1500002|         0|localhost |     57637|localhost |     57638
-colocated2|1500006|         0|localhost |     57637|localhost |     57638
-(4 rows)
-
 rebalance_table_shards
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-commit:
- COMMIT;
-
+step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
  WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
@@ -89,7 +77,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 (0 rows)
 
 
-starting permutation: s3-lock-2-start s1-rebalance-c1-block-writes s7-get-progress s3-unlock-2-start s1-commit s7-get-progress
+starting permutation: s3-lock-2-start s1-rebalance-c1-block-writes s7-get-progress s3-unlock-2-start s1-wait s7-get-progress
 master_set_node_property
 ---------------------------------------------------------------------
 
@@ -100,8 +88,6 @@ step s3-lock-2-start:
  DELETE FROM colocated1 WHERE test_id = 3;
 
 step s1-rebalance-c1-block-writes:
- BEGIN;
- SELECT * FROM get_rebalance_table_shards_plan('colocated1');
  SELECT rebalance_table_shards('colocated1', shard_transfer_mode:='block_writes');
  <waiting ...>
 step s7-get-progress: 
@@ -136,22 +122,12 @@ step s3-unlock-2-start:
  ROLLBACK;
 
 step s1-rebalance-c1-block-writes: <... completed>
-table_name|shardid|shard_size|sourcename|sourceport|targetname|targetport
----------------------------------------------------------------------
-colocated1|1500001|         0|localhost |     57637|localhost |     57638
-colocated2|1500005|         0|localhost |     57637|localhost |     57638
-colocated1|1500002|         0|localhost |     57637|localhost |     57638
-colocated2|1500006|         0|localhost |     57637|localhost |     57638
-(4 rows)
-
 rebalance_table_shards
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-commit:
- COMMIT;
-
+step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
  WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
@@ -177,7 +153,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 (0 rows)
 
 
-starting permutation: s6-acquire-advisory-lock s1-rebalance-c1-block-writes s7-get-progress s6-release-advisory-lock s1-commit s7-get-progress
+starting permutation: s6-acquire-advisory-lock s1-rebalance-c1-block-writes s7-get-progress s6-release-advisory-lock s1-wait s7-get-progress
 master_set_node_property
 ---------------------------------------------------------------------
 
@@ -192,8 +168,6 @@ pg_advisory_lock
 (1 row)
 
 step s1-rebalance-c1-block-writes:
- BEGIN;
- SELECT * FROM get_rebalance_table_shards_plan('colocated1');
  SELECT rebalance_table_shards('colocated1', shard_transfer_mode:='block_writes');
  <waiting ...>
 step s7-get-progress: 
@@ -233,22 +207,12 @@ t
 (1 row)
 
 step s1-rebalance-c1-block-writes: <... completed>
-table_name|shardid|shard_size|sourcename|sourceport|targetname|targetport
----------------------------------------------------------------------
-colocated1|1500001|         0|localhost |     57637|localhost |     57638
-colocated2|1500005|         0|localhost |     57637|localhost |     57638
-colocated1|1500002|         0|localhost |     57637|localhost |     57638
-colocated2|1500006|         0|localhost |     57637|localhost |     57638
-(4 rows)
-
 rebalance_table_shards
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-commit:
- COMMIT;
-
+step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
  WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
@@ -274,7 +238,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 (0 rows)
 
 
-starting permutation: s5-acquire-advisory-lock s1-rebalance-c1-online s7-get-progress s5-release-advisory-lock s1-commit s7-get-progress
+starting permutation: s5-acquire-advisory-lock s1-rebalance-c1-online s7-get-progress s5-release-advisory-lock s1-wait s7-get-progress
 master_set_node_property
 ---------------------------------------------------------------------
 
@@ -289,8 +253,6 @@ pg_advisory_lock
 (1 row)
 
 step s1-rebalance-c1-online:
- BEGIN;
- SELECT * FROM get_rebalance_table_shards_plan('colocated1');
  SELECT rebalance_table_shards('colocated1', shard_transfer_mode:='force_logical');
  <waiting ...>
 step s7-get-progress: 
@@ -330,22 +292,12 @@ t
 (1 row)
 
 step s1-rebalance-c1-online: <... completed>
-table_name|shardid|shard_size|sourcename|sourceport|targetname|targetport
----------------------------------------------------------------------
-colocated1|1500001|         0|localhost |     57637|localhost |     57638
-colocated2|1500005|         0|localhost |     57637|localhost |     57638
-colocated1|1500002|         0|localhost |     57637|localhost |     57638
-colocated2|1500006|         0|localhost |     57637|localhost |     57638
-(4 rows)
-
 rebalance_table_shards
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-commit:
- COMMIT;
-
+step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
  WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
@@ -371,7 +323,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 (0 rows)
 
 
-starting permutation: s6-acquire-advisory-lock s1-rebalance-c1-online s7-get-progress s6-release-advisory-lock s1-commit s7-get-progress
+starting permutation: s6-acquire-advisory-lock s1-rebalance-c1-online s7-get-progress s6-release-advisory-lock s1-wait s7-get-progress
 master_set_node_property
 ---------------------------------------------------------------------
 
@@ -386,8 +338,6 @@ pg_advisory_lock
 (1 row)
 
 step s1-rebalance-c1-online:
- BEGIN;
- SELECT * FROM get_rebalance_table_shards_plan('colocated1');
  SELECT rebalance_table_shards('colocated1', shard_transfer_mode:='force_logical');
  <waiting ...>
 step s7-get-progress: 
@@ -427,22 +377,12 @@ t
 (1 row)
 
 step s1-rebalance-c1-online: <... completed>
-table_name|shardid|shard_size|sourcename|sourceport|targetname|targetport
----------------------------------------------------------------------
-colocated1|1500001|         0|localhost |     57637|localhost |     57638
-colocated2|1500005|         0|localhost |     57637|localhost |     57638
-colocated1|1500002|         0|localhost |     57637|localhost |     57638
-colocated2|1500006|         0|localhost |     57637|localhost |     57638
-(4 rows)
-
 rebalance_table_shards
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-commit:
- COMMIT;
-
+step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
  WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
@@ -468,7 +408,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 (0 rows)
 
 
-starting permutation: s2-lock-1-start s1-shard-move-c1-block-writes s7-get-progress s2-unlock-1-start s1-commit s7-get-progress
+starting permutation: s2-lock-1-start s1-shard-move-c1-block-writes s7-get-progress s2-unlock-1-start s1-wait s7-get-progress
 master_set_node_property
 ---------------------------------------------------------------------
 
@@ -480,7 +420,6 @@ step s2-lock-1-start:
  DELETE FROM separate WHERE test_id = 1;
 
 step s1-shard-move-c1-block-writes:
- BEGIN;
  SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
  <waiting ...>
 step s7-get-progress: 
@@ -518,9 +457,7 @@ citus_move_shard_placement
 
 (1 row)
 
-step s1-commit:
- COMMIT;
-
+step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
  WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
@@ -546,7 +483,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 (0 rows)
 
 
-starting permutation: s6-acquire-advisory-lock s1-shard-move-c1-block-writes s7-get-progress s6-release-advisory-lock s1-commit s7-get-progress
+starting permutation: s6-acquire-advisory-lock s1-shard-move-c1-block-writes s7-get-progress s6-release-advisory-lock s1-wait s7-get-progress
 master_set_node_property
 ---------------------------------------------------------------------
 
@@ -561,7 +498,6 @@ pg_advisory_lock
 (1 row)
 
 step s1-shard-move-c1-block-writes:
- BEGIN;
  SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
  <waiting ...>
 step s7-get-progress: 
@@ -604,9 +540,7 @@ citus_move_shard_placement
 
 (1 row)
 
-step s1-commit:
- COMMIT;
-
+step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
  WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
@@ -632,7 +566,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 (0 rows)
 
 
-starting permutation: s2-lock-1-start s1-shard-copy-c1-block-writes s7-get-progress s2-unlock-1-start s1-commit
+starting permutation: s2-lock-1-start s1-shard-copy-c1-block-writes s7-get-progress s2-unlock-1-start s1-wait
 master_set_node_property
 ---------------------------------------------------------------------
 
@@ -644,7 +578,6 @@ step s2-lock-1-start:
  DELETE FROM separate WHERE test_id = 1;
 
 step s1-shard-copy-c1-block-writes:
- BEGIN;
  UPDATE pg_dist_partition SET repmodel = 'c' WHERE logicalrelid IN ('colocated1', 'colocated2');
  SELECT citus_copy_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, transfer_mode:='block_writes');
  <waiting ...>
@@ -683,11 +616,9 @@ citus_copy_shard_placement
 
 (1 row)
 
-step s1-commit:
- COMMIT;
+step s1-wait:
 
-
-starting permutation: s6-acquire-advisory-lock s1-shard-copy-c1-block-writes s7-get-progress s6-release-advisory-lock s1-commit s7-get-progress
+starting permutation: s6-acquire-advisory-lock s1-shard-copy-c1-block-writes s7-get-progress s6-release-advisory-lock s1-wait s7-get-progress
 master_set_node_property
 ---------------------------------------------------------------------
 
@@ -702,7 +633,6 @@ pg_advisory_lock
 (1 row)
 
 step s1-shard-copy-c1-block-writes:
- BEGIN;
  UPDATE pg_dist_partition SET repmodel = 'c' WHERE logicalrelid IN ('colocated1', 'colocated2');
  SELECT citus_copy_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, transfer_mode:='block_writes');
  <waiting ...>
@@ -746,9 +676,7 @@ citus_copy_shard_placement
 
 (1 row)
 
-step s1-commit:
- COMMIT;
-
+step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
  WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
@@ -774,7 +702,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 (0 rows)
 
 
-starting permutation: s5-acquire-advisory-lock s1-shard-move-c1-online s7-get-progress s5-release-advisory-lock s1-commit s7-get-progress
+starting permutation: s5-acquire-advisory-lock s1-shard-move-c1-online s7-get-progress s5-release-advisory-lock s1-wait s7-get-progress
 master_set_node_property
 ---------------------------------------------------------------------
 
@@ -789,7 +717,6 @@ pg_advisory_lock
 (1 row)
 
 step s1-shard-move-c1-online:
- BEGIN;
  SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='force_logical');
  <waiting ...>
 step s7-get-progress: 
@@ -832,9 +759,7 @@ citus_move_shard_placement
 
 (1 row)
 
-step s1-commit:
- COMMIT;
-
+step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
  WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
@@ -860,7 +785,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 (0 rows)
 
 
-starting permutation: s6-acquire-advisory-lock s1-shard-move-c1-online s7-get-progress s6-release-advisory-lock s1-commit s7-get-progress
+starting permutation: s6-acquire-advisory-lock s1-shard-move-c1-online s7-get-progress s6-release-advisory-lock s1-wait s7-get-progress
 master_set_node_property
 ---------------------------------------------------------------------
 
@@ -875,7 +800,6 @@ pg_advisory_lock
 (1 row)
 
 step s1-shard-move-c1-online:
- BEGIN;
  SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='force_logical');
  <waiting ...>
 step s7-get-progress: 
@@ -918,9 +842,7 @@ citus_move_shard_placement
 
 (1 row)
 
-step s1-commit:
- COMMIT;
-
+step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
  WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
@@ -946,7 +868,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 (0 rows)
 
 
-starting permutation: s5-acquire-advisory-lock s1-shard-copy-c1-online s7-get-progress s5-release-advisory-lock s1-commit
+starting permutation: s5-acquire-advisory-lock s1-shard-copy-c1-online s7-get-progress s5-release-advisory-lock s1-wait
 master_set_node_property
 ---------------------------------------------------------------------
 
@@ -961,7 +883,6 @@ pg_advisory_lock
 (1 row)
 
 step s1-shard-copy-c1-online:
- BEGIN;
  UPDATE pg_dist_partition SET repmodel = 'c' WHERE logicalrelid IN ('colocated1', 'colocated2');
  SELECT citus_copy_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, transfer_mode:='force_logical');
  <waiting ...>
@@ -1005,11 +926,9 @@ citus_copy_shard_placement
 
 (1 row)
 
-step s1-commit:
- COMMIT;
+step s1-wait:
 
-
-starting permutation: s6-acquire-advisory-lock s1-shard-copy-c1-online s7-get-progress s6-release-advisory-lock s1-commit s7-get-progress
+starting permutation: s6-acquire-advisory-lock s1-shard-copy-c1-online s7-get-progress s6-release-advisory-lock s1-wait s7-get-progress
 master_set_node_property
 ---------------------------------------------------------------------
 
@@ -1024,7 +943,6 @@ pg_advisory_lock
 (1 row)
 
 step s1-shard-copy-c1-online:
- BEGIN;
  UPDATE pg_dist_partition SET repmodel = 'c' WHERE logicalrelid IN ('colocated1', 'colocated2');
  SELECT citus_copy_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, transfer_mode:='force_logical');
  <waiting ...>
@@ -1068,9 +986,7 @@ citus_copy_shard_placement
 
 (1 row)
 
-step s1-commit:
- COMMIT;
-
+step s1-wait:
 step s7-get-progress:
  set LOCAL client_min_messages=NOTICE;
  WITH possible_sizes(size) as (VALUES (0), (8000), (50000), (200000), (400000))
@@ -1096,7 +1012,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 (0 rows)
 
 
-starting permutation: s2-lock-1-start s1-shard-move-c1-block-writes s4-shard-move-sep-block-writes-without-advisory-locks s7-get-progress s2-unlock-1-start s1-commit s4-commit s7-get-progress
+starting permutation: s2-lock-1-start s1-shard-move-c1-block-writes s4-shard-move-sep-block-writes-without-advisory-locks s7-get-progress s2-unlock-1-start s1-wait s4-commit s7-get-progress
 master_set_node_property
 ---------------------------------------------------------------------
 
@@ -1108,7 +1024,6 @@ step s2-lock-1-start:
  DELETE FROM separate WHERE test_id = 1;
 
 step s1-shard-move-c1-block-writes:
- BEGIN;
  SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
  <waiting ...>
 step s4-shard-move-sep-block-writes-without-advisory-locks: 
@@ -1158,9 +1073,7 @@ citus_move_shard_placement
 
 (1 row)
 
-step s1-commit:
- COMMIT;
-
+step s1-wait:
 step s4-commit:
  COMMIT;
 
@@ -1189,7 +1102,7 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 (0 rows)
 
 
-starting permutation: s6-acquire-advisory-lock s1-shard-move-c1-block-writes s4-shard-move-sep-block-writes s7-get-progress s6-release-advisory-lock s1-commit s4-commit s7-get-progress
+starting permutation: s6-acquire-advisory-lock s1-shard-move-c1-block-writes s4-shard-move-sep-block-writes s7-get-progress s6-release-advisory-lock s1-wait s4-commit s7-get-progress
 master_set_node_property
 ---------------------------------------------------------------------
 
@@ -1204,7 +1117,6 @@ pg_advisory_lock
 (1 row)
 
 step s1-shard-move-c1-block-writes:
- BEGIN;
  SELECT citus_move_shard_placement(1500001, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
  <waiting ...>
 step s4-shard-move-sep-block-writes: 
@@ -1252,15 +1164,13 @@ citus_move_shard_placement
 
 (1 row)
 
-step s1-commit:
- COMMIT;
-
 step s4-shard-move-sep-block-writes: <... completed>
 citus_move_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
 
+step s1-wait:
 step s4-commit:
  COMMIT;
 
