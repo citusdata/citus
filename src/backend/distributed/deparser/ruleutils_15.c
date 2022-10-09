@@ -7914,7 +7914,8 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 			/* Reconstruct the columndef list, which is also the aliases */
 			get_from_clause_coldeflist(rtfunc1, colinfo, context);
 		}
-		else if (GetRangeTblKind(rte) != CITUS_RTE_SHARD)
+		else if (GetRangeTblKind(rte) != CITUS_RTE_SHARD ||
+				 (rte->alias != NULL && rte->alias->colnames != NIL))
 		{
 			/* Else print column aliases as needed */
 			get_column_alias_list(colinfo, context);

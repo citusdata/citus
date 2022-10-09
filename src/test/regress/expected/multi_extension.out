@@ -909,6 +909,24 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function worker_fix_partition_shard_index_names(regclass,text,text) void
 (4 rows)
 
+-- There was a bug when downgrading to 10.2-2 from 10.2-4
+-- Test that we do not have any issues with this particular downgrade
+ALTER EXTENSION citus UPDATE TO '10.2-2';
+ALTER EXTENSION citus UPDATE TO '10.2-4';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Test downgrade to 10.2-4 from 10.2-5
+ALTER EXTENSION citus UPDATE TO '10.2-5';
+ALTER EXTENSION citus UPDATE TO '10.2-4';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
 -- Snapshot of state at 10.2-5
 ALTER EXTENSION citus UPDATE TO '10.2-5';
 SELECT * FROM multi_extension.print_extension_changes();
@@ -916,9 +934,6 @@ SELECT * FROM multi_extension.print_extension_changes();
 ---------------------------------------------------------------------
 (0 rows)
 
--- Test downgrade to 10.2-4 from 10.2-5
-ALTER EXTENSION citus UPDATE TO '10.2-4';
-ALTER EXTENSION citus UPDATE TO '10.2-5';
 -- Make sure that we defined dependencies from all rel objects (tables,
 -- indexes, sequences ..) to columnar table access method ...
 SELECT pg_class.oid INTO columnar_schema_members
@@ -1184,9 +1199,11 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 11.2-1
 ALTER EXTENSION citus UPDATE TO '11.2-1';
 SELECT * FROM multi_extension.print_extension_changes();
- previous_object | current_object
+                                                                                                                                    previous_object                                                                                                                                     |                                                                                                                                                        current_object
 ---------------------------------------------------------------------
-(0 rows)
+ function get_rebalance_progress() TABLE(sessionid integer, table_name regclass, shardid bigint, shard_size bigint, sourcename text, sourceport integer, targetname text, targetport integer, progress bigint, source_shard_size bigint, target_shard_size bigint, operation_type text) |
+                                                                                                                                                                                                                                                                                        | function get_rebalance_progress() TABLE(sessionid integer, table_name regclass, shardid bigint, shard_size bigint, sourcename text, sourceport integer, targetname text, targetport integer, progress bigint, source_shard_size bigint, target_shard_size bigint, operation_type text, source_lsn pg_lsn, target_lsn pg_lsn)
+(2 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
