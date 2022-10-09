@@ -77,6 +77,7 @@ typedef struct RebalanceOptions
 	float4 improvementThreshold;
 	Form_pg_dist_rebalance_strategy rebalanceStrategy;
 	const char *operationName;
+	WorkerNode *workerNode;
 } RebalanceOptions;
 
 
@@ -209,7 +210,6 @@ static bool WorkerNodeListContains(List *workerNodeList, const char *workerName,
 								   uint32 workerPort);
 static void UpdateColocatedShardPlacementProgress(uint64 shardId, char *sourceName,
 												  int sourcePort, uint64 progress);
-static bool IsPlacementOnWorkerNode(ShardPlacement *placement, WorkerNode *workerNode);
 static NodeFillState * FindFillStateForPlacement(RebalanceState *state,
 												 ShardPlacement *placement);
 static RebalanceState * InitRebalanceState(List *workerNodeList, List *shardPlacementList,
@@ -469,6 +469,13 @@ GetRebalanceSteps(RebalanceOptions *options)
 														  options->excludedShardArray);
 		List *activeShardPlacementListForRelation =
 			FilterShardPlacementList(shardPlacementList, IsActiveShardPlacement);
+
+		if (options->workerNode != NULL)
+		{
+			activeShardPlacementListForRelation = FilterActiveShardPlacementListByNode(
+				shardPlacementList, options->workerNode);
+		}
+
 		activeShardPlacementListList =
 			lappend(activeShardPlacementListList, activeShardPlacementListForRelation);
 	}
@@ -1052,6 +1059,7 @@ citus_drain_node(PG_FUNCTION_ARGS)
 	};
 
 	char *nodeName = text_to_cstring(nodeNameText);
+	options.workerNode = FindWorkerNodeOrError(nodeName, nodePort);
 
 	/*
 	 * This is done in a separate session. This way it's not undone if the
@@ -2291,21 +2299,6 @@ FindFillStateForPlacement(RebalanceState *state, ShardPlacement *placement)
 		}
 	}
 	return NULL;
-}
-
-
-/*
- * IsPlacementOnWorkerNode checks if the shard placement is for to the given
- * workenode.
- */
-static bool
-IsPlacementOnWorkerNode(ShardPlacement *placement, WorkerNode *workerNode)
-{
-	if (strncmp(workerNode->workerName, placement->nodeName, WORKER_LENGTH) != 0)
-	{
-		return false;
-	}
-	return workerNode->workerPort == placement->nodePort;
 }
 
 
