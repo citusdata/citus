@@ -1211,7 +1211,7 @@ StoreErrorMessage(MultiConnection *connection, StringInfo queryResultString)
  * more to avoid confusion).
  */
 bool
-IsSettingSafeToPropagate(char *name)
+IsSettingSafeToPropagate(const char *name)
 {
 	/* if this list grows considerably we should switch to bsearch */
 	const char *skipSettings[] = {
