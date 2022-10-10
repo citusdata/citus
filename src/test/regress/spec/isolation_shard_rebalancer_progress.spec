@@ -1,9 +1,5 @@
 setup
 {
-	CALL citus_cleanup_orphaned_shards();
-}
-setup
-{
 	ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1500001;
 	SET citus.shard_count TO 4;
 	SET citus.shard_replication_factor TO 1;
@@ -105,7 +101,7 @@ step "s4-shard-move-sep-block-writes"
 // Running two shard moves at the same time can cause racy behaviour over who
 // gets the lock. For the test where this move is used in we don't rely on the
 // advisory locks. So we disable taking the advisory lock there to avoid the
-// racy lock acquisition with the other concurretn move.
+// racy lock acquisition with the other concurrent move.
 step "s4-shard-move-sep-block-writes-without-advisory-locks"
 {
 	BEGIN;
