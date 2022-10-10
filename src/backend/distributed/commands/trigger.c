@@ -136,8 +136,6 @@ GetAlterTriggerStateCommand(Oid triggerId)
 	const char *quotedTrigName = quote_identifier(NameStr(triggerForm->tgname));
 	char enableDisableState = triggerForm->tgenabled;
 
-	heap_freetuple(triggerTuple);
-
 	const char *alterTriggerStateStr = NULL;
 	switch (enableDisableState)
 	{
@@ -174,6 +172,13 @@ GetAlterTriggerStateCommand(Oid triggerId)
 
 	appendStringInfo(alterTriggerStateCommand, "ALTER TABLE %s %s TRIGGER %s;",
 					 qualifiedRelName, alterTriggerStateStr, quotedTrigName);
+
+	/*
+	 * Free triggerTuple at the end since quote_identifier() might not return
+	 * a palloc'd string if given identifier doesn't need to be quoted, and in
+	 * that case quotedTrigName would still be bound to triggerTuple.
+	 */
+	heap_freetuple(triggerTuple);
 
 	return alterTriggerStateCommand->data;
 }
