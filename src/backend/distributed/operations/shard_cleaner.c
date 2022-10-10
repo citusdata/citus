@@ -187,7 +187,8 @@ citus_cleanup_orphaned_resources(PG_FUNCTION_ARGS)
 void
 DropOrphanedShardsInSeparateTransaction(void)
 {
-	ExecuteRebalancerCommandInSeparateTransaction("CALL citus_cleanup_orphaned_shards()");
+	ExecuteRebalancerCommandInSeparateTransaction("CALL citus_cleanup_orphaned_shards()",
+												  false);
 }
 
 

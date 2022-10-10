@@ -63,6 +63,8 @@
 #include "utils/syscache.h"
 #include "common/hashfn.h"
 #include "utils/varlena.h"
+#include "utils/guc_tables.h"
+#include "distributed/commands/utility_hook.h"
 
 /* RebalanceOptions are the options used to control the rebalance algorithm */
 typedef struct RebalanceOptions
@@ -1053,7 +1055,7 @@ citus_drain_node(PG_FUNCTION_ARGS)
 	ExecuteRebalancerCommandInSeparateTransaction(psprintf(
 													  "SELECT master_set_node_property(%s, %i, 'shouldhaveshards', false)",
 													  quote_literal_cstr(nodeName),
-													  nodePort));
+													  nodePort), true);
 
 	RebalanceTableShards(&options, shardTransferModeOid);
 
@@ -1951,7 +1953,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	 * In case of failure, we throw an error such that rebalance_table_shards
 	 * fails early.
 	 */
-	ExecuteRebalancerCommandInSeparateTransaction(placementUpdateCommand->data);
+	ExecuteRebalancerCommandInSeparateTransaction(placementUpdateCommand->data, true);
 
 	UpdateColocatedShardPlacementProgress(shardId,
 										  sourceNode->workerName,
@@ -1964,9 +1966,11 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
  * ExecuteCriticalCommandInSeparateTransaction runs a command in a separate
  * transaction that is commited right away. This is useful for things that you
  * don't want to rollback when the current transaction is rolled back.
+ * Set true to 'useExclusiveTransactionBlock' to initiate a BEGIN and COMMIT statements.
  */
 void
-ExecuteRebalancerCommandInSeparateTransaction(char *command)
+ExecuteRebalancerCommandInSeparateTransaction(char *command, bool
+											  useExclusiveTransactionBlock)
 {
 	int connectionFlag = FORCE_NEW_CONNECTION;
 	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
@@ -1978,33 +1982,43 @@ ExecuteRebalancerCommandInSeparateTransaction(char *command)
 	StringInfo setStatements = GetSetStatementsForNewConnections();
 	appendStringInfoString(setApplicationName, setStatements->data);
 
+	if (useExclusiveTransactionBlock)
+	{
+		ExecuteCriticalRemoteCommand(connection, "BEGIN;");
+	}
+
 	ExecuteCriticalRemoteCommand(connection, setApplicationName->data);
 	ExecuteCriticalRemoteCommand(connection, command);
+
+	if (useExclusiveTransactionBlock)
+	{
+		ExecuteCriticalRemoteCommand(connection, "COMMIT;");
+	}
 
 	CloseConnection(connection);
 }
 
 
+/*
+ * TODO:GG Comment
+ */
 StringInfo
-GetSetStatementsForNewConnections(void)
+GetSetStatementsForNewConnections()
 {
 	StringInfo setStatements = makeStringInfo();
 
-	List *variableList = NIL;
-	char *splitCopy = pstrdup(VariablesToBePassedToNewConnections);
+	struct config_generic **guc_vars = get_guc_variables();
+	int gucCount = GetNumConfigOptions();
 
-	if (!SplitGUCList(splitCopy, ',', &variableList))
+	for (int gucIndex = 0; gucIndex < gucCount; gucIndex++)
 	{
-		GUC_check_errdetail("not a valid list of identifiers");
-		return false;
-	}
-
-	char *variableName = NULL;
-	foreach_ptr(variableName, variableList)
-	{
-		const char *variableValue = GetConfigOption(variableName, true, true);
-		appendStringInfo(setStatements, "SET %s TO %s;",
-						 variableName, variableValue);
+		struct config_generic *var = (struct config_generic *) guc_vars[gucIndex];
+		if (var->source == PGC_S_SESSION && IsSettingSafeToPropagate(var->name))
+		{
+			const char *variableValue = GetConfigOption(var->name, true, true);
+			appendStringInfo(setStatements, "SET LOCAL %s TO '%s';",
+							 var->name, variableValue);
+		}
 	}
 
 	return setStatements;
