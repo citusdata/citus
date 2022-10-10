@@ -1387,6 +1387,21 @@ IsActiveShardPlacement(ShardPlacement *shardPlacement)
 
 
 /*
+ * IsPlacementOnWorkerNode checks if the shard placement is for to the given
+ * workenode.
+ */
+bool
+IsPlacementOnWorkerNode(ShardPlacement *placement, WorkerNode *workerNode)
+{
+	if (strncmp(workerNode->workerName, placement->nodeName, WORKER_LENGTH) != 0)
+	{
+		return false;
+	}
+	return workerNode->workerPort == placement->nodePort;
+}
+
+
+/*
  * FilterShardPlacementList filters a list of shard placements based on a filter.
  * Keep only the shard for which the filter function returns true.
  */
@@ -1399,6 +1414,30 @@ FilterShardPlacementList(List *shardPlacementList, bool (*filter)(ShardPlacement
 	foreach_ptr(shardPlacement, shardPlacementList)
 	{
 		if (filter(shardPlacement))
+		{
+			filteredShardPlacementList = lappend(filteredShardPlacementList,
+												 shardPlacement);
+		}
+	}
+
+	return filteredShardPlacementList;
+}
+
+
+/*
+ * FilterActiveShardPlacementListByNode filters a list of active shard placements based on given nodeName and nodePort.
+ */
+List *
+FilterActiveShardPlacementListByNode(List *shardPlacementList, WorkerNode *workerNode)
+{
+	List *activeShardPlacementList = FilterShardPlacementList(shardPlacementList,
+															  IsActiveShardPlacement);
+	List *filteredShardPlacementList = NIL;
+	ShardPlacement *shardPlacement = NULL;
+
+	foreach_ptr(shardPlacement, activeShardPlacementList)
+	{
+		if (IsPlacementOnWorkerNode(shardPlacement, workerNode))
 		{
 			filteredShardPlacementList = lappend(filteredShardPlacementList,
 												 shardPlacement);
