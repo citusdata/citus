@@ -2328,17 +2328,6 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
-		"citus.variables_to_be_passed_to_new_connections",
-		gettext_noop(
-			"Comma-seperated value of GUC variables to be passed to each worker node connection."),
-		NULL,
-		&VariablesToBePassedToNewConnections,
-		"",
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomStringVariable(
 		"citus.version",
 		gettext_noop("Shows the Citus library version"),
 		NULL,
