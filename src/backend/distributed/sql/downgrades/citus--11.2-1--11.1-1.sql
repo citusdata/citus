@@ -1,1 +1,1 @@
--- citus--11.2-1--11.1-1
+#include "../udfs/get_rebalance_progress/11.1-1.sql"

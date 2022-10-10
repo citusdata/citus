@@ -400,13 +400,21 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '10.2-4';
 SELECT * FROM multi_extension.print_extension_changes();
 
--- Snapshot of state at 10.2-5
-ALTER EXTENSION citus UPDATE TO '10.2-5';
+-- There was a bug when downgrading to 10.2-2 from 10.2-4
+-- Test that we do not have any issues with this particular downgrade
+ALTER EXTENSION citus UPDATE TO '10.2-2';
+ALTER EXTENSION citus UPDATE TO '10.2-4';
 SELECT * FROM multi_extension.print_extension_changes();
 
 -- Test downgrade to 10.2-4 from 10.2-5
-ALTER EXTENSION citus UPDATE TO '10.2-4';
 ALTER EXTENSION citus UPDATE TO '10.2-5';
+ALTER EXTENSION citus UPDATE TO '10.2-4';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 10.2-5
+ALTER EXTENSION citus UPDATE TO '10.2-5';
+SELECT * FROM multi_extension.print_extension_changes();
 
 -- Make sure that we defined dependencies from all rel objects (tables,
 -- indexes, sequences ..) to columnar table access method ...

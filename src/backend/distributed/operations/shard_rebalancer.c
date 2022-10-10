@@ -39,6 +39,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/multi_client_executor.h"
+#include "distributed/multi_logical_replication.h"
 #include "distributed/multi_progress.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_rebalance_strategy.h"
@@ -60,6 +61,7 @@
 #include "utils/json.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/pg_lsn.h"
 #include "utils/syscache.h"
 #include "common/hashfn.h"
 #include "utils/varlena.h"
@@ -77,6 +79,7 @@ typedef struct RebalanceOptions
 	float4 improvementThreshold;
 	Form_pg_dist_rebalance_strategy rebalanceStrategy;
 	const char *operationName;
+	WorkerNode *workerNode;
 } RebalanceOptions;
 
 
@@ -168,6 +171,7 @@ typedef struct ShardStatistics
 
 	/* The shard its size in bytes. */
 	uint64 totalSize;
+	XLogRecPtr shardLSN;
 } ShardStatistics;
 
 /*
@@ -177,6 +181,7 @@ typedef struct ShardStatistics
 typedef struct WorkerShardStatistics
 {
 	WorkerHashKey worker;
+	XLogRecPtr workerLSN;
 
 	/*
 	 * Statistics for each shard on this worker:
@@ -208,7 +213,6 @@ static bool WorkerNodeListContains(List *workerNodeList, const char *workerName,
 								   uint32 workerPort);
 static void UpdateColocatedShardPlacementProgress(uint64 shardId, char *sourceName,
 												  int sourcePort, uint64 progress);
-static bool IsPlacementOnWorkerNode(ShardPlacement *placement, WorkerNode *workerNode);
 static NodeFillState * FindFillStateForPlacement(RebalanceState *state,
 												 ShardPlacement *placement);
 static RebalanceState * InitRebalanceState(List *workerNodeList, List *shardPlacementList,
@@ -249,6 +253,10 @@ static HTAB * GetMovedShardIdsByWorker(PlacementUpdateEventProgress *steps,
 									   int stepCount, bool fromSource);
 static uint64 WorkerShardSize(HTAB *workerShardStatistics,
 							  char *workerName, int workerPort, uint64 shardId);
+static XLogRecPtr WorkerShardLSN(HTAB *workerShardStatisticsHash, char *workerName,
+								 int workerPort, uint64 shardId);
+static XLogRecPtr WorkerLSN(HTAB *workerShardStatisticsHash,
+							char *workerName, int workerPort);
 static void AddToWorkerShardIdSet(HTAB *shardsByWorker, char *workerName, int workerPort,
 								  uint64 shardId);
 static HTAB * BuildShardSizesHash(ProgressMonitorData *monitor, HTAB *shardStatistics);
@@ -464,6 +472,13 @@ GetRebalanceSteps(RebalanceOptions *options)
 														  options->excludedShardArray);
 		List *activeShardPlacementListForRelation =
 			FilterShardPlacementList(shardPlacementList, IsActiveShardPlacement);
+
+		if (options->workerNode != NULL)
+		{
+			activeShardPlacementListForRelation = FilterActiveShardPlacementListByNode(
+				shardPlacementList, options->workerNode);
+		}
+
 		activeShardPlacementListList =
 			lappend(activeShardPlacementListList, activeShardPlacementListForRelation);
 	}
@@ -1047,6 +1062,7 @@ citus_drain_node(PG_FUNCTION_ARGS)
 	};
 
 	char *nodeName = text_to_cstring(nodeNameText);
+	options.workerNode = FindWorkerNodeOrError(nodeName, nodePort);
 
 	/*
 	 * This is done in a separate session. This way it's not undone if the
@@ -1235,6 +1251,11 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 			uint64 targetSize = WorkerShardSize(shardStatistics, step->targetName,
 												step->targetPort, shardId);
 
+			XLogRecPtr sourceLSN = WorkerLSN(shardStatistics, step->sourceName,
+											 step->sourcePort);
+			XLogRecPtr targetLSN = WorkerShardLSN(shardStatistics, step->targetName,
+												  step->targetPort, shardId);
+
 			uint64 shardSize = 0;
 			ShardStatistics *shardSizesStat =
 				hash_search(shardSizes, &shardId, HASH_FIND, NULL);
@@ -1243,8 +1264,8 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 				shardSize = shardSizesStat->totalSize;
 			}
 
-			Datum values[12];
-			bool nulls[12];
+			Datum values[14];
+			bool nulls[14];
 
 			memset(values, 0, sizeof(values));
 			memset(nulls, 0, sizeof(nulls));
@@ -1262,6 +1283,8 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 			values[10] = UInt64GetDatum(targetSize);
 			values[11] = PointerGetDatum(
 				cstring_to_text(PlacementUpdateTypeNames[step->updateType]));
+			values[12] = LSNGetDatum(sourceLSN);
+			values[13] = LSNGetDatum(targetLSN);
 
 			tuplestore_putvalues(tupstore, tupdesc, values, nulls);
 		}
@@ -1396,6 +1419,59 @@ WorkerShardSize(HTAB *workerShardStatisticsHash, char *workerName, int workerPor
 
 
 /*
+ * WorkerShardLSN returns the LSN of a shard on a worker, based on
+ * the workerShardStatisticsHash. If there is no LSN data in the
+ * statistics object, returns InvalidXLogRecPtr.
+ */
+static XLogRecPtr
+WorkerShardLSN(HTAB *workerShardStatisticsHash, char *workerName, int workerPort,
+			   uint64 shardId)
+{
+	WorkerHashKey workerKey = { 0 };
+	strlcpy(workerKey.hostname, workerName, MAX_NODE_LENGTH);
+	workerKey.port = workerPort;
+
+	WorkerShardStatistics *workerStats =
+		hash_search(workerShardStatisticsHash, &workerKey, HASH_FIND, NULL);
+	if (!workerStats)
+	{
+		return InvalidXLogRecPtr;
+	}
+
+	ShardStatistics *shardStats =
+		hash_search(workerStats->statistics, &shardId, HASH_FIND, NULL);
+	if (!shardStats)
+	{
+		return InvalidXLogRecPtr;
+	}
+
+	return shardStats->shardLSN;
+}
+
+
+/*
+ * WorkerLSN returns the LSN of a worker, based on the workerShardStatisticsHash.
+ * If there is no LSN data in the statistics object, returns InvalidXLogRecPtr.
+ */
+static XLogRecPtr
+WorkerLSN(HTAB *workerShardStatisticsHash, char *workerName, int workerPort)
+{
+	WorkerHashKey workerKey = { 0 };
+	strlcpy(workerKey.hostname, workerName, MAX_NODE_LENGTH);
+	workerKey.port = workerPort;
+
+	WorkerShardStatistics *workerStats =
+		hash_search(workerShardStatisticsHash, &workerKey, HASH_FIND, NULL);
+	if (!workerStats)
+	{
+		return InvalidXLogRecPtr;
+	}
+
+	return workerStats->workerLSN;
+}
+
+
+/*
  * BuildWorkerShardStatisticsHash returns a shard id -> shard statistics hash containing
  * sizes of shards on the source node and destination node.
  */
@@ -1433,6 +1509,7 @@ BuildWorkerShardStatisticsHash(PlacementUpdateEventProgress *steps, int stepCoun
 		WorkerShardStatistics *moveStat =
 			hash_search(workerShardStatistics, &entry->worker, HASH_ENTER, NULL);
 		moveStat->statistics = statistics;
+		moveStat->workerLSN = GetRemoteLogPosition(connection);
 	}
 
 	return workerShardStatistics;
@@ -1484,15 +1561,17 @@ GetShardStatistics(MultiConnection *connection, HTAB *shardIds)
 	appendStringInfoString(query, "))");
 	appendStringInfoString(
 		query,
-		" SELECT shard_id, coalesce(pg_total_relation_size(tables.relid),0)"
+		" SELECT shard_id, coalesce(pg_total_relation_size(tables.relid),0), tables.lsn"
 
 		/* for each shard in shardIds */
 		" FROM shard_names"
 
 		/* check if its name can be found in pg_class, if so return size */
 		" LEFT JOIN"
-		" (SELECT c.oid AS relid, c.relname, n.nspname"
-		" FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace) tables"
+		" (SELECT c.oid AS relid, c.relname, n.nspname, ss.latest_end_lsn AS lsn"
+		" FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+		" LEFT JOIN pg_subscription_rel sr ON sr.srrelid = c.oid "
+		" LEFT JOIN pg_stat_subscription ss ON sr.srsubid = ss.subid) tables"
 		" ON tables.relname = shard_names.table_name AND"
 		" tables.nspname = shard_names.schema_name ");
 
@@ -1533,6 +1612,17 @@ GetShardStatistics(MultiConnection *connection, HTAB *shardIds)
 		ShardStatistics *statistics =
 			hash_search(shardStatistics, &shardId, HASH_ENTER, NULL);
 		statistics->totalSize = totalSize;
+
+		if (PQgetisnull(result, rowIndex, 2))
+		{
+			statistics->shardLSN = InvalidXLogRecPtr;
+		}
+		else
+		{
+			char *LSNString = PQgetvalue(result, rowIndex, 2);
+			Datum LSNDatum = DirectFunctionCall1(pg_lsn_in, CStringGetDatum(LSNString));
+			statistics->shardLSN = DatumGetLSN(LSNDatum);
+		}
 	}
 
 	PQclear(result);
@@ -2253,21 +2343,6 @@ FindFillStateForPlacement(RebalanceState *state, ShardPlacement *placement)
 		}
 	}
 	return NULL;
-}
-
-
-/*
- * IsPlacementOnWorkerNode checks if the shard placement is for to the given
- * workenode.
- */
-static bool
-IsPlacementOnWorkerNode(ShardPlacement *placement, WorkerNode *workerNode)
-{
-	if (strncmp(workerNode->workerName, placement->nodeName, WORKER_LENGTH) != 0)
-	{
-		return false;
-	}
-	return workerNode->workerPort == placement->nodePort;
 }
 
 

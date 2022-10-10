@@ -35,6 +35,7 @@ test: distributed_triggers
 
 test: multi_test_catalog_views
 test: multi_table_ddl
+test: multi_alias
 test: multi_sequence_default
 test: grant_on_sequence_propagation
 test: multi_name_lengths

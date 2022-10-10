@@ -173,7 +173,6 @@ SELECT count(*) FROM distributed_table_composite JOIN postgres_table USING(key)
 	WHERE (distributed_table_composite.key > 10 AND distributed_table_composite.key = 20)
 	OR (distributed_table_composite.value = 'text' AND distributed_table_composite.value = 'text');
 
--- Known bug: #4269
 SELECT count(*) FROM distributed_table_composite foo(a,b,c) JOIN postgres_table ON(foo.a > 1)
 	WHERE foo.a IN (SELECT COUNT(*) FROM local_partitioned_table) AND (foo.a = 10 OR foo.b ='text');
 

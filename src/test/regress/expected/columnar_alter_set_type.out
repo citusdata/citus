@@ -50,3 +50,28 @@ SELECT * FROM test_alter_table ORDER BY a;
 (4 rows)
 
 DROP TABLE test_alter_table;
+--  Make sure that the correct table options are used when rewriting the table.
+-- This is reflected by the VACUUM VERBOSE output right after a rewrite showing
+-- that all chunks are compressed with the configured compression algorithm
+-- https://github.com/citusdata/citus/issues/5927
+CREATE TABLE test(i int) USING columnar;
+ALTER TABLE test SET (columnar.compression = lz4);
+INSERT INTO test VALUES(1);
+VACUUM VERBOSE test;
+INFO:  statistics for "test":
+storage id: xxxxx
+total file size: 24576, total data size: 6
+compression rate: 0.83x
+total row count: 1, stripe count: 1, average rows per stripe: 1
+chunk count: 1, containing data for dropped columns: 0, lz4 compressed: 1
+
+ALTER TABLE test ALTER COLUMN i TYPE int8;
+VACUUM VERBOSE test;
+INFO:  statistics for "test":
+storage id: xxxxx
+total file size: 24576, total data size: 10
+compression rate: 0.90x
+total row count: 1, stripe count: 1, average rows per stripe: 1
+chunk count: 1, containing data for dropped columns: 0, lz4 compressed: 1
+
+DROP TABLE test;

@@ -1,0 +1,176 @@
+--
+-- MULTI_ALIAS
+--
+-- Here we test using various types of aliases for a distributed table
+-- Test file is created when fixing #4269 column alias bug
+--
+CREATE SCHEMA alias;
+SET search_path TO alias;
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 90630800;
+CREATE TABLE alias_test(a int, b int);
+SELECT create_distributed_table('alias_test', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO alias_test VALUES (0, 0), (1, 1);
+SET citus.log_remote_commands TO on;
+SELECT * FROM alias_test;
+NOTICE:  issuing SELECT a, b FROM alias.alias_test_90630800 alias_test
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ a | b
+---------------------------------------------------------------------
+ 0 | 0
+ 1 | 1
+(2 rows)
+
+SELECT * FROM alias_test AS alias_test;
+NOTICE:  issuing SELECT a, b FROM alias.alias_test_90630800 alias_test
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ a | b
+---------------------------------------------------------------------
+ 0 | 0
+ 1 | 1
+(2 rows)
+
+SELECT * FROM alias_test AS another_name;
+NOTICE:  issuing SELECT a, b FROM alias.alias_test_90630800 another_name
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ a | b
+---------------------------------------------------------------------
+ 0 | 0
+ 1 | 1
+(2 rows)
+
+SELECT * FROM alias_test AS alias_test(col1, col2);
+NOTICE:  issuing SELECT col1, col2 FROM alias.alias_test_90630800 alias_test(col1, col2)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ col1 | col2
+---------------------------------------------------------------------
+    0 |    0
+    1 |    1
+(2 rows)
+
+SELECT * FROM alias_test AS another_name(col1, col2);
+NOTICE:  issuing SELECT col1, col2 FROM alias.alias_test_90630800 another_name(col1, col2)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ col1 | col2
+---------------------------------------------------------------------
+    0 |    0
+    1 |    1
+(2 rows)
+
+RESET citus.log_remote_commands;
+-- test everything on https://github.com/citusdata/citus/issues/4269
+CREATE TABLE test (x int, y int, z int);
+INSERT INTO test VALUES (0, 1, 2), (3, 4, 5), (6, 7, 8);
+-- on PG works fine
+SELECT * FROM test AS t1 (a, b, c) ORDER BY 1;
+ a | b | c
+---------------------------------------------------------------------
+ 0 | 1 | 2
+ 3 | 4 | 5
+ 6 | 7 | 8
+(3 rows)
+
+SELECT * FROM test AS t1 (a, b, c) WHERE a  = 6 ORDER BY 2;
+ a | b | c
+---------------------------------------------------------------------
+ 6 | 7 | 8
+(1 row)
+
+CREATE TABLE test_2 (x int, y int);
+INSERT INTO test_2 VALUES (0, 10), (3, 30);
+-- on PG works fine
+SELECT *
+  FROM test t1 (a, b, c) JOIN test_2 t2 (a, d) USING (a)
+  ORDER BY a, d;
+ a | b | c | d
+---------------------------------------------------------------------
+ 0 | 1 | 2 | 10
+ 3 | 4 | 5 | 30
+(2 rows)
+
+-- same queries on Citus now also work!
+SELECT create_distributed_table('test', 'x');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$alias.test$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('test_2', 'x');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$alias.test_2$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.log_remote_commands TO on;
+SELECT * FROM test AS t1 (a, b, c) ORDER BY 1;
+NOTICE:  issuing SELECT a, b, c FROM alias.test_90630801 t1(a, b, c) ORDER BY a
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ a | b | c
+---------------------------------------------------------------------
+ 0 | 1 | 2
+ 3 | 4 | 5
+ 6 | 7 | 8
+(3 rows)
+
+SELECT *
+  FROM test t1 (a, b, c) JOIN test_2 t2 (a, d) USING (a)
+  ORDER BY a, d;
+NOTICE:  issuing SELECT t1.a, t1.b, t1.c, t2.d FROM (alias.test_90630801 t1(a, b, c) JOIN alias.test_2_90630802 t2(a, d) USING (a)) ORDER BY t1.a, t2.d
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ a | b | c | d
+---------------------------------------------------------------------
+ 0 | 1 | 2 | 10
+ 3 | 4 | 5 | 30
+(2 rows)
+
+SELECT * FROM test AS t1 (a, b, c) WHERE a  = 6 ORDER BY 2;
+NOTICE:  issuing SELECT a, b, c FROM alias.test_90630801 t1(a, b, c) WHERE (a OPERATOR(pg_catalog.=) 6) ORDER BY b
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ a | b | c
+---------------------------------------------------------------------
+ 6 | 7 | 8
+(1 row)
+
+SET citus.enable_fast_path_router_planner TO off;
+SELECT * FROM test AS t1 (a, b, c) WHERE a  = 6 ORDER BY 2;
+NOTICE:  issuing SELECT a, b, c FROM alias.test_90630801 t1(a, b, c) WHERE (a OPERATOR(pg_catalog.=) 6) ORDER BY b
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ a | b | c
+---------------------------------------------------------------------
+ 6 | 7 | 8
+(1 row)
+
+RESET citus.enable_fast_path_router_planner;
+-- outer JOINs go through pushdown planner
+SELECT *
+  FROM test t1 (a, b, c) LEFT  JOIN test_2 t2 (a, d) USING (a)
+  ORDER BY a, d;
+NOTICE:  issuing SELECT t1.a, t1.b, t1.c, t2.d FROM (alias.test_90630801 t1(a, b, c) LEFT JOIN alias.test_2_90630802 t2(a, d) USING (a)) ORDER BY t1.a, t2.d
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ a | b | c | d
+---------------------------------------------------------------------
+ 0 | 1 | 2 | 10
+ 3 | 4 | 5 | 30
+ 6 | 7 | 8 |
+(3 rows)
+
+RESET citus.log_remote_commands;
+DROP SCHEMA alias CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to table alias_test
+drop cascades to table test
+drop cascades to table test_2

@@ -473,7 +473,88 @@ SELECT * FROM distributed_table_change;
 SELECT tgrelid::regclass::text, tgname FROM pg_trigger WHERE tgname like 'insert_99_trigger%' ORDER BY 1,2;
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_trigger WHERE tgname like 'insert_99_trigger%'$$);
 
-RESET client_min_messages;
+CREATE TABLE "dist_\'table"(a int);
+
+CREATE FUNCTION trigger_func()
+  RETURNS trigger
+  LANGUAGE plpgsql
+AS $function$
+BEGIN
+	RETURN NULL;
+END;
+$function$;
+
+CREATE TRIGGER default_mode_trigger
+AFTER UPDATE OR DELETE ON "dist_\'table"
+FOR STATEMENT EXECUTE FUNCTION trigger_func();
+
+CREATE TRIGGER "disabled_trigger\'"
+AFTER UPDATE OR DELETE ON "dist_\'table"
+FOR STATEMENT EXECUTE FUNCTION trigger_func();
+
+ALTER TABLE "dist_\'table" DISABLE trigger "disabled_trigger\'";
+
+CREATE TRIGGER replica_trigger
+AFTER UPDATE OR DELETE ON "dist_\'table"
+FOR STATEMENT EXECUTE FUNCTION trigger_func();
+
+ALTER TABLE "dist_\'table" ENABLE REPLICA trigger replica_trigger;
+
+CREATE TRIGGER always_enabled_trigger
+AFTER UPDATE OR DELETE ON "dist_\'table"
+FOR STATEMENT EXECUTE FUNCTION trigger_func();
+
+ALTER TABLE "dist_\'table" ENABLE ALWAYS trigger always_enabled_trigger;
+
+CREATE TRIGGER noop_enabled_trigger
+AFTER UPDATE OR DELETE ON "dist_\'table"
+FOR STATEMENT EXECUTE FUNCTION trigger_func();
+
+ALTER TABLE "dist_\'table" ENABLE trigger noop_enabled_trigger;
+
+SELECT create_distributed_table('dist_\''table', 'a');
+
+SELECT bool_and(tgenabled = 'O') FROM pg_trigger WHERE tgname LIKE 'default_mode_trigger%';
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'O') FROM pg_trigger WHERE tgname LIKE 'default_mode_trigger%'$$);
+
+SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'disabled_trigger%';
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'disabled_trigger%'$$);
+
+SELECT bool_and(tgenabled = 'R') FROM pg_trigger WHERE tgname LIKE 'replica_trigger%';
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'R') FROM pg_trigger WHERE tgname LIKE 'replica_trigger%'$$);
+
+SELECT bool_and(tgenabled = 'A') FROM pg_trigger WHERE tgname LIKE 'always_enabled_trigger%';
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'A') FROM pg_trigger WHERE tgname LIKE 'always_enabled_trigger%'$$);
+
+SELECT bool_and(tgenabled = 'O') FROM pg_trigger WHERE tgname LIKE 'noop_enabled_trigger%';
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'O') FROM pg_trigger WHERE tgname LIKE 'noop_enabled_trigger%'$$);
+
+CREATE TABLE citus_local(a int);
+
+CREATE FUNCTION citus_local_trig_func()
+  RETURNS trigger
+  LANGUAGE plpgsql
+AS $function$
+BEGIN
+	RETURN NULL;
+END;
+$function$;
+
+CREATE TRIGGER citus_local_trig
+AFTER UPDATE OR DELETE ON citus_local
+FOR STATEMENT EXECUTE FUNCTION citus_local_trig_func();
+
+-- make sure that trigger is initially not disabled
+SELECT tgenabled = 'D' FROM pg_trigger WHERE tgname LIKE 'citus_local_trig%';
+
+ALTER TABLE citus_local DISABLE trigger citus_local_trig;
+
+SELECT citus_add_local_table_to_metadata('citus_local');
+
+SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'citus_local_trig%';
+SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'D') FROM pg_trigger WHERE tgname LIKE 'citus_local_trig%'$$);
+
+SET client_min_messages TO ERROR;
 RESET citus.enable_unsafe_triggers;
 SELECT run_command_on_workers('ALTER SYSTEM RESET citus.enable_unsafe_triggers;');
 SELECT run_command_on_workers('SELECT pg_reload_conf();');
