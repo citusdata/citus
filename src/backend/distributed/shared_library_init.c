@@ -649,7 +649,8 @@ multi_log_hook(ErrorData *edata)
  *
  * NB: All code here has to be able to cope with this routine being called
  * multiple times in the same backend.  This will e.g. happen when the
- * extension is created or upgraded.
+ * extension is created or upgraded, but also when pg_dist_partition is
+ * vacuumed.
  */
 void
 StartupCitusBackend(void)
@@ -657,13 +658,18 @@ StartupCitusBackend(void)
 	InitializeMaintenanceDaemonBackend();
 
 	/*
-	 * For queries this will be a no-op. But for background daemons we might
-	 * still need to initialize the backend data. For those backaground daemons
-	 * it doesn't really matter that we temporarily assign
-	 * INVALID_CITUS_INTERNAL_BACKEND_GPID, since we override it again two
-	 * lines below.
+	 * For query backends this will be a no-op, because InitializeBackendData
+	 * is already called from the CitusAuthHook. But for background workers we
+	 * still need to initialize the backend data.
 	 */
-	InitializeBackendData(INVALID_CITUS_INTERNAL_BACKEND_GPID);
+	InitializeBackendData(application_name);
+
+	/*
+	 * If this is an external connection or a background worker this will
+	 * generate the global PID for this connection. For internal connections
+	 * this is a no-op, since InitializeBackendData will already have extracted
+	 * the gpid from the application_name.
+	 */
 	AssignGlobalPID();
 	RegisterConnectionCleanup();
 }

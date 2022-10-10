@@ -1,3 +1,16 @@
+-- add coordinator in idempotent way, this is needed so we get a nodeid
+SET client_min_messages TO ERROR;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+RESET client_min_messages;
+
+-- Kill maintenance daemon so it gets restarted and gets a gpid containing our
+-- nodeid
+SELECT pg_terminate_backend(pid)
+FROM pg_stat_activity
+WHERE application_name = 'Citus Maintenance Daemon' \gset
+
+-- reconnect to make sure we get a session with the gpid containing our nodeid
+\c - - - -
 CREATE SCHEMA global_cancel;
 SET search_path TO global_cancel;
 SET citus.next_shard_id TO 56789000;
