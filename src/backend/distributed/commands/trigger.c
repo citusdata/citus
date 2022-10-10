@@ -176,11 +176,11 @@ GetAlterTriggerStateCommand(Oid triggerId)
 	appendStringInfo(alterTriggerStateCommand, "ALTER TABLE %s %s TRIGGER %s;",
 					 qualifiedRelName, alterTriggerStateStr, quotedTrigName);
 
-    /*
-     * Free triggerTuple at the end since quote_identifier() might not return
-     * a palloc'd string if given identifier doesn't need to be quoted, and in
-     * that case quotedTrigName would still be bound to triggerTuple.
-     */
+	/*
+	 * Free triggerTuple at the end since quote_identifier() might not return
+	 * a palloc'd string if given identifier doesn't need to be quoted, and in
+	 * that case quotedTrigName would still be bound to triggerTuple.
+	 */
 	heap_freetuple(triggerTuple);
 
 	return alterTriggerStateCommand->data;
