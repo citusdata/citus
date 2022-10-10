@@ -664,6 +664,7 @@ StartupCitusBackend(void)
 	 * INVALID_CITUS_INTERNAL_BACKEND_GPID, since we override it again two
 	 * lines below.
 	 */
+	elog(LOG, "STARTUP CITUS BACKEND %s", application_name);
 	InitializeBackendData(INVALID_CITUS_INTERNAL_BACKEND_GPID);
 	AssignGlobalPID();
 	RegisterConnectionCleanup();

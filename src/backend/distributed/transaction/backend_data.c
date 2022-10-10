@@ -702,6 +702,8 @@ InitializeBackendData(const char *applicationName)
 	UnSetDistributedTransactionId();
 	UnSetGlobalPID();
 
+	elog(LOG, "INITIALIZE BACKEND DATA %lu", gpid);
+
 	SpinLockAcquire(&MyBackendData->mutex);
 	MyBackendData->distributedCommandOriginator = IsExternalClientBackend();
 	MyBackendData->globalPID = gpid;
@@ -749,6 +751,7 @@ UnSetGlobalPID(void)
 	/* backend does not exist if the extension is not created */
 	if (MyBackendData)
 	{
+		elog(LOG, "UNSETTING GLOBAL PID");
 		SpinLockAcquire(&MyBackendData->mutex);
 
 		MyBackendData->globalPID = 0;
@@ -888,6 +891,7 @@ AssignGlobalPID(void)
 		globalPID = ExtractGlobalPID(application_name);
 	}
 
+	elog(LOG, "ASSIGNING GLOBAL PID %lu", globalPID);
 	Oid userId = GetUserId();
 
 	SpinLockAcquire(&MyBackendData->mutex);

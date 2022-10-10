@@ -25,9 +25,9 @@ RETURNS boolean AS $$
     END IF;
 
     RAISE WARNING E'DETECTING BLOCKS FOR %', mBlockedGlobalPid;
-    FOR r IN select p.blocking_global_pid, a1.query blocking_query, p.waiting_global_pid, a2.query waiting_query from citus_internal_global_blocked_processes() p join pg_stat_activity a1 on p.blocking_pid = a1.pid join  pg_stat_activity a2 on p.waiting_pid = a2.pid
+    FOR r IN select p.blocking_global_pid, p.blocking_pid, a1.application_name blocking_app, a1.query blocking_query, p.waiting_global_pid, p.waiting_pid, a2.application_name waiting_app, a2.query waiting_query from citus_internal_global_blocked_processes() p join pg_stat_activity a1 on p.blocking_pid = a1.pid join  pg_stat_activity a2 on p.waiting_pid = a2.pid
     LOOP
-        RAISE WARNING E'GPID: % %\nBLOCKS\nGPID: % %', r.blocking_global_pid,  r.blocking_query, r.waiting_global_pid, r.waiting_query;
+        RAISE WARNING E'GPID: % % % %\nBLOCKS\nGPID: % % % %', r.blocking_global_pid, r.blocking_pid, r.blocking_app, r.blocking_query, r.waiting_global_pid, r.waiting_pid, r.waiting_app, r.waiting_query;
     END LOOP;
 
     IF current_setting('citus.isolation_test_check_all_blocks') = 'off' THEN

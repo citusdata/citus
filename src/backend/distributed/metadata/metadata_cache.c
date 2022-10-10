@@ -4626,6 +4626,7 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		 */
 		if (relationId == MetadataCache.distPartitionRelationId)
 		{
+			elog(LOG, "NOOO: pg_dist_partition changed");
 			InvalidateMetadataSystemCache();
 		}
 
@@ -4774,6 +4775,7 @@ CreateDistObjectCache(void)
 void
 InvalidateMetadataSystemCache(void)
 {
+	elog(LOG, "INVALIDATING METADA SYSTEM CACHE");
 	InvalidateConnParamsHashEntries();
 
 	memset(&MetadataCache, 0, sizeof(MetadataCache));
