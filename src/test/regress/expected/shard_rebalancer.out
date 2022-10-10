@@ -2,8 +2,6 @@
 -- MUTLI_SHARD_REBALANCER
 --
 SET citus.next_shard_id TO 433000;
--- test rebalancer passes specified GUCs to worker nodes
-SET citus.variables_to_be_passed_to_new_connections TO 'citus.log_remote_commands,citus.multi_shard_modify_mode,citus.max_adaptive_executor_pool_size';
 CREATE TABLE ref_table_test(a int primary key);
 SELECT create_reference_table('ref_table_test');
  create_reference_table
@@ -183,7 +181,7 @@ SELECT pg_sleep(.1); -- wait to make sure the config has changed before running 
 SET citus.shard_replication_factor TO 2;
 SET citus.log_remote_commands TO ON;
 SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
-NOTICE:  issuing SET application_name TO citus_rebalancer;SET citus.log_remote_commands TO on;SET citus.multi_shard_modify_mode TO parallel;SET citus.max_adaptive_executor_pool_size TO 4;
+NOTICE:  issuing SET application_name TO citus_rebalancer;SET LOCAL citus.log_remote_commands TO 'on';SET LOCAL citus.next_shard_id TO '433105';SET LOCAL citus.shard_count TO '4';SET LOCAL citus.shard_replication_factor TO '2';
 DETAIL:  on server postgres@foobar:57636 connectionId: xxxxxxx
 ERROR:  connection to the remote node foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
 SET citus.log_remote_commands TO OFF;

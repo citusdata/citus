@@ -4,9 +4,6 @@
 
 SET citus.next_shard_id TO 433000;
 
--- test rebalancer passes specified GUCs to worker nodes
-SET citus.variables_to_be_passed_to_new_connections TO 'citus.log_remote_commands,citus.multi_shard_modify_mode,citus.max_adaptive_executor_pool_size';
-
 CREATE TABLE ref_table_test(a int primary key);
 SELECT create_reference_table('ref_table_test');
 CREATE TABLE dist_table_test(a int primary key);
