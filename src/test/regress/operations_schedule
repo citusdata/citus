@@ -12,3 +12,4 @@ test: multi_colocated_shard_rebalance
 test: ignoring_orphaned_shards
 test: cpu_priority
 test: check_mx
+test: citus_drain_node
