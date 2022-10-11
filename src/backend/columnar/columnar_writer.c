@@ -531,6 +531,9 @@ SerializeBoolArray(bool *boolArray, uint32 boolArrayLength)
 /*
  * SerializeSingleDatum serializes the given datum value and appends it to the
  * provided string info buffer.
+ *
+ * Since we don't want to limit datum buffer size to RSIZE_MAX unnecessarily,
+ * we use memcpy instead of memcpy_s several places in this function.
  */
 static void
 SerializeSingleDatum(StringInfo datumBuffer, Datum datum, bool datumTypeByValue,
@@ -552,15 +555,13 @@ SerializeSingleDatum(StringInfo datumBuffer, Datum datum, bool datumTypeByValue,
 		}
 		else
 		{
-			memcpy_s(currentDatumDataPointer, datumBuffer->maxlen - datumBuffer->len,
-					 DatumGetPointer(datum), datumTypeLength);
+			memcpy(currentDatumDataPointer, DatumGetPointer(datum), datumTypeLength); /* IGNORE-BANNED */
 		}
 	}
 	else
 	{
 		Assert(!datumTypeByValue);
-		memcpy_s(currentDatumDataPointer, datumBuffer->maxlen - datumBuffer->len,
-				 DatumGetPointer(datum), datumLength);
+		memcpy(currentDatumDataPointer, DatumGetPointer(datum), datumLength); /* IGNORE-BANNED */
 	}
 
 	datumBuffer->len += datumLengthAligned;
@@ -714,7 +715,12 @@ DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength)
 	{
 		uint32 datumLength = att_addlength_datum(0, datumTypeLength, datum);
 		char *datumData = palloc0(datumLength);
-		memcpy_s(datumData, datumLength, DatumGetPointer(datum), datumLength);
+
+		/*
+		 * We use IGNORE-BANNED here since we don't want to limit datum size to
+		 * RSIZE_MAX unnecessarily.
+		 */
+		memcpy(datumData, DatumGetPointer(datum), datumLength); /* IGNORE-BANNED */
 
 		datumCopy = PointerGetDatum(datumData);
 	}
@@ -737,8 +743,12 @@ CopyStringInfo(StringInfo sourceString)
 		targetString->data = palloc0(sourceString->len);
 		targetString->len = sourceString->len;
 		targetString->maxlen = sourceString->len;
-		memcpy_s(targetString->data, sourceString->len,
-				 sourceString->data, sourceString->len);
+
+		/*
+		 * We use IGNORE-BANNED here since we don't want to limit string
+		 * buffer size to RSIZE_MAX unnecessarily.
+		 */
+		memcpy(targetString->data, sourceString->data, sourceString->len); /* IGNORE-BANNED */
 	}
 
 	return targetString;
