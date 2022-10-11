@@ -649,8 +649,9 @@ multi_log_hook(ErrorData *edata)
  *
  * NB: All code here has to be able to cope with this routine being called
  * multiple times in the same backend.  This will e.g. happen when the
- * extension is created or upgraded, but also when pg_dist_partition is
- * vacuumed.
+ * extension is created, upgraded or dropped. Due to the way we detect the
+ * extension being dropped this can also happen when autovacuum runs ANALYZE on
+ * pg_dist_partition, see InvalidateDistRelationCacheCallback for details.
  */
 void
 StartupCitusBackend(void)
@@ -665,7 +666,7 @@ StartupCitusBackend(void)
 	InitializeBackendData(application_name);
 
 	/*
-	 * If this is an external connection or a background worker this will
+	 * If this is an external connection or a background workers this will
 	 * generate the global PID for this connection. For internal connections
 	 * this is a no-op, since InitializeBackendData will already have extracted
 	 * the gpid from the application_name.
