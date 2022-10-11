@@ -2576,8 +2576,13 @@ detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isnull)
 			if (values == orig_values)
 			{
 				values = palloc(sizeof(Datum) * natts);
-				memcpy_s(values, sizeof(Datum) * natts,
-						 orig_values, sizeof(Datum) * natts);
+
+				/*
+				 * We use IGNORE-BANNED here since we don't want to limit
+				 * size of the buffer that holds the datum array to RSIZE_MAX
+				 * unnecessarily.
+				 */
+				memcpy(values, orig_values, sizeof(Datum) * natts); /* IGNORE-BANNED */
 			}
 
 			/* will be freed when per-tuple context is reset */
