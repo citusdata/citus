@@ -3,9 +3,6 @@
 --
 -- Tests select distinct, and select distinct on features.
 --
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 15 AS server_version_ge_15;
-
 ANALYZE lineitem_hash_part;
 
 -- function calls are supported
