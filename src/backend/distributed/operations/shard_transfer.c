@@ -342,6 +342,12 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 							  PLACEMENT_UPDATE_STATUS_SETTING_UP);
 	}
 
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		colocatedShardList,
+		sourceNodeName,
+		sourceNodePort,
+		PLACEMENT_UPDATE_STATUS_SETTING_UP);
+
 	/*
 	 * At this point of the shard moves, we don't need to block the writes to
 	 * shards when logical replication is used.
@@ -408,6 +414,12 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	UpdateColocatedShardPlacementMetadataOnWorkers(shardId, sourceNodeName,
 												   sourceNodePort, targetNodeName,
 												   targetNodePort);
+
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		colocatedShardList,
+		sourceNodeName,
+		sourceNodePort,
+		PLACEMENT_UPDATE_STATUS_COMPLETED);
 
 	FinalizeCurrentProgressMonitor();
 	PG_RETURN_VOID();
@@ -1011,6 +1023,11 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 						  REBALANCE_PROGRESS_MOVING,
 						  PLACEMENT_UPDATE_STATUS_SETTING_UP);
 
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		colocatedShardList,
+		sourceNodeName,
+		sourceNodePort,
+		PLACEMENT_UPDATE_STATUS_SETTING_UP);
 
 	/*
 	 * At this point of the shard replication, we don't need to block the writes to
@@ -1080,6 +1097,13 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 			SendCommandToWorkersWithMetadata(placementCommand);
 		}
 	}
+
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		colocatedShardList,
+		sourceNodeName,
+		sourceNodePort,
+		PLACEMENT_UPDATE_STATUS_COMPLETED);
+
 	FinalizeCurrentProgressMonitor();
 }
 

@@ -284,7 +284,7 @@ static const char *PlacementUpdateTypeNames[] = {
 };
 
 static const char *PlacementUpdateStatusNames[] = {
-	[PLACEMENT_UPDATE_STATUS_INVALID_FIRST] = "unknown",
+	[PLACEMENT_UPDATE_STATUS_NOT_STARTED_YET] = "Not Started Yet",
 	[PLACEMENT_UPDATE_STATUS_SETTING_UP] = "Setting Up",
 	[PLACEMENT_UPDATE_STATUS_COPYING_DATA] = "Copying Data",
 	[PLACEMENT_UPDATE_STATUS_CATCHING_UP] = "Catching Up",
@@ -292,6 +292,7 @@ static const char *PlacementUpdateStatusNames[] = {
 	[PLACEMENT_UPDATE_STATUS_FINAL_CATCH_UP] = "Final Catchup",
 	[PLACEMENT_UPDATE_STATUS_CREATING_FOREIGN_KEYS] = "Creating Foreign Keys",
 	[PLACEMENT_UPDATE_STATUS_COMPLETING] = "Completing",
+	[PLACEMENT_UPDATE_STATUS_COMPLETED] = "Completed",
 };
 
 #ifdef USE_ASSERT_CHECKING
@@ -1296,9 +1297,9 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 			values[12] = LSNGetDatum(sourceLSN);
 			values[13] = LSNGetDatum(targetLSN);
 			values[14] = PointerGetDatum(cstring_to_text(
-											 PlacementUpdateStatusNames[pg_atomic_read_u64(
-																			&step->
-																			updateStatus)]));
+											 PlacementUpdateStatusNames[
+												 pg_atomic_read_u64(
+													 &step->updateStatus)]));
 
 			tuplestore_putvalues(tupstore, tupdesc, values, nulls);
 		}
@@ -1812,7 +1813,7 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 	 */
 	SetupRebalanceMonitor(placementUpdateList, linitial_oid(options->relationIdList),
 						  REBALANCE_PROGRESS_WAITING,
-						  PLACEMENT_UPDATE_STATUS_SETTING_UP);
+						  PLACEMENT_UPDATE_STATUS_NOT_STARTED_YET);
 	ExecutePlacementUpdates(placementUpdateList, shardReplicationModeOid, "Moving");
 	FinalizeCurrentProgressMonitor();
 }
