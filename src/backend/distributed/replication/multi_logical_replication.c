@@ -501,9 +501,9 @@ CreateShardMoveLogicalRepTargetList(HTAB *publicationInfoHash, List *shardList)
 		target->newShards = NIL;
 		target->subscriptionOwnerName = SubscriptionRoleName(SHARD_MOVE, ownerId);
 		target->replicationSlot = palloc0(sizeof(ReplicationSlotInfo));
-		target->replicationSlot->name = ReplicationSlotName(SHARD_MOVE,
-															nodeId,
-															ownerId);
+		target->replicationSlot->name = ReplicationSlotNameForNodeAndOwner(SHARD_MOVE,
+																		   nodeId,
+																		   ownerId);
 		target->replicationSlot->targetNodeId = nodeId;
 		target->replicationSlot->tableOwnerId = ownerId;
 		logicalRepTargetList = lappend(logicalRepTargetList, target);
@@ -1381,11 +1381,14 @@ PublicationName(LogicalRepType type, uint32_t nodeId, Oid ownerId)
 
 
 /*
- * ReplicationSlotName returns the name of the replication slot for the given
- * node and table owner.
+ * ReplicationSlotNameForNodeAndOwner returns the name of the replication slot for the
+ * given node and table owner.
+ *
+ * Note that PG15 introduced a new ReplicationSlotName function that caused name conflicts
+ * and we renamed this function.
  */
 char *
-ReplicationSlotName(LogicalRepType type, uint32_t nodeId, Oid ownerId)
+ReplicationSlotNameForNodeAndOwner(LogicalRepType type, uint32_t nodeId, Oid ownerId)
 {
 	StringInfo slotName = makeStringInfo();
 	appendStringInfo(slotName, "%s%u_%u", replicationSlotPrefix[type], nodeId,
