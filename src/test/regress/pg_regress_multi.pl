@@ -1098,7 +1098,10 @@ sub RunVanillaTests
     system("mkdir", ("-p", "$pgregressOutputdir/sql")) == 0
             or die "Could not create vanilla sql dir.";
 
+    # we need to add regress.so path to dlpath because some tests need to find that lib
+    my $regresslibdir = $pgregressdir;
     $exitcode = system("$plainRegress",
+                        ("--dlpath", $regresslibdir),
                         ("--inputdir",  $pgregressdir),
                         ("--outputdir",  $pgregressOutputdir),
                         ("--schedule",  catfile("$pgregressdir", "parallel_schedule")),
