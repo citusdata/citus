@@ -593,14 +593,12 @@ SELECT create_distributed_table('dist', 'a');
 INSERT INTO dist VALUES (7),(9);
 create materialized view m_dist as select * from dist;
 create view v_dist as select * from dist;
+\set VERBOSITY terse
 select alter_table_set_access_method('local','columnar');
 NOTICE:  creating a new table for alter_table_set_access_method.local
 NOTICE:  moving the data of alter_table_set_access_method.local
 NOTICE:  dropping the old alter_table_set_access_method.local
 NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to materialized view m_local
-drop cascades to view v_local
-CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.local CASCADE"
 NOTICE:  renaming the new table to alter_table_set_access_method.local
  alter_table_set_access_method
 ---------------------------------------------------------------------
@@ -612,9 +610,6 @@ NOTICE:  creating a new table for alter_table_set_access_method.ref
 NOTICE:  moving the data of alter_table_set_access_method.ref
 NOTICE:  dropping the old alter_table_set_access_method.ref
 NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to materialized view m_ref
-drop cascades to view v_ref
-CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.ref CASCADE"
 NOTICE:  renaming the new table to alter_table_set_access_method.ref
  alter_table_set_access_method
 ---------------------------------------------------------------------
@@ -626,9 +621,6 @@ NOTICE:  creating a new table for alter_table_set_access_method.dist
 NOTICE:  moving the data of alter_table_set_access_method.dist
 NOTICE:  dropping the old alter_table_set_access_method.dist
 NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to materialized view m_dist
-drop cascades to view v_dist
-CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.dist CASCADE"
 NOTICE:  renaming the new table to alter_table_set_access_method.dist
  alter_table_set_access_method
 ---------------------------------------------------------------------
@@ -640,9 +632,6 @@ NOTICE:  creating a new table for alter_table_set_access_method.dist
 NOTICE:  moving the data of alter_table_set_access_method.dist
 NOTICE:  dropping the old alter_table_set_access_method.dist
 NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to materialized view m_dist
-drop cascades to view v_dist
-CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.dist CASCADE"
 NOTICE:  renaming the new table to alter_table_set_access_method.dist
  alter_distributed_table
 ---------------------------------------------------------------------
@@ -654,9 +643,6 @@ NOTICE:  creating a new table for alter_table_set_access_method.local
 NOTICE:  moving the data of alter_table_set_access_method.local
 NOTICE:  dropping the old alter_table_set_access_method.local
 NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to materialized view m_local
-drop cascades to view v_local
-CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.local CASCADE"
 NOTICE:  renaming the new table to alter_table_set_access_method.local
  alter_table_set_access_method
 ---------------------------------------------------------------------
@@ -668,9 +654,6 @@ NOTICE:  creating a new table for alter_table_set_access_method.ref
 NOTICE:  moving the data of alter_table_set_access_method.ref
 NOTICE:  dropping the old alter_table_set_access_method.ref
 NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to materialized view m_ref
-drop cascades to view v_ref
-CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.ref CASCADE"
 NOTICE:  renaming the new table to alter_table_set_access_method.ref
  alter_table_set_access_method
 ---------------------------------------------------------------------
@@ -682,15 +665,13 @@ NOTICE:  creating a new table for alter_table_set_access_method.dist
 NOTICE:  moving the data of alter_table_set_access_method.dist
 NOTICE:  dropping the old alter_table_set_access_method.dist
 NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to materialized view m_dist
-drop cascades to view v_dist
-CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.dist CASCADE"
 NOTICE:  renaming the new table to alter_table_set_access_method.dist
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
 (1 row)
 
+\set VERBOSITY default
 SELECT * FROM m_local;
  a | b | c
 ---------------------------------------------------------------------
