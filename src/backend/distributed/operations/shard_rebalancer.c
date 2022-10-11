@@ -2066,7 +2066,7 @@ ExecuteRebalancerCommandInSeparateTransaction(char *command, bool
 	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
 													PostPortNumber);
 	StringInfo setApplicationName = makeStringInfo();
-	appendStringInfo(setApplicationName, "SET application_name TO %s;",
+	appendStringInfo(setApplicationName, "SET LOCAL application_name TO %s;",
 					 CITUS_REBALANCER_NAME);
 
 	StringInfo setStatements = GetSetStatementsForNewConnections();
