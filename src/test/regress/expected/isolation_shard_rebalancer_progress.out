@@ -41,8 +41,8 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 ---------------------------------------------------------------------
 colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|                0|       1|move          |t               |t                   |f                   |Setting Up
 colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|                0|       1|move          |t               |t                   |f                   |Setting Up
-colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Setting Up
-colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Setting Up
+colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
+colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
 (4 rows)
 
 step s2-unlock-1-start:
@@ -132,8 +132,8 @@ step s7-get-progress:
 
 table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname|targetport|target_shard_size|progress|operation_type|lsn_sanity_check|source_lsn_available|target_lsn_available|status
 ---------------------------------------------------------------------
-colocated1|1500001|     50000|localhost |     57637|                0|localhost |     57638|            50000|       2|move          |t               |t                   |f                   |Completing
-colocated2|1500005|    400000|localhost |     57637|                0|localhost |     57638|           400000|       2|move          |t               |t                   |f                   |Completing
+colocated1|1500001|     50000|localhost |     57637|                0|localhost |     57638|            50000|       2|move          |t               |t                   |f                   |Completed
+colocated2|1500005|    400000|localhost |     57637|                0|localhost |     57638|           400000|       2|move          |t               |t                   |f                   |Completed
 colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       1|move          |t               |t                   |f                   |Setting Up
 colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       1|move          |t               |t                   |f                   |Setting Up
 (4 rows)
@@ -239,8 +239,8 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 ---------------------------------------------------------------------
 colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|            50000|       1|move          |t               |t                   |f                   |Completing
 colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|           400000|       1|move          |t               |t                   |f                   |Completing
-colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Setting Up
-colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Setting Up
+colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
+colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
 (4 rows)
 
 step s7-release-lock:
@@ -336,8 +336,8 @@ table_name|shardid|shard_size|sourcename|sourceport|source_shard_size|targetname
 ---------------------------------------------------------------------
 colocated1|1500001|     50000|localhost |     57637|            50000|localhost |     57638|             8000|       1|move          |t               |t                   |f                   |Setting Up
 colocated2|1500005|    400000|localhost |     57637|           400000|localhost |     57638|             8000|       1|move          |t               |t                   |f                   |Setting Up
-colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Setting Up
-colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Setting Up
+colocated1|1500002|    200000|localhost |     57637|           200000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
+colocated2|1500006|      8000|localhost |     57637|             8000|localhost |     57638|                0|       0|move          |t               |t                   |f                   |Not Started Yet
 (4 rows)
 
 step s6-release-advisory-lock:
