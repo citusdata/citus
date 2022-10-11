@@ -196,7 +196,6 @@ extern List * ReplicationPlacementUpdates(List *workerNodeList, List *shardPlace
 										  int shardReplicationFactor);
 extern void ExecuteRebalancerCommandInSeparateTransaction(char *command, bool
 														  useExclusiveTransactionBlock);
-extern StringInfo GetSetStatementsForNewConnections(void);
 extern void AcquirePlacementColocationLock(Oid relationId, int lockMode,
 										   const char *operationName);
 

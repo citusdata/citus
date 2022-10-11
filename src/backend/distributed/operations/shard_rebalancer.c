@@ -261,7 +261,7 @@ static void AddToWorkerShardIdSet(HTAB *shardsByWorker, char *workerName, int wo
 								  uint64 shardId);
 static HTAB * BuildShardSizesHash(ProgressMonitorData *monitor, HTAB *shardStatistics);
 static void ErrorOnConcurrentRebalance(RebalanceOptions *);
-
+static StringInfo GetSetStatementsForNewConnections(void);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(rebalance_table_shards);
@@ -2090,10 +2090,11 @@ ExecuteRebalancerCommandInSeparateTransaction(char *command, bool
 
 
 /*
- * TODO:GG Comment
+ * GetSetStatementsForNewConnections returns a string of SET statements to
+ * be executed in new connections to worker nodes.
  */
-StringInfo
-GetSetStatementsForNewConnections()
+static StringInfo
+GetSetStatementsForNewConnections(void)
 {
 	StringInfo setStatements = makeStringInfo();
 
