@@ -269,9 +269,9 @@ ErrorIfCoordinatorNotAddedAsWorkerNode()
 
 	ereport(ERROR, (errmsg("operation is not allowed when coordinator "
 						   "is not added into metadata"),
-					errhint("Consider running \"SELECT citus_set_coordinator_host"
-							"('<coordinator-hostname>', <coordinator-port>)\" "
-							"first")));
+					errhint("Use \"SELECT citus_set_coordinator_host('"
+							"<hostname>', '<port>')\" to configure the "
+							"coordinator hostname and port")));
 }
 
 
