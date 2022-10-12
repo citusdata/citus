@@ -240,7 +240,6 @@ step s2-create-citus-local-table-1: SELECT citus_add_local_table_to_metadata('ci
 step s1-commit: COMMIT;
 step s2-create-citus-local-table-1: <... completed>
 ERROR:  operation is not allowed when coordinator is not added into metadata
-HINT:  Use "SELECT citus_set_coordinator_host('<hostname>', '<port>')" to configure the coordinator hostname and port
 step s2-commit: COMMIT;
 master_remove_node
 ---------------------------------------------------------------------
