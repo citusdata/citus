@@ -1209,9 +1209,17 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
 
 	MemoryContextSwitchTo(oldContext);
 
+	/* Start operation to prepare for generating cleanup records */
+	RegisterOperationNeedingCleanup();
+
 	/* data copy is done seperately when logical replication is used */
 	LogicallyReplicateShards(shardIntervalList, sourceNodeName,
 							 sourceNodePort, targetNodeName, targetNodePort);
+
+	/*
+	 * Drop temporary objects that were marked as CLEANUP_ALWAYS.
+	 */
+	FinalizeOperationNeedingCleanupOnSuccess("citus_copy_shard_placement");
 }
 
 

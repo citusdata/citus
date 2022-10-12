@@ -45,6 +45,7 @@
 #include "distributed/distributed_planner.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/shard_rebalancer.h"
 #include "distributed/shard_transfer.h"
 #include "distributed/version_compat.h"
@@ -318,6 +319,12 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		DropPublications(sourceConnection, publicationInfoHash);
 
 		/* We don't need to UnclaimConnections since we're already erroring out */
+
+		/*
+		 * Drop temporary objects that were marked as CLEANUP_ON_FAILURE
+		 * or CLEANUP_ALWAYS.
+		 */
+		FinalizeOperationNeedingCleanupOnFailure("moving shard");
 
 		PG_RE_THROW();
 	}
@@ -1747,6 +1754,12 @@ CreatePublications(MultiConnection *connection,
 		ExecuteCriticalRemoteCommand(connection, createPublicationCommand->data);
 		pfree(createPublicationCommand->data);
 		pfree(createPublicationCommand);
+
+		CleanupPolicy policy = CLEANUP_ALWAYS;
+		InsertCleanupRecordsForShardIntervalList(entry->shardIntervals,
+												 CLEANUP_OBJECT_PUBLICATION,
+												 entry->name,
+												 policy);
 	}
 }
 
@@ -1852,6 +1865,12 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 						 quote_literal_cstr(firstReplicationSlot->name),
 						 quote_literal_cstr(replicationSlot->name)));
 		}
+
+		CleanupPolicy policy = CLEANUP_ALWAYS;
+		InsertCleanupRecordsForShardIntervalList(target->publication->shardIntervals,
+												 CLEANUP_OBJECT_REPLICATION_SLOT,
+												 replicationSlot->name,
+												 policy);
 	}
 	return snapshot;
 }
@@ -1955,6 +1974,12 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 					"ALTER ROLE %s NOSUPERUSER;",
 					target->subscriptionOwnerName
 					)));
+
+		CleanupPolicy policy = CLEANUP_ALWAYS;
+		InsertCleanupRecordsForShardIntervalList(target->publication->shardIntervals,
+												 CLEANUP_OBJECT_SUBSCRIPTION,
+												 target->subscriptionName,
+												 policy);
 	}
 }
 

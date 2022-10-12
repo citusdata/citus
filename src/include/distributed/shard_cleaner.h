@@ -36,7 +36,10 @@ extern OperationId CurrentOperationId;
 typedef enum CleanupObject
 {
 	CLEANUP_OBJECT_INVALID = 0,
-	CLEANUP_OBJECT_SHARD_PLACEMENT = 1
+	CLEANUP_OBJECT_SHARD_PLACEMENT = 1,
+	CLEANUP_OBJECT_PUBLICATION = 2,
+	CLEANUP_OBJECT_SUBSCRIPTION = 3,
+	CLEANUP_OBJECT_REPLICATION_SLOT = 4
 } CleanupObject;
 
 /*
@@ -74,6 +77,16 @@ typedef enum CleanupPolicy
  * for cleanup.
  */
 extern OperationId RegisterOperationNeedingCleanup(void);
+
+/*
+ * InsertCleanupRecordsForShardIntervalList inserts a record into pg_dist_cleanup,
+ * with the given object type, name and policy, for all shard placements in the
+ * given shardInterval list.
+ */
+extern void InsertCleanupRecordsForShardIntervalList(List *shardIntervalList,
+													 CleanupObject objectType,
+													 char *objectName,
+													 CleanupPolicy policy);
 
 /*
  * InsertCleanupRecordInCurrentTransaction inserts a new pg_dist_cleanup entry
