@@ -36,7 +36,6 @@ RETURNS boolean AS $$
           citus_pid_for_gpid(blocking_global_pid) in (
               select * from unnest(pInterestingPids)
           )
-          OR citus_pid_for_gpid(blocking_global_pid) = workerProcessId
         )
     );
   END;
