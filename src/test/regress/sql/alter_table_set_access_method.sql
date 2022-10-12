@@ -211,6 +211,7 @@ INSERT INTO dist VALUES (7),(9);
 create materialized view m_dist as select * from dist;
 create view v_dist as select * from dist;
 
+\set VERBOSITY terse
 
 select alter_table_set_access_method('local','columnar');
 select alter_table_set_access_method('ref','columnar');
@@ -221,6 +222,8 @@ SELECT alter_distributed_table('dist', shard_count:=1, cascade_to_colocated:=fal
 select alter_table_set_access_method('local','heap');
 select alter_table_set_access_method('ref','heap');
 select alter_table_set_access_method('dist','heap');
+
+\set VERBOSITY default
 
 SELECT * FROM m_local;
 SELECT * FROM m_ref;
