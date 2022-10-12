@@ -239,7 +239,7 @@ master_remove_node
 step s2-create-citus-local-table-1: SELECT citus_add_local_table_to_metadata('citus_local_table_1'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-create-citus-local-table-1: <... completed>
-ERROR:  could not find the coordinator node in metadata as it is not added as a worker
+ERROR:  operation is not allowed when coordinator is not added into metadata
 step s2-commit: COMMIT;
 master_remove_node
 ---------------------------------------------------------------------

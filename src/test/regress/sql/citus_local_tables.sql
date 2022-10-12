@@ -35,6 +35,12 @@ CREATE TABLE citus_local_table_1 (a int primary key);
 -- this should fail as coordinator is removed from pg_dist_node
 SELECT citus_add_local_table_to_metadata('citus_local_table_1');
 
+-- This should also fail as coordinator is removed from pg_dist_node.
+--
+-- This is not a great place to test this but is one of those places that we
+-- have workers in metadata but not the coordinator.
+SELECT create_distributed_table_concurrently('citus_local_table_1', 'a');
+
 -- let coordinator have citus local tables again for next tests
 set client_min_messages to ERROR;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
