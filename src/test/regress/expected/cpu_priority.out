@@ -104,7 +104,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 
 SET citus.cpu_priority_for_logical_replication_senders = 15;
 SELECT master_move_shard_placement(11568900, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'force_logical');
-NOTICE:  issuing SET application_name TO citus_rebalancer;SET LOCAL citus.cpu_priority_for_logical_replication_senders TO '15';SET LOCAL citus.enable_binary_protocol TO 'off';SET LOCAL citus.grep_remote_commands TO '%CREATE SUBSCRIPTION%';SET LOCAL citus.log_remote_commands TO 'on';SET LOCAL search_path TO 'cpu_priority';
+NOTICE:  issuing SET LOCAL application_name TO citus_rebalancer;SET LOCAL citus.cpu_priority_for_logical_replication_senders TO '15';SET LOCAL citus.enable_binary_protocol TO 'off';SET LOCAL citus.grep_remote_commands TO '%CREATE SUBSCRIPTION%';SET LOCAL citus.log_remote_commands TO 'on';SET LOCAL search_path TO 'cpu_priority';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing CREATE SUBSCRIPTION citus_shard_move_subscription_xxxxxxx CONNECTION 'host=''localhost'' port=xxxxx user=''postgres'' dbname=''regression'' connect_timeout=20' PUBLICATION citus_shard_move_publication_xxxxxxx_xxxxxxx WITH (citus_use_authinfo=true, create_slot=false, copy_data=false, enabled=false, slot_name=citus_shard_move_slot_xxxxxxx_xxxxxxx)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -121,7 +121,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 
 SET citus.max_high_priority_background_processes = 3;
 SELECT master_move_shard_placement(11568900, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'force_logical');
-NOTICE:  issuing SET application_name TO citus_rebalancer;SET LOCAL citus.cpu_priority_for_logical_replication_senders TO '15';SET LOCAL citus.enable_binary_protocol TO 'off';SET LOCAL citus.grep_remote_commands TO '%CREATE SUBSCRIPTION%';SET LOCAL citus.log_remote_commands TO 'on';SET LOCAL citus.max_high_priority_background_processes TO '3';SET LOCAL search_path TO 'cpu_priority';
+NOTICE:  issuing SET LOCAL application_name TO citus_rebalancer;SET LOCAL citus.cpu_priority_for_logical_replication_senders TO '15';SET LOCAL citus.enable_binary_protocol TO 'off';SET LOCAL citus.grep_remote_commands TO '%CREATE SUBSCRIPTION%';SET LOCAL citus.log_remote_commands TO 'on';SET LOCAL citus.max_high_priority_background_processes TO '3';SET LOCAL search_path TO 'cpu_priority';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing CREATE SUBSCRIPTION citus_shard_move_subscription_xxxxxxx CONNECTION 'host=''localhost'' port=xxxxx user=''postgres'' dbname=''regression'' connect_timeout=20' PUBLICATION citus_shard_move_publication_xxxxxxx_xxxxxxx WITH (citus_use_authinfo=true, create_slot=false, copy_data=false, enabled=false, slot_name=citus_shard_move_slot_xxxxxxx_xxxxxxx)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
