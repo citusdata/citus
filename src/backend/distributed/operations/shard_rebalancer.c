@@ -279,6 +279,7 @@ PG_FUNCTION_INFO_V1(citus_rebalance_wait);
 
 bool RunningUnderIsolationTest = false;
 int MaxRebalancerLoggedIgnoredMoves = 5;
+bool PropagateSessionSettingsForLoopbackConnection = false;
 
 static const char *PlacementUpdateTypeNames[] = {
 	[PLACEMENT_UPDATE_INVALID_FIRST] = "unknown",
@@ -2069,8 +2070,11 @@ ExecuteRebalancerCommandInSeparateTransaction(char *command, bool
 	appendStringInfo(setApplicationName, "SET LOCAL application_name TO %s;",
 					 CITUS_REBALANCER_NAME);
 
-	StringInfo setStatements = GetSetStatementsForNewConnections();
-	appendStringInfoString(setApplicationName, setStatements->data);
+	if (PropagateSessionSettingsForLoopbackConnection)
+	{
+		StringInfo setStatements = GetSetStatementsForNewConnections();
+		appendStringInfoString(setApplicationName, setStatements->data);
+	}
 
 	if (useExclusiveTransactionBlock)
 	{

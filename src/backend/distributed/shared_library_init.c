@@ -1978,6 +1978,17 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.propagate_session_settings_for_loopback_connection",
+		gettext_noop(
+			"When enabled, rebalancer propagates all the allowed GUC settings to new connections."),
+		NULL,
+		&PropagateSessionSettingsForLoopbackConnection,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomEnumVariable(
 		"citus.propagate_set_commands",
 		gettext_noop("Sets which SET commands are propagated to workers."),
