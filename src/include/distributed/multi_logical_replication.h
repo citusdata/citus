@@ -157,7 +157,8 @@ extern void DropPublications(MultiConnection *sourceConnection,
 extern void DropAllLogicalReplicationLeftovers(LogicalRepType type);
 
 extern char * PublicationName(LogicalRepType type, uint32_t nodeId, Oid ownerId);
-extern char * ReplicationSlotName(LogicalRepType type, uint32_t nodeId, Oid ownerId);
+extern char * ReplicationSlotNameForNodeAndOwner(LogicalRepType type, uint32_t nodeId, Oid
+												 ownerId);
 extern char * SubscriptionName(LogicalRepType type, Oid ownerId);
 extern char * SubscriptionRoleName(LogicalRepType type, Oid ownerId);
 
