@@ -400,7 +400,7 @@ Citus is uniquely capable of scaling both analytical and transactional workloads
 - **GitHub issues**: Please submit issues via [GitHub issues](https://github.com/citusdata/citus/issues).
 - **Documentation**: Our [Citus docs](https://docs.citusdata.com ) have a wealth of resources, including sections on [query performance tuning](https://docs.citusdata.com/en/stable/performance/performance_tuning.html), [useful diagnostic queries](https://docs.citusdata.com/en/stable/admin_guide/diagnostic_queries.html), and [common error messages](https://docs.citusdata.com/en/stable/reference/common_errors.html).
 - **Docs issues**: You can also submit documentation issues via [GitHub issues for our Citus docs](https://github.com/citusdata/citus_docs/issues).
-- **Updates**: Learn about what's new in each Citus version on the [Citus Updates page](https://www.citusdata.com/updates/).
+- **Updates & Release Notes**: Learn about what's new in each Citus version on the [Citus Updates page](https://www.citusdata.com/updates/).
 
 ## Contributing
 
@@ -409,10 +409,10 @@ Citus is built on and of open source, and we welcome your contributions. The [CO
 ## Stay Connected
 
 - **Twitter**: Follow us [@citusdata](https://twitter.com/citusdata) to track the latest posts & updates on what’s happening.
-- **Citus Blog**: Read our popular [Citus Blog](https://www.citusdata.com/blog/) for useful & informative posts about PostgreSQL and Citus.
+- **Citus Blog**: Read our popular [Citus Open Source Blog](https://www.citusdata.com/blog/) for posts about PostgreSQL and Citus.
 - **Citus Newsletter**: Subscribe to our monthly technical [Citus Newsletter](https://www.citusdata.com/join-newsletter) to get a curated collection of our favorite posts, videos, docs, talks, & other Postgres goodies.
 - **Slack**: Our [Citus Public slack](https://slack.citusdata.com/) is a good way to stay connected, not just with us but with other Citus users.
-- **Sister Blog**: Read our Azure Database for PostgreSQL [sister blog on Microsoft TechCommunity](https://techcommunity.microsoft.com/t5/azure-database-for-postgresql/bg-p/ADforPostgreSQL) for posts relating to Postgres (and Citus) on Azure.
+- **Sister Blog**: Read the PostgreSQL posts on the [Azure Cosmos DB for PostgreSQL blog]([https://techcommunity.microsoft.com/t5/azure-database-for-postgresql/bg-p/ADforPostgreSQL](https://devblogs.microsoft.com/cosmosdb/category/postgresql/) for posts about our managed service on Azure.
 - **Videos**: Check out this [YouTube playlist](https://www.youtube.com/playlist?list=PLixnExCn6lRq261O0iwo4ClYxHpM9qfVy) of some of our favorite Citus videos and demos. If you want to deep dive into how Citus extends PostgreSQL, you might want to check out Marco Slot’s talk at Carnegie Mellon titled [Citus: Distributed PostgreSQL as an Extension](https://youtu.be/X-aAgXJZRqM) that was part of Andy Pavlo’s Vaccination Database Talks series at CMUDB.
 - **Our other Postgres projects**: Our team also works on other awesome PostgreSQL open source extensions & projects, including: [pg_cron](https://github.com/citusdata/pg_cron), [HyperLogLog](https://github.com/citusdata/postgresql-hll), [TopN](https://github.com/citusdata/postgresql-topn), [pg_auto_failover](https://github.com/citusdata/pg_auto_failover), [activerecord-multi-tenant](https://github.com/citusdata/activerecord-multi-tenant), and [django-multitenant](https://github.com/citusdata/django-multitenant).
 
