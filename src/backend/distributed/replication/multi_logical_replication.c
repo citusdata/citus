@@ -453,17 +453,6 @@ CompleteNonBlockingShardTransfer(List *shardList,
 		 */
 		CreateUncheckedForeignKeyConstraints(logicalRepTargetList);
 	}
-
-	UpdatePlacementUpdateStatusForShardIntervalList(
-		shardList,
-		sourceConnection->hostname,
-		sourceConnection->port,
-		PLACEMENT_UPDATE_STATUS_COMPLETING);
-
-	/* we're done, cleanup the publication and subscription */
-	DropSubscriptions(logicalRepTargetList);
-	DropReplicationSlots(sourceConnection, logicalRepTargetList);
-	DropPublications(sourceConnection, publicationInfoHash);
 }
 
 
