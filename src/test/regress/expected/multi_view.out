@@ -1361,7 +1361,7 @@ ALTER TABLE column_alias_test_1 RENAME COLUMN tmp TO b;
 SELECT * FROM column_alias_test_1_view;
  a | b
 ---------------------------------------------------------------------
- 2 | 1
+ 1 | 2
 (1 row)
 
 CREATE TABLE column_alias_test_2(a int, b int);
@@ -1376,8 +1376,11 @@ CREATE VIEW column_alias_test_2_view AS
 SELECT * FROM column_alias_test_2;
 ALTER TABLE column_alias_test_2 RENAME COLUMN a TO a_renamed;
 SELECT * FROM column_alias_test_2_view;
-ERROR:  column "a" does not exist
-CONTEXT:  while executing command on localhost:xxxxx
+ a | b
+---------------------------------------------------------------------
+ 1 | 2
+(1 row)
+
 DROP TABLE large, small, ref_1 CASCADE;
 NOTICE:  drop cascades to 4 other objects
 DETAIL:  drop cascades to view v1
