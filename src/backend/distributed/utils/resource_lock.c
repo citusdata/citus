@@ -1357,7 +1357,8 @@ AcquireDistributedLockOnRelations(List *relationList, LOCKMODE lockMode, uint32 
 													 (void *) lockRelationRecord);
 		}
 
-		if ((configs & DIST_LOCK_REFERENCING_TABLES) > 0)
+		if (get_rel_relkind(relationId) == RELKIND_RELATION &&
+            (configs & DIST_LOCK_REFERENCING_TABLES) > 0)
 		{
 			CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 			Assert(cacheEntry != NULL);

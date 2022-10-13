@@ -304,6 +304,15 @@ ALTER TABLE t1 VALIDATE CONSTRAINT t1_a_check;
 SELECT truncate_local_data_after_distributing_table('t1');
 ALTER TABLE t1 VALIDATE CONSTRAINT t1_a_check;
 
+CREATE TABLE tbl(a INT);
+SELECT create_distributed_table('tbl', 'a');
+CREATE VIEW vw AS SELECT * FROM tbl;
+
+-- throws an error because vw is not a table
+TRUNCATE TABLE tbl, vw CASCADE;
+
+SET client_min_messages TO ERROR;
+
 DROP VIEW table_sizes;
 DROP TABLE t1;
 DROP SCHEMA multi_truncate CASCADE;
