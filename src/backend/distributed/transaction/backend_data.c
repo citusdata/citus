@@ -871,17 +871,40 @@ AssignDistributedTransactionId(void)
  * If this is a Citus initiated backend, which means it is distributed part of a distributed
  * query, then this function assigns the global pid extracted from the application name.
  * If not, this function assigns a new generated global pid.
+ *
+ * If a global PID is already assigned to this backend, then this function is a
+ * no-op. In most scenarios this would already be the case, because a newly
+ * assigned global PID would be the same as a proviously assigned one. But
+ * there's two important cases where the newly assigned  global PID would be
+ * different from the previous one:
+ * 1. The current backend is an internal backend and in the meantime the
+ *    application_name was changed to one without a gpid, e.g.
+ *    citus_rebalancer. In this case we don't want to throw away the original
+ *    gpid of the query originator, because that would mess up distributed
+ *    deadlock detection involving this backend.
+ * 2. The current backend is an external backend and the node id of the current
+ *    node changed. Updating the gpid to match the nodeid might actually seem
+ *    like a desirable property, but that's not the case. Updating the gpid
+ *    with the new nodeid would mess up distributed deadlock and originator
+ *    detection of queries too. Because if this backend already opened
+ *    connections to other nodes, then those backends will still have the old
+ *    gpid.
  */
 void
 AssignGlobalPID(void)
 {
+	if (GetGlobalPID() != INVALID_CITUS_INTERNAL_BACKEND_GPID)
+	{
+		return;
+	}
+
 	uint64 globalPID = INVALID_CITUS_INTERNAL_BACKEND_GPID;
 	bool distributedCommandOriginator = false;
 
 	if (!IsCitusInternalBackend())
 	{
 		globalPID = GenerateGlobalPID();
-		distributedCommandOriginator = true;
+		distributedCommandOriginator = IsExternalClientBackend();
 	}
 	else
 	{

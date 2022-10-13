@@ -4622,7 +4622,13 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		/*
 		 * If pg_dist_partition is being invalidated drop all state
 		 * This happens pretty rarely, but most importantly happens during
-		 * DROP EXTENSION citus;
+		 * DROP EXTENSION citus; This isn't the only time when this happens
+		 * though, it can happen for multiple other reasons, such as an
+		 * autovacuum running ANALYZE on pg_dist_partition. Such an ANALYZE
+		 * wouldn't really need a full Metadata cache invalidation, but we
+		 * don't know how to differentiate between DROP EXTENSION and ANALYZE.
+		 * So for now we simply drop it in both cases and take the slight
+		 * temporary performance hit.
 		 */
 		if (relationId == MetadataCache.distPartitionRelationId)
 		{
