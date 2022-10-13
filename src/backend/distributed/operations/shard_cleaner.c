@@ -94,6 +94,8 @@ static bool CleanupRecordExists(uint64 recordId);
 static List * ListCleanupRecords(void);
 static List * ListCleanupRecordsForCurrentOperation(void);
 static int DropOrphanedShardsForCleanup(void);
+static int CompareCleanupRecordsByObjectType(const void *leftElement,
+											 const void *rightElement);
 
 /*
  * citus_cleanup_orphaned_shards implements a user-facing UDF to delete
@@ -474,6 +476,8 @@ FinalizeOperationNeedingCleanupOnFailure(const char *operationName)
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
 
 	List *currentOperationRecordList = ListCleanupRecordsForCurrentOperation();
+	currentOperationRecordList = SortList(currentOperationRecordList,
+										  CompareCleanupRecordsByObjectType);
 
 	int failedShardCountOnComplete = 0;
 
@@ -534,6 +538,8 @@ FinalizeOperationNeedingCleanupOnSuccess(const char *operationName)
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
 
 	List *currentOperationRecordList = ListCleanupRecordsForCurrentOperation();
+	currentOperationRecordList = SortList(currentOperationRecordList,
+										  CompareCleanupRecordsByObjectType);
 
 	int failedShardCountOnComplete = 0;
 
@@ -588,6 +594,30 @@ FinalizeOperationNeedingCleanupOnSuccess(const char *operationName)
 							  list_length(currentOperationRecordList),
 							  operationName)));
 	}
+}
+
+
+/*
+ * CompareRecordsByObjectType is a comparison function for sort
+ * cleanup records by their object type.
+ */
+static int
+CompareCleanupRecordsByObjectType(const void *leftElement, const void *rightElement)
+{
+	CleanupRecord *leftRecord = *((CleanupRecord **) leftElement);
+	CleanupRecord *rightRecord = *((CleanupRecord **) rightElement);
+
+	/* we compare 64-bit integers, instead of casting their difference to int */
+	if (leftRecord->objectType > rightRecord->objectType)
+	{
+		return 1;
+	}
+	else if (leftRecord->objectType < rightRecord->objectType)
+	{
+		return -1;
+	}
+
+	return 0;
 }
 
 

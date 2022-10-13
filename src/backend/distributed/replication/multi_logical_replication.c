@@ -1964,11 +1964,13 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 					target->subscriptionOwnerName
 					)));
 
+		WorkerNode *worker = FindWorkerNode(target->superuserConnection->hostname,
+											target->superuserConnection->port);
 		CleanupPolicy policy = CLEANUP_ALWAYS;
-		InsertCleanupRecordsForShardIntervalList(target->publication->shardIntervals,
-												 CLEANUP_OBJECT_SUBSCRIPTION,
-												 target->subscriptionName,
-												 policy);
+		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SUBSCRIPTION,
+											target->subscriptionName,
+											worker->groupId,
+											policy);
 	}
 }
 
