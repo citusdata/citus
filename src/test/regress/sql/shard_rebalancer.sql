@@ -96,7 +96,7 @@ SET citus.log_remote_commands TO ON;
 SET SESSION citus.max_adaptive_executor_pool_size TO 5;
 SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
 SET citus.log_remote_commands TO OFF;
-COMMIT; 
+COMMIT;
 
 ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();
