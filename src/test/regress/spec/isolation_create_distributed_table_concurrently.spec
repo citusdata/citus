@@ -1,5 +1,6 @@
 setup
 {
+	select setval('pg_dist_shardid_seq', GREATEST(1400292, nextval('pg_dist_shardid_seq')-1));
 	-- make sure coordinator is in metadata
 	SELECT citus_set_coordinator_host('localhost', 57636);
   	CREATE TABLE table_1(id int PRIMARY KEY);

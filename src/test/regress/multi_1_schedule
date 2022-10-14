@@ -85,7 +85,8 @@ test: ensure_no_intermediate_data_leak
 # Tests for partitioning support
 # ----------
 test: multi_partitioning_utils replicated_partitioned_table
-test: multi_partitioning partitioning_issue_3970
+test: multi_partitioning
+test: partitioning_issue_3970
 test: drop_partitioned_table
 test: multi_fix_partition_shard_index_names
 test: partition_wise_join
