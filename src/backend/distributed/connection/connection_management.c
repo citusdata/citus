@@ -1285,7 +1285,12 @@ StartConnectionEstablishment(MultiConnection *connection, ConnectionHashKey *key
 											  (const char **) entry->values,
 											  false);
 	INSTR_TIME_SET_CURRENT(connection->connectionEstablishmentStart);
-	connection->connectionId = connectionId++;
+
+	/* do not increment for restarted connections */
+	if (connection->connectionId == 0)
+	{
+		connection->connectionId = connectionId++;
+	}
 
 	/*
 	 * To avoid issues with interrupts not getting caught all our connections
@@ -1498,6 +1503,57 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 		   (MaxCachedConnectionLifetime >= 0 &&
 			MillisecondsToTimeout(connection->connectionEstablishmentStart,
 								  MaxCachedConnectionLifetime) <= 0);
+}
+
+
+/*
+ * RestartConnection starts a new connection attempt for the given
+ * MultiConnection.
+ *
+ * The internal state of the MultiConnection is preserved. For example, we
+ * assume that we already went through all the other initialization steps in
+ * StartNodeUserDatabaseConnection, such as incrementing shared connection
+ * counters.
+ *
+ * This function should be used cautiously. If a connection is already
+ * involved in a remote transaction, we cannot restart the underlying
+ * connection. The caller is responsible for enforcing the restrictions
+ * on this.
+ */
+void
+RestartConnection(MultiConnection *connection)
+{
+	/* we cannot restart any connection that refers to a placement */
+	Assert(dlist_is_empty(&connection->referencedPlacements));
+
+	/* we cannot restart any connection that is part of a transaction */
+	Assert(connection->remoteTransaction.transactionState == REMOTE_TRANS_NOT_STARTED);
+
+	ConnectionHashKey key;
+	strlcpy(key.hostname, connection->hostname, MAX_NODE_LENGTH);
+	key.port = connection->port;
+	strlcpy(key.user, connection->user, NAMEDATALEN);
+	strlcpy(key.database, connection->database, NAMEDATALEN);
+	key.replicationConnParam = connection->requiresReplication;
+
+	/*
+	 * With low-level APIs, we shutdown and restart the connection.
+	 * The main trick here is that we are using the same MultiConnection *
+	 * such that all the state of the connection is preserved.
+	 */
+	ShutdownConnection(connection);
+	StartConnectionEstablishment(connection, &key);
+
+	/*
+	 * We are restarting an already initialized connection which has
+	 * gone through StartNodeUserDatabaseConnection(). That's why we
+	 * can safely mark the state initialized.
+	 *
+	 * Not that we have to do this because ShutdownConnection() sets the
+	 * state to not initialized.
+	 */
+	connection->initilizationState = POOL_STATE_INITIALIZED;
+	connection->connectionState = MULTI_CONNECTION_CONNECTING;
 }
 
 
