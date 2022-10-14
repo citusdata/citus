@@ -65,7 +65,7 @@ Developers choose Citus for two reasons:
 
 The quickest way to get started with Citus is to use the [Azure Cosmos DB for PostgreSQL](https://learn.microsoft.com/azure/cosmos-db/postgresql/quickstart-create-portal) managed service in the cloud—or [set up Citus locally](https://docs.citusdata.com/en/stable/installation/single_node.html).
 
-### Azure Cosmos DB for PostgreSQL
+### Citus Managed Service on Azure
 
 You can get a fully-managed Citus cluster in minutes through the [Azure Cosmos DB for PostgreSQL portal](https://azure.microsoft.com/products/cosmos-db/). Azure will manage your backups, high availability through auto-failover, software updates, monitoring, and more for all of your servers. To get started Citus on Azure, use the [Azure Cosmos DB for PostgreSQL Quickstart](https://learn.microsoft.com/azure/cosmos-db/postgresql/quickstart-create-portal).
 
@@ -412,7 +412,7 @@ Citus is built on and of open source, and we welcome your contributions. The [CO
 - **Citus Blog**: Read our popular [Citus Open Source Blog](https://www.citusdata.com/blog/) for posts about PostgreSQL and Citus.
 - **Citus Newsletter**: Subscribe to our monthly technical [Citus Newsletter](https://www.citusdata.com/join-newsletter) to get a curated collection of our favorite posts, videos, docs, talks, & other Postgres goodies.
 - **Slack**: Our [Citus Public slack](https://slack.citusdata.com/) is a good way to stay connected, not just with us but with other Citus users.
-- **Sister Blog**: Read the PostgreSQL posts on the [Azure Cosmos DB for PostgreSQL blog](https://devblogs.microsoft.com/cosmosdb/category/postgresql/) for posts about our managed service on Azure.
+- **Sister Blog**: Read the PostgreSQL posts on the [Azure Cosmos DB for PostgreSQL blog](https://devblogs.microsoft.com/cosmosdb/category/postgresql/) about our managed service on Azure.
 - **Videos**: Check out this [YouTube playlist](https://www.youtube.com/playlist?list=PLixnExCn6lRq261O0iwo4ClYxHpM9qfVy) of some of our favorite Citus videos and demos. If you want to deep dive into how Citus extends PostgreSQL, you might want to check out Marco Slot’s talk at Carnegie Mellon titled [Citus: Distributed PostgreSQL as an Extension](https://youtu.be/X-aAgXJZRqM) that was part of Andy Pavlo’s Vaccination Database Talks series at CMUDB.
 - **Our other Postgres projects**: Our team also works on other awesome PostgreSQL open source extensions & projects, including: [pg_cron](https://github.com/citusdata/pg_cron), [HyperLogLog](https://github.com/citusdata/postgresql-hll), [TopN](https://github.com/citusdata/postgresql-topn), [pg_auto_failover](https://github.com/citusdata/pg_auto_failover), [activerecord-multi-tenant](https://github.com/citusdata/activerecord-multi-tenant), and [django-multitenant](https://github.com/citusdata/django-multitenant).
 
