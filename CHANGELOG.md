@@ -1,3 +1,19 @@
+### citus v11.1.3 (October 14, 2022) ###
+
+* Adds support for PostgreSQL 15.0
+
+* Fixes a bug in `ALTER EXTENSION citus UPDATE`
+
+* Fixes a bug that causes a crash with empty/null password
+
+* Fixes a bug that causes not retaining trigger enable/disable settings when
+  re-creating them on shards
+
+* Fixes a bug that prevents retaining columnar table options after a
+  table-rewrite
+
+* Raises memory limits in columnar from 256MB to 1GB for reads and writes
+
 ### citus v11.1.2 (September 30, 2022) ###
 
 * Adds support for PostgreSQL 15rc1
