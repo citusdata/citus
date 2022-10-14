@@ -63,11 +63,11 @@ Developers choose Citus for two reasons:
 
 ## Getting Started
 
-The quickest way to get started with Citus is to use the [Azure Cosmos DB for PostgreSQL](https://learn.microsoft.com/en-us/azure/cosmos-db/postgresql/quickstart-create-portal) deployment option in the Azure Cosmos DB for PostgreSQL managed service—or [set up Citus locally](https://docs.citusdata.com/en/stable/installation/single_node.html).
+The quickest way to get started with Citus is to use the [Azure Cosmos DB for PostgreSQL](https://learn.microsoft.com/azure/cosmos-db/postgresql/quickstart-create-portal) managed service in the cloud—or [set up Citus locally](https://docs.citusdata.com/en/stable/installation/single_node.html).
 
 ### Azure Cosmos DB for PostgreSQL
 
-You can get a fully-managed Citus cluster in minutes through the Azure Cosmos DB for PostgreSQL deployment option in the [Azure Cosmos DB for PostgreSQL](https://azure.microsoft.com/en-us/products/cosmos-db/) portal. Azure will manage your backups, high availability through auto-failover, software updates, monitoring, and more for all of your servers. To get started with Azure Cosmos DB for PostgreSQL, use the [Azure Cosmos DB for PostgreSQL Quickstart](https://learn.microsoft.com/en-us/azure/cosmos-db/postgresql/quickstart-create-portal) in the Azure docs.
+You can get a fully-managed Citus cluster in minutes through the [Azure Cosmos DB for PostgreSQL portal](https://azure.microsoft.com/products/cosmos-db/). Azure will manage your backups, high availability through auto-failover, software updates, monitoring, and more for all of your servers. To get started Citus on Azure, use the [Azure Cosmos DB for PostgreSQL Quickstart](https://learn.microsoft.com/azure/cosmos-db/postgresql/quickstart-create-portal).
 
 ### Running Citus using Docker
 
@@ -348,7 +348,7 @@ To learn more about columnar storage, check out the [columnar storage README](ht
 
 ## Documentation
 
-If you’re ready to get started with Citus or want to know more, we recommend reading the [Citus open source documentation](https://docs.citusdata.com/en/stable/). Or, if you are using Citus on Azure, then the [Azure Cosmos DB for PostgreSQL](https://learn.microsoft.com/en-us/azure/cosmos-db/postgresql/introduction) is online and available as part of the Azure Cosmos DB for PostgreSQL docs.
+If you’re ready to get started with Citus or want to know more, we recommend reading the [Citus open source documentation](https://docs.citusdata.com/en/stable/). Or, if you are using Citus on Azure, then the [Azure Cosmos DB for PostgreSQL](https://learn.microsoft.com/azure/cosmos-db/postgresql/introduction) is the place to start.
 
 Our Citus docs contain comprehensive use case guides on how to build a [multi-tenant SaaS application](https://docs.citusdata.com/en/stable/use_cases/multi_tenant.html), [real-time analytics dashboard]( https://docs.citusdata.com/en/stable/use_cases/realtime_analytics.html), or work with [time series data](https://docs.citusdata.com/en/stable/use_cases/timeseries.html).
 
