@@ -261,7 +261,7 @@ static void AddToWorkerShardIdSet(HTAB *shardsByWorker, char *workerName, int wo
 								  uint64 shardId);
 static HTAB * BuildShardSizesHash(ProgressMonitorData *monitor, HTAB *shardStatistics);
 static void ErrorOnConcurrentRebalance(RebalanceOptions *);
-static char * GetSetStatementsForNewConnections(void);
+static List * GetSetCommandListForNewConnections(void);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(rebalance_table_shards);
@@ -1072,7 +1072,7 @@ citus_drain_node(PG_FUNCTION_ARGS)
 	ExecuteRebalancerCommandInSeparateTransaction(psprintf(
 													  "SELECT master_set_node_property(%s, %i, 'shouldhaveshards', false)",
 													  quote_literal_cstr(nodeName),
-													  nodePort), true);
+													  nodePort));
 
 	RebalanceTableShards(&options, shardTransferModeOid);
 
@@ -2044,7 +2044,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	 * In case of failure, we throw an error such that rebalance_table_shards
 	 * fails early.
 	 */
-	ExecuteRebalancerCommandInSeparateTransaction(placementUpdateCommand->data, true);
+	ExecuteRebalancerCommandInSeparateTransaction(placementUpdateCommand->data);
 
 	UpdateColocatedShardPlacementProgress(shardId,
 										  sourceNode->workerName,
@@ -2054,53 +2054,48 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 
 
 /*
- * ExecuteCriticalCommandInSeparateTransaction runs a command in a separate
+ * ExecuteRebalancerCommandInSeparateTransaction runs a command in a separate
  * transaction that is commited right away. This is useful for things that you
  * don't want to rollback when the current transaction is rolled back.
  * Set true to 'useExclusiveTransactionBlock' to initiate a BEGIN and COMMIT statements.
  */
 void
-ExecuteRebalancerCommandInSeparateTransaction(char *command, bool
-											  useExclusiveTransactionBlock)
+ExecuteRebalancerCommandInSeparateTransaction(char *command)
 {
 	int connectionFlag = FORCE_NEW_CONNECTION;
 	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
 													PostPortNumber);
-	StringInfo setStatements = makeStringInfo();
-	appendStringInfo(setStatements, "SET LOCAL application_name TO %s;",
-					 CITUS_REBALANCER_NAME);
+	List *commandList = NIL;
+
+	commandList = lappend(commandList, psprintf("SET LOCAL application_name TO %s;",
+												CITUS_REBALANCER_NAME));
 
 	if (PropagateSessionSettingsForLoopbackConnection)
 	{
-		char *setStatementsForNewConnections = GetSetStatementsForNewConnections();
-		appendStringInfoString(setStatements, setStatementsForNewConnections);
+		List *setCommands = GetSetCommandListForNewConnections();
+		char *setCommand = NULL;
+
+		foreach_ptr(setCommand, setCommands)
+		{
+			commandList = lappend(commandList, setCommand);
+		}
 	}
 
-	if (useExclusiveTransactionBlock)
-	{
-		ExecuteCriticalRemoteCommand(connection, "BEGIN;");
-	}
+	commandList = lappend(commandList, command);
 
-	ExecuteCriticalRemoteCommand(connection, setStatements->data);
-	ExecuteCriticalRemoteCommand(connection, command);
-
-	if (useExclusiveTransactionBlock)
-	{
-		ExecuteCriticalRemoteCommand(connection, "COMMIT;");
-	}
-
+	SendCommandListToWorkerOutsideTransactionWithConnection(connection, commandList);
 	CloseConnection(connection);
 }
 
 
 /*
- * GetSetStatementsForNewConnections returns a string of SET statements to
+ * GetSetCommandListForNewConnections returns a list of SET statements to
  * be executed in new connections to worker nodes.
  */
-static char *
-GetSetStatementsForNewConnections(void)
+static List *
+GetSetCommandListForNewConnections(void)
 {
-	StringInfo setStatements = makeStringInfo();
+	List *commandList = NIL;
 
 	struct config_generic **guc_vars = get_guc_variables();
 	int gucCount = GetNumConfigOptions();
@@ -2111,12 +2106,12 @@ GetSetStatementsForNewConnections(void)
 		if (var->source == PGC_S_SESSION && IsSettingSafeToPropagate(var->name))
 		{
 			const char *variableValue = GetConfigOption(var->name, true, true);
-			appendStringInfo(setStatements, "SET LOCAL %s TO '%s';",
-							 var->name, variableValue);
+			commandList = lappend(commandList, psprintf("SET LOCAL %s TO '%s';",
+														var->name, variableValue));
 		}
 	}
 
-	return setStatements->data;
+	return commandList;
 }
 
 
