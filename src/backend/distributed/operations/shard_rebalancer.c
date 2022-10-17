@@ -2066,14 +2066,14 @@ ExecuteRebalancerCommandInSeparateTransaction(char *command, bool
 	int connectionFlag = FORCE_NEW_CONNECTION;
 	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
 													PostPortNumber);
-	StringInfo setApplicationName = makeStringInfo();
-	appendStringInfo(setApplicationName, "SET LOCAL application_name TO %s;",
+	StringInfo setStatements = makeStringInfo();
+	appendStringInfo(setStatements, "SET LOCAL application_name TO %s;",
 					 CITUS_REBALANCER_NAME);
 
 	if (PropagateSessionSettingsForLoopbackConnection)
 	{
 		char *setStatementsForNewConnections = GetSetStatementsForNewConnections();
-		appendStringInfoString(setApplicationName, setStatements->data);
+		appendStringInfoString(setStatements, setStatementsForNewConnections);
 	}
 
 	if (useExclusiveTransactionBlock)
@@ -2081,7 +2081,7 @@ ExecuteRebalancerCommandInSeparateTransaction(char *command, bool
 		ExecuteCriticalRemoteCommand(connection, "BEGIN;");
 	}
 
-	ExecuteCriticalRemoteCommand(connection, setApplicationName->data);
+	ExecuteCriticalRemoteCommand(connection, setStatements->data);
 	ExecuteCriticalRemoteCommand(connection, command);
 
 	if (useExclusiveTransactionBlock)
@@ -2116,7 +2116,7 @@ GetSetStatementsForNewConnections(void)
 		}
 	}
 
-	return setStatements;
+	return setStatements->data;
 }
 
 
