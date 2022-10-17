@@ -18,7 +18,6 @@ extern bool DeferShardDeleteOnMove;
 extern double DesiredPercentFreeAfterMove;
 extern bool CheckAvailableSpaceBeforeMove;
 
-extern bool DeferShardDeleteOnSplit;
 extern int NextOperationId;
 extern int NextCleanupRecordId;
 

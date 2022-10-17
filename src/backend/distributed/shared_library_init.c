@@ -1027,25 +1027,6 @@ RegisterCitusConfigVariables(void)
 		0,
 		NULL, NULL, NULL);
 
-	DefineCustomBoolVariable(
-		"citus.defer_drop_after_shard_split",
-		gettext_noop("When enabled a shard split will mark the original shards "
-					 "for deletion after a successful split, instead of deleting "
-					 "them right away."),
-		gettext_noop("The deletion of a shard can sometimes run into a conflict with a "
-					 "long running transactions on a the shard during the drop phase of "
-					 "the shard split. This causes some splits to be rolled back after "
-					 "resources have been spend on moving the shard. To prevent "
-					 "conflicts this feature lets you skip the actual deletion till a "
-					 "later point in time. When used one should set "
-					 "citus.defer_shard_delete_interval to make sure defered deletions "
-					 "will be executed"),
-		&DeferShardDeleteOnSplit,
-		true,
-		PGC_USERSET,
-		0,
-		NULL, NULL, NULL);
-
 	DefineCustomIntVariable(
 		"citus.defer_shard_delete_interval",
 		gettext_noop("Sets the time to wait between background deletion for shards."),

@@ -1560,7 +1560,6 @@ CREATE EXTENSION citus;
 CREATE TABLE test (x int, y int);
 INSERT INTO test VALUES (1,2);
 SET citus.shard_replication_factor TO 1;
-SET citus.defer_drop_after_shard_split TO off;
 SELECT create_distributed_table_concurrently('test','x');
 NOTICE:  relation test does not have a REPLICA IDENTITY or PRIMARY KEY
 DETAIL:  UPDATE and DELETE commands on the relation will error out during create_distributed_table_concurrently unless there is a REPLICA IDENTITY or PRIMARY KEY. INSERT commands will still work.
