@@ -338,8 +338,15 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 		placementUpdateEvent->sourceNode = sourceNode;
 		placementUpdateEvent->targetNode = targetNode;
 		SetupRebalanceMonitor(list_make1(placementUpdateEvent), relationId,
-							  REBALANCE_PROGRESS_MOVING);
+							  REBALANCE_PROGRESS_MOVING,
+							  PLACEMENT_UPDATE_STATUS_SETTING_UP);
 	}
+
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		colocatedShardList,
+		sourceNodeName,
+		sourceNodePort,
+		PLACEMENT_UPDATE_STATUS_SETTING_UP);
 
 	/*
 	 * At this point of the shard moves, we don't need to block the writes to
@@ -407,6 +414,12 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	UpdateColocatedShardPlacementMetadataOnWorkers(shardId, sourceNodeName,
 												   sourceNodePort, targetNodeName,
 												   targetNodePort);
+
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		colocatedShardList,
+		sourceNodeName,
+		sourceNodePort,
+		PLACEMENT_UPDATE_STATUS_COMPLETED);
 
 	FinalizeCurrentProgressMonitor();
 	PG_RETURN_VOID();
@@ -1007,8 +1020,14 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 	placementUpdateEvent->sourceNode = sourceNode;
 	placementUpdateEvent->targetNode = targetNode;
 	SetupRebalanceMonitor(list_make1(placementUpdateEvent), relationId,
-						  REBALANCE_PROGRESS_MOVING);
+						  REBALANCE_PROGRESS_MOVING,
+						  PLACEMENT_UPDATE_STATUS_SETTING_UP);
 
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		colocatedShardList,
+		sourceNodeName,
+		sourceNodePort,
+		PLACEMENT_UPDATE_STATUS_SETTING_UP);
 
 	/*
 	 * At this point of the shard replication, we don't need to block the writes to
@@ -1078,6 +1097,13 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 			SendCommandToWorkersWithMetadata(placementCommand);
 		}
 	}
+
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		colocatedShardList,
+		sourceNodeName,
+		sourceNodePort,
+		PLACEMENT_UPDATE_STATUS_COMPLETED);
+
 	FinalizeCurrentProgressMonitor();
 }
 
@@ -1257,7 +1283,19 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 												  tableOwner, ddlCommandList);
 	}
 
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardIntervalList,
+		sourceNodeName,
+		sourceNodePort,
+		PLACEMENT_UPDATE_STATUS_COPYING_DATA);
+
 	CopyShardsToNode(sourceNode, targetNode, shardIntervalList, NULL);
+
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardIntervalList,
+		sourceNodeName,
+		sourceNodePort,
+		PLACEMENT_UPDATE_STATUS_CREATING_CONSTRAINTS);
 
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
@@ -1291,6 +1329,12 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		}
 	}
 
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardIntervalList,
+		sourceNodeName,
+		sourceNodePort,
+		PLACEMENT_UPDATE_STATUS_CREATING_FOREIGN_KEYS);
+
 	/*
 	 * Iterate through the colocated shards and create DDL commamnds
 	 * to create the foreign constraints.
@@ -1321,6 +1365,12 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 												  tableOwner,
 												  shardCommandList->ddlCommandList);
 	}
+
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardIntervalList,
+		sourceNodeName,
+		sourceNodePort,
+		PLACEMENT_UPDATE_STATUS_COMPLETING);
 
 	MemoryContextReset(localContext);
 	MemoryContextSwitchTo(oldContext);
@@ -1936,4 +1986,60 @@ WorkerApplyShardDDLCommandList(List *ddlCommandList, int64 shardId)
 	}
 
 	return applyDDLCommandList;
+}
+
+
+/*
+ * UpdatePlacementUpdateStatusForShardIntervalList updates the status field for shards
+ * in the given shardInterval list.
+ */
+void
+UpdatePlacementUpdateStatusForShardIntervalList(List *shardIntervalList,
+												char *sourceName, int sourcePort,
+												PlacementUpdateStatus status)
+{
+	List *segmentList = NIL;
+	List *rebalanceMonitorList = NULL;
+
+	if (!HasProgressMonitor())
+	{
+		rebalanceMonitorList = ProgressMonitorList(REBALANCE_ACTIVITY_MAGIC_NUMBER,
+												   &segmentList);
+	}
+	else
+	{
+		rebalanceMonitorList = list_make1(GetCurrentProgressMonitor());
+	}
+
+	ProgressMonitorData *monitor = NULL;
+	foreach_ptr(monitor, rebalanceMonitorList)
+	{
+		PlacementUpdateEventProgress *steps = ProgressMonitorSteps(monitor);
+
+		for (int moveIndex = 0; moveIndex < monitor->stepCount; moveIndex++)
+		{
+			PlacementUpdateEventProgress *step = steps + moveIndex;
+			uint64 currentShardId = step->shardId;
+			bool foundInList = false;
+
+			ShardInterval *candidateShard = NULL;
+			foreach_ptr(candidateShard, shardIntervalList)
+			{
+				if (candidateShard->shardId == currentShardId)
+				{
+					foundInList = true;
+					break;
+				}
+			}
+
+			if (foundInList &&
+				strcmp(step->sourceName, sourceName) == 0 &&
+				step->sourcePort == sourcePort)
+			{
+				pg_atomic_write_u64(&step->updateStatus, status);
+			}
+		}
+	}
+
+	DetachFromDSMSegments(segmentList);
 }

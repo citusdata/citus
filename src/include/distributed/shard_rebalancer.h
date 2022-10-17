@@ -85,6 +85,19 @@ typedef enum
 	PLACEMENT_UPDATE_COPY = 2
 } PlacementUpdateType;
 
+typedef enum
+{
+	PLACEMENT_UPDATE_STATUS_NOT_STARTED_YET = 0,
+	PLACEMENT_UPDATE_STATUS_SETTING_UP = 1,
+	PLACEMENT_UPDATE_STATUS_COPYING_DATA = 2,
+	PLACEMENT_UPDATE_STATUS_CATCHING_UP = 3,
+	PLACEMENT_UPDATE_STATUS_CREATING_CONSTRAINTS = 4,
+	PLACEMENT_UPDATE_STATUS_FINAL_CATCH_UP = 5,
+	PLACEMENT_UPDATE_STATUS_CREATING_FOREIGN_KEYS = 6,
+	PLACEMENT_UPDATE_STATUS_COMPLETING = 7,
+	PLACEMENT_UPDATE_STATUS_COMPLETED = 8,
+} PlacementUpdateStatus;
+
 
 /*
  * PlacementUpdateEvent represents a logical unit of work that copies or
@@ -108,6 +121,7 @@ typedef struct PlacementUpdateEventProgress
 	int targetPort;
 	PlacementUpdateType updateType;
 	pg_atomic_uint64 progress;
+	pg_atomic_uint64 updateStatus;
 } PlacementUpdateEventProgress;
 
 typedef struct NodeFillState
@@ -199,6 +213,7 @@ extern void AcquirePlacementColocationLock(Oid relationId, int lockMode,
 
 extern void SetupRebalanceMonitor(List *placementUpdateList,
 								  Oid relationId,
-								  uint64 initialProgressState);
+								  uint64 initialProgressState,
+								  PlacementUpdateStatus initialStatus);
 
 #endif   /* SHARD_REBALANCER_H */

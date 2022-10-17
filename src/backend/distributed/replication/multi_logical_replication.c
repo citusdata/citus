@@ -258,6 +258,12 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 */
 		CreateReplicaIdentities(logicalRepTargetList);
 
+		UpdatePlacementUpdateStatusForShardIntervalList(
+			shardList,
+			sourceNodeName,
+			sourceNodePort,
+			PLACEMENT_UPDATE_STATUS_COPYING_DATA);
+
 		CopyShardsToNode(sourceNode, targetNode, shardList, snapshot);
 
 		/*
@@ -374,6 +380,12 @@ CompleteNonBlockingShardTransfer(List *shardList,
 	/* Start applying the changes from the replication slots to catch up. */
 	EnableSubscriptions(logicalRepTargetList);
 
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardList,
+		sourceConnection->hostname,
+		sourceConnection->port,
+		PLACEMENT_UPDATE_STATUS_CATCHING_UP);
+
 	/*
 	 * The following check is a leftover from when used subscriptions with
 	 * copy_data=true. It's probably not really necessary anymore, but it
@@ -392,12 +404,25 @@ CompleteNonBlockingShardTransfer(List *shardList,
 	 */
 	WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
 
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardList,
+		sourceConnection->hostname,
+		sourceConnection->port,
+		PLACEMENT_UPDATE_STATUS_CREATING_CONSTRAINTS);
+
 	/*
 	 * Now lets create the post-load objects, such as the indexes, constraints
 	 * and partitioning hierarchy. Once they are done, wait until the replication
 	 * catches up again. So we don't block writes too long.
 	 */
 	CreatePostLogicalReplicationDataLoadObjects(logicalRepTargetList, type);
+
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardList,
+		sourceConnection->hostname,
+		sourceConnection->port,
+		PLACEMENT_UPDATE_STATUS_FINAL_CATCH_UP);
+
 	WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
 
 
@@ -419,6 +444,12 @@ CompleteNonBlockingShardTransfer(List *shardList,
 
 	if (type != SHARD_SPLIT)
 	{
+		UpdatePlacementUpdateStatusForShardIntervalList(
+			shardList,
+			sourceConnection->hostname,
+			sourceConnection->port,
+			PLACEMENT_UPDATE_STATUS_CREATING_FOREIGN_KEYS);
+
 		/*
 		 * We're creating the foreign constraints to reference tables after the
 		 * data is already replicated and all the necessary locks are acquired.
@@ -431,6 +462,12 @@ CompleteNonBlockingShardTransfer(List *shardList,
 		 */
 		CreateUncheckedForeignKeyConstraints(logicalRepTargetList);
 	}
+
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardList,
+		sourceConnection->hostname,
+		sourceConnection->port,
+		PLACEMENT_UPDATE_STATUS_COMPLETING);
 
 	/* we're done, cleanup the publication and subscription */
 	DropSubscriptions(logicalRepTargetList);
