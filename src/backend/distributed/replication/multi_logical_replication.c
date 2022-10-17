@@ -1734,6 +1734,10 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 	{
 		int ownerId = target->tableOwnerId;
 
+		WorkerNode *worker = FindWorkerNode(target->superuserConnection->hostname,
+											target->superuserConnection->port);
+		CleanupPolicy policy = CLEANUP_ALWAYS;
+
 		/*
 		 * The CREATE USER command should not propagate, so we temporarily
 		 * disable DDL propagation.
@@ -1751,6 +1755,11 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 					target->subscriptionOwnerName,
 					GetUserNameFromId(ownerId, false)
 					)));
+
+		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_USER,
+											target->subscriptionOwnerName,
+											worker->groupId,
+											policy);
 
 		StringInfo conninfo = makeStringInfo();
 		appendStringInfo(conninfo, "host='%s' port=%d user='%s' dbname='%s' "
@@ -1791,6 +1800,12 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 									 createSubscriptionCommand->data);
 		pfree(createSubscriptionCommand->data);
 		pfree(createSubscriptionCommand);
+
+		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SUBSCRIPTION,
+											target->subscriptionName,
+											worker->groupId,
+											policy);
+
 		ExecuteCriticalRemoteCommand(target->superuserConnection, psprintf(
 										 "ALTER SUBSCRIPTION %s OWNER TO %s",
 										 target->subscriptionName,
@@ -1809,18 +1824,6 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 					"ALTER ROLE %s NOSUPERUSER;",
 					target->subscriptionOwnerName
 					)));
-
-		WorkerNode *worker = FindWorkerNode(target->superuserConnection->hostname,
-											target->superuserConnection->port);
-		CleanupPolicy policy = CLEANUP_ALWAYS;
-		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SUBSCRIPTION,
-											target->subscriptionName,
-											worker->groupId,
-											policy);
-		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_USER,
-											target->subscriptionOwnerName,
-											worker->groupId,
-											policy);
 	}
 }
 
