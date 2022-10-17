@@ -1494,8 +1494,6 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		shardGroupSplitIntervalListList,
 		workersForPlacementList);
 
-	DropAllLogicalReplicationLeftovers(SHARD_SPLIT);
-
 	int connectionFlags = FORCE_NEW_CONNECTION;
 	MultiConnection *sourceConnection = GetNodeUserDatabaseConnection(
 		connectionFlags,
@@ -1721,12 +1719,6 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 	{
 		/* end ongoing transactions to enable us to clean up */
 		ShutdownAllConnections();
-
-		/* Do a best effort cleanup of shards created on workers in the above block
-		 * TODO(niupre): We don't need to do this once shard cleaner can clean replication
-		 * artifacts.
-		 */
-		DropAllLogicalReplicationLeftovers(SHARD_SPLIT);
 
 		/*
 		 * Drop temporary objects that were marked as CLEANUP_ON_FAILURE

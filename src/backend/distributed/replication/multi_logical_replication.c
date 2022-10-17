@@ -185,8 +185,6 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		return;
 	}
 
-	DropAllLogicalReplicationLeftovers(SHARD_MOVE);
-
 	MultiConnection *sourceConnection =
 		GetNodeUserDatabaseConnection(connectionFlags, sourceNodeName, sourceNodePort,
 									  superUser, databaseName);
@@ -566,74 +564,6 @@ AcquireLogicalReplicationLock(void)
 	SET_LOCKTAG_LOGICAL_REPLICATION(tag);
 
 	LockAcquire(&tag, ExclusiveLock, false, false);
-}
-
-
-/*
- * DropAllLogicalReplicationLeftovers drops all subscriptions, publications,
- * roles and replication slots on all nodes that were related to this
- * LogicalRepType. These might have been left there after the coordinator
- * crashed during a shard move/split. It's important to delete them for two
- * reasons:
- * 1. Starting new shard moves will fail when they exist, because it cannot
- *    create them.
- * 2. Leftover replication slots that are not consumed from anymore make it
- *    impossible for WAL to be dropped. This can cause out-of-disk issues.
- */
-void
-DropAllLogicalReplicationLeftovers(LogicalRepType type)
-{
-	char *superUser = CitusExtensionOwnerName();
-	char *databaseName = get_database_name(MyDatabaseId);
-
-	/*
-	 * We need connections that are not currently inside a transaction. The
-	 * reason for this is that operations on subscriptions, publications and
-	 * replication slots cannot be run in a transaction. By forcing a new
-	 * connection we make sure no transaction is active on the connection.
-	 */
-	int connectionFlags = FORCE_NEW_CONNECTION;
-
-	List *workerNodeList = ActivePrimaryNodeList(AccessShareLock);
-	List *cleanupConnectionList = NIL;
-	WorkerNode *workerNode = NULL;
-
-	/*
-	 * First we try to remove the subscription, everywhere and only after
-	 * having done that we try to remove the publication everywhere. This is
-	 * needed, because the publication can only be removed if there's no active
-	 * subscription on it.
-	 */
-	foreach_ptr(workerNode, workerNodeList)
-	{
-		MultiConnection *cleanupConnection = GetNodeUserDatabaseConnection(
-			connectionFlags, workerNode->workerName, workerNode->workerPort,
-			superUser, databaseName);
-		cleanupConnectionList = lappend(cleanupConnectionList, cleanupConnection);
-
-		DropAllSubscriptions(cleanupConnection, type);
-		DropAllUsers(cleanupConnection, type);
-	}
-
-	MultiConnection *cleanupConnection = NULL;
-	foreach_ptr(cleanupConnection, cleanupConnectionList)
-	{
-		/*
-		 * If replication slot could not be dropped while dropping the
-		 * subscriber, drop it here.
-		 */
-		DropAllReplicationSlots(cleanupConnection, type);
-		DropAllPublications(cleanupConnection, type);
-
-		/*
-		 * We close all connections that we opened for the dropping here. That
-		 * way we don't keep these connections open unnecessarily during the
-		 * 'LogicalRepType' operation (which can take a long time). We might
-		 * need to reopen a few later on, but that seems better than keeping
-		 * many open for no reason for a long time.
-		 */
-		CloseConnection(cleanupConnection);
-	}
 }
 
 
@@ -1744,11 +1674,13 @@ CreatePublications(MultiConnection *connection,
 		pfree(createPublicationCommand->data);
 		pfree(createPublicationCommand);
 
+		WorkerNode *worker = FindWorkerNode(connection->hostname,
+											connection->port);
 		CleanupPolicy policy = CLEANUP_ALWAYS;
-		InsertCleanupRecordsForShardIntervalList(entry->shardIntervals,
-												 CLEANUP_OBJECT_PUBLICATION,
-												 entry->name,
-												 policy);
+		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_PUBLICATION,
+											entry->name,
+											worker->groupId,
+											policy);
 	}
 }
 
@@ -1837,8 +1769,11 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 	{
 		ReplicationSlotInfo *replicationSlot = target->replicationSlot;
 
+		MultiConnection *connectionToGetGroupId = NULL;
+
 		if (!firstReplicationSlot)
 		{
+			connectionToGetGroupId = sourceReplicationConnection;
 			firstReplicationSlot = replicationSlot;
 			snapshot = CreateReplicationSlot(
 				sourceReplicationConnection,
@@ -1848,6 +1783,7 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 		}
 		else
 		{
+			connectionToGetGroupId = sourceConnection;
 			ExecuteCriticalRemoteCommand(
 				sourceConnection,
 				psprintf("SELECT pg_catalog.pg_copy_logical_replication_slot(%s, %s)",
@@ -1855,11 +1791,13 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 						 quote_literal_cstr(replicationSlot->name)));
 		}
 
+		WorkerNode *worker = FindWorkerNode(connectionToGetGroupId->hostname,
+											connectionToGetGroupId->port);
 		CleanupPolicy policy = CLEANUP_ALWAYS;
-		InsertCleanupRecordsForShardIntervalList(target->publication->shardIntervals,
-												 CLEANUP_OBJECT_REPLICATION_SLOT,
-												 replicationSlot->name,
-												 policy);
+		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_REPLICATION_SLOT,
+											quote_literal_cstr(replicationSlot->name),
+											worker->groupId,
+											policy);
 	}
 	return snapshot;
 }
