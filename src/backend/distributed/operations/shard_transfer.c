@@ -2001,7 +2001,7 @@ UpdatePlacementUpdateStatusForShardIntervalList(List *shardIntervalList,
 	List *segmentList = NIL;
 	List *rebalanceMonitorList = NULL;
 
-	if (GetCurrentProgressDSMHandle() == DSM_HANDLE_INVALID)
+	if (!HasProgressMonitor())
 	{
 		rebalanceMonitorList = ProgressMonitorList(REBALANCE_ACTIVITY_MAGIC_NUMBER,
 												   &segmentList);

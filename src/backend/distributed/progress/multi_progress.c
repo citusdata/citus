@@ -134,13 +134,13 @@ FinalizeCurrentProgressMonitor(void)
 
 
 /*
- * GetCurrentProgressDSMHandle is the getter function for static variable
- * currentProgressDSMHandle
+ * HasProgressMonitor returns true if there is a current progress monitor,
+ * by checking the variable currentProgressDSMHandle. Returns false otherwise.
  */
-uint64
-GetCurrentProgressDSMHandle(void)
+bool
+HasProgressMonitor(void)
 {
-	return currentProgressDSMHandle;
+	return currentProgressDSMHandle != DSM_HANDLE_INVALID;
 }
 
 
