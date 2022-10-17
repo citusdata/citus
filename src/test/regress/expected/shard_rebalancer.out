@@ -178,17 +178,17 @@ SELECT pg_sleep(.1); -- wait to make sure the config has changed before running 
 
 (1 row)
 
+SET citus.node_connection_timeout to 60;
 BEGIN;
 SET LOCAL citus.shard_replication_factor TO 2;
 SET citus.log_remote_commands TO ON;
 SET SESSION citus.max_adaptive_executor_pool_size TO 5;
 SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
-NOTICE:  issuing SET LOCAL application_name TO citus_rebalancer;SET LOCAL citus.log_remote_commands TO 'on';SET LOCAL citus.max_adaptive_executor_pool_size TO '5';SET LOCAL citus.next_shard_id TO '433105';SET LOCAL citus.shard_count TO '4';SET LOCAL citus.shard_replication_factor TO '2';
+NOTICE:  issuing SET LOCAL application_name TO citus_rebalancer;SET LOCAL citus.log_remote_commands TO 'on';SET LOCAL citus.max_adaptive_executor_pool_size TO '5';SET LOCAL citus.next_shard_id TO '433105';SET LOCAL citus.node_connection_timeout TO '60';SET LOCAL citus.shard_count TO '4';SET LOCAL citus.shard_replication_factor TO '2';
 DETAIL:  on server postgres@foobar:57636 connectionId: xxxxxxx
 ERROR:  connection to the remote node foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
+ROLLBACK;
 SET citus.log_remote_commands TO OFF;
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
-COMMIT;
 ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();
  pg_reload_conf
