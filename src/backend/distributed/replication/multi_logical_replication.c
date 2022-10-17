@@ -1703,7 +1703,7 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 											sourceConnection->port);
 		CleanupPolicy policy = CLEANUP_ALWAYS;
 		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_REPLICATION_SLOT,
-											quote_literal_cstr(replicationSlot->name),
+											replicationSlot->name,
 											worker->groupId,
 											policy);
 	}
