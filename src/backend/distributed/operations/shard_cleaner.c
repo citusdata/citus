@@ -845,7 +845,7 @@ TryDropResourceByCleanupRecordOutsideTransaction(CleanupRecord *record,
 			appendStringInfo(dropQuery,
 							 "select pg_drop_replication_slot(slot_name) "
 							 "from pg_replication_slots where slot_name = %s",
-							 quote_literal_cstr(record->objectName));
+							 record->objectName);
 
 			dropCommandList = list_make1(dropQuery->data);
 			break;

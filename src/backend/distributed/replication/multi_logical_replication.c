@@ -1681,11 +1681,8 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 	{
 		ReplicationSlotInfo *replicationSlot = target->replicationSlot;
 
-		MultiConnection *connectionToGetGroupId = NULL;
-
 		if (!firstReplicationSlot)
 		{
-			connectionToGetGroupId = sourceReplicationConnection;
 			firstReplicationSlot = replicationSlot;
 			snapshot = CreateReplicationSlot(
 				sourceReplicationConnection,
@@ -1695,7 +1692,6 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 		}
 		else
 		{
-			connectionToGetGroupId = sourceConnection;
 			ExecuteCriticalRemoteCommand(
 				sourceConnection,
 				psprintf("SELECT pg_catalog.pg_copy_logical_replication_slot(%s, %s)",
@@ -1703,8 +1699,8 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 						 quote_literal_cstr(replicationSlot->name)));
 		}
 
-		WorkerNode *worker = FindWorkerNode(connectionToGetGroupId->hostname,
-											connectionToGetGroupId->port);
+		WorkerNode *worker = FindWorkerNode(sourceConnection->hostname,
+											sourceConnection->port);
 		CleanupPolicy policy = CLEANUP_ALWAYS;
 		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_REPLICATION_SLOT,
 											quote_literal_cstr(replicationSlot->name),
