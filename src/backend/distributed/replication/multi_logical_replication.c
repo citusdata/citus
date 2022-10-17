@@ -143,10 +143,6 @@ static void DropPublication(MultiConnection *connection, char *publicationName);
 static void DropUser(MultiConnection *connection, char *username);
 static void DropReplicationSlot(MultiConnection *connection,
 								char *publicationName);
-static void DropAllSubscriptions(MultiConnection *connection, LogicalRepType type);
-static void DropAllReplicationSlots(MultiConnection *connection, LogicalRepType type);
-static void DropAllPublications(MultiConnection *connection, LogicalRepType type);
-static void DropAllUsers(MultiConnection *connection, LogicalRepType type);
 static HTAB * CreateShardMovePublicationInfoHash(WorkerNode *targetNode,
 												 List *shardIntervals);
 static List * CreateShardMoveLogicalRepTargetList(HTAB *publicationInfoHash,
@@ -1453,90 +1449,6 @@ GetQueryResultStringList(MultiConnection *connection, char *query)
 	PQclear(result);
 	ForgetResults(connection);
 	return resultList;
-}
-
-
-/*
- * DropAllSubscriptions drops all the existing subscriptions that
- * match our shard move naming scheme on the node that the connection points
- * to.
- */
-static void
-DropAllSubscriptions(MultiConnection *connection, LogicalRepType type)
-{
-	char *query = psprintf(
-		"SELECT subname FROM pg_subscription "
-		"WHERE subname LIKE %s || '%%'",
-		quote_literal_cstr(subscriptionPrefix[type]));
-	List *subscriptionNameList = GetQueryResultStringList(connection, query);
-	char *subscriptionName;
-	foreach_ptr(subscriptionName, subscriptionNameList)
-	{
-		DropSubscription(connection, subscriptionName);
-	}
-}
-
-
-/*
- * DropAllUsers drops all the users that match our shard move naming
- * scheme for temporary shard move users on the node that the connection points
- * to.
- */
-static void
-DropAllUsers(MultiConnection *connection, LogicalRepType type)
-{
-	char *query = psprintf(
-		"SELECT rolname FROM pg_roles "
-		"WHERE rolname LIKE %s || '%%'",
-		quote_literal_cstr(subscriptionRolePrefix[type]));
-	List *usernameList = GetQueryResultStringList(connection, query);
-	char *username;
-	foreach_ptr(username, usernameList)
-	{
-		DropUser(connection, username);
-	}
-}
-
-
-/*
- * DropAllReplicationSlots drops all the existing replication slots
- * that match our shard move naming scheme on the node that the connection
- * points to.
- */
-static void
-DropAllReplicationSlots(MultiConnection *connection, LogicalRepType type)
-{
-	char *query = psprintf(
-		"SELECT slot_name FROM pg_replication_slots "
-		"WHERE slot_name LIKE %s || '%%'",
-		quote_literal_cstr(replicationSlotPrefix[type]));
-	List *slotNameList = GetQueryResultStringList(connection, query);
-	char *slotName;
-	foreach_ptr(slotName, slotNameList)
-	{
-		DropReplicationSlot(connection, slotName);
-	}
-}
-
-
-/*
- * DropAllPublications drops all the existing publications that
- * match our shard move naming scheme on the node that the connection points
- * to.
- */
-static void
-DropAllPublications(MultiConnection *connection, LogicalRepType type)
-{
-	char *query = psprintf(
-		"SELECT pubname FROM pg_publication "
-		"WHERE pubname LIKE %s || '%%'",
-		quote_literal_cstr(publicationPrefix[type]));
-	List *publicationNameList = GetQueryResultStringList(connection, query);
-	char *publicationName;
-	foreach_ptr(publicationName, publicationNameList)
-	{
-		DropPublication(connection, publicationName);
-	}
 }
 
 
