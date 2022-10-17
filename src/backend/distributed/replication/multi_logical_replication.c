@@ -1817,6 +1817,10 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 											target->subscriptionName,
 											worker->groupId,
 											policy);
+		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_USER,
+											target->subscriptionOwnerName,
+											worker->groupId,
+											policy);
 	}
 }
 

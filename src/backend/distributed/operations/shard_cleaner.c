@@ -851,6 +851,18 @@ TryDropResourceByCleanupRecordOutsideTransaction(CleanupRecord *record,
 			break;
 		}
 
+		case CLEANUP_OBJECT_USER:
+		{
+			StringInfo dropQuery = makeStringInfo();
+			appendStringInfo(dropQuery,
+							 "DROP USER IF EXISTS %s",
+							 record->objectName);
+
+			dropCommandList = list_make2("SET LOCAL citus.enable_ddl_propagation TO OFF",
+										 dropQuery->data);
+			break;
+		}
+
 		default:
 		{
 			ereport(WARNING, (errmsg(
