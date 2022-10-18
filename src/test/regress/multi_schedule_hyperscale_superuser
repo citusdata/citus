@@ -19,7 +19,6 @@
 # remove / add node operations, we do not want any preexisting objects before
 # propagate_extension_commands
 # ---
-test: turn_mx_off
 test: multi_test_helpers multi_test_helpers_superuser
 test: multi_test_catalog_views
 test: multi_name_lengths

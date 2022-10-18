@@ -254,6 +254,11 @@ ReportConnectionError(MultiConnection *connection, int elevel)
 	if (pgConn != NULL)
 	{
 		messageDetail = pchomp(PQerrorMessage(pgConn));
+		if (messageDetail == NULL || messageDetail[0] == '\0')
+		{
+			/* give a similar messages to Postgres */
+			messageDetail = "connection not open";
+		}
 	}
 
 	if (messageDetail)

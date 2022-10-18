@@ -14,7 +14,8 @@ CREATE OR REPLACE FUNCTION pg_catalog.get_rebalance_progress()
                 target_shard_size bigint,
                 operation_type text,
                 source_lsn pg_lsn,
-                target_lsn pg_lsn
+                target_lsn pg_lsn,
+                status text
             )
   AS 'MODULE_PATHNAME'
   LANGUAGE C STRICT;

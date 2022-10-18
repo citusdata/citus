@@ -131,7 +131,8 @@ extern void LogicallyReplicateShards(List *shardList, char *sourceNodeName,
 									 int sourceNodePort, char *targetNodeName,
 									 int targetNodePort);
 
-extern void ConflictOnlyWithIsolationTesting(void);
+extern void ConflictWithIsolationTestingBeforeCopy(void);
+extern void ConflictWithIsolationTestingAfterCopy(void);
 extern void CreateReplicaIdentities(List *subscriptionInfoList);
 extern void CreateReplicaIdentitiesOnNode(List *shardList,
 										  char *nodeName,

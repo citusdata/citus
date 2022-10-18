@@ -134,6 +134,17 @@ FinalizeCurrentProgressMonitor(void)
 
 
 /*
+ * HasProgressMonitor returns true if there is a current progress monitor,
+ * by checking the variable currentProgressDSMHandle. Returns false otherwise.
+ */
+bool
+HasProgressMonitor(void)
+{
+	return currentProgressDSMHandle != DSM_HANDLE_INVALID;
+}
+
+
+/*
  * ProgressMonitorList returns the addresses of monitors of ongoing commands, associated
  * with the given identifier magic number. The function takes a pass in
  * pg_stat_get_progress_info output, filters the rows according to the given magic number,
