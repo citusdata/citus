@@ -5,6 +5,11 @@ SET search_path TO 'distributed_triggers';
 SET citus.shard_replication_factor = 1;
 SET citus.next_shard_id TO 800000;
 
+-- idempotently add node to allow this test to run without add_coordinator
+SET client_min_messages TO WARNING;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+RESET client_min_messages;
+
 --
 -- Test citus.enable_unsafe_triggers
 -- Enables arbitrary triggers on distributed tables
@@ -174,7 +179,6 @@ DROP TRIGGER bad_shardkey_record_change_trigger ON data;
 
 CREATE OR REPLACE FUNCTION remote_shardkey_record_change()
 RETURNS trigger
-SET search_path = 'distributed_triggers'
 LANGUAGE plpgsql
 AS $$
 DECLARE
@@ -192,7 +196,6 @@ FOR EACH ROW EXECUTE FUNCTION distributed_triggers.remote_shardkey_record_change
 CREATE FUNCTION insert_document(key text, id text)
 RETURNS void
 LANGUAGE plpgsql
-SET search_path = 'distributed_triggers'
 AS $fn$
 BEGIN
 	INSERT INTO distributed_triggers.data VALUES (key, id, '{"id1":"id2"}');

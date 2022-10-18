@@ -275,6 +275,7 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' A
 \c - - - :master_port
 SET search_path TO fix_idx_names, public;
 DROP TABLE dist_partitioned_table;
+SET citus.next_shard_id TO 910040;
 
 -- test with citus local table
 SET client_min_messages TO WARNING;
@@ -342,5 +343,6 @@ DROP INDEX i4_renamed CASCADE;
 ALTER TABLE parent_table DROP CONSTRAINT pkey_cst CASCADE;
 ALTER TABLE parent_table DROP CONSTRAINT unique_cst CASCADE;
 
+SET client_min_messages TO WARNING;
 DROP SCHEMA fix_idx_names CASCADE;
 SELECT citus_remove_node('localhost', :master_port);
