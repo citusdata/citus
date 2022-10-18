@@ -1,3 +1,8 @@
+// Three alternative test outputs:
+// isolation_master_update_node.out for PG15
+// isolation_master_update_node_0.out for PG14
+// isolation_master_update_node_1.out for PG13
+
 setup
 {
     -- revert back to pg_isolation_test_session_is_blocked until the tests are fixed

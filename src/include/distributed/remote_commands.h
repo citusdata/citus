@@ -70,4 +70,7 @@ extern bool EvaluateSingleQueryResult(MultiConnection *connection, PGresult *que
 									  StringInfo queryResultString);
 extern void StoreErrorMessage(MultiConnection *connection, StringInfo queryResultString);
 
+extern bool IsSettingSafeToPropagate(const char *name);
+
+
 #endif /* REMOTE_COMMAND_H */

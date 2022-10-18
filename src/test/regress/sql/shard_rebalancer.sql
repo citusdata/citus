@@ -3,6 +3,7 @@
 --
 
 SET citus.next_shard_id TO 433000;
+
 CREATE TABLE ref_table_test(a int primary key);
 SELECT create_reference_table('ref_table_test');
 CREATE TABLE dist_table_test(a int primary key);
@@ -89,7 +90,6 @@ ALTER SYSTEM SET citus.local_hostname TO 'foobar';
 SELECT pg_reload_conf();
 SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
 
-SET citus.shard_replication_factor TO 2;
 SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
 
 ALTER SYSTEM RESET citus.local_hostname;
@@ -97,8 +97,16 @@ SELECT pg_reload_conf();
 SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
 
 -- replicate reference table should ignore the coordinator
-SET citus.shard_replication_factor TO 2;
-SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
+SET citus.node_connection_timeout to 60;
+BEGIN;
+    SET LOCAL citus.shard_replication_factor TO 2;
+    SET citus.log_remote_commands TO ON;
+    SET SESSION citus.max_adaptive_executor_pool_size TO 5;
+    SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
+COMMIT;
+
+RESET citus.node_connection_timeout;
+RESET citus.log_remote_commands;
 
 DROP TABLE dist_table_test, dist_table_test_2, ref_table_test, postgres_table_test;
 RESET citus.shard_count;
