@@ -99,3 +99,8 @@ To automatically setup a citus cluster in tests we use our
 `src/test/regress/pg_regress_multi.pl` script. This sets up a citus cluster and
 then starts the standard postgres test tooling. You almost never have to change
 this file.
+
+## Randomly failing tests
+
+In CI sometimes a test fails randomly, we call these tests "flaky". To fix these
+flaky tests see [`src/test/regress/flaky_tests.md`](https://github.com/citusdata/citus/blob/master/src/test/regress/mitmscripts/README.md)
