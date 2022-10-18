@@ -1357,7 +1357,10 @@ AcquireDistributedLockOnRelations(List *relationList, LOCKMODE lockMode, uint32 
 													 (void *) lockRelationRecord);
 		}
 
-		if (get_rel_relkind(relationId) == RELKIND_RELATION &&
+		char relkind = get_rel_relkind(relationId);
+		bool relationCanBeReferenced = (relkind == RELKIND_RELATION ||
+										relkind == RELKIND_PARTITIONED_TABLE);
+		if (relationCanBeReferenced &&
 			(configs & DIST_LOCK_REFERENCING_TABLES) > 0)
 		{
 			CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
