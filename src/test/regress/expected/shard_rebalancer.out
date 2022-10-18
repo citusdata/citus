@@ -178,7 +178,6 @@ SELECT pg_sleep(.1); -- wait to make sure the config has changed before running 
 
 (1 row)
 
-SET citus.shard_replication_factor TO 2;
 SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
 ERROR:  connection to the remote node foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
 ALTER SYSTEM RESET citus.local_hostname;
@@ -195,17 +194,106 @@ SELECT pg_sleep(.1); -- wait to make sure the config has changed before running 
 (1 row)
 
 -- replicate reference table should ignore the coordinator
-SET citus.shard_replication_factor TO 2;
-SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
+SET citus.node_connection_timeout to 60;
+BEGIN;
+    SET LOCAL citus.shard_replication_factor TO 2;
+    SET citus.log_remote_commands TO ON;
+    SET SESSION citus.max_adaptive_executor_pool_size TO 5;
+    SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
+NOTICE:  issuing CALL citus_cleanup_orphaned_shards()
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  Copying shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL application_name TO citus_rebalancer;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.log_remote_commands TO 'on';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.max_adaptive_executor_pool_size TO '5';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.next_shard_id TO '433105';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '60';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.shard_replication_factor TO '2';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT citus_copy_shard_placement(433101,'localhost',57637,'localhost',57638,'block_writes')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  Copying shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL application_name TO citus_rebalancer;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.log_remote_commands TO 'on';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.max_adaptive_executor_pool_size TO '5';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.next_shard_id TO '433105';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '60';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.shard_replication_factor TO '2';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT citus_copy_shard_placement(433102,'localhost',57638,'localhost',57637,'block_writes')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  Copying shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL application_name TO citus_rebalancer;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.log_remote_commands TO 'on';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.max_adaptive_executor_pool_size TO '5';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.next_shard_id TO '433105';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '60';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.shard_replication_factor TO '2';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT citus_copy_shard_placement(433103,'localhost',57637,'localhost',57638,'block_writes')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  Copying shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL application_name TO citus_rebalancer;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.log_remote_commands TO 'on';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.max_adaptive_executor_pool_size TO '5';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.next_shard_id TO '433105';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '60';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.shard_replication_factor TO '2';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT citus_copy_shard_placement(433104,'localhost',57638,'localhost',57637,'block_writes')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  replicate_table_shards
 ---------------------------------------------------------------------
 
 (1 row)
 
+COMMIT;
+RESET citus.node_connection_timeout;
+RESET citus.log_remote_commands;
 DROP TABLE dist_table_test, dist_table_test_2, ref_table_test, postgres_table_test;
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;

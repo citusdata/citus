@@ -64,7 +64,9 @@
 #include "utils/pg_lsn.h"
 #include "utils/syscache.h"
 #include "common/hashfn.h"
-
+#include "utils/varlena.h"
+#include "utils/guc_tables.h"
+#include "distributed/commands/utility_hook.h"
 
 /* RebalanceOptions are the options used to control the rebalance algorithm */
 typedef struct RebalanceOptions
@@ -189,6 +191,7 @@ typedef struct WorkerShardStatistics
 	HTAB *statistics;
 } WorkerShardStatistics;
 
+char *VariablesToBePassedToNewConnections = NULL;
 
 /* static declarations for main logic */
 static int ShardActivePlacementCount(HTAB *activePlacementsHash, uint64 shardId,
@@ -258,7 +261,7 @@ static void AddToWorkerShardIdSet(HTAB *shardsByWorker, char *workerName, int wo
 								  uint64 shardId);
 static HTAB * BuildShardSizesHash(ProgressMonitorData *monitor, HTAB *shardStatistics);
 static void ErrorOnConcurrentRebalance(RebalanceOptions *);
-
+static List * GetSetCommandListForNewConnections(void);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(rebalance_table_shards);
@@ -276,6 +279,7 @@ PG_FUNCTION_INFO_V1(citus_rebalance_wait);
 
 bool RunningUnderIsolationTest = false;
 int MaxRebalancerLoggedIgnoredMoves = 5;
+bool PropagateSessionSettingsForLoopbackConnection = false;
 
 static const char *PlacementUpdateTypeNames[] = {
 	[PLACEMENT_UPDATE_INVALID_FIRST] = "unknown",
@@ -2069,9 +2073,10 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 
 
 /*
- * ExecuteCriticalCommandInSeparateTransaction runs a command in a separate
+ * ExecuteRebalancerCommandInSeparateTransaction runs a command in a separate
  * transaction that is commited right away. This is useful for things that you
  * don't want to rollback when the current transaction is rolled back.
+ * Set true to 'useExclusiveTransactionBlock' to initiate a BEGIN and COMMIT statements.
  */
 void
 ExecuteRebalancerCommandInSeparateTransaction(char *command)
@@ -2079,14 +2084,53 @@ ExecuteRebalancerCommandInSeparateTransaction(char *command)
 	int connectionFlag = FORCE_NEW_CONNECTION;
 	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
 													PostPortNumber);
-	StringInfo setApplicationName = makeStringInfo();
-	appendStringInfo(setApplicationName, "SET application_name TO %s",
-					 CITUS_REBALANCER_NAME);
+	List *commandList = NIL;
 
-	ExecuteCriticalRemoteCommand(connection, setApplicationName->data);
-	ExecuteCriticalRemoteCommand(connection, command);
+	commandList = lappend(commandList, psprintf("SET LOCAL application_name TO %s;",
+												CITUS_REBALANCER_NAME));
 
+	if (PropagateSessionSettingsForLoopbackConnection)
+	{
+		List *setCommands = GetSetCommandListForNewConnections();
+		char *setCommand = NULL;
+
+		foreach_ptr(setCommand, setCommands)
+		{
+			commandList = lappend(commandList, setCommand);
+		}
+	}
+
+	commandList = lappend(commandList, command);
+
+	SendCommandListToWorkerOutsideTransactionWithConnection(connection, commandList);
 	CloseConnection(connection);
+}
+
+
+/*
+ * GetSetCommandListForNewConnections returns a list of SET statements to
+ * be executed in new connections to worker nodes.
+ */
+static List *
+GetSetCommandListForNewConnections(void)
+{
+	List *commandList = NIL;
+
+	struct config_generic **guc_vars = get_guc_variables();
+	int gucCount = GetNumConfigOptions();
+
+	for (int gucIndex = 0; gucIndex < gucCount; gucIndex++)
+	{
+		struct config_generic *var = (struct config_generic *) guc_vars[gucIndex];
+		if (var->source == PGC_S_SESSION && IsSettingSafeToPropagate(var->name))
+		{
+			const char *variableValue = GetConfigOption(var->name, true, true);
+			commandList = lappend(commandList, psprintf("SET LOCAL %s TO '%s';",
+														var->name, variableValue));
+		}
+	}
+
+	return commandList;
 }
 
 

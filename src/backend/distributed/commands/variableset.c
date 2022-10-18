@@ -25,10 +25,6 @@
 #include "utils/varlena.h"
 #include "distributed/remote_commands.h"
 
-
-static bool IsSettingSafeToPropagate(char *name);
-
-
 /*
  * ShouldPropagateSetCommand determines whether a SET or RESET command should be
  * propagated to the workers.
@@ -77,37 +73,6 @@ ShouldPropagateSetCommand(VariableSetStmt *setStmt)
 			return strcmp(setStmt->name, "TRANSACTION") == 0;
 		}
 	}
-}
-
-
-/*
- * IsSettingSafeToPropagate returns whether a SET LOCAL is safe to propagate.
- *
- * We exclude settings that are highly specific to the client or session and also
- * ban propagating the citus.propagate_set_commands setting (not for correctness,
- * more to avoid confusion).
- */
-static bool
-IsSettingSafeToPropagate(char *name)
-{
-	/* if this list grows considerably we should switch to bsearch */
-	const char *skipSettings[] = {
-		"application_name",
-		"citus.propagate_set_commands",
-		"client_encoding",
-		"exit_on_error",
-		"max_stack_depth"
-	};
-
-	for (Index settingIndex = 0; settingIndex < lengthof(skipSettings); settingIndex++)
-	{
-		if (pg_strcasecmp(skipSettings[settingIndex], name) == 0)
-		{
-			return false;
-		}
-	}
-
-	return true;
 }
 
 
