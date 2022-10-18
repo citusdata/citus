@@ -7,7 +7,6 @@ test: background_rebalance
 test: worker_copy_table_to_node
 test: foreign_key_to_reference_shard_rebalance
 test: multi_move_mx
-test: shard_move_deferred_delete
 test: multi_colocated_shard_rebalance
 test: ignoring_orphaned_shards
 test: cpu_priority

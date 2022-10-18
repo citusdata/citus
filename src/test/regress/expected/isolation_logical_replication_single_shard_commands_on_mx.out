@@ -697,16 +697,17 @@ run_commands_on_session_level_connection_to_node
 
 step s1-move-placement:
    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+ <waiting ...>
+step s2-commit-worker: 
+  SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
-master_move_shard_placement
+run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s2-commit-worker:
-  SELECT run_commands_on_session_level_connection_to_node('COMMIT');
-
-run_commands_on_session_level_connection_to_node
+step s1-move-placement: <... completed>
+master_move_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)

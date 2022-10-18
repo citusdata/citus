@@ -129,7 +129,6 @@ SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, node
 SET ROLE test_shard_split_role;
 SET search_path TO "citus_split_test_schema";
 SET citus.next_shard_id TO 8981007;
-SET citus.defer_drop_after_shard_move TO OFF;
 
 SELECT citus_move_shard_placement(8981000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='force_logical');
 -- END : Move one shard before we split it.

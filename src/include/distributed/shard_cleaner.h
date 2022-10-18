@@ -14,7 +14,6 @@
 /* GUC to configure deferred shard deletion */
 extern int DeferShardDeleteInterval;
 extern int BackgroundTaskQueueCheckInterval;
-extern bool DeferShardDeleteOnMove;
 extern double DesiredPercentFreeAfterMove;
 extern bool CheckAvailableSpaceBeforeMove;
 

@@ -592,7 +592,6 @@ BEGIN;
 NOTICE:  truncate cascades to table "on_delete_fkey_table"
 NOTICE:  truncate cascades to table "on_delete_fkey_table_xxxxx"
 NOTICE:  truncate cascades to table "on_delete_fkey_table_xxxxx"
-NOTICE:  truncate cascades to table "on_delete_fkey_table_xxxxx"
 ROLLBACK;
 -- join involving local, reference and distributed tables
 SELECT count(*) FROM local_table_in_the_metadata JOIN reference_table USING(id) JOIN on_delete_fkey_table USING(id);

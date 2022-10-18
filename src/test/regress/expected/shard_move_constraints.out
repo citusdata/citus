@@ -224,7 +224,6 @@ SELECT citus_move_shard_placement(8970000, 'localhost', :worker_1_port, 'localho
 (1 row)
 
 CALL citus_cleanup_orphaned_shards();
-NOTICE:  cleaned up 8 orphaned shards
 \c - postgres - :worker_2_port
 SET search_path TO "shard Move Fkeys Indexes", public, pg_catalog;
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='sensors_8970000'::regclass ORDER BY 1,2;
