@@ -234,7 +234,7 @@ remove it from there and check if it's still flaky.
 
 ### Use a fixed number of connections
 
-Citus its adaptive executor sometimes opens extra connections to do stuff in
+The adaptive executor of Citus sometimes opens extra connections to do stuff in
 parallel to speed up multi-shard queries. This happens especially in CI, because
 CI machines are sometimes slow. There are two ways to get a consistent number of
 connections:
