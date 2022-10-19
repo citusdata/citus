@@ -201,12 +201,21 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 
 	ExplainOpenGroup("Distributed Query", "Distributed Query", true, es);
 
+	/*
+	 * ExplainOnePlan function of postgres might be called in this codepath.
+	 * It requires an ActiveSnapshot being set. Make sure to make ActiveSnapshot available before calling into
+	 * Citus Explain functions.
+	 */
+	PushActiveSnapshot(executorState->es_snapshot);
+
 	if (distributedPlan->subPlanList != NIL)
 	{
 		ExplainSubPlans(distributedPlan, es);
 	}
 
 	ExplainJob(scanState, distributedPlan->workerJob, es, params);
+
+	PopActiveSnapshot();
 
 	ExplainCloseGroup("Distributed Query", "Distributed Query", true, es);
 }
