@@ -194,7 +194,7 @@ SELECT pg_sleep(.1); -- wait to make sure the config has changed before running 
 (1 row)
 
 -- replicate reference table should ignore the coordinator
-SET citus.node_connection_timeout to 60;
+SET citus.node_connection_timeout to '35s';
 BEGIN;
     SET LOCAL citus.shard_replication_factor TO 2;
     SET citus.log_remote_commands TO ON;
@@ -213,7 +213,7 @@ NOTICE:  issuing SET LOCAL citus.max_adaptive_executor_pool_size TO '5';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.next_shard_id TO '433105';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '60';
+NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '35000';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -234,7 +234,7 @@ NOTICE:  issuing SET LOCAL citus.max_adaptive_executor_pool_size TO '5';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.next_shard_id TO '433105';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '60';
+NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '35000';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -255,7 +255,7 @@ NOTICE:  issuing SET LOCAL citus.max_adaptive_executor_pool_size TO '5';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.next_shard_id TO '433105';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '60';
+NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '35000';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -276,7 +276,7 @@ NOTICE:  issuing SET LOCAL citus.max_adaptive_executor_pool_size TO '5';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.next_shard_id TO '433105';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '60';
+NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '35000';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx

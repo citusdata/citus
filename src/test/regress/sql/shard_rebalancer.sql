@@ -97,7 +97,7 @@ SELECT pg_reload_conf();
 SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
 
 -- replicate reference table should ignore the coordinator
-SET citus.node_connection_timeout to 60;
+SET citus.node_connection_timeout to '35s';
 BEGIN;
     SET LOCAL citus.shard_replication_factor TO 2;
     SET citus.log_remote_commands TO ON;
