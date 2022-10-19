@@ -16,6 +16,11 @@ SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 1;
 SELECT pg_backend_pid() as pid \gset
 
+-- cleanup any leftovers from previous tests so we get consistent output
+SET client_min_messages TO WARNING;
+CALL pg_catalog.citus_cleanup_orphaned_resources();
+RESET client_min_messages;
+
 -- Disable defer shard delete to stop auto cleanup.
 ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
 SELECT pg_reload_conf();
@@ -304,5 +309,7 @@ SELECT create_distributed_table('table_to_split', 'id');
 
 -- Cleanup
 \c - postgres - :master_port
+
+SET client_min_messages TO WARNING;
 DROP SCHEMA "citus_failure_split_cleanup_schema" CASCADE;
 -- Cleanup
