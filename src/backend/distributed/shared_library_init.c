@@ -649,7 +649,9 @@ multi_log_hook(ErrorData *edata)
  *
  * NB: All code here has to be able to cope with this routine being called
  * multiple times in the same backend.  This will e.g. happen when the
- * extension is created or upgraded.
+ * extension is created, upgraded or dropped. Due to the way we detect the
+ * extension being dropped this can also happen when autovacuum runs ANALYZE on
+ * pg_dist_partition, see InvalidateDistRelationCacheCallback for details.
  */
 void
 StartupCitusBackend(void)
@@ -657,13 +659,18 @@ StartupCitusBackend(void)
 	InitializeMaintenanceDaemonBackend();
 
 	/*
-	 * For queries this will be a no-op. But for background daemons we might
-	 * still need to initialize the backend data. For those backaground daemons
-	 * it doesn't really matter that we temporarily assign
-	 * INVALID_CITUS_INTERNAL_BACKEND_GPID, since we override it again two
-	 * lines below.
+	 * For query backends this will be a no-op, because InitializeBackendData
+	 * is already called from the CitusAuthHook. But for background workers we
+	 * still need to initialize the backend data.
 	 */
-	InitializeBackendData(INVALID_CITUS_INTERNAL_BACKEND_GPID);
+	InitializeBackendData(application_name);
+
+	/*
+	 * If this is an external connection or a background workers this will
+	 * generate the global PID for this connection. For internal connections
+	 * this is a no-op, since InitializeBackendData will already have extracted
+	 * the gpid from the application_name.
+	 */
 	AssignGlobalPID();
 	RegisterConnectionCleanup();
 }
@@ -1978,6 +1985,17 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.propagate_session_settings_for_loopback_connection",
+		gettext_noop(
+			"When enabled, rebalancer propagates all the allowed GUC settings to new connections."),
+		NULL,
+		&PropagateSessionSettingsForLoopbackConnection,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomEnumVariable(
 		"citus.propagate_set_commands",
 		gettext_noop("Sets which SET commands are propagated to workers."),
@@ -2358,6 +2376,7 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
+
 
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");

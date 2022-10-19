@@ -254,6 +254,11 @@ ReportConnectionError(MultiConnection *connection, int elevel)
 	if (pgConn != NULL)
 	{
 		messageDetail = pchomp(PQerrorMessage(pgConn));
+		if (messageDetail == NULL || messageDetail[0] == '\0')
+		{
+			/* give a similar messages to Postgres */
+			messageDetail = "connection not open";
+		}
 	}
 
 	if (messageDetail)
@@ -1200,4 +1205,35 @@ StoreErrorMessage(MultiConnection *connection, StringInfo queryResultString)
 	}
 
 	appendStringInfo(queryResultString, "%s", errorMessage);
+}
+
+
+/*
+ * IsSettingSafeToPropagate returns whether a SET LOCAL is safe to propagate.
+ *
+ * We exclude settings that are highly specific to the client or session and also
+ * ban propagating the citus.propagate_set_commands setting (not for correctness,
+ * more to avoid confusion).
+ */
+bool
+IsSettingSafeToPropagate(const char *name)
+{
+	/* if this list grows considerably we should switch to bsearch */
+	const char *skipSettings[] = {
+		"application_name",
+		"citus.propagate_set_commands",
+		"client_encoding",
+		"exit_on_error",
+		"max_stack_depth"
+	};
+
+	for (Index settingIndex = 0; settingIndex < lengthof(skipSettings); settingIndex++)
+	{
+		if (pg_strcasecmp(skipSettings[settingIndex], name) == 0)
+		{
+			return false;
+		}
+	}
+
+	return true;
 }

@@ -102,5 +102,22 @@ ALTER USER current_user SET search_path TO test_sp;
 SELECT COUNT(*) FROM public.test_search_path;
 ALTER USER current_user RESET search_path;
 
+-- test empty/null password: it is treated the same as no password
+SET password_encryption TO md5;
+
+CREATE ROLE new_role;
+SELECT workers.result AS worker_password, pg_authid.rolpassword AS coord_password FROM run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = 'new_role'$$) workers, pg_authid WHERE pg_authid.rolname = 'new_role';
+
+ALTER ROLE new_role PASSWORD '';
+SELECT workers.result AS worker_password, pg_authid.rolpassword AS coord_password FROM run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = 'new_role'$$) workers, pg_authid WHERE pg_authid.rolname = 'new_role';
+
+ALTER ROLE new_role PASSWORD 'new_password';
+SELECT workers.result AS worker_password, pg_authid.rolpassword AS coord_password, workers.result = pg_authid.rolpassword AS password_is_same FROM run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = 'new_role'$$) workers, pg_authid WHERE pg_authid.rolname = 'new_role';
+
+ALTER ROLE new_role PASSWORD NULL;
+SELECT workers.result AS worker_password, pg_authid.rolpassword AS coord_password FROM run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = 'new_role'$$) workers, pg_authid WHERE pg_authid.rolname = 'new_role';
+
+RESET password_encryption;
+DROP ROLE new_role;
 DROP TABLE test_search_path;
 DROP SCHEMA alter_role, ",CitUs,.TeeN!?", test_sp CASCADE;

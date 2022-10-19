@@ -236,7 +236,7 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 			logicalRepTargetList);
 
 		/* only useful for isolation testing, see the function comment for the details */
-		ConflictOnlyWithIsolationTesting();
+		ConflictWithIsolationTestingBeforeCopy();
 
 		/*
 		 * We have to create the primary key (or any other replica identity)
@@ -257,6 +257,12 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 * keep it before the COPY.
 		 */
 		CreateReplicaIdentities(logicalRepTargetList);
+
+		UpdatePlacementUpdateStatusForShardIntervalList(
+			shardList,
+			sourceNodeName,
+			sourceNodePort,
+			PLACEMENT_UPDATE_STATUS_COPYING_DATA);
 
 		CopyShardsToNode(sourceNode, targetNode, shardList, snapshot);
 
@@ -374,6 +380,12 @@ CompleteNonBlockingShardTransfer(List *shardList,
 	/* Start applying the changes from the replication slots to catch up. */
 	EnableSubscriptions(logicalRepTargetList);
 
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardList,
+		sourceConnection->hostname,
+		sourceConnection->port,
+		PLACEMENT_UPDATE_STATUS_CATCHING_UP);
+
 	/*
 	 * The following check is a leftover from when used subscriptions with
 	 * copy_data=true. It's probably not really necessary anymore, but it
@@ -392,17 +404,30 @@ CompleteNonBlockingShardTransfer(List *shardList,
 	 */
 	WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
 
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardList,
+		sourceConnection->hostname,
+		sourceConnection->port,
+		PLACEMENT_UPDATE_STATUS_CREATING_CONSTRAINTS);
+
 	/*
 	 * Now lets create the post-load objects, such as the indexes, constraints
 	 * and partitioning hierarchy. Once they are done, wait until the replication
 	 * catches up again. So we don't block writes too long.
 	 */
 	CreatePostLogicalReplicationDataLoadObjects(logicalRepTargetList, type);
+
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardList,
+		sourceConnection->hostname,
+		sourceConnection->port,
+		PLACEMENT_UPDATE_STATUS_FINAL_CATCH_UP);
+
 	WaitForAllSubscriptionsToCatchUp(sourceConnection, groupedLogicalRepTargetsHash);
 
 
 	/* only useful for isolation testing, see the function comment for the details */
-	ConflictOnlyWithIsolationTesting();
+	ConflictWithIsolationTestingAfterCopy();
 
 	/*
 	 * We're almost done, we'll block the writes to the shards that we're
@@ -419,6 +444,12 @@ CompleteNonBlockingShardTransfer(List *shardList,
 
 	if (type != SHARD_SPLIT)
 	{
+		UpdatePlacementUpdateStatusForShardIntervalList(
+			shardList,
+			sourceConnection->hostname,
+			sourceConnection->port,
+			PLACEMENT_UPDATE_STATUS_CREATING_FOREIGN_KEYS);
+
 		/*
 		 * We're creating the foreign constraints to reference tables after the
 		 * data is already replicated and all the necessary locks are acquired.
@@ -431,6 +462,12 @@ CompleteNonBlockingShardTransfer(List *shardList,
 		 */
 		CreateUncheckedForeignKeyConstraints(logicalRepTargetList);
 	}
+
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardList,
+		sourceConnection->hostname,
+		sourceConnection->port,
+		PLACEMENT_UPDATE_STATUS_COMPLETING);
 
 	/* we're done, cleanup the publication and subscription */
 	DropSubscriptions(logicalRepTargetList);
@@ -501,9 +538,9 @@ CreateShardMoveLogicalRepTargetList(HTAB *publicationInfoHash, List *shardList)
 		target->newShards = NIL;
 		target->subscriptionOwnerName = SubscriptionRoleName(SHARD_MOVE, ownerId);
 		target->replicationSlot = palloc0(sizeof(ReplicationSlotInfo));
-		target->replicationSlot->name = ReplicationSlotName(SHARD_MOVE,
-															nodeId,
-															ownerId);
+		target->replicationSlot->name = ReplicationSlotNameForNodeAndOwner(SHARD_MOVE,
+																		   nodeId,
+																		   ownerId);
 		target->replicationSlot->targetNodeId = nodeId;
 		target->replicationSlot->tableOwnerId = ownerId;
 		logicalRepTargetList = lappend(logicalRepTargetList, target);
@@ -1232,18 +1269,16 @@ CreateUncheckedForeignKeyConstraints(List *logicalRepTargetList)
 
 
 /*
- * ConflictOnlyWithIsolationTesting is only useful for testing and should
- * not be called by any code-path except for LogicallyReplicateShards().
- *
- * Since logically replicating shards does eventually block modifications,
- * it becomes tricky to use isolation tester to show concurrent behaviour
- * of online shard rebalancing and modification queries.
+ * ConflictWithIsolationTestingBeforeCopy is only useful to test
+ * get_rebalance_progress by pausing before doing the actual copy. This way we
+ * can see the state of the tables at that point. This should not be called by
+ * any code-path except for code paths to move and split shards().
  *
  * Note that since the cost of calling this function is pretty low, we prefer
  * to use it in non-assert builds as well not to diverge in the behaviour.
  */
 extern void
-ConflictOnlyWithIsolationTesting()
+ConflictWithIsolationTestingBeforeCopy(void)
 {
 	LOCKTAG tag;
 	const bool sessionLock = false;
@@ -1251,11 +1286,46 @@ ConflictOnlyWithIsolationTesting()
 
 	if (RunningUnderIsolationTest)
 	{
-		/* we've picked random keys */
-		SET_LOCKTAG_ADVISORY(tag, MyDatabaseId, SHARD_MOVE_ADVISORY_LOCK_FIRST_KEY,
+		SET_LOCKTAG_ADVISORY(tag, MyDatabaseId,
+							 SHARD_MOVE_ADVISORY_LOCK_SECOND_KEY,
+							 SHARD_MOVE_ADVISORY_LOCK_FIRST_KEY, 2);
+
+		/* uses sharelock so concurrent moves don't conflict with eachother */
+		(void) LockAcquire(&tag, ShareLock, sessionLock, dontWait);
+	}
+}
+
+
+/*
+ * ConflictWithIsolationTestingAfterCopy is only useful for two types of tests.
+ * 1. Testing the output of get_rebalance_progress after the copy is completed,
+ *    but before the move is completely finished. Because finishing the move
+ *    will clear the contents of get_rebalance_progress.
+ * 2. To test that our non-blocking shard moves/splits actually don't block
+ *    writes. Since logically replicating shards does eventually block
+ *    modifications, it becomes tricky to use isolation tester to show
+ *    concurrent behaviour of online shard rebalancing and modification
+ *    queries. So, during logical replication we call this function at
+ *    the end of the catchup, right before blocking writes.
+ *
+ * Note that since the cost of calling this function is pretty low, we prefer
+ * to use it in non-assert builds as well not to diverge in the behaviour.
+ */
+extern void
+ConflictWithIsolationTestingAfterCopy(void)
+{
+	LOCKTAG tag;
+	const bool sessionLock = false;
+	const bool dontWait = false;
+
+	if (RunningUnderIsolationTest)
+	{
+		SET_LOCKTAG_ADVISORY(tag, MyDatabaseId,
+							 SHARD_MOVE_ADVISORY_LOCK_FIRST_KEY,
 							 SHARD_MOVE_ADVISORY_LOCK_SECOND_KEY, 2);
 
-		(void) LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
+		/* uses sharelock so concurrent moves don't conflict with eachother */
+		(void) LockAcquire(&tag, ShareLock, sessionLock, dontWait);
 	}
 }
 
@@ -1381,11 +1451,14 @@ PublicationName(LogicalRepType type, uint32_t nodeId, Oid ownerId)
 
 
 /*
- * ReplicationSlotName returns the name of the replication slot for the given
- * node and table owner.
+ * ReplicationSlotNameForNodeAndOwner returns the name of the replication slot for the
+ * given node and table owner.
+ *
+ * Note that PG15 introduced a new ReplicationSlotName function that caused name conflicts
+ * and we renamed this function.
  */
 char *
-ReplicationSlotName(LogicalRepType type, uint32_t nodeId, Oid ownerId)
+ReplicationSlotNameForNodeAndOwner(LogicalRepType type, uint32_t nodeId, Oid ownerId)
 {
 	StringInfo slotName = makeStringInfo();
 	appendStringInfo(slotName, "%s%u_%u", replicationSlotPrefix[type], nodeId,

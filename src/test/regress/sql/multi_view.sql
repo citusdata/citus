@@ -673,5 +673,46 @@ CREATE MATERIALIZED VIEW v3 AS SELECT id AS col1 FROM small;
 DELETE  FROM ref_1  WHERE value in (SELECT col1 FROM v3);
 SELECT * FROM ref_1 ORDER BY key, value;
 
+-- show that we correctly handle renamed columns when expanding view query
+
+CREATE TABLE column_alias_test_1(a int, b int);
+SELECT create_distributed_table('column_alias_test_1', 'a');
+
+INSERT INTO column_alias_test_1 VALUES (1, 2);
+
+CREATE VIEW column_alias_test_1_view AS
+SELECT * FROM column_alias_test_1;
+
+ALTER TABLE column_alias_test_1 RENAME COLUMN a TO tmp;
+ALTER TABLE column_alias_test_1 RENAME COLUMN b TO a;
+ALTER TABLE column_alias_test_1 RENAME COLUMN tmp TO b;
+
+-- A tricky implication of #5932:
+--
+-- Even if we renamed column names, this should normally print:
+-- a | b
+-- 1 | 2
+--
+-- This is because, views preserve original column names by
+-- aliasing renamed columns.
+--
+-- But before fixing #5932, this was printing:
+-- a | b
+-- 2 | 1
+--
+-- which was not correct.
+SELECT * FROM column_alias_test_1_view;
+
+CREATE TABLE column_alias_test_2(a int, b int);
+SELECT create_distributed_table('column_alias_test_2', 'a');
+
+INSERT INTO column_alias_test_2 VALUES (1, 2);
+
+CREATE VIEW column_alias_test_2_view AS
+SELECT * FROM column_alias_test_2;
+
+ALTER TABLE column_alias_test_2 RENAME COLUMN a TO a_renamed;
+
+SELECT * FROM column_alias_test_2_view;
 
 DROP TABLE large, small, ref_1 CASCADE;

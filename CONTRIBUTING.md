@@ -218,3 +218,7 @@ style `#include` statements like this:
 
 Any other SQL you can put directly in the main sql file, e.g.
 `src/backend/distributed/sql/citus--8.3-1--9.0-1.sql`.
+
+### Running tests
+
+See [`src/test/regress/README.md`](https://github.com/citusdata/citus/blob/master/src/test/regress/README.md)

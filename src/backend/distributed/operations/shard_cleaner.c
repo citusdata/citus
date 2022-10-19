@@ -187,7 +187,11 @@ citus_cleanup_orphaned_resources(PG_FUNCTION_ARGS)
 void
 DropOrphanedShardsInSeparateTransaction(void)
 {
-	ExecuteRebalancerCommandInSeparateTransaction("CALL citus_cleanup_orphaned_shards()");
+	int connectionFlag = FORCE_NEW_CONNECTION;
+	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
+													PostPortNumber);
+	ExecuteCriticalRemoteCommand(connection, "CALL citus_cleanup_orphaned_shards()");
+	CloseConnection(connection);
 }
 
 

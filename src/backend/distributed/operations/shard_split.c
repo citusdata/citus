@@ -610,12 +610,11 @@ BlockingShardSplit(SplitOperation splitOperation,
 
 		/* For Blocking split, copy isn't snapshotted */
 		char *snapshotName = NULL;
+		ConflictWithIsolationTestingBeforeCopy();
 		DoSplitCopy(sourceShardNode, sourceColocatedShardIntervalList,
 					shardGroupSplitIntervalListList, workersForPlacementList,
 					snapshotName, distributionColumnOverrides);
-
-		/* Used for testing */
-		ConflictOnlyWithIsolationTesting();
+		ConflictWithIsolationTestingAfterCopy();
 
 		ereport(LOG, (errmsg(
 						  "creating auxillary structures (indexes, stats, replicaindentities, triggers) for %s",

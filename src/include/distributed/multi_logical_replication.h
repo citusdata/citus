@@ -131,7 +131,8 @@ extern void LogicallyReplicateShards(List *shardList, char *sourceNodeName,
 									 int sourceNodePort, char *targetNodeName,
 									 int targetNodePort);
 
-extern void ConflictOnlyWithIsolationTesting(void);
+extern void ConflictWithIsolationTestingBeforeCopy(void);
+extern void ConflictWithIsolationTestingAfterCopy(void);
 extern void CreateReplicaIdentities(List *subscriptionInfoList);
 extern void CreateReplicaIdentitiesOnNode(List *shardList,
 										  char *nodeName,
@@ -157,7 +158,8 @@ extern void DropPublications(MultiConnection *sourceConnection,
 extern void DropAllLogicalReplicationLeftovers(LogicalRepType type);
 
 extern char * PublicationName(LogicalRepType type, uint32_t nodeId, Oid ownerId);
-extern char * ReplicationSlotName(LogicalRepType type, uint32_t nodeId, Oid ownerId);
+extern char * ReplicationSlotNameForNodeAndOwner(LogicalRepType type, uint32_t nodeId, Oid
+												 ownerId);
 extern char * SubscriptionName(LogicalRepType type, Oid ownerId);
 extern char * SubscriptionRoleName(LogicalRepType type, Oid ownerId);
 
