@@ -59,8 +59,8 @@ AS $$
 DECLARE
     res INT := 0;
 BEGIN
-    INSERT INTO test_proc_colocation_0 VALUES (dist_key);
-    SELECT count(*) INTO res FROM test_proc_colocation_0;
+    INSERT INTO mx_alter_distributed_table.test_proc_colocation_0 VALUES (dist_key);
+    SELECT count(*) INTO res FROM mx_alter_distributed_table.test_proc_colocation_0;
     RAISE NOTICE 'Res: %', res;
     COMMIT;
 END;$$;
@@ -126,8 +126,8 @@ AS $$
 DECLARE
     res INT := 0;
 BEGIN
-    INSERT INTO test_proc_colocation_0 VALUES (dist_key);
-    SELECT count(*) INTO res FROM test_proc_colocation_0;
+    INSERT INTO mx_alter_distributed_table.test_proc_colocation_0 VALUES (dist_key);
+    SELECT count(*) INTO res FROM mx_alter_distributed_table.test_proc_colocation_0;
     RAISE NOTICE 'Res: %', res;
     COMMIT;
 END;$$;

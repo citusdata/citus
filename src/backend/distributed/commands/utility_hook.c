@@ -109,7 +109,6 @@ static void ProcessUtilityInternal(PlannedStmt *pstmt,
 #if PG_VERSION_NUM >= 140000
 static void set_indexsafe_procflags(void);
 #endif
-static char * SetSearchPathToCurrentSearchPathCommand(void);
 static char * CurrentSearchPath(void);
 static void IncrementUtilityHookCountersIfNecessary(Node *parsetree);
 static void PostStandardProcessUtility(Node *parsetree);
@@ -1212,17 +1211,18 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 	{
 		if (shouldSyncMetadata)
 		{
-			char *setSearchPathCommand = SetSearchPathToCurrentSearchPathCommand();
-
 			SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
+			char *currentSearchPath = CurrentSearchPath();
 
 			/*
 			 * Given that we're relaying the query to the worker nodes directly,
 			 * we should set the search path exactly the same when necessary.
 			 */
-			if (setSearchPathCommand != NULL)
+			if (currentSearchPath != NULL)
 			{
-				SendCommandToWorkersWithMetadata(setSearchPathCommand);
+				SendCommandToWorkersWithMetadata(
+					psprintf("SET LOCAL search_path TO %s;", currentSearchPath));
 			}
 
 			if (ddlJob->metadataSyncCommand != NULL)
@@ -1337,15 +1337,18 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			if (shouldSyncMetadata)
 			{
 				List *commandList = list_make1(DISABLE_DDL_PROPAGATION);
-				char *setSearchPathCommand = SetSearchPathToCurrentSearchPathCommand();
+
+				char *currentSearchPath = CurrentSearchPath();
 
 				/*
 				 * Given that we're relaying the query to the worker nodes directly,
 				 * we should set the search path exactly the same when necessary.
 				 */
-				if (setSearchPathCommand != NULL)
+				if (currentSearchPath != NULL)
 				{
-					commandList = lappend(commandList, setSearchPathCommand);
+					commandList = lappend(commandList,
+										  psprintf("SET search_path TO %s;",
+												   currentSearchPath));
 				}
 
 				commandList = lappend(commandList, (char *) ddlJob->metadataSyncCommand);
@@ -1413,31 +1416,6 @@ set_indexsafe_procflags(void)
 
 
 #endif
-
-
-/*
- * SetSearchPathToCurrentSearchPathCommand generates a command which can
- * set the search path to the exact same search path that the issueing node
- * has.
- *
- * If the current search path is null (or doesn't have any valid schemas),
- * the function returns NULL.
- */
-static char *
-SetSearchPathToCurrentSearchPathCommand(void)
-{
-	char *currentSearchPath = CurrentSearchPath();
-
-	if (currentSearchPath == NULL)
-	{
-		return NULL;
-	}
-
-	StringInfo setCommand = makeStringInfo();
-	appendStringInfo(setCommand, "SET search_path TO %s;", currentSearchPath);
-
-	return setCommand->data;
-}
 
 
 /*

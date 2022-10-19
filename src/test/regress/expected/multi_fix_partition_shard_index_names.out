@@ -493,6 +493,7 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' A
 \c - - - :master_port
 SET search_path TO fix_idx_names, public;
 DROP TABLE dist_partitioned_table;
+SET citus.next_shard_id TO 910040;
 -- test with citus local table
 SET client_min_messages TO WARNING;
 SELECT 1 FROM citus_add_node('localhost', :master_port, groupid=>0);
@@ -521,9 +522,9 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
                  tablename                 |                        indexname
 ---------------------------------------------------------------------
  date_partitioned_citus_local_table        | date_partitioned_citus_local_table_measureid_idx
- date_partitioned_citus_local_table_361377 | date_partitioned_citus_local_table_measureid_idx_361377
+ date_partitioned_citus_local_table_910040 | date_partitioned_citus_local_table_measureid_idx_910040
  partition_local_table                     | partition_local_table_measureid_idx
- partition_local_table_361378              | partition_local_table_measureid_idx_361378
+ partition_local_table_910041              | partition_local_table_measureid_idx_910041
 (4 rows)
 
 -- creating a single object should only need to trigger fixing the single object
@@ -555,9 +556,9 @@ NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET search_path TO fix_idx_names,public;
+NOTICE:  issuing SET LOCAL search_path TO fix_idx_names,public;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET search_path TO fix_idx_names,public;
+NOTICE:  issuing SET LOCAL search_path TO fix_idx_names,public;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing CREATE INDEX i4 ON parent_table(dist_col);
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -585,9 +586,9 @@ NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET search_path TO fix_idx_names,public;
+NOTICE:  issuing SET LOCAL search_path TO fix_idx_names,public;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET search_path TO fix_idx_names,public;
+NOTICE:  issuing SET LOCAL search_path TO fix_idx_names,public;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ALTER TABLE parent_table ADD CONSTRAINT pkey_cst PRIMARY KEY (dist_col, partition_col);
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -614,9 +615,9 @@ NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET search_path TO fix_idx_names,public;
+NOTICE:  issuing SET LOCAL search_path TO fix_idx_names,public;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET search_path TO fix_idx_names,public;
+NOTICE:  issuing SET LOCAL search_path TO fix_idx_names,public;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ALTER TABLE parent_table ADD CONSTRAINT unique_cst UNIQUE (dist_col, partition_col);
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -723,9 +724,9 @@ NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET search_path TO fix_idx_names,public;
+NOTICE:  issuing SET LOCAL search_path TO fix_idx_names,public;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET search_path TO fix_idx_names,public;
+NOTICE:  issuing SET LOCAL search_path TO fix_idx_names,public;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ALTER TABLE parent_table ATTACH PARTITION p2 FOR VALUES FROM ('2019-01-01') TO ('2020-01-01');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -747,15 +748,8 @@ RESET citus.log_remote_commands;
 DROP INDEX i4_renamed CASCADE;
 ALTER TABLE parent_table DROP CONSTRAINT pkey_cst CASCADE;
 ALTER TABLE parent_table DROP CONSTRAINT unique_cst CASCADE;
+SET client_min_messages TO WARNING;
 DROP SCHEMA fix_idx_names CASCADE;
-NOTICE:  drop cascades to 7 other objects
-DETAIL:  drop cascades to table not_partitioned
-drop cascades to table not_distributed
-drop cascades to table fk_table
-drop cascades to table p
-drop cascades to table date_partitioned_citus_local_table_361377
-drop cascades to table date_partitioned_citus_local_table
-drop cascades to table parent_table
 SELECT citus_remove_node('localhost', :master_port);
  citus_remove_node
 ---------------------------------------------------------------------
