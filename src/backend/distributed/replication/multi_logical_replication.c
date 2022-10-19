@@ -131,8 +131,6 @@ static void ExecuteCreateIndexStatisticsCommands(List *logicalRepTargetList);
 static void ExecuteRemainingPostLoadTableCommands(List *logicalRepTargetList);
 static char * escape_param_str(const char *str);
 static XLogRecPtr GetRemoteLSN(MultiConnection *connection, char *command);
-static bool RelationSubscriptionsAreReady(
-	GroupedLogicalRepTargets *groupedLogicalRepTargets);
 static void WaitForMiliseconds(long timeout);
 static XLogRecPtr GetSubscriptionPosition(
 	GroupedLogicalRepTargets *groupedLogicalRepTargets);
@@ -152,8 +150,6 @@ static HTAB * CreateShardMovePublicationInfoHash(WorkerNode *targetNode,
 												 List *shardIntervals);
 static List * CreateShardMoveLogicalRepTargetList(HTAB *publicationInfoHash,
 												  List *shardList);
-static void WaitForGroupedLogicalRepTargetsToBecomeReady(
-	GroupedLogicalRepTargets *groupedLogicalRepTargets);
 static void WaitForGroupedLogicalRepTargetsToCatchUp(XLogRecPtr sourcePosition,
 													 GroupedLogicalRepTargets *
 													 groupedLogicalRepTargets);
@@ -385,18 +381,6 @@ CompleteNonBlockingShardTransfer(List *shardList,
 		sourceConnection->hostname,
 		sourceConnection->port,
 		PLACEMENT_UPDATE_STATUS_CATCHING_UP);
-
-	/*
-	 * The following check is a leftover from when used subscriptions with
-	 * copy_data=true. It's probably not really necessary anymore, but it
-	 * seemed like a nice check to keep. At least for debugging issues it
-	 * seems nice to report differences between the subscription never
-	 * becoming ready and the subscriber not applying WAL. It's also not
-	 * entirely clear if the catchup check handles the case correctly where
-	 * the subscription is not in the ready state yet, because so far it
-	 * never had to.
-	 */
-	WaitForAllSubscriptionsToBecomeReady(groupedLogicalRepTargetsHash);
 
 	/*
 	 * Wait until all the subscriptions are caught up to changes that
@@ -2199,116 +2183,6 @@ CloseGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash)
 
 
 /*
- * WaitForRelationSubscriptionsBecomeReady waits until the states of the
- * subsriptions in the groupedLogicalRepTargetsHash becomes ready. This should happen
- * very quickly, because we don't use the COPY logic from the subscriptions. So
- * all that's needed is to start reading from the replication slot.
- *
- * The function errors if the subscriptions on one of the nodes don't become
- * ready within LogicalReplicationErrorTimeout. The function also reports its
- * progress every logicalReplicationProgressReportTimeout.
- */
-void
-WaitForAllSubscriptionsToBecomeReady(HTAB *groupedLogicalRepTargetsHash)
-{
-	HASH_SEQ_STATUS status;
-	GroupedLogicalRepTargets *groupedLogicalRepTargets = NULL;
-	foreach_htab(groupedLogicalRepTargets, &status, groupedLogicalRepTargetsHash)
-	{
-		WaitForGroupedLogicalRepTargetsToBecomeReady(groupedLogicalRepTargets);
-	}
-	elog(LOG, "The states of all subscriptions have become READY");
-}
-
-
-/*
- * WaitForRelationSubscriptionsBecomeReady waits until the states of the
- * subsriptions for each shard becomes ready. This should happen very quickly,
- * because we don't use the COPY logic from the subscriptions. So all that's
- * needed is to start reading from the replication slot.
- *
- * The function errors if the subscriptions don't become ready within
- * LogicalReplicationErrorTimeout. The function also reports its progress in
- * every logicalReplicationProgressReportTimeout.
- */
-static void
-WaitForGroupedLogicalRepTargetsToBecomeReady(
-	GroupedLogicalRepTargets *groupedLogicalRepTargets)
-{
-	TimestampTz previousSizeChangeTime = GetCurrentTimestamp();
-	TimestampTz previousReportTime = GetCurrentTimestamp();
-
-	MultiConnection *superuserConnection = groupedLogicalRepTargets->superuserConnection;
-
-	/*
-	 * We might be in the loop for a while. Since we don't need to preserve
-	 * any memory beyond this function, we can simply switch to a child context
-	 * and reset it on every iteration to make sure we don't slowly build up
-	 * a lot of memory.
-	 */
-	MemoryContext loopContext = AllocSetContextCreateInternal(CurrentMemoryContext,
-															  "WaitForRelationSubscriptionsBecomeReady",
-															  ALLOCSET_DEFAULT_MINSIZE,
-															  ALLOCSET_DEFAULT_INITSIZE,
-															  ALLOCSET_DEFAULT_MAXSIZE);
-
-	MemoryContext oldContext = MemoryContextSwitchTo(loopContext);
-	while (true)
-	{
-		/* we're done, all relations are ready */
-		if (RelationSubscriptionsAreReady(groupedLogicalRepTargets))
-		{
-			ereport(LOG, (errmsg("The states of the relations belonging to the "
-								 "subscriptions became READY on the "
-								 "target node %s:%d",
-								 superuserConnection->hostname,
-								 superuserConnection->port)));
-
-			break;
-		}
-
-		/* log the progress if necessary */
-		if (TimestampDifferenceExceeds(previousReportTime,
-									   GetCurrentTimestamp(),
-									   logicalReplicationProgressReportTimeout))
-		{
-			ereport(LOG, (errmsg("Not all subscriptions on target node %s:%d "
-								 "are READY yet",
-								 superuserConnection->hostname,
-								 superuserConnection->port)));
-
-			previousReportTime = GetCurrentTimestamp();
-		}
-
-		/* Error out if the size does not change within the given time threshold */
-		if (TimestampDifferenceExceeds(previousSizeChangeTime,
-									   GetCurrentTimestamp(),
-									   LogicalReplicationTimeout))
-		{
-			ereport(ERROR, (errmsg("The logical replication waiting timeout "
-								   "of %d msec is exceeded",
-								   LogicalReplicationTimeout),
-							errdetail("The subscribed relations haven't become "
-									  "ready on the target node %s:%d",
-									  superuserConnection->hostname,
-									  superuserConnection->port),
-							errhint(
-								"Logical replication has failed to initialize "
-								"on the target node. If not, consider using "
-								"higher values for "
-								"citus.logical_replication_timeout")));
-		}
-
-		/* wait for 1 second (1000 miliseconds) and try again */
-		WaitForMiliseconds(1000);
-		MemoryContextReset(loopContext);
-	}
-
-	MemoryContextSwitchTo(oldContext);
-}
-
-
-/*
  * SubscriptionNamesValueList returns a SQL value list containing the
  * subscription names from the logicalRepTargetList. This value list can
  * be used in a query by using the IN operator.
@@ -2336,62 +2210,6 @@ SubscriptionNamesValueList(List *logicalRepTargetList)
 	}
 	appendStringInfoString(subscriptionValueList, ")");
 	return subscriptionValueList->data;
-}
-
-
-/*
- * RelationSubscriptionsAreReady gets the subscription status for each
- * subscriptions and returns false if at least one of them is not ready.
- */
-static bool
-RelationSubscriptionsAreReady(GroupedLogicalRepTargets *groupedLogicalRepTargets)
-{
-	bool raiseInterrupts = false;
-
-	List *logicalRepTargetList = groupedLogicalRepTargets->logicalRepTargetList;
-	MultiConnection *superuserConnection = groupedLogicalRepTargets->superuserConnection;
-
-	char *subscriptionValueList = SubscriptionNamesValueList(logicalRepTargetList);
-	char *query = psprintf(
-		"SELECT count(*) FROM pg_subscription_rel, pg_stat_subscription "
-		"WHERE srsubid = subid AND srsubstate != 'r' AND subname IN %s",
-		subscriptionValueList);
-	int querySent = SendRemoteCommand(superuserConnection, query);
-	if (querySent == 0)
-	{
-		ReportConnectionError(superuserConnection, ERROR);
-	}
-
-	PGresult *result = GetRemoteCommandResult(superuserConnection, raiseInterrupts);
-	if (!IsResponseOK(result))
-	{
-		ReportResultError(superuserConnection, result, ERROR);
-	}
-
-	int rowCount = PQntuples(result);
-	int columnCount = PQnfields(result);
-
-	if (columnCount != 1)
-	{
-		ereport(ERROR, (errmsg("unexpected number of columns returned while reading ")));
-	}
-	if (rowCount != 1)
-	{
-		ereport(ERROR, (errmsg("unexpected number of rows returned while reading ")));
-	}
-
-	int columnIndex = 0;
-	int rowIndex = 0;
-
-	/* we're using the pstrdup to copy the data into the current memory context */
-	char *resultString = pstrdup(PQgetvalue(result, rowIndex, columnIndex));
-
-	PQclear(result);
-	ForgetResults(superuserConnection);
-
-	int64 resultInt = SafeStringToInt64(resultString);
-
-	return resultInt == 0;
 }
 
 
