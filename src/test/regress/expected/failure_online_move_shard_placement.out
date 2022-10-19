@@ -143,6 +143,25 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_2_proxy_port, 'loca
 
 (1 row)
 
+-- failure on polling last write-ahead log location reported to origin WAL sender
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT min\(latest_end_lsn").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+-- cancellation on polling last write-ahead log location reported to origin WAL sender
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT min\(latest_end_lsn").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
 -- failure on disabling subscription (right before dropping it)
 SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").kill()');
  mitmproxy
