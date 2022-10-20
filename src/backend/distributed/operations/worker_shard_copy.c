@@ -24,6 +24,7 @@
 #include "distributed/relation_utils.h"
 #include "distributed/version_compat.h"
 #include "distributed/local_executor.h"
+#include "replication/origin.h"
 
 /*
  * LocalCopyBuffer is used in copy callback to return the copied rows.
@@ -79,6 +80,7 @@ static int ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead);
 static void LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState
 							 localCopyOutState);
 static void ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest);
+static void SetupReplicationOrigin(RepOriginId nodeId);
 
 static bool
 CanUseLocalCopy(uint32_t destinationNodeId)
@@ -152,7 +154,7 @@ CreateShardCopyDestReceiver(EState *executorState,
 	return (DestReceiver *) copyDest;
 }
 
-
+#define InvalidRepOriginId 0
 /*
  * ShardCopyDestReceiverReceive implements the receiveSlot function of
  * ShardCopyDestReceiver. It takes a TupleTableSlot and sends the contents to
@@ -232,6 +234,27 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	return true;
 }
 
+static void 
+SetupReplicationOrigin(RepOriginId nodeId) {
+	RepOriginId originid = InvalidRepOriginId;
+	XLogRecPtr	origin_startpos = InvalidXLogRecPtr;
+	//Check if there is a replication origin session already active.
+	if (replorigin_session_origin == InvalidRepOriginId) {
+		//Lookup the replication origin and create it if it does not exist.
+		char originname[NAMEDATALEN];
+		snprintf(originname, sizeof(originname), "pg_%u",nodeId);
+		originid = replorigin_by_name(originname, true);
+		if (originid == InvalidRepOriginId) {
+			originid = replorigin_create(originname);
+		}
+		//Setup the replication origin session.
+		replorigin_session_setup(originid);
+		replorigin_session_origin = originid;
+		origin_startpos = replorigin_session_get_progress(false);
+		//elog(LOG, "!!!! Citus: ShardCopyDestReceiverReceive replorigin_session_origin %d", replorigin_session_origin);
+	}
+}
+
 
 /*
  * ShardCopyDestReceiverStartup implements the rStartup interface of ShardCopyDestReceiver.
@@ -259,6 +282,7 @@ ShardCopyDestReceiverStartup(DestReceiver *dest, int operation, TupleDesc
 	copyDest->columnOutputFunctions = ColumnOutputFunctions(inputTupleDescriptor,
 															copyOutState->binary);
 	copyDest->copyOutState = copyOutState;
+	SetupReplicationOrigin(copyDest->destinationNodeId);
 }
 
 

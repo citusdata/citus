@@ -10,10 +10,12 @@
 #include "postgres.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shardsplit_shared_memory.h"
+#include "distributed/worker_shard_visibility.h"
+#include "distributed/worker_protocol.h"
 #include "distributed/listutils.h"
 #include "replication/logical.h"
 #include "utils/typcache.h"
-
+#include "utils/lsyscache.h"
 
 extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
 static LogicalDecodeChangeCB pgoutputChangeCB;
@@ -37,7 +39,15 @@ static Oid FindTargetRelationOid(Relation sourceShardRelation,
 static HeapTuple GetTupleForTargetSchema(HeapTuple sourceRelationTuple,
 										 TupleDesc sourceTupleDesc,
 										 TupleDesc targetTupleDesc);
+static bool
+cdc_origin_filter(LogicalDecodingContext *ctx, RepOriginId origin_id);
 
+static bool 
+is_cdc_replication_slot(LogicalDecodingContext *ctx);
+
+bool
+handle_cdc_changes(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
+				Relation relation, ReorderBufferChange *change);
 /*
  * Postgres uses 'pgoutput' as default plugin for logical replication.
  * We want to reuse Postgres pgoutput's functionality as much as possible.
@@ -47,9 +57,10 @@ void
 _PG_output_plugin_init(OutputPluginCallbacks *cb)
 {
 	LogicalOutputPluginInit plugin_init =
-		(LogicalOutputPluginInit) (void *) load_external_function("pgoutput",
-																  "_PG_output_plugin_init",
-																  false, NULL);
+		(LogicalOutputPluginInit) (void *) 
+		load_external_function("pgoutput",
+								"_PG_output_plugin_init",
+								false, NULL);
 
 	if (plugin_init == NULL)
 	{
@@ -58,12 +69,69 @@ _PG_output_plugin_init(OutputPluginCallbacks *cb)
 
 	/* ask the output plugin to fill the callback struct */
 	plugin_init(cb);
-
 	/* actual pgoutput callback will be called with the appropriate destination shard */
 	pgoutputChangeCB = cb->change_cb;
 	cb->change_cb = split_change_cb;
+	cb->filter_by_origin_cb = cdc_origin_filter;
 }
 
+#define InvalidRepOriginId 0
+
+/*
+ * cdc_origin_filter is called for each change. If the change is not
+ * originated from the CDC replication slot, we return false to skip
+ * the change.
+ */
+static bool
+cdc_origin_filter(LogicalDecodingContext *ctx, RepOriginId origin_id)
+{
+	if (origin_id != InvalidRepOriginId)
+	{
+		elog(LOG,"!!!! cdc_origin_filter: filtering because origin_id: %d \n",origin_id);
+		return true;
+	}
+	//elog(LOG,"!!!! cdc_origin_filter: NOT filtering because origin_id: %d \n",origin_id);
+	return false;
+}
+
+static bool 
+is_cdc_replication_slot(LogicalDecodingContext *ctx) {
+	char *replicationSlotName = ctx->slot->data.name.data;
+	//elog(LOG,"is_cdc_replication_slot: replicationSlotName %s", replicationSlotName);
+	return (replicationSlotName != NULL && strcmp(replicationSlotName,"cdc")== 0);
+}
+
+bool
+handle_cdc_changes(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
+				Relation relation, ReorderBufferChange *change) {
+	bool is_cdc_translated_to_distribution_table = false;
+	if (is_cdc_replication_slot(ctx)) {
+		// Check if it is a change in a Shard table
+		if (RelationIsAKnownShard(relation->rd_id)) {
+			//Oid shardRelationId = relation->rd_id;
+			char *shardRelationName = RelationGetRelationName(relation);
+			uint64 shardId = ExtractShardIdFromTableName(shardRelationName, true);
+			if (shardId != INVALID_SHARD_ID)
+			{
+				// try to get the distributed relation id for the shard
+				Oid distributedRelationId = RelationIdForShard(shardId);
+				if (OidIsValid(distributedRelationId))
+				{
+					char* relationName = get_rel_name(distributedRelationId);
+					//elog(LOG,"changing to distributed relation name:%s id:%d ", relationName, distributedRelationId); 
+					Relation distributedRelation = RelationIdGetRelation(distributedRelationId);
+					pgoutputChangeCB(ctx, txn, distributedRelation, change);
+					is_cdc_translated_to_distribution_table = true;
+				}
+			}
+		}
+		if (!is_cdc_translated_to_distribution_table) {
+			pgoutputChangeCB(ctx, txn, relation, change);
+		}		
+		return true;
+	}
+	return false;
+}
 
 /*
  * split_change function emits the incoming tuple change
@@ -73,11 +141,15 @@ static void
 split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 				Relation relation, ReorderBufferChange *change)
 {
+	//elog(LOG,"Citus split_change_cb called");
+	if (handle_cdc_changes(ctx,txn,relation,change)) {
+		return;
+	}
 	if (!is_publishable_relation(relation))
 	{
 		return;
 	}
-
+	
 	char *replicationSlotName = ctx->slot->data.name.data;
 
 	/*
@@ -201,7 +273,6 @@ split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 	pgoutputChangeCB(ctx, txn, targetRelation, change);
 	RelationClose(targetRelation);
 }
-
 
 /*
  * FindTargetRelationOid returns the destination relation Oid for the incoming
