@@ -534,11 +534,6 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 		RaiseDeferredError(unsupportedQueryError, ERROR);
 	}
 
-	/*
-	 * In principle, we're first trying subquery pushdown planner. If it fails
-	 * to create a logical plan, continue with trying the single table
-	 * repartition subquery planning.
-	 */
 	DeferredErrorMessage *subqueryPushdownError = DeferErrorIfUnsupportedSubqueryPushdown(
 		originalQuery,
 		plannerRestrictionContext);
@@ -549,23 +544,6 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 	else if (subqueryPushdownError)
 	{
 		RaiseDeferredErrorInternal(subqueryPushdownError, ERROR);
-
-		List *subqueryEntryList = SubqueryEntryList(queryTree);
-		RangeTblEntry *subqueryRangeTableEntry = (RangeTblEntry *) linitial(
-			subqueryEntryList);
-		Assert(subqueryRangeTableEntry->rtekind == RTE_SUBQUERY);
-
-		Query *subqueryTree = subqueryRangeTableEntry->subquery;
-
-		DeferredErrorMessage *repartitionQueryError =
-			DeferErrorIfUnsupportedSubqueryRepartition(subqueryTree);
-		if (repartitionQueryError)
-		{
-			RaiseDeferredErrorInternal(repartitionQueryError, ERROR);
-		}
-
-		/* all checks have passed, safe to create the multi plan */
-		multiQueryNode = MultiNodeTree(queryTree);
 	}
 
 	Assert(multiQueryNode != NULL);
