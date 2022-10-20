@@ -543,7 +543,7 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 	}
 	else if (subqueryPushdownError)
 	{
-		RaiseDeferredErrorInternal(subqueryPushdownError, ERROR);
+		RaiseDeferredError(subqueryPushdownError, ERROR);
 	}
 
 	Assert(multiQueryNode != NULL);
