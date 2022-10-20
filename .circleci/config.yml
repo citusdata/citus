@@ -24,10 +24,10 @@ parameters:
     default: '0.8.18'
   flaky_test:
     type: string
-    default: ''
+    default: 'isolation_shard_move_vs_start_metadata_sync'
   flaky_test_make:
     type: string
-    default: check-minimal
+    default: check-isolation-base
 
 
 jobs:
@@ -539,7 +539,7 @@ jobs:
 
   test-flakyness:
     description: Runs a test multiple times to see if it's flaky
-    parallelism: 32
+    parallelism: 64
     parameters:
       pg_major:
         description: 'postgres major version'
