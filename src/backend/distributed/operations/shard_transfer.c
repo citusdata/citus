@@ -101,8 +101,9 @@ static List * RecreateTableDDLCommandList(Oid relationId);
 static void EnsureTableListOwner(List *tableIdList);
 static void EnsureTableListSuitableForReplication(List *tableIdList);
 
-static void DropColocatedShardPlacement(ShardInterval *shardInterval, char *nodeName,
-										int32 nodePort);
+static void MarkForDropColocatedShardPlacement(ShardInterval *shardInterval,
+											   char *nodeName,
+											   int32 nodePort);
 static void UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
 														   char *sourceNodeName,
 														   int32 sourceNodePort,
@@ -398,7 +399,7 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	}
 
 	/* since this is move operation, we remove shards from source node after copy */
-	DropColocatedShardPlacement(shardInterval, sourceNodeName, sourceNodePort);
+	MarkForDropColocatedShardPlacement(shardInterval, sourceNodeName, sourceNodePort);
 
 	UpdateColocatedShardPlacementMetadataOnWorkers(shardId, sourceNodeName,
 												   sourceNodePort, targetNodeName,
@@ -1862,12 +1863,13 @@ RecreateTableDDLCommandList(Oid relationId)
 
 
 /*
- * DropColocatedShardPlacement deletes the shard placement metadata for the given shard
- * placement from the pg_dist_placement, and then it drops the shard table
- * from the given node. The function does this for all colocated placements.
+ * MarkForDropColocatedShardPlacement marks the shard placement metadata for
+ * the given shard placement to be deleted in pg_dist_placement. The function
+ * does this for all colocated placements.
  */
 static void
-DropColocatedShardPlacement(ShardInterval *shardInterval, char *nodeName, int32 nodePort)
+MarkForDropColocatedShardPlacement(ShardInterval *shardInterval, char *nodeName,
+								   int32 nodePort)
 {
 	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 	ListCell *colocatedShardCell = NULL;
@@ -1875,18 +1877,13 @@ DropColocatedShardPlacement(ShardInterval *shardInterval, char *nodeName, int32 
 	foreach(colocatedShardCell, colocatedShardList)
 	{
 		ShardInterval *colocatedShard = (ShardInterval *) lfirst(colocatedShardCell);
-		char *qualifiedTableName = ConstructQualifiedShardName(colocatedShard);
-		StringInfo dropQuery = makeStringInfo();
 		uint64 shardId = colocatedShard->shardId;
 		List *shardPlacementList =
 			ShardPlacementListIncludingOrphanedPlacements(shardId);
 		ShardPlacement *placement =
 			SearchShardPlacementInListOrError(shardPlacementList, nodeName, nodePort);
 
-		appendStringInfo(dropQuery, DROP_REGULAR_TABLE_COMMAND, qualifiedTableName);
-
-		DeleteShardPlacementRow(placement->placementId);
-		SendCommandToWorker(nodeName, nodePort, dropQuery->data);
+		UpdateShardPlacementState(placement->placementId, SHARD_STATE_TO_DELETE);
 	}
 }
 
