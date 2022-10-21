@@ -1,0 +1,189 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s1-move-placement s1-drop-marked-shards s2-drop-marked-shards s1-commit
+step s1-begin:
+    BEGIN;
+
+step s1-move-placement:
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+s1: NOTICE:  cleaned up 1 orphaned shards
+step s1-drop-marked-shards:
+    SET client_min_messages to NOTICE;
+    CALL isolation_cleanup_orphaned_shards();
+
+step s2-drop-marked-shards:
+    SET client_min_messages to DEBUG1;
+    CALL isolation_cleanup_orphaned_shards();
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-drop-marked-shards: <... completed>
+
+starting permutation: s1-begin s1-move-placement s2-drop-marked-shards s1-drop-marked-shards s1-commit
+step s1-begin:
+    BEGIN;
+
+step s1-move-placement:
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-drop-marked-shards:
+    SET client_min_messages to DEBUG1;
+    CALL isolation_cleanup_orphaned_shards();
+
+s1: NOTICE:  cleaned up 1 orphaned shards
+step s1-drop-marked-shards:
+    SET client_min_messages to NOTICE;
+    CALL isolation_cleanup_orphaned_shards();
+
+step s1-commit:
+    COMMIT;
+
+
+starting permutation: s1-begin s1-move-placement s2-start-session-level-connection s2-lock-table-on-worker s1-drop-marked-shards s1-commit s2-stop-connection
+step s1-begin:
+    BEGIN;
+
+step s1-move-placement:
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-start-session-level-connection:
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-lock-table-on-worker:
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN;');
+    SELECT run_commands_on_session_level_connection_to_node('LOCK TABLE t1_120000');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-drop-marked-shards:
+    SET client_min_messages to NOTICE;
+    CALL isolation_cleanup_orphaned_shards();
+ <waiting ...>
+s1: WARNING:  canceling statement due to lock timeout
+step s1-drop-marked-shards: <... completed>
+s1: WARNING:  failed to clean up 1 orphaned shards out of 1
+step s1-commit:
+    COMMIT;
+
+step s2-stop-connection:
+ SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-begin s1-move-placement s2-start-session-level-connection s2-lock-table-on-worker s1-commit s1-begin s1-move-placement-back s1-commit s2-stop-connection
+step s1-begin:
+    BEGIN;
+
+step s1-move-placement:
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-start-session-level-connection:
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-lock-table-on-worker:
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN;');
+    SELECT run_commands_on_session_level_connection_to_node('LOCK TABLE t1_120000');
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-commit:
+    COMMIT;
+
+step s1-begin:
+    BEGIN;
+
+step s1-move-placement-back:
+    SET client_min_messages to NOTICE;
+    SHOW log_error_verbosity;
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637);
+ <waiting ...>
+step s1-move-placement-back: <... completed>
+log_error_verbosity
+---------------------------------------------------------------------
+verbose
+(1 row)
+
+ERROR:  shard xxxxx still exists on the target node as an orphaned shard
+step s1-commit:
+    COMMIT;
+
+step s2-stop-connection:
+ SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-begin s1-lock-pg-dist-placement s2-drop-old-shards s1-commit
+step s1-begin:
+    BEGIN;
+
+step s1-lock-pg-dist-placement:
+    LOCK TABLE pg_dist_placement IN SHARE ROW EXCLUSIVE MODE;
+
+s2: DEBUG:  could not acquire shard lock to cleanup placements
+step s2-drop-old-shards:
+    SELECT run_try_drop_marked_shards();
+
+run_try_drop_marked_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-commit:
+    COMMIT;
+
