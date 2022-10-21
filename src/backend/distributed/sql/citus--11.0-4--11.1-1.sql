@@ -5,14 +5,23 @@
 #include "udfs/citus_internal_delete_partition_metadata/11.1-1.sql"
 #include "udfs/citus_copy_shard_placement/11.1-1.sql"
 
+-- We should not introduce breaking sql changes to upgrade files after they are released.
+-- We did that for worker_fetch_foreign_file in v9.0.0 and worker_repartition_cleanup in v9.2.0.
+-- When we try to drop those udfs in that file, they were missing for some clients unexpectedly
+-- due to buggy changes in old upgrade scripts. For that case, the fix is to change DROP statements
+-- with DROP IF EXISTS for those 2 udfs in 11.0-4--11.1-1.
+-- Fixes an upgrade problem for worker_fetch_foreign_file when upgrade starts from 8.3 up to 11.1
+-- Fixes an upgrade problem for worker_repartition_cleanup when upgrade starts from 9.1 up to 11.1
+-- Refer the related PR https://github.com/citusdata/citus/pull/6441 for more information
+DROP FUNCTION IF EXISTS pg_catalog.worker_fetch_foreign_file(text, text, bigint, text[], integer[]);
+DROP FUNCTION IF EXISTS pg_catalog.worker_repartition_cleanup(bigint);
+
 DROP FUNCTION pg_catalog.worker_create_schema(bigint,text);
 DROP FUNCTION pg_catalog.worker_cleanup_job_schema_cache();
-DROP FUNCTION pg_catalog.worker_fetch_foreign_file(text, text, bigint, text[], integer[]);
 DROP FUNCTION pg_catalog.worker_fetch_partition_file(bigint, integer, integer, integer, text, integer);
 DROP FUNCTION pg_catalog.worker_hash_partition_table(bigint, integer, text, text, oid, anyarray);
 DROP FUNCTION pg_catalog.worker_merge_files_into_table(bigint, integer, text[], text[]);
 DROP FUNCTION pg_catalog.worker_range_partition_table(bigint, integer, text, text, oid, anyarray);
-DROP FUNCTION pg_catalog.worker_repartition_cleanup(bigint);
 
 DO $check_columnar$
 BEGIN
