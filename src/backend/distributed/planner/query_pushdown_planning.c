@@ -537,14 +537,12 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 	DeferredErrorMessage *subqueryPushdownError = DeferErrorIfUnsupportedSubqueryPushdown(
 		originalQuery,
 		plannerRestrictionContext);
-	if (!subqueryPushdownError)
-	{
-		multiQueryNode = SubqueryPushdownMultiNodeTree(originalQuery);
-	}
-	else if (subqueryPushdownError)
+	if (subqueryPushdownError != NULL)
 	{
 		RaiseDeferredError(subqueryPushdownError, ERROR);
 	}
+
+    multiQueryNode = SubqueryPushdownMultiNodeTree(originalQuery);
 
 	Assert(multiQueryNode != NULL);
 
