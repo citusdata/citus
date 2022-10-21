@@ -194,15 +194,14 @@ step s2-select:
 
 step s1-move-placement:
     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
- <waiting ...>
-step s2-end: 
-   COMMIT;
 
-step s1-move-placement: <... completed>
 master_move_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
+
+step s2-end:
+   COMMIT;
 
 step s1-end:
  COMMIT;
@@ -236,15 +235,14 @@ step s2-select-for-update:
 
 step s1-move-placement:
     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
- <waiting ...>
-step s2-end: 
-   COMMIT;
 
-step s1-move-placement: <... completed>
 master_move_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
+
+step s2-end:
+   COMMIT;
 
 step s1-end:
  COMMIT;

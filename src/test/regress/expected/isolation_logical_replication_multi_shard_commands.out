@@ -615,15 +615,14 @@ step s2-select:
 
 step s1-move-placement:
      SELECT master_move_shard_placement(get_shard_id_for_distribution_column, 'localhost', 57637, 'localhost', 57638) FROM selected_shard;
- <waiting ...>
-step s2-end: 
- COMMIT;
 
-step s1-move-placement: <... completed>
 master_move_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
+
+step s2-end:
+ COMMIT;
 
 step s1-end:
  COMMIT;

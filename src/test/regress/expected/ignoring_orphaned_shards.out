@@ -37,8 +37,9 @@ SELECT citus_move_shard_placement(92448100, 'localhost', :worker_1_port, 'localh
 SELECT shardid, shardstate, nodeport FROM pg_dist_shard_placement WHERE shardid = 92448100 ORDER BY placementid;
  shardid  | shardstate | nodeport
 ---------------------------------------------------------------------
+ 92448100 |          4 |    57637
  92448100 |          1 |    57638
-(1 row)
+(2 rows)
 
 -- Add a new table that should get colocated with dist1 automatically, but
 -- should not get a shard for the orphaned placement.
@@ -155,9 +156,10 @@ SELECT citus_move_shard_placement(92448300, 'localhost', :worker_1_port, 'localh
 SELECT shardid, shardstate, nodeport FROM pg_dist_shard_placement WHERE shardid = 92448300 ORDER BY placementid;
  shardid  | shardstate | nodeport
 ---------------------------------------------------------------------
+ 92448300 |          4 |    57637
  92448300 |          1 |    57638
  92448300 |          1 |    57636
-(2 rows)
+(3 rows)
 
 -- Add a new table that should get colocated with rep1 automatically, but
 -- should not get a shard for the orphaned placement.
@@ -242,8 +244,9 @@ SELECT shardid, shardstate, nodeport FROM pg_dist_shard_placement WHERE shardid 
  shardid  | shardstate | nodeport
 ---------------------------------------------------------------------
  92448300 |          1 |    57638
+ 92448300 |          4 |    57636
  92448300 |          1 |    57637
-(2 rows)
+(3 rows)
 
 -- Make sure we don't send a query to the orphaned shard if it's local
 BEGIN;
@@ -283,6 +286,7 @@ SELECT citus_move_shard_placement(92448500, 'localhost', :worker_2_port, 'localh
 (1 row)
 
 CALL citus_cleanup_orphaned_shards();
+NOTICE:  cleaned up 3 orphaned shards
 SELECT shardid, shardstate, nodeport FROM pg_dist_shard_placement WHERE shardid = 92448300 ORDER BY placementid;
  shardid  | shardstate | nodeport
 ---------------------------------------------------------------------
@@ -313,8 +317,9 @@ SELECT citus_move_shard_placement(92448600, 'localhost', :worker_2_port, 'localh
 SELECT shardid, shardstate, nodeport FROM pg_dist_shard_placement WHERE shardid = 92448600 ORDER BY placementid;
  shardid  | shardstate | nodeport
 ---------------------------------------------------------------------
+ 92448600 |          4 |    57638
  92448600 |          1 |    57637
-(1 row)
+(2 rows)
 
 -- Make sure co-located join works
 SELECT * FROM range1 JOIN range2 ON range1.id = range2.id;

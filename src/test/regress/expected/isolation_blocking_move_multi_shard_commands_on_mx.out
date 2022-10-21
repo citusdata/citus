@@ -259,17 +259,16 @@ run_commands_on_session_level_connection_to_node
 
 step s1-move-placement:
   SELECT master_move_shard_placement(get_shard_id_for_distribution_column, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes') FROM selected_shard;
- <waiting ...>
-step s2-commit-worker: 
- SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
-run_commands_on_session_level_connection_to_node
+master_move_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-move-placement: <... completed>
-master_move_shard_placement
+step s2-commit-worker:
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
 
 (1 row)
