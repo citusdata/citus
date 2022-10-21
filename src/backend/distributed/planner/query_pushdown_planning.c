@@ -542,7 +542,7 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 		RaiseDeferredError(subqueryPushdownError, ERROR);
 	}
 
-    multiQueryNode = SubqueryPushdownMultiNodeTree(originalQuery);
+	multiQueryNode = SubqueryPushdownMultiNodeTree(originalQuery);
 
 	Assert(multiQueryNode != NULL);
 
