@@ -641,7 +641,7 @@ UpdateAutoConvertedForConnectedRelations(List *relationIds, bool autoConverted)
 
 	foreach_oid(relid, relationIdList)
 	{
-		UpdatePgDistPartitionAutoConverted(relid, false);
+		UpdatePgDistPartitionAutoConverted(relid, autoConverted);
 	}
 }
 
