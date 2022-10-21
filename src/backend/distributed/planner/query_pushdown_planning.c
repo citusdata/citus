@@ -521,8 +521,6 @@ MultiNode *
 SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 					  PlannerRestrictionContext *plannerRestrictionContext)
 {
-	MultiNode *multiQueryNode = NULL;
-
 	/*
 	 * This is a generic error check that applies to both subquery pushdown
 	 * and single table repartition subquery.
@@ -542,7 +540,7 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 		RaiseDeferredError(subqueryPushdownError, ERROR);
 	}
 
-	multiQueryNode = SubqueryPushdownMultiNodeTree(originalQuery);
+	MultiNode *multiQueryNode = SubqueryPushdownMultiNodeTree(originalQuery);
 
 	Assert(multiQueryNode != NULL);
 
