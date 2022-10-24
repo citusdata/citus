@@ -213,6 +213,9 @@ SELECT logicalrelid FROM pg_dist_partition WHERE colocationid = 92448300 ORDER B
  rep2
 (2 rows)
 
+-- cannot copy from an orphaned shard
+SELECT * FROM citus_copy_shard_placement(92448300, 'localhost', :worker_1_port, 'localhost', :master_port);
+ERROR:  source placement must be in active state
 -- Make sure we don't send a query to the orphaned shard
 BEGIN;
 SET LOCAL citus.log_remote_commands TO ON;

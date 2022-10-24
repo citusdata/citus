@@ -82,6 +82,9 @@ SELECT logicalrelid FROM pg_dist_partition WHERE colocationid = 92448300 ORDER B
 SELECT update_distributed_table_colocation('rep2', 'rep1');
 SELECT logicalrelid FROM pg_dist_partition WHERE colocationid = 92448300 ORDER BY 1;
 
+-- cannot copy from an orphaned shard
+SELECT * FROM citus_copy_shard_placement(92448300, 'localhost', :worker_1_port, 'localhost', :master_port);
+
 -- Make sure we don't send a query to the orphaned shard
 BEGIN;
 SET LOCAL citus.log_remote_commands TO ON;
