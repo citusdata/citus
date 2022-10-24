@@ -1008,6 +1008,26 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.defer_drop_after_shard_move",
+		gettext_noop("Deprecated, Citus always defers drop after shard move"),
+		NULL,
+		&DeferShardDeleteOnMove,
+		true,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.defer_drop_after_shard_split",
+		gettext_noop("Deprecated, Citus always defers drop after shard split"),
+		NULL,
+		&DeferShardDeleteOnSplit,
+		true,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.defer_shard_delete_interval",
 		gettext_noop("Sets the time to wait between background deletion for shards."),

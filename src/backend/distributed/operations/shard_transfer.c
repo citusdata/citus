@@ -137,6 +137,9 @@ PG_FUNCTION_INFO_V1(master_copy_shard_placement);
 PG_FUNCTION_INFO_V1(citus_move_shard_placement);
 PG_FUNCTION_INFO_V1(master_move_shard_placement);
 
+/* deprecated GUC, citus.defer_drop_after_shard_move */
+bool DeferShardDeleteOnMove = true;
+
 double DesiredPercentFreeAfterMove = 10;
 bool CheckAvailableSpaceBeforeMove = true;
 
