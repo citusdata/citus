@@ -3375,7 +3375,7 @@ BackgroundTaskReadyToRun(BackgroundTask *task)
 
 
 /*
- * GetRunnableBackgroundTask returns the first candidate for a task to be run. When a task
+ * GetRunnableOrRunningBackgroundTask returns the first candidate for a task to be run. When a task
  * is returned it has been checked for all the preconditions to hold.
  *
  * That means, if there is no task returned the background worker should close and let the
@@ -3383,13 +3383,14 @@ BackgroundTaskReadyToRun(BackgroundTask *task)
  * available.
  */
 BackgroundTask *
-GetRunnableBackgroundTask(void)
+GetRunnableOrRunningBackgroundTask(void)
 {
 	Relation pgDistBackgroundTasks =
 		table_open(DistBackgroundTaskRelationId(), ExclusiveLock);
 
 	BackgroundTaskStatus taskStatus[] = {
-		BACKGROUND_TASK_STATUS_RUNNABLE
+		BACKGROUND_TASK_STATUS_RUNNABLE,
+		BACKGROUND_TASK_STATUS_RUNNING
 	};
 
 	BackgroundTask *task = NULL;

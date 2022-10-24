@@ -31,6 +31,7 @@
 
 #include "access/xact.h"
 #include "commands/dbcommands.h"
+#include "common/hashfn.h"
 #include "libpq-fe.h"
 #include "libpq/pqformat.h"
 #include "libpq/pqmq.h"
@@ -46,6 +47,7 @@
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
 #include "utils/fmgrprotos.h"
+#include "utils/hsearch.h"
 #include "utils/memutils.h"
 #include "utils/portal.h"
 #include "utils/ps_status.h"
@@ -71,16 +73,17 @@
 #define CITUS_BACKGROUND_TASK_KEY_TASK_ID 4
 #define CITUS_BACKGROUND_TASK_NKEYS 5
 
-static BackgroundWorkerHandle * StartCitusBackgroundTaskExecuter(char *database,
+static BackgroundWorkerHandle * StartCitusBackgroundTaskExecutor(char *database,
 																 char *user,
 																 char *command,
 																 int64 taskId,
 																 dsm_segment **pSegment);
 static void ExecuteSqlString(const char *sql);
-static void ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInfo message,
-									bool *hadError);
+static shm_mq_result ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInfo message,
+											 bool *hadError);
 static void UpdateDependingTasks(BackgroundTask *task);
 static int64 CalculateBackoffDelay(int retryCount);
+static HTAB * CreateBackgroundExecutorHash(MemoryContext context);
 
 PG_FUNCTION_INFO_V1(citus_job_cancel);
 PG_FUNCTION_INFO_V1(citus_job_wait);
@@ -311,6 +314,29 @@ CitusBackgroundTaskQueueMonitorErrorCallback(void *arg)
 
 
 /*
+ * CreateBackgroundExecutorHash constructs a hash table which maps from task
+ * id to a handle of BackgroundExecutor, allocated in given context
+ */
+static HTAB *
+CreateBackgroundExecutorHash(MemoryContext context)
+{
+	HASHCTL info;
+
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(int64);
+	info.entrysize = sizeof(BackgroundExecutorHashEntry);
+	info.hash = tag_hash;
+	info.hcxt = context;
+	int hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
+
+	HTAB *backgroundExecutorHash = hash_create("Background Executor Hash", 32, &info,
+											   hashFlags);
+
+	return backgroundExecutorHash;
+}
+
+
+/*
  * CitusBackgroundTaskQueueMonitorMain is the main entry point for the background worker
  * running the background tasks queue monitor.
  *
@@ -324,6 +350,7 @@ CitusBackgroundTaskQueueMonitorErrorCallback(void *arg)
 void
 CitusBackgroundTaskQueueMonitorMain(Datum arg)
 {
+	/*pg_usleep(35 * 1000 * 1000); // useful for attaching to backgroundm else it quickly exits. */
 	Oid databaseOid = DatumGetObjectId(arg);
 
 	/* extension owner is passed via bgw_extra */
@@ -336,14 +363,27 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 	/* connect to database, after that we can actually access catalogs */
 	BackgroundWorkerInitializeConnectionByOid(databaseOid, extensionOwner, 0);
 
+	/*
+	 * use BackgroundTaskContext allocated at TopMemoryContext(here CurrentMemoryContext == TopMemoryContext)
+	 * to not lose data on transaction commits.
+	 *
+	 * We have 2 rules to persist allocated data until the background
+	 * loop finishes.
+	 * 1) After each transaction starts, switch to BackgroundTaskContext
+	 * 2) Before each transaction ends, switch to TopTransactionContext.
+	 */
+	Assert(CurrentMemoryContext == TopMemoryContext);
+	MemoryContext backgroundTaskContext = AllocSetContextCreate(CurrentMemoryContext,
+																"BackgroundTaskContext",
+																ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = CurrentMemoryContext;
+
 	StartTransactionCommand();
 	PushActiveSnapshot(GetTransactionSnapshot());
+	MemoryContextSwitchTo(backgroundTaskContext);
 
-	/* load database name and copy to a memory context that survives the transaction */
 	const char *databasename = get_database_name(MyDatabaseId);
-	MemoryContext oldContext = MemoryContextSwitchTo(TopMemoryContext);
 	databasename = pstrdup(databasename);
-	MemoryContextSwitchTo(oldContext);
 
 	/* setup error context to indicate the errors came from a running background task */
 	ErrorContextCallback errorCallback = { 0 };
@@ -355,8 +395,10 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 	errorCallback.previous = error_context_stack;
 	error_context_stack = &errorCallback;
 
+	MemoryContextSwitchTo(TopTransactionContext);
 	PopActiveSnapshot();
 	CommitTransactionCommand();
+	MemoryContextSwitchTo(backgroundTaskContext);
 
 	/*
 	 * There should be exactly one background task monitor running, running multiple would
@@ -385,12 +427,6 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 	ereport(DEBUG1, (errmsg("started citus background task queue monitor")));
 
-	MemoryContext perTaskContext = AllocSetContextCreate(CurrentMemoryContext,
-														 "PerTaskContext",
-														 ALLOCSET_DEFAULT_MINSIZE,
-														 ALLOCSET_DEFAULT_INITSIZE,
-														 ALLOCSET_DEFAULT_MAXSIZE);
-
 	/*
 	 * First we find all jobs that are running, we need to check if they are still running
 	 * if not reset their state back to scheduled.
@@ -398,16 +434,22 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 	{
 		StartTransactionCommand();
 		PushActiveSnapshot(GetTransactionSnapshot());
+		MemoryContextSwitchTo(backgroundTaskContext);
 
 		ResetRunningBackgroundTasks();
 
+		MemoryContextSwitchTo(TopTransactionContext);
 		PopActiveSnapshot();
 		CommitTransactionCommand();
+		MemoryContextSwitchTo(backgroundTaskContext);
 	}
 
-
-	MemoryContext oldContextPerJob = MemoryContextSwitchTo(perTaskContext);
 	TimestampTz backgroundWorkerFailedStartTime = 0;
+
+	/*
+	 * create a map to concurrent store background workers created for tasks
+	 */
+	HTAB *backgroundExecutorHandles = CreateBackgroundExecutorHash(backgroundTaskContext);
 
 	/*
 	 * Although this variable could be omitted it does quickly and adequately describe
@@ -416,27 +458,21 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 	bool hasTasks = true;
 	while (hasTasks)
 	{
-		MemoryContextReset(perTaskContext);
-
 		CHECK_FOR_INTERRUPTS();
 
 		InvalidateMetadataSystemCache();
 		StartTransactionCommand();
 		PushActiveSnapshot(GetTransactionSnapshot());
+		MemoryContextSwitchTo(backgroundTaskContext);
 
-		/*
-		 * We need to load the task into the perTaskContext as we will switch contexts
-		 * later due to the committing and starting of new transactions
-		 */
-		oldContext = MemoryContextSwitchTo(perTaskContext);
-		BackgroundTask *task = GetRunnableBackgroundTask();
+		BackgroundTask *task = GetRunnableOrRunningBackgroundTask();
 
 		if (!task)
 		{
-			MemoryContextSwitchTo(oldContext);
-
+			MemoryContextSwitchTo(TopTransactionContext);
 			PopActiveSnapshot();
 			CommitTransactionCommand();
+			MemoryContextSwitchTo(backgroundTaskContext);
 
 			hasTasks = false;
 			break;
@@ -446,22 +482,40 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		char *databaseName = get_database_name(MyDatabaseId);
 		char *userName = GetUserNameFromId(task->owner, false);
 
-		MemoryContextSwitchTo(oldContext);
-
+		MemoryContextSwitchTo(TopTransactionContext);
 		PopActiveSnapshot();
 		CommitTransactionCommand();
+		MemoryContextSwitchTo(backgroundTaskContext);
 
-		MemoryContextSwitchTo(perTaskContext);
-
-		/*
-		 * The background worker needs to be started outside of the transaction, otherwise
-		 * it will complain about leaking shared memory segments used, among other things,
-		 * to communicate the output of the backend.
-		 */
+		BackgroundWorkerHandle *handle = NULL;
 		dsm_segment *seg = NULL;
-		BackgroundWorkerHandle *handle =
-			StartCitusBackgroundTaskExecuter(databaseName, userName, task->command,
-											 task->taskid, &seg);
+		StringInfo message = NULL;
+
+		bool handleEntryFound = false;
+		BackgroundExecutorHashEntry *handleEntry =
+			hash_search(backgroundExecutorHandles, (void *) &task->taskid, HASH_ENTER,
+						&handleEntryFound);
+		if (!handleEntryFound)
+		{
+			/*
+			 * The background worker needs to be started outside of the transaction, otherwise
+			 * it will complain about leaking shared memory segments used, among other things,
+			 * to communicate the output of the backend.
+			 */
+			handle = StartCitusBackgroundTaskExecutor(databaseName, userName,
+													  task->command,
+													  task->taskid, &seg);
+			handleEntry->handle = handle;
+			handleEntry->seg = seg;
+			handleEntry->message = makeStringInfo();
+			message = handleEntry->message;
+		}
+		else
+		{
+			handle = handleEntry->handle;
+			seg = handleEntry->seg;
+			message = handleEntry->message;
+		}
 
 		if (handle == NULL)
 		{
@@ -511,6 +565,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 		StartTransactionCommand();
 		PushActiveSnapshot(GetTransactionSnapshot());
+		MemoryContextSwitchTo(backgroundTaskContext);
 
 		/*
 		 * Reload task while holding a new ExclusiveLock on the table. A separate process
@@ -522,9 +577,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		 */
 		LockRelationOid(DistBackgroundTaskRelationId(), ExclusiveLock);
 
-		oldContext = MemoryContextSwitchTo(perTaskContext);
 		task = GetBackgroundTaskByTaskId(task->taskid);
-		MemoryContextSwitchTo(oldContext);
 
 		if (!task || task->status == BACKGROUND_TASK_STATUS_CANCELLING ||
 			task->status == BACKGROUND_TASK_STATUS_CANCELLED)
@@ -533,13 +586,16 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			UpdateBackgroundTask(task);
 			UpdateBackgroundJob(task->jobid);
 
+			MemoryContextSwitchTo(TopTransactionContext);
 			PopActiveSnapshot();
 			CommitTransactionCommand();
+			MemoryContextSwitchTo(backgroundTaskContext);
 
 			/*
 			 * Terminate backend and release shared memory to not leak these resources
-			 * across iterations.
+			 * across iterations. Also, remove handle from the map
 			 */
+			hash_search(backgroundExecutorHandles, &task->taskid, HASH_REMOVE, NULL);
 			TerminateBackgroundWorker(handle);
 			dsm_detach(seg);
 
@@ -558,32 +614,25 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		UpdateBackgroundTask(task);
 		UpdateBackgroundJob(task->jobid);
 
+		MemoryContextSwitchTo(TopTransactionContext);
 		PopActiveSnapshot();
 		CommitTransactionCommand();
-
-		MemoryContextSwitchTo(perTaskContext);
+		MemoryContextSwitchTo(backgroundTaskContext);
 
 		bool hadError = false;
-		StringInfoData message = { 0 };
-		initStringInfo(&message);
+		shm_toc *toc = shm_toc_attach(CITUS_BACKGROUND_TASK_MAGIC,
+									  dsm_segment_address(seg));
+		shm_mq *mq = shm_toc_lookup(toc, CITUS_BACKGROUND_TASK_KEY_QUEUE, false);
+		shm_mq_handle *responseq = shm_mq_attach(mq, seg, NULL);
 
-		{
-			shm_toc *toc = shm_toc_attach(CITUS_BACKGROUND_TASK_MAGIC,
-										  dsm_segment_address(seg));
-			shm_mq *mq = shm_toc_lookup(toc, CITUS_BACKGROUND_TASK_KEY_QUEUE, false);
-			shm_mq_handle *responseq = shm_mq_attach(mq, seg, NULL);
-
-			/*
-			 * We consume the complete shm_mq here as ConsumeTaskWorkerOutput loops till
-			 * it reaches a SHM_MQ_DETACHED response.
-			 */
-			ConsumeTaskWorkerOutput(responseq, &message, &hadError);
-
-			shm_mq_detach(responseq);
-		}
+		/*
+		 * Consume bacground executor's queue and get a response code.
+		 */
+		shm_mq_result mq_res = ConsumeTaskWorkerOutput(responseq, message, &hadError);
 
 		StartTransactionCommand();
 		PushActiveSnapshot(GetTransactionSnapshot());
+		MemoryContextSwitchTo(backgroundTaskContext);
 
 		/*
 		 * Same as before, we need to lock pg_dist_background_task in a way where we can
@@ -591,9 +640,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		 */
 		LockRelationOid(DistBackgroundTaskRelationId(), ExclusiveLock);
 
-		oldContext = MemoryContextSwitchTo(perTaskContext);
 		task = GetBackgroundTaskByTaskId(task->taskid);
-		MemoryContextSwitchTo(oldContext);
 
 		if (!task || task->status == BACKGROUND_TASK_STATUS_CANCELLING ||
 			task->status == BACKGROUND_TASK_STATUS_CANCELLED)
@@ -602,19 +649,23 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			 * A concurrent cancel has happened or the task has disappeared, we are not
 			 * retrying or changing state, we will only reflect the message onto the task
 			 * and for completeness we update the job aswell, this should be a no-op
+			 * Also remove handle from map
 			 *
 			 * We still need to release the shared memory and xact before looping
 			 */
-
+			hash_search(backgroundExecutorHandles, &task->taskid, HASH_REMOVE, NULL);
+			TerminateBackgroundWorker(handle);
 			dsm_detach(seg);
 
 			task->status = BACKGROUND_TASK_STATUS_CANCELLED;
-			task->message = message.data;
+			task->message = message->data;
 			UpdateBackgroundTask(task);
 			UpdateBackgroundJob(task->jobid);
 
+			MemoryContextSwitchTo(TopTransactionContext);
 			PopActiveSnapshot();
 			CommitTransactionCommand();
+			MemoryContextSwitchTo(backgroundTaskContext);
 
 			continue;
 		}
@@ -652,25 +703,42 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 				task->status = BACKGROUND_TASK_STATUS_RUNNABLE;
 			}
 		}
+		else if (mq_res == SHM_MQ_WOULD_BLOCK)
+		{
+			/*
+			 * still running the task
+			 */
+			MemoryContextSwitchTo(TopTransactionContext);
+			PopActiveSnapshot();
+			CommitTransactionCommand();
+			MemoryContextSwitchTo(backgroundTaskContext);
+
+			continue;
+		}
 		else
 		{
+			Assert(mq_res == SHM_MQ_DETACHED);
 			task->status = BACKGROUND_TASK_STATUS_DONE;
 		}
 		UNSET_NULLABLE_FIELD(task, pid);
-		task->message = message.data;
+		task->message = message->data;
 
 		UpdateBackgroundTask(task);
 		UpdateDependingTasks(task);
 		UpdateBackgroundJob(task->jobid);
 
+		hash_search(backgroundExecutorHandles, &task->taskid, HASH_REMOVE, NULL);
+		TerminateBackgroundWorker(handle);
 		dsm_detach(seg);
 
+		MemoryContextSwitchTo(TopTransactionContext);
 		PopActiveSnapshot();
 		CommitTransactionCommand();
+		MemoryContextSwitchTo(backgroundTaskContext);
 	}
 
-	MemoryContextSwitchTo(oldContextPerJob);
-	MemoryContextDelete(perTaskContext);
+	MemoryContextSwitchTo(oldContext);
+	MemoryContextDelete(backgroundTaskContext);
 }
 
 
@@ -853,9 +921,11 @@ UpdateDependingTasks(BackgroundTask *task)
  * ConsumeTaskWorkerOutput consumes the output of an executor and mutates the
  * BackgroundTask object to reflect changes like the message and status on the task.
  */
-static void
+static shm_mq_result
 ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInfo message, bool *hadError)
 {
+	shm_mq_result res;
+
 	/*
 	 * Message-parsing routines operate on a null-terminated StringInfo,
 	 * so we must construct one.
@@ -868,13 +938,12 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInfo message, bool *hadE
 		resetStringInfo(&msg);
 
 		/*
-		 * Get next message. Currently blocking, when multiple backends get implemented it
-		 * should switch to a non-blocking receive
+		 * non-blocking receive to not block other bg workers
 		 */
 		Size nbytes = 0;
 		void *data = NULL;
-		const bool noWait = false;
-		shm_mq_result res = shm_mq_receive(responseq, &nbytes, &data, noWait);
+		const bool noWait = true;
+		res = shm_mq_receive(responseq, &nbytes, &data, noWait);
 
 		if (res != SHM_MQ_SUCCESS)
 		{
@@ -957,7 +1026,11 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInfo message, bool *hadE
 		}
 	}
 
-	pfree(msg.data);
+	if (res == SHM_MQ_DETACHED)
+	{
+		pfree(msg.data);
+	}
+	return res;
 }
 
 
@@ -1034,13 +1107,13 @@ StoreArgumentsInDSM(char *database, char *username, char *command, int64 taskId)
 
 
 /*
- * StartCitusBackgroundTaskExecuter start a new background worker for the execution of a
+ * StartCitusBackgroundTaskExecutor start a new background worker for the execution of a
  * background task. Callers interested in the shared memory segment that is created
  * between the background worker and the current backend can pass in a segOut to get a
  * pointer to the dynamic shared memory.
  */
 static BackgroundWorkerHandle *
-StartCitusBackgroundTaskExecuter(char *database, char *user, char *command, int64 taskId,
+StartCitusBackgroundTaskExecutor(char *database, char *user, char *command, int64 taskId,
 								 dsm_segment **pSegment)
 {
 	dsm_segment *seg = StoreArgumentsInDSM(database, user, command, taskId);
@@ -1058,7 +1131,7 @@ StartCitusBackgroundTaskExecuter(char *database, char *user, char *command, int6
 	worker.bgw_restart_time = BGW_NEVER_RESTART;
 	strcpy_s(worker.bgw_library_name, sizeof(worker.bgw_library_name), "citus");
 	strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_library_name),
-			 "CitusBackgroundTaskExecuter");
+			 "CitusBackgroundTaskExecutor");
 	worker.bgw_main_arg = UInt32GetDatum(dsm_segment_handle(seg));
 	worker.bgw_notify_pid = MyProcPid;
 
@@ -1084,36 +1157,36 @@ StartCitusBackgroundTaskExecuter(char *database, char *user, char *command, int6
 /*
  * context for any log/error messages emitted from the background task executor.
  */
-typedef struct CitusBackgroundJobExecuterErrorCallbackContext
+typedef struct CitusBackgroundJobExecutorErrorCallbackContext
 {
 	const char *database;
 	const char *username;
-} CitusBackgroundJobExecuterErrorCallbackContext;
+} CitusBackgroundJobExecutorErrorCallbackContext;
 
 
 /*
- * CitusBackgroundJobExecuterErrorCallback is a callback handler that gets called for any
+ * CitusBackgroundJobExecutorErrorCallback is a callback handler that gets called for any
  * ereport to add extra context to the message.
  */
 static void
-CitusBackgroundJobExecuterErrorCallback(void *arg)
+CitusBackgroundJobExecutorErrorCallback(void *arg)
 {
-	CitusBackgroundJobExecuterErrorCallbackContext *context =
-		(CitusBackgroundJobExecuterErrorCallbackContext *) arg;
+	CitusBackgroundJobExecutorErrorCallbackContext *context =
+		(CitusBackgroundJobExecutorErrorCallbackContext *) arg;
 	errcontext("Citus Background Task Queue Executor: %s/%s", context->database,
 			   context->username);
 }
 
 
 /*
- * CitusBackgroundTaskExecuter is the main function of the background tasks queue
+ * CitusBackgroundTaskExecutor is the main function of the background tasks queue
  * executor. This backend attaches to a shared memory segment as identified by the
  * main_arg of the background worker.
  *
  * This is mostly based on the background worker logic in pg_cron
  */
 void
-CitusBackgroundTaskExecuter(Datum main_arg)
+CitusBackgroundTaskExecutor(Datum main_arg)
 {
 	/*
 	 * TODO figure out if we need this signal handler that is in pgcron
@@ -1159,11 +1232,11 @@ CitusBackgroundTaskExecuter(Datum main_arg)
 
 	/* setup error context to indicate the errors came from a running background task */
 	ErrorContextCallback errorCallback = { 0 };
-	CitusBackgroundJobExecuterErrorCallbackContext context = {
+	CitusBackgroundJobExecutorErrorCallbackContext context = {
 		.database = database,
 		.username = username,
 	};
-	errorCallback.callback = CitusBackgroundJobExecuterErrorCallback;
+	errorCallback.callback = CitusBackgroundJobExecutorErrorCallback;
 	errorCallback.arg = (void *) &context;
 	errorCallback.previous = error_context_stack;
 	error_context_stack = &errorCallback;
