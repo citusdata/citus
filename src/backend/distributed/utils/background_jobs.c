@@ -234,7 +234,6 @@ citus_job_wait_internal(int64 jobid, BackgroundJobStatus *desiredStatus)
 		}
 
 		/* sleep for a while, before rechecking the job status */
-		CHECK_FOR_INTERRUPTS();
 		const long delay_ms = 1000;
 		(void) WaitLatch(MyLatch,
 						 WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
@@ -452,20 +451,28 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 	HTAB *backgroundExecutorHandles = CreateBackgroundExecutorHash(backgroundTaskContext);
 
 	/*
+	 * Useful to keep track last monitored task id
+	 */
+	int64 lastMonitoredTaskId = -1;
+
+	/*
+	 * Control maximum number of parallel task executors
+	 */
+	int64 currentExecutorCount = 0;
+
+	/*
 	 * Although this variable could be omitted it does quickly and adequately describe
 	 * till when we are looping.
 	 */
 	bool hasTasks = true;
 	while (hasTasks)
 	{
-		CHECK_FOR_INTERRUPTS();
-
 		InvalidateMetadataSystemCache();
 		StartTransactionCommand();
 		PushActiveSnapshot(GetTransactionSnapshot());
 		MemoryContextSwitchTo(backgroundTaskContext);
 
-		BackgroundTask *task = GetRunnableOrRunningBackgroundTask();
+		BackgroundTask *task = GetNextReadyBackgroundTask(lastMonitoredTaskId);
 
 		if (!task)
 		{
@@ -477,6 +484,8 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			hasTasks = false;
 			break;
 		}
+
+		lastMonitoredTaskId = task->taskid;
 
 		/* we load the database name and username here as we are still in a transaction */
 		char *databaseName = get_database_name(MyDatabaseId);
@@ -493,10 +502,25 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 		bool handleEntryFound = false;
 		BackgroundExecutorHashEntry *handleEntry =
-			hash_search(backgroundExecutorHandles, (void *) &task->taskid, HASH_ENTER,
+			hash_search(backgroundExecutorHandles, &task->taskid, HASH_ENTER,
 						&handleEntryFound);
 		if (!handleEntryFound)
 		{
+			if (currentExecutorCount == MaxBackgroundTaskExecutors)
+			{
+				/*
+				 * We reached maximum amount of parallel task executor count,
+				 * let the monitor choose the next task
+				 */
+				ereport(WARNING, (errmsg("unable to start background worker for "
+										 "background task execution"),
+								  errdetail("Already reached the maximum number of task "
+											"executors: %ld", currentExecutorCount)));
+
+				hash_search(backgroundExecutorHandles, &task->taskid, HASH_REMOVE, NULL);
+				continue;
+			}
+
 			/*
 			 * The background worker needs to be started outside of the transaction, otherwise
 			 * it will complain about leaking shared memory segments used, among other things,
@@ -509,6 +533,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			handleEntry->seg = seg;
 			handleEntry->message = makeStringInfo();
 			message = handleEntry->message;
+			currentExecutorCount++;
 		}
 		else
 		{
@@ -531,10 +556,14 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 				backgroundWorkerFailedStartTime = GetCurrentTimestamp();
 			}
 
+			hash_search(backgroundExecutorHandles, &task->taskid, HASH_REMOVE, NULL);
+			currentExecutorCount--;
+
 			const long delay_ms = 1000;
 			(void) WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
 							 delay_ms, WAIT_EVENT_PG_SLEEP);
 			ResetLatch(MyLatch);
+			CHECK_FOR_INTERRUPTS();
 
 			continue;
 		}
@@ -579,8 +608,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 		task = GetBackgroundTaskByTaskId(task->taskid);
 
-		if (!task || task->status == BACKGROUND_TASK_STATUS_CANCELLING ||
-			task->status == BACKGROUND_TASK_STATUS_CANCELLED)
+		if (!task || task->status == BACKGROUND_TASK_STATUS_CANCELLING)
 		{
 			task->status = BACKGROUND_TASK_STATUS_CANCELLED;
 			UpdateBackgroundTask(task);
@@ -598,6 +626,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			hash_search(backgroundExecutorHandles, &task->taskid, HASH_REMOVE, NULL);
 			TerminateBackgroundWorker(handle);
 			dsm_detach(seg);
+			currentExecutorCount--;
 
 			/* there could be an other task ready to run, let a new loop decide */
 			continue;
@@ -626,7 +655,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		shm_mq_handle *responseq = shm_mq_attach(mq, seg, NULL);
 
 		/*
-		 * Consume bacground executor's queue and get a response code.
+		 * Consume background executor's queue and get a response code.
 		 */
 		shm_mq_result mq_res = ConsumeTaskWorkerOutput(responseq, message, &hadError);
 
@@ -642,8 +671,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 		task = GetBackgroundTaskByTaskId(task->taskid);
 
-		if (!task || task->status == BACKGROUND_TASK_STATUS_CANCELLING ||
-			task->status == BACKGROUND_TASK_STATUS_CANCELLED)
+		if (!task || task->status == BACKGROUND_TASK_STATUS_CANCELLING)
 		{
 			/*
 			 * A concurrent cancel has happened or the task has disappeared, we are not
@@ -656,6 +684,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			hash_search(backgroundExecutorHandles, &task->taskid, HASH_REMOVE, NULL);
 			TerminateBackgroundWorker(handle);
 			dsm_detach(seg);
+			currentExecutorCount--;
 
 			task->status = BACKGROUND_TASK_STATUS_CANCELLED;
 			task->message = message->data;
@@ -693,6 +722,11 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			{
 				task->status = BACKGROUND_TASK_STATUS_ERROR;
 				UNSET_NULLABLE_FIELD(task, not_before);
+
+				hash_search(backgroundExecutorHandles, &task->taskid, HASH_REMOVE, NULL);
+				TerminateBackgroundWorker(handle);
+				dsm_detach(seg);
+				currentExecutorCount--;
 			}
 			else
 			{
@@ -713,6 +747,13 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			CommitTransactionCommand();
 			MemoryContextSwitchTo(backgroundTaskContext);
 
+			/* lower cpu consumption on EWOULD_BLOCK on queue */
+			const long delay_ms = 2;
+			(void) WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
+							 delay_ms, WAIT_EVENT_PG_SLEEP);
+			ResetLatch(MyLatch);
+			CHECK_FOR_INTERRUPTS();
+
 			continue;
 		}
 		else
@@ -720,16 +761,13 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			Assert(mq_res == SHM_MQ_DETACHED);
 			task->status = BACKGROUND_TASK_STATUS_DONE;
 		}
+
 		UNSET_NULLABLE_FIELD(task, pid);
 		task->message = message->data;
 
 		UpdateBackgroundTask(task);
 		UpdateDependingTasks(task);
 		UpdateBackgroundJob(task->jobid);
-
-		hash_search(backgroundExecutorHandles, &task->taskid, HASH_REMOVE, NULL);
-		TerminateBackgroundWorker(handle);
-		dsm_detach(seg);
 
 		MemoryContextSwitchTo(TopTransactionContext);
 		PopActiveSnapshot();
@@ -1199,9 +1237,7 @@ CitusBackgroundTaskExecutor(Datum main_arg)
 	CurrentResourceOwner = ResourceOwnerCreate(NULL, "citus background job");
 	CurrentMemoryContext = AllocSetContextCreate(TopMemoryContext,
 												 "citus background job execution",
-												 ALLOCSET_DEFAULT_MINSIZE,
-												 ALLOCSET_DEFAULT_INITSIZE,
-												 ALLOCSET_DEFAULT_MAXSIZE);
+												 ALLOCSET_DEFAULT_SIZES);
 
 	/* Set up a dynamic shared memory segment. */
 	dsm_segment *seg = dsm_attach(DatumGetInt32(main_arg));
