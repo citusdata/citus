@@ -36,7 +36,7 @@ build_ext() {
   CFLAGS=-Werror "${basedir}/configure" PG_CONFIG="/usr/lib/postgresql/${pg_major}/bin/pg_config" --enable-coverage --with-security-flags     LLVM_CONFIG=llvm-config-14 CLANG=clang-14
 
   installdir="${builddir}/install"
-  make -j$(nproc) && mkdir -p "${installdir}" && { make DESTDIR="${installdir}" install-all || make DESTDIR="${installdir}" install ; }
+  make -j$(nproc) -s && mkdir -p "${installdir}" && { make DESTDIR="${installdir}" install-all || make DESTDIR="${installdir}" install ; }
 
   cd "${installdir}" && find . -type f -print > "${builddir}/files.lst"
   tar cvf "${basedir}/install-${pg_major}.tar" `cat ${builddir}/files.lst`
