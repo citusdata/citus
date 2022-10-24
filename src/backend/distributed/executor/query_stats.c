@@ -312,6 +312,8 @@ CitusQueryStatsShmemShutdown(int code, Datum arg)
 		return;
 	}
 
+	int32 num_entries = hash_get_num_entries(queryStatsHash);
+
 	FILE *file = AllocateFile(CITUS_STATS_DUMP_FILE ".tmp", PG_BINARY_W);
 	if (file == NULL)
 	{
@@ -322,8 +324,6 @@ CitusQueryStatsShmemShutdown(int code, Datum arg)
 	{
 		goto error;
 	}
-
-	int32 num_entries = hash_get_num_entries(queryStatsHash);
 
 	if (fwrite(&num_entries, sizeof(int32), 1, file) != 1)
 	{
