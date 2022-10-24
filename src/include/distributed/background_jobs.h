@@ -28,6 +28,7 @@ typedef struct BackgroundExecutorHashEntry
 
 	BackgroundWorkerHandle *handle;
 	dsm_segment *seg;
+	int64 jobid;
 	StringInfo message;
 } BackgroundExecutorHashEntry;
 
