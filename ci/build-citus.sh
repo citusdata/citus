@@ -33,7 +33,12 @@ build_ext() {
   # do everything in a subdirectory to avoid clutter in current directory
   mkdir -p "${builddir}" && cd "${builddir}"
 
-  CFLAGS=-Werror "${basedir}/configure" PG_CONFIG="/usr/lib/postgresql/${pg_major}/bin/pg_config" --enable-coverage --with-security-flags     LLVM_CONFIG=llvm-config-14 CLANG=clang-14
+  CFLAGS=-Werror "${basedir}/configure" \
+      PG_CONFIG="/usr/lib/postgresql/${pg_major}/bin/pg_config" \
+      --enable-coverage \
+      --with-security-flags \
+      LLVM_CONFIG=llvm-config-14 \
+      CLANG=clang-14
 
   installdir="${builddir}/install"
   make -j$(nproc) -s && mkdir -p "${installdir}" && { make DESTDIR="${installdir}" install-all || make DESTDIR="${installdir}" install ; }
