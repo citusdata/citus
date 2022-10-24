@@ -22,3 +22,4 @@ COMMENT ON FUNCTION pg_catalog.worker_append_table_to_shard(text, text, text, in
     IS 'append a regular table''s contents to the shard';
 
 #include "../udfs/worker_split_shard_replication_setup/11.1-1.sql"
+DROP FUNCTION pg_catalog.citus_task_wait(bigint, pg_catalog.citus_task_status);
