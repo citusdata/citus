@@ -47,3 +47,8 @@ WHERE shard.logicalrelid = shardgroup.logicalrelid
        OR (    shard.shardmaxvalue      IS NULL
            AND shardgroup.shardmaxvalue IS NULL)
   );
+
+-- risky, but we want to fail quickly here. If there are cases where a shard is not associated correctly with a
+-- shardgroup we would not want the setup to use the new Citus version as it hard relies on the shardgroups being
+-- correctly associated.
+ALTER TABLE pg_catalog.pg_dist_shard ALTER COLUMN shardgroupid SET NOT NULL;
