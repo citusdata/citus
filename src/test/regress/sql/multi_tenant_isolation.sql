@@ -399,29 +399,6 @@ RESET citus.enable_metadata_sync;
 CREATE EVENT TRIGGER abort_drop ON sql_drop
    EXECUTE PROCEDURE abort_drop_command();
 
-\c - postgres - :master_port
--- Disable deferred drop otherwise we will skip the drop and operation will succeed instead of failing.
-SET citus.defer_drop_after_shard_split TO OFF;
-SET ROLE mx_isolation_role_ent;
-SET search_path to "Tenant Isolation";
-
-\set VERBOSITY terse
-SELECT isolate_tenant_to_new_shard('orders_streaming', 104, 'CASCADE', shard_transfer_mode => 'block_writes');
-
-\set VERBOSITY default
-
--- check if metadata is changed
-SELECT * FROM pg_dist_shard
-	WHERE logicalrelid = 'lineitem_streaming'::regclass OR logicalrelid = 'orders_streaming'::regclass
-	ORDER BY shardminvalue::BIGINT, logicalrelid;
-
-\c - - - :worker_1_port
-SET search_path to "Tenant Isolation";
-
--- however, new tables are already created
-SET citus.override_table_visibility TO false;
-\d
-
 \c - postgres - :worker_1_port
 
 DROP EVENT TRIGGER abort_drop;

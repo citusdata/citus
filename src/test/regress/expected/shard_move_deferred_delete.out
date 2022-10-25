@@ -4,7 +4,6 @@
 SET citus.next_shard_id TO 20000000;
 SET citus.shard_count TO 6;
 SET citus.shard_replication_factor TO 1;
-SET citus.defer_drop_after_shard_move TO on;
 CREATE SCHEMA shard_move_deferred_delete;
 SET search_path TO shard_move_deferred_delete;
 CREATE TABLE t1 ( id int PRIMARY KEY);

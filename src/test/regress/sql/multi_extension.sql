@@ -819,7 +819,6 @@ CREATE EXTENSION citus;
 CREATE TABLE test (x int, y int);
 INSERT INTO test VALUES (1,2);
 SET citus.shard_replication_factor TO 1;
-SET citus.defer_drop_after_shard_split TO off;
 SELECT create_distributed_table_concurrently('test','x');
 DROP TABLE test;
 TRUNCATE pg_dist_node;

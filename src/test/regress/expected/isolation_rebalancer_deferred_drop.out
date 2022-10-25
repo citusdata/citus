@@ -96,7 +96,7 @@ step s1-commit:
     COMMIT;
 
 step s2-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+ SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -160,7 +160,7 @@ step s1-commit:
     COMMIT;
 
 step s2-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+ SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -180,38 +180,6 @@ step s2-drop-old-shards:
     SELECT run_try_drop_marked_shards();
 
 run_try_drop_marked_shards
----------------------------------------------------------------------
-
-(1 row)
-
-step s1-commit:
-    COMMIT;
-
-
-starting permutation: s1-begin s2-begin s2-select s1-move-placement-without-deferred s2-commit s1-commit
-step s1-begin:
-    BEGIN;
-
-step s2-begin:
-    BEGIN;
-
-step s2-select:
-    SELECT COUNT(*) FROM t1;
-
-count
----------------------------------------------------------------------
-    0
-(1 row)
-
-step s1-move-placement-without-deferred:
-    SET citus.defer_drop_after_shard_move TO OFF;
-    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
- <waiting ...>
-step s2-commit: 
-    COMMIT;
-
-step s1-move-placement-without-deferred: <... completed>
-master_move_shard_placement
 ---------------------------------------------------------------------
 
 (1 row)

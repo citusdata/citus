@@ -148,6 +148,8 @@ DEFINE_COLUMNAR_PASSTHROUGH_FUNC(test_columnar_storage_write_new_page)
 static char *CitusVersion = CITUS_VERSION;
 static char *DeprecatedEmptyString = "";
 static char *MitmfifoEmptyString = "";
+static bool DeprecatedDeferShardDeleteOnMove = true;
+static bool DeprecatedDeferShardDeleteOnSplit = true;
 
 /* deprecated GUC value that should not be used anywhere outside this file */
 static int ReplicationModel = REPLICATION_MODEL_STREAMING;
@@ -1010,18 +1012,9 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.defer_drop_after_shard_move",
-		gettext_noop("When enabled a shard move will mark the original shards "
-					 "for deletion after a successful move, instead of deleting "
-					 "them right away."),
-		gettext_noop("The deletion of a shard can sometimes run into a conflict with a "
-					 "long running transactions on a the shard during the drop phase of "
-					 "the shard move. This causes some moves to be rolled back after "
-					 "resources have been spend on moving the shard. To prevent "
-					 "conflicts this feature lets you skip the actual deletion till a "
-					 "later point in time. When used one should set "
-					 "citus.defer_shard_delete_interval to make sure defered deletions "
-					 "will be executed"),
-		&DeferShardDeleteOnMove,
+		gettext_noop("Deprecated, Citus always defers drop after shard move"),
+		NULL,
+		&DeprecatedDeferShardDeleteOnMove,
 		true,
 		PGC_USERSET,
 		0,
@@ -1029,18 +1022,9 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.defer_drop_after_shard_split",
-		gettext_noop("When enabled a shard split will mark the original shards "
-					 "for deletion after a successful split, instead of deleting "
-					 "them right away."),
-		gettext_noop("The deletion of a shard can sometimes run into a conflict with a "
-					 "long running transactions on a the shard during the drop phase of "
-					 "the shard split. This causes some splits to be rolled back after "
-					 "resources have been spend on moving the shard. To prevent "
-					 "conflicts this feature lets you skip the actual deletion till a "
-					 "later point in time. When used one should set "
-					 "citus.defer_shard_delete_interval to make sure defered deletions "
-					 "will be executed"),
-		&DeferShardDeleteOnSplit,
+		gettext_noop("Deprecated, Citus always defers drop after shard split"),
+		NULL,
+		&DeprecatedDeferShardDeleteOnSplit,
 		true,
 		PGC_USERSET,
 		0,
