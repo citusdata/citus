@@ -507,7 +507,7 @@ CreateShardMoveLogicalRepTargetList(HTAB *publicationInfoHash, List *shardList)
 static void
 AcquireLogicalReplicationLock(void)
 {
-	LOCKTAG tag;
+	LOCKTAG tag = { 0 };
 	SET_LOCKTAG_LOGICAL_REPLICATION(tag);
 
 	LockAcquire(&tag, ExclusiveLock, false, false);

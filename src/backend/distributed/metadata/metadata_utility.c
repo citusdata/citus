@@ -1705,6 +1705,8 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 		isNulls[Anum_pg_dist_shard_shardmaxvalue - 1] = true;
 	}
 
+	isNulls[Anum_pg_dist_shard_shardgroupid - 1] = true;
+
 	/* open shard relation and insert new tuple */
 	Relation pgDistShard = table_open(DistShardRelationId(), RowExclusiveLock);
 
