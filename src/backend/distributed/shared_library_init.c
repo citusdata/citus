@@ -148,6 +148,8 @@ DEFINE_COLUMNAR_PASSTHROUGH_FUNC(test_columnar_storage_write_new_page)
 static char *CitusVersion = CITUS_VERSION;
 static char *DeprecatedEmptyString = "";
 static char *MitmfifoEmptyString = "";
+static bool DeprecatedDeferShardDeleteOnMove = true;
+static bool DeprecatedDeferShardDeleteOnSplit = true;
 
 /* deprecated GUC value that should not be used anywhere outside this file */
 static int ReplicationModel = REPLICATION_MODEL_STREAMING;
@@ -1012,7 +1014,7 @@ RegisterCitusConfigVariables(void)
 		"citus.defer_drop_after_shard_move",
 		gettext_noop("Deprecated, Citus always defers drop after shard move"),
 		NULL,
-		&DeferShardDeleteOnMove,
+		&DeprecatedDeferShardDeleteOnMove,
 		true,
 		PGC_USERSET,
 		0,
@@ -1022,7 +1024,7 @@ RegisterCitusConfigVariables(void)
 		"citus.defer_drop_after_shard_split",
 		gettext_noop("Deprecated, Citus always defers drop after shard split"),
 		NULL,
-		&DeferShardDeleteOnSplit,
+		&DeprecatedDeferShardDeleteOnSplit,
 		true,
 		PGC_USERSET,
 		0,

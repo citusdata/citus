@@ -46,9 +46,6 @@
 #include "distributed/shard_rebalancer.h"
 #include "postmaster/postmaster.h"
 
-/* deprecated GUC, citus.defer_drop_after_shard_split */
-bool DeferShardDeleteOnSplit = true;
-
 /*
  * Entry for map that tracks ShardInterval -> Placement Node
  * created by split workflow.
