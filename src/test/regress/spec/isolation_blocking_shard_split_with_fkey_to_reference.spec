@@ -14,11 +14,11 @@ setup
 teardown
 {
 	-- Cleanup any orphan shards that might be left over from a previous run.
-	CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
+	CREATE OR REPLACE FUNCTION run_try_drop_marked_resources()
 	RETURNS VOID
 	AS 'citus'
 	LANGUAGE C STRICT VOLATILE;
-	SELECT run_try_drop_marked_shards();
+	SELECT run_try_drop_marked_resources();
 
 	DROP TABLE table_to_split CASCADE;
 	DROP TABLE reference_table CASCADE;

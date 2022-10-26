@@ -23,7 +23,7 @@ extern bool CheckAvailableSpaceBeforeMove;
 extern int NextOperationId;
 extern int NextCleanupRecordId;
 
-extern int TryDropOrphanedShards(bool waitForLocks);
+extern int TryDropOrphanedResources(bool waitForLocks);
 extern void DropOrphanedShardsInSeparateTransaction(void);
 
 /* Members for cleanup infrastructure */

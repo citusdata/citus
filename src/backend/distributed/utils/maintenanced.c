@@ -627,7 +627,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			TimestampDifferenceExceeds(lastShardCleanTime, GetCurrentTimestamp(),
 									   DeferShardDeleteInterval))
 		{
-			int numberOfDroppedShards = 0;
+			int numberOfDroppedResources = 0;
 
 			InvalidateMetadataSystemCache();
 			StartTransactionCommand();
@@ -646,16 +646,16 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 				lastShardCleanTime = GetCurrentTimestamp();
 
 				bool waitForLocks = false;
-				numberOfDroppedShards = TryDropOrphanedShards(waitForLocks);
+				numberOfDroppedResources = TryDropOrphanedResources(waitForLocks);
 			}
 
 			CommitTransactionCommand();
 
-			if (numberOfDroppedShards > 0)
+			if (numberOfDroppedResources > 0)
 			{
-				ereport(LOG, (errmsg("maintenance daemon dropped %d distributed "
-									 "shards previously marked to be removed",
-									 numberOfDroppedShards)));
+				ereport(LOG, (errmsg("maintenance daemon dropped %d "
+									 "resources previously marked to be removed",
+									 numberOfDroppedResources)));
 			}
 
 			/* make sure we don't wait too long */

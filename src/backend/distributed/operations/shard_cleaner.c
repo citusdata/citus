@@ -93,7 +93,7 @@ static void DeleteCleanupRecordByRecordIdOutsideTransaction(uint64 recordId);
 static bool CleanupRecordExists(uint64 recordId);
 static List * ListCleanupRecords(void);
 static List * ListCleanupRecordsForCurrentOperation(void);
-static int DropOrphanedShardsForCleanup(void);
+static int DropOrphanedResourcesForCleanup(void);
 static int CompareCleanupRecordsByObjectType(const void *leftElement,
 											 const void *rightElement);
 
@@ -158,8 +158,6 @@ isolation_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
  * orphaned resources that are present in the system. These resources are
  * orphaned by previous actions that either failed or marked the resources
  * for deferred cleanup.
- * The UDF only supports dropping shards at the moment but will be extended in
- * near future to clean any type of resource.
  *
  * The function takes no arguments and runs on co-ordinator. It cannot be run in a
  * transaction, because holding the locks it takes for a long time is not good.
@@ -173,7 +171,7 @@ citus_cleanup_orphaned_resources(PG_FUNCTION_ARGS)
 	EnsureCoordinator();
 	PreventInTransactionBlock(true, "citus_cleanup_orphaned_resources");
 
-	int droppedCount = DropOrphanedShardsForCleanup();
+	int droppedCount = DropOrphanedResourcesForCleanup();
 	if (droppedCount > 0)
 	{
 		ereport(NOTICE, (errmsg("cleaned up %d orphaned resources", droppedCount)));
@@ -200,15 +198,15 @@ DropOrphanedShardsInSeparateTransaction(void)
 
 
 /*
- * TryDropOrphanedShards is a wrapper around DropOrphanedShardsForMove and
- * DropOrphanedShardsForCleanup that catches any errors to make it safe to
+ * TryDropOrphanedResources is a wrapper around DropOrphanedShardsForMove and
+ * DropOrphanedResourcesForCleanup that catches any errors to make it safe to
  * use in the maintenance daemon.
  *
  * If dropping any of the shards failed this function returns -1, otherwise it
  * returns the number of dropped shards.
  */
 int
-TryDropOrphanedShards(bool waitForLocks)
+TryDropOrphanedResources(bool waitForLocks)
 {
 	int droppedShardCount = 0;
 	MemoryContext savedContext = CurrentMemoryContext;
@@ -222,7 +220,7 @@ TryDropOrphanedShards(bool waitForLocks)
 	PG_TRY();
 	{
 		droppedShardCount = DropOrphanedShardsForMove(waitForLocks);
-		droppedShardCount += DropOrphanedShardsForCleanup();
+		droppedShardCount += DropOrphanedResourcesForCleanup();
 
 		/*
 		 * Releasing a subtransaction doesn't free its memory context, since the
@@ -250,14 +248,14 @@ TryDropOrphanedShards(bool waitForLocks)
 
 
 /*
- * DropOrphanedShardsForCleanup removes resources that were marked for cleanup by operation.
+ * DropOrphanedResourcesForCleanup removes resources that were marked for cleanup by operation.
  * It does so by trying to take an exclusive lock on the resources. If the lock cannot be
  * obtained it skips the resource and continues with others.
  * The resource that has been skipped will be removed at a later iteration when there are no
  * locks held anymore.
  */
 static int
-DropOrphanedShardsForCleanup()
+DropOrphanedResourcesForCleanup()
 {
 	/* Only runs on Coordinator */
 	if (!IsCoordinator())
@@ -266,18 +264,15 @@ DropOrphanedShardsForCleanup()
 	}
 
 	List *cleanupRecordList = ListCleanupRecords();
+	cleanupRecordList = SortList(cleanupRecordList,
+								 CompareCleanupRecordsByObjectType);
 
-	int removedShardCountForCleanup = 0;
-	int failedShardCountForCleanup = 0;
+	int removedResourceCountForCleanup = 0;
+	int failedResourceCountForCleanup = 0;
 	CleanupRecord *record = NULL;
 
 	foreach_ptr(record, cleanupRecordList)
 	{
-		if (record->objectType != CLEANUP_OBJECT_SHARD_PLACEMENT)
-		{
-			continue;
-		}
-
 		if (!PrimaryNodeForGroup(record->nodeGroupId, NULL))
 		{
 			continue;
@@ -290,7 +285,7 @@ DropOrphanedShardsForCleanup()
 			continue;
 		}
 
-		char *qualifiedTableName = record->objectName;
+		char *resourceName = record->objectName;
 		WorkerNode *workerNode = LookupNodeForGroup(record->nodeGroupId);
 
 		/*
@@ -303,28 +298,28 @@ DropOrphanedShardsForCleanup()
 			continue;
 		}
 
-		if (TryDropShardOutsideTransaction(qualifiedTableName,
-										   workerNode->workerName,
-										   workerNode->workerPort))
+		if (TryDropResourceByCleanupRecordOutsideTransaction(record,
+															 workerNode->workerName,
+															 workerNode->workerPort))
 		{
 			if (record->policy == CLEANUP_DEFERRED_ON_SUCCESS)
 			{
-				ereport(LOG, (errmsg("deferred drop of orphaned shard %s on %s:%d "
+				ereport(LOG, (errmsg("deferred drop of orphaned resource %s on %s:%d "
 									 "completed",
-									 qualifiedTableName,
+									 resourceName,
 									 workerNode->workerName, workerNode->workerPort)));
 			}
 			else
 			{
-				ereport(LOG, (errmsg("cleaned up orphaned shard %s on %s:%d which "
+				ereport(LOG, (errmsg("cleaned up orphaned resource %s on %s:%d which "
 									 "was left behind after a failed operation",
-									 qualifiedTableName,
+									 resourceName,
 									 workerNode->workerName, workerNode->workerPort)));
 			}
 
 			/* delete the cleanup record */
 			DeleteCleanupRecordByRecordId(record->recordId);
-			removedShardCountForCleanup++;
+			removedResourceCountForCleanup++;
 		}
 		else
 		{
@@ -332,18 +327,18 @@ DropOrphanedShardsForCleanup()
 			 * We log failures at the end, since they occur repeatedly
 			 * for a large number of objects.
 			 */
-			failedShardCountForCleanup++;
+			failedResourceCountForCleanup++;
 		}
 	}
 
-	if (failedShardCountForCleanup > 0)
+	if (failedResourceCountForCleanup > 0)
 	{
-		ereport(WARNING, (errmsg("failed to clean up %d orphaned shards out of %d",
-								 failedShardCountForCleanup,
+		ereport(WARNING, (errmsg("failed to clean up %d orphaned resources out of %d",
+								 failedResourceCountForCleanup,
 								 list_length(cleanupRecordList))));
 	}
 
-	return removedShardCountForCleanup;
+	return removedResourceCountForCleanup;
 }
 
 
@@ -868,7 +863,7 @@ TryDropResourceByCleanupRecordOutsideTransaction(CleanupRecord *record,
 			ereport(WARNING, (errmsg(
 								  "Invalid object type %d on failed operation cleanup",
 								  record->objectType)));
-			return true;
+			return false;
 		}
 	}
 
