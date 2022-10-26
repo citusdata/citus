@@ -1043,7 +1043,7 @@ DROP TABLE test_colocated_table_no_rep_identity;
 SELECT isolate_tenant_to_new_shard('test_colocated_table_2', 1, 'CASCADE', shard_transfer_mode => 'auto');
  isolate_tenant_to_new_shard
 ---------------------------------------------------------------------
-                     1230108
+                     1230102
 (1 row)
 
 SELECT count(*) FROM test_colocated_table_2;
@@ -1054,7 +1054,7 @@ SELECT count(*) FROM test_colocated_table_2;
 
 \c - postgres - :master_port
 CALL pg_catalog.citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 10 orphaned resources
+NOTICE:  cleaned up 4 orphaned resources
 \c - postgres - :worker_1_port
 -- show the foreign keys of the main table & its colocated shard on other tables
 SELECT tbl.relname, fk."Constraint", fk."Definition"
@@ -1065,47 +1065,47 @@ ORDER BY 1, 2;
             relname             |                 Constraint                  |                                        Definition
 ---------------------------------------------------------------------
  test_colocated_table_1         | test_colocated_table_1_id_fkey              | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1(id)
- test_colocated_table_1_1230074 | test_colocated_table_1_id_fkey_1230074      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230074(id)
- test_colocated_table_1_1230076 | test_colocated_table_1_id_fkey_1230076      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230076(id)
- test_colocated_table_1_1230078 | test_colocated_table_1_id_fkey_1230078      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230078(id)
- test_colocated_table_1_1230104 | test_colocated_table_1_id_fkey_1230104      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230104(id)
- test_colocated_table_1_1230105 | test_colocated_table_1_id_fkey_1230105      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230105(id)
- test_colocated_table_1_1230106 | test_colocated_table_1_id_fkey_1230106      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230106(id)
+ test_colocated_table_1_1230068 | test_colocated_table_1_id_fkey_1230068      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230068(id)
+ test_colocated_table_1_1230070 | test_colocated_table_1_id_fkey_1230070      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230070(id)
+ test_colocated_table_1_1230072 | test_colocated_table_1_id_fkey_1230072      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230072(id)
+ test_colocated_table_1_1230098 | test_colocated_table_1_id_fkey_1230098      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230098(id)
+ test_colocated_table_1_1230099 | test_colocated_table_1_id_fkey_1230099      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230099(id)
+ test_colocated_table_1_1230100 | test_colocated_table_1_id_fkey_1230100      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230100(id)
  test_colocated_table_2         | test_colocated_table_2_id_fkey              | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1(id)
  test_colocated_table_2         | test_colocated_table_2_value_1_fkey         | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey(id)
- test_colocated_table_2_1230082 | test_colocated_table_2_id_fkey_1230082      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230074(id)
- test_colocated_table_2_1230082 | test_colocated_table_2_value_1_fkey_1230082 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230071(id)
- test_colocated_table_2_1230084 | test_colocated_table_2_id_fkey_1230084      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230076(id)
- test_colocated_table_2_1230084 | test_colocated_table_2_value_1_fkey_1230084 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230071(id)
- test_colocated_table_2_1230086 | test_colocated_table_2_id_fkey_1230086      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230078(id)
- test_colocated_table_2_1230086 | test_colocated_table_2_value_1_fkey_1230086 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230071(id)
- test_colocated_table_2_1230107 | test_colocated_table_2_id_fkey_1230107      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230104(id)
- test_colocated_table_2_1230107 | test_colocated_table_2_value_1_fkey_1230107 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230071(id)
- test_colocated_table_2_1230108 | test_colocated_table_2_id_fkey_1230108      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230105(id)
- test_colocated_table_2_1230108 | test_colocated_table_2_value_1_fkey_1230108 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230071(id)
- test_colocated_table_2_1230109 | test_colocated_table_2_id_fkey_1230109      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230106(id)
- test_colocated_table_2_1230109 | test_colocated_table_2_value_1_fkey_1230109 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230071(id)
+ test_colocated_table_2_1230076 | test_colocated_table_2_id_fkey_1230076      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230068(id)
+ test_colocated_table_2_1230076 | test_colocated_table_2_value_1_fkey_1230076 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230065(id)
+ test_colocated_table_2_1230078 | test_colocated_table_2_id_fkey_1230078      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230070(id)
+ test_colocated_table_2_1230078 | test_colocated_table_2_value_1_fkey_1230078 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230065(id)
+ test_colocated_table_2_1230080 | test_colocated_table_2_id_fkey_1230080      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230072(id)
+ test_colocated_table_2_1230080 | test_colocated_table_2_value_1_fkey_1230080 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230065(id)
+ test_colocated_table_2_1230101 | test_colocated_table_2_id_fkey_1230101      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230098(id)
+ test_colocated_table_2_1230101 | test_colocated_table_2_value_1_fkey_1230101 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230065(id)
+ test_colocated_table_2_1230102 | test_colocated_table_2_id_fkey_1230102      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230099(id)
+ test_colocated_table_2_1230102 | test_colocated_table_2_value_1_fkey_1230102 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230065(id)
+ test_colocated_table_2_1230103 | test_colocated_table_2_id_fkey_1230103      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230100(id)
+ test_colocated_table_2_1230103 | test_colocated_table_2_value_1_fkey_1230103 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230065(id)
  test_colocated_table_3         | test_colocated_table_3_id_fkey              | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1(id)
  test_colocated_table_3         | test_colocated_table_3_id_fkey1             | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2(id)
  test_colocated_table_3         | test_colocated_table_3_value_1_fkey         | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey(id)
- test_colocated_table_3_1230090 | test_colocated_table_3_id_fkey1_1230090     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230082(id)
- test_colocated_table_3_1230090 | test_colocated_table_3_id_fkey_1230090      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230074(id)
- test_colocated_table_3_1230090 | test_colocated_table_3_value_1_fkey_1230090 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230071(id)
- test_colocated_table_3_1230092 | test_colocated_table_3_id_fkey1_1230092     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230084(id)
- test_colocated_table_3_1230092 | test_colocated_table_3_id_fkey_1230092      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230076(id)
- test_colocated_table_3_1230092 | test_colocated_table_3_value_1_fkey_1230092 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230071(id)
- test_colocated_table_3_1230094 | test_colocated_table_3_id_fkey1_1230094     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230086(id)
- test_colocated_table_3_1230094 | test_colocated_table_3_id_fkey_1230094      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230078(id)
- test_colocated_table_3_1230094 | test_colocated_table_3_value_1_fkey_1230094 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230071(id)
- test_colocated_table_3_1230110 | test_colocated_table_3_id_fkey1_1230110     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230107(id)
- test_colocated_table_3_1230110 | test_colocated_table_3_id_fkey_1230110      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230104(id)
- test_colocated_table_3_1230110 | test_colocated_table_3_value_1_fkey_1230110 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230071(id)
- test_colocated_table_3_1230111 | test_colocated_table_3_id_fkey1_1230111     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230108(id)
- test_colocated_table_3_1230111 | test_colocated_table_3_id_fkey_1230111      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230105(id)
- test_colocated_table_3_1230111 | test_colocated_table_3_value_1_fkey_1230111 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230071(id)
- test_colocated_table_3_1230112 | test_colocated_table_3_id_fkey1_1230112     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230109(id)
- test_colocated_table_3_1230112 | test_colocated_table_3_id_fkey_1230112      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230106(id)
- test_colocated_table_3_1230112 | test_colocated_table_3_value_1_fkey_1230112 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230071(id)
+ test_colocated_table_3_1230084 | test_colocated_table_3_id_fkey1_1230084     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230076(id)
+ test_colocated_table_3_1230084 | test_colocated_table_3_id_fkey_1230084      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230068(id)
+ test_colocated_table_3_1230084 | test_colocated_table_3_value_1_fkey_1230084 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230065(id)
+ test_colocated_table_3_1230086 | test_colocated_table_3_id_fkey1_1230086     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230078(id)
+ test_colocated_table_3_1230086 | test_colocated_table_3_id_fkey_1230086      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230070(id)
+ test_colocated_table_3_1230086 | test_colocated_table_3_value_1_fkey_1230086 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230065(id)
+ test_colocated_table_3_1230088 | test_colocated_table_3_id_fkey1_1230088     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230080(id)
+ test_colocated_table_3_1230088 | test_colocated_table_3_id_fkey_1230088      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230072(id)
+ test_colocated_table_3_1230088 | test_colocated_table_3_value_1_fkey_1230088 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230065(id)
+ test_colocated_table_3_1230104 | test_colocated_table_3_id_fkey1_1230104     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230101(id)
+ test_colocated_table_3_1230104 | test_colocated_table_3_id_fkey_1230104      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230098(id)
+ test_colocated_table_3_1230104 | test_colocated_table_3_value_1_fkey_1230104 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230065(id)
+ test_colocated_table_3_1230105 | test_colocated_table_3_id_fkey1_1230105     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230102(id)
+ test_colocated_table_3_1230105 | test_colocated_table_3_id_fkey_1230105      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230099(id)
+ test_colocated_table_3_1230105 | test_colocated_table_3_value_1_fkey_1230105 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230065(id)
+ test_colocated_table_3_1230106 | test_colocated_table_3_id_fkey1_1230106     | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_2_1230103(id)
+ test_colocated_table_3_1230106 | test_colocated_table_3_id_fkey_1230106      | FOREIGN KEY (id) REFERENCES "Tenant Isolation".test_colocated_table_1_1230100(id)
+ test_colocated_table_3_1230106 | test_colocated_table_3_value_1_fkey_1230106 | FOREIGN KEY (value_1) REFERENCES "Tenant Isolation".test_reference_table_fkey_1230065(id)
 (42 rows)
 
 \c - mx_isolation_role_ent - :master_port
