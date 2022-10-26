@@ -65,14 +65,6 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 -- SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* ENABLE").cancel(' || :pid || ')');
 -- SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 
--- failure on dropping subscription
-SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* (ENABLE|DISABLE)").kill()');
-SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
--- try again
-SELECT citus.mitmproxy('conn.allow()');
-SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-SELECT master_move_shard_placement(101, 'localhost', :worker_2_proxy_port, 'localhost', :worker_1_port);
-
 -- failure on polling last write-ahead log location reported to origin WAL sender
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT min\(latest_end_lsn").kill()');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
@@ -81,22 +73,21 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT min\(latest_end_lsn").cancel(' || :pid || ')');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 
--- failure on disabling subscription (right before dropping it)
-SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").kill()');
-SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-
 -- cancellation on disabling subscription (right before dropping it)
 SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").cancel(' || :pid || ')');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 
--- failure on dropping subscription
-SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").kill()');
-SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+CALL citus_cleanup_orphaned_resources();
 
 -- cancellation on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").cancel(' || :pid || ')');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+CALL citus_cleanup_orphaned_resources();
 
 -- failure on creating the primary key
 SELECT citus.mitmproxy('conn.onQuery(query="t_pkey").kill()');
@@ -104,33 +95,6 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 
 -- cancellation on creating the primary key
 SELECT citus.mitmproxy('conn.onQuery(query="t_pkey").cancel(' || :pid || ')');
-SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-
--- failure on create index
-SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
-SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-
-SELECT citus.mitmproxy('conn.allow()');
--- lets create few more indexes and fail with both
--- parallel mode and sequential mode
-CREATE INDEX index_failure_2 ON t(id);
-CREATE INDEX index_failure_3 ON t(id);
-CREATE INDEX index_failure_4 ON t(id);
-CREATE INDEX index_failure_5 ON t(id);
-
--- failure on the third create index
-ALTER SYSTEM SET citus.max_adaptive_executor_pool_size TO 1;
-SELECT pg_reload_conf();
-
-SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
-SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-
-SELECT citus.mitmproxy('conn.allow()');
-
--- failure on parallel create index
-ALTER SYSTEM RESET citus.max_adaptive_executor_pool_size;
-SELECT pg_reload_conf();
-SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 
 -- Verify that the shard is not moved and the number of rows are still 100k
