@@ -17,6 +17,31 @@
 
 #include "distributed/metadata_utility.h"
 
+/*
+ * BackgroundMonitorExecutionStates encodes execution states in FSM for Background task monitor
+ */
+typedef enum BackgroundMonitorExecutionStates
+{
+	TryToExecuteNewTask,
+	NoReadyTaskFound,
+	WorkerNotFound,
+	WorkerFound,
+	AssignTaskToWorker,
+	WorkerAllocationFailure,
+	WorkerAllocationSuccess,
+	CitusMaxTaskWorkerReached,
+	TaskAssigned,
+	TaskDisappearedOrCancelled,
+	TryConsumeTaskWorker,
+	TaskCommandError,
+	TaskWouldBlock,
+	TaskDetached,
+	TaskFinished
+} BackgroundMonitorExecutionStates;
+
+/*
+ * BackgroundExecutorHashEntry hash table entry to refer existing task executors
+ */
 typedef struct BackgroundExecutorHashEntry
 {
 	/* hash key must be the first to hash correctly */
