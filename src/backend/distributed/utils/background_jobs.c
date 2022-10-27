@@ -560,6 +560,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 											"executors: %ld", currentExecutorCount)));
 
 				hash_search(backgroundExecutorHandles, &task->taskid, HASH_REMOVE, NULL);
+				currentExecutorCount--;
 
 				const long delay_ms = 1000;
 				(void) WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
