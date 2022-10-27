@@ -34,10 +34,10 @@ typedef enum BackgroundMonitorExecutionStates
 	TaskCheckStillExists,
 	TaskCancelled,
 	TryConsumeTaskWorker,
-	TaskCommandError,
+	TaskHadError,
 	TaskWouldBlock,
-	TaskDetached,
-	TaskFinished
+	TaskSucceeded,
+	TaskEnded
 } BackgroundMonitorExecutionStates;
 
 /*

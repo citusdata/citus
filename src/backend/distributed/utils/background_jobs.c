@@ -719,7 +719,19 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 				else
 				{
 					Assert(prevMonitorExecutionState == TryConsumeTaskWorker);
-					monitorExecutionState = TaskCommandError;
+					if (hadError)
+					{
+						monitorExecutionState = TaskHadError;
+					}
+					else if (mq_res == SHM_MQ_WOULD_BLOCK)
+					{
+						monitorExecutionState = TaskWouldBlock;
+					}
+					else
+					{
+						Assert(mq_res == SHM_MQ_DETACHED);
+						monitorExecutionState = TaskSucceeded;
+					}
 				}
 
 				prevMonitorExecutionState = TaskCheckStillExists;
@@ -778,101 +790,84 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 				break;
 			}
 
-			case TaskCommandError:
+			case TaskHadError:
 			{
-				if (hadError)
+				/*
+				 * When we had an error we need to decide if we want to retry (keep the
+				 * runnable state), or move to error state
+				 */
+				if (!task->retry_count)
 				{
-					/*
-					 * When we had an error we need to decide if we want to retry (keep the
-					 * runnable state), or move to error state
-					 */
-					if (!task->retry_count)
-					{
-						SET_NULLABLE_FIELD(task, retry_count, 1);
-					}
-					else
-					{
-						(*task->retry_count)++;
-					}
-
-					/*
-					 * based on the retry count we either transition the task to its error
-					 * state, or we calculate a new backoff time for future execution.
-					 */
-					int64 delayMs = CalculateBackoffDelay(*(task->retry_count));
-					if (delayMs < 0)
-					{
-						task->status = BACKGROUND_TASK_STATUS_ERROR;
-						UNSET_NULLABLE_FIELD(task, not_before);
-
-						hash_search(backgroundExecutorHandles, &task->taskid, HASH_REMOVE,
-									NULL);
-						TerminateBackgroundWorker(handle);
-						dsm_detach(seg);
-						currentExecutorCount--;
-					}
-					else
-					{
-						TimestampTz notBefore = TimestampTzPlusMilliseconds(
-							GetCurrentTimestamp(), delayMs);
-						SET_NULLABLE_FIELD(task, not_before, notBefore);
-
-						task->status = BACKGROUND_TASK_STATUS_RUNNABLE;
-					}
-
-					monitorExecutionState = TaskFinished;
+					SET_NULLABLE_FIELD(task, retry_count, 1);
 				}
 				else
 				{
-					monitorExecutionState = TaskWouldBlock;
+					(*task->retry_count)++;
 				}
 
-				prevMonitorExecutionState = TaskCommandError;
+				/*
+				 * based on the retry count we either transition the task to its error
+				 * state, or we calculate a new backoff time for future execution.
+				 */
+				int64 delayMs = CalculateBackoffDelay(*(task->retry_count));
+				if (delayMs < 0)
+				{
+					task->status = BACKGROUND_TASK_STATUS_ERROR;
+					UNSET_NULLABLE_FIELD(task, not_before);
+
+					hash_search(backgroundExecutorHandles, &task->taskid, HASH_REMOVE,
+								NULL);
+					TerminateBackgroundWorker(handle);
+					dsm_detach(seg);
+					currentExecutorCount--;
+				}
+				else
+				{
+					TimestampTz notBefore = TimestampTzPlusMilliseconds(
+						GetCurrentTimestamp(), delayMs);
+					SET_NULLABLE_FIELD(task, not_before, notBefore);
+
+					task->status = BACKGROUND_TASK_STATUS_RUNNABLE;
+				}
+
+				prevMonitorExecutionState = TaskHadError;
+				monitorExecutionState = TaskEnded;
 				break;
 			}
 
 			case TaskWouldBlock:
 			{
-				if (mq_res == SHM_MQ_WOULD_BLOCK)
-				{
-					/*
-					 * still running the task
-					 */
-					MemoryContextSwitchTo(TopTransactionContext);
-					PopActiveSnapshot();
-					CommitTransactionCommand();
-					MemoryContextSwitchTo(backgroundTaskContext);
+				/*
+				 * still running the task
+				 */
+				MemoryContextSwitchTo(TopTransactionContext);
+				PopActiveSnapshot();
+				CommitTransactionCommand();
+				MemoryContextSwitchTo(backgroundTaskContext);
 
-					/* lower cpu consumption on EWOULD_BLOCK on queue */
-					const long delay_ms = 2;
-					(void) WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT |
-									 WL_EXIT_ON_PM_DEATH,
-									 delay_ms, WAIT_EVENT_PG_SLEEP);
-					ResetLatch(MyLatch);
-					CHECK_FOR_INTERRUPTS();
-
-					monitorExecutionState = TryToExecuteNewTask;
-				}
-				else
-				{
-					monitorExecutionState = TaskDetached;
-				}
+				/* lower cpu consumption on EWOULD_BLOCK on queue */
+				const long delay_ms = 2;
+				(void) WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT |
+								 WL_EXIT_ON_PM_DEATH,
+								 delay_ms, WAIT_EVENT_PG_SLEEP);
+				ResetLatch(MyLatch);
+				CHECK_FOR_INTERRUPTS();
 
 				prevMonitorExecutionState = TaskWouldBlock;
+				monitorExecutionState = TryToExecuteNewTask;
 				break;
 			}
 
-			case TaskDetached:
+			case TaskSucceeded:
 			{
-				Assert(mq_res == SHM_MQ_DETACHED);
 				task->status = BACKGROUND_TASK_STATUS_DONE;
 
-				prevMonitorExecutionState = TaskDetached;
-				monitorExecutionState = TaskFinished;
+				prevMonitorExecutionState = TaskSucceeded;
+				monitorExecutionState = TaskEnded;
 				break;
 			}
 
-			case TaskFinished:
+			case TaskEnded:
 			{
 				UNSET_NULLABLE_FIELD(task, pid);
 				task->message = message->data;
@@ -886,7 +881,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 				CommitTransactionCommand();
 				MemoryContextSwitchTo(backgroundTaskContext);
 
-				prevMonitorExecutionState = TaskFinished;
+				prevMonitorExecutionState = TaskEnded;
 				monitorExecutionState = TryToExecuteNewTask;
 				break;
 			}

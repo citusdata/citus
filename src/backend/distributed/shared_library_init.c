@@ -1697,10 +1697,10 @@ RegisterCitusConfigVariables(void)
 			"background tasks"),
 		gettext_noop(
 			"Controls the maximum number of parallel task executors the task monitor "
-			"can create for scheduled background tasks. Note that the value is effective "
-			"until it is set 'max_worker_processes' postgres parameter . It is also not "
-			"guaranteed to have exactly specified number of parallel task executors because "
-			"total background worker count is shared by all background workers. The value "
+			"can create for scheduled background tasks. Note that the value is not effective "
+			"if it is set a value higher than 'max_worker_processes' postgres parameter . It is "
+			"also not guaranteed to have exactly specified number of parallel task executors "
+			"because total background worker count is shared by all background workers. The value "
 			"represents the possible maximum number of task executors."),
 		&MaxBackgroundTaskExecutors,
 		4, 1, 8,
