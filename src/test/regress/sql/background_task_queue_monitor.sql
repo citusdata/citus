@@ -103,11 +103,31 @@ INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id3, $job$ SE
 
 SELECT pg_sleep(2); -- we assume this is enough time for all tasks to be in running status except the last one due to parallel worker limit
 
--- show that last task is not running but ready to run(runnable)
-SELECT task_id, status FROM pg_dist_background_task WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4, :task_id5) ORDER BY task_id;
+SELECT task_id, status FROM pg_dist_background_task
+    WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4, :task_id5) 
+    ORDER BY task_id; -- show that last task is not running but ready to run(runnable)
+
 SELECT citus_job_cancel(:job_id2); -- when a job with 1 task is cancelled, the last runnable task will be running
 SELECT citus_job_wait(:job_id3, desired_status => 'running');
-SELECT task_id, status FROM pg_dist_background_task WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4, :task_id5) ORDER BY task_id;
+SELECT task_id, status FROM pg_dist_background_task 
+    WHERE task_id IN (:task_id1, :task_id2, :task_id3, :task_id4, :task_id5) 
+    ORDER BY task_id;  -- show that last task is running
+
+SELECT citus_job_cancel(:job_id1);
+SELECT citus_job_cancel(:job_id3);
+
+-- verify that task is not starved by currently long running task
+INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify max parallel background execution') RETURNING job_id AS job_id1 \gset
+INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id1, $job$ SELECT pg_sleep(5000); $job$) RETURNING task_id AS task_id1 \gset
+INSERT INTO pg_dist_background_job (job_type, description) VALUES ('test_job', 'simple test to verify max parallel background execution') RETURNING job_id AS job_id2 \gset
+INSERT INTO pg_dist_background_task (job_id, command) VALUES (:job_id2, $job$ SELECT 1; $job$) RETURNING task_id AS task_id2 \gset
+
+SELECT citus_job_wait(:job_id1, desired_status => 'running');
+SELECT citus_job_wait(:job_id2, desired_status => 'finished');
+SELECT task_id, status FROM pg_dist_background_task 
+    WHERE task_id IN (:task_id1, :task_id2) 
+    ORDER BY task_id;  -- show that last task is finished without starvation
+SELECT citus_job_cancel(:job_id1);
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA background_task_queue_monitor CASCADE;

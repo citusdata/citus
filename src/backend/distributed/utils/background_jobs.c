@@ -561,6 +561,12 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 				hash_search(backgroundExecutorHandles, &task->taskid, HASH_REMOVE, NULL);
 
+				const long delay_ms = 1000;
+				(void) WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
+								 delay_ms, WAIT_EVENT_PG_SLEEP);
+				ResetLatch(MyLatch);
+				CHECK_FOR_INTERRUPTS();
+
 				prevMonitorExecutionState = CitusMaxTaskWorkerReached;
 				monitorExecutionState = TryToExecuteNewTask;
 				break;
