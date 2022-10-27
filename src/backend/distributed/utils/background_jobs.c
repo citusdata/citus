@@ -659,11 +659,38 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 									 task->jobid, task->taskid)));
 
 				prevMonitorExecutionState = WorkerAllocationSuccess;
-				monitorExecutionState = TaskDisappearedOrCancelled;
+				monitorExecutionState = TaskCheckStillExists;
 				break;
 			}
 
-			case TaskDisappearedOrCancelled:
+			case TaskCancelled:
+			{
+				task->status = BACKGROUND_TASK_STATUS_CANCELLED;
+				task->message = (message) ? message->data : NULL;
+				UpdateBackgroundTask(task);
+				UpdateBackgroundJob(task->jobid);
+
+				MemoryContextSwitchTo(TopTransactionContext);
+				PopActiveSnapshot();
+				CommitTransactionCommand();
+				MemoryContextSwitchTo(backgroundTaskContext);
+
+				/*
+				 * Terminate backend and release shared memory to not leak these resources
+				 * across iterations. Also, remove handle from the map
+				 */
+				hash_search(backgroundExecutorHandles, &task->taskid, HASH_REMOVE,
+							NULL);
+				TerminateBackgroundWorker(handle);
+				dsm_detach(seg);
+				currentExecutorCount--;
+
+				prevMonitorExecutionState = TaskCancelled;
+				monitorExecutionState = TryToExecuteNewTask;
+				break;
+			}
+
+			case TaskCheckStillExists:
 			{
 				StartTransactionCommand();
 				PushActiveSnapshot(GetTransactionSnapshot());
@@ -683,26 +710,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 
 				if (!task || task->status == BACKGROUND_TASK_STATUS_CANCELLING)
 				{
-					task->status = BACKGROUND_TASK_STATUS_CANCELLED;
-					UpdateBackgroundTask(task);
-					UpdateBackgroundJob(task->jobid);
-
-					MemoryContextSwitchTo(TopTransactionContext);
-					PopActiveSnapshot();
-					CommitTransactionCommand();
-					MemoryContextSwitchTo(backgroundTaskContext);
-
-					/*
-					 * Terminate backend and release shared memory to not leak these resources
-					 * across iterations. Also, remove handle from the map
-					 */
-					hash_search(backgroundExecutorHandles, &task->taskid, HASH_REMOVE,
-								NULL);
-					TerminateBackgroundWorker(handle);
-					dsm_detach(seg);
-					currentExecutorCount--;
-
-					monitorExecutionState = TryToExecuteNewTask;
+					monitorExecutionState = TryConsumeTaskWorker;
 				}
 				else if (prevMonitorExecutionState == WorkerAllocationSuccess)
 				{
@@ -714,7 +722,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 					monitorExecutionState = TaskCommandError;
 				}
 
-				prevMonitorExecutionState = TaskDisappearedOrCancelled;
+				prevMonitorExecutionState = TaskCheckStillExists;
 				break;
 			}
 
@@ -756,8 +764,17 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 				 */
 				mq_res = ConsumeTaskWorkerOutput(responseq, message, &hadError);
 
+				if (prevMonitorExecutionState == TaskCheckStillExists)
+				{
+					monitorExecutionState = TaskCancelled;
+				}
+				else
+				{
+					Assert(prevMonitorExecutionState == TaskAssigned);
+					monitorExecutionState = TaskCheckStillExists;
+				}
+
 				prevMonitorExecutionState = TryConsumeTaskWorker;
-				monitorExecutionState = TaskDisappearedOrCancelled;
 				break;
 			}
 
