@@ -31,9 +31,6 @@
 #define MAX_LOGICAL ((1LU << LOGICAL_BITS) - 1)
 #define MAX_COUNTER LOGICAL_MASK
 
-#define GET_LOGICAL(x) ((x) >> COUNTER_BITS)
-#define GET_COUNTER(x) ((x) & LOGICAL_MASK)
-
 extern bool EnableClusterClock;
 
 extern void LogicalClockShmemInit(void);
