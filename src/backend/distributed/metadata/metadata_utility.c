@@ -3375,35 +3375,23 @@ BackgroundTaskReadyToRun(BackgroundTask *task)
 
 
 /*
- * GetNextReadyBackgroundTask returns a cancelling, runnable or running task to be
- * run by task queue monitor. It will try to find the next task in round-robin fashion
- * so that tasks will not starve to wait for their excecution. When a task is returned,
- * it has been checked for all the preconditions to hold.
+ * GetRunnableBackgroundTask returns the first candidate for a task to be run. When a task
+ * is returned it has been checked for all the preconditions to hold.
  *
  * That means, if there is no task returned the background worker should close and let the
  * maintenance daemon start a new background tasks queue monitor once task become
  * available.
  */
 BackgroundTask *
-GetNextReadyBackgroundTask(int64 lastMonitoredTaskId)
+GetRunnableBackgroundTask(void)
 {
 	Relation pgDistBackgroundTasks =
 		table_open(DistBackgroundTaskRelationId(), ExclusiveLock);
 
-	/*
-	 * Ordering of status is important.
-	 * 1) We should change Cancelling status to Cancelled,
-	 * 2) We should then select runnable or running tasks.
-	 */
 	BackgroundTaskStatus taskStatus[] = {
-		BACKGROUND_TASK_STATUS_CANCELLING,
-		BACKGROUND_TASK_STATUS_RUNNABLE,
-		BACKGROUND_TASK_STATUS_RUNNING
+		BACKGROUND_TASK_STATUS_RUNNABLE
 	};
 
-	BackgroundTask *firstReadyTask = NULL;
-	BackgroundTask *nextReadyTask = NULL;
-	int64 nextReadyTaskId = INT64_MAX;
 	BackgroundTask *task = NULL;
 	for (int i = 0; !task && i < sizeof(taskStatus) / sizeof(taskStatus[0]); i++)
 	{
@@ -3429,16 +3417,8 @@ GetNextReadyBackgroundTask(int64 lastMonitoredTaskId)
 			task = DeformBackgroundTaskHeapTuple(tupleDescriptor, taskTuple);
 			if (BackgroundTaskReadyToRun(task))
 			{
-				if (firstReadyTask == NULL)
-				{
-					firstReadyTask = task;
-				}
-
-				if (task->taskid > lastMonitoredTaskId && task->taskid < nextReadyTaskId)
-				{
-					nextReadyTask = task;
-					nextReadyTaskId = task->taskid;
-				}
+				/* found task, close table and return */
+				break;
 			}
 			task = NULL;
 		}
@@ -3448,19 +3428,7 @@ GetNextReadyBackgroundTask(int64 lastMonitoredTaskId)
 
 	table_close(pgDistBackgroundTasks, NoLock);
 
-	if (nextReadyTask)
-	{
-		/* we return next ready task */
-		return nextReadyTask;
-	}
-	else if (firstReadyTask)
-	{
-		/* we return to the beginning of the ready task list */
-		return firstReadyTask;
-	}
-
-	/* No ready task found */
-	return NULL;
+	return task;
 }
 
 
