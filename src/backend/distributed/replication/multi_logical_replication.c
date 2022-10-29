@@ -1340,10 +1340,6 @@ CreatePublications(MultiConnection *connection,
 			prefixWithComma = true;
 		}
 
-		ExecuteCriticalRemoteCommand(connection, createPublicationCommand->data);
-		pfree(createPublicationCommand->data);
-		pfree(createPublicationCommand);
-
 		WorkerNode *worker = FindWorkerNode(connection->hostname,
 											connection->port);
 		CleanupPolicy policy = CLEANUP_ALWAYS;
@@ -1351,6 +1347,10 @@ CreatePublications(MultiConnection *connection,
 											entry->name,
 											worker->groupId,
 											policy);
+
+		ExecuteCriticalRemoteCommand(connection, createPublicationCommand->data);
+		pfree(createPublicationCommand->data);
+		pfree(createPublicationCommand);
 	}
 }
 
@@ -1439,6 +1439,14 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 	{
 		ReplicationSlotInfo *replicationSlot = target->replicationSlot;
 
+		WorkerNode *worker = FindWorkerNode(sourceConnection->hostname,
+											sourceConnection->port);
+		CleanupPolicy policy = CLEANUP_ALWAYS;
+		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_REPLICATION_SLOT,
+											replicationSlot->name,
+											worker->groupId,
+											policy);
+
 		if (!firstReplicationSlot)
 		{
 			firstReplicationSlot = replicationSlot;
@@ -1456,14 +1464,6 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 						 quote_literal_cstr(firstReplicationSlot->name),
 						 quote_literal_cstr(replicationSlot->name)));
 		}
-
-		WorkerNode *worker = FindWorkerNode(sourceConnection->hostname,
-											sourceConnection->port);
-		CleanupPolicy policy = CLEANUP_ALWAYS;
-		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_REPLICATION_SLOT,
-											replicationSlot->name,
-											worker->groupId,
-											policy);
 	}
 	return snapshot;
 }
