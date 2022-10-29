@@ -2113,7 +2113,7 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomIntVariable(
 		"citus.shard_count",
-		gettext_noop("Sets the number of shards for a new hash-partitioned table"
+		gettext_noop("Sets the number of shards for a new hash-partitioned table "
 					 "created with create_distributed_table()."),
 		NULL,
 		&ShardCount,
