@@ -32,13 +32,15 @@ SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_proxy_
 CREATE TABLE table_to_split(id int PRIMARY KEY, int_data int, data text);
 SELECT create_distributed_table('table_to_split', 'id');
 
---1. Failure while creating publications
-    SELECT citus.mitmproxy('conn.onQuery(query="CREATE PUBLICATION .* FOR TABLE").killall()');
+--1. Cancel while creating publications
+    SELECT citus.mitmproxy('conn.onQuery(query="CREATE PUBLICATION .* FOR TABLE").cancel(' || pg_backend_pid() || ')');
     SELECT pg_catalog.citus_split_shard_by_split_points(
         8981000,
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
+
+    -- show all records have been cleanup by FinalizeOperationNeedingCleanupOnFailure
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
 
@@ -80,7 +82,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SET citus.next_operation_id TO 777;
     SET citus.next_cleanup_record_id TO 11;
 
-    SELECT citus.mitmproxy('conn.onQuery(query="SELECT \* FROM pg_catalog.worker_split_shard_replication_setup\(.*").killall()');
+    SELECT citus.mitmproxy('conn.onQuery(query="SELECT \* FROM pg_catalog.worker_split_shard_replication_setup\(.*").cancel(' || pg_backend_pid() || ')');
     SELECT pg_catalog.citus_split_shard_by_split_points(
         8981000,
         ARRAY['-100000'],
@@ -126,7 +128,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SET citus.next_operation_id TO 777;
     SET citus.next_cleanup_record_id TO 11;
 
-    SELECT citus.mitmproxy('conn.onQuery(query="CREATE_REPLICATION_SLOT .* LOGICAL .* EXPORT_SNAPSHOT.*").killall()');
+    SELECT citus.mitmproxy('conn.onQuery(query="CREATE_REPLICATION_SLOT .* LOGICAL .* EXPORT_SNAPSHOT.*").cancel(' || pg_backend_pid() || ')');
     SELECT pg_catalog.citus_split_shard_by_split_points(
         8981000,
         ARRAY['-100000'],
@@ -172,7 +174,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SET citus.next_operation_id TO 777;
     SET citus.next_cleanup_record_id TO 11;
 
-    SELECT citus.mitmproxy('conn.onQuery(query="ALTER SUBSCRIPTION .* ENABLE").killall()');
+    SELECT citus.mitmproxy('conn.onQuery(query="ALTER SUBSCRIPTION .* ENABLE").cancel(' || pg_backend_pid() || ')');
     SELECT pg_catalog.citus_split_shard_by_split_points(
         8981000,
         ARRAY['-100000'],
@@ -218,7 +220,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SET citus.next_operation_id TO 777;
     SET citus.next_cleanup_record_id TO 11;
 
-    SELECT citus.mitmproxy('conn.onQuery(query="^SELECT min\(latest_end_lsn").killall()');
+    SELECT citus.mitmproxy('conn.onQuery(query="^SELECT min\(latest_end_lsn").cancel(' || pg_backend_pid() || ')');
     SELECT pg_catalog.citus_split_shard_by_split_points(
         8981000,
         ARRAY['-100000'],
