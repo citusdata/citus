@@ -128,6 +128,7 @@ static void ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum val
 static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards);
 static void RemoveOldShardPlacementForNodeGroup(int groupId);
 static int FindCoordinatorNodeId(void);
+static WorkerNode * FindNodeAnyClusterByNodeId(uint32 nodeId);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_set_coordinator_host);
@@ -1343,7 +1344,7 @@ citus_update_node(PG_FUNCTION_ARGS)
 		}
 	}
 
-	WorkerNode *workerNode = LookupNodeByNodeId(nodeId);
+	WorkerNode *workerNode = FindNodeAnyClusterByNodeId(nodeId);
 	if (workerNode == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_NO_DATA_FOUND),
@@ -1620,8 +1621,7 @@ citus_nodename_for_nodeid(PG_FUNCTION_ARGS)
 
 	int nodeId = PG_GETARG_INT32(0);
 
-	bool missingOk = true;
-	WorkerNode *node = FindNodeWithNodeId(nodeId, missingOk);
+	WorkerNode *node = FindNodeAnyClusterByNodeId(nodeId);
 
 	if (node == NULL)
 	{
@@ -1642,8 +1642,7 @@ citus_nodeport_for_nodeid(PG_FUNCTION_ARGS)
 
 	int nodeId = PG_GETARG_INT32(0);
 
-	bool missingOk = true;
-	WorkerNode *node = FindNodeWithNodeId(nodeId, missingOk);
+	WorkerNode *node = FindNodeAnyClusterByNodeId(nodeId);
 
 	if (node == NULL)
 	{
@@ -1763,6 +1762,29 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
 
 	table_close(pgDistNode, NoLock);
 	return workerNode;
+}
+
+
+/*
+ * FindNodeAnyClusterByNodeId searches pg_dist_node and returns the node with
+ * the nodeId. If the node can't be found returns NULL.
+ */
+static WorkerNode *
+FindNodeAnyClusterByNodeId(uint32 nodeId)
+{
+	bool includeNodesFromOtherClusters = true;
+	List *nodeList = ReadDistNode(includeNodesFromOtherClusters);
+	WorkerNode *node = NULL;
+
+	foreach_ptr(node, nodeList)
+	{
+		if (node->nodeId == nodeId)
+		{
+			return node;
+		}
+	}
+
+	return NULL;
 }
 
 
