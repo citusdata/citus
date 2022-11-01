@@ -1420,7 +1420,7 @@ citus_update_node(PG_FUNCTION_ARGS)
 	UpdateNodeLocation(nodeId, newNodeNameString, newNodePort);
 
 	/* we should be able to find the new node from the metadata */
-	workerNode = FindWorkerNode(newNodeNameString, newNodePort);
+	workerNode = FindWorkerNodeAnyCluster(newNodeNameString, newNodePort);
 	Assert(workerNode->nodeId == nodeId);
 
 	/*

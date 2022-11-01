@@ -969,10 +969,34 @@ SELECT citus_update_node(:worker_1_node, 'localhost', 9991);
 
 (1 row)
 
+SELECT citus_nodename_for_nodeid(:worker_1_node);
+ citus_nodename_for_nodeid
+---------------------------------------------------------------------
+ localhost
+(1 row)
+
+SELECT citus_nodeport_for_nodeid(:worker_1_node);
+ citus_nodeport_for_nodeid
+---------------------------------------------------------------------
+                      9991
+(1 row)
+
 SELECT citus_update_node(:worker_1_node, 'localhost', 9992);
  citus_update_node
 ---------------------------------------------------------------------
 
+(1 row)
+
+SELECT citus_nodename_for_nodeid(:worker_1_node);
+ citus_nodename_for_nodeid
+---------------------------------------------------------------------
+ localhost
+(1 row)
+
+SELECT citus_nodeport_for_nodeid(:worker_1_node);
+ citus_nodeport_for_nodeid
+---------------------------------------------------------------------
+                      9992
 (1 row)
 
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
