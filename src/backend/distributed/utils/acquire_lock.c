@@ -211,26 +211,20 @@ LockAcquireHelperMain(Datum main_arg)
 	BackgroundWorkerInitializeConnectionByOid(args->DatabaseId, InvalidOid, 0);
 
 	/*
-	 * The query below does a self join on pg_locks to find backends that are granted a
-	 * lock our target backend (backendPid) is waiting for. Once it found such a backend
-	 * it terminates the backend with pg_terminate_pid.
+	 * The query below sends a SIGTERM signal to conflicting backends using
+	 * pg_terminate_backend() function.
 	 *
-	 * The result is are rows of pid,bool indicating backend that is terminated and the
-	 * success of the termination. These will be logged accordingly below for an
-	 * administrator to correlate in the logs with the termination message.
+	 * The result is are rows of pid,bool indicating a conflicting backend and
+	 * whether the SIGTERM was successfully delivered. These will be logged
+	 * accordingly below for an administrator to correlate in the logs with the
+	 * termination message.
 	 */
 	initStringInfo(&sql);
 	appendStringInfo(&sql,
-					 "SELECT \n"
-					 "    DISTINCT conflicting.pid,\n"
-					 "    pg_terminate_backend(conflicting.pid)\n"
-					 "  FROM pg_locks AS blocked\n"
-					 "       JOIN pg_locks AS conflicting\n"
-					 "         ON (conflicting.database = blocked.database\n"
-					 "             AND conflicting.objid = blocked.objid)\n"
-					 " WHERE conflicting.granted = true\n"
-					 "   AND blocked.granted = false\n"
-					 "   AND blocked.pid = $1;");
+					 "WITH pids AS (\n"
+					 "  SELECT DISTINCT pid\n"
+					 "  FROM pg_catalog.unnest(pg_catalog.pg_blocking_pids($1)) AS pid\n"
+					 ") SELECT pid, pg_catalog.pg_terminate_backend(pid) FROM pids");
 	paramValues[0] = Int32GetDatum(backendPid);
 
 	while (ShouldAcquireLock(100))
@@ -256,23 +250,23 @@ LockAcquireHelperMain(Datum main_arg)
 			{
 				bool isnull = false;
 
-				int terminatedPid = DatumGetInt32(SPI_getbinval(SPI_tuptable->vals[0],
-																SPI_tuptable->tupdesc,
-																1, &isnull));
+				int signaledPid = DatumGetInt32(SPI_getbinval(SPI_tuptable->vals[0],
+															  SPI_tuptable->tupdesc,
+															  1, &isnull));
 
-				bool isTerminated = DatumGetBool(SPI_getbinval(SPI_tuptable->vals[0],
-															   SPI_tuptable->tupdesc,
-															   2, &isnull));
+				bool isSignaled = DatumGetBool(SPI_getbinval(SPI_tuptable->vals[0],
+															 SPI_tuptable->tupdesc,
+															 2, &isnull));
 
-				if (isTerminated)
+				if (isSignaled)
 				{
-					elog(WARNING, "terminated conflicting backend %d", terminatedPid);
+					elog(WARNING, "terminating conflicting backend %d", signaledPid);
 				}
 				else
 				{
 					elog(INFO,
 						 "attempt to terminate conflicting backend %d was unsuccessful",
-						 terminatedPid);
+						 signaledPid);
 				}
 			}
 		}
