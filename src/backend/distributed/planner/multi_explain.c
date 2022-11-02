@@ -50,6 +50,8 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "distributed/jsonbutils.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/backend_data.h"
 #include "executor/tstoreReceiver.h"
 #include "fmgr.h"
 #include "lib/stringinfo.h"
@@ -196,6 +198,20 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 		appendStringInfoSpaces(es->str, es->indent * 2);
 		appendStringInfo(es->str, "explain statements for distributed queries ");
 		appendStringInfo(es->str, "are not enabled\n");
+		return;
+	}
+
+	if (SkipConstraintValidation || (AlterTableInProgress() && IsCitusInternalBackend()))
+	{
+		/*
+		 * We do not want to explain ALTER TABLE ... ADD FOREIGN KEY .. queries in
+		 * in the workers. They trigger a SELECT query on the citus tables as part of the
+		 * constraint validation check. Explaining the distributed SELECT query in the
+		 * workers cause memory corruption resulting in a crash later on.
+		 */
+		appendStringInfoSpaces(es->str, es->indent * 2);
+		appendStringInfo(es->str, "explain statements for distributed queries ");
+		appendStringInfo(es->str, "triggered via DDL commands are only supported on the coordinator \n");
 		return;
 	}
 
