@@ -94,7 +94,7 @@ StringInfo activeSetStmts;
 static List *activeSubXactContexts = NIL;
 
 /* some pre-allocated memory so we don't need to call malloc() during callbacks */
-MemoryContext CommitContext = NULL;
+MemoryContext CitusXactCallbackContext = NULL;
 
 /*
  * Should this coordinated transaction use 2PC? Set by
@@ -245,11 +245,11 @@ InitializeTransactionManagement(void)
 	AdjustMaxPreparedTransactions();
 
 	/* set aside 8kb of memory for use in CoordinatedTransactionCallback */
-	CommitContext = AllocSetContextCreateInternal(TopMemoryContext,
-												  "CommitContext",
-												  8 * 1024,
-												  8 * 1024,
-												  8 * 1024);
+	CitusXactCallbackContext = AllocSetContextCreateInternal(TopMemoryContext,
+															 "CitusXactCallbackContext",
+															 8 * 1024,
+															 8 * 1024,
+															 8 * 1024);
 }
 
 
@@ -274,7 +274,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 *
 			 * One possible source of errors is memory allocation failures. To minimize
 			 * the chance of those happening we've pre-allocated some memory in the
-			 * CommitContext, it has 8kb of memory that we're allowed to use.
+			 * CitusXactCallbackContext, it has 8kb of memory that we're allowed to use.
 			 *
 			 * We only do this in the COMMIT callback because:
 			 * - Errors thrown in other callbacks (such as PRE_COMMIT) won't cause
@@ -283,8 +283,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 *   postgres already creates a TransactionAbortContext which performs this
 			 *   trick, so there's no need for us to do it again.
 			 */
-			MemoryContext previousContext = CurrentMemoryContext;
-			MemoryContextSwitchTo(CommitContext);
+			MemoryContext previousContext = MemoryContextSwitchTo(CitusXactCallbackContext);
 
 			if (CurrentCoordinatedTransactionState == COORD_TRANS_PREPARED)
 			{
@@ -322,9 +321,9 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			PlacementMovedUsingLogicalReplicationInTX = false;
 
-			/* empty the CommitContext to ensure we're not leaking memory */
+			/* empty the CitusXactCallbackContext to ensure we're not leaking memory */
 			MemoryContextSwitchTo(previousContext);
-			MemoryContextReset(CommitContext);
+			MemoryContextReset(CitusXactCallbackContext);
 
 			/* Set CreateCitusTransactionLevel to 0 since original transaction is about to be
 			 * committed.
@@ -630,16 +629,23 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 		 */
 		case SUBXACT_EVENT_START_SUB:
 		{
+			MemoryContext previousContext = MemoryContextSwitchTo(CitusXactCallbackContext);
+
 			PushSubXact(subId);
 			if (InCoordinatedTransaction())
 			{
 				CoordinatedRemoteTransactionsSavepointBegin(subId);
 			}
+
+			MemoryContextSwitchTo(previousContext);
+
 			break;
 		}
 
 		case SUBXACT_EVENT_COMMIT_SUB:
 		{
+			MemoryContext previousContext = MemoryContextSwitchTo(CitusXactCallbackContext);
+
 			if (InCoordinatedTransaction())
 			{
 				CoordinatedRemoteTransactionsSavepointRelease(subId);
@@ -652,11 +658,16 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			{
 				SetCreateCitusTransactionLevel(GetCitusCreationLevel() - 1);
 			}
+
+			MemoryContextSwitchTo(previousContext);
+
 			break;
 		}
 
 		case SUBXACT_EVENT_ABORT_SUB:
 		{
+			MemoryContext previousContext = MemoryContextSwitchTo(CitusXactCallbackContext);
+
 			/*
 			 * Stop showing message for now, will re-enable when executing
 			 * the next statement.
@@ -684,6 +695,9 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 				InvalidateMetadataSystemCache();
 				SetCreateCitusTransactionLevel(0);
 			}
+
+			MemoryContextSwitchTo(previousContext);
+
 			break;
 		}
 
@@ -731,18 +745,6 @@ AdjustMaxPreparedTransactions(void)
 static void
 PushSubXact(SubTransactionId subId)
 {
-	/*
-	 * We need to allocate these in TopTransactionContext instead of current
-	 * subxact's memory context. This is because AtSubCommit_Memory won't
-	 * delete the subxact's memory context unless it is empty, and this
-	 * can cause in memory leaks. For emptiness it just checks if the memory
-	 * has been reset, and we cannot reset the subxact context since other
-	 * data can be in the context that are needed by upper commits.
-	 *
-	 * See https://github.com/citusdata/citus/issues/3999
-	 */
-	MemoryContext old_context = MemoryContextSwitchTo(TopTransactionContext);
-
 	/* save provided subId as well as propagated SET LOCAL stmts */
 	SubXactContext *state = palloc(sizeof(SubXactContext));
 	state->subId = subId;
@@ -751,8 +753,6 @@ PushSubXact(SubTransactionId subId)
 	/* append to list and reset active set stmts for upcoming sub-xact */
 	activeSubXactContexts = lcons(state, activeSubXactContexts);
 	activeSetStmts = makeStringInfo();
-
-	MemoryContextSwitchTo(old_context);
 }
 
 
