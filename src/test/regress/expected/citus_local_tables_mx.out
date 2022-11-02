@@ -54,7 +54,7 @@ SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 -- show that the trigger is not allowed to depend(explicitly) on an extension.
 CREATE EXTENSION seg;
 ALTER TRIGGER dummy_function_trigger ON citus_local_table DEPENDS ON EXTENSION seg;
-ERROR:  trigger dummy_function_trigger depends on an extension and this is not supported for distributed tables and local tables added to metadata
+ERROR:  trigger "dummy_function_trigger" depends on an extension and this is not supported for distributed tables and local tables added to metadata
 ALTER TRIGGER dummy_function_trigger ON citus_local_table RENAME TO renamed_trigger;
 NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1508000, 'citus_local_tables_mx', 'ALTER TRIGGER dummy_function_trigger ON citus_local_table RENAME TO renamed_trigger;')
 ALTER TABLE citus_local_table DISABLE TRIGGER ALL;

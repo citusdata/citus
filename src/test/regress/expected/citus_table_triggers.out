@@ -58,7 +58,7 @@ CREATE EXTENSION seg;
 ALTER TRIGGER update_value_dist ON distributed_table RENAME TO update_value_dist1;
 ERROR:  triggers are not supported on distributed tables
 ALTER TRIGGER update_value_dist ON distributed_table DEPENDS ON EXTENSION seg;
-ERROR:  trigger update_value_dist depends on an extension and this is not supported for distributed tables and local tables added to metadata
+ERROR:  trigger "update_value_dist" depends on an extension and this is not supported for distributed tables and local tables added to metadata
 DROP TRIGGER update_value_dist ON distributed_table;
 ERROR:  triggers are not supported on distributed tables
 ALTER TABLE distributed_table DISABLE TRIGGER ALL;
@@ -77,7 +77,7 @@ ERROR:  triggers are not supported on distributed tables
 ALTER TRIGGER update_value_ref ON reference_table RENAME TO update_value_ref1;
 ERROR:  triggers are not supported on reference tables
 ALTER TRIGGER update_value_ref ON reference_table DEPENDS ON EXTENSION seg;
-ERROR:  trigger update_value_ref depends on an extension and this is not supported for distributed tables and local tables added to metadata
+ERROR:  trigger "update_value_ref" depends on an extension and this is not supported for distributed tables and local tables added to metadata
 DROP TRIGGER update_value_ref ON reference_table;
 ERROR:  triggers are not supported on reference tables
 ALTER TABLE reference_table DISABLE TRIGGER ALL;
