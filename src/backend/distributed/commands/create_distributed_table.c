@@ -1667,13 +1667,13 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	EnsureLocalTableEmptyIfNecessary(relationId, distributionMethod, viaDeprecatedAPI);
 
 	/* user really wants triggers? */
-	if (!EnableUnsafeTriggers)
+	if (EnableUnsafeTriggers)
 	{
-		EnsureRelationHasNoTriggers(relationId);
+		ErrorIfRelationHasUnsupportedTrigger(relationId);
 	}
 	else
 	{
-		ErrorIfRelationHasUnsupportedTrigger(relationId);
+		EnsureRelationHasNoTriggers(relationId);
 	}
 
 	/* we assume callers took necessary locks */

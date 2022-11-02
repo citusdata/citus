@@ -48,7 +48,6 @@ static bool IsCreateCitusTruncateTriggerStmt(CreateTrigStmt *createTriggerStmt);
 static String * GetAlterTriggerDependsTriggerNameValue(AlterObjectDependsStmt *
 													   alterTriggerDependsStmt);
 static void ErrorIfUnsupportedDropTriggerCommand(DropStmt *dropTriggerStmt);
-static void ErrorOutForTriggerDependsOnExtension(char *triggerName);
 static RangeVar * GetDropTriggerStmtRelation(DropStmt *dropTriggerStmt);
 static void ExtractDropStmtTriggerAndRelationName(DropStmt *dropTriggerStmt,
 												  char **triggerName,
@@ -550,7 +549,13 @@ PreprocessAlterTriggerDependsStmt(Node *node, const char *queryString,
 	String *triggerNameValue =
 		GetAlterTriggerDependsTriggerNameValue(alterTriggerDependsStmt);
 
-	ErrorOutForTriggerDependsOnExtension(strVal(triggerNameValue));
+	ereport(ERROR, (errmsg("trigger \"%s\" depends on an extension and this "
+						   "is not supported for distributed tables and "
+						   "local tables added to metadata",
+						   strVal(triggerNameValue)),
+					errdetail("Triggers from extensions are expected to be "
+							  "created on the workers by the extension they "
+							  "depend on.")));
 
 	/* not reachable, keep compiler happy */
 	return NIL;
@@ -714,15 +719,11 @@ ErrorOutForTriggerIfNotSupported(Oid relationId)
 	}
 	else if (IsCitusTableType(relationId, REFERENCE_TABLE))
 	{
-		ereport(ERROR, (errmsg("triggers are not supported on reference tables "
-							   "when \"citus.enable_unsafe_triggers\" is set to "
-							   "\"false\"")));
+		ereport(ERROR, (errmsg("triggers are not supported on reference tables")));
 	}
 	else if (IsCitusTableType(relationId, DISTRIBUTED_TABLE))
 	{
-		ereport(ERROR, (errmsg("triggers are not supported on distributed tables "
-							   "when \"citus.enable_unsafe_triggers\" is set to "
-							   "\"false\"")));
+		ereport(ERROR, (errmsg("triggers are not supported on distributed tables")));
 	}
 
 	/* we always support triggers on citus local tables */
@@ -747,28 +748,12 @@ ErrorIfRelationHasUnsupportedTrigger(Oid relationId)
 		/* triggers that depend on extensions are not supported */
 		if (ObjectAddressDependsOnExtension(&triggerObjectAddress))
 		{
-			ErrorOutForTriggerDependsOnExtension(GetTriggerNameById(triggerId));
+			ereport(ERROR, (errmsg("trigger \"%s\" depends on an extension and this "
+								   "is not supported for distributed tables and "
+								   "local tables added to metadata",
+								   GetTriggerNameById(triggerId))));
 		}
 	}
-}
-
-
-/*
- * ErrorOutForTriggerDependsOnExtension throws an error for given trigger that
- * that presumably depends on an extension.
- *
- * Moved into a function to make the error message consistent.
- */
-static void
-ErrorOutForTriggerDependsOnExtension(char *triggerName)
-{
-	ereport(ERROR, (errmsg("trigger %s depends on an extension and this "
-						   "is not supported for distributed tables and "
-						   "local tables added to metadata",
-						   triggerName),
-					errdetail("Triggers from extensions are expected to be "
-							  "created on the workers by the extension they "
-							  "depend on.")));
 }
 
 
