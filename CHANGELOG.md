@@ -1,3 +1,11 @@
+### citus v11.1.4 (October 24, 2022) ###
+
+* Fixes an upgrade problem for `worker_fetch_foreign_file` when upgrade path
+  starts from 8.3 up to 11.1
+
+* Fixes an upgrade problem for `worker_repartition_cleanup` when upgrade path
+  starts from 9.1 up to 11.1
+
 ### citus v11.1.3 (October 14, 2022) ###
 
 * Adds support for PostgreSQL 15.0

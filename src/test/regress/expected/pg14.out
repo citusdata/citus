@@ -125,9 +125,9 @@ NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET search_path TO pg14;
+NOTICE:  issuing SET LOCAL search_path TO pg14;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET search_path TO pg14;
+NOTICE:  issuing SET LOCAL search_path TO pg14;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing reindex(TABLESPACE test_tablespace) index idx;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -155,9 +155,9 @@ NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET search_path TO pg14;
+NOTICE:  issuing SET LOCAL search_path TO pg14;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET search_path TO pg14;
+NOTICE:  issuing SET LOCAL search_path TO pg14;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing reindex(TABLESPACE test_tablespace, verbose) index idx;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -184,9 +184,9 @@ NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET search_path TO pg14;
+NOTICE:  issuing SET LOCAL search_path TO pg14;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET search_path TO pg14;
+NOTICE:  issuing SET LOCAL search_path TO pg14;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing reindex(TABLESPACE test_tablespace, verbose false) index idx ;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -214,9 +214,9 @@ NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET search_path TO pg14;
+NOTICE:  issuing SET LOCAL search_path TO pg14;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET search_path TO pg14;
+NOTICE:  issuing SET LOCAL search_path TO pg14;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing reindex(verbose, TABLESPACE test_tablespace) index idx ;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx

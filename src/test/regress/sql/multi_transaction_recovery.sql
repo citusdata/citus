@@ -200,7 +200,6 @@ LIMIT 1;
 
 SELECT COUNT(*) FROM pg_dist_transaction;
 BEGIN;
-SET LOCAL citus.defer_drop_after_shard_move TO OFF;
 SELECT citus_move_shard_placement((SELECT * FROM selected_shard), 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode := 'block_writes');
 COMMIT;
 SELECT COUNT(*) FROM pg_dist_transaction;

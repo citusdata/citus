@@ -321,3 +321,37 @@ https://github.com/citusdata/citus/blob/main/src/test/regress/bin/normalize.sed
 Sometimes removing the test is the only way to make our test suite less flaky.
 Of course this is a last resort, but sometimes it's what we want. If running the
 test does more bad than good, removing will be a net positive.
+
+
+## PR descriptions of flaky tests
+
+Even if a fix for a flaky test is very simple without a clear description it can
+be hard for a reviewer (or a future git spelunker) to understand its purpose.
+A good PR description of a flaky test includes the following things:
+1. Name of the test that was flaky
+2. The part of the regression.diffs file that caused the test to fail randomly
+3. A link to a CI run that failed because of this flaky test
+4. Explanation of why this output was non-deterministic (was it a bug in Citus?)
+5. Explanation of how this change makes the test deterministic
+
+An example of such a PR description is this one from [#6272][6272]:
+
+[6272]: https://github.com/citusdata/citus/pull/6272
+
+> Sometimes in CI our multi_utilities test fails like this:
+> ```diff
+>  VACUUM (INDEX_CLEANUP ON, PARALLEL 1) local_vacuum_table;
+>  SELECT CASE WHEN s BETWEEN 20000000 AND 25000000 THEN 22500000 ELSE s END size
+>  FROM pg_total_relation_size('local_vacuum_table') s ;
+>     size
+>  ----------
+> - 22500000
+> + 39518208
+>  (1 row)
+> ```
+> Source: https://app.circleci.com/pipelines/github/citusdata/citus/26641/workflows/5caea99c-9f58-4baa-839a-805aea714628/jobs/762870
+>
+> Apparently VACUUM is not as reliable in cleaning up as we thought. This
+> PR increases the range of allowed values to make the test reliable. Important
+> to note is that the range is still completely outside of the allowed range of
+> the initial size. So we know for sure that some data was cleaned up.

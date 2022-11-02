@@ -46,9 +46,6 @@
 #include "distributed/shard_rebalancer.h"
 #include "postmaster/postmaster.h"
 
-/* declarations for dynamic loading */
-bool DeferShardDeleteOnSplit = true;
-
 /*
  * Entry for map that tracks ShardInterval -> Placement Node
  * created by split workflow.
@@ -159,7 +156,6 @@ static uint64 GetNextShardIdForSplitChild(void);
 static void AcquireNonblockingSplitLock(Oid relationId);
 static List * GetWorkerNodesFromWorkerIds(List *nodeIdsForPlacementList);
 static void DropShardListMetadata(List *shardIntervalList);
-static void DropShardList(List *shardIntervalList);
 static void InsertDeferredDropCleanupRecordsForShards(List *shardIntervalList);
 
 /* Customize error message strings based on operation type */
@@ -633,26 +629,15 @@ BlockingShardSplit(SplitOperation splitOperation,
 
 
 		/*
-		 * Delete old shards metadata and either mark the shards as
-		 * to be deferred drop or physically delete them.
+		 * Delete old shards metadata and mark the shards as to be deferred drop.
 		 * Have to do that before creating the new shard metadata,
 		 * because there's cross-checks preventing inconsistent metadata
 		 * (like overlapping shards).
 		 */
-		if (DeferShardDeleteOnSplit)
-		{
-			ereport(LOG, (errmsg("marking deferred cleanup of source shard(s) for %s",
-								 operationName)));
+		ereport(LOG, (errmsg("marking deferred cleanup of source shard(s) for %s",
+							 operationName)));
 
-			InsertDeferredDropCleanupRecordsForShards(sourceColocatedShardIntervalList);
-		}
-		else
-		{
-			ereport(LOG, (errmsg("performing cleanup of source shard(s) for %s",
-								 operationName)));
-
-			DropShardList(sourceColocatedShardIntervalList);
-		}
+		InsertDeferredDropCleanupRecordsForShards(sourceColocatedShardIntervalList);
 
 		DropShardListMetadata(sourceColocatedShardIntervalList);
 
@@ -670,7 +655,7 @@ BlockingShardSplit(SplitOperation splitOperation,
 
 		/*
 		 * Create foreign keys if exists after the metadata changes happening in
-		 * DropShardList() and InsertSplitChildrenShardMetadata() because the foreign
+		 * InsertSplitChildrenShardMetadata() because the foreign
 		 * key creation depends on the new metadata.
 		 */
 		CreateForeignKeyConstraints(shardGroupSplitIntervalListList,
@@ -1393,54 +1378,8 @@ DropShardListMetadata(List *shardIntervalList)
 
 
 /*
- * DropShardList drops actual shards from the worker nodes.
- */
-static void
-DropShardList(List *shardIntervalList)
-{
-	ListCell *shardIntervalCell = NULL;
-
-	foreach(shardIntervalCell, shardIntervalList)
-	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
-		ListCell *shardPlacementCell = NULL;
-		uint64 oldShardId = shardInterval->shardId;
-
-		/* delete shard placements */
-		List *shardPlacementList = ActiveShardPlacementList(oldShardId);
-		foreach(shardPlacementCell, shardPlacementList)
-		{
-			ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
-			char *workerName = placement->nodeName;
-			uint32 workerPort = placement->nodePort;
-			StringInfo dropQuery = makeStringInfo();
-
-			/* get shard name */
-			char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
-
-			char storageType = shardInterval->storageType;
-			if (storageType == SHARD_STORAGE_TABLE)
-			{
-				appendStringInfo(dropQuery, DROP_REGULAR_TABLE_COMMAND,
-								 qualifiedShardName);
-			}
-			else if (storageType == SHARD_STORAGE_FOREIGN)
-			{
-				appendStringInfo(dropQuery, DROP_FOREIGN_TABLE_COMMAND,
-								 qualifiedShardName);
-			}
-
-			/* drop old shard */
-			SendCommandToWorker(workerName, workerPort, dropQuery->data);
-		}
-	}
-}
-
-
-/*
- * If deferred drop is enabled, insert deferred cleanup records instead of
- * dropping actual shards from the worker nodes. The shards will be dropped
- * by background cleaner later.
+ * Insert deferred cleanup records.
+ * The shards will be dropped by background cleaner later.
  */
 static void
 InsertDeferredDropCleanupRecordsForShards(List *shardIntervalList)
@@ -1698,26 +1637,15 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 										 SHARD_SPLIT);
 
 		/*
-		 * 10) Delete old shards metadata and either mark the shards as
-		 * to be deferred drop or physically delete them.
+		 * 10) Delete old shards metadata and mark the shards as to be deferred drop.
 		 * Have to do that before creating the new shard metadata,
 		 * because there's cross-checks preventing inconsistent metadata
 		 * (like overlapping shards).
 		 */
-		if (DeferShardDeleteOnSplit)
-		{
-			ereport(LOG, (errmsg("marking deferred cleanup of source shard(s) for %s",
-								 operationName)));
+		ereport(LOG, (errmsg("marking deferred cleanup of source shard(s) for %s",
+							 operationName)));
 
-			InsertDeferredDropCleanupRecordsForShards(sourceColocatedShardIntervalList);
-		}
-		else
-		{
-			ereport(LOG, (errmsg("performing cleanup of source shard(s) for %s",
-								 operationName)));
-
-			DropShardList(sourceColocatedShardIntervalList);
-		}
+		InsertDeferredDropCleanupRecordsForShards(sourceColocatedShardIntervalList);
 
 		DropShardListMetadata(sourceColocatedShardIntervalList);
 
@@ -1769,7 +1697,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 
 		/*
 		 * 14) Create foreign keys if exists after the metadata changes happening in
-		 * DropShardList() and InsertSplitChildrenShardMetadata() because the foreign
+		 * InsertSplitChildrenShardMetadata() because the foreign
 		 * key creation depends on the new metadata.
 		 */
 		CreateUncheckedForeignKeyConstraints(logicalRepTargetList);

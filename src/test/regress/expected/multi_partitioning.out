@@ -1940,11 +1940,11 @@ DROP TABLE partitioning_test_2008, partitioning_test_2009, partitioning_test_201
 -- verify this doesn't crash and gives a debug message for dropped table
 SET client_min_messages TO DEBUG1;
 DROP TABLE partitioning_test, reference_table;
-DEBUG:  drop cascades to constraint partitioning_reference_fkey on table partitioning_test
+DEBUG:  drop cascades to constraint partitioning_reference_fkey on table partitioning_schema.partitioning_test
 DETAIL:  from localhost:xxxxx
 CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
-DEBUG:  drop cascades to constraint partitioning_reference_fkey on table partitioning_test
+DEBUG:  drop cascades to constraint partitioning_reference_fkey on table partitioning_schema.partitioning_test
 DETAIL:  from localhost:xxxxx
 CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
@@ -1953,14 +1953,14 @@ DETAIL:  Table "<dropped>" is modified, which might lead to data inconsistencies
 CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DEBUG:  drop cascades to 2 other objects
-DETAIL:  drop cascades to constraint partitioning_reference_fkey_1660302 on table partitioning_test_1660302
-drop cascades to constraint partitioning_reference_fkey_1660304 on table partitioning_test_1660304
+DETAIL:  drop cascades to constraint partitioning_reference_fkey_1660302 on table partitioning_schema.partitioning_test_1660302
+drop cascades to constraint partitioning_reference_fkey_1660304 on table partitioning_schema.partitioning_test_1660304
 DETAIL:  from localhost:xxxxx
 CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DEBUG:  drop cascades to 2 other objects
-DETAIL:  drop cascades to constraint partitioning_reference_fkey_1660303 on table partitioning_test_1660303
-drop cascades to constraint partitioning_reference_fkey_1660305 on table partitioning_test_1660305
+DETAIL:  drop cascades to constraint partitioning_reference_fkey_1660303 on table partitioning_schema.partitioning_test_1660303
+drop cascades to constraint partitioning_reference_fkey_1660305 on table partitioning_schema.partitioning_test_1660305
 DETAIL:  from localhost:xxxxx
 CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM

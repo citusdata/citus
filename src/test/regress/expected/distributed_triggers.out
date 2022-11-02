@@ -5,6 +5,15 @@ CREATE SCHEMA distributed_triggers;
 SET search_path TO 'distributed_triggers';
 SET citus.shard_replication_factor = 1;
 SET citus.next_shard_id TO 800000;
+-- idempotently add node to allow this test to run without add_coordinator
+SET client_min_messages TO WARNING;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+RESET client_min_messages;
 --
 -- Test citus.enable_unsafe_triggers
 -- Enables arbitrary triggers on distributed tables
@@ -275,7 +284,7 @@ DETAIL:  Executing a distributed query in a function call that may be pushed to 
 HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "INSERT INTO distributed_triggers.data_changes (shard_key_value, object_id, change_id, operation_type, new_value)
     VALUES ('BAD', NEW.object_id, COALESCE(last_change_id + 1, 1), TG_OP, NEW.value)"
-PL/pgSQL function bad_shardkey_record_change() line XX at SQL statement
+PL/pgSQL function distributed_triggers.bad_shardkey_record_change() line XX at SQL statement
 while executing command on localhost:xxxxx
 -- Bad trigger fired from SQL inside a force-delegated function
 -- Incorrect distribution key exception should catch this
@@ -315,7 +324,6 @@ ORDER BY shard_key_value, object_id, change_id;
 DROP TRIGGER bad_shardkey_record_change_trigger ON data;
 CREATE OR REPLACE FUNCTION remote_shardkey_record_change()
 RETURNS trigger
-SET search_path = 'distributed_triggers'
 LANGUAGE plpgsql
 AS $$
 DECLARE
@@ -331,7 +339,6 @@ FOR EACH ROW EXECUTE FUNCTION distributed_triggers.remote_shardkey_record_change
 CREATE FUNCTION insert_document(key text, id text)
 RETURNS void
 LANGUAGE plpgsql
-SET search_path = 'distributed_triggers'
 AS $fn$
 BEGIN
 	INSERT INTO distributed_triggers.data VALUES (key, id, '{"id1":"id2"}');
@@ -354,7 +361,7 @@ ERROR:  cannot execute a distributed query from a query on a shard
 DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
 HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "UPDATE distributed_triggers.data_changes SET operation_type = TG_OP"
-PL/pgSQL function remote_shardkey_record_change() line XX at SQL statement
+PL/pgSQL function distributed_triggers.remote_shardkey_record_change() line XX at SQL statement
 while executing command on localhost:xxxxx
 SQL statement "INSERT INTO distributed_triggers.data VALUES (key, id, '{"id1":"id2"}')"
 PL/pgSQL function insert_document(text,text) line XX at SQL statement
@@ -364,9 +371,9 @@ ERROR:  cannot execute a distributed query from a query on a shard
 DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
 HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "UPDATE distributed_triggers.data_changes SET operation_type = TG_OP"
-PL/pgSQL function remote_shardkey_record_change() line XX at SQL statement
+PL/pgSQL function distributed_triggers.remote_shardkey_record_change() line XX at SQL statement
 SQL statement "INSERT INTO distributed_triggers.data VALUES (key, id, '{"id1":"id2"}')"
-PL/pgSQL function insert_document(text,text) line XX at SQL statement
+PL/pgSQL function distributed_triggers.insert_document(text,text) line XX at SQL statement
 while executing command on localhost:xxxxx
 SELECT * FROM data
 ORDER BY shard_key_value, object_id;
@@ -509,7 +516,7 @@ ERROR:  cannot execute a distributed query from a query on a shard
 DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
 HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "INSERT INTO distributed_triggers.record_op SELECT 'dummy', TG_OP, now()"
-PL/pgSQL function record_emp() line XX at SQL statement
+PL/pgSQL function distributed_triggers.record_emp() line XX at SQL statement
 while executing command on localhost:xxxxx
 DELETE FROM emptest;
 ERROR:  cannot execute a distributed query from a query on a shard
@@ -557,7 +564,7 @@ HINT:  Avoid nesting of distributed queries or use alter user current_user set c
 CONTEXT:  SQL statement "SELECT change_id                           FROM distributed_triggers.data_changes
       WHERE shard_key_value = NEW.shard_key_value AND object_id = NEW.object_id
       ORDER BY change_id DESC LIMIT 1"
-PL/pgSQL function record_change() line XX at SQL statement
+PL/pgSQL function distributed_triggers.record_change() line XX at SQL statement
 while executing command on localhost:xxxxx
 INSERT INTO data_ref_table VALUES ('hello2','world2','{"ref":"table"}');
 ERROR:  cannot execute a distributed query from a query on a shard
@@ -566,7 +573,7 @@ HINT:  Avoid nesting of distributed queries or use alter user current_user set c
 CONTEXT:  SQL statement "SELECT change_id                           FROM distributed_triggers.data_changes
       WHERE shard_key_value = NEW.shard_key_value AND object_id = NEW.object_id
       ORDER BY change_id DESC LIMIT 1"
-PL/pgSQL function record_change() line XX at SQL statement
+PL/pgSQL function distributed_triggers.record_change() line XX at SQL statement
 while executing command on localhost:xxxxx
 DELETE FROM data_ref_table where shard_key_value = 'hello';
 BEGIN;
@@ -605,7 +612,7 @@ DETAIL:  Executing a distributed query in a function call that may be pushed to 
 HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
 CONTEXT:  SQL statement "INSERT INTO distributed_triggers.data_changes (shard_key_value, object_id, change_id, operation_type, new_value)
       VALUES (NEW.shard_key_value, NEW.object_id, COALESCE(last_change_id + 1, 1), TG_OP, NEW.value)"
-PL/pgSQL function record_change() line XX at SQL statement
+PL/pgSQL function distributed_triggers.record_change() line XX at SQL statement
 while executing command on localhost:xxxxx
 TABLE data_changes ORDER BY shard_key_value, object_id, change_id;
  shard_key_value | object_id | change_id | change_time | operation_type | new_value
@@ -743,18 +750,18 @@ CREATE VIEW sale_triggers AS
     WHERE tgrelid::regclass::text = 'sale'
     ORDER BY 1, 2;
 SELECT * FROM sale_triggers ORDER BY 1,2;
-         tgname         |     tgrelid     | tgenabled
+         tgname         | tgrelid | tgenabled
 ---------------------------------------------------------------------
- record_sale_trigger    | sale            | O
- truncate_trigger_xxxxxxx | sale            | O
+ record_sale_trigger    | sale    | O
+ truncate_trigger_xxxxxxx | sale    | O
 (2 rows)
 
 ALTER TRIGGER "record_sale_trigger" ON "distributed_triggers"."sale" RENAME TO "new_record_sale_trigger";
 SELECT * FROM sale_triggers ORDER BY 1,2;
-         tgname          |     tgrelid     | tgenabled
+         tgname          | tgrelid | tgenabled
 ---------------------------------------------------------------------
- new_record_sale_trigger | sale            | O
- truncate_trigger_xxxxxxx  | sale            | O
+ new_record_sale_trigger | sale    | O
+ truncate_trigger_xxxxxxx  | sale    | O
 (2 rows)
 
 CREATE EXTENSION seg;

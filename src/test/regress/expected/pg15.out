@@ -517,6 +517,77 @@ SELECT * FROM numeric_scale_gt_precision WHERE numeric_column=0.027;
           0.027
 (1 row)
 
+-- test repartition joins on tables distributed on numeric types with negative scale
+CREATE TABLE numeric_repartition_first(id int, data int, numeric_column numeric(3,-1));
+CREATE TABLE numeric_repartition_second(id int, data int, numeric_column numeric(3,-1));
+-- populate tables
+INSERT INTO numeric_repartition_first SELECT x, x, x FROM generate_series (100, 115) x;
+INSERT INTO numeric_repartition_second SELECT x, x, x FROM generate_series (100, 115) x;
+-- Run some queries before distributing the tables to see results in vanilla PG
+SELECT count(*)
+FROM numeric_repartition_first f,
+     numeric_repartition_second s
+WHERE f.id = s.numeric_column;
+ count
+---------------------------------------------------------------------
+    15
+(1 row)
+
+SELECT count(*)
+FROM numeric_repartition_first f,
+     numeric_repartition_second s
+WHERE f.numeric_column = s.numeric_column;
+ count
+---------------------------------------------------------------------
+   126
+(1 row)
+
+-- distribute tables and re-run the same queries
+SELECT * FROM create_distributed_table('numeric_repartition_first','id');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg15.numeric_repartition_first$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM create_distributed_table('numeric_repartition_second','id');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg15.numeric_repartition_second$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.enable_repartition_joins TO 1;
+SELECT count(*)
+FROM numeric_repartition_first f,
+     numeric_repartition_second s
+WHERE f.id = s.numeric_column;
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+-- show that the same query works if we use an int column instead of a numeric on the filter clause
+SELECT count(*)
+FROM numeric_repartition_first f,
+     numeric_repartition_second s
+WHERE f.id = s.data;
+ count
+---------------------------------------------------------------------
+    16
+(1 row)
+
+SELECT count(*)
+FROM numeric_repartition_first f,
+     numeric_repartition_second s
+WHERE f.numeric_column = s.numeric_column;
+ count
+---------------------------------------------------------------------
+   126
+(1 row)
+
 -- test new regex functions
 -- print order comments that contain the word `fluffily` at least twice
 SELECT o_comment FROM public.orders WHERE regexp_count(o_comment, 'FluFFily', 1, 'i')>=2 ORDER BY 1;
@@ -836,7 +907,7 @@ SELECT * FROM FKTABLE ORDER BY id;
 SET search_path TO pg15;
 -- test NULL NOT DISTINCT clauses
 -- set the next shard id so that the error messages are easier to maintain
-SET citus.next_shard_id TO 960050;
+SET citus.next_shard_id TO 960150;
 CREATE TABLE null_distinct_test(id INT, c1 INT, c2 INT, c3 VARCHAR(10)) ;
 SELECT create_distributed_table('null_distinct_test', 'id');
  create_distributed_table
@@ -852,7 +923,7 @@ INSERT INTO null_distinct_test VALUES (1, 2, NULL, 'data2') ;
 INSERT INTO null_distinct_test VALUES (1, NULL, 3, 'data3') ;
 -- should fail as we already have a null value in c2 column
 INSERT INTO null_distinct_test VALUES (1, NULL, NULL, 'data4') ;
-ERROR:  duplicate key value violates unique constraint "idx2_null_distinct_test_960050"
+ERROR:  duplicate key value violates unique constraint "idx2_null_distinct_test_960150"
 DETAIL:  Key (id, c2)=(1, null) already exists.
 CONTEXT:  while executing command on localhost:xxxxx
 INSERT INTO null_distinct_test VALUES (1, NULL, NULL, 'data4') ON CONFLICT DO NOTHING;
@@ -868,7 +939,7 @@ INSERT INTO null_distinct_test VALUES (1, NULL, 5, 'data5') ;
 -- since we have multiple (1,NULL) pairs for columns (id,c1) the first will work, second will fail
 ALTER TABLE null_distinct_test ADD CONSTRAINT uniq_distinct_c1 UNIQUE NULLS DISTINCT (id,c1);
 ALTER TABLE null_distinct_test ADD CONSTRAINT uniq_c1 UNIQUE NULLS NOT DISTINCT (id,c1);
-ERROR:  could not create unique index "uniq_c1_960050"
+ERROR:  could not create unique index "uniq_c1_960150"
 DETAIL:  Key (id, c1)=(1, null) is duplicated.
 CONTEXT:  while executing command on localhost:xxxxx
 -- show all records in the table for fact checking
@@ -895,7 +966,7 @@ SELECT create_reference_table('reference_uniq_test');
 INSERT INTO reference_uniq_test VALUES (1, 1), (1, NULL), (NULL, 1);
 -- the following will fail
 INSERT INTO reference_uniq_test VALUES (1, NULL);
-ERROR:  duplicate key value violates unique constraint "reference_uniq_test_x_y_key_960054"
+ERROR:  duplicate key value violates unique constraint "reference_uniq_test_x_y_key_960154"
 DETAIL:  Key (x, y)=(1, null) already exists.
 CONTEXT:  while executing command on localhost:xxxxx
 --

@@ -163,7 +163,6 @@ extern char * ReplicationSlotNameForNodeAndOwner(LogicalRepType type, uint32_t n
 extern char * SubscriptionName(LogicalRepType type, Oid ownerId);
 extern char * SubscriptionRoleName(LogicalRepType type, Oid ownerId);
 
-extern void WaitForAllSubscriptionsToBecomeReady(HTAB *groupedLogicalRepTargetsHash);
 extern void WaitForAllSubscriptionsToCatchUp(MultiConnection *sourceConnection,
 											 HTAB *groupedLogicalRepTargetsHash);
 extern void WaitForShardSubscriptionToCatchUp(MultiConnection *targetConnection,
