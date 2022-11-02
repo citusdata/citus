@@ -34,7 +34,7 @@ SELECT create_reference_table('reference_table');
 CREATE TRIGGER update_value_dist
 AFTER INSERT ON distributed_table
 FOR EACH ROW EXECUTE FUNCTION update_value();
-ERROR:  triggers are not supported on distributed tables when "citus.enable_unsafe_triggers" is set to "false"
+ERROR:  triggers are not supported on distributed tables
 CREATE TRIGGER update_value_ref
 AFTER INSERT ON reference_table
 FOR EACH ROW EXECUTE FUNCTION update_value();
@@ -56,28 +56,28 @@ SET citus.enable_ddl_propagation to ON;
 CREATE EXTENSION seg;
 -- below all should error out
 ALTER TRIGGER update_value_dist ON distributed_table RENAME TO update_value_dist1;
-ERROR:  triggers are not supported on distributed tables when "citus.enable_unsafe_triggers" is set to "false"
+ERROR:  triggers are not supported on distributed tables
 ALTER TRIGGER update_value_dist ON distributed_table DEPENDS ON EXTENSION seg;
-ERROR:  Triggers "update_value_dist" on distributed tables and local tables added to metadata are not allowed to depend on an extension
+ERROR:  trigger "update_value_dist" depends on an extension and this is not supported for distributed tables and local tables added to metadata
 DROP TRIGGER update_value_dist ON distributed_table;
-ERROR:  triggers are not supported on distributed tables when "citus.enable_unsafe_triggers" is set to "false"
+ERROR:  triggers are not supported on distributed tables
 ALTER TABLE distributed_table DISABLE TRIGGER ALL;
-ERROR:  triggers are not supported on distributed tables when "citus.enable_unsafe_triggers" is set to "false"
+ERROR:  triggers are not supported on distributed tables
 ALTER TABLE distributed_table DISABLE TRIGGER USER;
-ERROR:  triggers are not supported on distributed tables when "citus.enable_unsafe_triggers" is set to "false"
+ERROR:  triggers are not supported on distributed tables
 ALTER TABLE distributed_table DISABLE TRIGGER update_value_dist;
-ERROR:  triggers are not supported on distributed tables when "citus.enable_unsafe_triggers" is set to "false"
+ERROR:  triggers are not supported on distributed tables
 ALTER TABLE distributed_table ENABLE TRIGGER ALL;
-ERROR:  triggers are not supported on distributed tables when "citus.enable_unsafe_triggers" is set to "false"
+ERROR:  triggers are not supported on distributed tables
 ALTER TABLE distributed_table ENABLE TRIGGER USER;
-ERROR:  triggers are not supported on distributed tables when "citus.enable_unsafe_triggers" is set to "false"
+ERROR:  triggers are not supported on distributed tables
 ALTER TABLE distributed_table ENABLE TRIGGER update_value_dist;
-ERROR:  triggers are not supported on distributed tables when "citus.enable_unsafe_triggers" is set to "false"
+ERROR:  triggers are not supported on distributed tables
 -- below all should error out
 ALTER TRIGGER update_value_ref ON reference_table RENAME TO update_value_ref1;
 ERROR:  triggers are not supported on reference tables
 ALTER TRIGGER update_value_ref ON reference_table DEPENDS ON EXTENSION seg;
-ERROR:  Triggers "update_value_ref" on distributed tables and local tables added to metadata are not allowed to depend on an extension
+ERROR:  trigger "update_value_ref" depends on an extension and this is not supported for distributed tables and local tables added to metadata
 DROP TRIGGER update_value_ref ON reference_table;
 ERROR:  triggers are not supported on reference tables
 ALTER TABLE reference_table DISABLE TRIGGER ALL;

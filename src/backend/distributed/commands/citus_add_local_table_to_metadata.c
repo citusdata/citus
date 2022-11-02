@@ -487,6 +487,7 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 	ErrorIfUnsupportedCitusLocalTableKind(relationId);
 	EnsureTableNotDistributed(relationId);
 	ErrorIfUnsupportedCitusLocalColumnDefinition(relation);
+	ErrorIfRelationHasUnsupportedTrigger(relationId);
 
 	/*
 	 * When creating other citus table types, we don't need to check that case as

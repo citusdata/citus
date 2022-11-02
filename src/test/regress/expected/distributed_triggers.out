@@ -766,7 +766,7 @@ SELECT * FROM sale_triggers ORDER BY 1,2;
 
 CREATE EXTENSION seg;
 ALTER TRIGGER "emptest_audit" ON "emptest" DEPENDS ON EXTENSION seg;
-ERROR:  Triggers "emptest_audit" on distributed tables and local tables added to metadata are not allowed to depend on an extension
+ERROR:  trigger "emptest_audit" depends on an extension and this is not supported for distributed tables and local tables added to metadata
 DETAIL:  Triggers from extensions are expected to be created on the workers by the extension they depend on.
 DROP TABLE data_ref_table;
 --
@@ -1000,6 +1000,25 @@ SELECT run_command_on_workers($$SELECT bool_and(tgenabled = 'D') FROM pg_trigger
  (localhost,57638,t,t)
 (2 rows)
 
+CREATE TABLE dist_trigger_depends_on_test(a int);
+CREATE FUNCTION dist_trigger_depends_on_test_func()
+  RETURNS trigger
+  LANGUAGE plpgsql
+AS $function$
+BEGIN
+	RETURN NULL;
+END;
+$function$;
+CREATE TRIGGER dist_trigger_depends_on_test_trig
+AFTER UPDATE OR DELETE ON dist_trigger_depends_on_test
+FOR STATEMENT EXECUTE FUNCTION dist_trigger_depends_on_test_func();
+ALTER trigger dist_trigger_depends_on_test_trig ON dist_trigger_depends_on_test DEPENDS ON EXTENSION seg;
+SELECT create_distributed_table('dist_trigger_depends_on_test', 'a');
+ERROR:  trigger "dist_trigger_depends_on_test_trig" depends on an extension and this is not supported for distributed tables and local tables added to metadata
+SELECT create_reference_table('dist_trigger_depends_on_test');
+ERROR:  trigger "dist_trigger_depends_on_test_trig" depends on an extension and this is not supported for distributed tables and local tables added to metadata
+SELECT citus_add_local_table_to_metadata('dist_trigger_depends_on_test');
+ERROR:  trigger "dist_trigger_depends_on_test_trig" depends on an extension and this is not supported for distributed tables and local tables added to metadata
 SET client_min_messages TO ERROR;
 RESET citus.enable_unsafe_triggers;
 SELECT run_command_on_workers('ALTER SYSTEM RESET citus.enable_unsafe_triggers;');

@@ -148,6 +148,9 @@ static void CollectObjectAddress(ObjectAddressCollector *collector,
 static bool IsObjectAddressCollected(ObjectAddress findAddress,
 									 ObjectAddressCollector *collector);
 static ObjectAddress * GetUndistributableDependency(const ObjectAddress *objectAddress);
+static bool ObjectAddressHasExtensionDependency(const ObjectAddress *target,
+												ObjectAddress *extensionAddress,
+												int extensionDependency);
 static void MarkObjectVisited(ObjectAddressCollector *collector,
 							  ObjectAddress target);
 static bool TargetObjectVisited(ObjectAddressCollector *collector,
@@ -1081,6 +1084,19 @@ IsTableOwnedByExtension(Oid relationId)
 
 
 /*
+ * ObjectAddressDependsOnExtension returns whether or not the object depends
+ * on an extension. It is assumed that "an object having a dependency of type
+ * DEPENDENCY_AUTO_EXTENSION to an extension" depends on that extension.
+ */
+bool
+ObjectAddressDependsOnExtension(const ObjectAddress *target)
+{
+	return ObjectAddressHasExtensionDependency(target, NULL,
+											   DEPENDENCY_AUTO_EXTENSION);
+}
+
+
+/*
  * IsObjectAddressOwnedByExtension returns whether or not the object is owned by an
  * extension. It is assumed that an object having a dependency on an extension is created
  * by that extension and therefore owned by that extension.
@@ -1092,6 +1108,27 @@ static bool
 IsObjectAddressOwnedByExtension(const ObjectAddress *target,
 								ObjectAddress *extensionAddress)
 {
+	return ObjectAddressHasExtensionDependency(target, extensionAddress,
+											   DEPENDENCY_EXTENSION);
+}
+
+
+/*
+ * ObjectAddressHasExtensionDependency is a helper function that returns true if
+ * given object has a dependency record (of type DEPENDENCY_EXTENSION or
+ * DEPENDENCY_AUTO_EXTENSION) for an extension.
+ *
+ * If extensionAddress is not set to a NULL pointer the function will write the
+ * extension address this function depends on into this location.
+ */
+static bool
+ObjectAddressHasExtensionDependency(const ObjectAddress *target,
+									ObjectAddress *extensionAddress,
+									int extensionDependency)
+{
+	Assert(extensionDependency == DEPENDENCY_EXTENSION ||
+		   extensionDependency == DEPENDENCY_AUTO_EXTENSION);
+
 	ScanKeyData key[2];
 	HeapTuple depTup = NULL;
 	bool result = false;
@@ -1109,7 +1146,7 @@ IsObjectAddressOwnedByExtension(const ObjectAddress *target,
 	while (HeapTupleIsValid(depTup = systable_getnext(depScan)))
 	{
 		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
-		if (pg_depend->deptype == DEPENDENCY_EXTENSION)
+		if (pg_depend->deptype == extensionDependency)
 		{
 			result = true;
 			if (extensionAddress != NULL)
