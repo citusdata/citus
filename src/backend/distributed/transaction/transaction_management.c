@@ -283,7 +283,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 *   postgres already creates a TransactionAbortContext which performs this
 			 *   trick, so there's no need for us to do it again.
 			 */
-			MemoryContext previousContext = MemoryContextSwitchTo(CitusXactCallbackContext);
+			MemoryContext previousContext =
+				MemoryContextSwitchTo(CitusXactCallbackContext);
 
 			if (CurrentCoordinatedTransactionState == COORD_TRANS_PREPARED)
 			{
@@ -379,6 +380,9 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			ResetGlobalVariables();
 			ResetRelationAccessHash();
+
+			/* empty the CitusXactCallbackContext to ensure we're not leaking memory */
+			MemoryContextReset(CitusXactCallbackContext);
 
 			/*
 			 * Clear MetadataCache table if we're aborting from a CREATE EXTENSION Citus
@@ -629,7 +633,8 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 		 */
 		case SUBXACT_EVENT_START_SUB:
 		{
-			MemoryContext previousContext = MemoryContextSwitchTo(CitusXactCallbackContext);
+			MemoryContext previousContext =
+				MemoryContextSwitchTo(CitusXactCallbackContext);
 
 			PushSubXact(subId);
 			if (InCoordinatedTransaction())
@@ -644,7 +649,8 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 
 		case SUBXACT_EVENT_COMMIT_SUB:
 		{
-			MemoryContext previousContext = MemoryContextSwitchTo(CitusXactCallbackContext);
+			MemoryContext previousContext =
+				MemoryContextSwitchTo(CitusXactCallbackContext);
 
 			if (InCoordinatedTransaction())
 			{
@@ -666,7 +672,8 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 
 		case SUBXACT_EVENT_ABORT_SUB:
 		{
-			MemoryContext previousContext = MemoryContextSwitchTo(CitusXactCallbackContext);
+			MemoryContext previousContext =
+				MemoryContextSwitchTo(CitusXactCallbackContext);
 
 			/*
 			 * Stop showing message for now, will re-enable when executing
