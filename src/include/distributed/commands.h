@@ -607,6 +607,8 @@ extern void PreprocessTruncateStatement(TruncateStmt *truncateStatement);
 extern List * PreprocessRenameTypeAttributeStmt(Node *stmt, const char *queryString,
 												ProcessUtilityContext
 												processUtilityContext);
+extern List * PreprocessDropTypeStmt(Node *stmt, const char *queryString,
+									 ProcessUtilityContext processUtilityContext);
 extern Node * CreateTypeStmtByObjectAddress(const ObjectAddress *address);
 extern List * CompositeTypeStmtObjectAddress(Node *stmt, bool missing_ok, bool
 											 isPostprocess);

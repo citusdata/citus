@@ -350,6 +350,55 @@ SELECT create_distributed_table('table_text_local_def','id');
 CREATE TYPE pg_temp.temp_type AS (int_field int);
 CREATE TYPE pg_temp.temp_enum AS ENUM ('one', 'two', 'three');
 
+-- verify that dropping a type which is used in the distribution column
+-- of a distributed table fails
+
+-- create a custom type...
+CREATE TYPE my_type AS (
+    i integer,
+    i2 integer
+);
+
+CREATE FUNCTION equal_my_type_function(my_type, my_type) RETURNS boolean
+LANGUAGE 'internal'
+AS 'record_eq'
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+
+-- ... use that function to create a custom equality operator...
+CREATE OPERATOR = (
+   LEFTARG = my_type,
+   RIGHTARG = my_type,
+   PROCEDURE = equal_my_type_function,
+   HASHES
+);
+
+-- ... create a test HASH function. Though it is a poor hash function,
+-- it is acceptable for our tests
+CREATE FUNCTION my_type_hash(my_type) RETURNS int
+AS 'SELECT hashtext( ($1.i + $1.i2)::text);'
+LANGUAGE SQL
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+
+-- ... and create a custom operator family for hash indexes...
+CREATE OPERATOR FAMILY cats_op_fam USING hash;
+
+-- We need to define a default operator classes for my_type
+-- that uses HASH
+
+CREATE OPERATOR CLASS cats_op_fam_class
+DEFAULT FOR TYPE my_type USING HASH AS
+OPERATOR 1 = (my_type, my_type),
+FUNCTION 1 my_type_hash(my_type);
+
+CREATE TABLE tbl (a my_type);
+SELECT create_distributed_table('tbl', 'a');
+DROP TYPE my_type CASCADE;
+ALTER TABLE tbl DROP COLUMN a;
+SELECT undistribute_table('tbl');
+DROP TYPE my_type CASCADE;
+
 -- clear objects
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;

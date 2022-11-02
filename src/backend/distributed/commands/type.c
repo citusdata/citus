@@ -101,6 +101,7 @@ static CompositeTypeStmt * RecreateCompositeTypeStmt(Oid typeOid);
 static List * CompositeTypeColumnDefList(Oid typeOid);
 static CreateEnumStmt * RecreateEnumStmt(Oid typeOid);
 static List * EnumValsList(Oid typeOid);
+static ObjectAddress * typeDependentDistributionColumn(Oid typeId);
 
 /*
  * PreprocessRenameTypeAttributeStmt is called for changes of attribute names for composite
@@ -139,6 +140,63 @@ PreprocessRenameTypeAttributeStmt(Node *node, const char *queryString,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * PreprocessDropTypeStmt is called to check whether this is a
+ * DROP TYPE ... CASCADE statement. If yes, it checks whether there are any
+ * columns part of distributed tables included. If yes, it errors out.
+ * After that it calls the general PreprocessDropDistributedObjectStmt
+ */
+List *
+PreprocessDropTypeStmt(Node *node, const char *queryString,
+					   ProcessUtilityContext processUtilityContext)
+{
+	DropStmt *stmt = castNode(DropStmt, node);
+	Assert(stmt->removeType == OBJECT_TYPE);
+
+	if (stmt->behavior == DROP_CASCADE)
+	{
+		ListCell *cell;
+		foreach(cell, stmt->objects)
+		{
+			Node *object = lfirst(cell);
+			Relation relation = NULL;
+
+			/* Get an ObjectAddress for the type. */
+			ObjectAddress typeAddress = get_object_address(OBJECT_TYPE,
+														   object,
+														   &relation,
+														   AccessExclusiveLock,
+														   stmt->missing_ok);
+
+			ObjectAddress *distTableAndColumn = typeDependentDistributionColumn(
+				typeAddress.objectId);
+			if (distTableAndColumn != NULL)
+			{
+				Oid distTableId = distTableAndColumn->objectId;
+				int32 attNum = distTableAndColumn->objectSubId;
+
+				HeapTuple attTuple = SearchSysCacheAttNum(distTableId, attNum);
+				Form_pg_attribute targetAttr = (Form_pg_attribute) GETSTRUCT(attTuple);
+				char *columnName = NameStr(targetAttr->attname);
+				ReleaseSysCache(attTuple);
+
+				TypeName *typeName = castNode(TypeName, object);
+				Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
+				const char *identifier = format_type_be_qualified(typeOid);
+
+				ereport(ERROR,
+						(errmsg("Can't drop type \"%s\" "
+								"because it is used in the partition column \"%s\" "
+								"of Citus table \"%s\"",
+								identifier, columnName, get_rel_name(distTableId))));
+			}
+		}
+	}
+
+	return PreprocessDropDistributedObjectStmt(node, queryString, processUtilityContext);
 }
 
 
@@ -668,4 +726,58 @@ LookupNonAssociatedArrayTypeNameOid(ParseState *pstate, const TypeName *typeName
 	}
 
 	return typeOid;
+}
+
+
+/*
+ * typeDependentDistributionColumn checks whether the given type has a dependency
+ * to a Citus table as the type of the table's distribution column
+ * If there exists at least one, it returns the first object seen in the list.
+ */
+static ObjectAddress *
+typeDependentDistributionColumn(Oid typeId)
+{
+	ObjectAddress *distTableAndColumn = NULL;
+
+	ScanKeyData key[2];
+
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_refclassid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(TypeRelationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_refobjid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(typeId));
+
+	SysScanDesc scan = systable_beginscan(depRel, DependReferenceIndexId, true,
+										  NULL, 2, key);
+
+	HeapTuple tup;
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_depend pgDependEntry = (Form_pg_depend) GETSTRUCT(tup);
+
+		if (pgDependEntry->classid == RelationRelationId &&
+			get_rel_relkind(pgDependEntry->objid) == RELKIND_RELATION &&
+			IsCitusTable(pgDependEntry->objid))
+		{
+			Var *partitionColumn = DistPartitionKey(pgDependEntry->objid);
+			if (partitionColumn != NULL &&
+				partitionColumn->varattno == pgDependEntry->objsubid)
+			{
+				distTableAndColumn = palloc0(sizeof(ObjectAddress));
+				ObjectAddressSubSet(*distTableAndColumn, RelationRelationId,
+									pgDependEntry->objid, pgDependEntry->objsubid);
+				break;
+			}
+		}
+	}
+
+	systable_endscan(scan);
+	table_close(depRel, AccessShareLock);
+
+	return distTableAndColumn;
 }
