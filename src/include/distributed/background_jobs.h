@@ -22,21 +22,12 @@
  */
 typedef enum BackgroundMonitorExecutionStates
 {
-	MonitorStart,
-	FetchNewTask,
-	AssignNewTask,
-	TryToExecuteReadyTask,
-	NoReadyTaskFound,
-	ExecutorReady,
+	ExecutionStarted,
 	TaskConcurrentCancelCheck,
 	TryConsumeTaskWorker,
-	TaskRunning,
-	TaskCancelling,
-	TaskCancelled,
 	TaskHadError,
-	TaskWouldBlock,
-	TaskSucceeded,
-	TaskEnded
+	TaskEnded,
+	ExecutionEnded
 } BackgroundMonitorExecutionStates;
 
 /*
@@ -51,6 +42,22 @@ typedef struct BackgroundExecutorHashEntry
 	dsm_segment *seg;
 	StringInfo message;
 } BackgroundExecutorHashEntry;
+
+
+/*
+ * QueueMonitorExecutionContext is used for background worker failure handling and allocations
+ */
+typedef struct QueueMonitorExecutionContext
+{
+	/* current total # of parallel task executors */
+	int64 currentExecutorCount;
+
+	/* last background allocation failure timestamp */
+	TimestampTz backgroundWorkerFailedStartTime;
+
+	/* context for monitor related allocations */
+	MemoryContext ctx;
+} QueueMonitorExecutionContext;
 
 extern BackgroundWorkerHandle * StartCitusBackgroundTaskQueueMonitor(Oid database,
 																	 Oid extensionOwner);

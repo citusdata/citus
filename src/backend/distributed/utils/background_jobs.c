@@ -84,10 +84,21 @@ static shm_mq_result ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInf
 static void UpdateDependingTasks(BackgroundTask *task);
 static int64 CalculateBackoffDelay(int retryCount);
 static HTAB * CreateBackgroundExecutorHash(MemoryContext context);
-static BackgroundExecutorHashEntry * GetNextTaskExecutorFromHashTable(
-	HTAB *runningTaskBackgroundExecutors, int64 lastMonitoredTaskId);
-static void StartMonitorTransaction(MemoryContext ctx);
-static void CommitMonitorTransaction(MemoryContext ctx);
+static bool NewExecutorExceedsCitusLimit(
+	QueueMonitorExecutionContext *queueMonitorExecutionContext);
+static bool NewExecutorExceedsPgMaxWorkers(BackgroundWorkerHandle *handle,
+										   QueueMonitorExecutionContext *
+										   queueMonitorExecutionContext);
+static BackgroundWorkerHandle * CreateNewExecutor(BackgroundTask *task, dsm_segment **seg,
+												  char *databaseName,
+												  char *userName);
+static bool AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
+											HTAB *backgroundExecutorHandles,
+											QueueMonitorExecutionContext *
+											queueMonitorExecutionContext);
+static void AssignRunnableTasks(HTAB *backgroundExecutorHandles,
+								QueueMonitorExecutionContext *queueMonitorExecutionContext);
+static List * GetRunningTaskEntries(HTAB *backgroundExecutorHandles);
 static shm_mq_result ReadFromExecutorQueue(dsm_segment *seg, StringInfo message,
 										   bool *hadError);
 
@@ -240,6 +251,7 @@ citus_job_wait_internal(int64 jobid, BackgroundJobStatus *desiredStatus)
 		}
 
 		/* sleep for a while, before rechecking the job status */
+		CHECK_FOR_INTERRUPTS();
 		const long delay_ms = 1000;
 		(void) WaitLatch(MyLatch,
 						 WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
@@ -325,7 +337,7 @@ CitusBackgroundTaskQueueMonitorErrorCallback(void *arg)
 static HTAB *
 CreateBackgroundExecutorHash(MemoryContext context)
 {
-	HASHCTL info;
+	HASHCTL info = { 0 };
 
 	memset(&info, 0, sizeof(info));
 	info.keysize = sizeof(int64);
@@ -342,82 +354,210 @@ CreateBackgroundExecutorHash(MemoryContext context)
 
 
 /*
- * GetNextTaskExecutorFromHashTable returns the next executor from given hash table to be
- * run by task queue monitor. It will try to find the next executor in round-robin fashion
- * so that tasks will not starve to wait for their execution.
+ * NewExecutorExceedsCitusLimit returns true if currently we reached Citus' max worker count.
+ * It also sleeps 1 sec to let running tasks progress so that we have better chance to not hit
+ * that limit again.
  */
-static BackgroundExecutorHashEntry *
-GetNextTaskExecutorFromHashTable(HTAB *runningTaskBackgroundExecutors, int64
-								 lastMonitoredTaskId)
+static bool
+NewExecutorExceedsCitusLimit(QueueMonitorExecutionContext *queueMonitorExecutionContext)
 {
-	BackgroundExecutorHashEntry *firstReadyBackgroundExecutorHashEntry = NULL;
-	BackgroundExecutorHashEntry *nextReadyBackgroundExecutorHashEntry = NULL;
+	if (queueMonitorExecutionContext->currentExecutorCount >= MaxBackgroundTaskExecutors)
+	{
+		/*
+		 * we hit to Citus' maximum task executor count. Warn for the first failure
+		 * after a successful worker allocation happened, that is, we do not warn if
+		 * we repeatedly come here without a successful worker allocation.
+		 */
+		if (queueMonitorExecutionContext->backgroundWorkerFailedStartTime == 0)
+		{
+			ereport(WARNING, (errmsg("unable to start background worker for "
+									 "background task execution"),
+							  errdetail(
+								  "Already reached the maximum number of task "
+								  "executors: %ld/%d",
+								  queueMonitorExecutionContext->currentExecutorCount,
+								  MaxBackgroundTaskExecutors)));
+			queueMonitorExecutionContext->backgroundWorkerFailedStartTime =
+				GetCurrentTimestamp();
+		}
+
+		const long delay_ms = 1000;
+		(void) WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT |
+						 WL_EXIT_ON_PM_DEATH,
+						 delay_ms, WAIT_EVENT_PG_SLEEP);
+		ResetLatch(MyLatch);
+
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * NewExecutorExceedsPgMaxWorkers returns true if currently we reached Postgres' max worker count.
+ * It also sleeps 1 sec to let running tasks progress so that we have better chance to not hit
+ * that limit again.
+ */
+static bool
+NewExecutorExceedsPgMaxWorkers(BackgroundWorkerHandle *handle,
+							   QueueMonitorExecutionContext *queueMonitorExecutionContext)
+{
+	if (handle == NULL)
+	{
+		/*
+		 * we are unable to start a background worker for the task execution.
+		 * Probably we are out of background workers. Warn for the first failure
+		 * after a successful worker allocation happened, that is, we do not warn if
+		 * we repeatedly come here without a successful worker allocation.
+		 */
+		if (queueMonitorExecutionContext->backgroundWorkerFailedStartTime == 0)
+		{
+			ereport(WARNING, (errmsg(
+								  "unable to start background worker for "
+								  "background task execution"),
+							  errdetail(
+								  "Current number of task "
+								  "executors: %ld/%d",
+								  queueMonitorExecutionContext->currentExecutorCount,
+								  MaxBackgroundTaskExecutors)));
+			queueMonitorExecutionContext->backgroundWorkerFailedStartTime =
+				GetCurrentTimestamp();
+		}
+
+		const long delay_ms = 1000;
+		(void) WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT |
+						 WL_EXIT_ON_PM_DEATH,
+						 delay_ms, WAIT_EVENT_PG_SLEEP);
+		ResetLatch(MyLatch);
+
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * CreateNewExecutor returns the handle to new task executor.
+ */
+static BackgroundWorkerHandle *
+CreateNewExecutor(BackgroundTask *task, dsm_segment **seg, char *databaseName,
+				  char *userName)
+{
+	/* try to allocate a new task executor */
+	BackgroundWorkerHandle *handle = StartCitusBackgroundTaskExecutor(databaseName,
+																	  userName,
+																	  task->command,
+																	  task->taskid, seg);
+	return handle;
+}
+
+
+/*
+ * AssignRunnableTaskToNewExecutor tries to assign given runnable task to a new task executor. It reports the assignment status as return value.
+ */
+static bool
+AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
+								HTAB *backgroundExecutorHandles,
+								QueueMonitorExecutionContext *queueMonitorExecutionContext)
+{
+	Assert(runnableTask && runnableTask->status == BACKGROUND_TASK_STATUS_RUNNABLE);
+
+	if (NewExecutorExceedsCitusLimit(queueMonitorExecutionContext))
+	{
+		/* escape if we hit citus executor limit */
+		return false;
+	}
+
+	char *databaseName = get_database_name(MyDatabaseId);
+	char *userName = GetUserNameFromId(runnableTask->owner, false);
+
+	/* try to create new executor and make it alive during queue monitor lifetime */
+	MemoryContext oldContext = MemoryContextSwitchTo(queueMonitorExecutionContext->ctx);
+	dsm_segment *seg = NULL;
+	BackgroundWorkerHandle *handle = CreateNewExecutor(runnableTask, &seg, databaseName,
+													   userName);
+	MemoryContextSwitchTo(oldContext);
+
+	if (NewExecutorExceedsPgMaxWorkers(handle, queueMonitorExecutionContext))
+	{
+		/* escape if we hit pg worker limit */
+		return false;
+	}
+
+	/* assign the allocated executor to the runnable task and increment total executor count */
+	bool handleEntryFound = false;
+	BackgroundExecutorHashEntry *handleEntry = hash_search(backgroundExecutorHandles,
+														   &runnableTask->taskid,
+														   HASH_ENTER, &handleEntryFound);
+	Assert(!handleEntryFound);
+	handleEntry->handle = handle;
+	handleEntry->seg = seg;
+
+	/* make message alive during queue monitor lifetime */
+	oldContext = MemoryContextSwitchTo(queueMonitorExecutionContext->ctx);
+	handleEntry->message = makeStringInfo();
+	MemoryContextSwitchTo(oldContext);
+
+	/* set runnable task's status as running */
+	runnableTask->status = BACKGROUND_TASK_STATUS_RUNNING;
+	UpdateBackgroundTask(runnableTask);
+	UpdateBackgroundJob(runnableTask->jobid);
+
+	queueMonitorExecutionContext->currentExecutorCount++;
+
+	ereport(LOG, (errmsg("task jobid/taskid started: %ld/%ld",
+						 runnableTask->jobid, runnableTask->taskid)));
+
+	return true;
+}
+
+
+/*
+ * AssignRunnableTasks tries to assign all runnable tasks to a new task executor. If an assignment fails, it stops in case we hit some limitation.
+ * We do not load all the runnable tasks in memory at once as it can load memory much + we have limited worker to which we can assign task.
+ */
+static void
+AssignRunnableTasks(HTAB *backgroundExecutorHandles,
+					QueueMonitorExecutionContext *queueMonitorExecutionContext)
+{
+	BackgroundTask *runnableTask = NULL;
+	bool taskAssigned = false;
+	do {
+		/* fetch a runnable task from catalog */
+		runnableTask = GetRunnableBackgroundTask();
+		if (runnableTask)
+		{
+			taskAssigned = AssignRunnableTaskToNewExecutor(runnableTask,
+														   backgroundExecutorHandles,
+														   queueMonitorExecutionContext);
+		}
+		else
+		{
+			taskAssigned = false;
+		}
+	} while (taskAssigned);
+}
+
+
+/*
+ * GetRunningTaskEntries returns list of BackgroundExecutorHashEntry from given hash table
+ */
+static List *
+GetRunningTaskEntries(HTAB *backgroundExecutorHandles)
+{
+	List *runningTaskEntries = NIL;
 
 	HASH_SEQ_STATUS status;
 	BackgroundExecutorHashEntry *backgroundExecutorHashEntry;
-	hash_seq_init(&status, runningTaskBackgroundExecutors);
-
+	hash_seq_init(&status, backgroundExecutorHandles);
 	while ((backgroundExecutorHashEntry = hash_seq_search(&status)) != NULL)
 	{
-		int64 taskid = backgroundExecutorHashEntry->taskid;
-
-		if (firstReadyBackgroundExecutorHashEntry == NULL)
-		{
-			firstReadyBackgroundExecutorHashEntry = backgroundExecutorHashEntry;
-		}
-
-		if (taskid > lastMonitoredTaskId)
-		{
-			if (nextReadyBackgroundExecutorHashEntry == NULL)
-			{
-				nextReadyBackgroundExecutorHashEntry = backgroundExecutorHashEntry;
-			}
-			else if (taskid < nextReadyBackgroundExecutorHashEntry->taskid)
-			{
-				nextReadyBackgroundExecutorHashEntry = backgroundExecutorHashEntry;
-			}
-		}
+		runningTaskEntries = lappend(runningTaskEntries, backgroundExecutorHashEntry);
 	}
 
-	if (nextReadyBackgroundExecutorHashEntry)
-	{
-		/* we return next background executor */
-		return nextReadyBackgroundExecutorHashEntry;
-	}
-	else if (firstReadyBackgroundExecutorHashEntry)
-	{
-		/* we return to the beginning of the background executors */
-		return firstReadyBackgroundExecutorHashEntry;
-	}
-
-	/* No background executor found */
-	return NULL;
-}
-
-
-/*
- * StartMonitorTransaction switches into given ctx to make allocations persist in it
- */
-static void
-StartMonitorTransaction(MemoryContext ctx)
-{
-	StartTransactionCommand();
-	PushActiveSnapshot(GetTransactionSnapshot());
-	MemoryContextSwitchTo(ctx);
-}
-
-
-/*
- * CommitMonitorTransaction changes given ctx with TopTransactionContext to not deallocate
- * memory in ctx on transaction commits
- */
-static void
-CommitMonitorTransaction(MemoryContext ctx)
-{
-	MemoryContextSwitchTo(TopTransactionContext);
-	PopActiveSnapshot();
-	CommitTransactionCommand();
-	MemoryContextSwitchTo(ctx);
+	return runningTaskEntries;
 }
 
 
@@ -454,15 +594,19 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 	 * save old context until monitor loop exits, we use backgroundTaskContext for
 	 * all allocations.
 	 */
-	MemoryContext oldContext = CurrentMemoryContext;
+	MemoryContext firstContext = CurrentMemoryContext;
 	MemoryContext backgroundTaskContext = AllocSetContextCreate(TopMemoryContext,
 																"BackgroundTaskContext",
 																ALLOCSET_DEFAULT_SIZES);
 
-	StartMonitorTransaction(backgroundTaskContext);
+	StartTransactionCommand();
+	PushActiveSnapshot(GetTransactionSnapshot());
 
+	/* make databasename alive during queue monitor lifetime */
+	MemoryContext oldContext = MemoryContextSwitchTo(backgroundTaskContext);
 	const char *databasename = get_database_name(MyDatabaseId);
 	databasename = pstrdup(databasename);
+	MemoryContextSwitchTo(oldContext);
 
 	/* setup error context to indicate the errors came from a running background task */
 	ErrorContextCallback errorCallback = { 0 };
@@ -474,7 +618,8 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 	errorCallback.previous = error_context_stack;
 	error_context_stack = &errorCallback;
 
-	CommitMonitorTransaction(backgroundTaskContext);
+	PopActiveSnapshot();
+	CommitTransactionCommand();
 
 	/*
 	 * There should be exactly one background task monitor running, running multiple would
@@ -507,453 +652,315 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 	 * First we find all jobs that are running, we need to check if they are still running
 	 * if not reset their state back to scheduled.
 	 */
-	StartMonitorTransaction(backgroundTaskContext);
+	StartTransactionCommand();
+	PushActiveSnapshot(GetTransactionSnapshot());
+
 	ResetRunningBackgroundTasks();
-	CommitMonitorTransaction(backgroundTaskContext);
 
-	TimestampTz backgroundWorkerFailedStartTime = 0;
+	PopActiveSnapshot();
+	CommitTransactionCommand();
 
-	/*
-	 * create a map to concurrent store background workers created for tasks
-	 */
+	/* create a map to store parallel task executors */
 	HTAB *backgroundExecutorHandles = CreateBackgroundExecutorHash(backgroundTaskContext);
 
 	/*
-	 * Useful to keep track last monitored task id to ensure round-robin task execution
+	 * task execution context that is useful during the monitor loop.
+	 * we store current executor count, last background failure timestamp and also
+	 * a context to persist some allocations throughout the loop.
 	 */
-	int64 lastMonitoredTaskId = -1;
+	QueueMonitorExecutionContext queueMonitorExecutionContext = {
+		.currentExecutorCount = 0,
+		.backgroundWorkerFailedStartTime = 0,
+		.ctx = backgroundTaskContext
+	};
 
-	/*
-	 * current total # of parallel task executors
-	 */
-	int64 currentExecutorCount = 0;
-
-	/*
-	 * current running or runnable task and its related params used in monitor FSM
-	 */
-	BackgroundTask *task = NULL;
-	BackgroundWorkerHandle *handle = NULL;
-	BackgroundExecutorHashEntry *handleEntry = NULL;
-	dsm_segment *seg = NULL;
-	StringInfo message = NULL;
-	shm_mq_result mq_res = SHM_MQ_WOULD_BLOCK;
-	bool hadError = false;
-	char *databaseName = NULL;
-	char *userName = NULL;
-
-	/*
-	 * current and previous execution state for task monitor FSM
-	 */
-	BackgroundMonitorExecutionStates monitorExecutionState = MonitorStart;
-	BackgroundMonitorExecutionStates prevMonitorExecutionState = MonitorStart;
-
-	/* loop exits if there is no runnable or running tasks left (no ready task) */
-	while (monitorExecutionState != NoReadyTaskFound)
+	/* loop exits if there is no running tasks left */
+	bool hasAnyTask = true;
+	while (hasAnyTask)
 	{
-		switch (monitorExecutionState)
+		/* handle signals */
+		CHECK_FOR_INTERRUPTS();
+
+		/* invalidate cache for new data in catalog */
+		InvalidateMetadataSystemCache();
+
+		/* assign runnable tasks, if any, to new task executors in a transaction */
+		StartTransactionCommand();
+		PushActiveSnapshot(GetTransactionSnapshot());
+		AssignRunnableTasks(backgroundExecutorHandles, &queueMonitorExecutionContext);
+		PopActiveSnapshot();
+		CommitTransactionCommand();
+
+		/* get running task entries from hash table */
+		List *runningTaskEntries = GetRunningTaskEntries(backgroundExecutorHandles);
+		hasAnyTask = list_length(runningTaskEntries) > 0;
+
+		/* useful to sleep if all tasks ewouldblock on current iteration */
+		bool allWouldBlock = true;
+
+		/*
+		 * iterate over all handle entries and execute each task starting from
+		 * ExecutionStarted state until FSM reaches ExecutionEnded state.
+		 */
+		BackgroundExecutorHashEntry *handleEntry = NULL;
+		foreach_ptr(handleEntry, runningTaskEntries)
 		{
-			case MonitorStart:
+			/* execution state for current task in FSM */
+			BackgroundMonitorExecutionStates monitorExecutionState = ExecutionStarted;
+
+			/* useful to store cancelling status for current task in FSM */
+			bool taskCancelledConcurrently = false;
+
+			/* currently running task used in FSM */
+			BackgroundTask *task = NULL;
+
+			while (monitorExecutionState != ExecutionEnded)
 			{
-				/* initial state */
-
-				InvalidateMetadataSystemCache();
-
-				monitorExecutionState = FetchNewTask;
-				prevMonitorExecutionState = MonitorStart;
-				break;
-			}
-
-			case FetchNewTask:
-			{
-				/* try to fetch a runnable task */
-
-				StartMonitorTransaction(backgroundTaskContext);
-				task = GetRunnableBackgroundTask();
-
-				if (!task)
+				switch (monitorExecutionState)
 				{
-					monitorExecutionState = TryToExecuteReadyTask;
-				}
-				else
-				{
-					/* we load the database name and username here as we are still in a transaction */
-					databaseName = get_database_name(MyDatabaseId);
-					userName = GetUserNameFromId(task->owner, false);
-
-					monitorExecutionState = AssignNewTask;
-				}
-
-				prevMonitorExecutionState = FetchNewTask;
-				CommitMonitorTransaction(backgroundTaskContext);
-				break;
-			}
-
-			case TryToExecuteReadyTask:
-			{
-				/* we try to find an existing task executor in our hash table */
-
-				handleEntry = GetNextTaskExecutorFromHashTable(backgroundExecutorHandles,
-															   lastMonitoredTaskId);
-
-				if (handleEntry)
-				{
-					StartMonitorTransaction(backgroundTaskContext);
-					task = GetBackgroundTaskByTaskId(handleEntry->taskid);
-					CommitMonitorTransaction(backgroundTaskContext);
-
-					handle = handleEntry->handle;
-					seg = handleEntry->seg;
-					message = handleEntry->message;
-					lastMonitoredTaskId = handleEntry->taskid;
-
-					monitorExecutionState = ExecutorReady;
-				}
-				else
-				{
-					monitorExecutionState = NoReadyTaskFound;
-				}
-
-				prevMonitorExecutionState = TryToExecuteReadyTask;
-				break;
-			}
-
-			case AssignNewTask:
-			{
-				/* we try to allocate a new task executor for a runnable task */
-
-				if (currentExecutorCount == MaxBackgroundTaskExecutors)
-				{
-					/*
-					 * we hit to maximum allowable task executor count. Warn once and restart the loop
-					 * after a short sleep.
-					 */
-					ereport(WARNING, (errmsg("unable to start background worker for "
-											 "background task execution"),
-									  errdetail(
-										  "Already reached the maximum number of task "
-										  "executors: %ld", currentExecutorCount)));
-
-					const long delay_ms = 1000;
-					(void) WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT |
-									 WL_EXIT_ON_PM_DEATH,
-									 delay_ms, WAIT_EVENT_PG_SLEEP);
-					ResetLatch(MyLatch);
-					CHECK_FOR_INTERRUPTS();
-
-					monitorExecutionState = TryToExecuteReadyTask;
-				}
-				else
-				{
-					handle = StartCitusBackgroundTaskExecutor(databaseName, userName,
-															  task->command,
-															  task->taskid, &seg);
-
-					if (handle == NULL)
+					case ExecutionStarted:
 					{
 						/*
-						 * we are unable to start a background worker for the task execution.
-						 * Probably we are out of background workers. Warn once and restart the loop
-						 * after a short sleep.
+						 * initial execution state
+						 * check if we started execution after a delay
 						 */
-						if (backgroundWorkerFailedStartTime == 0)
+
+						if (queueMonitorExecutionContext.backgroundWorkerFailedStartTime >
+							0)
 						{
-							ereport(WARNING, (errmsg(
-												  "unable to start background worker for "
-												  "background task execution")));
-							backgroundWorkerFailedStartTime = GetCurrentTimestamp();
+							/*
+							 * we had a delay in starting the background worker for task execution. Report
+							 * the actual delay and reset the time. This allows a subsequent task to
+							 * report again if it can't start a background worker directly.
+							 */
+							long secs = 0;
+							int microsecs = 0;
+							TimestampDifference(
+								queueMonitorExecutionContext.
+								backgroundWorkerFailedStartTime,
+								GetCurrentTimestamp(),
+								&secs, &microsecs);
+							ereport(LOG, (errmsg(
+											  "able to start a background worker with %ld seconds"
+											  "delay", secs)));
+
+							queueMonitorExecutionContext.backgroundWorkerFailedStartTime =
+								0;
 						}
 
-						const long delay_ms = 1000;
-						(void) WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT |
-										 WL_EXIT_ON_PM_DEATH,
-										 delay_ms, WAIT_EVENT_PG_SLEEP);
-						ResetLatch(MyLatch);
-						CHECK_FOR_INTERRUPTS();
-
-						monitorExecutionState = TryToExecuteReadyTask;
+						monitorExecutionState = TaskConcurrentCancelCheck;
+						break;
 					}
-					else
+
+					case TaskConcurrentCancelCheck:
 					{
 						/*
-						 * we allocated a task executor. Then set shared variables used in FSM.
-						 * Also add new task executor into our map.
+						 * here we take exclusive lock on pg_dist_background_task table to prevent a
+						 * concurrent modification. We first check if a task is concurrently cancelled
+						 * or deleted. Accordingly, we decide to make the task status as cancelled or running.
 						 */
-						message = makeStringInfo();
 
-						bool handleEntryFound = false;
-						handleEntry = hash_search(backgroundExecutorHandles,
-												  &task->taskid, HASH_ENTER,
-												  &handleEntryFound);
-						Assert(!handleEntryFound);
-						handleEntry->handle = handle;
-						handleEntry->seg = seg;
-						handleEntry->message = message;
-						currentExecutorCount++;
+						StartTransactionCommand();
+						PushActiveSnapshot(GetTransactionSnapshot());
 
-						lastMonitoredTaskId = handleEntry->taskid;
 
-						monitorExecutionState = ExecutorReady;
+						/*
+						 * reload task while holding a new ExclusiveLock on the table. A separate process
+						 * could have cancelled or removed the task by now, they would not see the pid and
+						 * status update, so it is our responsibility to stop the backend and _not_ write
+						 * the pid and running status.
+						 *
+						 * The lock will release on transaction commit.
+						 */
+						LockRelationOid(DistBackgroundTaskRelationId(), ExclusiveLock);
+
+						task = GetBackgroundTaskByTaskId(handleEntry->taskid);
+
+						ereport(LOG, (errmsg("found task with jobid/taskid: %ld/%ld",
+											 task->jobid, task->taskid)));
+
+						if (!task || task->status == BACKGROUND_TASK_STATUS_CANCELLING)
+						{
+							/*
+							 * being in that step means that a concurrent cancel happened. we should make task status
+							 * as cancelled. We also want to reflect cancel message by consuming task executor
+							 * queue.
+							 */
+							taskCancelledConcurrently = true;
+						}
+						else
+						{
+							/*
+							 * now that we have verified the task has not been cancelled and still exist we
+							 * update it to reflect the new state. If task is already in running status,
+							 * the operation is idempotent. But for runnable tasks, we make their status
+							 * as running.
+							 */
+
+							pid_t pid = 0;
+							GetBackgroundWorkerPid(handleEntry->handle, &pid);
+							task->status = BACKGROUND_TASK_STATUS_RUNNING;
+							SET_NULLABLE_FIELD(task, pid, pid);
+
+							/* Update task status to indicate it is running */
+							UpdateBackgroundTask(task);
+							UpdateBackgroundJob(task->jobid);
+						}
+
+						monitorExecutionState = TryConsumeTaskWorker;
+						break;
+					}
+
+					case TryConsumeTaskWorker:
+					{
+						/*
+						 * we consume task executor response queue.
+						 * possible response codes can lead us different steps below.
+						 */
+						bool hadError = false;
+						shm_mq_result mq_res = ReadFromExecutorQueue(handleEntry->seg,
+																	 handleEntry->message,
+																	 &hadError);
+
+						if (taskCancelledConcurrently)
+						{
+							/* we update task status as cancelled */
+							ereport(LOG, (errmsg(
+											  "task jobid/taskid is cancelled: %ld/%ld",
+											  task->jobid, task->taskid)));
+
+							task->status = BACKGROUND_TASK_STATUS_CANCELLED;
+							monitorExecutionState = TaskEnded;
+						}
+						else if (hadError)
+						{
+							ereport(LOG, (errmsg("task jobid/taskid failed: %ld/%ld",
+												 task->jobid, task->taskid)));
+
+							monitorExecutionState = TaskHadError;
+						}
+						else if (mq_res == SHM_MQ_WOULD_BLOCK)
+						{
+							/*
+							 * still running the task but had no output for current iteration.
+							 * commit current transaction and jump onto next task.
+							 */
+							PopActiveSnapshot();
+							CommitTransactionCommand();
+							monitorExecutionState = ExecutionEnded;
+						}
+						else
+						{
+							Assert(mq_res == SHM_MQ_DETACHED);
+
+							ereport(LOG, (errmsg("task jobid/taskid succeeded: %ld/%ld",
+												 task->jobid, task->taskid)));
+
+							/* update task status as done. */
+							task->status = BACKGROUND_TASK_STATUS_DONE;
+							monitorExecutionState = TaskEnded;
+						}
+
+						break;
+					}
+
+					case TaskHadError:
+					{
+						/*
+						 * when we had an error in response queue, we need to decide if we want to retry (keep the
+						 * runnable state), or move to error state
+						 */
+
+						if (!task->retry_count)
+						{
+							SET_NULLABLE_FIELD(task, retry_count, 1);
+						}
+						else
+						{
+							(*task->retry_count)++;
+						}
+
+						/*
+						 * based on the retry count we either transition the task to its error
+						 * state, or we calculate a new backoff time for future execution.
+						 */
+						int64 delayMs = CalculateBackoffDelay(*(task->retry_count));
+						if (delayMs < 0)
+						{
+							task->status = BACKGROUND_TASK_STATUS_ERROR;
+							UNSET_NULLABLE_FIELD(task, not_before);
+						}
+						else
+						{
+							TimestampTz notBefore = TimestampTzPlusMilliseconds(
+								GetCurrentTimestamp(), delayMs);
+							SET_NULLABLE_FIELD(task, not_before, notBefore);
+
+							task->status = BACKGROUND_TASK_STATUS_RUNNABLE;
+						}
+
+						monitorExecutionState = TaskEnded;
+						break;
+					}
+
+					case TaskEnded:
+					{
+						/* end state for current execution */
+
+						/* we are sure that at least one task did not block on current iteration */
+						allWouldBlock = false;
+
+						/*
+						 * we update task and job fields. We also update depending jobs.
+						 * At the end, do cleanup.
+						 */
+						UNSET_NULLABLE_FIELD(task, pid);
+						task->message = (handleEntry->message) ?
+										handleEntry->message->data : NULL;
+
+						UpdateBackgroundTask(task);
+						UpdateDependingTasks(task);
+						UpdateBackgroundJob(task->jobid);
+
+						hash_search(backgroundExecutorHandles, &task->taskid,
+									HASH_REMOVE, NULL);
+						TerminateBackgroundWorker(handleEntry->handle);
+						dsm_detach(handleEntry->seg);
+						queueMonitorExecutionContext.currentExecutorCount--;
+
+						PopActiveSnapshot();
+						CommitTransactionCommand();
+
+						monitorExecutionState = ExecutionEnded;
+						break;
+					}
+
+					default:
+					{
+						break;
 					}
 				}
-
-				prevMonitorExecutionState = AssignNewTask;
-				break;
 			}
+		}
 
-			case ExecutorReady:
-			{
-				/*
-				 * the step is just after we setup shared FSM variables. We are here either after
-				 * finding an existing task executor from hash map, or after allocating a task
-				 * executor for a runnable task.
-				 */
-
-				if (backgroundWorkerFailedStartTime > 0)
-				{
-					/*
-					 * We had a delay in starting the background worker for task execution. Report
-					 * the actual delay and reset the time. This allows a subsequent task to
-					 * report again if it can't start a background worker directly.
-					 */
-					long secs = 0;
-					int microsecs = 0;
-					TimestampDifference(backgroundWorkerFailedStartTime,
-										GetCurrentTimestamp(),
-										&secs, &microsecs);
-					ereport(LOG, (errmsg(
-									  "able to start a background worker with %ld seconds"
-									  "delay", secs)));
-
-					backgroundWorkerFailedStartTime = 0;
-				}
-
-				ereport(LOG, (errmsg("found task with jobid/taskid: %ld/%ld",
-									 task->jobid, task->taskid)));
-
-				prevMonitorExecutionState = ExecutorReady;
-				monitorExecutionState = TaskConcurrentCancelCheck;
-				break;
-			}
-
-			case TaskConcurrentCancelCheck:
-			{
-				/*
-				 * Here we take exclusive lock on pg_dist_background_task table to prevent a
-				 * concurrent modification. We first check if a task is concurrently cancelled
-				 * or deleted. Accordingly, we decide to make the task status as cancelled or running.
-				 */
-
-				Assert(prevMonitorExecutionState == ExecutorReady);
-
-				StartMonitorTransaction(backgroundTaskContext);
-
-				/*
-				 * Reload task while holding a new ExclusiveLock on the table. A separate process
-				 * could have cancelled or removed the task by now, they would not see the pid and
-				 * status update, so it is our responsibility to stop the backend and _not_ write
-				 * the pid and running status.
-				 *
-				 * The lock will release on transaction commit.
-				 */
-				LockRelationOid(DistBackgroundTaskRelationId(), ExclusiveLock);
-
-				task = GetBackgroundTaskByTaskId(task->taskid);
-
-				if (!task || task->status == BACKGROUND_TASK_STATUS_CANCELLING)
-				{
-					monitorExecutionState = TaskCancelling;
-				}
-				else
-				{
-					monitorExecutionState = TaskRunning;
-				}
-
-				prevMonitorExecutionState = TaskConcurrentCancelCheck;
-				break;
-			}
-
-			case TaskCancelling:
-			{
-				/*
-				 * being in that step means that a concurrent cancel happened. we should make task status
-				 * as cancelled. We also want to reflect cancel message by consuming task executor
-				 * queue.
-				 */
-				prevMonitorExecutionState = TaskCancelling;
-				monitorExecutionState = TryConsumeTaskWorker;
-				break;
-			}
-
-			case TaskRunning:
-			{
-				/*
-				 * Now that we have verified the task has not been cancelled and still exist we
-				 * update it to reflect the new state. If task is already in running status,
-				 * the operation is idempotent. But for runnable tasks, we make their status
-				 * as running.
-				 */
-
-				pid_t pid = 0;
-				GetBackgroundWorkerPid(handle, &pid);
-				task->status = BACKGROUND_TASK_STATUS_RUNNING;
-				SET_NULLABLE_FIELD(task, pid, pid);
-
-				/* Update task status to indicate it is running */
-				UpdateBackgroundTask(task);
-				UpdateBackgroundJob(task->jobid);
-
-				prevMonitorExecutionState = TaskRunning;
-				monitorExecutionState = TryConsumeTaskWorker;
-				break;
-			}
-
-			case TryConsumeTaskWorker:
-			{
-				/*
-				 * we consume task executor response queue.
-				 * possible response codes can lead us different steps below.
-				 */
-				hadError = false;
-				mq_res = ReadFromExecutorQueue(seg, message, &hadError);
-
-				if (prevMonitorExecutionState == TaskCancelling)
-				{
-					monitorExecutionState = TaskCancelled;
-				}
-				else if (hadError)
-				{
-					monitorExecutionState = TaskHadError;
-				}
-				else if (mq_res == SHM_MQ_WOULD_BLOCK)
-				{
-					monitorExecutionState = TaskWouldBlock;
-				}
-				else
-				{
-					Assert(mq_res == SHM_MQ_DETACHED);
-					monitorExecutionState = TaskSucceeded;
-				}
-
-				prevMonitorExecutionState = TryConsumeTaskWorker;
-				break;
-			}
-
-			case TaskHadError:
-			{
-				/*
-				 * When we had an error in response queue, we need to decide if we want to retry (keep the
-				 * runnable state), or move to error state
-				 */
-
-				if (!task->retry_count)
-				{
-					SET_NULLABLE_FIELD(task, retry_count, 1);
-				}
-				else
-				{
-					(*task->retry_count)++;
-				}
-
-				/*
-				 * based on the retry count we either transition the task to its error
-				 * state, or we calculate a new backoff time for future execution.
-				 */
-				int64 delayMs = CalculateBackoffDelay(*(task->retry_count));
-				if (delayMs < 0)
-				{
-					task->status = BACKGROUND_TASK_STATUS_ERROR;
-					UNSET_NULLABLE_FIELD(task, not_before);
-				}
-				else
-				{
-					TimestampTz notBefore = TimestampTzPlusMilliseconds(
-						GetCurrentTimestamp(), delayMs);
-					SET_NULLABLE_FIELD(task, not_before, notBefore);
-
-					task->status = BACKGROUND_TASK_STATUS_RUNNABLE;
-				}
-
-				prevMonitorExecutionState = TaskHadError;
-				monitorExecutionState = TaskEnded;
-				break;
-			}
-
-			case TaskCancelled:
-			{
-				/* we update task status as cancelled */
-
-				task->status = BACKGROUND_TASK_STATUS_CANCELLED;
-
-				prevMonitorExecutionState = TaskCancelled;
-				monitorExecutionState = TaskEnded;
-				break;
-			}
-
-			case TaskWouldBlock:
-			{
-				/* still running the task, let the loop choose a new task */
-
-				/* lower cpu consumption on EWOULD_BLOCK */
-				const long delay_ms = 2;
-				(void) WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT |
-								 WL_EXIT_ON_PM_DEATH,
-								 delay_ms, WAIT_EVENT_PG_SLEEP);
-				ResetLatch(MyLatch);
-				CHECK_FOR_INTERRUPTS();
-
-				CommitMonitorTransaction(backgroundTaskContext);
-
-				prevMonitorExecutionState = TaskWouldBlock;
-				monitorExecutionState = MonitorStart;
-				break;
-			}
-
-			case TaskSucceeded:
-			{
-				/* update task status as done. */
-				task->status = BACKGROUND_TASK_STATUS_DONE;
-
-				prevMonitorExecutionState = TaskSucceeded;
-				monitorExecutionState = TaskEnded;
-				break;
-			}
-
-			case TaskEnded:
-			{
-				/*
-				 * here is a common end state for fail, success and cancel cases.
-				 * we update task and job fields. We also update depending jobs.
-				 * At the end, do cleanup.
-				 */
-
-				UNSET_NULLABLE_FIELD(task, pid);
-				task->message = (message) ? message->data : NULL;
-
-				UpdateBackgroundTask(task);
-				UpdateDependingTasks(task);
-				UpdateBackgroundJob(task->jobid);
-
-				hash_search(backgroundExecutorHandles, &task->taskid, HASH_REMOVE, NULL);
-				TerminateBackgroundWorker(handle);
-				dsm_detach(seg);
-				currentExecutorCount--;
-
-				CommitMonitorTransaction(backgroundTaskContext);
-
-				prevMonitorExecutionState = TaskEnded;
-				monitorExecutionState = MonitorStart;
-				break;
-			}
-
-			default:
-			{
-				break;
-			}
+		if (allWouldBlock)
+		{
+			/*
+			 * sleep to lower cpu consumption if all tasks responded with EWOULD_BLOCK on the last iteration.
+			 * That will also let those tasks to progress to generate some output probably.
+			 */
+			const long delay_ms = 1000;
+			(void) WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT |
+							 WL_EXIT_ON_PM_DEATH,
+							 delay_ms, WAIT_EVENT_PG_SLEEP);
+			ResetLatch(MyLatch);
 		}
 	}
 
-	MemoryContextSwitchTo(oldContext);
+	MemoryContextSwitchTo(firstContext);
 	MemoryContextDelete(backgroundTaskContext);
+
+	proc_exit(0);
 }
 
 
@@ -1293,6 +1300,8 @@ StoreArgumentsInDSM(char *database, char *username, char *command, int64 taskId)
 	shm_toc_estimate_keys(&e, CITUS_BACKGROUND_TASK_NKEYS);
 	Size segsize = shm_toc_estimate(&e);
 
+	/* attaches the segment into TopMemoryContext, else, we can get garbage segment after commit */
+	CurrentResourceOwner = ResourceOwnerCreate(NULL, "citus background job");
 	dsm_segment *seg = dsm_create(segsize, DSM_CREATE_NULL_IF_MAXSEGMENTS);
 	if (seg == NULL)
 	{
@@ -1420,13 +1429,6 @@ CitusBackgroundTaskExecutor(Datum main_arg)
 	 * pqsignal(SIGTERM, pg_cron_background_worker_sigterm);
 	 */
 	BackgroundWorkerUnblockSignals();
-
-	/* Set up a memory context and resource owner. */
-	Assert(CurrentResourceOwner == NULL);
-	CurrentResourceOwner = ResourceOwnerCreate(NULL, "citus background job");
-	CurrentMemoryContext = AllocSetContextCreate(TopMemoryContext,
-												 "citus background job execution",
-												 ALLOCSET_DEFAULT_SIZES);
 
 	/* Set up a dynamic shared memory segment. */
 	dsm_segment *seg = dsm_attach(DatumGetInt32(main_arg));
