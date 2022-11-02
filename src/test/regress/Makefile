@@ -190,7 +190,7 @@ check-isolation-base: all  $(isolation_test_files)
 	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/base_isolation_schedule $(EXTRA_TESTS)
 
 # ci takes regression.diffs output from another location, so copy diffs file at the end.
-check-vanilla:
+check-vanilla: all
 	$(pg_regress_multi_check) --vanillatest || (cp $(vanilla_diffs_file) $(citus_abs_srcdir)/regression.diffs)
 
 check-multi-mx: all
@@ -205,7 +205,7 @@ check-operations: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/operations_schedule $(EXTRA_TESTS)
 
-check-columnar:
+check-columnar: all
 	$(pg_regress_multi_check) --load-extension=citus_columnar --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/columnar_schedule $(EXTRA_TESTS)
 
@@ -229,23 +229,23 @@ check-enterprise-failure: all
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/enterprise_failure_schedule $(EXTRA_TESTS)
 
-check-pg-upgrade:
+check-pg-upgrade: all
 	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir)
 
-check-arbitrary-configs:
+check-arbitrary-configs: all
 	${arbitrary_config_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir) --parallel=$(parallel) --configs=$(CONFIGS) --seed=$(seed)
 
-check-arbitrary-base:
+check-arbitrary-base: all
 	${arbitrary_config_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir) --parallel=$(parallel) --configs=$(CONFIGS) --seed=$(seed) --base
 
-check-citus-upgrade:
+check-citus-upgrade: all
 	$(citus_upgrade_check) \
 		--bindir=$(bindir) \
 		--pgxsdir=$(pgxsdir) \
 		--citus-pre-tar=$(citus-pre-tar) \
 		--citus-post-tar=$(citus-post-tar)
 
-check-citus-upgrade-mixed:
+check-citus-upgrade-mixed: all
 	$(citus_upgrade_check) \
 		--bindir=$(bindir) \
 		--pgxsdir=$(pgxsdir) \
@@ -253,13 +253,13 @@ check-citus-upgrade-mixed:
 		--citus-post-tar=$(citus-post-tar) \
 		--mixed
 
-check-citus-upgrade-local: clean-upgrade-artifacts
+check-citus-upgrade-local: all clean-upgrade-artifacts
 	$(citus_upgrade_check) \
 		--bindir=$(bindir) \
 		--pgxsdir=$(pgxsdir) \
 		--citus-old-version=$(citus-old-version)
 
-check-citus-upgrade-mixed-local: clean-upgrade-artifacts
+check-citus-upgrade-mixed-local: all clean-upgrade-artifacts
 	$(citus_upgrade_check) \
 		--bindir=$(bindir) \
 		--pgxsdir=$(pgxsdir) \
