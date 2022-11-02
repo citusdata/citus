@@ -73,3 +73,12 @@ CREATE TABLE http_request (
 );
 
 SELECT create_distributed_table('http_request', 'site_id');
+
+-- Standard planner converted text and varchar casts to cstring in some cases
+-- We make sure we convert it back to text when parsing the expression
+-- https://github.com/citusdata/citus/issues/6061
+-- https://github.com/citusdata/citus/issues/5646
+-- https://github.com/citusdata/citus/issues/5033
+
+CREATE TABLE test(t timestamp, user_id int);
+SELECT create_distributed_table('test', 'user_id');
