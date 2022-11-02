@@ -90,6 +90,9 @@ StringInfo activeSetStmts;
  * PostgreSQL with a sub-xact callback). At present, the context of a subxact
  * includes a subxact identifier as well as any SET LOCAL statements propagated
  * to workers during the sub-transaction.
+ *
+ * To be clear, last item of activeSubXactContexts list corresponds to top of
+ * stack.
  */
 static List *activeSubXactContexts = NIL;
 
@@ -758,7 +761,7 @@ PushSubXact(SubTransactionId subId)
 	state->setLocalCmds = activeSetStmts;
 
 	/* append to list and reset active set stmts for upcoming sub-xact */
-	activeSubXactContexts = lcons(state, activeSubXactContexts);
+	activeSubXactContexts = lappend(activeSubXactContexts, state);
 	activeSetStmts = makeStringInfo();
 }
 
@@ -767,7 +770,7 @@ PushSubXact(SubTransactionId subId)
 static void
 PopSubXact(SubTransactionId subId)
 {
-	SubXactContext *state = linitial(activeSubXactContexts);
+	SubXactContext *state = llast(activeSubXactContexts);
 
 	Assert(state->subId == subId);
 
@@ -794,7 +797,7 @@ PopSubXact(SubTransactionId subId)
 	 */
 	pfree(state);
 
-	activeSubXactContexts = list_delete_first(activeSubXactContexts);
+	activeSubXactContexts = list_delete_last(activeSubXactContexts);
 }
 
 
@@ -802,19 +805,7 @@ PopSubXact(SubTransactionId subId)
 List *
 ActiveSubXactContexts(void)
 {
-	List *reversedSubXactStates = NIL;
-
-	/*
-	 * activeSubXactContexts is in reversed temporal order, so we reverse it to get it
-	 * in temporal order.
-	 */
-	SubXactContext *state = NULL;
-	foreach_ptr(state, activeSubXactContexts)
-	{
-		reversedSubXactStates = lcons(state, reversedSubXactStates);
-	}
-
-	return reversedSubXactStates;
+	return activeSubXactContexts;
 }
 
 
