@@ -264,6 +264,11 @@ DropOrphanedResourcesForCleanup()
 	}
 
 	List *cleanupRecordList = ListCleanupRecords();
+
+	/*
+	 * We sort the records before cleaning up by their types, because of dependencies.
+	 * For example, a subscription might depend on a publication.
+	 */
 	cleanupRecordList = SortList(cleanupRecordList,
 								 CompareCleanupRecordsByObjectType);
 
@@ -471,6 +476,11 @@ FinalizeOperationNeedingCleanupOnFailure(const char *operationName)
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
 
 	List *currentOperationRecordList = ListCleanupRecordsForCurrentOperation();
+
+	/*
+	 * We sort the records before cleaning up by their types, because of dependencies.
+	 * For example, a subscription might depend on a publication.
+	 */
 	currentOperationRecordList = SortList(currentOperationRecordList,
 										  CompareCleanupRecordsByObjectType);
 
@@ -533,6 +543,11 @@ FinalizeOperationNeedingCleanupOnSuccess(const char *operationName)
 	Assert(CurrentOperationId != INVALID_OPERATION_ID);
 
 	List *currentOperationRecordList = ListCleanupRecordsForCurrentOperation();
+
+	/*
+	 * We sort the records before cleaning up by their types, because of dependencies.
+	 * For example, a subscription might depend on a publication.
+	 */
 	currentOperationRecordList = SortList(currentOperationRecordList,
 										  CompareCleanupRecordsByObjectType);
 
