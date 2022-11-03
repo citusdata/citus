@@ -100,6 +100,38 @@ To automatically setup a citus cluster in tests we use our
 then starts the standard postgres test tooling. You almost never have to change
 this file.
 
+## Handling different test outputs
+
+Sometimes the test output changes because we run tests in different configurations.
+The most common example is an output that changes in different Postgres versions.
+We highly encourage to find a way to avoid these test outputs.
+You can try the following, if applicable to the changing output:
+- Change the test such that you still test what you want, but you avoid the different test outputs.
+- Reduce the test verbosity via: `\set VERBOSITY terse`, `SET client_min_messages TO error`, etc
+- Drop the specific test lines altogether, if the test is not critical.
+- Use utility functions that modify the output to your preference,
+like [coordinator_plan](https://github.com/citusdata/citus/blob/main/src/test/regress/sql/multi_test_helpers.sql#L23),
+which modifies EXPLAIN output
+- Add [a normalization rule](https://github.com/citusdata/citus/blob/main/ci/README.md#normalize_expectedsh)
+
+Alternative test output files are highly discouraged, so only add one when strictly necessary.
+In order to maintain a clean test suite, make sure to explain why it has an alternative
+output in the test header, and when we can drop the alternative output file in the future.
+
+For example:
+
+```sql
+--
+-- MULTI_INSERT_SELECT
+--
+-- This test file has an alternative output because of the change in the
+-- display of SQL-standard function's arguments in INSERT/SELECT in PG15.
+-- The alternative output can be deleted when we drop support for PG14
+--
+```
+Including important keywords, like "PG14", "PG15", "alternative output" will
+help cleaning up in the future.
+
 ## Randomly failing tests
 
 In CI sometimes a test fails randomly, we call these tests "flaky". To fix these
