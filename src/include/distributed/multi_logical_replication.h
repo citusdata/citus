@@ -178,6 +178,7 @@ extern void CompleteNonBlockingShardTransfer(List *shardList,
 											 MultiConnection *sourceConnection,
 											 HTAB *publicationInfoHash,
 											 List *logicalRepTargetList,
+											 List *logicalRepTargetList2,
 											 HTAB *groupedLogicalRepTargetsHash,
 											 LogicalRepType type);
 extern void CreateUncheckedForeignKeyConstraints(List *logicalRepTargetList);

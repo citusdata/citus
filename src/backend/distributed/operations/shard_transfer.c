@@ -1209,6 +1209,35 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
 
 	MemoryContextSwitchTo(oldContext);
 
+	/*
+	 * We should recreate partitioning hierarchy between shards.
+	 */
+	List *attachPartitionCommands = NIL;
+	foreach_ptr(shardInterval, shardIntervalList)
+	{
+		if (PartitionTable(shardInterval->relationId))
+		{
+			char *attachPartitionCommand =
+				GenerateAttachShardPartitionCommand(shardInterval);
+
+			ShardCommandList *shardCommandList = CreateShardCommandList(
+				shardInterval,
+				list_make1(attachPartitionCommand));
+			attachPartitionCommands = lappend(attachPartitionCommands,
+											  shardCommandList);
+		}
+	}
+
+	/* Now execute the Partitioning creation commads. */
+	ShardCommandList *attachPartitionCommand = NULL;
+	foreach_ptr(attachPartitionCommand, attachPartitionCommands)
+	{
+		char *tableOwner = TableOwner(attachPartitionCommand->shardInterval->relationId);
+		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
+												  tableOwner,
+												  attachPartitionCommand->ddlCommandList);
+	}
+
 	/* data copy is done seperately when logical replication is used */
 	LogicallyReplicateShards(shardIntervalList, sourceNodeName,
 							 sourceNodePort, targetNodeName, targetNodePort);

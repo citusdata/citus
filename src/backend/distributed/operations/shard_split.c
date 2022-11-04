@@ -1633,6 +1633,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 										 sourceConnection,
 										 publicationInfoHash,
 										 logicalRepTargetList,
+										 logicalRepTargetList,
 										 groupedLogicalRepTargetsHash,
 										 SHARD_SPLIT);
 
