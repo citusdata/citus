@@ -11,8 +11,6 @@ ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1370000;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1370000;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 1370000;
 
-SET citus.replicate_reference_tables_on_activate TO off;
-
 -- only query shards created in this test
 CREATE VIEW pg_dist_shard_placement_view AS
 SELECT * FROM pg_dist_shard_placement WHERE shardid BETWEEN 1370000 AND 1380000;
@@ -622,29 +620,8 @@ SELECT count(*) - :ref_table_placements FROM pg_dist_shard_placement WHERE shard
 DROP TABLE range_table;
 SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
 
--- test setting citus.replicate_reference_tables_on_activate to on
--- master_add_node
-SET citus.replicate_reference_tables_on_activate TO on;
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-
-SELECT count(*) - :ref_table_placements FROM pg_dist_shard_placement WHERE shardid = :ref_table_shard;
-
--- master_activate_node
-SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
-SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port);
-
-SELECT count(*) - :ref_table_placements FROM pg_dist_shard_placement WHERE shardid = :ref_table_shard;
-
-SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
-
-SELECT count(*) - :ref_table_placements FROM pg_dist_shard_placement WHERE shardid = :ref_table_shard;
-
-SELECT min(result) = max(result) AS consistent FROM run_command_on_placements('ref_table', 'SELECT sum(a) FROM %s');
-
 -- test that metadata is synced when citus_copy_shard_placement replicates
 -- reference table shards
-SET citus.replicate_reference_tables_on_activate TO off;
-SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 SET citus.shard_replication_factor TO 1;
@@ -705,7 +682,6 @@ SET search_path TO replicate_reference_table;
 -- The following case used to get stuck on create_distributed_table() instead
 -- of detecting the distributed deadlock.
 --
-SET citus.replicate_reference_tables_on_activate TO off;
 SET citus.shard_replication_factor TO 1;
 
 SELECT master_remove_node('localhost', :worker_2_port);

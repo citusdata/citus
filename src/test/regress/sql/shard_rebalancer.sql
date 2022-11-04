@@ -1220,11 +1220,9 @@ SELECT public.wait_until_metadata_sync(30000);
 
 --
 -- Make sure that rebalance_table_shards() and replicate_table_shards() replicate
--- reference tables to the coordinator when replicate_reference_tables_on_activate
--- is off.
+-- reference tables to the coordinator
 --
 
-SET citus.replicate_reference_tables_on_activate TO off;
 SET client_min_messages TO WARNING;
 
 CREATE TABLE dist_table_test_3(a int);

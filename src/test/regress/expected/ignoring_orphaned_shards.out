@@ -128,7 +128,6 @@ SELECT * FROM create_distributed_table('rep1', 'id');
 
 -- Add the coordinator, so we can have a replicated shard
 SELECT 1 FROM citus_add_node('localhost', :master_port, 0);
-NOTICE:  Replicating reference table "ref" to the node localhost:xxxxx
 NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  ?column?
 ---------------------------------------------------------------------

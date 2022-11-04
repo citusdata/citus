@@ -509,10 +509,25 @@ SELECT master_remove_node('localhost', :master_port);
 (1 row)
 
 -- add the coordinator as a worker node and verify that the reference tables are replicated
-SELECT master_add_node('localhost', :master_port, groupid => 0) AS master_nodeid \gset
-NOTICE:  Replicating reference table "squares" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "numbers" to the node localhost:xxxxx
+SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
 NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT replicate_reference_tables(shard_transfer_mode := 'force_logical');
+ replicate_reference_tables
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) > 0 FROM pg_dist_shard_placement WHERE nodename = 'localhost' AND nodeport = :master_port;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- clean-up
 SET client_min_messages TO ERROR;
 DROP SCHEMA replicate_ref_to_coordinator CASCADE;

@@ -98,7 +98,7 @@ CREATE OR REPLACE VIEW prop_view_6 AS
     INNER JOIN view_prop_schema_inner.view_table_4 AS vt4 ON vt1.id = vt4.id;
 -- Show that all views are propagated as distributed object
 SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%prop_view_%' ORDER BY 1;
-               obj_identifier
+                 obj_identifier
 ---------------------------------------------------------------------
  (view,"{view_prop_schema,prop_view_1}",{})
  (view,"{view_prop_schema,prop_view_2}",{})
@@ -209,8 +209,8 @@ CREATE USER view_creation_user;
 SELECT 1 FROM run_command_on_workers($$CREATE USER view_creation_user;$$);
  ?column?
 ---------------------------------------------------------------------
- 1
- 1
+        1
+        1
 (2 rows)
 
 GRANT ALL PRIVILEGES ON SCHEMA view_prop_schema to view_creation_user;
@@ -468,7 +468,7 @@ SELECT definition FROM pg_views WHERE viewname = 'alter_view_1';
 ---------------------------------------------------------------------
   SELECT alter_view_table.id,+
      alter_view_table.val1   +
-     FROM alter_view_table;
+    FROM alter_view_table;
 (1 row)
 
 SELECT relname, reloptions
@@ -481,11 +481,11 @@ WHERE oid = 'view_prop_schema.alter_view_1'::regclass::oid;
 
 \c - - - :worker_1_port
 SELECT definition FROM pg_views WHERE viewname = 'alter_view_1';
-          definition
+                 definition
 ---------------------------------------------------------------------
-  SELECT alter_view_table.id,+
-     alter_view_table.val1   +
-     FROM view_prop_schema.alter_view_table;
+  SELECT alter_view_table.id,              +
+     alter_view_table.val1                 +
+    FROM view_prop_schema.alter_view_table;
 (1 row)
 
 SELECT relname, reloptions
@@ -879,7 +879,7 @@ CREATE VIEW v_dist AS SELECT 1;
 SELECT COUNT(*) FROM pg_dist_object WHERE objid = 'v_dist'::regclass;
  count
 ---------------------------------------------------------------------
-    1
+     1
 (1 row)
 
 -- tests when citus.enforce_object_restrictions_for_local_objects=false
@@ -893,7 +893,7 @@ CREATE OR REPLACE VIEW vv3 as SELECT * FROM vv4;
 SELECT COUNT(*) FROM pg_dist_object WHERE objid IN ('vv3'::regclass, 'vv4'::regclass);
  count
 ---------------------------------------------------------------------
-    0
+     0
 (1 row)
 
 -- local view with no citus relation dependency will NOT be distributed
@@ -902,7 +902,7 @@ CREATE VIEW v_local_only AS SELECT 1;
 SELECT COUNT(*) FROM pg_dist_object WHERE objid = 'v_local_only'::regclass;
  count
 ---------------------------------------------------------------------
-    0
+     0
 (1 row)
 
 -- distribute the local table and check the distribution of dependent views
@@ -916,14 +916,14 @@ SELECT create_distributed_table('local_t', 'a');
 SELECT COUNT(*) FROM pg_dist_object WHERE objid IN ('vv1'::regclass, 'vv2'::regclass);
  count
 ---------------------------------------------------------------------
-    2
+     2
 (1 row)
 
 -- show that views with circular dependency are NOT in pg_dist_object
 SELECT COUNT(*) FROM pg_dist_object WHERE objid IN ('vv3'::regclass, 'vv4'::regclass);
  count
 ---------------------------------------------------------------------
-    0
+     0
 (1 row)
 
 -- show that we cannot re-create the circular views ever

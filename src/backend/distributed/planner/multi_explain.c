@@ -32,7 +32,6 @@
 #include "distributed/insert_select_planner.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/listutils.h"
-#include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_logical_optimizer.h"

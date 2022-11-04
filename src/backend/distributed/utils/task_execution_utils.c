@@ -20,7 +20,6 @@
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"

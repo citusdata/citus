@@ -120,9 +120,6 @@ static void EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
 static List * RecreateShardDDLCommandList(ShardInterval *shardInterval,
 										  const char *sourceNodeName,
 										  int32 sourceNodePort);
-static List * CopyShardContentsCommandList(ShardInterval *shardInterval,
-										   const char *sourceNodeName,
-										   int32 sourceNodePort);
 static List * PostLoadShardCreationCommandList(ShardInterval *shardInterval,
 											   const char *sourceNodeName,
 											   int32 sourceNodePort);
@@ -1578,31 +1575,6 @@ SearchShardPlacementInListOrError(List *shardPlacementList, const char *nodeName
 
 
 /*
- * CopyShardCommandList generates command list to copy the given shard placement
- * from the source node to the target node. To do this it recreates the shard
- * on the target, and then copies the data. Caller could optionally skip
- * copying the data by the flag includeDataCopy.
- */
-List *
-CopyShardCommandList(ShardInterval *shardInterval, const char *sourceNodeName,
-					 int32 sourceNodePort, bool includeDataCopy)
-{
-	List *copyShardToNodeCommandsList = RecreateShardDDLCommandList(
-		shardInterval, sourceNodeName, sourceNodePort);
-	if (includeDataCopy)
-	{
-		copyShardToNodeCommandsList = list_concat(
-			copyShardToNodeCommandsList,
-			CopyShardContentsCommandList(shardInterval, sourceNodeName,
-										 sourceNodePort));
-	}
-	return list_concat(copyShardToNodeCommandsList,
-					   PostLoadShardCreationCommandList(shardInterval, sourceNodeName,
-														sourceNodePort));
-}
-
-
-/*
  * RecreateShardDDLCommandList generates a command list to recreate a shard,
  * but without any data init and without the post-load table creation commands.
  */
@@ -1615,28 +1587,6 @@ RecreateShardDDLCommandList(ShardInterval *shardInterval, const char *sourceNode
 
 	List *tableRecreationCommandList = RecreateTableDDLCommandList(relationId);
 	return WorkerApplyShardDDLCommandList(tableRecreationCommandList, shardId);
-}
-
-
-/*
- * CopyShardContentsCommandList generates a command list to copy the data of the
- * given shard placement from the source node to the target node. This copying
- * requires a precreated table for the shard on the target node to have been
- * created already (using RecreateShardDDLCommandList).
- */
-static List *
-CopyShardContentsCommandList(ShardInterval *shardInterval, const char *sourceNodeName,
-							 int32 sourceNodePort)
-{
-	char *shardName = ConstructQualifiedShardName(shardInterval);
-	StringInfo copyShardDataCommand = makeStringInfo();
-	appendStringInfo(copyShardDataCommand, WORKER_APPEND_TABLE_TO_SHARD,
-					 quote_literal_cstr(shardName), /* table to append */
-					 quote_literal_cstr(shardName), /* remote table name */
-					 quote_literal_cstr(sourceNodeName), /* remote host */
-					 sourceNodePort); /* remote port */
-
-	return list_make1(copyShardDataCommand->data);
 }
 
 

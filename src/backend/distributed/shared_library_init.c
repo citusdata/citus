@@ -151,6 +151,7 @@ static char *DeprecatedEmptyString = "";
 static char *MitmfifoEmptyString = "";
 static bool DeprecatedDeferShardDeleteOnMove = true;
 static bool DeprecatedDeferShardDeleteOnSplit = true;
+static bool DeprecatedReplicateReferenceTablesOnActivate = false;
 
 /* deprecated GUC value that should not be used anywhere outside this file */
 static int ReplicationModel = REPLICATION_MODEL_STREAMING;
@@ -2058,11 +2059,12 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	/* deprecated setting */
 	DefineCustomBoolVariable(
 		"citus.replicate_reference_tables_on_activate",
 		NULL,
 		NULL,
-		&ReplicateReferenceTablesOnActivate,
+		&DeprecatedReplicateReferenceTablesOnActivate,
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,

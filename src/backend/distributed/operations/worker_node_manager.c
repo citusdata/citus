@@ -19,7 +19,6 @@
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_client_executor.h"
 #include "distributed/worker_manager.h"
 #include "libpq/hba.h"
 #include "common/ip.h"

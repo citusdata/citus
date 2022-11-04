@@ -79,7 +79,7 @@ ORDER BY 1;
  function citus_is_coordinator()
  function citus_isolation_test_session_is_blocked(integer,integer[])
  function citus_job_cancel(bigint)
- function citus_job_wait(bigint, citus_job_status)
+ function citus_job_wait(bigint,citus_job_status)
  function citus_json_concatenate(json,json)
  function citus_json_concatenate_final(json)
  function citus_jsonb_concatenate(jsonb,jsonb)
@@ -223,7 +223,6 @@ ORDER BY 1;
  function truncate_local_data_after_distributing_table(regclass)
  function undistribute_table(regclass,boolean)
  function update_distributed_table_colocation(regclass,text)
- function worker_append_table_to_shard(text,text,text,integer)
  function worker_apply_inter_shard_ddl_command(bigint,text,bigint,text,text)
  function worker_apply_sequence_command(text)
  function worker_apply_sequence_command(text,regtype)
@@ -312,5 +311,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(304 rows)
+(303 rows)
 

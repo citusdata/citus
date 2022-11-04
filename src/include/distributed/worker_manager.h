@@ -61,7 +61,6 @@ typedef struct WorkerNode
 extern int MaxWorkerNodesTracked;
 extern char *WorkerListFileName;
 extern char *CurrentCluster;
-extern bool ReplicateReferenceTablesOnActivate;
 
 extern void ActivateNodeList(List *nodeList);
 extern int ActivateNode(char *nodeName, int nodePort);
