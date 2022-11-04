@@ -391,14 +391,13 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 			ColumnToColumnName(parentRelationId, (Node *) parentDistributionColumn);
 		char parentDistributionMethod = DISTRIBUTE_BY_HASH;
 		char *parentRelationName = generate_qualified_relation_name(parentRelationId);
-		bool viaDeprecatedAPI = false;
 
 		SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(parentRelationId,
 																  relationId);
 
 		CreateDistributedTable(relationId, distributionColumnName,
 							   parentDistributionMethod, ShardCount, false,
-							   parentRelationName, viaDeprecatedAPI);
+							   parentRelationName);
 	}
 }
 
@@ -598,14 +597,13 @@ DistributePartitionUsingParent(Oid parentCitusRelationId, Oid partitionRelationI
 
 	char distributionMethod = DISTRIBUTE_BY_HASH;
 	char *parentRelationName = generate_qualified_relation_name(parentCitusRelationId);
-	bool viaDeprecatedAPI = false;
 
 	SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(
 		parentCitusRelationId, partitionRelationId);
 
 	CreateDistributedTable(partitionRelationId, distributionColumnName,
 						   distributionMethod, ShardCount, false,
-						   parentRelationName, viaDeprecatedAPI);
+						   parentRelationName);
 }
 
 

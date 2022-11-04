@@ -396,8 +396,8 @@ CREATE TABLE objects (
 	name text NOT NULL
 );
 
-SELECT master_create_distributed_table('objects', 'id', 'hash');
-SELECT master_create_worker_shards('objects', 1, 2);
+SET citus.shard_replication_factor TO 2;
+SELECT create_distributed_table('objects', 'id', 'hash', shard_count := 1);
 
 -- test primary key violations
 BEGIN;
@@ -615,7 +615,7 @@ ORDER BY s.logicalrelid, sp.shardstate;
 -- some append-partitioned tests for good measure
 CREATE TABLE append_researchers ( LIKE researchers );
 
-SELECT master_create_distributed_table('append_researchers', 'id', 'append');
+SELECT create_distributed_table('append_researchers', 'id', 'append');
 
 SET citus.shard_replication_factor TO 1;
 

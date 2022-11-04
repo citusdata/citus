@@ -30,49 +30,6 @@ SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regcl
 (1 row)
 
 DROP TABLE repmodel_test;
--- test that deprecated api creates distributed tables with coordinator replication
-CREATE TABLE repmodel_test (a int);
-SELECT master_create_distributed_table('repmodel_test', 'a', 'hash');
- master_create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
- repmodel
----------------------------------------------------------------------
- c
-(1 row)
-
-DROP TABLE repmodel_test;
-CREATE TABLE repmodel_test (a int);
-SELECT master_create_distributed_table('repmodel_test', 'a', 'append');
- master_create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
- repmodel
----------------------------------------------------------------------
- c
-(1 row)
-
-DROP TABLE repmodel_test;
-CREATE TABLE repmodel_test (a int);
-SELECT master_create_distributed_table('repmodel_test', 'a', 'range');
- master_create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
- repmodel
----------------------------------------------------------------------
- c
-(1 row)
-
-DROP TABLE repmodel_test;
 RESET citus.shard_replication_factor;
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360025;
 -- There should be no table on the worker node

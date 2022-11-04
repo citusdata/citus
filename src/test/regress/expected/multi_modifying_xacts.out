@@ -463,14 +463,9 @@ CREATE TABLE objects (
 	id bigint PRIMARY KEY,
 	name text NOT NULL
 );
-SELECT master_create_distributed_table('objects', 'id', 'hash');
- master_create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT master_create_worker_shards('objects', 1, 2);
- master_create_worker_shards
+SET citus.shard_replication_factor TO 2;
+SELECT create_distributed_table('objects', 'id', 'hash', shard_count := 1);
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
@@ -731,8 +726,8 @@ ORDER BY s.logicalrelid, sp.shardstate;
 
 -- some append-partitioned tests for good measure
 CREATE TABLE append_researchers ( LIKE researchers );
-SELECT master_create_distributed_table('append_researchers', 'id', 'append');
- master_create_distributed_table
+SELECT create_distributed_table('append_researchers', 'id', 'append');
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)

@@ -93,7 +93,6 @@ SELECT create_distributed_table('nation_append_search_path', 'n_nationkey', 'app
 
 SELECT master_create_empty_shard('nation_append_search_path') AS shardid \gset
 copy nation_append_search_path FROM STDIN with (delimiter '|', append_to_shard :shardid);
--- create shard with master_create_worker_shards
 CREATE TABLE test_schema_support.nation_hash(
     n_nationkey integer not null,
     n_name char(25) not null,

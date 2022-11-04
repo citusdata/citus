@@ -81,8 +81,8 @@ CREATE TABLE events_range (
 	id bigint,
 	name text
 );
-SELECT master_create_distributed_table('events_range', 'name', 'range');
- master_create_distributed_table
+SELECT create_distributed_table('events_range', 'name', 'range');
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)

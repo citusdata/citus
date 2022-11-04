@@ -21,7 +21,7 @@ RESET ROLE;
 
 -- ensure GRANT/REVOKE's do something sane for creating shards of
 CREATE TABLE checkperm(key int);
-SELECT master_create_distributed_table('checkperm', 'key', 'append');
+SELECT create_distributed_table('checkperm', 'key', 'append');
 SELECT * FROM master_get_table_ddl_events('checkperm');
 
 REVOKE ALL ON checkperm FROM PUBLIC;
@@ -40,14 +40,14 @@ SELECT * FROM master_get_table_ddl_events('checkperm');
 
 -- create table as superuser/postgres
 CREATE TABLE trivial_postgres (id int);
-SELECT master_create_distributed_table('trivial_postgres', 'id', 'append');
+SELECT create_distributed_table('trivial_postgres', 'id', 'append');
 GRANT ALL ON trivial_postgres TO full_access;
 
 GRANT CREATE ON SCHEMA public TO full_access;
 
 SET ROLE full_access;
 CREATE TABLE trivial_full_access (id int);
-SELECT master_create_distributed_table('trivial_full_access', 'id', 'append');
+SELECT create_distributed_table('trivial_full_access', 'id', 'append');
 RESET ROLE;
 
 SELECT relname, rolname, relacl FROM pg_class JOIN pg_roles ON (pg_roles.oid = pg_class.relowner) WHERE relname LIKE 'trivial%' ORDER BY relname;

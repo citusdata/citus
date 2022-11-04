@@ -9,27 +9,6 @@
 
 SET citus.next_shard_id TO 360000;
 
--- this function is dropped in Citus10, added here for tests
-SET citus.enable_metadata_sync TO OFF;
-CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
-                                                                      distribution_column text,
-                                                                      distribution_method citus.distribution_type)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus', $$master_create_distributed_table$$;
-COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
-                                                               distribution_column text,
-                                                               distribution_method citus.distribution_type)
-    IS 'define the table distribution functions';
-
--- this function is dropped in Citus10, added here for tests
-CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name text, shard_count integer,
-                                                                  replication_factor integer DEFAULT 2)
-    RETURNS void
-    AS 'citus', $$master_create_worker_shards$$
-    LANGUAGE C STRICT;
-RESET citus.enable_metadata_sync;
-
 CREATE TABLE lineitem (
 	l_orderkey bigint not null,
 	l_partkey integer not null,
@@ -174,9 +153,6 @@ INSERT INTO data_load_test VALUES (243, 'world');
 SELECT create_distributed_table('data_load_test', 'col1', 'append');
 SELECT create_distributed_table('data_load_test', 'col1', 'range');
 
--- table must be empty when using master_create_distributed_table (no shards created)
-SELECT master_create_distributed_table('data_load_test', 'col1', 'hash');
-
 -- create_distributed_table creates shards and copies data into the distributed table
 SELECT create_distributed_table('data_load_test', 'col1');
 SELECT * FROM data_load_test ORDER BY col1;
@@ -190,11 +166,6 @@ DROP TABLE no_shard_test;
 
 CREATE TABLE no_shard_test (col1 int, col2 text);
 SELECT create_distributed_table('no_shard_test', 'col1', 'range');
-SELECT * FROM no_shard_test WHERE col1 > 1;
-DROP TABLE no_shard_test;
-
-CREATE TABLE no_shard_test (col1 int, col2 text);
-SELECT master_create_distributed_table('no_shard_test', 'col1', 'hash');
 SELECT * FROM no_shard_test WHERE col1 > 1;
 DROP TABLE no_shard_test;
 
