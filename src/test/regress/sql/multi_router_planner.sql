@@ -42,14 +42,10 @@ CREATE TABLE authors_reference ( name varchar(20), id bigint );
 -- this table is used in router executor tests
 CREATE TABLE articles_single_shard_hash (LIKE articles_hash);
 
-SELECT master_create_distributed_table('articles_hash', 'author_id', 'hash');
-SELECT master_create_distributed_table('articles_single_shard_hash', 'author_id', 'hash');
+SET citus.shard_replication_factor TO 1;
 
--- test when a table is distributed but no shards created yet
-SELECT count(*) from articles_hash;
-
-SELECT master_create_worker_shards('articles_hash', 2, 1);
-SELECT master_create_worker_shards('articles_single_shard_hash', 1, 1);
+SELECT create_distributed_table('articles_hash', 'author_id', 'hash', shard_count := 2);
+SELECT create_distributed_table('articles_single_shard_hash', 'author_id', 'hash', shard_count := 1);
 
 SELECT create_reference_table('authors_reference');
 
@@ -212,8 +208,7 @@ SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
 
 -- recursive CTEs are supported when filtered on partition column
 CREATE TABLE company_employees (company_id int, employee_id int, manager_id int);
-SELECT master_create_distributed_table('company_employees', 'company_id', 'hash');
-SELECT master_create_worker_shards('company_employees', 4, 1);
+SELECT create_distributed_table('company_employees', 'company_id', 'hash', shard_count := 4);
 
 INSERT INTO company_employees values(1, 1, 0);
 INSERT INTO company_employees values(1, 2, 1);
@@ -840,8 +835,8 @@ SELECT author_id FROM articles_hash
 -- just 4 shards to be created for each table to make sure
 -- they are 'co-located' pairwise
 SET citus.shard_replication_factor TO 1;
-SELECT master_create_distributed_table('authors_range', 'id', 'range');
-SELECT master_create_distributed_table('articles_range', 'author_id', 'range');
+SELECT create_distributed_table('authors_range', 'id', 'range');
+SELECT create_distributed_table('articles_range', 'author_id', 'range');
 
 SELECT master_create_empty_shard('authors_range') as shard_id \gset
 UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue=10 WHERE shardid = :shard_id;
@@ -927,7 +922,7 @@ SELECT * FROM articles_range ar join authors_reference au on (ar.author_id = au.
 -- following is a bug, function should have been
 -- evaluated at master before going to worker
 -- need to use a append distributed table here
-SELECT master_create_distributed_table('articles_append', 'author_id', 'append');
+SELECT create_distributed_table('articles_append', 'author_id', 'append');
 SET citus.shard_replication_factor TO 1;
 SELECT master_create_empty_shard('articles_append') AS shard_id \gset
 UPDATE pg_dist_shard SET shardmaxvalue = 100, shardminvalue=1 WHERE shardid = :shard_id;
@@ -970,7 +965,7 @@ SELECT raise_failed_execution_router($$
 		LIMIT 1;
 $$);
 
--- same query on router planner with where false but evaluation left to worker
+-- hash-distributed tables can be evaluated on workers since they are synced
 SELECT raise_failed_execution_router($$
 	SELECT author_id FROM articles_single_shard_hash
 		WHERE
@@ -1183,8 +1178,7 @@ SET client_min_messages to 'NOTICE';
 -- test that a connection failure marks placements invalid
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE failure_test (a int, b int);
-SELECT master_create_distributed_table('failure_test', 'a', 'hash');
-SELECT master_create_worker_shards('failure_test', 2);
+SELECT create_distributed_table('failure_test', 'a', 'hash');
 
 SET citus.enable_ddl_propagation TO off;
 CREATE USER router_user;

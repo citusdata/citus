@@ -68,22 +68,19 @@ SELECT create_distributed_table('table_to_distribute', 'json_data', 'hash');
 -- use a partition column of type lacking the required support function (hash)
 SELECT create_distributed_table('table_to_distribute', 'test_type_data', 'hash');
 
--- distribute table and inspect side effects
-SELECT master_create_distributed_table('table_to_distribute', 'name', 'hash');
-SELECT partmethod, partkey FROM pg_dist_partition
-	WHERE logicalrelid = 'table_to_distribute'::regclass;
-
 -- use a bad shard count
-SELECT master_create_worker_shards('table_to_distribute', 0, 1);
+SELECT create_distributed_table('table_to_distribute', 'name', 'hash', shard_count := 0);
 
 -- use a bad replication factor
-SELECT master_create_worker_shards('table_to_distribute', 16, 0);
+SET citus.shard_replication_factor TO 0;
 
 -- use a replication factor higher than shard count
-SELECT master_create_worker_shards('table_to_distribute', 16, 3);
+SET citus.shard_replication_factor TO 3;
+SELECT create_distributed_table('table_to_distribute', 'name', 'hash');
+RESET citus.shard_replication_factor;
 
 -- finally, create shards and inspect metadata
-SELECT master_create_worker_shards('table_to_distribute', 16, 1);
+SELECT create_distributed_table('table_to_distribute', 'name', 'hash', shard_count := 16);
 
 SELECT shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
 	WHERE logicalrelid = 'table_to_distribute'::regclass
@@ -97,9 +94,6 @@ SELECT count(*) AS shard_count,
 	GROUP BY shard_size;
 
 SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'table_to_distribute%' AND relkind = 'r';
-
--- try to create them again
-SELECT master_create_worker_shards('table_to_distribute', 16, 1);
 
 -- test list sorting
 SELECT sort_names('sumedh', 'jason', 'ozgun');

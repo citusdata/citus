@@ -1255,7 +1255,7 @@ CreateDistributedTableLike(TableConversionState *con)
 	char partitionMethod = PartitionMethod(con->relationId);
 
 	CreateDistributedTable(con->newRelationId, distributionColumnName, partitionMethod,
-						   newShardCount, true, newColocateWith, false);
+						   newShardCount, true, newColocateWith);
 }
 
 
@@ -1273,7 +1273,7 @@ CreateCitusTableLike(TableConversionState *con)
 	else if (IsCitusTableType(con->relationId, REFERENCE_TABLE))
 	{
 		CreateDistributedTable(con->newRelationId, NULL, DISTRIBUTE_BY_NONE, 0, false,
-							   NULL, false);
+							   NULL);
 	}
 	else if (IsCitusTableType(con->relationId, CITUS_LOCAL_TABLE))
 	{

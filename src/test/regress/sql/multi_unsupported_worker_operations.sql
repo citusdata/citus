@@ -50,31 +50,7 @@ SELECT * FROM mx_table ORDER BY col_1;
 -- Try commands from metadata worker
 \c - - - :worker_1_port
 
--- this function is dropped in Citus10, added here for tests
-SET citus.enable_metadata_sync TO OFF;
-CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
-                                                                      distribution_column text,
-                                                                      distribution_method citus.distribution_type)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus', $$master_create_distributed_table$$;
-COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
-                                                               distribution_column text,
-                                                               distribution_method citus.distribution_type)
-    IS 'define the table distribution functions';
-
--- this function is dropped in Citus10, added here for tests
-CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name text, shard_count integer,
-                                                                  replication_factor integer DEFAULT 2)
-    RETURNS void
-    AS 'citus', $$master_create_worker_shards$$
-    LANGUAGE C STRICT;
-RESET citus.enable_metadata_sync;
-
 CREATE TABLE mx_table_worker(col_1 text);
-
--- master_create_distributed_table
-SELECT master_create_distributed_table('mx_table_worker', 'col_1', 'hash');
 
 -- create_distributed_table
 SELECT create_distributed_table('mx_table_worker', 'col_1');
@@ -84,18 +60,6 @@ SELECT create_reference_table('mx_table_worker');
 
 SELECT count(*) FROM pg_dist_partition WHERE logicalrelid='mx_table_worker'::regclass;
 DROP TABLE mx_table_worker;
-
--- master_create_worker_shards
-CREATE TEMP TABLE pg_dist_shard_temp AS
-SELECT * FROM pg_dist_shard WHERE logicalrelid = 'mx_table'::regclass;
-
-DELETE FROM pg_dist_shard WHERE logicalrelid = 'mx_table'::regclass;
-
-SELECT master_create_worker_shards('mx_table', 5, 1);
-SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='mx_table'::regclass;
-
-INSERT INTO pg_dist_shard SELECT * FROM pg_dist_shard_temp;
-SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='mx_table'::regclass;
 
 \c - - - :master_port
 DROP TABLE mx_ref_table;

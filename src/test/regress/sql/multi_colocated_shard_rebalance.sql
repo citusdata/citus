@@ -7,21 +7,6 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 13000000;
 SET citus.shard_count TO 6;
 SET citus.shard_replication_factor TO 1;
 
--- this function is dropped in Citus10, added here for tests
-SET citus.enable_metadata_sync TO OFF;
-CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
-                                                                      distribution_column text,
-                                                                      distribution_method citus.distribution_type)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus', $$master_create_distributed_table$$;
-COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
-                                                               distribution_column text,
-                                                               distribution_method citus.distribution_type)
-    IS 'define the table distribution functions';
-RESET citus.enable_metadata_sync;
-
-
 -- create distributed tables
 CREATE TABLE table1_group1 ( id int PRIMARY KEY);
 SELECT create_distributed_table('table1_group1', 'id', 'hash');
@@ -34,7 +19,7 @@ CREATE TABLE table5_groupX ( id int );
 SELECT create_distributed_table('table5_groupX', 'id', 'hash');
 
 CREATE TABLE table6_append ( id int );
-SELECT master_create_distributed_table('table6_append', 'id', 'append');
+SELECT create_distributed_table('table6_append', 'id', 'append');
 SELECT master_create_empty_shard('table6_append');
 SELECT master_create_empty_shard('table6_append');
 

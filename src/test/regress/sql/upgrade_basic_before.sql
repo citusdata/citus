@@ -33,25 +33,6 @@ INSERT INTO r SELECT * FROM generate_series(1, 5);
 CREATE TABLE tr(pk int, a int REFERENCES r(a) ON DELETE CASCADE ON UPDATE CASCADE);
 SELECT create_distributed_table('tr', 'pk');
 INSERT INTO tr SELECT c, c FROM generate_series(1, 5) as c;
--- this function is dropped in Citus10, added here for tests
-SET citus.enable_metadata_sync TO OFF;
-CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
-                                                                      distribution_column text,
-                                                                      distribution_method citus.distribution_type)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus', $$master_create_distributed_table$$;
-COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
-                                                               distribution_column text,
-                                                               distribution_method citus.distribution_type)
-    IS 'define the table distribution functions';
--- this function is dropped in Citus10, added here for tests
-CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name text, shard_count integer,
-                                                                  replication_factor integer DEFAULT 2)
-    RETURNS void
-    AS 'citus', $$master_create_worker_shards$$
-    LANGUAGE C STRICT;
-RESET citus.enable_metadata_sync;
 CREATE TABLE t_range(id int, value_1 int);
 SELECT create_distributed_table('t_range', 'id', 'range');
 SELECT master_create_empty_shard('t_range') as shardid1 \gset

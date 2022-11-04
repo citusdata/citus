@@ -49,20 +49,6 @@ ALTER ROLE CURRENT_USER WITH PASSWORD 'dummypassword';
 -- pg_dist_node entries, pg_dist_object entries and roles.
 SELECT unnest(activate_node_snapshot()) order by 1;
 
--- this function is dropped in Citus10, added here for tests
-SET citus.enable_metadata_sync TO OFF;
-CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
-                                                                      distribution_column text,
-                                                                      distribution_method citus.distribution_type)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus', $$master_create_distributed_table$$;
-RESET citus.enable_metadata_sync;
-COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
-                                                               distribution_column text,
-                                                               distribution_method citus.distribution_type)
-    IS 'define the table distribution functions';
-
 -- Create a test table with constraints and SERIAL and default from user defined sequence
 CREATE SEQUENCE user_defined_seq;
 CREATE TABLE mx_test_table (col_1 int UNIQUE, col_2 text NOT NULL, col_3 BIGSERIAL, col_4 BIGINT DEFAULT nextval('user_defined_seq'));
@@ -90,7 +76,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
 
 -- Show that append distributed tables are not included in the activate node snapshot
 CREATE TABLE non_mx_test_table (col_1 int, col_2 text);
-SELECT master_create_distributed_table('non_mx_test_table', 'col_1', 'append');
+SELECT create_distributed_table('non_mx_test_table', 'col_1', 'append');
 UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid='non_mx_test_table'::regclass;
 SELECT unnest(activate_node_snapshot()) order by 1;
 

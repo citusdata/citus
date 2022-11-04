@@ -6,25 +6,6 @@
 -- need to cover both reference join and partitioned join, we have created
 -- reference and hash-distributed version of orders, customer and part tables.
 SET citus.next_shard_id TO 360000;
--- this function is dropped in Citus10, added here for tests
-SET citus.enable_metadata_sync TO OFF;
-CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
-                                                                      distribution_column text,
-                                                                      distribution_method citus.distribution_type)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus', $$master_create_distributed_table$$;
-COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
-                                                               distribution_column text,
-                                                               distribution_method citus.distribution_type)
-    IS 'define the table distribution functions';
--- this function is dropped in Citus10, added here for tests
-CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name text, shard_count integer,
-                                                                  replication_factor integer DEFAULT 2)
-    RETURNS void
-    AS 'citus', $$master_create_worker_shards$$
-    LANGUAGE C STRICT;
-RESET citus.enable_metadata_sync;
 CREATE TABLE lineitem (
 	l_orderkey bigint not null,
 	l_partkey integer not null,
@@ -218,11 +199,6 @@ SELECT create_distributed_table('data_load_test', 'col1', 'range');
 ERROR:  cannot distribute relation "data_load_test"
 DETAIL:  Relation "data_load_test" contains data.
 HINT:  Empty your table before distributing it.
--- table must be empty when using master_create_distributed_table (no shards created)
-SELECT master_create_distributed_table('data_load_test', 'col1', 'hash');
-ERROR:  cannot distribute relation "data_load_test"
-DETAIL:  Relation "data_load_test" contains data.
-HINT:  Empty your table before distributing it.
 -- create_distributed_table creates shards and copies data into the distributed table
 SELECT create_distributed_table('data_load_test', 'col1');
 NOTICE:  Copying data from local table...
@@ -259,19 +235,6 @@ DROP TABLE no_shard_test;
 CREATE TABLE no_shard_test (col1 int, col2 text);
 SELECT create_distributed_table('no_shard_test', 'col1', 'range');
  create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT * FROM no_shard_test WHERE col1 > 1;
- col1 | col2
----------------------------------------------------------------------
-(0 rows)
-
-DROP TABLE no_shard_test;
-CREATE TABLE no_shard_test (col1 int, col2 text);
-SELECT master_create_distributed_table('no_shard_test', 'col1', 'hash');
- master_create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)

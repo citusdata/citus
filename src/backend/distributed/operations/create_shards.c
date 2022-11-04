@@ -58,40 +58,13 @@ PG_FUNCTION_INFO_V1(master_create_worker_shards);
 
 
 /*
- * master_create_worker_shards is a user facing function to create worker shards
- * for the given relation in round robin order.
+ * master_create_worker_shards is a deprecated UDF that was used to
+ * create shards for a hash-distributed table.
  */
 Datum
 master_create_worker_shards(PG_FUNCTION_ARGS)
 {
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
-
-	text *tableNameText = PG_GETARG_TEXT_P(0);
-	int32 shardCount = PG_GETARG_INT32(1);
-	int32 replicationFactor = PG_GETARG_INT32(2);
-
-	Oid distributedTableId = ResolveRelationId(tableNameText, false);
-
-	/* do not add any data */
-	bool useExclusiveConnections = false;
-
-	/*
-	 * distributed tables might have dependencies on different objects, since we create
-	 * shards for a distributed table via multiple sessions these objects will be created
-	 * via their own connection and committed immediately so they become visible to all
-	 * sessions creating shards.
-	 */
-	ObjectAddress *tableAddress = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*tableAddress, RelationRelationId, distributedTableId);
-	EnsureAllObjectDependenciesExistOnAllNodes(list_make1(tableAddress));
-
-	EnsureReferenceTablesExistOnAllNodes();
-
-	CreateShardsWithRoundRobinPolicy(distributedTableId, shardCount, replicationFactor,
-									 useExclusiveConnections);
-
-	PG_RETURN_VOID();
+	ereport(ERROR, (errmsg("master_create_worker_shards has been deprecated")));
 }
 
 

@@ -17,26 +17,15 @@ CREATE TABLE articles (
 CREATE TABLE authors ( name text, id bigint );
 -- this table is used in router executor tests
 CREATE TABLE articles_single_shard (LIKE articles);
-SELECT master_create_distributed_table('articles', 'author_id', 'hash');
- master_create_distributed_table
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('articles', 'author_id', 'hash', shard_count := 2);
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT master_create_distributed_table('articles_single_shard', 'author_id', 'hash');
- master_create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT master_create_worker_shards('articles', 2, 1);
- master_create_worker_shards
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT master_create_worker_shards('articles_single_shard', 1, 1);
- master_create_worker_shards
+SELECT create_distributed_table('articles_single_shard', 'author_id', 'hash', shard_count := 1);
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
