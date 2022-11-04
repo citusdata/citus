@@ -22,7 +22,6 @@ BEGIN;
   SET client_min_messages TO ERROR;
   SET search_path TO public;
   CREATE EXTENSION citus;
-  SET citus.replicate_reference_tables_on_activate TO OFF;
   SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
  ?column?
 ---------------------------------------------------------------------

@@ -35,7 +35,6 @@
 #include "distributed/local_executor.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_sync.h"
-#include "distributed/multi_client_executor.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"

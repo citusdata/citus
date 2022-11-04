@@ -1076,7 +1076,6 @@ ORDER BY 1, 2;
 SET search_path to "Tenant Isolation";
 --
 -- Make sure that isolate_tenant_to_new_shard() replicats reference tables
--- when replicate_reference_tables_on_activate is off.
 --
 CREATE TABLE ref_table(a int);
 SELECT create_reference_table('ref_table');
@@ -1146,7 +1145,6 @@ SELECT count(*) FROM partitioning_test;
      4
 (1 row)
 
-SET citus.replicate_reference_tables_on_activate TO off;
 SET client_min_messages TO WARNING;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId=>0);
  ?column?

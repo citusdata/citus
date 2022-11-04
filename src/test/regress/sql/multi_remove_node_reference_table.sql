@@ -5,7 +5,6 @@
 
 
 SET citus.next_shard_id TO 1380000;
-SET citus.replicate_reference_tables_on_activate TO off;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1380000;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1380000;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 1380000;
@@ -122,7 +121,6 @@ WHERE
     nodeport = :worker_2_port;
 
 \c - - - :master_port
-SET citus.replicate_reference_tables_on_activate TO off;
 
 -- remove same node twice
 SELECT master_remove_node('localhost', :worker_2_port);
@@ -269,7 +267,6 @@ WHERE
     nodeport = :worker_2_port;
 
 \c - - - :master_port
-SET citus.replicate_reference_tables_on_activate TO off;
 
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
@@ -345,7 +342,6 @@ WHERE
 SELECT * FROM remove_node_reference_table;
 
 \c - - - :master_port
-SET citus.replicate_reference_tables_on_activate TO off;
 
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
@@ -417,7 +413,6 @@ WHERE
     nodeport = :worker_2_port;
 
 \c - - - :master_port
-SET citus.replicate_reference_tables_on_activate TO off;
 
 SET citus.next_shard_id TO 1380001;
 
@@ -540,7 +535,6 @@ WHERE
     nodeport = :worker_2_port;
 
 \c - - - :master_port
-SET citus.replicate_reference_tables_on_activate TO off;
 
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
@@ -619,7 +613,6 @@ WHERE
     nodeport = :worker_2_port;
 
 \c - - - :master_port
-SET citus.replicate_reference_tables_on_activate TO off;
 
 -- re-add the node for next tests
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);

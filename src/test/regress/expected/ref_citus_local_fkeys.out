@@ -196,7 +196,6 @@ ERROR:  insert or update on table "reference_table_1506003" violates foreign key
 -- between reference tables and citus local tables in worker_2 placements of
 -- the reference tables
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "reference_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1

@@ -404,8 +404,6 @@ where val = 'asdf';
      3
 (1 row)
 
--- not replicate reference tables from other test files
-SET citus.replicate_reference_tables_on_activate TO off;
 SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  ?column?
@@ -641,7 +639,6 @@ NOTICE:  renaming the new table to test_pg12.generated_stored_ref
 (4 rows)
 
 ROLLBACK;
-RESET citus.replicate_reference_tables_on_activate;
 SELECT citus_remove_node('localhost', :master_port);
  citus_remove_node
 ---------------------------------------------------------------------

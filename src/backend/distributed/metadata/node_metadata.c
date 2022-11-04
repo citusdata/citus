@@ -68,12 +68,6 @@ int GroupSize = 1;
 /* config variable managed via guc.c */
 char *CurrentCluster = "default";
 
-/*
- * Config variable to control whether we should replicate reference tables on
- * node activation or we should defer it to shard creation.
- */
-bool ReplicateReferenceTablesOnActivate = true;
-
 /* did current transaction modify pg_dist_node? */
 bool TransactionModifiedNodeMetadata = false;
 
@@ -1229,22 +1223,6 @@ ActivateNodeList(List *nodeList)
 	 * need such objects.
 	 */
 	SyncDistributedObjectsToNodeList(nodeToSyncMetadata);
-
-	if (ReplicateReferenceTablesOnActivate)
-	{
-		foreach_ptr(node, nodeList)
-		{
-			/*
-			 * We need to replicate reference tables before syncing node metadata, otherwise
-			 * reference table replication logic would try to get lock on the new node before
-			 * having the shard placement on it
-			 */
-			if (NodeIsPrimary(node))
-			{
-				ReplicateAllReferenceTablesToNode(node);
-			}
-		}
-	}
 
 	/*
 	 * Sync node metadata. We must sync node metadata before syncing table

@@ -219,7 +219,6 @@ SELECT isolate_tenant_to_new_shard('test', 5, 'CASCADE', shard_transfer_mode => 
 -- and on the workers
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 NOTICE:  shards are still on the coordinator after adding the new node
-NOTICE:  Replicating reference table "ref" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
         1

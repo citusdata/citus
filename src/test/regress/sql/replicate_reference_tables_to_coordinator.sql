@@ -253,7 +253,9 @@ ALTER TABLE squares DROP COLUMN b;
 SELECT master_remove_node('localhost', :master_port);
 
 -- add the coordinator as a worker node and verify that the reference tables are replicated
-SELECT master_add_node('localhost', :master_port, groupid => 0) AS master_nodeid \gset
+SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+SELECT replicate_reference_tables(shard_transfer_mode := 'force_logical');
+SELECT count(*) > 0 FROM pg_dist_shard_placement WHERE nodename = 'localhost' AND nodeport = :master_port;
 
 -- clean-up
 SET client_min_messages TO ERROR;

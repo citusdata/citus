@@ -3,7 +3,6 @@
 --
 -- Tests that check the metadata after master_remove_node.
 SET citus.next_shard_id TO 1380000;
-SET citus.replicate_reference_tables_on_activate TO off;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1380000;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1380000;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 1380000;
@@ -241,7 +240,6 @@ WHERE
 (0 rows)
 
 \c - - - :master_port
-SET citus.replicate_reference_tables_on_activate TO off;
 -- remove same node twice
 SELECT master_remove_node('localhost', :worker_2_port);
 ERROR:  node at "localhost:xxxxx" does not exist
@@ -480,7 +478,6 @@ WHERE
 (0 rows)
 
 \c - - - :master_port
-SET citus.replicate_reference_tables_on_activate TO off;
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
  ?column?
@@ -603,7 +600,6 @@ SELECT * FROM remove_node_reference_table;
 (1 row)
 
 \c - - - :master_port
-SET citus.replicate_reference_tables_on_activate TO off;
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
  ?column?
@@ -713,7 +709,6 @@ WHERE
 (0 rows)
 
 \c - - - :master_port
-SET citus.replicate_reference_tables_on_activate TO off;
 SET citus.next_shard_id TO 1380001;
 -- verify table structure is changed
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.remove_node_reference_table'::regclass;
@@ -920,7 +915,6 @@ WHERE
 (0 rows)
 
 \c - - - :master_port
-SET citus.replicate_reference_tables_on_activate TO off;
 -- re-add the node for next tests
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
  ?column?
@@ -1055,7 +1049,6 @@ WHERE
 (0 rows)
 
 \c - - - :master_port
-SET citus.replicate_reference_tables_on_activate TO off;
 -- re-add the node for next tests
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
  ?column?

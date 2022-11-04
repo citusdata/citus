@@ -24,8 +24,6 @@ BEGIN;
   SET search_path TO public;
   CREATE EXTENSION citus;
 
-  -- not wait for replicating reference tables from other test files
-  SET citus.replicate_reference_tables_on_activate TO OFF;
   SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 
   create table l1 (a int unique);

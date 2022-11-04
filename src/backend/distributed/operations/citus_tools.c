@@ -17,7 +17,6 @@
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_client_executor.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/remote_commands.h"
 #include "distributed/utils/array_type.h"

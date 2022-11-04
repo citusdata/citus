@@ -28,12 +28,6 @@
 /* Number of rows to prefetch when reading data with a cursor */
 #define ROW_PREFETCH_COUNT 50
 
-/* Defines used for fetching files and tables */
-/* the tablename in the overloaded COPY statement is the to-be-transferred file */
-#define COPY_OUT_COMMAND "COPY %s TO STDOUT"
-#define COPY_SELECT_ALL_OUT_COMMAND "COPY (SELECT * FROM %s) TO STDOUT"
-#define COPY_IN_COMMAND "COPY %s FROM '%s'"
-
 /* Defines that relate to creating tables */
 #define GET_TABLE_DDL_EVENTS "SELECT master_get_table_ddl_events('%s')"
 #define SET_SEARCH_PATH_COMMAND "SET search_path TO %s"

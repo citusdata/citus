@@ -839,6 +839,11 @@ SET client_min_messages to ERROR;
 SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 RESET client_min_messages;
 
+-- this works around bug #6476: the CREATE TABLE below will
+-- self-deadlock on PG15 if it also replicates reference
+-- tables to the coordinator.
+SELECT replicate_reference_tables(shard_transfer_mode := 'block_writes');
+
 -- should error since col_3 defaults to a sequence
 CREATE TABLE set_on_default_test_referencing(
     col_1 int, col_2 int, col_3 serial, col_4 int,

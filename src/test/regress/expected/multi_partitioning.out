@@ -3773,14 +3773,6 @@ ROLLBACK;
 DROP TABLE pi_table;
 -- 6) test with citus local table
 select 1 from citus_add_node('localhost', :master_port, groupid=>0);
-NOTICE:  Replicating reference table "orders_reference" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "customer" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "nation" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "part" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "supplier" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "users_ref_test_table" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "events_reference_table" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "users_reference_table" to the node localhost:xxxxx
 NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  ?column?
 ---------------------------------------------------------------------

@@ -20,7 +20,6 @@ CREATE TABLE postgres_table_test(a int primary key);
 -- make sure that all rebalance operations works fine when
 -- reference tables are replicated to the coordinator
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId=>0);
-NOTICE:  Replicating reference table "ref_table_test" to the node localhost:xxxxx
 NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  ?column?
 ---------------------------------------------------------------------
@@ -2177,10 +2176,8 @@ SELECT public.wait_until_metadata_sync(30000);
 
 --
 -- Make sure that rebalance_table_shards() and replicate_table_shards() replicate
--- reference tables to the coordinator when replicate_reference_tables_on_activate
--- is off.
+-- reference tables to the coordinator
 --
-SET citus.replicate_reference_tables_on_activate TO off;
 SET client_min_messages TO WARNING;
 CREATE TABLE dist_table_test_3(a int);
 SET citus.shard_count TO 4;
