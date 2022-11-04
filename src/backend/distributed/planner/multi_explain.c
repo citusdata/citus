@@ -209,9 +209,10 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 		 * constraint validation check. Explaining the distributed SELECT query in the
 		 * workers cause memory corruption resulting in a crash later on.
 		 */
-		appendStringInfoSpaces(es->str, es->indent * 2);
-		appendStringInfo(es->str, "explain statements for distributed queries ");
-		appendStringInfo(es->str, "triggered via DDL commands are only supported on the coordinator \n");
+		ExplainPropertyText("Citus Explain Return",
+							"Explain statements for distributed queries "
+							"triggered via DDL commands are only supported on the coordinator",
+							es);
 		return;
 	}
 
