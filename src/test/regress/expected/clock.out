@@ -259,9 +259,6 @@ SELECT ABS(:epoch - cluster_clock_logical(:'latest_clock')) < 25;
  t
 (1 row)
 
--- This should fail as there is no explicit transaction
-SELECT citus_get_transaction_clock();
-ERROR:  citus_get_transaction_clock can only be used in transaction blocks
 BEGIN;
 SELECT citus_get_transaction_clock();
  citus_get_transaction_clock

@@ -415,8 +415,6 @@ PrepareAndSetTransactionClock(void)
 		return NULL;
 	}
 
-	RequireTransactionBlock(true, "citus_get_transaction_clock");
-
 	dlist_iter iter;
 	List *transactionNodeList = NIL;
 	List *nodeList = NIL;
