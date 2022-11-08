@@ -80,16 +80,6 @@ typedef enum CleanupPolicy
 extern OperationId RegisterOperationNeedingCleanup(void);
 
 /*
- * InsertCleanupRecordsForShardIntervalList inserts a record into pg_dist_cleanup,
- * with the given object type, name and policy, for all shard placements in the
- * given shardInterval list.
- */
-extern void InsertCleanupRecordsForShardIntervalList(List *shardIntervalList,
-													 CleanupObject objectType,
-													 char *objectName,
-													 CleanupPolicy policy);
-
-/*
  * InsertCleanupRecordInCurrentTransaction inserts a new pg_dist_cleanup entry
  * as part of the current transaction.
  *

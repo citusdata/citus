@@ -632,35 +632,6 @@ CompareCleanupRecordsByObjectType(const void *leftElement, const void *rightElem
 
 
 /*
- * InsertCleanupRecordsForShardIntervalList inserts a record into pg_dist_cleanup,
- * with the given object type, name and policy, for all shard placements in the
- * given shardInterval list.
- */
-void
-InsertCleanupRecordsForShardIntervalList(List *shardIntervalList,
-										 CleanupObject objectType,
-										 char *objectName,
-										 CleanupPolicy policy)
-{
-	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
-	{
-		List *shardPlacementList = ActiveShardPlacementList(shardInterval->shardId);
-
-		ShardPlacement *placement = NULL;
-		foreach_ptr(placement, shardPlacementList)
-		{
-			/* log shard in pg_dist_cleanup */
-			InsertCleanupRecordInSubtransaction(objectType,
-												objectName,
-												placement->groupId,
-												policy);
-		}
-	}
-}
-
-
-/*
  * InsertCleanupRecordInCurrentTransaction inserts a new pg_dist_cleanup_record entry
  * as part of the current transaction. This is primarily useful for deferred drop scenarios,
  * since these records would roll back in case of operation failure.
