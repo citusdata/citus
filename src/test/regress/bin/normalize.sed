@@ -298,3 +298,6 @@ s/^(NOTICE:  )(clock).*LC:[0-9]+,.*C:[0-9]+,.*$/\1\2 xxxxxx/g
 /^(DEBUG:  )(adjusted to remote clock: <logical)\([0-9]+\) counter\([0-9]+\)>$/d
 /^DEBUG:  persisting transaction.*counter.*$/d
 /^DEBUG:  both logical clock values are equal\([0-9]+\), pick remote.*$/d
+# The following 2 lines are to normalize duration and cost in the EXPLAIN output
+s/LOG:  duration: [0-9].[0-9]+ ms/LOG:  duration: xxxx ms/g
+s/"Total Cost": [0-9].[0-9]+/"Total Cost": xxxx/g
