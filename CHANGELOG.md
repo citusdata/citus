@@ -1,3 +1,33 @@
+### citus v11.0.7 (November 8, 2022) ###
+
+* Adds the GUC `citus.allow_unsafe_constraints` to allow unique/exclusion/
+  primary key constraints without distribution column
+
+* Allows `citus_internal` `application_name` with additional suffix
+
+* Disallows having `ON DELETE/UPDATE SET DEFAULT` actions on columns that
+  default to sequences
+
+* Fixes a bug in `ALTER EXTENSION citus UPDATE`
+
+* Fixes a bug that causes a crash with empty/null password
+
+* Fixes a bug that causes not retaining trigger enable/disable settings when
+  re-creating them on shards
+
+* Fixes a bug that might cause inserting incorrect `DEFAULT` values when
+  applying foreign key actions
+
+* Fixes a bug that prevents retaining columnar table options after a
+  table-rewrite
+
+* Fixes a bug that prevents setting colocation group of a partitioned
+  distributed table to `none`
+
+* Fixes an issue that can cause logical reference table replication to fail
+
+* Raises memory limits in columnar from 256MB to 1GB for reads and writes
+
 ### citus v11.0.6 (August 19, 2022) ###
 
 * Fixes a bug that could cause failures in `CREATE ROLE` statement
