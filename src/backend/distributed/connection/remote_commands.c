@@ -1261,7 +1261,9 @@ IsSettingSafeToPropagate(const char *name)
 		"citus.propagate_set_commands",
 		"client_encoding",
 		"exit_on_error",
-		"max_stack_depth"
+		"max_stack_depth",
+		"citus.enable_ddl_propagation",
+		"search_path"
 	};
 
 	for (Index settingIndex = 0; settingIndex < lengthof(skipSettings); settingIndex++)
