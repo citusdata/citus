@@ -33,6 +33,7 @@
 #include "distributed/jsonbutils.h"
 #include "utils/memutils.h"
 #include "utils/builtins.h"
+#include "utils/guc_tables.h"
 
 static void SendCommandToMetadataWorkersParams(const char *command,
 											   const char *user, int parameterCount,
@@ -44,7 +45,8 @@ static void SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet,
 											   const Oid *parameterTypes,
 											   const char *const *parameterValues);
 static void ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList);
-
+static List * GetSetCommandListForNewConnections(void);
+bool PropagateSessionSettingsForLoopbackConnection = true;
 
 /*
  * SendCommandToWorker sends a command to a particular worker as part of the
@@ -356,21 +358,38 @@ SendCommandListToWorkerOutsideTransaction(const char *nodeName, int32 nodePort,
  * any of the queries fail.
  */
 void
-SendCommandListToWorkerOutsideTransactionWithConnection(MultiConnection *workerConnection,
+SendCommandListToWorkerOutsideTransactionWithConnection(MultiConnection *connection,
 														List *commandList)
 {
-	MarkRemoteTransactionCritical(workerConnection);
-	RemoteTransactionBegin(workerConnection);
+	MarkRemoteTransactionCritical(connection);
+	RemoteTransactionBegin(connection);
+
+	List *concatenatedCommandList = list_copy(commandList);
+	bool isLoopBackConnection = false;
+	WorkerNode *workerNode = FindWorkerNode(connection->hostname, connection->port);
+
+	if (workerNode)
+	{
+		isLoopBackConnection = IsCoordinator() && workerNode->groupId ==
+							   GetLocalGroupId();
+	}
+
+	if (PropagateSessionSettingsForLoopbackConnection && isLoopBackConnection)
+	{
+		List *setCommandList = GetSetCommandListForNewConnections();
+		concatenatedCommandList = list_concat_copy(setCommandList,
+												   concatenatedCommandList);
+	}
 
 	/* iterate over the commands and execute them in the same connection */
 	const char *commandString = NULL;
-	foreach_ptr(commandString, commandList)
+	foreach_ptr(commandString, concatenatedCommandList)
 	{
-		ExecuteCriticalRemoteCommand(workerConnection, commandString);
+		ExecuteCriticalRemoteCommand(connection, commandString);
 	}
 
-	RemoteTransactionCommit(workerConnection);
-	ResetRemoteTransaction(workerConnection);
+	RemoteTransactionCommit(connection);
+	ResetRemoteTransaction(connection);
 }
 
 
@@ -658,4 +677,36 @@ IsWorkerTheCurrentNode(WorkerNode *workerNode)
 	char *currentServerId = text_to_cstring(currentServerIdTextP);
 
 	return strcmp(workerServerId, currentServerId) == 0;
+}
+
+
+/*
+ * GetSetCommandListForNewConnections returns a list of SET statements to
+ * be executed in new connections to worker nodes.
+ */
+static List *
+GetSetCommandListForNewConnections(void)
+{
+	List *commandList = NIL;
+
+	struct config_generic **guc_vars = get_guc_variables();
+	int gucCount = GetNumConfigOptions();
+
+	for (int gucIndex = 0; gucIndex < gucCount; gucIndex++)
+	{
+		struct config_generic *var = (struct config_generic *) guc_vars[gucIndex];
+		if (var->source == PGC_S_SESSION && IsSettingSafeToPropagate(var->name))
+		{
+			const char *variableValue = GetConfigOption(var->name, true, true);
+			commandList = lappend(commandList, psprintf("SET LOCAL %s TO '%s';",
+														var->name, variableValue));
+
+
+			ereport(DEBUG4, (errmsg("SET LOCAL %s TO '%s';",
+									var->name, variableValue),
+							 errdetail("This can happen sometimes.")));
+		}
+	}
+
+	return commandList;
 }

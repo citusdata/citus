@@ -46,6 +46,7 @@ typedef enum TargetWorkerSet
 	METADATA_NODES
 } TargetWorkerSet;
 
+extern bool PropagateSessionSettingsForLoopbackConnection;
 
 /* Functions declarations for worker transactions */
 extern List * GetWorkerTransactions(void);
