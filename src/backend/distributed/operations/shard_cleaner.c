@@ -203,12 +203,12 @@ DropOrphanedShardsInSeparateTransaction(void)
  * use in the maintenance daemon.
  *
  * If dropping any of the shards failed this function returns -1, otherwise it
- * returns the number of dropped shards.
+ * returns the number of dropped resources.
  */
 int
 TryDropOrphanedResources(bool waitForLocks)
 {
-	int droppedShardCount = 0;
+	int droppedResourceCount = 0;
 	MemoryContext savedContext = CurrentMemoryContext;
 
 	/*
@@ -219,8 +219,8 @@ TryDropOrphanedResources(bool waitForLocks)
 
 	PG_TRY();
 	{
-		droppedShardCount = DropOrphanedShardsForMove(waitForLocks);
-		droppedShardCount += DropOrphanedResourcesForCleanup();
+		droppedResourceCount = DropOrphanedShardsForMove(waitForLocks);
+		droppedResourceCount += DropOrphanedResourcesForCleanup();
 
 		/*
 		 * Releasing a subtransaction doesn't free its memory context, since the
@@ -243,7 +243,7 @@ TryDropOrphanedResources(bool waitForLocks)
 	}
 	PG_END_TRY();
 
-	return droppedShardCount;
+	return droppedResourceCount;
 }
 
 
