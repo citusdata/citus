@@ -5,7 +5,8 @@ source ci/ci_helpers.sh
 
 # Remove all the ignored files from git tree, and error out
 # find all ignored files in git tree, and use quotation marks to prevent word splitting on filenames with spaces in them
-ignored_lines_in_git_tree=$(git ls-files --ignored --exclude-standard | sed 's/.*/"&"/')
+# NOTE: Option --cached is neeed to avoid a bug in git ls-files command.
+ignored_lines_in_git_tree=$(git ls-files --ignored --cached --exclude-standard | sed 's/.*/"&"/')
 
 if [[ -n $ignored_lines_in_git_tree ]]
 then
