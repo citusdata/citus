@@ -6,9 +6,9 @@ create_distributed_table
 
 (1 row)
 
-step s1-begin: BEGIN;
+step s1-begin: BEGIN; SET citus.propagate_session_settings_for_loopback_connection TO FALSE;
 step s1-insert: INSERT INTO t1 SELECT generate_series(1, 100);
-step s2-begin: BEGIN;
+step s2-begin: BEGIN; SET citus.propagate_session_settings_for_loopback_connection TO FALSE;
 step s2-update-node-1:
     -- update a specific node by address
     SELECT master_update_node(nodeid, 'localhost', nodeport + 10)
@@ -37,9 +37,9 @@ create_distributed_table
 
 (1 row)
 
-step s1-begin: BEGIN;
+step s1-begin: BEGIN; SET citus.propagate_session_settings_for_loopback_connection TO FALSE;
 step s1-insert: INSERT INTO t1 SELECT generate_series(1, 100);
-step s2-begin: BEGIN;
+step s2-begin: BEGIN; SET citus.propagate_session_settings_for_loopback_connection TO FALSE;
 step s2-update-node-1-force:
     -- update a specific node by address (force)
     SELECT master_update_node(nodeid, 'localhost', nodeport + 10, force => true, lock_cooldown => 100)

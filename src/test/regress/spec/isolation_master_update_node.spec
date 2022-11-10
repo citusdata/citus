@@ -27,12 +27,12 @@ teardown
 }
 
 session "s1"
-step "s1-begin" { BEGIN; }
+step "s1-begin" { BEGIN; SET citus.propagate_session_settings_for_loopback_connection TO FALSE; }
 step "s1-insert" { INSERT INTO t1 SELECT generate_series(1, 100); }
 step "s1-abort" { ABORT; }
 
 session "s2"
-step "s2-begin" { BEGIN; }
+step "s2-begin" { BEGIN; SET citus.propagate_session_settings_for_loopback_connection TO FALSE; }
 step "s2-update-node-1" {
     -- update a specific node by address
     SELECT master_update_node(nodeid, 'localhost', nodeport + 10)
