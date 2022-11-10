@@ -153,6 +153,8 @@ typedef enum SearchForeignKeyColumnFlags
 	/* callers can also pass union of above flags */
 } SearchForeignKeyColumnFlags;
 
+/* begin.c - forward declarations */
+extern void SaveBeginCommandProperties(TransactionStmt *transactionStmt);
 
 /* cluster.c - forward declarations */
 extern List * PreprocessClusterStmt(Node *node, const char *clusterCommand,

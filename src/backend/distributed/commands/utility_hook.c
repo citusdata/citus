@@ -70,6 +70,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
 #include "distributed/string_utils.h"
+#include "distributed/transaction_management.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
@@ -92,7 +93,6 @@ static bool shouldInvalidateForeignKeyGraph = false;
 static int activeAlterTables = 0;
 static int activeDropSchemaOrDBs = 0;
 static bool ConstraintDropped = false;
-
 
 ProcessUtility_hook_type PrevProcessUtility = NULL;
 int UtilityHookLevel = 0;
@@ -170,6 +170,18 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 #endif
 
 	parsetree = pstmt->utilityStmt;
+
+	if (IsA(parsetree, TransactionStmt))
+	{
+		TransactionStmt *transactionStmt = (TransactionStmt *) parsetree;
+
+		if (context == PROCESS_UTILITY_TOPLEVEL &&
+			(transactionStmt->kind == TRANS_STMT_BEGIN ||
+			 transactionStmt->kind == TRANS_STMT_START))
+		{
+			SaveBeginCommandProperties(transactionStmt);
+		}
+	}
 
 	if (IsA(parsetree, TransactionStmt) ||
 		IsA(parsetree, ListenStmt) ||
