@@ -9,3 +9,4 @@ DROP FUNCTION pg_catalog.worker_append_table_to_shard(text, text, text, integer)
 #include "udfs/citus_get_transaction_clock/11.2-1.sql"
 #include "udfs/citus_is_clock_after/11.2-1.sql"
 #include "udfs/citus_internal_adjust_local_clock_to_remote/11.2-1.sql"
+#include "udfs/citus_use_snapshot/11.1-1.sql"

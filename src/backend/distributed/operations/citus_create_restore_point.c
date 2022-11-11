@@ -111,7 +111,7 @@ citus_create_restore_point(PG_FUNCTION_ARGS)
  * OpenConnectionsToAllNodes opens connections to all nodes and returns the list
  * of connections.
  */
-static List *
+List *
 OpenConnectionsToAllWorkerNodes(LOCKMODE lockMode)
 {
 	List *connectionList = NIL;

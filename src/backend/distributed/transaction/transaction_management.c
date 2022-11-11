@@ -34,6 +34,7 @@
 #include "distributed/multi_logical_replication.h"
 #include "distributed/multi_explain.h"
 #include "distributed/repartition_join_execution.h"
+#include "distributed/transaction/snapshot.h"
 #include "distributed/transaction_management.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
@@ -618,6 +619,7 @@ ResetGlobalVariables()
 	BeginXactReadOnly = BeginXactReadOnly_NotSet;
 	BeginXactDeferrable = BeginXactDeferrable_NotSet;
 	ResetWorkerErrorIndication();
+	ResetExportedSnapshots();
 	memset(&AllowedDistributionColumnValue, 0,
 		   sizeof(AllowedDistributionColumn));
 }
