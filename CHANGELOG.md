@@ -1,4 +1,5 @@
 ### citus v11.0.7 (November 8, 2022) ###
+
 * Adds the GUC `citus.allow_unsafe_constraints` to allow unique/exclusion/
   primary key constraints without distribution column
 

@@ -23,6 +23,78 @@ SET TRANSACTION READ ONLY;
 INSERT INTO test VALUES (2,2);
 END;
 
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+-- should reflect isolation level of current transaction
+SELECT current_setting('transaction_isolation') FROM test WHERE id = 1;
+END;
+
+START TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+-- should reflect isolation level of current transaction
+SELECT current_setting('transaction_isolation') FROM test WHERE id = 1;
+END;
+
+BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+-- should reflect isolation level of current transaction
+SELECT current_setting('transaction_isolation') FROM test WHERE id = 1;
+END;
+
+BEGIN READ ONLY;
+-- should reflect read-only status of current transaction
+SELECT current_setting('transaction_read_only') FROM test WHERE id = 1;
+END;
+
+BEGIN READ WRITE;
+-- should reflect read-only status of current transaction
+SELECT current_setting('transaction_read_only') FROM test WHERE id = 1;
+SET TRANSACTION READ ONLY;
+-- should reflect writable status of current transaction
+SELECT current_setting('transaction_read_only') FROM test WHERE id = 1;
+END;
+
+BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE DEFERRABLE;
+-- should reflect deferrable status of the current transaction
+SELECT current_setting('transaction_deferrable') FROM test WHERE id = 1;
+END;
+
+BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE DEFERRABLE READ ONLY;
+SELECT current_setting('transaction_read_only') FROM test WHERE id = 1;
+SELECT current_setting('transaction_deferrable') FROM test WHERE id = 1;
+END;
+
+-- postgres warns against, but does not disallow multiple BEGIN
+BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+SELECT current_setting('transaction_isolation') FROM test WHERE id = 1;
+-- but not after a query (SET TRANSACTION error is consistent with postgres)
+BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+END;
+
+BEGIN READ WRITE;
+SAVEPOINT goback;
+SET TRANSACTION READ ONLY;
+SELECT current_setting('transaction_read_only') FROM test WHERE id = 1;
+ROLLBACK TO SAVEPOINT goback;
+SELECT current_setting('transaction_read_only') FROM test WHERE id = 1;
+END;
+
+SET default_transaction_isolation TO 'repeatable read';
+
+BEGIN;
+-- should reflect isolation level of local session
+SELECT current_setting('transaction_isolation') FROM test WHERE id = 1;
+END;
+
+-- SET is not propagated and plain SELECT does not use transaction blocks
+SELECT DISTINCT current_setting('transaction_isolation') FROM test;
+
+-- the CTE will trigger transaction blocks
+WITH cte AS MATERIALIZED (
+  SELECT DISTINCT current_setting('transaction_isolation') iso FROM test
+)
+SELECT iso FROM cte;
+
+RESET default_transaction_isolation;
+
 BEGIN;
 SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
 -- should reflect new isolation level
