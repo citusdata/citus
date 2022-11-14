@@ -690,7 +690,7 @@ DROP SCHEMA sc3 CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table sc3.alter_add_prim_key
 drop cascades to table sc3.alter_add_unique
--- Test if ALTER TABLE works with auto_explain extension loaded.
+-- Test ALTER TABLE ... ADD CONSTRAINT ... does not cause a crash when auto_explain module is loaded
 CREATE TABLE target_table(col_1 int primary key, col_2 int);
 SELECT create_distributed_table('target_table','col_1');
  create_distributed_table
@@ -730,7 +730,7 @@ LOG:  duration: xxxx ms  plan:
     "Total Cost": xxxx,
     "Plan Rows": 100000,
     "Plan Width": 4,
-    "Citus Explain Scan": "Explain for ALTER TABLE commands are not supported"
+    "Citus Explain Scan": "Explain for triggered constraint validation queries during ALTER TABLE commands are not supported by Citus"
   }
 }
 CONTEXT:  SQL statement "SELECT fk."col_1" FROM ONLY "public"."target_table" fk LEFT OUTER JOIN ONLY "public"."test_ref_table" pk ON ( pk."key" OPERATOR(pg_catalog.=) fk."col_1") WHERE pk."key" IS NULL AND (fk."col_1" IS NOT NULL)"

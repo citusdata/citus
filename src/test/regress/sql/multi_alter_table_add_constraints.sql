@@ -576,7 +576,7 @@ DROP SCHEMA sc1 CASCADE;
 DROP SCHEMA sc2 CASCADE;
 DROP SCHEMA sc3 CASCADE;
 
--- Test if ALTER TABLE works with auto_explain extension loaded.
+-- Test ALTER TABLE ... ADD CONSTRAINT ... does not cause a crash when auto_explain module is loaded
 CREATE TABLE target_table(col_1 int primary key, col_2 int);
 SELECT create_distributed_table('target_table','col_1');
 INSERT INTO target_table VALUES(1,2),(2,3),(3,4),(4,5),(5,6);
