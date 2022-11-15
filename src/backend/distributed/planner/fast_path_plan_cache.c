@@ -91,7 +91,7 @@ CacheFastPathPlanForShardQuery(Task *task, DistributedPlan *originalDistributedP
 	planCache = planner(localShardQuery, NULL, 0, NULL);
 	fastPathPlanCache->localPlan = planCache;
 	fastPathPlanCache->shardId = task->anchorShardId;
-	fastPathPlanCache->localGroupId = GetLocalGroupId();
+	fastPathPlanCache->placementGroupIds = TaskGroupIdAccesses(task);
 
 	originalDistributedPlan->workerJob->fastPathPlanCacheList =
 		lappend(originalDistributedPlan->workerJob->fastPathPlanCacheList,
@@ -241,12 +241,13 @@ GetFastPathLocalPlan(Task *task, DistributedPlan *distributedPlan)
 	List *cachedPlanList = distributedPlan->workerJob->fastPathPlanCacheList;
 	FastPathPlanCache *fastPathPlanCache = NULL;
 
-	int32 localGroupId = GetLocalGroupId();
+	List *taskGroupIdAccesses = TaskGroupIdAccesses(task);
 
 	foreach_ptr(fastPathPlanCache, cachedPlanList)
 	{
 		if (fastPathPlanCache->shardId == task->anchorShardId &&
-			fastPathPlanCache->localGroupId == localGroupId)
+			list_difference_int(taskGroupIdAccesses,
+								fastPathPlanCache->placementGroupIds) == NIL)
 		{
 			/* already have a cached plan, no need to continue */
 			return fastPathPlanCache->localPlan;
@@ -295,22 +296,12 @@ IsFastPathPlanCachingSupported(Job *currentJob, DistributedPlan *originalDistrib
 		return false;
 	}
 
-	Task *task = linitial(taskList);
-	if (!TaskAccessesLocalNode(task))
+	if (!TaskAccessesLocalNode(linitial(taskList)))
 	{
-		/* not a local task */
-		return false;
-	}
-
-	if (!EnableLocalExecution)
-	{
-		/* user requested not to use local execution */
-		return false;
-	}
-
-	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_DISABLED)
-	{
-		/* transaction already connected to localhost */
+		/*
+		 * TODO: we'll remove this, but for the tests not to
+		 * break, keep on this temp commit.
+		 */
 		return false;
 	}
 

@@ -547,7 +547,7 @@ OutFastPathPlanCache(OUTFUNC_ARGS)
 	WRITE_NODE_TYPE("FastPathPlanCache");
 
 	WRITE_UINT64_FIELD(shardId);
-	WRITE_UINT_FIELD(localGroupId);
+	WRITE_NODE_FIELD(placementGroupIds);
 	WRITE_NODE_FIELD(localPlan);
 }
 

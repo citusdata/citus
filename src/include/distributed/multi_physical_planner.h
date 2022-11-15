@@ -119,7 +119,7 @@ typedef struct FastPathPlanCache
 	CitusNode type;
 
 	uint64 shardId;
-	uint32 localGroupId;
+	List *placementGroupIds;
 	PlannedStmt *localPlan;
 } FastPathPlanCache;
 
@@ -577,6 +577,7 @@ extern List * RoundRobinAssignTaskList(List *taskList);
 extern List * RoundRobinReorder(List *placementList);
 extern void SetPlacementNodeMetadata(ShardPlacement *placement, WorkerNode *workerNode);
 extern int CompareTasksByTaskId(const void *leftElement, const void *rightElement);
+extern List * TaskGroupIdAccesses(Task *task);
 extern int CompareTasksByExecutionDuration(const void *leftElement, const
 										   void *rightElement);
 

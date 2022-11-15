@@ -5549,6 +5549,25 @@ AssignDataFetchDependencies(List *taskList)
 
 
 /*
+ * TaskAccessesLocalNode returns true if any placements of the task reside on
+ * the node that we're executing the query.
+ */
+List *
+TaskGroupIdAccesses(Task *task)
+{
+	List *taskGroupIdAccesses = NIL;
+	ShardPlacement *taskPlacement = NULL;
+	foreach_ptr(taskPlacement, task->taskPlacementList)
+	{
+		taskGroupIdAccesses =
+			list_append_unique_int(taskGroupIdAccesses, taskPlacement->groupId);
+	}
+
+	return taskGroupIdAccesses;
+}
+
+
+/*
  * TaskListHighestTaskId walks over tasks in the given task list, finds the task
  * that has the largest taskId, and returns that taskId.
  *
