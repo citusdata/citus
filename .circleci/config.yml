@@ -6,19 +6,19 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-v186a1be'
+    default: '-v9372c09'
   pg13_version:
     type: string
-    default: '13.8'
+    default: '13.9'
   pg14_version:
     type: string
-    default: '14.5'
+    default: '14.6'
   pg15_version:
     type: string
-    default: '15.0'
+    default: '15.1'
   upgrade_pg_versions:
     type: string
-    default: '13.8-14.5-15.0'
+    default: '13.9-14.6-15.1'
   style_checker_tools_version:
     type: string
     default: '0.8.18'
