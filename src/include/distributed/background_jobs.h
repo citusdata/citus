@@ -26,8 +26,7 @@ typedef enum BackgroundMonitorExecutionStates
 	TaskConcurrentCancelCheck,
 	TryConsumeTaskWorker,
 	TaskHadError,
-	TaskEnded,
-	ExecutionEnded
+	TaskEnded
 } BackgroundMonitorExecutionStates;
 
 /*

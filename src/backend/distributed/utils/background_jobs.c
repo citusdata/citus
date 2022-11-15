@@ -698,10 +698,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		/* useful to sleep if all tasks ewouldblock on current iteration */
 		bool allWouldBlock = true;
 
-		/*
-		 * iterate over all handle entries and execute each task starting from
-		 * ExecutionStarted state until FSM reaches ExecutionEnded state.
-		 */
+		/* iterate over all handle entries and monitor each task's output */
 		BackgroundExecutorHashEntry *handleEntry = NULL;
 		foreach_ptr(handleEntry, runningTaskEntries)
 		{
@@ -714,7 +711,20 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			/* currently running task used in FSM */
 			BackgroundTask *task = NULL;
 
-			while (monitorExecutionState != ExecutionEnded)
+			/* start transaction for monitoring current task */
+			StartTransactionCommand();
+			PushActiveSnapshot(GetTransactionSnapshot());
+
+			/* tracks execution status for current task execution. */
+			bool taskWouldBlock = false;
+			bool taskEnded = false;
+
+			/*
+			 * starting from initial FSM state (ExecutionStarted), loop until
+			 * current task has no output (EWOULDBLOCK) or it is ended.
+			 * (suceeded, failed, or cancelled)
+			 */
+			while (!taskWouldBlock && !taskEnded)
 			{
 				switch (monitorExecutionState)
 				{
@@ -759,9 +769,6 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 						 * concurrent modification. We first check if a task is concurrently cancelled
 						 * or deleted. Accordingly, we decide to make the task status as cancelled or running.
 						 */
-
-						StartTransactionCommand();
-						PushActiveSnapshot(GetTransactionSnapshot());
 
 
 						/*
@@ -842,12 +849,9 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 						else if (mq_res == SHM_MQ_WOULD_BLOCK)
 						{
 							/*
-							 * still running the task but had no output for current iteration.
-							 * commit current transaction and jump onto next task.
+							 * still running the task but had no output for current iteration
 							 */
-							PopActiveSnapshot();
-							CommitTransactionCommand();
-							monitorExecutionState = ExecutionEnded;
+							taskWouldBlock = true;
 						}
 						else
 						{
@@ -928,10 +932,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 						dsm_detach(handleEntry->seg);
 						queueMonitorExecutionContext.currentExecutorCount--;
 
-						PopActiveSnapshot();
-						CommitTransactionCommand();
-
-						monitorExecutionState = ExecutionEnded;
+						taskEnded = true;
 						break;
 					}
 
@@ -941,6 +942,10 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 					}
 				}
 			}
+
+			/* commit transaction for monitoring current task */
+			PopActiveSnapshot();
+			CommitTransactionCommand();
 		}
 
 		if (allWouldBlock)
