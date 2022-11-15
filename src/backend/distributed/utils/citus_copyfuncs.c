@@ -99,7 +99,7 @@ copyJobInfo(Job *newnode, Job *from)
 	COPY_SCALAR_FIELD(requiresCoordinatorEvaluation);
 	COPY_SCALAR_FIELD(deferredPruning);
 	COPY_NODE_FIELD(partitionKeyValue);
-	COPY_NODE_FIELD(localPlannedStatements);
+	COPY_NODE_FIELD(fastPathPlanCacheList);
 	COPY_SCALAR_FIELD(parametersInJobQueryResolved);
 }
 
@@ -333,9 +333,9 @@ CopyNodeTask(COPYFUNC_ARGS)
 
 
 void
-CopyNodeLocalPlannedStatement(COPYFUNC_ARGS)
+CopyNodeFastPathPlanCache(COPYFUNC_ARGS)
 {
-	DECLARE_FROM_AND_NEW_NODE(LocalPlannedStatement);
+	DECLARE_FROM_AND_NEW_NODE(FastPathPlanCache);
 
 	COPY_SCALAR_FIELD(shardId);
 	COPY_SCALAR_FIELD(localGroupId);

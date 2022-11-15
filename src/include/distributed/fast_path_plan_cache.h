@@ -1,11 +1,11 @@
-#ifndef LOCAL_PLAN_CACHE
-#define LOCAL_PLAN_CACHE
+#ifndef FAST_PATH_PLAN_CACHE
+#define FAST_PATH_PLAN_CACHE
 
-extern bool IsLocalPlanCachingSupported(Job *currentJob,
-										DistributedPlan *originalDistributedPlan);
-extern PlannedStmt * GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan);
-extern void CacheLocalPlanForShardQuery(Task *task,
-										DistributedPlan *originalDistributedPlan,
-										ParamListInfo paramListInfo);
+extern bool IsFastPathPlanCachingSupported(Job *currentJob,
+										   DistributedPlan *originalDistributedPlan);
+extern PlannedStmt * GetFastPathLocalPlan(Task *task, DistributedPlan *distributedPlan);
+extern void CacheFastPathPlanForShardQuery(Task *task,
+										   DistributedPlan *originalDistributedPlan,
+										   ParamListInfo paramListInfo);
 
-#endif /* LOCAL_PLAN_CACHE */
+#endif /* FAST_PATH_PLAN_CACHE */

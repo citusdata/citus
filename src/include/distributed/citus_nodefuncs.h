@@ -48,7 +48,7 @@ extern void OutShardPlacement(OUTFUNC_ARGS);
 extern void OutRelationShard(OUTFUNC_ARGS);
 extern void OutRelationRowLock(OUTFUNC_ARGS);
 extern void OutTask(OUTFUNC_ARGS);
-extern void OutLocalPlannedStatement(OUTFUNC_ARGS);
+extern void OutFastPathPlanCache(OUTFUNC_ARGS);
 extern void OutDeferredErrorMessage(OUTFUNC_ARGS);
 extern void OutGroupShardPlacement(OUTFUNC_ARGS);
 
@@ -75,7 +75,7 @@ extern void CopyNodeGroupShardPlacement(COPYFUNC_ARGS);
 extern void CopyNodeRelationShard(COPYFUNC_ARGS);
 extern void CopyNodeRelationRowLock(COPYFUNC_ARGS);
 extern void CopyNodeTask(COPYFUNC_ARGS);
-extern void CopyNodeLocalPlannedStatement(COPYFUNC_ARGS);
+extern void CopyNodeFastPathPlanCache(COPYFUNC_ARGS);
 extern void CopyNodeTaskQuery(COPYFUNC_ARGS);
 extern void CopyNodeDeferredErrorMessage(COPYFUNC_ARGS);
 

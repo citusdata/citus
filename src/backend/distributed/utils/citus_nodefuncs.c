@@ -40,7 +40,7 @@ static const char *CitusNodeTagNamesD[] = {
 	"DistributedSubPlan",
 	"UsedDistributedSubPlan",
 	"Task",
-	"LocalPlannedStatement",
+	"FastPathPlanCache",
 	"ShardInterval",
 	"ShardPlacement",
 	"RelationShard",
@@ -397,7 +397,7 @@ const ExtensibleNodeMethods nodeMethods[] =
 	DEFINE_NODE_METHODS(RelationShard),
 	DEFINE_NODE_METHODS(RelationRowLock),
 	DEFINE_NODE_METHODS(Task),
-	DEFINE_NODE_METHODS(LocalPlannedStatement),
+	DEFINE_NODE_METHODS(FastPathPlanCache),
 	DEFINE_NODE_METHODS(DeferredErrorMessage),
 	DEFINE_NODE_METHODS(GroupShardPlacement),
 

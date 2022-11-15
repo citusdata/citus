@@ -274,7 +274,7 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 	/*
 	 * Create a copy of the generic plan for the current execution, but make a shallow
 	 * copy of the plan cache. That means we'll be able to access the plan cache via
-	 * currentPlan->workerJob->localPlannedStatements, but it will be preserved across
+	 * currentPlan->workerJob->fastPathPlanCacheList, but it will be preserved across
 	 * executions by the prepared statement logic.
 	 */
 	DistributedPlan *currentPlan =
@@ -309,7 +309,7 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 	/* parameters are filled in, so we can generate a task for this execution */
 	RegenerateTaskForFasthPathQuery(workerJob);
 
-	if (IsLocalPlanCachingSupported(workerJob, originalDistributedPlan))
+	if (IsFastPathPlanCachingSupported(workerJob, originalDistributedPlan))
 	{
 		Task *task = linitial(workerJob->taskList);
 
@@ -321,8 +321,8 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 		 * The plan will be cached across executions when originalDistributedPlan
 		 * represents a prepared statement.
 		 */
-		CacheLocalPlanForShardQuery(task, originalDistributedPlan,
-									estate->es_param_list_info);
+		CacheFastPathPlanForShardQuery(task, originalDistributedPlan,
+									   estate->es_param_list_info);
 	}
 }
 
@@ -432,7 +432,7 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	 * Now that we have populated the task placements we can determine whether
 	 * any of them are local to this node and cache a plan if needed.
 	 */
-	if (IsLocalPlanCachingSupported(workerJob, originalDistributedPlan))
+	if (IsFastPathPlanCachingSupported(workerJob, originalDistributedPlan))
 	{
 		Task *task = linitial(workerJob->taskList);
 
@@ -449,8 +449,8 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		 * The plan will be cached across executions when originalDistributedPlan
 		 * represents a prepared statement.
 		 */
-		CacheLocalPlanForShardQuery(task, originalDistributedPlan,
-									estate->es_param_list_info);
+		CacheFastPathPlanForShardQuery(task, originalDistributedPlan,
+									   estate->es_param_list_info);
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -548,21 +548,21 @@ ModifyJobNeedsEvaluation(Job *workerJob)
  * executions of a prepared statement. Instead we create a deep copy that we only
  * use for the current execution.
  *
- * We also exclude localPlannedStatements from the copyObject call for performance
+ * We also exclude fastPathPlanCacheList from the copyObject call for performance
  * reasons, as they are immutable, so no need to have a deep copy.
  */
 static DistributedPlan *
 CopyDistributedPlanWithoutCache(DistributedPlan *originalDistributedPlan)
 {
-	List *localPlannedStatements =
-		originalDistributedPlan->workerJob->localPlannedStatements;
-	originalDistributedPlan->workerJob->localPlannedStatements = NIL;
+	List *fastPathPlanCacheList =
+		originalDistributedPlan->workerJob->fastPathPlanCacheList;
+	originalDistributedPlan->workerJob->fastPathPlanCacheList = NIL;
 
 	DistributedPlan *distributedPlan = copyObject(originalDistributedPlan);
 
 	/* set back the immutable field */
-	originalDistributedPlan->workerJob->localPlannedStatements = localPlannedStatements;
-	distributedPlan->workerJob->localPlannedStatements = localPlannedStatements;
+	originalDistributedPlan->workerJob->fastPathPlanCacheList = fastPathPlanCacheList;
+	distributedPlan->workerJob->fastPathPlanCacheList = fastPathPlanCacheList;
 
 	return distributedPlan;
 }

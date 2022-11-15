@@ -32,16 +32,16 @@ static int ExtractParameterTypesForParamListInfo(ParamListInfo originalParamList
 												 Oid **parameterTypes);
 
 /*
- * CacheLocalPlanForShardQuery replaces the relation OIDs in the job query
+ * CacheFastPathPlanForShardQuery replaces the relation OIDs in the job query
  * with shard relation OIDs and then plans the query and caches the result
  * in the originalDistributedPlan (which may be preserved across executions).
  */
 void
-CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan,
-							ParamListInfo paramListInfo)
+CacheFastPathPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan,
+							   ParamListInfo paramListInfo)
 {
-	PlannedStmt *localPlan = GetCachedLocalPlan(task, originalDistributedPlan);
-	if (localPlan != NULL)
+	PlannedStmt *planCache = GetFastPathLocalPlan(task, originalDistributedPlan);
+	if (planCache != NULL)
 	{
 		/* we already have a local plan */
 		return;
@@ -87,15 +87,15 @@ CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan
 
 	LockRelationOid(rangeTableEntry->relid, lockMode);
 
-	LocalPlannedStatement *localPlannedStatement = CitusMakeNode(LocalPlannedStatement);
-	localPlan = planner(localShardQuery, NULL, 0, NULL);
-	localPlannedStatement->localPlan = localPlan;
-	localPlannedStatement->shardId = task->anchorShardId;
-	localPlannedStatement->localGroupId = GetLocalGroupId();
+	FastPathPlanCache *fastPathPlanCache = CitusMakeNode(FastPathPlanCache);
+	planCache = planner(localShardQuery, NULL, 0, NULL);
+	fastPathPlanCache->localPlan = planCache;
+	fastPathPlanCache->shardId = task->anchorShardId;
+	fastPathPlanCache->localGroupId = GetLocalGroupId();
 
-	originalDistributedPlan->workerJob->localPlannedStatements =
-		lappend(originalDistributedPlan->workerJob->localPlannedStatements,
-				localPlannedStatement);
+	originalDistributedPlan->workerJob->fastPathPlanCacheList =
+		lappend(originalDistributedPlan->workerJob->fastPathPlanCacheList,
+				fastPathPlanCache);
 
 	MemoryContextSwitchTo(oldContext);
 }
@@ -232,24 +232,24 @@ ExtractParameterTypesForParamListInfo(ParamListInfo originalParamListInfo,
  * Otherwise, the function returns NULL.
  */
 PlannedStmt *
-GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan)
+GetFastPathLocalPlan(Task *task, DistributedPlan *distributedPlan)
 {
 	if (distributedPlan == NULL || distributedPlan->workerJob == NULL)
 	{
 		return NULL;
 	}
-	List *cachedPlanList = distributedPlan->workerJob->localPlannedStatements;
-	LocalPlannedStatement *localPlannedStatement = NULL;
+	List *cachedPlanList = distributedPlan->workerJob->fastPathPlanCacheList;
+	FastPathPlanCache *fastPathPlanCache = NULL;
 
 	int32 localGroupId = GetLocalGroupId();
 
-	foreach_ptr(localPlannedStatement, cachedPlanList)
+	foreach_ptr(fastPathPlanCache, cachedPlanList)
 	{
-		if (localPlannedStatement->shardId == task->anchorShardId &&
-			localPlannedStatement->localGroupId == localGroupId)
+		if (fastPathPlanCache->shardId == task->anchorShardId &&
+			fastPathPlanCache->localGroupId == localGroupId)
 		{
 			/* already have a cached plan, no need to continue */
-			return localPlannedStatement->localPlan;
+			return fastPathPlanCache->localPlan;
 		}
 	}
 
@@ -263,7 +263,7 @@ GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan)
  * functions).
  */
 bool
-IsLocalPlanCachingSupported(Job *currentJob, DistributedPlan *originalDistributedPlan)
+IsFastPathPlanCachingSupported(Job *currentJob, DistributedPlan *originalDistributedPlan)
 {
 	if (originalDistributedPlan->numberOfTimesExecuted < 1)
 	{

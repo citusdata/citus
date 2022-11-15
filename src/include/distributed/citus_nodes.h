@@ -59,7 +59,7 @@ typedef enum CitusNodeTag
 	T_DistributedSubPlan,
 	T_UsedDistributedSubPlan,
 	T_Task,
-	T_LocalPlannedStatement,
+	T_FastPathPlanCache,
 	T_ShardInterval,
 	T_ShardPlacement,
 	T_RelationShard,

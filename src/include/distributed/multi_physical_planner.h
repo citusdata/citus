@@ -111,17 +111,17 @@ typedef enum RowModifyLevel
 
 
 /*
- * LocalPlannedStatement represents a local plan of a shard. The scope
- * for the LocalPlannedStatement is Task.
+ * FastPathPlanCache represents a plan of a shard. The scope
+ * for the FastPathPlanCache is Task.
  */
-typedef struct LocalPlannedStatement
+typedef struct FastPathPlanCache
 {
 	CitusNode type;
 
 	uint64 shardId;
 	uint32 localGroupId;
 	PlannedStmt *localPlan;
-} LocalPlannedStatement;
+} FastPathPlanCache;
 
 
 /*
@@ -144,7 +144,7 @@ typedef struct Job
 	Const *partitionKeyValue;
 
 	/* for local shard queries, we may save the local plan here */
-	List *localPlannedStatements;
+	List *fastPathPlanCacheList;
 
 	/*
 	 * When we evaluate functions and parameters in jobQuery then we

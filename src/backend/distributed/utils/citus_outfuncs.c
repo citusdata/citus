@@ -345,7 +345,7 @@ OutJobFields(StringInfo str, const Job *node)
 	WRITE_BOOL_FIELD(requiresCoordinatorEvaluation);
 	WRITE_BOOL_FIELD(deferredPruning);
 	WRITE_NODE_FIELD(partitionKeyValue);
-	WRITE_NODE_FIELD(localPlannedStatements);
+	WRITE_NODE_FIELD(fastPathPlanCacheList);
 	WRITE_BOOL_FIELD(parametersInJobQueryResolved);
 }
 
@@ -540,11 +540,11 @@ OutTask(OUTFUNC_ARGS)
 
 
 void
-OutLocalPlannedStatement(OUTFUNC_ARGS)
+OutFastPathPlanCache(OUTFUNC_ARGS)
 {
-	WRITE_LOCALS(LocalPlannedStatement);
+	WRITE_LOCALS(FastPathPlanCache);
 
-	WRITE_NODE_TYPE("LocalPlannedStatement");
+	WRITE_NODE_TYPE("FastPathPlanCache");
 
 	WRITE_UINT64_FIELD(shardId);
 	WRITE_UINT_FIELD(localGroupId);

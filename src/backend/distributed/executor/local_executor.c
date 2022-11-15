@@ -274,19 +274,19 @@ ExecuteLocalTaskListExtended(List *taskList,
 			continue;
 		}
 
-		PlannedStmt *localPlan = GetCachedLocalPlan(task, distributedPlan);
+		PlannedStmt *planCache = GetFastPathLocalPlan(task, distributedPlan);
 
 		/*
 		 * If the plan is already cached, don't need to re-plan, just
 		 * acquire necessary locks.
 		 */
-		if (localPlan != NULL)
+		if (planCache != NULL)
 		{
 			Query *jobQuery = distributedPlan->workerJob->jobQuery;
 			LOCKMODE lockMode = GetQueryLockMode(jobQuery);
 
 			Oid relationId = InvalidOid;
-			foreach_oid(relationId, localPlan->relationOids)
+			foreach_oid(relationId, planCache->relationOids)
 			{
 				LockRelationOid(relationId, lockMode);
 			}
@@ -339,7 +339,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 			 * implemented. So, let planner to call distributed_planner() which
 			 * eventually calls standard_planner().
 			 */
-			localPlan = planner(shardQuery, NULL, cursorOptions, paramListInfo);
+			planCache = planner(shardQuery, NULL, cursorOptions, paramListInfo);
 		}
 
 		char *shardQueryString = NULL;
@@ -354,7 +354,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 		}
 
 		totalRowsProcessed +=
-			LocallyExecuteTaskPlan(localPlan, shardQueryString,
+			LocallyExecuteTaskPlan(planCache, shardQueryString,
 								   tupleDest, task, paramListInfo);
 
 		MemoryContextSwitchTo(oldContext);
