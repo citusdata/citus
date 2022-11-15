@@ -101,9 +101,6 @@ SELECT (extract(epoch from now()) * 1000)::bigint AS epoch,
 -- Returns true
 SELECT ABS(:epoch - cluster_clock_logical(:'latest_clock')) < 25;
 
--- This should fail as there is no explicit transaction
-SELECT citus_get_transaction_clock();
-
 BEGIN;
 SELECT citus_get_transaction_clock();
 END;

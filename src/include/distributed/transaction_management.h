@@ -9,6 +9,7 @@
 #ifndef TRANSACTION_MANAGMENT_H
 #define TRANSACTION_MANAGMENT_H
 
+#include "access/xact.h"
 #include "lib/ilist.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
@@ -76,6 +77,28 @@ typedef struct AllowedDistributionColumn
 } AllowedDistributionColumn;
 
 /*
+ * BeginXactDeferrableState reflects the value of the DEFERRABLE property
+ * in the BEGIN of a transaction block.
+ */
+typedef enum BeginXactDeferrableState
+{
+	BeginXactDeferrable_NotSet,
+	BeginXactDeferrable_Disabled,
+	BeginXactDeferrable_Enabled,
+} BeginXactDeferrableState;
+
+/*
+ * BeginXactReadOnlyState reflects the value of the READ ONLY property
+ * in the BEGIN of a transaction block.
+ */
+typedef enum BeginXactReadOnlyState
+{
+	BeginXactReadOnly_NotSet,
+	BeginXactReadOnly_Disabled,
+	BeginXactReadOnly_Enabled,
+} BeginXactReadOnlyState;
+
+/*
  * The current distribution column value passed as an argument to a forced
  * function call delegation.
  */
@@ -118,6 +141,10 @@ extern StringInfo activeSetStmts;
 
 /* did current transaction modify pg_dist_node? */
 extern bool TransactionModifiedNodeMetadata;
+
+/* after an explicit BEGIN, keep track of top-level transaction characteristics */
+extern BeginXactReadOnlyState BeginXactReadOnly;
+extern BeginXactDeferrableState BeginXactDeferrable;
 
 /*
  * Coordinated transaction management.

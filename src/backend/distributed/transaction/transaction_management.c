@@ -125,6 +125,13 @@ bool FunctionOpensTransactionBlock = true;
 /* if true, we should trigger node metadata sync on commit */
 bool NodeMetadataSyncOnCommit = false;
 
+/*
+ * In an explicit BEGIN ...; we keep track of top-level transaction characteristics
+ * specified by the user.
+ */
+BeginXactReadOnlyState BeginXactReadOnly = BeginXactReadOnly_NotSet;
+BeginXactDeferrableState BeginXactDeferrable = BeginXactDeferrable_NotSet;
+
 
 /* transaction management functions */
 static void CoordinatedTransactionCallback(XactEvent event, void *arg);
@@ -608,6 +615,8 @@ ResetGlobalVariables()
 	InTopLevelDelegatedFunctionCall = false;
 	InTableTypeConversionFunctionCall = false;
 	CurrentOperationId = INVALID_OPERATION_ID;
+	BeginXactReadOnly = BeginXactReadOnly_NotSet;
+	BeginXactDeferrable = BeginXactDeferrable_NotSet;
 	ResetWorkerErrorIndication();
 	memset(&AllowedDistributionColumnValue, 0,
 		   sizeof(AllowedDistributionColumn));

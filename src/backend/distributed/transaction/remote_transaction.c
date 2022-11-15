@@ -39,6 +39,7 @@
 #define PREPARED_TRANSACTION_NAME_FORMAT "citus_%u_%u_"UINT64_FORMAT "_%u"
 
 
+static char * BeginTransactionCommand(void);
 static char * AssignDistributedTransactionIdCommand(void);
 static void StartRemoteTransactionSavepointBegin(MultiConnection *connection,
 												 SubTransactionId subId);
@@ -54,6 +55,14 @@ static void FinishRemoteTransactionSavepointRollback(MultiConnection *connection
 													 SubTransactionId subId);
 
 static void Assign2PCIdentifier(MultiConnection *connection);
+
+
+static char *IsolationLevelName[] = {
+	"READ UNCOMMITTED",
+	"READ COMMITTED",
+	"REPEATABLE READ",
+	"SERIALIZABLE"
+};
 
 
 /*
@@ -82,7 +91,7 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 	 * behaviour.
 	 */
 	appendStringInfoString(beginAndSetDistributedTransactionId,
-						   "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;");
+						   BeginTransactionCommand());
 
 	/* append context for in-progress SAVEPOINTs for this transaction */
 	List *activeSubXacts = ActiveSubXactContexts();
@@ -151,12 +160,74 @@ BeginAndSetDistributedTransactionIdCommand(void)
 	 * behaviour.
 	 */
 	appendStringInfoString(beginAndSetDistributedTransactionId,
-						   "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;");
+						   BeginTransactionCommand());
 
 	appendStringInfoString(beginAndSetDistributedTransactionId,
 						   AssignDistributedTransactionIdCommand());
 
 	return beginAndSetDistributedTransactionId;
+}
+
+
+/*
+ * BeginTransactionCommand returns the BEGIN command to use for the current isolation
+ * level.
+ *
+ * Transactions have 3 properties that we care about here:
+ * - XactIsoLevel (isolation level)
+ * - XactDeferrable (deferrable)
+ * - XactReadOnly (read only)
+ *
+ * These properties can be set in several ways:
+ * - via BEGIN TRANSACTION ISOLATION LEVEL ...
+ * - via default_transaction_isolation, ...
+ * - via SET TRANSACTION .. (or plain SET transaction_isolation ...)
+ *
+ * We want to make sure that the properties that are passed to the worker nodes
+ * match the coordinator as much as possible. However, we do not want to waste
+ * bytes repeating the current values ad infinitum.
+ *
+ * The trade-off we make is that we send the isolation level in all cases,
+ * but only set deferrable and read-only if they were explicitly specified
+ * in the BEGIN by the user. The implication is that we may not follow the
+ * default_transaction_* settings on the coordinator if they differ on the
+ * worker.
+ */
+static char *
+BeginTransactionCommand(void)
+{
+	StringInfo beginCommand = makeStringInfo();
+
+	/*
+	 * XactIsoLevel can only be set at the start of the transaction, before the
+	 * first query. Since Citus does not send BEGIN until the first query, we
+	 * can simply use the current values, and they will match the values for the
+	 * outer transaction after any BEGIN and SET TRANSACTION that may have occurred.
+	 */
+	appendStringInfo(beginCommand, "BEGIN TRANSACTION ISOLATION LEVEL %s",
+					 IsolationLevelName[XactIsoLevel]);
+
+	if (BeginXactDeferrable == BeginXactDeferrable_Enabled)
+	{
+		appendStringInfoString(beginCommand, " DEFERRABLE");
+	}
+	else if (BeginXactDeferrable == BeginXactDeferrable_Disabled)
+	{
+		appendStringInfoString(beginCommand, " NOT DEFERRABLE");
+	}
+
+	if (BeginXactReadOnly == BeginXactReadOnly_Enabled)
+	{
+		appendStringInfoString(beginCommand, " READ ONLY");
+	}
+	else if (BeginXactReadOnly == BeginXactReadOnly_Disabled)
+	{
+		appendStringInfoString(beginCommand, " READ WRITE");
+	}
+
+	appendStringInfoChar(beginCommand, ';');
+
+	return beginCommand->data;
 }
 
 
