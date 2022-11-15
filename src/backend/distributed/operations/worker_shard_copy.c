@@ -32,6 +32,17 @@
  * argument to the copy callback.
  */
 static StringInfo LocalCopyBuffer;
+#define CDC_REPLICATION_ORIGIN_CREATE_IF_NOT_EXISTS_CMD \
+	"SELECT  pg_catalog.pg_replication_origin_create('citus_cdc') \
+	where (select pg_catalog.pg_replication_origin_oid('citus_cdc')) IS NULL;"
+
+#define CDC_REPLICATION_ORIGIN_SESION_SETUP_CMD \
+	"SELECT pg_catalog.pg_replication_origin_session_setup('citus_cdc') \
+	where pg_catalog.pg_replication_origin_session_is_setup()='f';"
+
+#define CDC_REPLICATION_ORIGIN_SESION_RESET_CMD \
+	"SELECT pg_catalog.pg_replication_origin_session_reset() \
+	where pg_catalog.pg_replication_origin_session_is_setup()='t';"
 
 typedef struct ShardCopyDestReceiver
 {
@@ -80,7 +91,10 @@ static int ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead);
 static void LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState
 							 localCopyOutState);
 static void ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest);
-static void SetupReplicationOrigin(RepOriginId nodeId);
+
+static void CreateReplicationOriginIfNotExists(ShardCopyDestReceiver *dest);
+static void SetupReplicationOriginSessionIfNotSetupAlready(MultiConnection *connection);
+static void ResetReplicationOriginSessionIfSetupAlready(MultiConnection *connection);
 
 static bool
 CanUseLocalCopy(uint32_t destinationNodeId)
@@ -89,6 +103,30 @@ CanUseLocalCopy(uint32_t destinationNodeId)
 	return GetLocalNodeId() == (int32) destinationNodeId;
 }
 
+/*
+ * SetupReplicationOriginSessionIfNotSetupAlready sets up the replication origin session
+ * if it is not already setup.
+ */
+ static void SetupReplicationOriginSessionIfNotSetupAlready(MultiConnection *connection) {
+	/* Setup replication Origin if not setup already */
+	if (!SendRemoteCommand(connection, CDC_REPLICATION_ORIGIN_SESION_SETUP_CMD))
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+	ForgetResults(connection);
+}
+
+/*
+ * ResetReplicationOriginSessionIfSetupAlready resets the replication origin session
+ * if it has been setup currently.
+ */
+static void ResetReplicationOriginSessionIfSetupAlready(MultiConnection *connection) {
+	if (!SendRemoteCommand(connection, CDC_REPLICATION_ORIGIN_SESION_RESET_CMD))
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+	ForgetResults(connection);
+}
 
 /* Connect to node with source shard and trigger copy start.  */
 static void
@@ -105,10 +143,13 @@ ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 														 NULL /* database (current) */);
 	ClaimConnectionExclusively(copyDest->connection);
 
+	/* Setup Replication Origin Session if not setup already for 
+	avoiding publication of events more than once. */
+	SetupReplicationOriginSessionIfNotSetupAlready(copyDest->connection);
+
 	StringInfo copyStatement = ConstructShardCopyStatement(
 		copyDest->destinationShardFullyQualifiedName,
 		copyDest->copyOutState->binary);
-
 	if (!SendRemoteCommand(copyDest->connection, copyStatement->data))
 	{
 		ReportConnectionError(copyDest->connection, ERROR);
@@ -154,7 +195,9 @@ CreateShardCopyDestReceiver(EState *executorState,
 	return (DestReceiver *) copyDest;
 }
 
+
 #define InvalidRepOriginId 0
+
 /*
  * ShardCopyDestReceiverReceive implements the receiveSlot function of
  * ShardCopyDestReceiver. It takes a TupleTableSlot and sends the contents to
@@ -234,27 +277,6 @@ ShardCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	return true;
 }
 
-static void 
-SetupReplicationOrigin(RepOriginId nodeId) {
-	RepOriginId originid = InvalidRepOriginId;
-	XLogRecPtr	origin_startpos = InvalidXLogRecPtr;
-	//Check if there is a replication origin session already active.
-	if (replorigin_session_origin == InvalidRepOriginId) {
-		//Lookup the replication origin and create it if it does not exist.
-		char originname[NAMEDATALEN];
-		snprintf(originname, sizeof(originname), "pg_%u",nodeId);
-		originid = replorigin_by_name(originname, true);
-		if (originid == InvalidRepOriginId) {
-			originid = replorigin_create(originname);
-		}
-		//Setup the replication origin session.
-		replorigin_session_setup(originid);
-		replorigin_session_origin = originid;
-		origin_startpos = replorigin_session_get_progress(false);
-		//elog(LOG, "!!!! Citus: ShardCopyDestReceiverReceive replorigin_session_origin %d", replorigin_session_origin);
-	}
-}
-
 
 /*
  * ShardCopyDestReceiverStartup implements the rStartup interface of ShardCopyDestReceiver.
@@ -282,7 +304,26 @@ ShardCopyDestReceiverStartup(DestReceiver *dest, int operation, TupleDesc
 	copyDest->columnOutputFunctions = ColumnOutputFunctions(inputTupleDescriptor,
 															copyOutState->binary);
 	copyDest->copyOutState = copyOutState;
-	SetupReplicationOrigin(copyDest->destinationNodeId);
+	CreateReplicationOriginIfNotExists(copyDest);
+}
+
+
+static void
+CreateReplicationOriginIfNotExists(ShardCopyDestReceiver *dest)
+{
+	int connectionFlags = OUTSIDE_TRANSACTION;
+	char *currentUser = CurrentUserName();
+	WorkerNode *workerNode = FindNodeWithNodeId(dest->destinationNodeId,
+												false /* missingOk */);
+	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,
+																workerNode->workerName,
+																workerNode->workerPort,
+																currentUser,
+																NULL /* database (current) */);
+	ClaimConnectionExclusively(connection);
+	ExecuteCriticalRemoteCommand(connection,
+								 CDC_REPLICATION_ORIGIN_CREATE_IF_NOT_EXISTS_CMD);
+	CloseConnection(connection);
 }
 
 
@@ -341,6 +382,11 @@ ShardCopyDestReceiverShutdown(DestReceiver *dest)
 
 		PQclear(result);
 		ForgetResults(copyDest->connection);
+
+		/*Reset Replication Origin. */
+		ExecuteCriticalRemoteCommand(copyDest->connection,
+									 CDC_REPLICATION_ORIGIN_SESION_RESET_CMD);
+
 		CloseConnection(copyDest->connection);
 	}
 }
