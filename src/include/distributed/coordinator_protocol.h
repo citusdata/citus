@@ -60,8 +60,6 @@
 	"SELECT worker_apply_shard_ddl_command (" UINT64_FORMAT ", %s, %s)"
 #define WORKER_APPLY_SHARD_DDL_COMMAND_WITHOUT_SCHEMA \
 	"SELECT worker_apply_shard_ddl_command (" UINT64_FORMAT ", %s)"
-#define WORKER_APPEND_TABLE_TO_SHARD \
-	"SELECT worker_append_table_to_shard (%s, %s, %s, %u)"
 #define WORKER_APPLY_INTER_SHARD_DDL_COMMAND \
 	"SELECT worker_apply_inter_shard_ddl_command (" UINT64_FORMAT ", %s, " UINT64_FORMAT \
 	", %s, %s)"
@@ -287,9 +285,6 @@ extern Datum isolate_tenant_to_new_shard(PG_FUNCTION_ARGS);
 extern Datum citus_split_shard_by_split_points(PG_FUNCTION_ARGS);
 
 /* function declarations for shard copy functinality */
-extern List * CopyShardCommandList(ShardInterval *shardInterval, const
-								   char *sourceNodeName,
-								   int32 sourceNodePort, bool includeData);
 extern List * CopyShardForeignConstraintCommandList(ShardInterval *shardInterval);
 extern void CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 														 List **

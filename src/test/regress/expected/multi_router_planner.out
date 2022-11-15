@@ -32,33 +32,15 @@ CREATE TABLE authors_range ( name varchar(20), id bigint );
 CREATE TABLE authors_reference ( name varchar(20), id bigint );
 -- this table is used in router executor tests
 CREATE TABLE articles_single_shard_hash (LIKE articles_hash);
-SELECT master_create_distributed_table('articles_hash', 'author_id', 'hash');
- master_create_distributed_table
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('articles_hash', 'author_id', 'hash', shard_count := 2);
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT master_create_distributed_table('articles_single_shard_hash', 'author_id', 'hash');
- master_create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
--- test when a table is distributed but no shards created yet
-SELECT count(*) from articles_hash;
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
-SELECT master_create_worker_shards('articles_hash', 2, 1);
- master_create_worker_shards
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT master_create_worker_shards('articles_single_shard_hash', 1, 1);
- master_create_worker_shards
+SELECT create_distributed_table('articles_single_shard_hash', 'author_id', 'hash', shard_count := 1);
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
@@ -388,14 +370,8 @@ DEBUG:  Creating router plan
 
 -- recursive CTEs are supported when filtered on partition column
 CREATE TABLE company_employees (company_id int, employee_id int, manager_id int);
-SELECT master_create_distributed_table('company_employees', 'company_id', 'hash');
- master_create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT master_create_worker_shards('company_employees', 4, 1);
- master_create_worker_shards
+SELECT create_distributed_table('company_employees', 'company_id', 'hash', shard_count := 4);
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1761,14 +1737,14 @@ DEBUG:  Creating router plan
 -- just 4 shards to be created for each table to make sure
 -- they are 'co-located' pairwise
 SET citus.shard_replication_factor TO 1;
-SELECT master_create_distributed_table('authors_range', 'id', 'range');
- master_create_distributed_table
+SELECT create_distributed_table('authors_range', 'id', 'range');
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT master_create_distributed_table('articles_range', 'author_id', 'range');
- master_create_distributed_table
+SELECT create_distributed_table('articles_range', 'author_id', 'range');
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1994,8 +1970,8 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 -- following is a bug, function should have been
 -- evaluated at master before going to worker
 -- need to use a append distributed table here
-SELECT master_create_distributed_table('articles_append', 'author_id', 'append');
- master_create_distributed_table
+SELECT create_distributed_table('articles_append', 'author_id', 'append');
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
@@ -2041,7 +2017,7 @@ SELECT raise_failed_execution_router($$
 		LIMIT 1;
 $$);
 ERROR:  Task failed to execute
--- same query on router planner with where false but evaluation left to worker
+-- hash-distributed tables can be evaluated on workers since they are synced
 SELECT raise_failed_execution_router($$
 	SELECT author_id FROM articles_single_shard_hash
 		WHERE
@@ -2050,7 +2026,11 @@ SELECT raise_failed_execution_router($$
 			author_id
 		LIMIT 1;
 $$);
-ERROR:  Task failed to execute
+ raise_failed_execution_router
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT raise_failed_execution_router($$
 	SELECT author_id FROM articles_hash
 		WHERE
@@ -2060,7 +2040,11 @@ SELECT raise_failed_execution_router($$
 			author_id
 		LIMIT 1;
 $$);
-ERROR:  Task failed to execute
+ raise_failed_execution_router
+---------------------------------------------------------------------
+
+(1 row)
+
 -- create a dummy function to be used in filtering
 CREATE OR REPLACE FUNCTION someDummyFunction(regclass)
     RETURNS text AS
@@ -2094,7 +2078,11 @@ SELECT raise_failed_execution_router($$
 			author_id, id
 		LIMIT 5;
 $$);
-ERROR:  Task failed to execute
+ raise_failed_execution_router
+---------------------------------------------------------------------
+
+(1 row)
+
 \set VERBOSITY DEFAULT
 -- temporarily turn off debug messages before dropping the function
 SET client_min_messages TO 'NOTICE';
@@ -2437,14 +2425,8 @@ SET client_min_messages to 'NOTICE';
 -- test that a connection failure marks placements invalid
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE failure_test (a int, b int);
-SELECT master_create_distributed_table('failure_test', 'a', 'hash');
- master_create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT master_create_worker_shards('failure_test', 2);
- master_create_worker_shards
+SELECT create_distributed_table('failure_test', 'a', 'hash');
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
@@ -2475,9 +2457,13 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 ---------------------------------------------------------------------
   840017 |          1 | localhost |    57637
   840017 |          1 | localhost |    57638
-  840018 |          1 | localhost |    57638
   840018 |          1 | localhost |    57637
-(4 rows)
+  840018 |          1 | localhost |    57638
+  840019 |          1 | localhost |    57637
+  840019 |          1 | localhost |    57638
+  840020 |          1 | localhost |    57637
+  840020 |          1 | localhost |    57638
+(8 rows)
 
 \c - postgres - :worker_1_port
 DROP OWNED BY router_user;

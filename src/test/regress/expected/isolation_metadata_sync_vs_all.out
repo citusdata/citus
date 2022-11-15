@@ -357,7 +357,7 @@ t
 (1 row)
 
 
-starting permutation: s1-begin s2-begin s1-start-metadata-sync s2-create-dist-table s1-commit s2-commit s3-compare-snapshot
+starting permutation: s1-begin s2-begin s1-start-metadata-sync s2-create-dist-table s1-commit s2-commit
 step s1-begin:
     BEGIN;
 
@@ -387,30 +387,6 @@ create_distributed_table
 
 step s2-commit:
  COMMIT;
-
-step s3-compare-snapshot:
- SELECT count(*) = 0 AS same_metadata_in_workers
- FROM
- (
-  (
-   SELECT unnest(activate_node_snapshot())
-    EXCEPT
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-  )
- UNION
-  (
-   SELECT unnest(result::text[]) AS unnested_result
-   FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
-    EXCEPT
-   SELECT unnest(activate_node_snapshot())
-  )
- ) AS foo;
-
-same_metadata_in_workers
----------------------------------------------------------------------
-t
-(1 row)
 
 
 starting permutation: s1-begin s2-begin s1-start-metadata-sync s2-create-ref-table s1-commit s2-commit s3-compare-snapshot

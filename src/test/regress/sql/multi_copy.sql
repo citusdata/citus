@@ -182,7 +182,7 @@ CREATE TABLE customer_copy_range (
         c_comment varchar(117),
 		primary key (c_custkey));
 
-SELECT master_create_distributed_table('customer_copy_range', 'c_custkey', 'range');
+SELECT create_distributed_table('customer_copy_range', 'c_custkey', 'range');
 
 -- Test COPY into empty range-partitioned table
 \set client_side_copy_command '\\copy customer_copy_range FROM ' :'customer1datafile' ' WITH (DELIMITER '''|''');'
@@ -338,9 +338,8 @@ CREATE TABLE "customer_with_special_\\_character"(
         c_custkey integer,
         c_name varchar(25) not null);
 
-SELECT master_create_distributed_table('"customer_with_special_\\_character"', 'c_custkey', 'hash');
-
-SELECT master_create_worker_shards('"customer_with_special_\\_character"', 4, 1);
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('"customer_with_special_\\_character"', 'c_custkey', 'hash', shard_count := 4);
 
 COPY "customer_with_special_\\_character" (c_custkey, c_name) FROM STDIN
 WITH (FORMAT 'csv');
@@ -356,9 +355,8 @@ CREATE TABLE "1_customer"(
         c_custkey integer,
         c_name varchar(25) not null);
 
-SELECT master_create_distributed_table('"1_customer"', 'c_custkey', 'hash');
-
-SELECT master_create_worker_shards('"1_customer"', 4, 1);
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('"1_customer"', 'c_custkey', 'hash', shard_count := 4);
 
 COPY "1_customer" (c_custkey, c_name) FROM STDIN
 WITH (FORMAT 'csv');
@@ -386,8 +384,8 @@ CREATE TABLE packed_numbers_hash (
         packed_numbers number_pack[]
 );
 
-SELECT master_create_distributed_table('packed_numbers_hash', 'id', 'hash');
-SELECT master_create_worker_shards('packed_numbers_hash', 4, 1);
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('packed_numbers_hash', 'id', 'hash', shard_count := 4);
 COPY (SELECT 1, ARRAY[ROW(42, 42), ROW(42, 42)]) TO :'temp_dir''copy_test_array_of_composite';
 COPY packed_numbers_hash FROM :'temp_dir''copy_test_array_of_composite';
 
@@ -401,8 +399,8 @@ CREATE TABLE super_packed_numbers_hash (
         super_packed_number super_number_pack
 );
 
-SELECT master_create_distributed_table('super_packed_numbers_hash', 'id', 'hash');
-SELECT master_create_worker_shards('super_packed_numbers_hash', 4, 1);
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('super_packed_numbers_hash', 'id', 'hash', shard_count := 4);
 COPY (SELECT 1, ROW(ROW(42, 42), ROW(42, 42))) TO :'temp_dir''copy_test_composite_of_composite';
 COPY super_packed_numbers_hash FROM :'temp_dir''copy_test_composite_of_composite';
 
@@ -514,16 +512,6 @@ SELECT shardid, nodename, nodeport
 	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
 
 -- add the node back
--- before adding the node, add pg_dist_object entry for tables created with
--- master_create_distributed_table as we don't have the entry for them.
-
-INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'objects'::regclass::oid, 0);
-INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'customer_with_special_\\_character'::regclass::oid, 0);
-INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, '1_customer'::regclass::oid, 0);
-INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'packed_numbers_hash'::regclass::oid, 0);
-INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'super_packed_numbers_hash'::regclass::oid, 0);
-INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table_to_distribute'::regclass::oid, 0);
-
 SET client_min_messages TO ERROR;
 SELECT 1 FROM master_activate_node('localhost', :worker_1_port);
 RESET client_min_messages;

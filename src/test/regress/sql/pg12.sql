@@ -267,8 +267,6 @@ select count(*)
 from col_test
 where val = 'asdf';
 
--- not replicate reference tables from other test files
-SET citus.replicate_reference_tables_on_activate TO off;
 SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 
 BEGIN;
@@ -376,7 +374,6 @@ BEGIN;
   SELECT * FROM generated_stored_ref;
 ROLLBACK;
 
-RESET citus.replicate_reference_tables_on_activate;
 SELECT citus_remove_node('localhost', :master_port);
 
 CREATE TABLE superuser_columnar_table (a int) USING columnar;

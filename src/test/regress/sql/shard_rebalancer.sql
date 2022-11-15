@@ -144,27 +144,6 @@ RETURNS boolean
 AS 'citus'
 LANGUAGE C STRICT VOLATILE;
 
--- this function is dropped in Citus10, added here for tests
-SET citus.enable_metadata_sync TO OFF;
-CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
-                                                                      distribution_column text,
-                                                                      distribution_method citus.distribution_type)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus', $$master_create_distributed_table$$;
-COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
-                                                               distribution_column text,
-                                                               distribution_method citus.distribution_type)
-    IS 'define the table distribution functions';
-
--- this function is dropped in Citus10, added here for tests
-CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name text, shard_count integer,
-                                                                  replication_factor integer DEFAULT 2)
-    RETURNS void
-    AS 'citus', $$master_create_worker_shards$$
-    LANGUAGE C STRICT;
-RESET citus.enable_metadata_sync;
-
 SET citus.next_shard_id TO 123000;
 
 SELECT worker_node_responsive(node_name, node_port::int)
@@ -1220,11 +1199,9 @@ SELECT public.wait_until_metadata_sync(30000);
 
 --
 -- Make sure that rebalance_table_shards() and replicate_table_shards() replicate
--- reference tables to the coordinator when replicate_reference_tables_on_activate
--- is off.
+-- reference tables to the coordinator
 --
 
-SET citus.replicate_reference_tables_on_activate TO off;
 SET client_min_messages TO WARNING;
 
 CREATE TABLE dist_table_test_3(a int);
@@ -1254,7 +1231,7 @@ SELECT 1 FROM master_remove_node('localhost', :master_port);
 SELECT public.wait_until_metadata_sync(30000);
 
 CREATE TABLE rebalance_test_table(int_column int);
-SELECT master_create_distributed_table('rebalance_test_table', 'int_column', 'append');
+SELECT create_distributed_table('rebalance_test_table', 'int_column', 'append');
 
 CALL create_unbalanced_shards('rebalance_test_table');
 

@@ -84,7 +84,7 @@ CREATE TABLE events_range (
 	id bigint,
 	name text
 );
-SELECT master_create_distributed_table('events_range', 'name', 'range');
+SELECT create_distributed_table('events_range', 'name', 'range');
 
 -- create empty shard
 SELECT master_create_empty_shard('events_range');

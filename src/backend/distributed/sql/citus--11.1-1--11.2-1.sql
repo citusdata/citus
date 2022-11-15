@@ -1,6 +1,6 @@
 -- citus--11.1-1--11.2-1
 
--- bump version to 11.2-1
+DROP FUNCTION pg_catalog.worker_append_table_to_shard(text, text, text, integer);
 
 #include "udfs/get_rebalance_progress/11.2-1.sql"
 #include "udfs/citus_isolation_test_session_is_blocked/11.2-1.sql"

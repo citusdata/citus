@@ -121,12 +121,9 @@ id_title AS (SELECT id, title from articles_hash WHERE author_id = 2)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
 
 CREATE TABLE company_employees (company_id int, employee_id int, manager_id int);
-SELECT master_create_distributed_table('company_employees', 'company_id', 'hash');
 
--- do not print notices from workers since the order is not deterministic
-SET client_min_messages TO DEFAULT;
-SELECT master_create_worker_shards('company_employees', 4, 1);
-SET client_min_messages TO 'DEBUG2';
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('company_employees', 'company_id', 'hash');
 
 INSERT INTO company_employees values(1, 1, 0);
 INSERT INTO company_employees values(1, 2, 1);

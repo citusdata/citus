@@ -49,8 +49,8 @@ SELECT * FROM master_get_active_worker_nodes();
 RESET ROLE;
 -- ensure GRANT/REVOKE's do something sane for creating shards of
 CREATE TABLE checkperm(key int);
-SELECT master_create_distributed_table('checkperm', 'key', 'append');
- master_create_distributed_table
+SELECT create_distributed_table('checkperm', 'key', 'append');
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
@@ -154,8 +154,8 @@ SELECT * FROM master_get_table_ddl_events('checkperm');
 
 -- create table as superuser/postgres
 CREATE TABLE trivial_postgres (id int);
-SELECT master_create_distributed_table('trivial_postgres', 'id', 'append');
- master_create_distributed_table
+SELECT create_distributed_table('trivial_postgres', 'id', 'append');
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
@@ -164,8 +164,8 @@ GRANT ALL ON trivial_postgres TO full_access;
 GRANT CREATE ON SCHEMA public TO full_access;
 SET ROLE full_access;
 CREATE TABLE trivial_full_access (id int);
-SELECT master_create_distributed_table('trivial_full_access', 'id', 'append');
- master_create_distributed_table
+SELECT create_distributed_table('trivial_full_access', 'id', 'append');
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)

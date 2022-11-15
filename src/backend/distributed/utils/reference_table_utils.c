@@ -45,9 +45,6 @@ static StringInfo CopyShardPlacementToWorkerNodeQuery(
 	ShardPlacement *sourceShardPlacement,
 	WorkerNode *workerNode,
 	char transferMode);
-static void ReplicateReferenceTableShardToNode(ShardInterval *shardInterval,
-											   char *nodeName,
-											   int nodePort);
 static bool AnyRelationsModifiedInTransaction(List *relationIdList);
 static List * ReplicatedMetadataSyncedDistributedTableList(void);
 static bool NodeHasAllReferenceTableReplicas(WorkerNode *workerNode);
@@ -448,56 +445,6 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 
 
 /*
- * ReplicateShardToNode function replicates given shard to the given worker node
- * in a separate transaction. If the worker already has
- * a replica of the shard this is a no-op. This function also modifies metadata
- * by inserting/updating related rows in pg_dist_placement.
- *
- * IMPORTANT: This should only be used to replicate shards of a reference
- * table.
- */
-static void
-ReplicateReferenceTableShardToNode(ShardInterval *shardInterval, char *nodeName,
-								   int nodePort)
-{
-	uint64 shardId = shardInterval->shardId;
-
-	bool missingOk = false;
-	ShardPlacement *sourceShardPlacement = ActiveShardPlacement(shardId, missingOk);
-	char *srcNodeName = sourceShardPlacement->nodeName;
-	uint32 srcNodePort = sourceShardPlacement->nodePort;
-	bool includeDataCopy = true; /* TODO: consider using logical replication */
-	List *ddlCommandList = CopyShardCommandList(shardInterval, srcNodeName, srcNodePort,
-												includeDataCopy);
-
-	ereport(NOTICE, (errmsg("Replicating reference table \"%s\" to the node %s:%d",
-							get_rel_name(shardInterval->relationId), nodeName,
-							nodePort)));
-
-	/* send commands to new workers, the current user should be a superuser */
-	Assert(superuser());
-	WorkerNode *workerNode = FindWorkerNode(nodeName, nodePort);
-	SendMetadataCommandListToWorkerListInCoordinatedTransaction(list_make1(workerNode),
-																CurrentUserName(),
-																ddlCommandList);
-	int32 groupId = GroupForNode(nodeName, nodePort);
-
-	uint64 placementId = GetNextPlacementId();
-	InsertShardPlacementRow(shardId, placementId, SHARD_STATE_ACTIVE, 0,
-							groupId);
-
-	if (ShouldSyncTableMetadata(shardInterval->relationId))
-	{
-		char *placementCommand = PlacementUpsertCommand(shardId, placementId,
-														SHARD_STATE_ACTIVE, 0,
-														groupId);
-
-		SendCommandToWorkersWithMetadata(placementCommand);
-	}
-}
-
-
-/*
  * CreateReferenceTableColocationId creates a new co-location id for reference tables and
  * writes it into pg_dist_colocation, then returns the created co-location id. Since there
  * can be only one colocation group for all kinds of reference tables, if a co-location id
@@ -655,95 +602,6 @@ CompareOids(const void *leftElement, const void *rightElement)
 	else
 	{
 		return 0;
-	}
-}
-
-
-/*
- * ReplicateAllReferenceTablesToNode function finds all reference tables and
- * replicates them to the given worker node. It also modifies pg_dist_colocation
- * table to update the replication factor column when necessary. This function
- * skips reference tables if that node already has healthy placement of that
- * reference table to prevent unnecessary data transfer.
- */
-void
-ReplicateAllReferenceTablesToNode(WorkerNode *workerNode)
-{
-	int colocationId = GetReferenceTableColocationId();
-	if (colocationId == INVALID_COLOCATION_ID)
-	{
-		/* no reference tables in system */
-		return;
-	}
-
-	/* prevent changes in table set while replicating reference tables */
-	LockColocationId(colocationId, RowExclusiveLock);
-
-	List *referenceTableList = CitusTableTypeIdList(REFERENCE_TABLE);
-
-	/* if there is no reference table, we do not need to replicate anything */
-	if (list_length(referenceTableList) > 0)
-	{
-		List *referenceShardIntervalList = NIL;
-
-		/*
-		 * We sort the reference table list to prevent deadlocks in concurrent
-		 * ReplicateAllReferenceTablesToAllNodes calls.
-		 */
-		referenceTableList = SortList(referenceTableList, CompareOids);
-		Oid referenceTableId = InvalidOid;
-		foreach_oid(referenceTableId, referenceTableList)
-		{
-			List *shardIntervalList = LoadShardIntervalList(referenceTableId);
-			ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
-
-			List *shardPlacementList =
-				ShardPlacementListIncludingOrphanedPlacements(shardInterval->shardId);
-			ShardPlacement *targetPlacement =
-				SearchShardPlacementInList(shardPlacementList,
-										   workerNode->workerName,
-										   workerNode->workerPort);
-			if (targetPlacement != NULL &&
-				targetPlacement->shardState == SHARD_STATE_ACTIVE)
-			{
-				/* We already have the shard, nothing to do */
-				continue;
-			}
-
-
-			referenceShardIntervalList = lappend(referenceShardIntervalList,
-												 shardInterval);
-		}
-
-		if (ClusterHasKnownMetadataWorkers())
-		{
-			BlockWritesToShardList(referenceShardIntervalList);
-		}
-
-		ShardInterval *shardInterval = NULL;
-		foreach_ptr(shardInterval, referenceShardIntervalList)
-		{
-			uint64 shardId = shardInterval->shardId;
-
-			LockShardDistributionMetadata(shardId, ExclusiveLock);
-
-			ReplicateReferenceTableShardToNode(shardInterval,
-											   workerNode->workerName,
-											   workerNode->workerPort);
-		}
-
-		/* create foreign constraints between reference tables */
-		foreach_ptr(shardInterval, referenceShardIntervalList)
-		{
-			List *commandList = CopyShardForeignConstraintCommandList(shardInterval);
-
-			/* send commands to new workers, the current user should be a superuser */
-			Assert(superuser());
-			SendMetadataCommandListToWorkerListInCoordinatedTransaction(
-				list_make1(workerNode),
-				CurrentUserName(),
-				commandList);
-		}
 	}
 }
 

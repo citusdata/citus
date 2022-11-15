@@ -127,8 +127,8 @@ SELECT create_distributed_table('dustbunnies', 'id', 'hash');
 \.
 
 CREATE TABLE second_dustbunnies(id integer, name text, age integer);
-SELECT master_create_distributed_table('second_dustbunnies', 'id', 'hash');
-SELECT master_create_worker_shards('second_dustbunnies', 1, 2);
+SET citus.shard_replication_factor TO 2;
+SELECT create_distributed_table('second_dustbunnies', 'id', 'hash', shard_count := 1);
 
 -- run VACUUM and ANALYZE against the table on the master
 \c - - :master_host :master_port

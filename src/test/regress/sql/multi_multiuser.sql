@@ -318,34 +318,8 @@ CREATE TABLE full_access_user_schema.t2(id int);
 SELECT create_distributed_table('full_access_user_schema.t2', 'id');
 RESET ROLE;
 
-\c - - - :worker_2_port
--- non-superuser should be able to use worker_append_table_to_shard on their own shard
-SET ROLE full_access;
-CREATE TABLE full_access_user_schema.source_table (id int);
-INSERT INTO full_access_user_schema.source_table VALUES (1);
-CREATE TABLE full_access_user_schema.shard_0 (id int);
-SELECT worker_append_table_to_shard('full_access_user_schema.shard_0', 'full_access_user_schema.source_table', 'localhost', :worker_2_port);
-SELECT * FROM full_access_user_schema.shard_0;
-RESET ROLE;
-
--- other users should not be able to read from a table they have no access to via worker_append_table_to_shard
-SET ROLE usage_access;
-SELECT worker_append_table_to_shard('full_access_user_schema.shard_0', 'full_access_user_schema.source_table', 'localhost', :worker_2_port);
-RESET ROLE;
-
--- allow usage_access to read from table
-GRANT SELECT ON full_access_user_schema.source_table TO usage_access;
-
--- other users should not be able to write to a table they do not have write access to
-SET ROLE usage_access;
-SELECT worker_append_table_to_shard('full_access_user_schema.shard_0', 'full_access_user_schema.source_table', 'localhost', :worker_2_port);
-RESET ROLE;
-
-DROP TABLE full_access_user_schema.source_table, full_access_user_schema.shard_0;
-
-\c - - - :master_port
-
 DROP SCHEMA full_access_user_schema CASCADE;
+
 DROP TABLE
     my_table,
     my_table_with_data,

@@ -121,7 +121,6 @@ static List * GenerateGrantOnFunctionQueriesFromAclItem(Oid schemaOid,
 static List * GrantOnSequenceDDLCommands(Oid sequenceOid);
 static List * GenerateGrantOnSequenceQueriesFromAclItem(Oid sequenceOid,
 														AclItem *aclItem);
-static void SetLocalReplicateReferenceTablesOnActivate(bool state);
 static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
 static void MetadataSyncSigAlrmHandler(SIGNAL_ARGS);
@@ -193,13 +192,8 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 	char *nodeNameString = text_to_cstring(nodeName);
 
-	bool prevReplicateRefTablesOnActivate = ReplicateReferenceTablesOnActivate;
-	SetLocalReplicateReferenceTablesOnActivate(false);
-
 	ActivateNode(nodeNameString, nodePort);
 	TransactionModifiedNodeMetadata = true;
-
-	SetLocalReplicateReferenceTablesOnActivate(prevReplicateRefTablesOnActivate);
 
 	PG_RETURN_VOID();
 }
@@ -220,13 +214,8 @@ start_metadata_sync_to_all_nodes(PG_FUNCTION_ARGS)
 
 	List *workerNodes = ActivePrimaryNonCoordinatorNodeList(RowShareLock);
 
-	bool prevReplicateRefTablesOnActivate = ReplicateReferenceTablesOnActivate;
-	SetLocalReplicateReferenceTablesOnActivate(false);
-
 	ActivateNodeList(workerNodes);
 	TransactionModifiedNodeMetadata = true;
-
-	SetLocalReplicateReferenceTablesOnActivate(prevReplicateRefTablesOnActivate);
 
 	PG_RETURN_BOOL(true);
 }
@@ -2465,20 +2454,6 @@ void
 SetLocalEnableMetadataSync(bool state)
 {
 	set_config_option("citus.enable_metadata_sync", state == true ? "on" : "off",
-					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
-					  GUC_ACTION_LOCAL, true, 0, false);
-}
-
-
-/*
- * SetLocalReplicateReferenceTablesOnActivate sets the
- * replicate_reference_tables_on_activate locally
- */
-void
-SetLocalReplicateReferenceTablesOnActivate(bool state)
-{
-	set_config_option("citus.replicate_reference_tables_on_activate",
-					  state == true ? "on" : "off",
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
 }

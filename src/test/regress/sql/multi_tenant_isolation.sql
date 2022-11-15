@@ -540,7 +540,6 @@ SET search_path to "Tenant Isolation";
 
 --
 -- Make sure that isolate_tenant_to_new_shard() replicats reference tables
--- when replicate_reference_tables_on_activate is off.
 --
 
 
@@ -580,7 +579,6 @@ SELECT count(*) FROM pg_dist_shard WHERE logicalrelid = 'partitioning_test'::reg
 SELECT count(*) FROM partitioning_test;
 
 
-SET citus.replicate_reference_tables_on_activate TO off;
 SET client_min_messages TO WARNING;
 
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId=>0);

@@ -123,7 +123,6 @@ copy nation_append_search_path FROM STDIN with (delimiter '|', append_to_shard :
 5|ETHIOPIA|0|ven packages wake quickly. regu
 \.
 
--- create shard with master_create_worker_shards
 CREATE TABLE test_schema_support.nation_hash(
     n_nationkey integer not null,
     n_name char(25) not null,

@@ -330,8 +330,7 @@ extern void UpdatePlacementGroupId(uint64 placementId, int groupId);
 extern void DeleteShardPlacementRow(uint64 placementId);
 extern void CreateDistributedTable(Oid relationId, char *distributionColumnName,
 								   char distributionMethod, int shardCount,
-								   bool shardCountIsStrict, char *colocateWithTableName,
-								   bool viaDeprecatedAPI);
+								   bool shardCountIsStrict, char *colocateWithTableName);
 extern void CreateTruncateTrigger(Oid relationId);
 extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
 
