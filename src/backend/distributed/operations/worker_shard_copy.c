@@ -103,11 +103,14 @@ CanUseLocalCopy(uint32_t destinationNodeId)
 	return GetLocalNodeId() == (int32) destinationNodeId;
 }
 
+
 /*
  * SetupReplicationOriginSessionIfNotSetupAlready sets up the replication origin session
  * if it is not already setup.
  */
- static void SetupReplicationOriginSessionIfNotSetupAlready(MultiConnection *connection) {
+static void
+SetupReplicationOriginSessionIfNotSetupAlready(MultiConnection *connection)
+{
 	/* Setup replication Origin if not setup already */
 	if (!SendRemoteCommand(connection, CDC_REPLICATION_ORIGIN_SESION_SETUP_CMD))
 	{
@@ -116,17 +119,21 @@ CanUseLocalCopy(uint32_t destinationNodeId)
 	ForgetResults(connection);
 }
 
+
 /*
  * ResetReplicationOriginSessionIfSetupAlready resets the replication origin session
  * if it has been setup currently.
  */
-static void ResetReplicationOriginSessionIfSetupAlready(MultiConnection *connection) {
+static void
+ResetReplicationOriginSessionIfSetupAlready(MultiConnection *connection)
+{
 	if (!SendRemoteCommand(connection, CDC_REPLICATION_ORIGIN_SESION_RESET_CMD))
 	{
 		ReportConnectionError(connection, ERROR);
 	}
 	ForgetResults(connection);
 }
+
 
 /* Connect to node with source shard and trigger copy start.  */
 static void
@@ -143,8 +150,8 @@ ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 														 NULL /* database (current) */);
 	ClaimConnectionExclusively(copyDest->connection);
 
-	/* Setup Replication Origin Session if not setup already for 
-	avoiding publication of events more than once. */
+	/* Setup Replication Origin Session if not setup already for
+	 * avoiding publication of events more than once. */
 	SetupReplicationOriginSessionIfNotSetupAlready(copyDest->connection);
 
 	StringInfo copyStatement = ConstructShardCopyStatement(
