@@ -1707,6 +1707,7 @@ RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 		modifyTask->taskPlacementList = ActiveShardPlacementList(
 			modifyRoute->shardId);
 		modifyTask->parametersInQueryStringResolved = parametersInQueryResolved;
+		modifyTask->deferredPruning = true;
 
 		insertTaskList = lappend(insertTaskList, modifyTask);
 	}
@@ -1810,6 +1811,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	{
 		Job *job = CreateJob(originalQuery);
 		job->deferredPruning = true;
+		job->requiresCoordinatorEvaluation = requiresCoordinatorEvaluation;
 
 		ereport(DEBUG2, (errmsg("Deferred pruning for a fast-path router "
 								"query")));

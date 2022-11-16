@@ -345,6 +345,15 @@ IsFastPathPlanCachingSupported(Job *currentJob, DistributedPlan *originalDistrib
 		return false;
 	}
 
+	if (currentJob->requiresCoordinatorEvaluation)
+	{
+		/*
+		 * We want functions to be evaluated on the coordinator, and
+		 * we do not want to put into the cache.
+		 */
+		return false;
+	}
+
 	if (!currentJob->deferredPruning)
 	{
 		/*
