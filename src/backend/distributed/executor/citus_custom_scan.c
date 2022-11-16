@@ -303,26 +303,38 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 	 */
 	ExecuteCoordinatorEvaluableExpressions(jobQuery, planState);
 
-	/* job query no longer has parameters, so we should not send any */
-	workerJob->parametersInJobQueryResolved = true;
-
-	/* parameters are filled in, so we can generate a task for this execution */
+	/* only do the pruning, but do not deparse just yet */
 	RegenerateTaskForFasthPathQuery(workerJob);
 
-	if (IsFastPathPlanCachingSupported(workerJob, originalDistributedPlan))
-	{
-		Task *task = linitial(workerJob->taskList);
+	Task *task = linitial(workerJob->taskList);
 
-		/*
-		 * We are going to execute this task locally. If it's not already in
-		 * the cache, create a local plan now and add it to the cache. During
-		 * execution, we will get the plan from the cache.
-		 *
-		 * The plan will be cached across executions when originalDistributedPlan
-		 * represents a prepared statement.
-		 */
-		CacheFastPathPlanForShardQuery(task, originalDistributedPlan,
+	/*
+	 * We are going to execute this task locally. If it's not already in
+	 * the cache, create a local plan now and add it to the cache. During
+	 * execution, we will get the plan from the cache.
+	 *
+	 * The plan will be cached across executions when originalDistributedPlan
+	 * represents a prepared statement.
+	 */
+	FastPathPlanCache *fastPathPlanCache =
+		CacheFastPathPlanForShardQuery(task, workerJob, originalDistributedPlan,
 									   estate->es_param_list_info);
+
+	if (fastPathPlanCache == NULL)
+	{
+		/* job query no longer has parameters, so we should not send any */
+		workerJob->parametersInJobQueryResolved = true;
+
+
+		/* do the heavy lifting of deparsing unless we cannot find any cache */
+		SetTaskQueryString(task, DeparseTaskQuery(task, workerJob->jobQuery));
+	}
+	else if (fastPathPlanCache->queryString != NULL)
+	{
+		SetTaskQueryString(task, fastPathPlanCache->queryString);
+
+		/* TODO: we have this due to MarkUnreferencedExternParams. Can we find another way? */
+		workerJob->jobQuery = copyObject(originalDistributedPlan->workerJob->jobQuery);
 	}
 }
 
@@ -449,7 +461,7 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		 * The plan will be cached across executions when originalDistributedPlan
 		 * represents a prepared statement.
 		 */
-		CacheFastPathPlanForShardQuery(task, originalDistributedPlan,
+		CacheFastPathPlanForShardQuery(task, workerJob, originalDistributedPlan,
 									   estate->es_param_list_info);
 	}
 
@@ -650,11 +662,13 @@ RegenerateTaskForFasthPathQuery(Job *workerJob)
 	}
 
 	bool isLocalTableModification = false;
+	bool deferredPruning = true;
 	GenerateSingleShardRouterTaskList(workerJob,
 									  relationShardList,
 									  placementList,
 									  shardId,
-									  isLocalTableModification);
+									  isLocalTableModification,
+									  deferredPruning);
 }
 
 

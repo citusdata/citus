@@ -348,6 +348,9 @@ typedef struct Task
 	 * Vacuum, create/drop/reindex concurrently cannot be executed in a transaction.
 	 */
 	bool cannotBeExecutedInTransction;
+
+	/* TODO: add comment */
+	bool deferredPruning;
 } Task;
 
 

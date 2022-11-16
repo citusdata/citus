@@ -44,7 +44,6 @@ static void UpdateTaskQueryString(Query *query, Task *task);
 static RelationShard * FindRelationShard(Oid inputRelationId, List *relationShardList);
 static void ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte);
 static bool ShouldLazyDeparseQuery(Task *task);
-static char * DeparseTaskQuery(Task *task, Query *query);
 
 
 /*
@@ -366,7 +365,7 @@ ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
 static bool
 ShouldLazyDeparseQuery(Task *task)
 {
-	return TaskAccessesLocalNode(task);
+	return task->deferredPruning;
 }
 
 
@@ -429,7 +428,7 @@ SetTaskQueryStringList(Task *task, List *queryStringList)
 /*
  * DeparseTaskQuery is a general way of deparsing a query based on a task.
  */
-static char *
+char *
 DeparseTaskQuery(Task *task, Query *query)
 {
 	StringInfo queryString = makeStringInfo();

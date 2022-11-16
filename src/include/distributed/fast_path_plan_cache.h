@@ -5,8 +5,9 @@ extern bool IsFastPathPlanCachingSupported(Job *currentJob,
 										   DistributedPlan *originalDistributedPlan);
 extern PlannedStmt * GetCachedFastPathLocalPlan(Task *task,
 												DistributedPlan *distributedPlan);
-extern void CacheFastPathPlanForShardQuery(Task *task,
-										   DistributedPlan *originalDistributedPlan,
-										   ParamListInfo paramListInfo);
+extern FastPathPlanCache * CacheFastPathPlanForShardQuery(Task *task, Job *evaluatedJob,
+														  DistributedPlan *
+														  originalDistributedPlan,
+														  ParamListInfo paramListInfo);
 
 #endif /* FAST_PATH_PLAN_CACHE */

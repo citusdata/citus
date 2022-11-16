@@ -87,7 +87,8 @@ extern void GenerateSingleShardRouterTaskList(Job *job,
 											  List *relationShardList,
 											  List *placementList,
 											  uint64 shardId,
-											  bool isLocalTableModification);
+											  bool isLocalTableModification,
+											  bool deferredPruning);
 
 /*
  * FastPathPlanner is a subset of router planner, that's why we prefer to

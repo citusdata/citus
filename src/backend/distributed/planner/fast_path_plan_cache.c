@@ -39,22 +39,30 @@ static int ExtractParameterTypesForParamListInfo(ParamListInfo originalParamList
  * CacheFastPathPlanForShardQuery replaces the relation OIDs in the job query
  * with shard relation OIDs and then plans the query and caches the result
  * in the originalDistributedPlan (which may be preserved across executions).
+ *
+ * TODO: update comment
  */
-void
-CacheFastPathPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan,
+FastPathPlanCache *
+CacheFastPathPlanForShardQuery(Task *task, Job *evaluatedJob,
+							   DistributedPlan *originalDistributedPlan,
 							   ParamListInfo paramListInfo)
 {
+	if (!IsFastPathPlanCachingSupported(evaluatedJob, originalDistributedPlan))
+	{
+		return NULL;
+	}
+
 	FastPathPlanCache *planCache = GetFastPathCachedPlan(task, originalDistributedPlan);
 	if (planCache != NULL)
 	{
 		/* we already have a local plan */
-		return;
+		return planCache;
 	}
 
 	if (list_length(task->relationShardList) == 0)
 	{
 		/* zero shard plan, no need to cache */
-		return;
+		return NULL;
 	}
 
 	/*
@@ -93,7 +101,7 @@ CacheFastPathPlanForShardQuery(Task *task, DistributedPlan *originalDistributedP
 			pfree(jobQuery);
 			pfree(localShardQuery);
 			MemoryContextSwitchTo(oldContext);
-			return;
+			return NULL;
 		}
 
 		LockRelationOid(rangeTableEntry->relid, lockMode);
@@ -117,6 +125,8 @@ CacheFastPathPlanForShardQuery(Task *task, DistributedPlan *originalDistributedP
 				fastPathPlanCache);
 
 	MemoryContextSwitchTo(oldContext);
+
+	return fastPathPlanCache;
 }
 
 

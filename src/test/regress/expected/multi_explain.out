@@ -2633,7 +2633,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         Tuple data received from node: 4 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
-              Filter: (a = 10)
+              Filter: (a = $1)
               Rows Removed by Filter: 3
 EXPLAIN :default_analyze_flags EXECUTE p2(100);
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
@@ -2644,7 +2644,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         Tuple data received from node: 4 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570023 dist_table_rep1 (actual rows=1 loops=1)
-              Filter: (a = 100)
+              Filter: (a = $1)
               Rows Removed by Filter: 1
 prepare p3 AS SELECT * FROM dist_table_rep1 WHERE a = 1;
 EXPLAIN :default_analyze_flags EXECUTE p3;

@@ -22,6 +22,7 @@
 
 
 extern void RebuildQueryStrings(Job *workerJob);
+extern char * DeparseTaskQuery(Task *task, Query *query);
 extern bool UpdateRelationToShardNames(Node *node, List *relationShardList);
 extern void SetTaskQueryIfShouldLazyDeparse(Task *task, Query *query);
 extern void SetTaskQueryString(Task *task, char *queryString);

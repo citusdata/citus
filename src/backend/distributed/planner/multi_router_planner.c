@@ -170,7 +170,8 @@ static int CompareInsertValuesByShardId(const void *leftElement,
 static List * SingleShardTaskList(Query *query, uint64 jobId,
 								  List *relationShardList, List *placementList,
 								  uint64 shardId, bool parametersInQueryResolved,
-								  bool isLocalTableModification);
+								  bool isLocalTableModification,
+								  bool deferredPruning);
 static bool RowLocksOnRelations(Node *node, List **rtiLockList);
 static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 														TaskAssignmentPolicyType
@@ -1869,7 +1870,8 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	{
 		GenerateSingleShardRouterTaskList(job, relationShardList,
 										  placementList, shardId,
-										  isLocalTableModification);
+										  isLocalTableModification,
+										  false);
 	}
 
 	job->requiresCoordinatorEvaluation = requiresCoordinatorEvaluation;
@@ -1885,8 +1887,9 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
  */
 void
 GenerateSingleShardRouterTaskList(Job *job, List *relationShardList,
-								  List *placementList, uint64 shardId, bool
-								  isLocalTableModification)
+								  List *placementList, uint64 shardId,
+								  bool isLocalTableModification,
+								  bool deferredPruning)
 {
 	Query *originalQuery = job->jobQuery;
 
@@ -1896,7 +1899,8 @@ GenerateSingleShardRouterTaskList(Job *job, List *relationShardList,
 											relationShardList, placementList,
 											shardId,
 											job->parametersInJobQueryResolved,
-											isLocalTableModification);
+											isLocalTableModification,
+											deferredPruning);
 
 		/*
 		 * Queries to reference tables, or distributed tables with multiple replica's have
@@ -1924,7 +1928,8 @@ GenerateSingleShardRouterTaskList(Job *job, List *relationShardList,
 											relationShardList, placementList,
 											shardId,
 											job->parametersInJobQueryResolved,
-											isLocalTableModification);
+											isLocalTableModification,
+											deferredPruning);
 	}
 }
 
@@ -2018,7 +2023,8 @@ static List *
 SingleShardTaskList(Query *query, uint64 jobId, List *relationShardList,
 					List *placementList, uint64 shardId,
 					bool parametersInQueryResolved,
-					bool isLocalTableModification)
+					bool isLocalTableModification,
+					bool deferredPruning)
 {
 	TaskType taskType = READ_TASK;
 	char replicationModel = 0;
@@ -2078,6 +2084,7 @@ SingleShardTaskList(Query *query, uint64 jobId, List *relationShardList,
 
 	Task *task = CreateTask(taskType);
 	task->isLocalTableModification = isLocalTableModification;
+	task->deferredPruning = deferredPruning;
 	List *relationRowLockList = NIL;
 
 	RowLocksOnRelations((Node *) query, &relationRowLockList);
