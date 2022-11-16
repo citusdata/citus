@@ -28,6 +28,8 @@ static FastPathPlanCache * GetFastPathCachedPlan(Task *task,
 												 DistributedPlan *distributedPlan);
 static Query * GetLocalShardQueryForCache(Query *jobQuery, Task *task,
 										  ParamListInfo paramListInfo);
+static char * GetFastPathQueryStringForCache(Query *jobQuery, Task *task,
+											 ParamListInfo orig_paramListInfo);
 static char * DeparseLocalShardQuery(Query *jobQuery, List *relationShardList,
 									 Oid anchorDistributedTableId, int64 anchorShardId);
 static int ExtractParameterTypesForParamListInfo(ParamListInfo originalParamListInfo,
@@ -67,6 +69,8 @@ CacheFastPathPlanForShardQuery(Task *task, DistributedPlan *originalDistributedP
 	 * functions/params to have been evaluated in the cached plan.
 	 */
 	Query *jobQuery = copyObject(originalDistributedPlan->workerJob->jobQuery);
+	FastPathPlanCache *fastPathPlanCache = CitusMakeNode(FastPathPlanCache);
+
 	PlannedStmt *localPlan = NULL;
 
 	if (TaskAccessesLocalNode(task))
@@ -95,12 +99,16 @@ CacheFastPathPlanForShardQuery(Task *task, DistributedPlan *originalDistributedP
 		LockRelationOid(rangeTableEntry->relid, lockMode);
 
 		localPlan = planner(localShardQuery, NULL, 0, NULL);
+		fastPathPlanCache->localPlan = localPlan;
 	}
 	else
-	{ }
+	{
+		char *queryString =
+			GetFastPathQueryStringForCache(jobQuery, task, paramListInfo);
 
-	FastPathPlanCache *fastPathPlanCache = CitusMakeNode(FastPathPlanCache);
-	fastPathPlanCache->localPlan = localPlan;
+		fastPathPlanCache->queryString = queryString;
+	}
+
 	fastPathPlanCache->shardId = task->anchorShardId;
 	fastPathPlanCache->placementGroupIds = TaskGroupIdAccesses(task);
 
@@ -145,6 +153,28 @@ GetLocalShardQueryForCache(Query *jobQuery, Task *task, ParamListInfo orig_param
 		ParseQueryString(shardQueryString, parameterTypes, numberOfParameters);
 
 	return localShardQuery;
+}
+
+
+/*
+ * GetFastPathQueryStringForCache is a helper function which generates
+ * the local shard string based on the jobQuery. The function should
+ * not be used for generic purposes, it is specialized for local cached
+ * queries.
+ *
+ */
+static char *
+GetFastPathQueryStringForCache(Query *jobQuery, Task *task, ParamListInfo
+							   orig_paramListInfo)
+{
+	char *shardQueryString =
+		DeparseLocalShardQuery(jobQuery, task->relationShardList,
+							   task->anchorDistributedTableId,
+							   task->anchorShardId);
+	ereport(DEBUG5, (errmsg("Local shard query that is going to be cached: %s",
+							shardQueryString)));
+
+	return shardQueryString;
 }
 
 

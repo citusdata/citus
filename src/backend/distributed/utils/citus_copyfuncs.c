@@ -340,6 +340,7 @@ CopyNodeFastPathPlanCache(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(shardId);
 	COPY_NODE_FIELD(placementGroupIds);
 	COPY_NODE_FIELD(localPlan);
+	COPY_STRING_FIELD(queryString);
 }
 
 

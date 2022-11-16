@@ -120,7 +120,24 @@ typedef struct FastPathPlanCache
 
 	uint64 shardId;
 	List *placementGroupIds;
+
+	/*
+	 * Cache can be found in different ways and therefore stored differently on the
+	 * definition.
+	 *
+	 * TODO: Ideally we only have either of the fields.
+	 * investigate UNION of a C struct and CopyNodeFastPathPlanCache.
+	 */
+
+	/* union */
+	/*{*/
+	/* if fast path cache is for a local shard */
 	PlannedStmt *localPlan;
+
+	/* if fast path cache is for a remote shard */
+	char *queryString;
+
+	/*} data;*/
 } FastPathPlanCache;
 
 
