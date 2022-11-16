@@ -274,7 +274,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 			continue;
 		}
 
-		PlannedStmt *planCache = GetFastPathLocalPlan(task, distributedPlan);
+		PlannedStmt *planCache = GetCachedFastPathLocalPlan(task, distributedPlan);
 
 		/*
 		 * If the plan is already cached, don't need to re-plan, just

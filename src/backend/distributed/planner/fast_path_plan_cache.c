@@ -24,6 +24,8 @@
 #include "optimizer/clauses.h"
 
 
+static FastPathPlanCache * GetFastPathCachedPlan(Task *task,
+												 DistributedPlan *distributedPlan);
 static Query * GetLocalShardQueryForCache(Query *jobQuery, Task *task,
 										  ParamListInfo paramListInfo);
 static char * DeparseLocalShardQuery(Query *jobQuery, List *relationShardList,
@@ -40,7 +42,7 @@ void
 CacheFastPathPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan,
 							   ParamListInfo paramListInfo)
 {
-	PlannedStmt *planCache = GetFastPathLocalPlan(task, originalDistributedPlan);
+	FastPathPlanCache *planCache = GetFastPathCachedPlan(task, originalDistributedPlan);
 	if (planCache != NULL)
 	{
 		/* we already have a local plan */
@@ -88,8 +90,8 @@ CacheFastPathPlanForShardQuery(Task *task, DistributedPlan *originalDistributedP
 	LockRelationOid(rangeTableEntry->relid, lockMode);
 
 	FastPathPlanCache *fastPathPlanCache = CitusMakeNode(FastPathPlanCache);
-	planCache = planner(localShardQuery, NULL, 0, NULL);
-	fastPathPlanCache->localPlan = planCache;
+	PlannedStmt *localPlan = planner(localShardQuery, NULL, 0, NULL);
+	fastPathPlanCache->localPlan = localPlan;
 	fastPathPlanCache->shardId = task->anchorShardId;
 	fastPathPlanCache->placementGroupIds = TaskGroupIdAccesses(task);
 
@@ -226,13 +228,33 @@ ExtractParameterTypesForParamListInfo(ParamListInfo originalParamListInfo,
 
 
 /*
- * GetCachedLocalPlan is a helper function which return the cached
+ * GetCachedFastPathLocalPlan is a helper function which return the cached
  * plan in the distributedPlan for the given task if exists.
  *
  * Otherwise, the function returns NULL.
  */
 PlannedStmt *
-GetFastPathLocalPlan(Task *task, DistributedPlan *distributedPlan)
+GetCachedFastPathLocalPlan(Task *task, DistributedPlan *distributedPlan)
+{
+	FastPathPlanCache *fastPathPlanCache = GetFastPathCachedPlan(task, distributedPlan);
+
+	if (fastPathPlanCache != NULL)
+	{
+		return fastPathPlanCache->localPlan;
+	}
+
+	return NULL;
+}
+
+
+/*
+ * GetFastPathCachedPlan is a helper function which return the cached
+ * plan in the distributedPlan for the given task if exists.
+ *
+ * Otherwise, the function returns NULL.
+ */
+static FastPathPlanCache *
+GetFastPathCachedPlan(Task *task, DistributedPlan *distributedPlan)
 {
 	if (distributedPlan == NULL || distributedPlan->workerJob == NULL)
 	{
@@ -250,7 +272,7 @@ GetFastPathLocalPlan(Task *task, DistributedPlan *distributedPlan)
 								fastPathPlanCache->placementGroupIds) == NIL)
 		{
 			/* already have a cached plan, no need to continue */
-			return fastPathPlanCache->localPlan;
+			return fastPathPlanCache;
 		}
 	}
 
