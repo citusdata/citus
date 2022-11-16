@@ -67,30 +67,39 @@ CacheFastPathPlanForShardQuery(Task *task, DistributedPlan *originalDistributedP
 	 * functions/params to have been evaluated in the cached plan.
 	 */
 	Query *jobQuery = copyObject(originalDistributedPlan->workerJob->jobQuery);
+	PlannedStmt *localPlan = NULL;
 
-	Query *localShardQuery = GetLocalShardQueryForCache(jobQuery, task, paramListInfo);
-
-	LOCKMODE lockMode = GetQueryLockMode(localShardQuery);
-
-	/* fast path queries can only have a single RTE by definition */
-	RangeTblEntry *rangeTableEntry = (RangeTblEntry *) linitial(localShardQuery->rtable);
-
-	/*
-	 * If the shard has been created in this transction, we wouldn't see the relationId
-	 * for it, so do not cache.
-	 */
-	if (rangeTableEntry->relid == InvalidOid)
+	if (TaskAccessesLocalNode(task))
 	{
-		pfree(jobQuery);
-		pfree(localShardQuery);
-		MemoryContextSwitchTo(oldContext);
-		return;
-	}
+		Query *localShardQuery =
+			GetLocalShardQueryForCache(jobQuery, task, paramListInfo);
 
-	LockRelationOid(rangeTableEntry->relid, lockMode);
+		LOCKMODE lockMode = GetQueryLockMode(localShardQuery);
+
+		/* fast path queries can only have a single RTE by definition */
+		RangeTblEntry *rangeTableEntry =
+			(RangeTblEntry *) linitial(localShardQuery->rtable);
+
+		/*
+		 * If the shard has been created in this transction, we wouldn't see the relationId
+		 * for it, so do not cache.
+		 */
+		if (rangeTableEntry->relid == InvalidOid)
+		{
+			pfree(jobQuery);
+			pfree(localShardQuery);
+			MemoryContextSwitchTo(oldContext);
+			return;
+		}
+
+		LockRelationOid(rangeTableEntry->relid, lockMode);
+
+		localPlan = planner(localShardQuery, NULL, 0, NULL);
+	}
+	else
+	{ }
 
 	FastPathPlanCache *fastPathPlanCache = CitusMakeNode(FastPathPlanCache);
-	PlannedStmt *localPlan = planner(localShardQuery, NULL, 0, NULL);
 	fastPathPlanCache->localPlan = localPlan;
 	fastPathPlanCache->shardId = task->anchorShardId;
 	fastPathPlanCache->placementGroupIds = TaskGroupIdAccesses(task);
@@ -315,15 +324,6 @@ IsFastPathPlanCachingSupported(Job *currentJob, DistributedPlan *originalDistrib
 	if (list_length(taskList) != 1)
 	{
 		/* we only support plan caching for single shard queries */
-		return false;
-	}
-
-	if (!TaskAccessesLocalNode(linitial(taskList)))
-	{
-		/*
-		 * TODO: we'll remove this, but for the tests not to
-		 * break, keep on this temp commit.
-		 */
 		return false;
 	}
 
