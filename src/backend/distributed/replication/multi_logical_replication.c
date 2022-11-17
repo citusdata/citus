@@ -115,7 +115,7 @@ bool PlacementMovedUsingLogicalReplicationInTX = false;
 static int logicalReplicationProgressReportTimeout = 10 * 1000;
 
 
-static List * PrepareReplicationSubscriptionList(List *shardList);
+// static List * PrepareReplicationSubscriptionList(List *shardList);
 static List * GetReplicaIdentityCommandListForShard(Oid relationId, uint64 shardId);
 static List * GetIndexCommandListForShardBackingReplicaIdentity(Oid relationId,
 																uint64 shardId);
@@ -176,7 +176,7 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 	char *superUser = CitusExtensionOwnerName();
 	char *databaseName = get_database_name(MyDatabaseId);
 	int connectionFlags = FORCE_NEW_CONNECTION;
-	List *replicationSubscriptionList = PrepareReplicationSubscriptionList(shardList);
+	List *replicationSubscriptionList = shardList;
 
 	/* no shards to move */
 	if (list_length(replicationSubscriptionList) == 0)
@@ -648,25 +648,25 @@ DropAllLogicalReplicationLeftovers(LogicalRepType type)
  * to a partitioned tables should be exluded from logical replication
  * subscription list.
  */
-static List *
-PrepareReplicationSubscriptionList(List *shardList)
-{
-	List *replicationSubscriptionList = NIL;
-	ListCell *shardCell = NULL;
+// static List *
+// PrepareReplicationSubscriptionList(List *shardList)
+// {
+// 	List *replicationSubscriptionList = NIL;
+// 	ListCell *shardCell = NULL;
 
-	foreach(shardCell, shardList)
-	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardCell);
-		if (!PartitionedTable(shardInterval->relationId))
-		{
-			/* only add regular and child tables to subscription */
-			replicationSubscriptionList = lappend(replicationSubscriptionList,
-												  shardInterval);
-		}
-	}
+// 	foreach(shardCell, shardList)
+// 	{
+// 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardCell);
+// 		if (!PartitionedTable(shardInterval->relationId))
+// 		{
+// 			/* only add regular and child tables to subscription */
+// 			replicationSubscriptionList = lappend(replicationSubscriptionList,
+// 												  shardInterval);
+// 		}
+// 	}
 
-	return replicationSubscriptionList;
-}
+// 	return replicationSubscriptionList;
+// }
 
 
 /*
