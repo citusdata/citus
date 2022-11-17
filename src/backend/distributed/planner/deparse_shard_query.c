@@ -365,7 +365,7 @@ ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
 static bool
 ShouldLazyDeparseQuery(Task *task)
 {
-	return task->deferredPruning;
+	return task->deferredPruning || task->anchorShardId == INVALID_SHARD_ID;
 }
 
 
