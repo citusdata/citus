@@ -282,7 +282,7 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 		 * Drop temporary objects that were marked as CLEANUP_ON_FAILURE
 		 * or CLEANUP_ALWAYS.
 		 */
-		FinalizeOperationNeedingCleanupOnFailure("moving shard");
+		FinalizeOperationNeedingCleanupOnFailure("citus_[move/copy]_shard_placement");
 
 		PG_RE_THROW();
 	}
