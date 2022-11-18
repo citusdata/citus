@@ -505,10 +505,18 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_2 for subquery SELECT x, y FROM recursive_union.test
 DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION ALL SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u LEFT JOIN recursive_union.test USING (x)) ORDER BY u.x, u.y
+DEBUG:  Wrapping relation "test" to a subquery
 DEBUG:  Router planner cannot handle multi-shard select queries
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
+DEBUG:  generating subplan XXX_4 for subquery SELECT x, y FROM recursive_union.test WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u LEFT JOIN (SELECT test_1.x, test_1.y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) test_1) test USING (x)) ORDER BY u.x, u.y
+DEBUG:  Creating router plan
+ x | y | y
+---------------------------------------------------------------------
+ 1 | 1 | 1
+ 1 | 1 | 1
+ 2 | 2 | 2
+(3 rows)
+
 -- unions in a join without partition column equality (column names from first query are used for join)
 SELECT * FROM ((SELECT x, y FROM test) UNION (SELECT y, x FROM test)) u JOIN test USING (x) ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -686,10 +694,16 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_2 for subquery SELECT x, y FROM recursive_union.test
 DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) INTERSECT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u LEFT JOIN recursive_union.test USING (x)) ORDER BY u.x, u.y
+DEBUG:  Wrapping relation "test" to a subquery
 DEBUG:  Router planner cannot handle multi-shard select queries
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
+DEBUG:  generating subplan XXX_4 for subquery SELECT x, y FROM recursive_union.test WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u LEFT JOIN (SELECT test_1.x, test_1.y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) test_1) test USING (x)) ORDER BY u.x, u.y
+DEBUG:  Creating router plan
+ x | y | y
+---------------------------------------------------------------------
+ 1 | 1 | 1
+(1 row)
+
 -- distributed table in WHERE clause is recursively planned
 SELECT * FROM ((SELECT * FROM test) UNION (SELECT * FROM ref WHERE a IN (SELECT x FROM test))) u ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries

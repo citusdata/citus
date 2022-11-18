@@ -497,9 +497,14 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (((citus_l
   1296
 (1 row)
 
--- not supported direct outer join
 SELECT count(*) FROM citus_local_table LEFT JOIN distributed_table ON (true);
-ERROR:  cannot pushdown the subquery
+NOTICE:  executing the command locally: SELECT NULL::integer AS "dummy-1" FROM citus_local_table_queries.citus_local_table_1509001 citus_local_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM ((SELECT NULL::integer AS a, NULL::integer AS b FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) citus_local_table_1) citus_local_table LEFT JOIN (SELECT NULL::integer AS a, NULL::integer AS b FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) distributed_table_1) distributed_table ON (true))
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
 -- distinct in subquery on CTE
 WITH one_row AS (
 	SELECT a from citus_local_table WHERE b = 1
