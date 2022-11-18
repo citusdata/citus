@@ -568,13 +568,18 @@ WHERE  user_id IN
         SELECT user_id
         FROM   events_test_table);
 
--- Reference tables can not locate on the outer part of the outer join
+-- Reference tables can locate on the outer part of the outer join
+-- Note that we don't need to sort the output because
+-- citus.sort_returning is enabled by default during
+-- regression tests.
 UPDATE users_test_table
 SET value_1 = 4
-WHERE user_id IN
-    (SELECT DISTINCT e2.user_id
-     FROM users_reference_copy_table
-     LEFT JOIN users_test_table e2 ON (e2.user_id = users_reference_copy_table.value_1)) RETURNING *;
+WHERE user_id IN (
+    SELECT DISTINCT e2.user_id
+    FROM users_reference_copy_table
+    LEFT JOIN users_test_table e2 ON (e2.user_id = users_reference_copy_table.value_1)
+)
+RETURNING *;
 
 -- Volatile functions are also not supported
 UPDATE users_test_table

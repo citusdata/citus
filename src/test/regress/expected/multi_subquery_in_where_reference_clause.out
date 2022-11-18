@@ -162,8 +162,7 @@ WHERE
       )
 ORDER BY user_id
 LIMIT 3;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ERROR:  correlated subqueries are not supported when the FROM clause contains a CTE or subquery
 -- subqueries in WHERE with IN operator without equality
 SELECT
   users_table.user_id, count(*)

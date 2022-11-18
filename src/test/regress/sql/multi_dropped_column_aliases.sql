@@ -22,12 +22,11 @@ SELECT * FROM customer LIMIT 2;
 -- Verify joins work with dropped columns.
 SELECT count(*) FROM customer, orders WHERE c_custkey = o_custkey;
 
--- Test joinExpr aliases by performing an outer-join. This code path is
--- currently not exercised, but we are adding this test to catch this bug when
--- we start supporting outer joins.
+-- Test joinExpr aliases by performing an outer-join.
 
 SELECT c_custkey
 FROM   (customer LEFT OUTER JOIN orders ON (c_custkey = o_custkey)) AS
        test(c_custkey, c_nationkey)
        INNER JOIN lineitem ON (test.c_custkey = l_orderkey)
+ORDER BY 1
 LIMIT 10;

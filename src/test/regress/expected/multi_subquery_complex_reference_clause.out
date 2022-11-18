@@ -76,12 +76,20 @@ ORDER BY 1;
        7
 (10 rows)
 
--- Shouldn't work, reference table at the outer side is not allowed
+-- Should work, reference table at the outer side is allowed
 SELECT * FROM
-  (SELECT random() FROM users_ref_test_table LEFT JOIN user_buy_test_table
+  (SELECT random() > 2 FROM users_ref_test_table LEFT JOIN user_buy_test_table
   ON users_ref_test_table.id = user_buy_test_table.user_id) subquery_1;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ ?column?
+---------------------------------------------------------------------
+ f
+ f
+ f
+ f
+ f
+ f
+(6 rows)
+
 -- Should work, reference table at the inner side is allowed
 SELECT count(*) FROM
   (SELECT random() FROM users_ref_test_table RIGHT JOIN user_buy_test_table
@@ -91,12 +99,20 @@ SELECT count(*) FROM
      4
 (1 row)
 
--- Shouldn't work, reference table at the outer side is not allowed
+-- Should work, reference table at the outer side is allowed
 SELECT * FROM
-  (SELECT random() FROM user_buy_test_table RIGHT JOIN users_ref_test_table
+  (SELECT random() > 2 FROM user_buy_test_table RIGHT JOIN users_ref_test_table
   ON user_buy_test_table.user_id = users_ref_test_table.id) subquery_1;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ ?column?
+---------------------------------------------------------------------
+ f
+ f
+ f
+ f
+ f
+ f
+(6 rows)
+
 -- Equi join test with reference table on non-partition keys
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table JOIN users_ref_test_table
@@ -270,16 +286,22 @@ ON user_buy_test_table.item_id = users_ref_test_table.id;
      4
 (1 row)
 
--- table function cannot be the outer relationship in an outer join
+-- table function can be the outer relationship in an outer join
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table RIGHT JOIN generate_series(1,10) AS users_ref_test_table(id)
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a table function in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    16
+(1 row)
+
 SELECT count(*) FROM user_buy_test_table RIGHT JOIN (SELECT * FROM generate_series(1,10) id) users_ref_test_table
 ON user_buy_test_table.item_id = users_ref_test_table.id;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a table function in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
 -- volatile functions can be used as table expressions through recursive planning
 SET client_min_messages TO DEBUG;
 SELECT count(*) FROM
@@ -351,11 +373,14 @@ ON user_buy_test_table.item_id = users_ref_test_table.id;
      4
 (1 row)
 
--- subquery without FROM cannot be the outer relationship in an outer join
+-- subquery without FROM can be the outer relationship in an outer join
 SELECT count(*) FROM user_buy_test_table RIGHT JOIN (SELECT 5 AS id) users_ref_test_table
 ON user_buy_test_table.item_id = users_ref_test_table.id;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a subquery without FROM in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
 -- can perform a union with subquery without FROM
 -- with pulling data to coordinator
 SET client_min_messages TO DEBUG;
@@ -498,8 +523,8 @@ DEBUG:  Router planner cannot handle multi-shard select queries
        1
 (4 rows)
 
--- query can be pushed down when a reference table inside union query is
--- joined with a distributed table. reference table cannot be at
+-- query is supported when a reference table inside union query is
+-- joined with a distributed table. reference table can be at
 -- the outer part.
 SELECT * FROM
 	(SELECT user_id FROM users_ref_test_table ref LEFT JOIN  user_buy_test_table dis
@@ -508,8 +533,26 @@ SELECT * FROM
 	 SELECT user_id FROM user_buy_test_table) sub
 ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "user_buy_test_table" "dis" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "user_buy_test_table" "dis" to a subquery
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM public.user_buy_test_table dis WHERE true
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_2 for subquery SELECT user_id FROM public.user_buy_test_table
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_3 for subquery SELECT dis.user_id FROM (public.users_ref_test_table ref LEFT JOIN (SELECT dis_1.user_id, NULL::integer AS item_id, NULL::integer AS buy_count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) dis_1) dis ON ((ref.id OPERATOR(pg_catalog.=) dis.user_id))) UNION SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) sub ORDER BY user_id DESC
+DEBUG:  Creating router plan
+ user_id
+---------------------------------------------------------------------
+
+       7
+       3
+       2
+       1
+(5 rows)
+
 RESET client_min_messages;
 -- should be able to pushdown since reference table is in the
 -- inner part of the left join
@@ -533,7 +576,7 @@ FROM
        6 |   210
 (6 rows)
 
--- should not be able to pushdown since reference table is in the
+-- supported even if the reference table is in the
 -- direct outer part of the left join
 SELECT
   user_id, sum(value_1)
@@ -545,18 +588,29 @@ FROM
       LEFT JOIN events_table ON (events_table.user_id = users_table.user_id)
   ) as foo
   GROUP BY user_id ORDER BY 2 DESC LIMIT 10;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
--- should not be able to pushdown since reference table is in the
+ user_id |  sum
+---------------------------------------------------------------------
+         |
+       2 | 31248
+       3 | 15120
+       4 | 14994
+       5 |  8694
+       1 |  7590
+(6 rows)
+
+-- supported even if the reference table is in the
 -- direct outer part of the left join wrapped into a subquery
 SELECT
-    *
+    COUNT(*) = 1581
 FROM
     (SELECT *, random() FROM events_reference_table) as ref_all LEFT JOIN users_table
     ON (users_table.user_id = ref_all.value_2);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
--- should not be able to pushdown since reference table is in the
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- supported even if the reference table is in the
 -- outer part of the left join
 SELECT
   user_id, sum(value_1)
@@ -568,8 +622,16 @@ FROM
       LEFT JOIN events_table ON (events_table.user_id = users_table.user_id)
   ) as foo
   GROUP BY user_id ORDER BY 2 DESC LIMIT 10;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ user_id |  sum
+---------------------------------------------------------------------
+         |
+       2 | 31248
+       3 | 15120
+       4 | 14994
+       5 |  8694
+       1 |  7590
+(6 rows)
+
 -- should be able to pushdown since reference table is in the
 -- inner part of the left join
 SELECT * FROM
@@ -1466,13 +1528,16 @@ ORDER BY types;
      3 |            120
 (4 rows)
 
--- just a sanity check that we don't allow this if the reference table is on the
+-- just a sanity check that we allow this even if the reference table is on the
 -- left part of the left join
 SELECT count(*) FROM
   (SELECT random() FROM users_ref_test_table LEFT JOIN user_buy_test_table
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    12
+(1 row)
+
 -- we do allow non equi join among subqueries via recursive planning
 SET client_min_messages TO DEBUG1;
 SELECT count(*) FROM
@@ -1961,73 +2026,124 @@ LIMIT 5;
        6
 (1 row)
 
--- outer part of the LEFT JOIN consists only reference tables, so we cannot push down
+-- supported even if the outer part of the LEFT JOIN consists only reference tables
 -- we have different combinations for ON condition, true/false/two column join/single column filter
 SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    24
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    24
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON false;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON false;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (ref1.id > 5);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     9
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (user_buy_test_table.user_id > 5);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (ref1.id = user_buy_test_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (ref2.id = user_buy_test_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (ref1.id = user_buy_test_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (ref2.id = user_buy_test_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
--- outer part of the LEFT JOIN consists only reference tables within a subquery, so we cannot push down
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+-- outer part of the LEFT JOIN consists only reference tables within a subquery
 -- we have different combinations for ON condition, true/false/two column join/single column filter
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    24
+(1 row)
+
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    24
+(1 row)
+
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON false;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON false;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON (foo.id > 5);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     9
+(1 row)
+
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON (user_buy_test_table.user_id > 19);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON (foo.id = user_buy_test_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
 -- one example where unsupported outer join is deep inside a subquery
 SELECT *, random() FROM (
 SELECT *,random() FROM user_buy_test_table WHERE user_id > (
 SELECT count(*) FROM (SELECT *,random() FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as bar) as foo LEFT JOIN (SELECT *, random() FROM (SELECT *,random() FROM user_buy_test_table d1 JOIN user_buy_test_table d2 USING (user_id)) as bar_inner ) as bar ON true)) as boo;
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
--- In theory, we should be able to pushdown this query
--- however, as the LEFT JOIN condition is between a reference table and the distributed table
--- Postgres generates a LEFT JOIN alternative among those tables
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN user_buy_test_table u1 on ref1.id = u1.user_id) as foo LEFT JOIN user_buy_test_table ON (foo.id = user_buy_test_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
 -- same as the above query, but this time LEFT JOIN condition is between distributed tables
 -- so Postgres doesn't generate join restriction between reference and distributed tables
 SELECT count(*) FROM (SELECT u1.*, random() FROM users_ref_test_table ref1 INNER JOIN user_buy_test_table u1 on ref1.id = u1.user_id) as foo LEFT JOIN user_buy_test_table ON (foo.user_id = user_buy_test_table.user_id);
@@ -2036,10 +2152,13 @@ SELECT count(*) FROM (SELECT u1.*, random() FROM users_ref_test_table ref1 INNER
      3
 (1 row)
 
--- outer part of the LEFT JOIN consists only intermediate result due to LIMIT, so we cannot push down
+-- outer part of the LEFT JOIN consists only intermediate result due to LIMIT but this is still supported
 SELECT count(*) FROM (SELECT ref1.* FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LIMIT 5) as foo LEFT JOIN user_buy_test_table ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
+ count
+---------------------------------------------------------------------
+    20
+(1 row)
+
 -- should be fine as OUTER part is the distributed table
 SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id RIGHT JOIN user_buy_test_table ON true;
  count
@@ -2062,123 +2181,212 @@ SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table r
 -- left outer part of the FULL JOIN consists only reference tables, so we cannot push down
 -- we have different combinations for ON condition, true/false/two column join/single column filter
 SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id FULL JOIN user_buy_test_table ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    24
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id FULL JOIN user_buy_test_table ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    24
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id FULL JOIN user_buy_test_table ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    24
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id FULL JOIN user_buy_test_table ON false;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id FULL JOIN user_buy_test_table ON false;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id FULL JOIN user_buy_test_table ON (ref1.id > 5);
 ERROR:  FULL JOIN is only supported with merge-joinable or hash-joinable join conditions
 SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id FULL JOIN user_buy_test_table ON (user_buy_test_table.user_id > 5);
 ERROR:  FULL JOIN is only supported with merge-joinable or hash-joinable join conditions
 SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id FULL JOIN user_buy_test_table ON (ref1.id = user_buy_test_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id FULL JOIN user_buy_test_table ON (ref2.id = user_buy_test_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id FULL JOIN user_buy_test_table ON (ref1.id = user_buy_test_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id FULL JOIN user_buy_test_table ON (ref2.id = user_buy_test_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
 -- right outer part of the FULL JOIN consists only reference tables, so we cannot push down
 -- we have different combinations for ON condition, true/false/two column join/single column filter
 SELECT count(*) FROM user_buy_test_table FULL JOIN users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    24
+(1 row)
+
 SELECT count(*) FROM user_buy_test_table FULL JOIN users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    24
+(1 row)
+
 SELECT count(*) FROM user_buy_test_table FULL JOIN users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    24
+(1 row)
+
 SELECT count(*) FROM user_buy_test_table FULL JOIN users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id ON false;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
 SELECT count(*) FROM user_buy_test_table FULL JOIN users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id ON false;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
 SELECT count(*) FROM user_buy_test_table FULL JOIN users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id ON (ref1.id > 5);
 ERROR:  FULL JOIN is only supported with merge-joinable or hash-joinable join conditions
 SELECT count(*) FROM user_buy_test_table FULL JOIN users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id ON (user_buy_test_table.user_id > 5);
 ERROR:  FULL JOIN is only supported with merge-joinable or hash-joinable join conditions
 SELECT count(*) FROM user_buy_test_table FULL JOIN users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id ON (ref1.id = user_buy_test_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
 SELECT count(*) FROM user_buy_test_table FULL JOIN users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id ON (ref2.id = user_buy_test_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
 SELECT count(*) FROM user_buy_test_table FULL JOIN users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id ON (ref1.id = user_buy_test_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
 SELECT count(*) FROM user_buy_test_table FULL JOIN users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id ON (ref2.id = user_buy_test_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
 -- left outer part of the FULL JOIN consists only reference tables within a subquery, so we cannot push down
 -- we have different combinations for ON condition, true/false/two column join/single column filter
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo FULL JOIN user_buy_test_table ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    24
+(1 row)
+
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo FULL JOIN user_buy_test_table ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    24
+(1 row)
+
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo FULL JOIN user_buy_test_table ON false;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo FULL JOIN user_buy_test_table ON false;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo FULL JOIN user_buy_test_table ON (foo.id > 5);
 ERROR:  FULL JOIN is only supported with merge-joinable or hash-joinable join conditions
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo FULL JOIN user_buy_test_table ON (user_buy_test_table.user_id > 19);
 ERROR:  FULL JOIN is only supported with merge-joinable or hash-joinable join conditions
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo FULL JOIN user_buy_test_table ON (foo.id = user_buy_test_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
 -- right outer part of the FULL JOIN consists only reference tables within a subquery, so we cannot push down
 -- we have different combinations for ON condition, true/false/two column join/single column filter
 SELECT count(*) FROM user_buy_test_table FULL JOIN (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    24
+(1 row)
+
 SELECT count(*) FROM user_buy_test_table FULL JOIN (SELECT ref1.*, random() FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    24
+(1 row)
+
 SELECT count(*) FROM user_buy_test_table FULL JOIN (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo ON false;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
 SELECT count(*) FROM user_buy_test_table FULL JOIN (SELECT ref1.*, random() FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo ON false;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
 SELECT count(*) FROM user_buy_test_table FULL JOIN (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo ON (foo.id > 5);
 ERROR:  FULL JOIN is only supported with merge-joinable or hash-joinable join conditions
 SELECT count(*) FROM user_buy_test_table FULL JOIN (SELECT ref1.*, random() FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo ON (user_buy_test_table.user_id > 19);
 ERROR:  FULL JOIN is only supported with merge-joinable or hash-joinable join conditions
 SELECT count(*) FROM user_buy_test_table FULL JOIN (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo ON (foo.id = user_buy_test_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
 -- one example where unsupported outer join is deep inside a subquery
 SELECT *, random() FROM (
 SELECT *,random() FROM user_buy_test_table WHERE user_id > (
 SELECT count(*) FROM (SELECT *,random() FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as bar) as foo FULL JOIN (SELECT *, random() FROM (SELECT *,random() FROM user_buy_test_table d1 JOIN user_buy_test_table d2 USING (user_id)) as bar_inner ) as bar ON true)) as boo;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ user_id | item_id | buy_count | random | random
+---------------------------------------------------------------------
+(0 rows)
+
 -- In theory, we should be able to pushdown this query
 -- however, as the FULL JOIN condition is between a reference table and the distributed table
 -- Postgres generates a FULL JOIN alternative among those tables
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN user_buy_test_table u1 on ref1.id = u1.user_id) as foo FULL JOIN user_buy_test_table ON (foo.id = user_buy_test_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
 -- same as the above query, but this time FULL JOIN condition is between distributed tables
 -- so Postgres doesn't generate join restriction between reference and distributed tables
 SELECT count(*) FROM (SELECT u1.*, random() FROM users_ref_test_table ref1 INNER JOIN user_buy_test_table u1 on ref1.id = u1.user_id) as foo FULL JOIN user_buy_test_table ON (foo.user_id = user_buy_test_table.user_id);
@@ -2189,8 +2397,11 @@ SELECT count(*) FROM (SELECT u1.*, random() FROM users_ref_test_table ref1 INNER
 
 -- left outer part of the FULL JOIN consists only intermediate result due to LIMIT, so we cannot push down
 SELECT count(*) FROM (SELECT ref1.* FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LIMIT 5) as foo FULL JOIN user_buy_test_table ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
+ count
+---------------------------------------------------------------------
+    20
+(1 row)
+
 DROP TABLE user_buy_test_table;
 DROP TABLE users_ref_test_table;
 DROP TABLE users_return_test_table;

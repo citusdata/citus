@@ -103,9 +103,7 @@ INSERT INTO partitioned_distributed_table SELECT foo.* FROM partitioned_distribu
 INSERT INTO partitioned_distributed_table SELECT foo.* FROM distributed_table AS foo JOIN citus_local_table ON (true);
 INSERT INTO distributed_table SELECT foo.a FROM partitioned_distributed_table AS foo JOIN citus_local_table ON (true);
 
--- should fail
 SELECT COUNT(*) FROM reference_table LEFT JOIN partitioned_distributed_table ON true;
-
 
 -- non-colocated subquery should work
 SELECT COUNT(*) FROM
