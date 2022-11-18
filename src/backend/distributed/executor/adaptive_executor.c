@@ -2689,15 +2689,6 @@ RunDistributedExecution(DistributedExecution *execution)
 			}
 			else if (execution->rebuildWaitEventSet)
 			{
-				if (execution->events != NULL)
-				{
-					/*
-					 * The execution might take a while, so explicitly free at this point
-					 * because we don't need anymore.
-					 */
-					pfree(execution->events);
-					execution->events = NULL;
-				}
 				eventSetSize = RebuildWaitEventSet(execution, false);
 
 				skipWaitEvents =
@@ -2844,6 +2835,16 @@ HasIncompleteConnectionEstablishment(DistributedExecution *execution)
 static int
 RebuildWaitEventSet(DistributedExecution *execution, bool socketClosedOnly)
 {
+	if (execution->events != NULL)
+	{
+		/*
+		 * The execution might take a while, so explicitly free at this point
+		 * because we don't need anymore.
+		 */
+		pfree(execution->events);
+		execution->events = NULL;
+	}
+
 	if (execution->waitEventSet != NULL)
 	{
 		FreeWaitEventSet(execution->waitEventSet);
@@ -3413,7 +3414,11 @@ OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 
 	long timeout = 0;/* don't wait */
 
-	int eventCount = WaitEventSetWait(workerPool->distributedExecution->waitEventSet, timeout, workerPool->distributedExecution->events, size, WAIT_EVENT_CLIENT_READ);
+	int eventCount =
+		WaitEventSetWait(workerPool->distributedExecution->waitEventSet,
+						 timeout, workerPool->distributedExecution->events,
+						 size, WAIT_EVENT_CLIENT_READ);
+
 	ProcessWaitEventsForSocketClosed(workerPool->distributedExecution->events, eventCount);
 
 	workerPool->distributedExecution->waitFlagsChanged = true;
