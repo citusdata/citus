@@ -9,19 +9,21 @@
  */
 
 
+#include "postgres.h"
+
 /*
  * Make sure that functions marked as deprecated in OpenSSL 3.0 don't trigger
  * deprecation warnings by indicating that we're using the OpenSSL 1.0.1
  * compatibile API. Postgres does this by already in PG14, so we should not do
- * it otherwise we get warnings about redefining this value.
+ * it otherwise we get warnings about redefining this value. This needs to be
+ * done before including libpq.h.
  */
+#include "distributed/pg_version_constants.h"
 #if PG_VERSION_NUM < PG_VERSION_14
 #ifndef OPENSSL_API_COMPAT
 #define OPENSSL_API_COMPAT 0x1000100L
 #endif
 #endif
-
-#include "postgres.h"
 
 #include "distributed/connection_management.h"
 #include "distributed/memutils.h"
