@@ -724,7 +724,7 @@ $$);
 
 -- similar to the above, make sure that we skip recursive planning when
 -- the subquery contains only intermediate results
-SELECT *
+SELECT COUNT(*) = 176
 FROM
   (
    SELECT * FROM(

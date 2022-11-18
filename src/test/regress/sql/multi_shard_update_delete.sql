@@ -569,12 +569,17 @@ WHERE  user_id IN
         FROM   events_test_table);
 
 -- Reference tables can not locate on the outer part of the outer join
-UPDATE users_test_table
-SET value_1 = 4
-WHERE user_id IN
-    (SELECT DISTINCT e2.user_id
-     FROM users_reference_copy_table
-     LEFT JOIN users_test_table e2 ON (e2.user_id = users_reference_copy_table.value_1)) RETURNING *;
+WITH updated as (
+    UPDATE users_test_table
+    SET value_1 = 4
+    WHERE user_id IN (
+        SELECT DISTINCT e2.user_id
+        FROM users_reference_copy_table
+        LEFT JOIN users_test_table e2 ON (e2.user_id = users_reference_copy_table.value_1)
+    )
+    RETURNING *
+)
+SELECT * FROM updated ORDER BY 1;
 
 -- Volatile functions are also not supported
 UPDATE users_test_table

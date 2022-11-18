@@ -30,5 +30,8 @@ extern int LocalTableJoinPolicy;
 extern bool ShouldConvertLocalTableJoinsToSubqueries(List *rangeTableList);
 extern void RecursivelyPlanLocalTableJoins(Query *query,
 										   RecursivePlanningContext *context);
+extern List * RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
+											 PlannerRestrictionContext *
+											 plannerRestrictionContext);
 
 #endif /* LOCAL_DISTRIBUTED_JOIN_PLANNER_H */

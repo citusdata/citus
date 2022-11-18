@@ -231,8 +231,8 @@ SELECT * FROM
 	) s1
 ORDER BY 2 DESC, 1;
 
--- event vs table non-partition-key join is not supported
--- given that we cannot recursively plan tables yet
+-- event vs table non-partition-key join is supported
+-- given that we can recursively plan events_table
 SELECT * FROM
 	(SELECT ru.user_id, CASE WHEN et.user_id IS NULL THEN 'NO' ELSE 'YES' END as done_event
 		FROM recent_users ru

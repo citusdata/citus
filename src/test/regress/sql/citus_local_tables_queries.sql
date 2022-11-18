@@ -210,7 +210,6 @@ SELECT count(*) FROM reference_table
   LEFT JOIN postgres_local_table ON (true)
   LEFT JOIN reference_table r2 ON (true);
 
--- not supported direct outer join
 SELECT count(*) FROM citus_local_table LEFT JOIN distributed_table ON (true);
 
 -- distinct in subquery on CTE

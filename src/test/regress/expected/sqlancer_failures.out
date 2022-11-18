@@ -149,8 +149,11 @@ SELECT create_reference_table('t10');
 SELECT count(*) FROM (
 SELECT ALL t7.c1, t7.c0, t8.c1, t10.c1, t8.c0 FROM t7 CROSS JOIN t10 FULL OUTER JOIN t8 ON (((((((('[832125354,1134163512)'::int4range)*('(0,2106623281)'::int4range)))-('(-600267905,509840582]'::int4range)))*('(-365203965,1662828182)'::int4range)))&<((((((('(-1286467417,697584012]'::int4range)*('[-1691485781,1341103963)'::int4range)))*((('(-1768368435,1719707648)'::int4range)*('(139536997,1275813540]'::int4range)))))*((((('[-2103910157,-1961746758)'::int4range)*('[-834534078,533073939)'::int4range)))*((('[-1030552151,552856781]'::int4range)*('[-1109419376,1205173697]'::int4range))))))))
 ) AS foo;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
 CREATE TABLE reference_table(id int, it_name varchar(25), k_no int);
 SELECT create_reference_table('reference_table');
  create_reference_table
