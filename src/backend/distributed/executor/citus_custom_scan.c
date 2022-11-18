@@ -333,7 +333,7 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 		SetTaskQueryString(task, fastPathPlanCache->queryString);
 
 		/* TODO: we have this due to MarkUnreferencedExternParams. Can we find another way? */
-		workerJob->jobQuery = copyObject(originalDistributedPlan->workerJob->jobQuery);
+		//workerJob->jobQuery = copyObject(originalDistributedPlan->workerJob->jobQuery);
 	}
 }
 

@@ -852,8 +852,8 @@ AdaptiveExecutor(CitusScanState *scanState)
 	 */
 	if (paramListInfo && !paramListInfo->paramFetch)
 	{
-		paramListInfo = copyParamList(paramListInfo);
-		MarkUnreferencedExternParams((Node *) job->jobQuery, paramListInfo);
+		//paramListInfo = copyParamList(paramListInfo);
+		//MarkUnreferencedExternParams((Node *) job->jobQuery, paramListInfo);
 	}
 
 	DistributedExecution *execution = CreateDistributedExecution(
