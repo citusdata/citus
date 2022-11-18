@@ -3326,9 +3326,9 @@ OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 		newConnectionsList = lappend(newConnectionsList, session);
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_15
 	bool socketClosedOnly = true;
 	RebuildWaitEventSet(workerPool->distributedExecution, socketClosedOnly);
-
 
 	/*
 	 * Before using this connection in the distributed execution, we check
@@ -3344,7 +3344,6 @@ OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 						 workerPool->distributedExecution->eventSetSize,
 						 WAIT_EVENT_CLIENT_READ);
 
-#if PG_VERSION_NUM >= PG_VERSION_15
 	ProcessWaitEventsForSocketClosed(workerPool->distributedExecution->events,
 									 eventCount);
 #endif
@@ -5490,8 +5489,10 @@ BuildWaitEventSet(List *sessionList, bool socketClosedOnly)
 							  NULL);
 
 	if (!socketClosedOnly)
+	{
 	CitusAddWaitEventSetToSet(waitEventSet, WL_LATCH_SET, PGINVALID_SOCKET, MyLatch,
 							  NULL);
+	}
 
 	return waitEventSet;
 }
@@ -5503,8 +5504,8 @@ BuildWaitEventSet(List *sessionList, bool socketClosedOnly)
  * to the waitEventSet.
  */
 static void
-AddSessionToWaitEventSet(WorkerSession *session, WaitEventSet *waitEventSet, bool
-						 socketClosedOnly)
+AddSessionToWaitEventSet(WorkerSession *session, WaitEventSet *waitEventSet,
+						 bool socketClosedOnly)
 {
 	MultiConnection *connection = session->connection;
 
@@ -5531,9 +5532,15 @@ AddSessionToWaitEventSet(WorkerSession *session, WaitEventSet *waitEventSet, boo
 
 	if (socketClosedOnly)
 	{
+#if PG_VERSION_NUM >= PG_VERSION_15
+
 		waitEventSetIndex = CitusAddWaitEventSetToSet(waitEventSet, WL_SOCKET_CLOSED,
 													  sock,
 													  NULL, (void *) session);
+#else
+	/* socketClosedOnly is only true for */
+	Assert (false);
+#endif
 	}
 	else
 	{
