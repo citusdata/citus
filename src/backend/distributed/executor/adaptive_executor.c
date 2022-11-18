@@ -5490,8 +5490,8 @@ BuildWaitEventSet(List *sessionList, bool socketClosedOnly)
 
 	if (!socketClosedOnly)
 	{
-	CitusAddWaitEventSetToSet(waitEventSet, WL_LATCH_SET, PGINVALID_SOCKET, MyLatch,
-							  NULL);
+		CitusAddWaitEventSetToSet(waitEventSet, WL_LATCH_SET, PGINVALID_SOCKET, MyLatch,
+								  NULL);
 	}
 
 	return waitEventSet;
@@ -5538,8 +5538,9 @@ AddSessionToWaitEventSet(WorkerSession *session, WaitEventSet *waitEventSet,
 													  sock,
 													  NULL, (void *) session);
 #else
-	/* socketClosedOnly is only true for */
-	Assert (false);
+
+		/* socketClosedOnly is only true for */
+		Assert(false);
 #endif
 	}
 	else
