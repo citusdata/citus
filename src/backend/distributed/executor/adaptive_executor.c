@@ -666,7 +666,6 @@ static WorkerPool * FindOrCreateWorkerPool(DistributedExecution *execution,
 										   char *nodeName, int nodePort);
 static WorkerSession * FindOrCreateWorkerSession(WorkerPool *workerPool,
 												 MultiConnection *connection);
-static bool RemoteSocketClosedForNewSession(WorkerSession *session);
 static void ManageWorkerPool(WorkerPool *workerPool);
 static bool ShouldWaitForSlowStart(WorkerPool *workerPool);
 static int CalculateNewConnectionCount(WorkerPool *workerPool);
@@ -5489,6 +5488,8 @@ BuildWaitEventSet(List *sessionList, bool socketClosedOnly)
 
 	CitusAddWaitEventSetToSet(waitEventSet, WL_POSTMASTER_DEATH, PGINVALID_SOCKET, NULL,
 							  NULL);
+
+	if (!socketClosedOnly)
 	CitusAddWaitEventSetToSet(waitEventSet, WL_LATCH_SET, PGINVALID_SOCKET, MyLatch,
 							  NULL);
 
