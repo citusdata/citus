@@ -248,7 +248,7 @@ ON (key = num);
    101
 (1 row)
 
--- VALUES with unsupported OUTER join
+-- VALUES with supported OUTER join (since test_values is recursively planned)
 SELECT
 	count(*)
 FROM
@@ -256,8 +256,14 @@ FROM
 		RIGHT JOIN
 	(SELECT a,b FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(a,b) ) as foo (num,letter)
 ON (key = num);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a VALUES clause in the outer part of the outer join
+DEBUG:  Wrapping relation "test_values" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM values_subquery.test_values WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT test_values_1.key, NULL::text AS value, NULL::jsonb AS data FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) test_values_1) test_values RIGHT JOIN (SELECT t.a, t.b FROM (VALUES (1,'one'::text), (2,'two'::text), (3,'three'::text)) t(a, b)) foo(num, letter) ON ((test_values.key OPERATOR(pg_catalog.=) foo.num)))
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
 -- values with router queries
 SELECT
 	count(*)
@@ -456,12 +462,18 @@ SELECT count(*) FROM
    296
 (1 row)
 
--- VALUES cannot be the right relationship in a join
+-- VALUES can be the right relationship in a join
 SELECT count(*) FROM
   (SELECT random() FROM test_values RIGHT JOIN (SELECT a, b FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(a,b)) as values_data(a,b)
   ON test_values.key > values_data.a) subquery_1;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a VALUES clause in the outer part of the outer join
+DEBUG:  Wrapping relation "test_values" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM values_subquery.test_values WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT random() AS random FROM ((SELECT test_values_1.key, NULL::text AS value, NULL::jsonb AS data FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) test_values_1) test_values RIGHT JOIN (SELECT t.a, t.b FROM (VALUES (1,'one'::text), (2,'two'::text), (3,'three'::text)) t(a, b)) values_data(a, b) ON ((test_values.key OPERATOR(pg_catalog.>) values_data.a)))) subquery_1
+ count
+---------------------------------------------------------------------
+   294
+(1 row)
+
 -- subquery IN WHERE clause need to be recursively planned
 -- but it is correlated so cannot be pushed down
 SELECT

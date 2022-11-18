@@ -33,7 +33,7 @@ SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table r
 
 -- two reference tables CROSS JOINNed, and later JOINED with distributed tables
 -- but the reference table CROSS JOIN is in the outer side of the JOIN with the distributed table
--- so we cannot pushdown
+-- so this is supported by recursively planning the distributed table (users_table)
 SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table ref2 LEFT JOIN users_table ON (ref1.id = users_table.user_id);
 SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table ref2 FULL JOIN users_table ON (ref1.id = users_table.user_id);
 SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table ref2 LEFT JOIN users_table ON (ref1.id != users_table.user_id);

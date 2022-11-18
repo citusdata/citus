@@ -159,7 +159,7 @@ FROM
 	(SELECT a,b FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(a,b) ) as foo (num,letter)
 ON (key = num);
 
--- VALUES with unsupported OUTER join
+-- VALUES with supported OUTER join (since test_values is recursively planned)
 SELECT
 	count(*)
 FROM
@@ -299,7 +299,7 @@ SELECT count(*) FROM
   (SELECT random() FROM test_values LEFT JOIN (SELECT a, b FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(a,b)) as values_data(a,b)
   ON test_values.key > values_data.a) subquery_1;
 
--- VALUES cannot be the right relationship in a join
+-- VALUES can be the right relationship in a join
 SELECT count(*) FROM
   (SELECT random() FROM test_values RIGHT JOIN (SELECT a, b FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(a,b)) as values_data(a,b)
   ON test_values.key > values_data.a) subquery_1;
