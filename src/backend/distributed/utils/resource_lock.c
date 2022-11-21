@@ -801,10 +801,10 @@ AnyTableReplicated(List *shardIntervalList, List **replicatedShardIntervalList)
 		}
 	}
 
-    if (replicatedShardIntervalList != NULL)
-    {
-        *replicatedShardIntervalList = localList;
-    }
+	if (replicatedShardIntervalList != NULL)
+	{
+		*replicatedShardIntervalList = localList;
+	}
 
 	return list_length(localList) > 0;
 }
