@@ -33,6 +33,10 @@
 #include "distributed/worker_transaction.h"
 #include "distributed/pg_dist_cleanup.h"
 
+#define REPLICATION_SLOT_CATALOG_TABLE_NAME "pg_replication_slots"
+#define STR_ERRCODE_OBJECT_IN_USE "55006"
+#define STR_ERRCODE_UNDEFINED_OBJECT "42704"
+
 /* GUC configuration for shard cleaner */
 int NextOperationId = 0;
 int NextCleanupRecordId = 0;
@@ -78,6 +82,16 @@ static bool TryDropResourceByCleanupRecordOutsideTransaction(CleanupRecord *reco
 static bool TryDropShardOutsideTransaction(char *qualifiedTableName,
 										   char *nodeName,
 										   int nodePort);
+static bool TryDropSubscriptionOutsideTransaction(char *subscriptionName,
+												  char *nodeName,
+												  int nodePort);
+static bool TryDropPublicationOutsideTransaction(char *publicationName,
+												 char *nodeName,
+												 int nodePort);
+static bool TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
+													 char *nodeName,
+													 int nodePort);
+static bool TryDropUserOutsideTransaction(char *username, char *nodeName, int nodePort);
 static bool TryLockRelationAndPlacementCleanup(Oid relationId, LOCKMODE lockmode);
 
 /* Functions for cleanup infrastructure */
@@ -776,8 +790,6 @@ TryDropResourceByCleanupRecordOutsideTransaction(CleanupRecord *record,
 												 char *nodeName,
 												 int nodePort)
 {
-	List *dropCommandList = NIL;
-
 	switch (record->objectType)
 	{
 		case CLEANUP_OBJECT_SHARD_PLACEMENT:
@@ -788,60 +800,25 @@ TryDropResourceByCleanupRecordOutsideTransaction(CleanupRecord *record,
 
 		case CLEANUP_OBJECT_SUBSCRIPTION:
 		{
-			StringInfo disableQuery = makeStringInfo();
-			appendStringInfo(disableQuery,
-							 "ALTER SUBSCRIPTION %s DISABLE",
-							 quote_identifier(record->objectName));
-
-			StringInfo alterQuery = makeStringInfo();
-			appendStringInfo(alterQuery,
-							 "ALTER SUBSCRIPTION %s SET (slot_name = NONE)",
-							 quote_identifier(record->objectName));
-
-			StringInfo dropQuery = makeStringInfo();
-			appendStringInfo(dropQuery,
-							 "DROP SUBSCRIPTION IF EXISTS %s",
-							 quote_identifier(record->objectName));
-
-			dropCommandList = list_make3(disableQuery->data,
-										 alterQuery->data,
-										 dropQuery->data);
-			break;
+			return TryDropSubscriptionOutsideTransaction(record->objectName,
+														 nodeName, nodePort);
 		}
 
 		case CLEANUP_OBJECT_PUBLICATION:
 		{
-			StringInfo dropQuery = makeStringInfo();
-			appendStringInfo(dropQuery,
-							 "DROP PUBLICATION IF EXISTS %s",
-							 quote_identifier(record->objectName));
-
-			dropCommandList = list_make1(dropQuery->data);
-			break;
+			return TryDropPublicationOutsideTransaction(record->objectName,
+														nodeName, nodePort);
 		}
 
 		case CLEANUP_OBJECT_REPLICATION_SLOT:
 		{
-			StringInfo dropQuery = makeStringInfo();
-			appendStringInfo(dropQuery,
-							 "select pg_drop_replication_slot(slot_name) "
-							 "from pg_replication_slots where slot_name = %s",
-							 quote_literal_cstr(record->objectName));
-
-			dropCommandList = list_make1(dropQuery->data);
-			break;
+			return TryDropReplicationSlotOutsideTransaction(record->objectName,
+															nodeName, nodePort);
 		}
 
 		case CLEANUP_OBJECT_USER:
 		{
-			StringInfo dropQuery = makeStringInfo();
-			appendStringInfo(dropQuery,
-							 "DROP USER IF EXISTS %s",
-							 record->objectName);
-
-			dropCommandList = list_make2("SET LOCAL citus.enable_ddl_propagation TO OFF",
-										 dropQuery->data);
-			break;
+			return TryDropUserOutsideTransaction(record->objectName, nodeName, nodePort);
 		}
 
 		default:
@@ -853,16 +830,7 @@ TryDropResourceByCleanupRecordOutsideTransaction(CleanupRecord *record,
 		}
 	}
 
-	int connectionFlags = OUTSIDE_TRANSACTION;
-	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
-																	  nodeName, nodePort,
-																	  CitusExtensionOwnerName(),
-																	  NULL);
-	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
-		workerConnection,
-		dropCommandList);
-
-	return success;
+	return false;
 }
 
 
@@ -900,6 +868,212 @@ TryDropShardOutsideTransaction(char *qualifiedTableName,
 	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
 		workerConnection,
 		dropCommandList);
+
+	return success;
+}
+
+
+/*
+ * TryDropSubscriptionOutsideTransaction drops subscription with the given name on the
+ * subscriber node if it exists. Note that this doesn't drop the replication slot on the
+ * publisher node. The reason is that sometimes this is not possible. To known
+ * cases where this is not possible are:
+ * 1. Due to the node with the replication slot being down.
+ * 2. Due to a deadlock when the replication is on the same node as the
+ *    subscription, which is the case for shard splits to the local node.
+ *
+ * So instead of directly dropping the subscription, including the attached
+ * replication slot, the subscription is first disconnected from the
+ * replication slot before dropping it. The replication slot itself should be
+ * dropped using DropReplicationSlot on the source connection.
+ */
+static bool
+TryDropSubscriptionOutsideTransaction(char *subscriptionName,
+									  char *nodeName,
+									  int nodePort)
+{
+	int connectionFlags = OUTSIDE_TRANSACTION;
+	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,
+																nodeName, nodePort,
+																CitusExtensionOwnerName(),
+																NULL);
+
+	int querySent = SendRemoteCommand(
+		connection,
+		psprintf("ALTER SUBSCRIPTION %s DISABLE", quote_identifier(subscriptionName)));
+	if (querySent == 0)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	bool raiseInterrupts = true;
+	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+	if (!IsResponseOK(result))
+	{
+		char *errorcode = PQresultErrorField(result, PG_DIAG_SQLSTATE);
+		if (errorcode != NULL && strcmp(errorcode, STR_ERRCODE_UNDEFINED_OBJECT) == 0)
+		{
+			/*
+			 * The subscription doesn't exist, so we can return right away.
+			 * This DropSubscription call is effectively a no-op.
+			 */
+			return false;
+		}
+		else
+		{
+			ReportResultError(connection, result, ERROR);
+			PQclear(result);
+			ForgetResults(connection);
+		}
+	}
+
+	PQclear(result);
+	ForgetResults(connection);
+
+	StringInfo alterQuery = makeStringInfo();
+	appendStringInfo(alterQuery,
+					 "ALTER SUBSCRIPTION %s SET (slot_name = NONE)",
+					 quote_identifier(subscriptionName));
+
+	StringInfo dropQuery = makeStringInfo();
+	appendStringInfo(dropQuery,
+					 "DROP SUBSCRIPTION %s",
+					 quote_identifier(subscriptionName));
+
+	List *dropCommandList = list_make2(alterQuery->data, dropQuery->data);
+	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
+		connection,
+		dropCommandList);
+
+	return success;
+}
+
+
+/*
+ * TryDropPublicationOutsideTransaction drops the publication with the given name if it
+ * exists.
+ */
+static bool
+TryDropPublicationOutsideTransaction(char *publicationName,
+									 char *nodeName,
+									 int nodePort)
+{
+	int connectionFlags = OUTSIDE_TRANSACTION;
+	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,
+																nodeName, nodePort,
+																CitusExtensionOwnerName(),
+																NULL);
+	StringInfo dropQuery = makeStringInfo();
+	appendStringInfo(dropQuery,
+					 "DROP PUBLICATION IF EXISTS %s",
+					 quote_identifier(publicationName));
+
+	List *dropCommandList = list_make1(dropQuery->data);
+	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
+		connection,
+		dropCommandList);
+
+	return success;
+}
+
+
+/*
+ * TryDropReplicationSlotOutsideTransaction drops the replication slot with the given
+ * name if it exists. It retries if the command fails with an OBJECT_IN_USE error.
+ */
+static bool
+TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
+										 char *nodeName,
+										 int nodePort)
+{
+	int connectionFlags = OUTSIDE_TRANSACTION;
+	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,
+																nodeName, nodePort,
+																CitusExtensionOwnerName(),
+																NULL);
+
+	int maxSecondsToTryDropping = 20;
+	bool raiseInterrupts = true;
+	PGresult *result = NULL;
+	bool success = false;
+
+	/* we'll retry in case of an OBJECT_IN_USE error */
+	while (maxSecondsToTryDropping >= 0)
+	{
+		int querySent = SendRemoteCommand(
+			connection,
+			psprintf(
+				"select pg_drop_replication_slot(slot_name) from "
+				REPLICATION_SLOT_CATALOG_TABLE_NAME
+				" where slot_name = %s",
+				quote_literal_cstr(replicationSlotName))
+			);
+
+		if (querySent == 0)
+		{
+			/* return false */
+			break;
+		}
+
+		result = GetRemoteCommandResult(connection, raiseInterrupts);
+
+		if (IsResponseOK(result))
+		{
+			/* no error, we are good to go */
+			success = true;
+			break;
+		}
+
+		char *errorcode = PQresultErrorField(result, PG_DIAG_SQLSTATE);
+		if (errorcode != NULL && strcmp(errorcode, STR_ERRCODE_OBJECT_IN_USE) == 0 &&
+			maxSecondsToTryDropping > 0)
+		{
+			/* retry dropping the replication slot after sleeping for one sec */
+			maxSecondsToTryDropping--;
+			pg_usleep(1000);
+		}
+		else
+		{
+			/*
+			 * we have made enough number of retries (currently 20), but didn't work
+			 */
+			break;
+		}
+
+		PQclear(result);
+		ForgetResults(connection);
+	}
+
+	PQclear(result);
+	ForgetResults(connection);
+
+	return success;
+}
+
+
+/*
+ * TryDropUserOutsideTransaction drops the user with the given name if it exists.
+ */
+static bool
+TryDropUserOutsideTransaction(char *username,
+							  char *nodeName, int nodePort)
+{
+	int connectionFlags = OUTSIDE_TRANSACTION;
+	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,
+																nodeName, nodePort,
+																CitusExtensionOwnerName(),
+																NULL);
+
+	/*
+	 * The DROP USER command should not propagate, so we temporarily disable
+	 * DDL propagation.
+	 */
+	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
+		connection,
+		list_make2(
+			"SET LOCAL citus.enable_ddl_propagation TO OFF;",
+			psprintf("DROP USER IF EXISTS %s;",
+					 quote_identifier(username))));
 
 	return success;
 }

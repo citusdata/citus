@@ -66,11 +66,6 @@
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
 
-#define STR_ERRCODE_UNDEFINED_OBJECT "42704"
-#define STR_ERRCODE_OBJECT_IN_USE "55006"
-
-
-#define REPLICATION_SLOT_CATALOG_TABLE_NAME "pg_replication_slots"
 #define CURRENT_LOG_POSITION_COMMAND "SELECT pg_current_wal_lsn()"
 
 /* decimal representation of Adler-16 hash value of citus_shard_move_publication */
@@ -411,6 +406,12 @@ CompleteNonBlockingShardTransfer(List *shardList,
 		 */
 		CreateUncheckedForeignKeyConstraints(logicalRepTargetList);
 	}
+
+	UpdatePlacementUpdateStatusForShardIntervalList(
+		shardList,
+		sourceConnection->hostname,
+		sourceConnection->port,
+		PLACEMENT_UPDATE_STATUS_COMPLETING);
 }
 
 
@@ -1342,11 +1343,10 @@ CreatePublications(MultiConnection *connection,
 
 		WorkerNode *worker = FindWorkerNode(connection->hostname,
 											connection->port);
-		CleanupPolicy policy = CLEANUP_ALWAYS;
 		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_PUBLICATION,
 											entry->name,
 											worker->groupId,
-											policy);
+											CLEANUP_ALWAYS);
 
 		ExecuteCriticalRemoteCommand(connection, createPublicationCommand->data);
 		pfree(createPublicationCommand->data);
@@ -1441,11 +1441,10 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 
 		WorkerNode *worker = FindWorkerNode(sourceConnection->hostname,
 											sourceConnection->port);
-		CleanupPolicy policy = CLEANUP_ALWAYS;
 		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_REPLICATION_SLOT,
 											replicationSlot->name,
 											worker->groupId,
-											policy);
+											CLEANUP_ALWAYS);
 
 		if (!firstReplicationSlot)
 		{
@@ -1494,7 +1493,6 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 
 		WorkerNode *worker = FindWorkerNode(target->superuserConnection->hostname,
 											target->superuserConnection->port);
-		CleanupPolicy policy = CLEANUP_ALWAYS;
 
 		/*
 		 * The CREATE USER command should not propagate, so we temporarily
@@ -1517,7 +1515,7 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_USER,
 											target->subscriptionOwnerName,
 											worker->groupId,
-											policy);
+											CLEANUP_ALWAYS);
 
 		StringInfo conninfo = makeStringInfo();
 		appendStringInfo(conninfo, "host='%s' port=%d user='%s' dbname='%s' "
@@ -1562,7 +1560,7 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SUBSCRIPTION,
 											target->subscriptionName,
 											worker->groupId,
-											policy);
+											CLEANUP_ALWAYS);
 
 		ExecuteCriticalRemoteCommand(target->superuserConnection, psprintf(
 										 "ALTER SUBSCRIPTION %s OWNER TO %s",

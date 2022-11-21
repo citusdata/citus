@@ -771,12 +771,11 @@ CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 									   workerPlacementNode->workerPort)));
 			}
 
-			CleanupPolicy policy = CLEANUP_ON_FAILURE;
 			InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
 												ConstructQualifiedShardName(
 													shardInterval),
 												workerPlacementNode->groupId,
-												policy);
+												CLEANUP_ON_FAILURE);
 
 			/* Create new split child shard on the specified placement list */
 			CreateObjectOnPlacement(splitShardCreationCommandList,
@@ -1407,11 +1406,10 @@ InsertDeferredDropCleanupRecordsForShards(List *shardIntervalList)
 			 * We also log cleanup record in the current transaction. If the current transaction rolls back,
 			 * we do not generate a record at all.
 			 */
-			CleanupPolicy policy = CLEANUP_DEFERRED_ON_SUCCESS;
 			InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
 													qualifiedShardName,
 													placement->groupId,
-													policy);
+													CLEANUP_DEFERRED_ON_SUCCESS);
 		}
 	}
 }
@@ -1812,12 +1810,11 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			/* Log shard in pg_dist_cleanup. Given dummy shards are transient resources,
 			 * we want to cleanup irrespective of operation success or failure.
 			 */
-			CleanupPolicy policy = CLEANUP_ALWAYS;
 			InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
 												ConstructQualifiedShardName(
 													shardInterval),
 												workerPlacementNode->groupId,
-												policy);
+												CLEANUP_ALWAYS);
 
 			/* Create dummy source shard on the specified placement list */
 			CreateObjectOnPlacement(splitShardCreationCommandList,
@@ -1875,12 +1872,11 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			/* Log shard in pg_dist_cleanup. Given dummy shards are transient resources,
 			 * we want to cleanup irrespective of operation success or failure.
 			 */
-			CleanupPolicy policy = CLEANUP_ALWAYS;
 			InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
 												ConstructQualifiedShardName(
 													shardInterval),
 												sourceWorkerNode->groupId,
-												policy);
+												CLEANUP_ALWAYS);
 
 			/* Create dummy split child shard on source worker node */
 			CreateObjectOnPlacement(splitShardCreationCommandList, sourceWorkerNode);

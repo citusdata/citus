@@ -1219,7 +1219,7 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
 	/*
 	 * Drop temporary objects that were marked as CLEANUP_ALWAYS.
 	 */
-	FinalizeOperationNeedingCleanupOnSuccess("citus_copy_shard_placement");
+	FinalizeOperationNeedingCleanupOnSuccess("citus_[move/copy]_shard_placement");
 }
 
 
