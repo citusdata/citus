@@ -44,10 +44,15 @@
 
 #define SAVE_AND_PERSIST(c) \
 	do { \
+		Oid savedUserId = InvalidOid; \
+		int savedSecurityContext = 0; \
 		LogicalClockShmem->clusterClockValue = *(c); \
+		GetUserIdAndSecContext(&savedUserId, &savedSecurityContext); \
+		SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE); \
 		DirectFunctionCall2(setval_oid, \
 							ObjectIdGetDatum(DistClockLogicalSequenceId()), \
 							Int64GetDatum((c)->logical)); \
+		SetUserIdAndSecContext(savedUserId, savedSecurityContext); \
 	} while (0)
 
 PG_FUNCTION_INFO_V1(citus_get_node_clock);
@@ -61,7 +66,7 @@ PG_FUNCTION_INFO_V1(citus_get_transaction_clock);
 typedef enum ClockState
 {
 	CLOCKSTATE_INITIALIZED,
-	CLOCKSTATE_UNINITIALIZED,
+	CLOCKSTATE_UNINITIALIZED
 } ClockState;
 
 /*
@@ -504,8 +509,16 @@ InitClockAtFirstUse(void)
 	 * a higher rate than once every 32 seconds.
 	 *
 	 */
+	Oid saveUserId = InvalidOid;
+	int savedSecurityCtx = 0;
+
+	GetUserIdAndSecContext(&saveUserId, &savedSecurityCtx);
+	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+
 	persistedMaxClock.logical =
 		DirectFunctionCall1(nextval_oid, ObjectIdGetDatum(DistClockLogicalSequenceId()));
+
+	SetUserIdAndSecContext(saveUserId, savedSecurityCtx);
 
 	/*
 	 * Sequence 1 indicates no prior clock timestamps on this server, retain
