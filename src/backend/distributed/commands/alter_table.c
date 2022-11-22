@@ -585,7 +585,6 @@ ConvertTable(TableConversionState *con)
 															  includeIndexes,
 															  includeReplicaIdentity);
 	List *justBeforeDropCommands = NIL;
-	List *attachPartitionCommands = NIL;
 
 	postLoadCommands =
 		list_concat(postLoadCommands,
@@ -626,8 +625,10 @@ ConvertTable(TableConversionState *con)
 		justBeforeDropCommands = lappend(justBeforeDropCommands, detachFromParentCommand);
 	}
 
+	bool isPartitionedTable = false;
 	if (PartitionedTable(con->relationId))
 	{
+		isPartitionedTable = true;
 		if (!con->suppressNoticeMessages)
 		{
 			ereport(NOTICE, (errmsg("converting the partitions of %s",
@@ -644,8 +645,6 @@ ConvertTable(TableConversionState *con)
 				partitionRelationId);
 			char *detachPartitionCommand = GenerateDetachPartitionCommand(
 				partitionRelationId);
-			char *attachPartitionCommand = GenerateAlterTableAttachPartitionCommand(
-				partitionRelationId);
 
 			/*
 			 * We first detach the partitions to be able to convert them separately.
@@ -653,8 +652,6 @@ ConvertTable(TableConversionState *con)
 			 * the checks.
 			 */
 			ExecuteQueryViaSPI(detachPartitionCommand, SPI_OK_UTILITY);
-			attachPartitionCommands = lappend(attachPartitionCommands,
-											  attachPartitionCommand);
 
 			CascadeToColocatedOption cascadeOption = CASCADE_TO_COLOCATED_NO;
 			if (con->cascadeToColocated == CASCADE_TO_COLOCATED_YES ||
@@ -792,14 +789,21 @@ ConvertTable(TableConversionState *con)
 		ExecuteQueryViaSPI(tableConstructionSQL, SPI_OK_UTILITY);
 	}
 
-	char *attachPartitionCommand = NULL;
-	foreach_ptr(attachPartitionCommand, attachPartitionCommands)
+	if (isPartitionedTable)
 	{
-		Node *parseTree = ParseTreeNode(attachPartitionCommand);
+		List *partitionList = PartitionList(con->relationId);
 
-		ProcessUtilityParseTree(parseTree, attachPartitionCommand,
-								PROCESS_UTILITY_QUERY,
-								NULL, None_Receiver, NULL);
+		Oid partitionRelationId = InvalidOid;
+		foreach_oid(partitionRelationId, partitionList)
+		{
+			char *attachPartitionCommand =
+				GenerateAlterTableAttachPartitionCommand(partitionRelationId);
+			Node *parseTree = ParseTreeNode(attachPartitionCommand);
+
+			ProcessUtilityParseTree(parseTree, attachPartitionCommand,
+									PROCESS_UTILITY_QUERY,
+									NULL, None_Receiver, NULL);
+		}
 	}
 
 	if (isPartitionTable)
