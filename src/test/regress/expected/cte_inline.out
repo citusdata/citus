@@ -1357,22 +1357,15 @@ DEBUG:  Router planner cannot handle multi-shard select queries
  { "8" : "test18", "8" : "test28", "8" : "test38", "8" : "test48", "8" : "test58", "8" : "test68", "8" : "test78", "8" : "test8", "8" : "test88", "8" : "test98" }
 (1 row)
 
--- this test can only work if the CTE is recursively
--- planned
 WITH b AS (SELECT * FROM test_table)
 SELECT count(*) FROM (SELECT key as x FROM test_table OFFSET 0) as ref LEFT JOIN b ON (ref.x = b.key);
 DEBUG:  CTE b is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for subquery SELECT key AS x FROM cte_inline.test_table OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.x FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) ref LEFT JOIN (SELECT test_table.key, test_table.value, test_table.other_value FROM cte_inline.test_table) b ON ((ref.x OPERATOR(pg_catalog.=) b.key)))
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_1 for CTE b: SELECT key, value, other_value FROM cte_inline.test_table
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_2 for subquery SELECT key AS x FROM cte_inline.test_table OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.x FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) ref LEFT JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) b ON ((ref.x OPERATOR(pg_catalog.=) b.key)))
+DEBUG:  generating subplan XXX_2 for subquery SELECT key, value, other_value FROM cte_inline.test_table
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.x FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) ref LEFT JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) b ON ((ref.x OPERATOR(pg_catalog.=) b.key)))
 DEBUG:  Creating router plan
  count
 ---------------------------------------------------------------------
@@ -1397,8 +1390,6 @@ DEBUG:  Router planner cannot handle multi-shard select queries
    480
 (1 row)
 
--- cte a has to be recursively planned because of OFFSET 0
--- after that, cte b also requires recursive planning
 WITH a AS (SELECT * FROM test_table OFFSET 0),
 b AS (SELECT * FROM test_table)
 SELECT min(a.key) FROM  a LEFT JOIN b ON (a.value = b.value);
@@ -1407,13 +1398,8 @@ DEBUG:  CTE b is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, other_value FROM cte_inline.test_table OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT min(a.key) AS min FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) a LEFT JOIN (SELECT test_table.key, test_table.value, test_table.other_value FROM cte_inline.test_table) b ON ((a.value OPERATOR(pg_catalog.=) b.value)))
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_1 for CTE a: SELECT key, value, other_value FROM cte_inline.test_table OFFSET 0
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_2 for CTE b: SELECT key, value, other_value FROM cte_inline.test_table
-DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_2 for subquery SELECT key, value, other_value FROM cte_inline.test_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT min(a.key) AS min FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) a LEFT JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) b ON ((a.value OPERATOR(pg_catalog.=) b.value)))
 DEBUG:  Creating router plan
  min
@@ -1450,14 +1436,9 @@ DEBUG:  CTE cte_2 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM cte_inline.test_table WHERE (key OPERATOR(pg_catalog.>) 3)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT value FROM ((SELECT test_table.value FROM cte_inline.test_table WHERE (test_table.key OPERATOR(pg_catalog.>) 1)) cte_1 FULL JOIN (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value text)) cte_2 USING (value)) ORDER BY value DESC LIMIT 3
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT value FROM cte_inline.test_table WHERE (key OPERATOR(pg_catalog.>) 1)
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT value FROM cte_inline.test_table WHERE (key OPERATOR(pg_catalog.>) 3)
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT value FROM ((SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value text)) cte_1 FULL JOIN (SELECT intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(value text)) cte_2 USING (value)) ORDER BY value DESC LIMIT 3
+DEBUG:  generating subplan XXX_2 for subquery SELECT value FROM cte_inline.test_table WHERE (key OPERATOR(pg_catalog.>) 1)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT value FROM ((SELECT intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(value text)) cte_1 FULL JOIN (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value text)) cte_2 USING (value)) ORDER BY value DESC LIMIT 3
 DEBUG:  Creating router plan
  value
 ---------------------------------------------------------------------
