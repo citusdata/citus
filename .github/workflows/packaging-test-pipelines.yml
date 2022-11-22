@@ -7,8 +7,30 @@ on:
   workflow_dispatch:
 
 jobs:
+
+  get_postgres_versions_from_file:
+    runs-on: ubuntu-latest
+    outputs:
+      pg_versions: ${{ steps.get-postgres-versions.outputs.pg_versions }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+      - name: Get Postgres Versions
+        id: get-postgres-versions
+        run: |
+          # Postgres versions are stored in .circleci/config.yml file in "build-[pg-version] format. Below command
+          # extracts the versions and get the unique values.
+          pg_versions=`grep -Eo 'build-[[:digit:]]{2}' .circleci/config.yml|sed -e "s/^build-//"|sort|uniq|tr '\n' ','| head -c -1`
+          pg_versions_array="[ ${pg_versions} ]"
+          echo "Supported PG Versions: ${pg_versions_array}"
+          # Below line is needed to set the output variable to be used in the next job
+          echo "pg_versions=${pg_versions_array}" >> $GITHUB_OUTPUT
+
   build_tests_in_packaging_images:
     name: tests_build_in_packaging_images
+    needs: get_postgres_versions_from_file
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -25,10 +47,7 @@ jobs:
           - citus/packaging:centos-7-pg
           - citus/packaging:centos-8-pg
           - citus/packaging:almalinux-9-pg
-        POSTGRES_VERSION:
-          - 13
-          - 14
-          - 15
+        POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
         include:
           - packaging_docker_image: citus/packaging:ubuntu-jammy-all
           - packaging_docker_image: citus/packaging:debian-bookworm-all
