@@ -344,16 +344,45 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 				/*
 				 * Here we set autoConverted to false, since the user explicitly
 				 * wants these tables to be added to metadata, by setting the
-				 * GUC use_citus_managed_tables to true.
-				 *
-				 * We always create it with the invalid co-location ID (on
-				 * coordinator). We could consider changing this in the future
-				 * and create it in the local node.
+				 * GUC use_citus_managed_tables or enable_schema_based_sharding to
+				 * true.
 				 */
 				bool autoConverted = false;
-				bool cascade = true;
-				CreateCitusLocalTable(relationId, cascade, autoConverted,
-									  INVALID_COLOCATION_ID);
+
+				if (EnableSchemaBasedSharding)
+				{
+					bool cascadeViaForeignKeys = false;
+
+					/* use "none" if there is no other table in the schema */
+					char *colocateWith = "none";
+
+					Oid schemaId = get_rel_namespace(relationId);
+					Oid colocateWithRelationId = FindCitusManagedTableInSchema(schemaId);
+					if (OidIsValid(colocateWithRelationId))
+					{
+						/* construct a colocate_with for the existing relation */
+						colocateWith =
+							generate_qualified_relation_name(colocateWithRelationId);
+					}
+
+					CitusAddLocalTableToMetadata(relationId, cascadeViaForeignKeys,
+												 colocateWith);
+				}
+				else
+				{
+					Assert(AddAllLocalTablesToMetadata);
+
+					bool cascade = true;
+
+					/*
+					 * In the regular use_citus_managed_tables case, we always
+					 * create tables with the invalid co-location ID (on
+					 * coordinator). We could consider changing this in the future
+					 * and create it in the local node.
+					 */
+					CreateCitusLocalTable(relationId, cascade, autoConverted,
+										  INVALID_COLOCATION_ID);
+				}
 			}
 		}
 
@@ -1096,6 +1125,14 @@ ShouldAddNewTableToMetadata(Node *parsetree)
 		 * We have verified that the GUC is set to true, and we are not upgrading,
 		 * and we are on the coordinator that is added as worker node.
 		 * So return true here, to add this newly created table to metadata.
+		 */
+		return true;
+	}
+
+	if (EnableSchemaBasedSharding && !IsBinaryUpgrade && IsCoordinator())
+	{
+		/*
+		 * Table is added to a co-location group specific to the schema.
 		 */
 		return true;
 	}

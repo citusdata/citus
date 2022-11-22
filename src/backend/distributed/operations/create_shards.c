@@ -79,7 +79,8 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
  */
 void
 CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
-								 int32 replicationFactor, bool useExclusiveConnections)
+								 int32 replicationFactor, bool useExclusiveConnections,
+								 bool useRoundRobinStart)
 {
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 	bool colocatedShard = false;
@@ -167,8 +168,6 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 
 	for (int64 shardIndex = 0; shardIndex < shardCount; shardIndex++)
 	{
-		uint32 roundRobinNodeIndex = shardIndex % workerNodeCount;
-
 		/* initialize the hash token space for this shard */
 		int32 shardMinHashToken = PG_INT32_MIN + (shardIndex * hashTokenIncrement);
 		int32 shardMaxHashToken = shardMinHashToken + (hashTokenIncrement - 1);
@@ -186,6 +185,9 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 
 		InsertShardRow(distributedTableId, shardId, shardStorageType,
 					   minHashTokenText, maxHashTokenText);
+
+		uint64 nodeOffset = useRoundRobinStart ? shardId : shardIndex;
+		uint32 roundRobinNodeIndex = (uint32) (nodeOffset % workerNodeCount);
 
 		List *currentInsertedShardPlacements = InsertShardPlacementRows(
 			distributedTableId,

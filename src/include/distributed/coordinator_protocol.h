@@ -244,7 +244,8 @@ extern List * InsertShardPlacementRows(Oid relationId, int64 shardId,
 extern uint64 UpdateShardStatistics(int64 shardId);
 extern void CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 											 int32 replicationFactor,
-											 bool useExclusiveConnections);
+											 bool useExclusiveConnections,
+											 bool useRoundRobinStart);
 extern void CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId,
 								  bool useExclusiveConnections);
 extern void CreateReferenceTableShard(Oid distributedTableId);

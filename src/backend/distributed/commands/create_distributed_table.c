@@ -1487,12 +1487,19 @@ CreateHashDistributedTableShards(Oid relationId, int shardCount,
 	else
 	{
 		/*
+		 * We currently always place the first shard on the first node. We should
+		 * consider changing this in the future.
+		 */
+		bool useRoundRobinStart = false;
+
+		/*
 		 * This path is only reached by create_distributed_table for the distributed
 		 * tables which will not be part of an existing colocation group. Therefore,
 		 * we can directly use ShardReplicationFactor global variable here.
 		 */
 		CreateShardsWithRoundRobinPolicy(relationId, shardCount, ShardReplicationFactor,
-										 useExclusiveConnection);
+										 useExclusiveConnection,
+										 useRoundRobinStart);
 	}
 }
 
@@ -1529,11 +1536,14 @@ CreateCitusManagedTableShard(Oid relationId, Oid colocatedTableId)
 		/* Citus managed tables can currently only have 1 replica */
 		int replicationFactor = 1;
 
+		/* distribute the shards across the cluster */
+		bool useRoundRobinStart = true;
+
 		CreateShardsWithRoundRobinPolicy(relationId, shardCount, replicationFactor,
-										 useExclusiveConnection);
+										 useExclusiveConnection,
+										 useRoundRobinStart);
 	}
 }
-
 
 
 /*

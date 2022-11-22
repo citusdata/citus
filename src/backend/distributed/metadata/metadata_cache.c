@@ -4857,7 +4857,7 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 		Oid replicationModel = DatumGetChar(replicationModelDatum);
 		uint32 colocationId = DatumGetUInt32(colocationIdDatum);
 
-		if (IsCitusTableTypeInternal(partitionMethod, replicationModel, 
+		if (IsCitusTableTypeInternal(partitionMethod, replicationModel,
 									 colocationId, citusTableType))
 		{
 			Datum relationIdDatum = datumArray[Anum_pg_dist_partition_logicalrelid - 1];

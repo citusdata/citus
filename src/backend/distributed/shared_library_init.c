@@ -1290,6 +1290,18 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_schema_based_sharding",
+		gettext_noop("Automatically create a shard group per schema"),
+		gettext_noop("When enabled, every table created in a schema "
+					 "automatically becomes a Citus-managed table that is added "
+					 "to the shard group for that schema."),
+		&EnableSchemaBasedSharding,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_single_hash_repartition_joins",
 		gettext_noop("Enables single hash repartitioning between hash "
 					 "distributed tables"),

@@ -22,7 +22,11 @@
 #include "utils/acl.h"
 
 
+/* citus.use_citus_managed_tables */
 extern bool AddAllLocalTablesToMetadata;
+
+/* citus.enable_schema_based_sharding */
+extern bool EnableSchemaBasedSharding;
 
 /* controlled via GUC, should be accessed via EnableLocalReferenceForeignKeys() */
 extern bool EnableLocalReferenceForeignKeys;
@@ -742,9 +746,12 @@ extern void ExecuteForeignKeyCreateCommandList(List *ddlCommandList,
 											   bool skip_validation);
 
 /* create_citus_local_table.c */
+extern void CitusAddLocalTableToMetadata(Oid relationId, bool cascadeViaForeignKeys,
+										 char *colocateWith);
 extern void CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys,
 								  bool autoConverted, uint32 colocationId);
 extern List * GetExplicitIndexOidList(Oid relationId);
+extern Oid FindCitusManagedTableInSchema(Oid schemaId);
 
 extern bool ShouldPropagateSetCommand(VariableSetStmt *setStmt);
 extern void PostprocessVariableSetStmt(VariableSetStmt *setStmt, const char *setCommand);

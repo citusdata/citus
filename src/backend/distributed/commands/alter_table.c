@@ -1281,6 +1281,7 @@ CreateCitusTableLike(TableConversionState *con)
 		CitusTableCacheEntry *entry = GetCitusTableCacheEntry(con->relationId);
 		bool autoConverted = entry->autoConverted;
 		bool cascade = false;
+
 		/* keep existing co-location group */
 		uint32 colocationId = entry->colocationId;
 		CreateCitusLocalTable(con->newRelationId, cascade, autoConverted,

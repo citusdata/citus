@@ -53,10 +53,18 @@
  * This is used after every CREATE TABLE statement in utility_hook.c
  * If this variable is set to true, we add all created tables to metadata.
  */
-bool AddAllLocalTablesToMetadata = true;
+bool AddAllLocalTablesToMetadata = false;
 
-static void CitusAddLocalTableToMetadata(Oid relationId, bool cascadeViaForeignKeys,
-										 char *colocateWith);
+/*
+ * EnableSchemaBasedSharding is the global variable for
+ * citus.enable_schema_based_sharding.
+ *
+ * When enabled, each table created will be added to a co-location group
+ * that is specific to its schema.
+ */
+bool EnableSchemaBasedSharding = false;
+
+
 static void ErrorIfAddingPartitionTableToMetadata(Oid relationId);
 static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
@@ -126,7 +134,7 @@ citus_add_local_table_to_metadata(PG_FUNCTION_ARGS)
  * CitusAddLocalTableToMetadata is the internal method for
  * citus_add_local_table_to_metadata udf.
  */
-static void
+void
 CitusAddLocalTableToMetadata(Oid relationId, bool cascadeViaForeignKeys,
 							 char *colocateWith)
 {
@@ -1378,4 +1386,27 @@ FinalizeCitusLocalTableCreation(Oid relationId)
 	{
 		InvalidateForeignKeyGraph();
 	}
+}
+
+
+/*
+ * FindCitusManagedTableInSchema returns the first Citus-managed table in the
+ * schema (first as in lowest OID).
+ */
+Oid
+FindCitusManagedTableInSchema(Oid schemaId)
+{
+	List *citusMangedTableIdList = CitusTableTypeIdList(CITUS_MANAGED_TABLE);
+	citusMangedTableIdList = SortList(citusMangedTableIdList, CompareOids);
+
+	Oid citusManagedTableId = InvalidOid;
+	foreach_oid(citusManagedTableId, citusMangedTableIdList)
+	{
+		if (get_rel_namespace(citusManagedTableId) == schemaId)
+		{
+			return citusManagedTableId;
+		}
+	}
+
+	return InvalidOid;
 }

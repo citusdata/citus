@@ -394,7 +394,7 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 				ColumnToColumnName(parentRelationId, (Node *) parentDistributionColumn);
 		}
 
-		char parentDistributionMethod = PartitionMethod(parentRelationId);;
+		char parentDistributionMethod = PartitionMethod(parentRelationId);
 		char parentReplicationModel = TableReplicationModel(parentRelationId);
 		char *parentRelationName = generate_qualified_relation_name(parentRelationId);
 
