@@ -715,8 +715,6 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 -- recursive planning should kick in for outer joins as well
--- but this time recursive planning might convert the query
--- into a not supported join
 SELECT true AS valid FROM explain_json_2($$
 
     SELECT
@@ -729,8 +727,13 @@ SELECT true AS valid FROM explain_json_2($$
 $$);
 DEBUG:  function does not have co-located tables
 DEBUG:  generating subplan XXX_1 for subquery SELECT value_2, random() AS random FROM public.users_table
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT users_table.value_2, random() AS random FROM public.users_table) u1 RIGHT JOIN (SELECT intermediate_result.value_2, intermediate_result.random FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer, random double precision)) u2 USING (value_2))
-ERROR:  cannot pushdown the subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT value_2, random() AS random FROM public.users_table
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.value_2, intermediate_result.random FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer, random double precision)) u1 RIGHT JOIN (SELECT intermediate_result.value_2, intermediate_result.random FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer, random double precision)) u2 USING (value_2))
+ valid
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- set operations may produce not very efficient plans
 -- although we could have picked a as our anchor subquery,
 -- we pick foo in this case and recursively plan a

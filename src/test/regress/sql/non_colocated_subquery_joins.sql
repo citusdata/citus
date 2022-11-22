@@ -532,8 +532,6 @@ $$);
 
 
 -- recursive planning should kick in for outer joins as well
--- but this time recursive planning might convert the query
--- into a not supported join
 SELECT true AS valid FROM explain_json_2($$
 
     SELECT

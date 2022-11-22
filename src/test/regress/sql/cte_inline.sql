@@ -566,8 +566,6 @@ EXECUTE retry_planning(4);
 EXECUTE retry_planning(5);
 EXECUTE retry_planning(6);
 
--- this test can only work if the CTE is recursively
--- planned
 WITH b AS (SELECT * FROM test_table)
 SELECT count(*) FROM (SELECT key as x FROM test_table OFFSET 0) as ref LEFT JOIN b ON (ref.x = b.key);
 
@@ -578,8 +576,6 @@ WITH a AS (SELECT * FROM test_table),
 b AS (SELECT * FROM test_table)
 SELECT count(*) FROM a LEFT JOIN b ON (a.value = b.value);
 
--- cte a has to be recursively planned because of OFFSET 0
--- after that, cte b also requires recursive planning
 WITH a AS (SELECT * FROM test_table OFFSET 0),
 b AS (SELECT * FROM test_table)
 SELECT min(a.key) FROM  a LEFT JOIN b ON (a.value = b.value);
