@@ -878,12 +878,14 @@ RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
 	else if (distributedRte->rtekind == RTE_SUBQUERY)
 	{
 		/*
-		 * XXX: Similar to JoinExpr, we don't know how to recursively plan distributed
-		 *      subqueries within join expressions yet.
+		 * We don't try logging the subquery here because RecursivelyPlanSubquery
+		 * will anyway do so if the query doesn't reference the outer query.
 		 */
-		ereport(DEBUG4, (errmsg("recursive planner cannot plan distributed "
-								"subqueries within join expressions yet")));
-		return;
+		ereport(DEBUG1, (errmsg("recursively planning the distributed subquery "
+								"since it is part of a distributed join node "
+								"that is outer joined with a recurring rel")));
+
+		RecursivelyPlanSubquery(distributedRte->subquery, recursivePlanningContext);
 	}
 	else
 	{

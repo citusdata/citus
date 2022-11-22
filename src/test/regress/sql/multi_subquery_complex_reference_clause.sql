@@ -723,7 +723,7 @@ count(*) AS cnt, "generated_group_field"
     cnt DESC, generated_group_field ASC
   LIMIT 10;
 
-  -- RIGHT JOINs used with INNER JOINs should error out since reference table exist in the
+  -- RIGHT JOINs used with INNER JOINs should work even if the reference table exist in the
 -- right side of the RIGHT JOIN.
 SELECT
 count(*) AS cnt, "generated_group_field"
@@ -1097,9 +1097,6 @@ SELECT count(*) FROM
   ON user_buy_test_table.user_id > users_ref_test_table.id) subquery_2
 WHERE subquery_1.user_id != subquery_2.user_id ;
 
--- we could not push this query not due to non colocated
--- subqueries (i.e., they are recursively planned)
--- but due to outer join restrictions
 SELECT
 count(*) AS cnt, "generated_group_field"
  FROM
@@ -1449,7 +1446,7 @@ SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INN
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON (user_buy_test_table.user_id > 19);
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON (foo.id = user_buy_test_table.user_id);
 
--- one example where unsupported outer join is deep inside a subquery
+-- one example where supported outer join is deep inside a subquery
 SELECT *, random() FROM (
 SELECT *,random() FROM user_buy_test_table WHERE user_id > (
 SELECT count(*) FROM (SELECT *,random() FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as bar) as foo LEFT JOIN (SELECT *, random() FROM (SELECT *,random() FROM user_buy_test_table d1 JOIN user_buy_test_table d2 USING (user_id)) as bar_inner ) as bar ON true)) as boo;
