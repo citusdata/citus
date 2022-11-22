@@ -1396,15 +1396,6 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 {
 	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(sourceRelationId);
 	char sourceReplicationModel = sourceTableEntry->replicationModel;
-	Var *sourceDistributionColumn = DistPartitionKeyOrError(sourceRelationId);
-
-	if (!IsCitusTableTypeCacheEntry(sourceTableEntry, HASH_DISTRIBUTED))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot distribute relation"),
-						errdetail("Currently, colocate_with option is only supported "
-								  "for hash distributed tables.")));
-	}
 
 	if (sourceReplicationModel != replicationModel)
 	{
@@ -1417,6 +1408,28 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 								  sourceRelationName, relationName)));
 	}
 
+	if (IsCitusTableTypeCacheEntry(sourceTableEntry, CITUS_MANAGED_TABLE))
+	{
+		if (distributionColumnType != InvalidOid)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot colocate a distributed table "
+								   "with a Citus-managed table")));
+		}
+
+		/* done with checks for Citus-managed tables */
+		return;
+	}
+
+	if (!IsCitusTableTypeCacheEntry(sourceTableEntry, HASH_DISTRIBUTED))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot distribute relation"),
+						errdetail("Currently, colocate_with option is only supported "
+								  "for hash distributed tables.")));
+	}
+
+	Var *sourceDistributionColumn = DistPartitionKeyOrError(sourceRelationId);
 	Oid sourceDistributionColumnType = sourceDistributionColumn->vartype;
 	if (sourceDistributionColumnType != distributionColumnType)
 	{

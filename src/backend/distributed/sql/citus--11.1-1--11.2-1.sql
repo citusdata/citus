@@ -9,3 +9,6 @@ DROP FUNCTION pg_catalog.worker_append_table_to_shard(text, text, text, integer)
 #include "udfs/citus_get_transaction_clock/11.2-1.sql"
 #include "udfs/citus_is_clock_after/11.2-1.sql"
 #include "udfs/citus_internal_adjust_local_clock_to_remote/11.2-1.sql"
+
+DROP FUNCTION pg_catalog.citus_add_local_table_to_metadata(regclass, boolean);
+#include "udfs/create_citus_local_table/11.2-1.sql"

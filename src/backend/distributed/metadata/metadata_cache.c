@@ -311,7 +311,7 @@ static void InvalidateDistTableCache(void);
 static void InvalidateDistObjectCache(void);
 static bool InitializeTableCacheEntry(int64 shardId, bool missingOk);
 static bool IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
-									 CitusTableType tableType);
+									 uint32 colocationId, CitusTableType tableType);
 static bool RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry, bool
 											missingOk);
 
@@ -450,7 +450,9 @@ bool
 IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry, CitusTableType tableType)
 {
 	return IsCitusTableTypeInternal(tableEntry->partitionMethod,
-									tableEntry->replicationModel, tableType);
+									tableEntry->replicationModel,
+									tableEntry->colocationId,
+									tableType);
 }
 
 
@@ -460,7 +462,7 @@ IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry, CitusTableType tabl
  */
 static bool
 IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
-						 CitusTableType tableType)
+						 uint32 colocationId, CitusTableType tableType)
 {
 	switch (tableType)
 	{
@@ -498,10 +500,17 @@ IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
 				   replicationModel == REPLICATION_MODEL_2PC;
 		}
 
-		case CITUS_LOCAL_TABLE:
+		case CITUS_MANAGED_TABLE:
 		{
 			return partitionMethod == DISTRIBUTE_BY_NONE &&
 				   replicationModel != REPLICATION_MODEL_2PC;
+		}
+
+		case CITUS_LOCAL_TABLE:
+		{
+			return partitionMethod == DISTRIBUTE_BY_NONE &&
+				   replicationModel != REPLICATION_MODEL_2PC &&
+				   colocationId == INVALID_COLOCATION_ID;
 		}
 
 		case CITUS_TABLE_WITH_NO_DIST_KEY:
@@ -4842,11 +4851,14 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 
 		Datum partMethodDatum = datumArray[Anum_pg_dist_partition_partmethod - 1];
 		Datum replicationModelDatum = datumArray[Anum_pg_dist_partition_repmodel - 1];
+		Datum colocationIdDatum = datumArray[Anum_pg_dist_partition_colocationid - 1];
 
 		Oid partitionMethod = DatumGetChar(partMethodDatum);
 		Oid replicationModel = DatumGetChar(replicationModelDatum);
+		uint32 colocationId = DatumGetUInt32(colocationIdDatum);
 
-		if (IsCitusTableTypeInternal(partitionMethod, replicationModel, citusTableType))
+		if (IsCitusTableTypeInternal(partitionMethod, replicationModel, 
+									 colocationId, citusTableType))
 		{
 			Datum relationIdDatum = datumArray[Anum_pg_dist_partition_logicalrelid - 1];
 
@@ -5217,7 +5229,7 @@ DeformedDistShardTupleToShardInterval(Datum *datumArray, bool *isNullArray,
 	bool minValueNull = isNullArray[Anum_pg_dist_shard_shardminvalue - 1];
 	bool maxValueNull = isNullArray[Anum_pg_dist_shard_shardmaxvalue - 1];
 
-	if (!minValueNull && !maxValueNull)
+	if (!minValueNull && !maxValueNull && intervalTypeId != InvalidOid)
 	{
 		char *minValueString = TextDatumGetCString(minValueTextDatum);
 		char *maxValueString = TextDatumGetCString(maxValueTextDatum);

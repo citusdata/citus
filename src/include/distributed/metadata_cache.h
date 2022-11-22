@@ -132,6 +132,7 @@ typedef enum
 
 	REFERENCE_TABLE,
 	CITUS_LOCAL_TABLE,
+	CITUS_MANAGED_TABLE,
 
 	/* table without a dist key such as reference table */
 	CITUS_TABLE_WITH_NO_DIST_KEY,

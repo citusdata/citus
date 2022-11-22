@@ -139,12 +139,12 @@ typedef struct RTEListProperties
 	bool hasPostgresLocalTable;
 
 	bool hasReferenceTable;
-	bool hasCitusLocalTable;
+	bool hasCitusManagedTable;
 
 	/* includes hash, append and range partitioned tables */
 	bool hasDistributedTable;
 
-	/* union of hasReferenceTable, hasCitusLocalTable and hasDistributedTable */
+	/* union of hasReferenceTable, hasCitusManagedTable and hasDistributedTable */
 	bool hasCitusTable;
 
 	bool hasMaterializedView;

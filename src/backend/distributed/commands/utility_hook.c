@@ -345,10 +345,15 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 				 * Here we set autoConverted to false, since the user explicitly
 				 * wants these tables to be added to metadata, by setting the
 				 * GUC use_citus_managed_tables to true.
+				 *
+				 * We always create it with the invalid co-location ID (on
+				 * coordinator). We could consider changing this in the future
+				 * and create it in the local node.
 				 */
 				bool autoConverted = false;
 				bool cascade = true;
-				CreateCitusLocalTable(relationId, cascade, autoConverted);
+				CreateCitusLocalTable(relationId, cascade, autoConverted,
+									  INVALID_COLOCATION_ID);
 			}
 		}
 

@@ -145,7 +145,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 						errdetail("We currently don't support creating shards "
 								  "on reference tables")));
 	}
-	else if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	else if (IsCitusTableType(relationId, CITUS_MANAGED_TABLE))
 	{
 		ereport(ERROR, (errmsg("relation \"%s\" is a local table",
 							   relationName),
@@ -518,8 +518,8 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 	relationShard->shardId = shardInterval->shardId;
 	List *relationShardList = list_make1(relationShard);
 
-	if (IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) &&
-		cacheEntry->colocationId != INVALID_COLOCATION_ID)
+	if (IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) ||
+		IsCitusTableTypeCacheEntry(cacheEntry, CITUS_MANAGED_TABLE))
 	{
 		shardIndex = ShardIndex(shardInterval);
 	}
@@ -537,7 +537,8 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 			continue;
 		}
 
-		if (IsCitusTableType(fkeyRelationid, REFERENCE_TABLE))
+		if (IsCitusTableType(fkeyRelationid, REFERENCE_TABLE) ||
+			IsCitusTableType(fkeyRelationid, CITUS_MANAGED_TABLE))
 		{
 			fkeyShardId = GetFirstShardId(fkeyRelationid);
 		}
@@ -552,13 +553,7 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 		}
 		else
 		{
-			/*
-			 * We currently do not support foreign keys from/to local tables or
-			 * non-colocated tables when creating shards. Also note that shard
-			 * creation via shard moves doesn't happen in a transaction block,
-			 * so not relevant here.
-			 */
-			continue;
+			Assert(false);
 		}
 
 		RelationShard *fkeyRelationShard = CitusMakeNode(RelationShard);

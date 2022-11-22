@@ -16,6 +16,7 @@
 
 #include "access/xact.h"
 #include "catalog/pg_constraint.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/commands.h"
 #include "distributed/foreign_key_relationship.h"
@@ -482,7 +483,7 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 				{
 					bool autoConverted = false;
 					CreateCitusLocalTable(relationId, cascadeViaForeignKeys,
-										  autoConverted);
+										  autoConverted, INVALID_COLOCATION_ID);
 				}
 
 				break;
@@ -494,7 +495,7 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 				{
 					bool autoConverted = true;
 					CreateCitusLocalTable(relationId, cascadeViaForeignKeys,
-										  autoConverted);
+										  autoConverted, INVALID_COLOCATION_ID);
 				}
 
 				break;

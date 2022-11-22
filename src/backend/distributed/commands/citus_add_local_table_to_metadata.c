@@ -55,8 +55,8 @@
  */
 bool AddAllLocalTablesToMetadata = true;
 
-static void citus_add_local_table_to_metadata_internal(Oid relationId,
-													   bool cascadeViaForeignKeys);
+static void CitusAddLocalTableToMetadata(Oid relationId, bool cascadeViaForeignKeys,
+										 char *colocateWith);
 static void ErrorIfAddingPartitionTableToMetadata(Oid relationId);
 static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
@@ -93,7 +93,7 @@ static void DropDefaultColumnDefinition(Oid relationId, char *columnName);
 static void TransferSequenceOwnership(Oid ownedSequenceId, Oid targetRelationId,
 									  char *columnName);
 static void InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
-											 bool autoConverted);
+											 bool autoConverted, uint32 colocationId);
 static void FinalizeCitusLocalTableCreation(Oid relationId);
 
 
@@ -112,27 +112,68 @@ citus_add_local_table_to_metadata(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 	bool cascadeViaForeignKeys = PG_GETARG_BOOL(1);
+	text *colocateWithTableNameText = PG_GETARG_TEXT_P(2);
+	char *colocateWithTableName = text_to_cstring(colocateWithTableNameText);
 
-	citus_add_local_table_to_metadata_internal(relationId, cascadeViaForeignKeys);
+	CitusAddLocalTableToMetadata(relationId, cascadeViaForeignKeys,
+								 colocateWithTableName);
 
 	PG_RETURN_VOID();
 }
 
 
 /*
- * citus_add_local_table_to_metadata_internal is the internal method for
+ * CitusAddLocalTableToMetadata is the internal method for
  * citus_add_local_table_to_metadata udf.
  */
 static void
-citus_add_local_table_to_metadata_internal(Oid relationId, bool cascadeViaForeignKeys)
+CitusAddLocalTableToMetadata(Oid relationId, bool cascadeViaForeignKeys,
+							 char *colocateWith)
 {
 	CheckCitusVersion(ERROR);
 
 	/* enable citus_add_local_table_to_metadata on an empty node */
 	InsertCoordinatorIfClusterEmpty();
 
+	uint32 colocationId = INVALID_COLOCATION_ID;
+	if (IsColocateWithNone(colocateWith))
+	{
+		/* single shard placement */
+		int shardCount = 1;
+		int shardReplicationFactor = 1;
+
+		/* no distribution column */
+		Oid distributionColumnType = InvalidOid;
+		Oid distributionColumnCollation = InvalidOid;
+
+		colocationId = CreateColocationGroup(shardCount, shardReplicationFactor,
+											 distributionColumnType,
+											 distributionColumnCollation);
+	}
+	else if (!IsColocateWithDefault(colocateWith))
+	{
+		text *colocateWithText = cstring_to_text(colocateWith);
+		Oid colocatedRelationId = ResolveRelationId(colocateWithText, false);
+		CitusTableCacheEntry *targetTableEntry =
+			GetCitusTableCacheEntry(colocatedRelationId);
+
+		colocationId = targetTableEntry->colocationId;
+	}
+
+	if (colocationId != INVALID_COLOCATION_ID)
+	{
+		int shardCount = 1;
+		char *distributionColumnName = NULL;
+
+		CreateDistributedTable(relationId, distributionColumnName, DISTRIBUTE_BY_NONE,
+							   REPLICATION_MODEL_STREAMING, shardCount, false,
+							   colocateWith);
+		return;
+	}
+
 	bool autoConverted = false;
-	CreateCitusLocalTable(relationId, cascadeViaForeignKeys, autoConverted);
+	CreateCitusLocalTable(relationId, cascadeViaForeignKeys, autoConverted,
+						  colocationId);
 }
 
 
@@ -158,7 +199,7 @@ create_citus_local_table(PG_FUNCTION_ARGS)
 	 * since create_citus_local_table doesn't specify cascadeViaForeignKeys.
 	 */
 	bool cascadeViaForeignKeys = false;
-	citus_add_local_table_to_metadata_internal(relationId, cascadeViaForeignKeys);
+	CitusAddLocalTableToMetadata(relationId, cascadeViaForeignKeys, "default");
 
 	PG_RETURN_VOID();
 }
@@ -188,11 +229,11 @@ remove_local_tables_from_metadata(PG_FUNCTION_ARGS)
  *  - its distribution method will be DISTRIBUTE_BY_NONE,
  *  - its replication model will be REPLICATION_MODEL_STREAMING,
  *  - its replication factor will be set to 1.
- * Similar to reference tables, it has only 1 placement. In addition to that, that
- * single placement is only allowed to be on the coordinator.
+ * Similar to reference tables, it has only 1 placement.
  */
 void
-CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConverted)
+CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConverted,
+					  uint32 colocationId)
 {
 	/*
 	 * These checks should be done before acquiring any locks on relation.
@@ -372,7 +413,8 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	DropNextValExprsAndMoveOwnedSeqOwnerships(shardRelationId,
 											  shellRelationId);
 
-	InsertMetadataForCitusLocalTable(shellRelationId, shardId, autoConverted);
+	InsertMetadataForCitusLocalTable(shellRelationId, shardId, autoConverted,
+									 colocationId);
 
 	FinalizeCitusLocalTableCreation(shellRelationId);
 }
@@ -435,7 +477,7 @@ CreateCitusLocalTablePartitionOf(CreateStmt *createStatement, Oid relationId,
 
 	bool cascade = false;
 	bool autoConverted = entry->autoConverted;
-	CreateCitusLocalTable(relationId, cascade, autoConverted);
+	CreateCitusLocalTable(relationId, cascade, autoConverted, entry->colocationId);
 	ExecuteAndLogUtilityCommand(attachCommand);
 }
 
@@ -1274,7 +1316,7 @@ TransferSequenceOwnership(Oid sequenceId, Oid targetRelationId, char *targetColu
  */
 static void
 InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
-								 bool autoConverted)
+								 bool autoConverted, uint32 colocationId)
 {
 	Assert(OidIsValid(citusLocalTableId));
 	Assert(shardId != INVALID_SHARD_ID);
@@ -1282,7 +1324,6 @@ InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
 	char distributionMethod = DISTRIBUTE_BY_NONE;
 	char replicationModel = REPLICATION_MODEL_STREAMING;
 
-	uint32 colocationId = INVALID_COLOCATION_ID;
 	Var *distributionColumn = NULL;
 	InsertIntoPgDistPartition(citusLocalTableId, distributionMethod,
 							  distributionColumn, colocationId,

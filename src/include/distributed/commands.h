@@ -743,7 +743,7 @@ extern void ExecuteForeignKeyCreateCommandList(List *ddlCommandList,
 
 /* create_citus_local_table.c */
 extern void CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys,
-								  bool autoConverted);
+								  bool autoConverted, uint32 colocationId);
 extern List * GetExplicitIndexOidList(Oid relationId);
 
 extern bool ShouldPropagateSetCommand(VariableSetStmt *setStmt);

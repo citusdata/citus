@@ -632,7 +632,7 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 
 	RTEListProperties *subqueryRteListProperties = GetRTEListPropertiesForQuery(subquery);
 	if (subqueryRteListProperties->hasDistributedTable &&
-		(subqueryRteListProperties->hasCitusLocalTable ||
+		(subqueryRteListProperties->hasCitusManagedTable ||
 		 subqueryRteListProperties->hasPostgresLocalTable))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -642,7 +642,7 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 	}
 
 	if (subqueryRteListProperties->hasDistributedTable &&
-		IsCitusTableType(targetRelationId, CITUS_LOCAL_TABLE))
+		IsCitusTableType(targetRelationId, CITUS_MANAGED_TABLE))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "distributed INSERT ... SELECT cannot insert into a "
@@ -692,10 +692,10 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 		return error;
 	}
 
-	if (IsCitusTableType(targetRelationId, CITUS_LOCAL_TABLE))
+	if (IsCitusTableType(targetRelationId, CITUS_MANAGED_TABLE))
 	{
 		/*
-		 * If we're inserting into a citus local table, it is ok because we've
+		 * If we're inserting into a citus-managed table, it is ok because we've
 		 * checked the non-existence of distributed tables in the subquery.
 		 */
 	}

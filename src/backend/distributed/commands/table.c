@@ -386,18 +386,24 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 			return;
 		}
 
-		Var *parentDistributionColumn = DistPartitionKeyOrError(parentRelationId);
-		char *distributionColumnName =
-			ColumnToColumnName(parentRelationId, (Node *) parentDistributionColumn);
-		char parentDistributionMethod = DISTRIBUTE_BY_HASH;
+		char *distributionColumnName = NULL;
+		Var *parentDistributionColumn = DistPartitionKey(parentRelationId);
+		if (parentDistributionColumn != NULL)
+		{
+			distributionColumnName =
+				ColumnToColumnName(parentRelationId, (Node *) parentDistributionColumn);
+		}
+
+		char parentDistributionMethod = PartitionMethod(parentRelationId);;
+		char parentReplicationModel = TableReplicationModel(parentRelationId);
 		char *parentRelationName = generate_qualified_relation_name(parentRelationId);
 
 		SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(parentRelationId,
 																  relationId);
 
 		CreateDistributedTable(relationId, distributionColumnName,
-							   parentDistributionMethod, ShardCount, false,
-							   parentRelationName);
+							   parentDistributionMethod, parentReplicationModel,
+							   ShardCount, false, parentRelationName);
 	}
 }
 
@@ -518,7 +524,7 @@ PreprocessAttachPartitionToCitusTable(Oid parentRelationId, Oid partitionRelatio
 			CitusTableCacheEntry *entry = GetCitusTableCacheEntry(parentRelationId);
 			bool autoConverted = entry->autoConverted;
 			CreateCitusLocalTable(partitionRelationId, cascadeViaForeignKeys,
-								  autoConverted);
+								  autoConverted, entry->colocationId);
 		}
 		else if (IsCitusTableType(parentRelationId, DISTRIBUTED_TABLE))
 		{
@@ -596,13 +602,14 @@ DistributePartitionUsingParent(Oid parentCitusRelationId, Oid partitionRelationI
 													  (Node *) distributionColumn);
 
 	char distributionMethod = DISTRIBUTE_BY_HASH;
+	char replicationModel = TableReplicationModel(parentCitusRelationId);
 	char *parentRelationName = generate_qualified_relation_name(parentCitusRelationId);
 
 	SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(
 		parentCitusRelationId, partitionRelationId);
 
 	CreateDistributedTable(partitionRelationId, distributionColumnName,
-						   distributionMethod, ShardCount, false,
+						   distributionMethod, replicationModel, ShardCount, false,
 						   parentRelationName);
 }
 
@@ -1420,7 +1427,8 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 				 *      Citus local tables to have the same autoConverted value.
 				 */
 				bool autoConverted = containsAnyUserConvertedLocalRelation ? false : true;
-				CreateCitusLocalTable(relationId, cascade, autoConverted);
+				CreateCitusLocalTable(relationId, cascade, autoConverted,
+									  INVALID_COLOCATION_ID);
 			}
 		}
 		PG_CATCH();

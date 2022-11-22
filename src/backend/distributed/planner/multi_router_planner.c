@@ -178,7 +178,7 @@ static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 														List *placementList);
 static bool ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList);
 static DeferredErrorMessage * DeferErrorIfUnsupportedLocalTableJoin(List *rangeTableList);
-static bool IsLocallyAccessibleCitusLocalTable(Oid relationId);
+static bool IsLocallyAccessibleCitusManagedTable(Oid relationId);
 
 
 /*
@@ -815,9 +815,9 @@ ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList)
 		{
 			continue;
 		}
-		if (IsCitusTableType(rangeTableEntry->relid, CITUS_LOCAL_TABLE))
+		if (IsCitusTableType(rangeTableEntry->relid, CITUS_MANAGED_TABLE))
 		{
-			if (!IsLocallyAccessibleCitusLocalTable(rangeTableEntry->relid))
+			if (!IsLocallyAccessibleCitusManagedTable(rangeTableEntry->relid))
 			{
 				containsRemoteCitusLocalTable = true;
 			}
@@ -832,13 +832,13 @@ ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList)
 
 
 /*
- * IsLocallyAccessibleCitusLocalTable returns true if the given table
+ * IsLocallyAccessibleCitusManagedTable returns true if the given table
  * is a citus local table that can be accessed using local execution.
  */
 static bool
-IsLocallyAccessibleCitusLocalTable(Oid relationId)
+IsLocallyAccessibleCitusManagedTable(Oid relationId)
 {
-	if (!IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	if (!IsCitusTableType(relationId, CITUS_MANAGED_TABLE))
 	{
 		return false;
 	}
@@ -2918,7 +2918,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 				ereport(ERROR, (errmsg("reference table cannot have %d shards",
 									   shardCount)));
 			}
-			else if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_TABLE))
+			else if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_MANAGED_TABLE))
 			{
 				ereport(ERROR, (errmsg("local table cannot have %d shards",
 									   shardCount)));
@@ -3578,7 +3578,7 @@ DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *query)
 				hasReferenceTable = true;
 				continue;
 			}
-			else if (IsCitusTableType(distributedTableId, CITUS_LOCAL_TABLE))
+			else if (IsCitusTableType(distributedTableId, CITUS_MANAGED_TABLE))
 			{
 				hasPostgresOrCitusLocalTable = true;
 				elog(DEBUG4, "Router planner finds a local table added to metadata");

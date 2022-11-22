@@ -1253,9 +1253,10 @@ CreateDistributedTableLike(TableConversionState *con)
 	}
 
 	char partitionMethod = PartitionMethod(con->relationId);
+	char replicationModel = TableReplicationModel(con->relationId);
 
 	CreateDistributedTable(con->newRelationId, distributionColumnName, partitionMethod,
-						   newShardCount, true, newColocateWith);
+						   replicationModel, newShardCount, true, newColocateWith);
 }
 
 
@@ -1272,15 +1273,18 @@ CreateCitusTableLike(TableConversionState *con)
 	}
 	else if (IsCitusTableType(con->relationId, REFERENCE_TABLE))
 	{
-		CreateDistributedTable(con->newRelationId, NULL, DISTRIBUTE_BY_NONE, 0, false,
-							   NULL);
+		CreateDistributedTable(con->newRelationId, NULL, DISTRIBUTE_BY_NONE,
+							   REPLICATION_MODEL_2PC, 0, false, NULL);
 	}
-	else if (IsCitusTableType(con->relationId, CITUS_LOCAL_TABLE))
+	else if (IsCitusTableType(con->relationId, CITUS_MANAGED_TABLE))
 	{
 		CitusTableCacheEntry *entry = GetCitusTableCacheEntry(con->relationId);
 		bool autoConverted = entry->autoConverted;
 		bool cascade = false;
-		CreateCitusLocalTable(con->newRelationId, cascade, autoConverted);
+		/* keep existing co-location group */
+		uint32 colocationId = entry->colocationId;
+		CreateCitusLocalTable(con->newRelationId, cascade, autoConverted,
+							  colocationId);
 
 		/*
 		 * creating Citus local table adds a shell table on top

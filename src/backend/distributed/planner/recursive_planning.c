@@ -1111,7 +1111,7 @@ IsRelationLocalTableOrMatView(Oid relationId)
 		/* postgres local table or a materialized view */
 		return true;
 	}
-	else if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	else if (IsCitusTableType(relationId, CITUS_MANAGED_TABLE))
 	{
 		return true;
 	}

@@ -329,8 +329,9 @@ extern void UpdateShardPlacementState(uint64 placementId, char shardState);
 extern void UpdatePlacementGroupId(uint64 placementId, int groupId);
 extern void DeleteShardPlacementRow(uint64 placementId);
 extern void CreateDistributedTable(Oid relationId, char *distributionColumnName,
-								   char distributionMethod, int shardCount,
-								   bool shardCountIsStrict, char *colocateWithTableName);
+								   char distributionMethod, char replicationModel,
+								   int shardCount, bool shardCountIsStrict,
+								   char *colocateWithTableName);
 extern void CreateTruncateTrigger(Oid relationId);
 extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
 

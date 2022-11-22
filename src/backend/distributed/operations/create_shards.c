@@ -85,9 +85,6 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	bool colocatedShard = false;
 	List *insertedShardPlacements = NIL;
 
-	/* make sure table is hash partitioned */
-	CheckHashPartitionedTable(distributedTableId);
-
 	/*
 	 * In contrast to append/range partitioned tables it makes more sense to
 	 * require ownership privileges - shards for hash-partitioned tables are
@@ -215,10 +212,6 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 {
 	bool colocatedShard = true;
 	List *insertedShardPlacements = NIL;
-
-	/* make sure that tables are hash partitioned */
-	CheckHashPartitionedTable(targetRelationId);
-	CheckHashPartitionedTable(sourceRelationId);
 
 	/*
 	 * In contrast to append/range partitioned tables it makes more sense to
@@ -352,23 +345,6 @@ CreateReferenceTableShard(Oid distributedTableId)
 
 	CreateShardsOnWorkers(distributedTableId, insertedShardPlacements,
 						  useExclusiveConnection, colocatedShard);
-}
-
-
-/*
- * CheckHashPartitionedTable looks up the partition information for the given
- * tableId and checks if the table is hash partitioned. If not, the function
- * throws an error.
- */
-void
-CheckHashPartitionedTable(Oid distributedTableId)
-{
-	char partitionType = PartitionMethod(distributedTableId);
-	if (partitionType != DISTRIBUTE_BY_HASH)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("unsupported table partition type: %c", partitionType)));
-	}
 }
 
 

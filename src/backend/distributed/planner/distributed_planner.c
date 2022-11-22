@@ -2532,9 +2532,9 @@ GetRTEListProperties(List *rangeTableList)
 		{
 			rteListProperties->hasReferenceTable = true;
 		}
-		else if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_TABLE))
+		else if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_MANAGED_TABLE))
 		{
-			rteListProperties->hasCitusLocalTable = true;
+			rteListProperties->hasCitusManagedTable = true;
 		}
 		else if (IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE))
 		{
@@ -2552,7 +2552,7 @@ GetRTEListProperties(List *rangeTableList)
 
 	rteListProperties->hasCitusTable = (rteListProperties->hasDistributedTable ||
 										rteListProperties->hasReferenceTable ||
-										rteListProperties->hasCitusLocalTable);
+										rteListProperties->hasCitusManagedTable);
 
 	return rteListProperties;
 }

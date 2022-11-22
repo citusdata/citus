@@ -929,7 +929,7 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 	}
 
 	RTEListProperties *queryRteListProperties = GetRTEListPropertiesForQuery(queryTree);
-	if (queryRteListProperties->hasCitusLocalTable ||
+	if (queryRteListProperties->hasCitusManagedTable ||
 		queryRteListProperties->hasPostgresLocalTable)
 	{
 		preconditionsSatisfied = false;

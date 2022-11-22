@@ -102,6 +102,7 @@
 static void CreateDistributedTableConcurrently(Oid relationId,
 											   char *distributionColumnName,
 											   char distributionMethod,
+											   char replicationModel,
 											   char *colocateWithTableName,
 											   int shardCount,
 											   bool shardCountIsStrict);
@@ -112,6 +113,7 @@ static List * WorkerNodesForShardList(List *shardList);
 static List * RoundRobinWorkerNodeList(List *workerNodeList, int listLength);
 static void CreateHashDistributedTableShards(Oid relationId, int shardCount,
 											 Oid colocatedTableId, bool localTableEmpty);
+static void CreateCitusManagedTableShard(Oid relationId, Oid colocatedTableId);
 static uint32 ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 									  char distributionMethod, char replicationModel,
 									  int shardCount, bool shardCountIsStrict,
@@ -156,6 +158,7 @@ static void SendAddLocalTableToMetadataCommandOutsideTransaction(Oid relationId)
 static void EnsureDistributableTable(Oid relationId);
 static void EnsureForeignKeysForDistributedTableConcurrently(Oid relationId);
 static void EnsureColocateWithTableIsValid(Oid relationId, char distributionMethod,
+										   char replicationModel,
 										   char *distributionColumnName,
 										   char *colocateWithTableName);
 static void WarnIfTableHaveNoReplicaIdentity(Oid relationId);
@@ -250,8 +253,12 @@ create_distributed_table(PG_FUNCTION_ARGS)
 							   shardCount, MAX_SHARD_COUNT)));
 	}
 
+	char replicationModel = DecideReplicationModel(distributionMethod,
+												   colocateWithTableName);
+
 	CreateDistributedTable(relationId, distributionColumnName, distributionMethod,
-						   shardCount, shardCountIsStrict, colocateWithTableName);
+						   replicationModel, shardCount, shardCountIsStrict,
+						   colocateWithTableName);
 
 	PG_RETURN_VOID();
 }
@@ -300,8 +307,12 @@ create_distributed_table_concurrently(PG_FUNCTION_ARGS)
 		shardCountIsStrict = true;
 	}
 
+	char replicationModel = DecideReplicationModel(distributionMethod,
+												   colocateWithTableName);
+
 	CreateDistributedTableConcurrently(relationId, distributionColumnName,
 									   distributionMethod,
+									   replicationModel,
 									   colocateWithTableName,
 									   shardCount,
 									   shardCountIsStrict);
@@ -321,6 +332,7 @@ create_distributed_table_concurrently(PG_FUNCTION_ARGS)
 static void
 CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 								   char distributionMethod,
+								   char replicationModel,
 								   char *colocateWithTableName,
 								   int shardCount,
 								   bool shardCountIsStrict)
@@ -374,9 +386,6 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 
 	EnsureForeignKeysForDistributedTableConcurrently(relationId);
 
-	char replicationModel = DecideReplicationModel(distributionMethod,
-												   colocateWithTableName);
-
 	/*
 	 * we fail transaction before local table conversion if the table could not be colocated with
 	 * given table. We should make those checks after local table conversion by acquiring locks to
@@ -386,7 +395,7 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 			colocateWithTableName))
 	{
 		EnsureColocateWithTableIsValid(relationId, distributionMethod,
-									   distributionColumnName,
+									   replicationModel, distributionColumnName,
 									   colocateWithTableName);
 	}
 
@@ -616,12 +625,12 @@ EnsureForeignKeysForDistributedTableConcurrently(Oid relationId)
  * EnsureColocateWithTableIsValid ensures given relation can be colocated with the table of given name.
  */
 static void
-EnsureColocateWithTableIsValid(Oid relationId, char distributionMethod,
-							   char *distributionColumnName, char *colocateWithTableName)
+EnsureColocateWithTableIsValid(Oid relationId,
+							   char distributionMethod,
+							   char replicationModel,
+							   char *distributionColumnName,
+							   char *colocateWithTableName)
 {
-	char replicationModel = DecideReplicationModel(distributionMethod,
-												   colocateWithTableName);
-
 	/*
 	 * we fail transaction before local table conversion if the table could not be colocated with
 	 * given table. We should make those checks after local table conversion by acquiring locks to
@@ -893,7 +902,8 @@ create_reference_table(PG_FUNCTION_ARGS)
 	}
 
 	CreateDistributedTable(relationId, distributionColumnName, DISTRIBUTE_BY_NONE,
-						   ShardCount, false, colocateWithTableName);
+						   REPLICATION_MODEL_2PC, ShardCount, false,
+						   colocateWithTableName);
 	PG_RETURN_VOID();
 }
 
@@ -957,7 +967,7 @@ EnsureRelationExists(Oid relationId)
  */
 void
 CreateDistributedTable(Oid relationId, char *distributionColumnName,
-					   char distributionMethod, int shardCount,
+					   char distributionMethod, char replicationModel, int shardCount,
 					   bool shardCountIsStrict, char *colocateWithTableName)
 {
 	/*
@@ -1019,9 +1029,6 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 
 	PropagatePrerequisiteObjectsForDistributedTable(relationId);
 
-	char replicationModel = DecideReplicationModel(distributionMethod,
-												   colocateWithTableName);
-
 	Var *distributionColumn = BuildDistributionKeyFromColumnName(relationId,
 																 distributionColumnName,
 																 NoLock);
@@ -1082,11 +1089,14 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 	}
 	else if (distributionMethod == DISTRIBUTE_BY_NONE)
 	{
-		/*
-		 * This function does not expect to create Citus local table, so we blindly
-		 * create reference table when the method is DISTRIBUTE_BY_NONE.
-		 */
-		CreateReferenceTableShard(relationId);
+		if (replicationModel == REPLICATION_MODEL_2PC)
+		{
+			CreateReferenceTableShard(relationId);
+		}
+		else
+		{
+			CreateCitusManagedTableShard(relationId, colocatedTableId);
+		}
 	}
 
 	if (ShouldSyncTableMetadata(relationId))
@@ -1116,8 +1126,8 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 		foreach_oid(partitionRelationId, partitionList)
 		{
 			CreateDistributedTable(partitionRelationId, distributionColumnName,
-								   distributionMethod, shardCount, false,
-								   parentRelationName);
+								   distributionMethod, replicationModel, shardCount,
+								   false, parentRelationName);
 		}
 	}
 
@@ -1488,6 +1498,45 @@ CreateHashDistributedTableShards(Oid relationId, int shardCount,
 
 
 /*
+ * CreateCitusManagedTableShard creates a shard for a Citus managed table.
+ */
+static void
+CreateCitusManagedTableShard(Oid relationId, Oid colocatedTableId)
+{
+	/* useExclusiveConnection is only relevant when creating multiple shards */
+	bool useExclusiveConnection = false;
+
+	if (colocatedTableId != InvalidOid)
+	{
+		/*
+		 * We currently allow concurrent distribution of colocated tables (which
+		 * we probably should not be allowing because of foreign keys /
+		 * partitioning etc).
+		 *
+		 * We also prevent concurrent shard moves / copy / splits) while creating
+		 * a colocated table.
+		 */
+		AcquirePlacementColocationLock(colocatedTableId, ShareLock,
+									   "colocate distributed table");
+
+		CreateColocatedShards(relationId, colocatedTableId, useExclusiveConnection);
+	}
+	else
+	{
+		/* Citus managed tables have a single shard */
+		int shardCount = 1;
+
+		/* Citus managed tables can currently only have 1 replica */
+		int replicationFactor = 1;
+
+		CreateShardsWithRoundRobinPolicy(relationId, shardCount, replicationFactor,
+										 useExclusiveConnection);
+	}
+}
+
+
+
+/*
  * ColocationIdForNewTable returns a colocation id for hash-distributed table
  * according to given configuration. If there is no such configuration, it
  * creates one and returns colocation id of newly the created colocation group.
@@ -1519,7 +1568,8 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 
 		return colocationId;
 	}
-	else if (distributionMethod == DISTRIBUTE_BY_NONE)
+	else if (distributionMethod == DISTRIBUTE_BY_NONE &&
+			 replicationModel == REPLICATION_MODEL_2PC)
 	{
 		return CreateReferenceTableColocationId();
 	}
@@ -1530,15 +1580,20 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 		 * can be sure that there will no modifications on the colocation table
 		 * until this transaction is committed.
 		 */
-		Assert(distributionMethod == DISTRIBUTE_BY_HASH);
-
-		Oid distributionColumnType = distributionColumn->vartype;
-		Oid distributionColumnCollation = get_typcollation(distributionColumnType);
 
 		/* get an advisory lock to serialize concurrent default group creations */
 		if (IsColocateWithDefault(colocateWithTableName))
 		{
 			AcquireColocationDefaultLock();
+		}
+
+		Oid distributionColumnType = InvalidOid;
+		Oid distributionColumnCollation = InvalidOid;
+
+		if (distributionColumn != NULL)
+		{
+			distributionColumnType = distributionColumn->vartype;
+			distributionColumnCollation = get_typcollation(distributionColumnType);
 		}
 
 		colocationId = FindColocateWithColocationId(relationId,
@@ -1724,7 +1779,7 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	if (PartitionedTableNoLock(relationId))
 	{
 		/* distributing partitioned tables in only supported for hash-distribution */
-		if (distributionMethod != DISTRIBUTE_BY_HASH)
+		if (replicationModel != REPLICATION_MODEL_STREAMING)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("distributing partitioned tables in only supported "

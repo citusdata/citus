@@ -17,3 +17,11 @@ CREATE FUNCTION pg_catalog.worker_append_table_to_shard(text, text, text, intege
     AS 'MODULE_PATHNAME', $$worker_append_table_to_shard$$;
 COMMENT ON FUNCTION pg_catalog.worker_append_table_to_shard(text, text, text, integer)
     IS 'append a regular table''s contents to the shard';
+
+DROP FUNCTION pg_catalog.citus_add_local_table_to_metadata(regclass, boolean, text);
+CREATE OR REPLACE FUNCTION pg_catalog.citus_add_local_table_to_metadata(table_name regclass, cascade_via_foreign_keys boolean default false)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'MODULE_PATHNAME', $$citus_add_local_table_to_metadata$$;
+COMMENT ON FUNCTION pg_catalog.citus_add_local_table_to_metadata(table_name regclass, cascade_via_foreign_keys boolean)
+    IS 'create a citus local table';
