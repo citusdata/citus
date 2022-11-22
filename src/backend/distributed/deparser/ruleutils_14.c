@@ -482,7 +482,7 @@ get_merged_argument_list(CallStmt *stmt, List **mergedNamedArgList,
 	Oid  functionOid = stmt->funcexpr->funcid;
 	List *namedArgList = NIL;
 	List *finalArgumentList = NIL;
-	Oid  finalArgTypes[FUNC_MAX_ARGS];
+	Oid  *finalArgTypes;
 	Oid  *argTypes = NULL;
 	char *argModes = NULL;
 	char **argNames = NULL;
@@ -519,6 +519,7 @@ get_merged_argument_list(CallStmt *stmt, List **mergedNamedArgList,
 
 	/* Remove the duplicate INOUT counting */
 	numberOfArgs = numberOfArgs - totalInoutArgs;
+	finalArgTypes = palloc0(sizeof(Oid) * numberOfArgs);
 
 	ListCell *inArgCell = list_head(stmt->funcexpr->args);
 	ListCell *outArgCell = list_head(stmt->outargs);
