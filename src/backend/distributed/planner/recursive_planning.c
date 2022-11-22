@@ -824,6 +824,11 @@ IsJoinNodeRecurring(Node *joinNode, Query *query)
 }
 
 
+static void ForceRecursivelyPlanAllRtes(Node *node, Query *query,
+										RecursivePlanningContext *recursivePlanningContext);
+static bool RecursivelyPlanAllRtes(Node *node, Query *q,
+								   RecursivePlanningContext *planningContext);
+
 /*
  * RecursivelyPlanNonRecurringJoinNode is a helper function for
  * RecursivelyPlanRecurringLeftJoins that recursively plans given distributed
@@ -835,20 +840,8 @@ RecursivelyPlanNonRecurringJoinNode(Node *distributedNode, Query *query,
 {
 	if (IsA(distributedNode, JoinExpr))
 	{
-		/*
-		 * XXX: This, for example, means that RecursivelyPlanRecurringLeftJoins
-		 *      needs to plan inner side, i.e., <distributed> INNER JOIN <distributed>,
-		 *      of the following join:
-		 *
-		 *      <recurring> LEFT JOIN (<distributed> INNER JOIN <distributed>)
-		 *
-		 *      However, this would require moving part of the join tree into a
-		 *      subquery but this implies that we need to rebuild the rtable and
-		 *      re-point all the Vars to the new rtable indexes. We have not
-		 *      implemented that yet.
-		 */
-		ereport(DEBUG4, (errmsg("recursive planner cannot plan distributed sub "
-								"join nodes yet")));
+
+		ForceRecursivelyPlanAllRtes(distributedNode, query, recursivePlanningContext);
 		return;
 	}
 
@@ -874,7 +867,6 @@ RecursivelyPlanNonRecurringJoinNode(Node *distributedNode, Query *query,
 	else if (distributedRte->rtekind == RTE_SUBQUERY)
 	{
 		RecursivelyPlanSubquery(distributedRte->subquery, recursivePlanningContext);
-		return;
 	}
 	else
 	{
@@ -885,6 +877,62 @@ RecursivelyPlanNonRecurringJoinNode(Node *distributedNode, Query *query,
 		ereport(ERROR, (errmsg("cannot recursively plan an RTE of type %d",
 							   distributedRte->rtekind)));
 	}
+}
+
+
+static void
+ForceRecursivelyPlanAllRtes(Node *node, Query *query,
+							RecursivePlanningContext *recursivePlanningContext)
+{
+	JoinExpr *joinExpr = (JoinExpr *) node;
+
+	Node *leftNode = joinExpr->larg;
+	Node *rightNode = joinExpr->rarg;
+
+	RecursivelyPlanAllRtes(leftNode, query, recursivePlanningContext);
+	RecursivelyPlanAllRtes(rightNode, query, recursivePlanningContext);
+}
+
+
+static bool
+RecursivelyPlanAllRtes(Node *node, Query *query,
+					   RecursivePlanningContext *planningContext)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Query))
+	{
+		Query *squery = (Query *) node;
+		if (FindNodeMatchingCheckFunctionInRangeTableList(squery->rtable,
+														  IsCitusTableRTE))
+		{
+			RecursivelyPlanSubquery(squery, planningContext);
+		}
+
+		return false;
+	}
+	else if (IsA(node, RangeTblRef))
+	{
+		RangeTblRef *rangeTableRef = (RangeTblRef *) node;
+		RangeTblEntry *distributedRte = rt_fetch(rangeTableRef->rtindex,
+												 query->rtable);
+		if (IsCitusTableRTE((Node *) distributedRte))
+		{
+			PlannerRestrictionContext *restrictionContext =
+				GetPlannerRestrictionContext(planningContext);
+			List *requiredAttributes =
+				RequiredAttrNumbersForRelation(distributedRte, restrictionContext);
+
+			ReplaceRTERelationWithRteSubquery(distributedRte, requiredAttributes,
+											  planningContext);
+			return false;
+		}
+	}
+
+	return expression_tree_walker(node, RecursivelyPlanAllSubqueries, planningContext);
 }
 
 
@@ -1996,7 +2044,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
 		}
 	}
-
 	/*
 	 * If tupleDesc is NULL we have 2 different cases:
 	 *
@@ -2046,7 +2093,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 				columnType = list_nth_oid(rangeTblFunction->funccoltypes,
 										  targetColumnIndex);
 			}
-
 			/* use the types in the function definition otherwise */
 			else
 			{
