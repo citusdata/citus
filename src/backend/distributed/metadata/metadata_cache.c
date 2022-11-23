@@ -5658,3 +5658,47 @@ poolinfo_valid(PG_FUNCTION_ARGS)
 
 	PG_RETURN_BOOL(poolinfoValid);
 }
+
+bool CheckCitusDropStmt(Oid domainoid)
+{
+	bool result = false;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 0;
+	char domainoidStr[16] = {0};
+	sprintf(domainoidStr, "%d", domainoid);
+
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
+													InvalidOid, false,
+													NULL, scanKeyCount, scanKey);
+
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		bool isNullArray[Natts_pg_dist_partition];
+		Datum datumArray[Natts_pg_dist_partition];
+		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
+
+		// Datum relationIdDatum = datumArray[Anum_pg_dist_partition_logicalrelid - 1];
+		Datum partitionKeyDatum = datumArray[Anum_pg_dist_partition_partkey - 1];
+		char *partitionKeyString = TextDatumGetCString(partitionKeyDatum);
+
+		// Oid relationId = DatumGetObjectId(relationIdDatum);
+
+		if (strstr(partitionKeyString, domainoidStr) != NULL)
+		{
+			result = true;
+			break;
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistPartition, AccessShareLock);
+
+	return result;
+}

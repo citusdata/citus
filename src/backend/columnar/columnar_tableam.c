@@ -31,6 +31,7 @@
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/plancat.h"
+#include "parser/parse_type.h"
 #include "pgstat.h"
 #include "safe_lib.h"
 #include "storage/bufmgr.h"
@@ -55,6 +56,7 @@
 #include "columnar/columnar_tableam.h"
 #include "columnar/columnar_version_compat.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
 
 /*
  * Timing parameters for truncate locking heuristics.
@@ -2346,6 +2348,32 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 			AlterTableStmt *alterTableStmt = castNode(AlterTableStmt, parsetree);
 			columnarRangeVar = ColumnarProcessAlterTable(alterTableStmt,
 														 &columnarOptions);
+			break;
+		}
+
+		case T_DropStmt:
+		{
+			DropStmt *dropStmt = castNode(DropStmt, parsetree);
+			if(dropStmt->removeType == OBJECT_DOMAIN)
+			{
+				TypeName   *typename;
+				Oid			domainoid;
+
+				ListCell   *cell1;
+
+				foreach(cell1, dropStmt->objects)
+				{
+					Node	   *object = lfirst(cell1);
+					typename = castNode(TypeName, object);
+					domainoid = typenameTypeId(NULL, typename);
+
+					if(CheckCitusDropStmt(domainoid))
+					{
+						ereport(ERROR,
+							(errmsg("columnar storage parameters specified on non-columnar table")));
+					}
+				}
+			}
 			break;
 		}
 

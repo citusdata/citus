@@ -211,6 +211,7 @@ extern bool RelationExists(Oid relationId);
 extern ShardInterval * TupleToShardInterval(HeapTuple heapTuple,
 											TupleDesc tupleDescriptor, Oid intervalTypeId,
 											int32 intervalTypeMod);
+extern bool CheckCitusDropStmt(Oid domainoid);
 
 /* access WorkerNodeHash */
 extern bool HasAnyNodes(void);
