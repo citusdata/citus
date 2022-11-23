@@ -2354,10 +2354,10 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 		case T_DropStmt:
 		{
 			DropStmt *dropStmt = castNode(DropStmt, parsetree);
-			if(dropStmt->removeType == OBJECT_DOMAIN)
+			if(dropStmt->removeType == OBJECT_DOMAIN || dropStmt->removeType == OBJECT_TYPE)
 			{
 				TypeName   *typename;
-				Oid			domainoid;
+				Oid			objoid;
 
 				ListCell   *cell1;
 
@@ -2365,28 +2365,22 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 				{
 					Node	   *object = lfirst(cell1);
 					typename = castNode(TypeName, object);
-					domainoid = typenameTypeId(NULL, typename);
+					Type		tup;
 
-					if(CheckCitusDropDomainOrTypeStmt(domainoid))
+					tup = LookupTypeName(NULL, typename, NULL, false);
+					if (tup == NULL)
 					{
-						ereport(ERROR,
-							(errmsg("This domain cannot be deleted when it is used in a distribution column.")));
+						continue;
 					}
-				}
-			}
-			else if(dropStmt->removeType == OBJECT_TYPE)
-			{
-				ListCell *objectCell = NULL;
 
-				foreach(objectCell, dropStmt->objects)
-				{
-					TypeName *typeName = castNode(TypeName, lfirst(objectCell));
-					Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
-					
-					if(CheckCitusDropDomainOrTypeStmt(typeOid))
+					objoid = ((Form_pg_type) GETSTRUCT(tup))->oid;
+					ReleaseSysCache(tup);
+
+					if(CheckCitusDropDomainOrTypeStmt(objoid))
 					{
 						ereport(ERROR,
-							(errmsg("This type cannot be deleted when it is used in a distribution column.")));
+							(errmsg("This %s cannot be deleted when it is used in a distribution column.", 
+							dropStmt->removeType == OBJECT_DOMAIN ? "domain" : "type")));
 					}
 				}
 			}
