@@ -1074,6 +1074,8 @@ CreateSplitIntervalsForShard(ShardInterval *sourceShard,
 		splitChildShardInterval->shardIndex = -1;
 		splitChildShardInterval->shardId = GetNextShardIdForSplitChild();
 
+		/* TODO find shardgroup id */
+
 		splitChildShardInterval->minValueExists = true;
 		splitChildShardInterval->minValue = currentSplitChildMinValue;
 		splitChildShardInterval->maxValueExists = true;
@@ -1175,7 +1177,8 @@ InsertSplitChildrenShardMetadata(List *shardGroupSplitIntervalListList,
 				shardInterval->shardId,
 				shardInterval->storageType,
 				IntegerToText(DatumGetInt32(shardInterval->minValue)),
-				IntegerToText(DatumGetInt32(shardInterval->maxValue)));
+				IntegerToText(DatumGetInt32(shardInterval->maxValue)),
+				NULL);
 
 			InsertShardPlacementRow(
 				shardInterval->shardId,

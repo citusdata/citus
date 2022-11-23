@@ -66,6 +66,7 @@ typedef struct ShardInterval
 	Datum minValue;     /* a shard's typed min value datum */
 	Datum maxValue;     /* a shard's typed max value datum */
 	uint64 shardId;
+	uint64 shardGroupId;
 	int shardIndex;
 } ShardInterval;
 
@@ -306,7 +307,8 @@ extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
-						   text *shardMinValue, text *shardMaxValue);
+						   text *shardMinValue, text *shardMaxValue,
+						   uint64 *shardGroupId);
 extern void DeleteShardRow(uint64 shardId);
 extern uint64 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 									  uint64 shardLength, int32 groupId);

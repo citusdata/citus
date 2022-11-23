@@ -52,3 +52,10 @@ WHERE shard.logicalrelid = shardgroup.logicalrelid
 -- shardgroup we would not want the setup to use the new Citus version as it hard relies on the shardgroups being
 -- correctly associated.
 ALTER TABLE pg_catalog.pg_dist_shard ALTER COLUMN shardgroupid SET NOT NULL;
+
+#include "udfs/citus_internal_add_shard_metadata/11.3-1.sql"
+DROP FUNCTION pg_catalog.citus_internal_add_shard_metadata(
+    relation_id regclass, shard_id bigint,
+    storage_type "char", shard_min_value text,
+    shard_max_value text
+);

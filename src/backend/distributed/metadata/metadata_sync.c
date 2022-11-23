@@ -1304,11 +1304,12 @@ ShardListInsertCommand(List *shardIntervalList)
 	StringInfo insertShardCommand = makeStringInfo();
 	appendStringInfo(insertShardCommand,
 					 "WITH shard_data(relationname, shardid, storagetype, "
-					 "shardminvalue, shardmaxvalue)  AS (VALUES ");
+					 "shardminvalue, shardmaxvalue, shardgroup_id)  AS (VALUES ");
 
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
+		uint64 shardGroupId = shardInterval->shardGroupId;
 		Oid distributedRelationId = shardInterval->relationId;
 		char *qualifiedRelationName = generate_qualified_relation_name(
 			distributedRelationId);
@@ -1336,12 +1337,13 @@ ShardListInsertCommand(List *shardIntervalList)
 		}
 
 		appendStringInfo(insertShardCommand,
-						 "(%s::regclass, %ld, '%c'::\"char\", %s, %s)",
+						 "(%s::regclass, %ld, '%c'::\"char\", %s, %s, %ld)",
 						 quote_literal_cstr(qualifiedRelationName),
 						 shardId,
 						 shardInterval->storageType,
 						 minHashToken->data,
-						 maxHashToken->data);
+						 maxHashToken->data,
+						 shardGroupId);
 
 		if (llast(shardIntervalList) != shardInterval)
 		{
@@ -1353,7 +1355,7 @@ ShardListInsertCommand(List *shardIntervalList)
 
 	appendStringInfo(insertShardCommand,
 					 "SELECT citus_internal_add_shard_metadata(relationname, shardid, "
-					 "storagetype, shardminvalue, shardmaxvalue) "
+					 "storagetype, shardminvalue, shardmaxvalue, shardgroup_id) "
 					 "FROM shard_data;");
 
 	/*
@@ -3257,6 +3259,9 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 		shardMaxValue = PG_GETARG_TEXT_P(4);
 	}
 
+	PG_ENSURE_ARGNOTNULL(5, "shard group id");
+	uint64 shardGroupId = (uint64) PG_GETARG_INT64(5);
+
 	/* only owner of the table (or superuser) is allowed to add the Citus metadata */
 	EnsureTableOwner(relationId);
 
@@ -3277,7 +3282,8 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 								  shardMaxValue);
 	}
 
-	InsertShardRow(relationId, shardId, storageType, shardMinValue, shardMaxValue);
+	InsertShardRow(relationId, shardId, storageType, shardMinValue, shardMaxValue,
+				   &shardGroupId);
 
 	PG_RETURN_VOID();
 }

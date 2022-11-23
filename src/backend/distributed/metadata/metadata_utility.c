@@ -1276,6 +1276,7 @@ CopyShardInterval(ShardInterval *srcInterval)
 	destInterval->minValueExists = srcInterval->minValueExists;
 	destInterval->maxValueExists = srcInterval->maxValueExists;
 	destInterval->shardId = srcInterval->shardId;
+	destInterval->shardGroupId = srcInterval->shardGroupId;
 	destInterval->shardIndex = srcInterval->shardIndex;
 
 	destInterval->minValue = 0;
@@ -1677,7 +1678,7 @@ TupleToGroupShardPlacement(TupleDesc tupleDescriptor, HeapTuple heapTuple)
  */
 void
 InsertShardRow(Oid relationId, uint64 shardId, char storageType,
-			   text *shardMinValue, text *shardMaxValue)
+			   text *shardMinValue, text *shardMaxValue, uint64 *shardGroupId)
 {
 	Datum values[Natts_pg_dist_shard];
 	bool isNulls[Natts_pg_dist_shard];
@@ -1705,7 +1706,14 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 		isNulls[Anum_pg_dist_shard_shardmaxvalue - 1] = true;
 	}
 
-	isNulls[Anum_pg_dist_shard_shardgroupid - 1] = true;
+	if (shardGroupId)
+	{
+		values[Anum_pg_dist_shard_shardgroupid - 1] = UInt64GetDatum(*shardGroupId);
+	}
+	else
+	{
+		isNulls[Anum_pg_dist_shard_shardgroupid - 1] = true;
+	}
 
 	/* open shard relation and insert new tuple */
 	Relation pgDistShard = table_open(DistShardRelationId(), RowExclusiveLock);
