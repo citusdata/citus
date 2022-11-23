@@ -573,7 +573,7 @@ jobs:
           at: .
       - run:
           name: 'Detect newly introduced tests'
-          command: | 
+          command: |
             testForDebugging="<< parameters.test >>"
 
             if [ -z "$testForDebugging" ]; then
@@ -586,7 +586,7 @@ jobs:
                 echo "No test found."
                 circleci-agent step halt
             fi
-            
+
             echo export tests=\""$tests"\" >> "$BASH_ENV"
             source "$BASH_ENV"
       - run:
