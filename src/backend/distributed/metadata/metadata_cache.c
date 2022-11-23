@@ -5659,7 +5659,13 @@ poolinfo_valid(PG_FUNCTION_ARGS)
 	PG_RETURN_BOOL(poolinfoValid);
 }
 
-bool CheckCitusDropStmt(Oid domainoid)
+/*
+ * CheckCitusDropStmt determines whether the domain in the current drop operation 
+ * is used in the distribution column of a distribution table, 
+ * and if so, returns true for subsequent error reporting.
+ */
+bool 
+CheckCitusDropStmt(Oid domainoid)
 {
 	bool result = false;
 	ScanKeyData scanKey[1];
@@ -5682,11 +5688,8 @@ bool CheckCitusDropStmt(Oid domainoid)
 		Datum datumArray[Natts_pg_dist_partition];
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
-		// Datum relationIdDatum = datumArray[Anum_pg_dist_partition_logicalrelid - 1];
 		Datum partitionKeyDatum = datumArray[Anum_pg_dist_partition_partkey - 1];
 		char *partitionKeyString = TextDatumGetCString(partitionKeyDatum);
-
-		// Oid relationId = DatumGetObjectId(relationIdDatum);
 
 		if (strstr(partitionKeyString, domainoidStr) != NULL)
 		{

@@ -2370,7 +2370,7 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 					if(CheckCitusDropStmt(domainoid))
 					{
 						ereport(ERROR,
-							(errmsg("columnar storage parameters specified on non-columnar table")));
+							(errmsg("This domain cannot be deleted when it is used in a distribution column.")));
 					}
 				}
 			}
