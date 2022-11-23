@@ -558,6 +558,7 @@ jobs:
       test:
         description: 'the test that should be run multiple times'
         type: string
+        default: ''
       runs:
         description: 'number of times that the test should be run in total'
         type: integer
@@ -570,6 +571,24 @@ jobs:
       - checkout
       - attach_workspace:
           at: .
+      - run:
+          name: 'Detect newly introduced tests'
+          command: | 
+            testForDebugging="<< parameters.test >>"
+
+            if [ -z "$testForDebugging" ]; then
+              tests=$(git diff origin/main --name-status --oneline --diff-filter=A | (grep 'src/test/regress/sql/' || true) | rev | cut -d "/" -f1 | rev | sed 's/.sql//g' | tr '\n' ' ' | sed 's/.$//')
+            else
+              tests=$testForDebugging;
+            fi
+
+            if [ -z "$tests" ]; then
+                echo "No test found."
+                circleci-agent step halt
+            fi
+            
+            echo export tests=\""$tests"\" >> "$BASH_ENV"
+            source "$BASH_ENV"
       - run:
           name: 'Install Extension'
           command: |
@@ -586,7 +605,12 @@ jobs:
       - run:
           name: 'Run minimal tests'
           command: |
-            gosu circleci make -C src/test/regress << parameters.make >> EXTRA_TESTS="$(for i in $(seq << parameters.runs >> | circleci tests split); do echo -n '<< parameters.test >> ' ; done)"
+            tests_array=($tests)
+            for test in "${tests_array[@]}"
+            do
+                echo "Running : $test on << parameters.make >>"
+                gosu circleci make -C src/test/regress << parameters.make >> EXTRA_TESTS="$(for i in $(seq << parameters.runs >> | circleci tests split); do echo -n $test '' ; done)"
+            done
           no_output_timeout: 2m
       - run:
           name: 'Regressions'
@@ -643,6 +667,21 @@ workflows:
           requires: [build-flaky-15]
           make: '<< pipeline.parameters.flaky_test_make >>'
           test: '<< pipeline.parameters.flaky_test >>'
+
+  flaky_test:
+      when:
+        not: << pipeline.parameters.flaky_test >>
+      jobs:
+        - build:
+            name: build-flaky-15
+            pg_major: 15
+            image_tag: '<< pipeline.parameters.pg15_version >>'
+
+        - test-flakyness:
+            name: 'test-15_flaky'
+            pg_major: 15
+            image_tag: '<< pipeline.parameters.pg15_version >>'
+            requires: [build-flaky-15]
 
   build_and_test:
     when:
