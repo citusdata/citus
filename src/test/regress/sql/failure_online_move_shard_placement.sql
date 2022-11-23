@@ -97,6 +97,42 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 SELECT citus.mitmproxy('conn.onQuery(query="t_pkey").cancel(' || :pid || ')');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 
+-- failure on create index
+SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+CALL citus_cleanup_orphaned_resources();
+
+-- lets create few more indexes and fail with both
+-- parallel mode and sequential mode
+CREATE INDEX index_failure_2 ON t(id);
+CREATE INDEX index_failure_3 ON t(id);
+CREATE INDEX index_failure_4 ON t(id);
+CREATE INDEX index_failure_5 ON t(id);
+
+-- failure on the third create index
+ALTER SYSTEM SET citus.max_adaptive_executor_pool_size TO 1;
+SELECT pg_reload_conf();
+
+SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+CALL citus_cleanup_orphaned_resources();
+
+-- failure on parallel create index
+ALTER SYSTEM RESET citus.max_adaptive_executor_pool_size;
+SELECT pg_reload_conf();
+SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+CALL citus_cleanup_orphaned_resources();
+
 -- Verify that the shard is not moved and the number of rows are still 100k
 SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM shards_in_workers;
