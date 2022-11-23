@@ -74,6 +74,10 @@ jobs:
           echo "GCC Version: $(gcc --version)"
           ./configure 2>&1 | tee output.log
 
+      - name: Make clean
+        run: |
+          make clean
+
       - name: Make
         run: |
           make -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
@@ -105,3 +109,4 @@ jobs:
           python3 -m pip install -r tools/packaging_automation/requirements.txt
           python3 -m tools.packaging_automation.validate_build_output --output_file output.log \
             --ignore_file packaging_ignore.yml --package_type ${package_type}
+
