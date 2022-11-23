@@ -5660,18 +5660,18 @@ poolinfo_valid(PG_FUNCTION_ARGS)
 }
 
 /*
- * CheckCitusDropStmt determines whether the domain in the current drop operation 
+ * CheckCitusDropDomainOrTypeStmt determines whether the domain/type in the current drop operation 
  * is used in the distribution column of a distribution table, 
  * and if so, returns true for subsequent error reporting.
  */
 bool 
-CheckCitusDropStmt(Oid domainoid)
+CheckCitusDropDomainOrTypeStmt(Oid oid)
 {
 	bool result = false;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 0;
-	char domainoidStr[16] = {0};
-	sprintf(domainoidStr, "%d", domainoid);
+	char oidStr[16] = {0};
+	sprintf(oidStr, "%d", oid);
 
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 
@@ -5691,7 +5691,7 @@ CheckCitusDropStmt(Oid domainoid)
 		Datum partitionKeyDatum = datumArray[Anum_pg_dist_partition_partkey - 1];
 		char *partitionKeyString = TextDatumGetCString(partitionKeyDatum);
 
-		if (strstr(partitionKeyString, domainoidStr) != NULL)
+		if (strstr(partitionKeyString, oidStr) != NULL)
 		{
 			result = true;
 			break;

@@ -2367,10 +2367,26 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 					typename = castNode(TypeName, object);
 					domainoid = typenameTypeId(NULL, typename);
 
-					if(CheckCitusDropStmt(domainoid))
+					if(CheckCitusDropDomainOrTypeStmt(domainoid))
 					{
 						ereport(ERROR,
 							(errmsg("This domain cannot be deleted when it is used in a distribution column.")));
+					}
+				}
+			}
+			else if(dropStmt->removeType == OBJECT_TYPE)
+			{
+				ListCell *objectCell = NULL;
+
+				foreach(objectCell, dropStmt->objects)
+				{
+					TypeName *typeName = castNode(TypeName, lfirst(objectCell));
+					Oid typeOid = LookupTypeNameOid(NULL, typeName, false);
+					
+					if(CheckCitusDropDomainOrTypeStmt(typeOid))
+					{
+						ereport(ERROR,
+							(errmsg("This type cannot be deleted when it is used in a distribution column.")));
 					}
 				}
 			}
