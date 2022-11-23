@@ -852,16 +852,23 @@ RecursivelyPlanDistributedJoinNode(Node *distributedNode, Query *query,
 		 * parts with the nonrecurring part consisting of INNER JOIN.
 		 *
 		 * <ref> left join (<dist> INNER JOIN <dist>)
-		 * We should recursively plan nonrecurring part i.e. (dist INNER JOIN dist) as a whole.
+		 * We should recursively plan nonrecurring part i.e. (dist INNER JOIN dist).
 		 */
 		JoinExpr *joinExpr = (JoinExpr *) distributedNode;
 		Node *leftNode = joinExpr->larg;
 		Node *rightNode = joinExpr->rarg;
 
-		RecursivelyPlanDistributedJoinNode(leftNode, query,
-										   recursivePlanningContext);
-		RecursivelyPlanDistributedJoinNode(rightNode, query,
-										   recursivePlanningContext);
+		if (!IsJoinNodeRecurring(leftNode, query))
+		{
+			RecursivelyPlanDistributedJoinNode(leftNode, query,
+											   recursivePlanningContext);
+		}
+
+		if (!IsJoinNodeRecurring(rightNode, query))
+		{
+			RecursivelyPlanDistributedJoinNode(rightNode, query,
+											   recursivePlanningContext);
+		}
 
 		return;
 	}
