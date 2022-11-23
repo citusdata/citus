@@ -177,6 +177,9 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 		int32 shardMaxHashToken = shardMinHashToken + (hashTokenIncrement - 1);
 		uint64 shardId = GetNextShardId();
 
+		/* we use shardid of the first shard in a shardgroup as the shardgroupid */
+		uint64 shardGroupId = shardId;
+
 		/* if we are at the last shard, make sure the max token value is INT_MAX */
 		if (shardIndex == (shardCount - 1))
 		{
@@ -187,8 +190,11 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 		text *minHashTokenText = IntegerToText(shardMinHashToken);
 		text *maxHashTokenText = IntegerToText(shardMaxHashToken);
 
+		InsertShardGroupRow(shardGroupId, cacheEntry->colocationId,
+							minHashTokenText, maxHashTokenText);
+
 		InsertShardRow(distributedTableId, shardId, shardStorageType,
-					   minHashTokenText, maxHashTokenText, NULL);
+					   minHashTokenText, maxHashTokenText, &shardGroupId);
 
 		List *currentInsertedShardPlacements = InsertShardPlacementRows(
 			distributedTableId,

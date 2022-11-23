@@ -52,6 +52,7 @@
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/pg_dist_shardgroup.h"
 #include "distributed/pg_dist_placement.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relay_utility.h"
@@ -1668,6 +1669,47 @@ TupleToGroupShardPlacement(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 		datumArray[Anum_pg_dist_placement_groupid - 1]);
 
 	return shardPlacement;
+}
+
+
+void
+InsertShardGroupRow(uint64 shardGroupId, uint32 colocationId,
+					text *shardMinValue, text *shardMaxValue)
+{
+	Datum values[Natts_pg_dist_shardgroup];
+	bool isNulls[Natts_pg_dist_shardgroup];
+
+	/* form new shard tuple */
+	memset(values, 0, sizeof(values));
+	memset(isNulls, false, sizeof(isNulls));
+
+	values[Anum_pg_dist_shardgroup_shardgroupid - 1] = Int64GetDatum(shardGroupId);
+	values[Anum_pg_dist_shardgroup_colocationid - 1] = Int32GetDatum(colocationId);
+
+	/* check if shard min/max values are null */
+	if (shardMinValue != NULL && shardMaxValue != NULL)
+	{
+		values[Anum_pg_dist_shardgroup_shardminvalue - 1] =
+			PointerGetDatum(shardMinValue);
+		values[Anum_pg_dist_shardgroup_shardmaxvalue - 1] =
+			PointerGetDatum(shardMaxValue);
+	}
+	else
+	{
+		isNulls[Anum_pg_dist_shardgroup_shardminvalue - 1] = true;
+		isNulls[Anum_pg_dist_shardgroup_shardmaxvalue - 1] = true;
+	}
+
+	/* open shard relation and insert new tuple */
+	Relation pgDistShardgroup = table_open(DistShardgroupRelationId(), RowExclusiveLock);
+
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistShardgroup);
+	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
+
+	CatalogTupleInsert(pgDistShardgroup, heapTuple);
+
+	CommandCounterIncrement();
+	table_close(pgDistShardgroup, NoLock);
 }
 
 

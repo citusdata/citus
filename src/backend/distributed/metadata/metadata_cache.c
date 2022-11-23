@@ -140,6 +140,7 @@ typedef struct MetadataCacheData
 {
 	bool extensionLoaded;
 	Oid distShardRelationId;
+	Oid distShardgroupRelationId;
 	Oid distPlacementRelationId;
 	Oid distBackgroundJobRelationId;
 	Oid distBackgroundJobPKeyIndexId;
@@ -2494,6 +2495,17 @@ DistShardRelationId(void)
 						 &MetadataCache.distShardRelationId);
 
 	return MetadataCache.distShardRelationId;
+}
+
+
+/* return oid of pg_dist_shardgroup relation */
+Oid
+DistShardgroupRelationId(void)
+{
+	CachedRelationLookup("pg_dist_shardgroup",
+						 &MetadataCache.distShardgroupRelationId);
+
+	return MetadataCache.distShardgroupRelationId;
 }
 
 

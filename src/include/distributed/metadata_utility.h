@@ -306,6 +306,8 @@ extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 
 /* Function declarations to modify shard and shard placement data */
+extern void InsertShardGroupRow(uint64 shardGroupId, uint32 colocationId,
+								text *shardMinValue, text *shardMaxValue);
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 						   text *shardMinValue, text *shardMaxValue,
 						   uint64 *shardGroupId);
