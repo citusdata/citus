@@ -664,6 +664,7 @@ RecursivelyPlanRecurringTupleOuterJoins(Node *node, Query *query,
 												recursivePlanningContext);
 		RecursivelyPlanRecurringTupleOuterJoins(joinExpr->rarg, query,
 												recursivePlanningContext);
+
 		switch (joinExpr->jointype)
 		{
 			case JOIN_LEFT:
@@ -846,19 +847,22 @@ RecursivelyPlanDistributedJoinNode(Node *distributedNode, Query *query,
 	if (IsA(distributedNode, JoinExpr))
 	{
 		/*
-		 * XXX: This, for example, means that RecursivelyPlanRecurringTupleOuterJoins
-		 *      needs to plan inner side, i.e., <distributed> INNER JOIN <distributed>,
-		 *      of the following join:
+		 * we forcefully choose recursive plan for nonrecurring part of join tree.
+		 * We are here only if we cannot push down a join between recurring and non-recurring
+		 * parts with the nonrecurring part consisting of INNER JOIN.
 		 *
-		 *      <recurring> LEFT JOIN (<distributed> INNER JOIN <distributed>)
-		 *
-		 *      However, this would require moving part of the join tree into a
-		 *      subquery but this implies that we need to rebuild the rtable and
-		 *      re-point all the Vars to the new rtable indexes. We have not
-		 *      implemented that yet.
+		 * <ref> left join (<dist> INNER JOIN <dist>)
+		 * We should recursively plan nonrecurring part i.e. (dist INNER JOIN dist) as a whole.
 		 */
-		ereport(DEBUG4, (errmsg("recursive planner cannot plan distributed sub "
-								"join nodes yet")));
+		JoinExpr *joinExpr = (JoinExpr *) distributedNode;
+		Node *leftNode = joinExpr->larg;
+		Node *rightNode = joinExpr->rarg;
+
+		RecursivelyPlanDistributedJoinNode(leftNode, query,
+										   recursivePlanningContext);
+		RecursivelyPlanDistributedJoinNode(rightNode, query,
+										   recursivePlanningContext);
+
 		return;
 	}
 
