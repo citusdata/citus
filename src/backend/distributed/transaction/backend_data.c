@@ -92,13 +92,13 @@ typedef enum CitusBackendType
 	EXTERNAL_CLIENT_BACKEND
 } CitusBackendType;
 
-static const char *citusBackendPrefixes[] = {
+static const char *CitusBackendPrefixes[] = {
 	CITUS_APPLICATION_NAME_PREFIX,
 	CITUS_REBALANCER_APPLICATION_NAME_PREFIX,
 	CITUS_RUN_COMMAND_APPLICATION_NAME_PREFIX,
 };
 
-static const CitusBackendType citusBackendTypes[] = {
+static const CitusBackendType CitusBackendTypes[] = {
 	CITUS_INTERNAL_BACKEND,
 	CITUS_REBALANCER_BACKEND,
 	CITUS_RUN_COMMAND_BACKEND,
@@ -1078,12 +1078,12 @@ ExtractGlobalPID(const char *applicationName)
 	/* we create our own copy of application name incase the original changes */
 	char *applicationNameCopy = pstrdup(applicationName);
 
-	for (int i = 0; i < lengthof(citusBackendPrefixes); i++)
+	for (int i = 0; i < lengthof(CitusBackendPrefixes); i++)
 	{
-		uint64 prefixLength = strlen(citusBackendPrefixes[i]);
+		uint64 prefixLength = strlen(CitusBackendPrefixes[i]);
 
 		/* does application name start with this prefix prefix */
-		if (strncmp(applicationNameCopy, citusBackendPrefixes[i], prefixLength) != 0)
+		if (strncmp(applicationNameCopy, CitusBackendPrefixes[i], prefixLength) != 0)
 		{
 			continue;
 		}
@@ -1457,14 +1457,14 @@ DetermineCitusBackendType(const char *applicationName)
 	if (applicationName &&
 		ExtractGlobalPID(applicationName) != INVALID_CITUS_INTERNAL_BACKEND_GPID)
 	{
-		for (int i = 0; i < lengthof(citusBackendPrefixes); i++)
+		for (int i = 0; i < lengthof(CitusBackendPrefixes); i++)
 		{
-			uint64 prefixLength = strlen(citusBackendPrefixes[i]);
+			uint64 prefixLength = strlen(CitusBackendPrefixes[i]);
 
 			/* does application name start with this prefix prefix */
-			if (strncmp(applicationName, citusBackendPrefixes[i], prefixLength) == 0)
+			if (strncmp(applicationName, CitusBackendPrefixes[i], prefixLength) == 0)
 			{
-				CurrentBackendType = citusBackendTypes[i];
+				CurrentBackendType = CitusBackendTypes[i];
 				return;
 			}
 		}
