@@ -17,6 +17,7 @@
 #include "replication/logical.h"
 #include "utils/typcache.h"
 #include "utils/lsyscache.h"
+#include "catalog/pg_namespace.h"
 
 extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
 static LogicalDecodeChangeCB pgoutputChangeCB;
@@ -48,7 +49,8 @@ static bool PublishChangesIfCdcSlot(LogicalDecodingContext *ctx, ReorderBufferTX
 
 /* used in the replication_origin_filter_cb function. */
 #define InvalidRepOriginId 0
-#define CITUS_CDC_SLOT_NAME "citus_cdc_slot"
+
+#define CITUS_SHARD_PREFIX_SLOT "citus_shard_"
 
 /*
  * Postgres uses 'pgoutput' as default plugin for logical replication.
@@ -108,31 +110,28 @@ PublishChangesIfCdcSlot(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 	char *replicationSlotName = ctx->slot->data.name.data;
 
 	/* Check if the replication slot is CITUS_CDC_SLOT*/
-	if (replicationSlotName != NULL && strcmp(replicationSlotName, CITUS_CDC_SLOT_NAME) ==
-		0)
+	if (replicationSlotName != NULL &&
+		strncmp(replicationSlotName, CITUS_SHARD_PREFIX_SLOT, strlen(
+					CITUS_SHARD_PREFIX_SLOT)) != 0)
 	{
-		/* Skip publishing changes for Citus metadata tables*/
-		ObjectAddress objectAdress = { RelationRelationId, relation->rd_id, 0 };
-		if (IsObjectAddressOwnedByCitus(&objectAdress))
+		/* Skip publishing changes for system relations in pg_catalog*/
+		if (relation->rd_rel->relnamespace == PG_CATALOG_NAMESPACE)
 		{
 			return true;
 		}
 
-		/* Check if this change is for a shard in distributed table. */
-		if (RelationIsAKnownShard(relation->rd_id))
+		char *shardRelationName = RelationGetRelationName(relation);
+		uint64 shardId = ExtractShardIdFromTableName(shardRelationName, true);
+		if (shardId != INVALID_SHARD_ID && ShardExists(shardId))
 		{
-			char *shardRelationName = RelationGetRelationName(relation);
-			uint64 shardId = ExtractShardIdFromTableName(shardRelationName, true);
-			if (shardId != INVALID_SHARD_ID)
+			/* try to get the distributed relation id for the shard */
+			Oid distributedRelationId = RelationIdForShard(shardId);
+			if (OidIsValid(distributedRelationId))
 			{
-				/* try to get the distributed relation id for the shard */
-				Oid distributedRelationId = RelationIdForShard(shardId);
-				if (OidIsValid(distributedRelationId))
-				{
-					relation = RelationIdGetRelation(distributedRelationId);
-				}
+				relation = RelationIdGetRelation(distributedRelationId);
 			}
 		}
+
 		pgoutputChangeCB(ctx, txn, relation, change);
 		return true;
 	}
@@ -148,6 +147,12 @@ static void
 split_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 				Relation relation, ReorderBufferChange *change)
 {
+	/*check if Citus extension is loaded. */
+	if (!CitusHasBeenLoaded())
+	{
+		return;
+	}
+
 	if (!is_publishable_relation(relation))
 	{
 		return;

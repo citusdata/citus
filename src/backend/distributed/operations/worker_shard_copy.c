@@ -33,11 +33,11 @@
  */
 static StringInfo LocalCopyBuffer;
 #define CDC_REPLICATION_ORIGIN_CREATE_IF_NOT_EXISTS_CMD \
-	"SELECT  pg_catalog.pg_replication_origin_create('citus_cdc') \
-	where (select pg_catalog.pg_replication_origin_oid('citus_cdc')) IS NULL;"
+	"SELECT  pg_catalog.pg_replication_origin_create('citus_cdc_%d') \
+	where (select pg_catalog.pg_replication_origin_oid('citus_cdc_%d')) IS NULL;"
 
 #define CDC_REPLICATION_ORIGIN_SESION_SETUP_CMD \
-	"SELECT pg_catalog.pg_replication_origin_session_setup('citus_cdc') \
+	"SELECT pg_catalog.pg_replication_origin_session_setup('citus_cdc_%d') \
 	where pg_catalog.pg_replication_origin_session_is_setup()='f';"
 
 #define CDC_REPLICATION_ORIGIN_SESION_RESET_CMD \
@@ -93,8 +93,6 @@ static void LocalCopyToShard(ShardCopyDestReceiver *copyDest, CopyOutState
 static void ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest);
 
 static void CreateReplicationOriginIfNotExists(ShardCopyDestReceiver *dest);
-static void SetupReplicationOriginSessionIfNotSetupAlready(MultiConnection *connection);
-static void ResetReplicationOriginSessionIfSetupAlready(MultiConnection *connection);
 
 static bool
 CanUseLocalCopy(uint32_t destinationNodeId)
@@ -104,36 +102,7 @@ CanUseLocalCopy(uint32_t destinationNodeId)
 }
 
 
-/*
- * SetupReplicationOriginSessionIfNotSetupAlready sets up the replication origin session
- * if it is not already setup.
- */
-static void
-SetupReplicationOriginSessionIfNotSetupAlready(MultiConnection *connection)
-{
-	/* Setup replication Origin if not setup already */
-	if (!SendRemoteCommand(connection, CDC_REPLICATION_ORIGIN_SESION_SETUP_CMD))
-	{
-		ReportConnectionError(connection, ERROR);
-	}
-	ForgetResults(connection);
-}
-
-
-/*
- * ResetReplicationOriginSessionIfSetupAlready resets the replication origin session
- * if it has been setup currently.
- */
-static void
-ResetReplicationOriginSessionIfSetupAlready(MultiConnection *connection)
-{
-	if (!SendRemoteCommand(connection, CDC_REPLICATION_ORIGIN_SESION_RESET_CMD))
-	{
-		ReportConnectionError(connection, ERROR);
-	}
-	ForgetResults(connection);
-}
-
+#define REPLICATION_ORIGIN_CMD_BUFFER_SIZE 1024
 
 /* Connect to node with source shard and trigger copy start.  */
 static void
@@ -152,7 +121,11 @@ ConnectToRemoteAndStartCopy(ShardCopyDestReceiver *copyDest)
 
 	/* Setup Replication Origin Session if not setup already for
 	 * avoiding publication of events more than once. */
-	SetupReplicationOriginSessionIfNotSetupAlready(copyDest->connection);
+	char replicationOrginSetupCommand[REPLICATION_ORIGIN_CMD_BUFFER_SIZE];
+	int originId = GetLocalNodeId();
+	snprintf(replicationOrginSetupCommand, REPLICATION_ORIGIN_CMD_BUFFER_SIZE,
+			 CDC_REPLICATION_ORIGIN_SESION_SETUP_CMD, originId);
+	ExecuteCriticalRemoteCommand(copyDest->connection, replicationOrginSetupCommand);
 
 	StringInfo copyStatement = ConstructShardCopyStatement(
 		copyDest->destinationShardFullyQualifiedName,
@@ -327,9 +300,12 @@ CreateReplicationOriginIfNotExists(ShardCopyDestReceiver *dest)
 																workerNode->workerPort,
 																currentUser,
 																NULL /* database (current) */);
-	ClaimConnectionExclusively(connection);
-	ExecuteCriticalRemoteCommand(connection,
-								 CDC_REPLICATION_ORIGIN_CREATE_IF_NOT_EXISTS_CMD);
+	char replicationOrginCreateCommand[REPLICATION_ORIGIN_CMD_BUFFER_SIZE];
+	int originId = GetLocalNodeId();
+	snprintf(replicationOrginCreateCommand, REPLICATION_ORIGIN_CMD_BUFFER_SIZE,
+			 CDC_REPLICATION_ORIGIN_CREATE_IF_NOT_EXISTS_CMD, originId, originId);
+
+	ExecuteCriticalRemoteCommand(connection, replicationOrginCreateCommand);
 	CloseConnection(connection);
 }
 
