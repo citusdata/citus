@@ -227,7 +227,6 @@ static const struct config_enum_entry task_assignment_policy_options[] = {
 };
 
 static const struct config_enum_entry replication_model_options[] = {
-	{ "statement", REPLICATION_MODEL_COORDINATOR, false },
 	{ "streaming", REPLICATION_MODEL_STREAMING, false },
 	{ NULL, 0, false }
 };

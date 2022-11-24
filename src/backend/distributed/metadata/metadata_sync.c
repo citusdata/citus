@@ -3173,8 +3173,7 @@ EnsurePartitionMetadataIsSane(Oid relationId, char distributionMethod, int coloc
 
 
 	if (!(replicationModel == REPLICATION_MODEL_2PC ||
-		  replicationModel == REPLICATION_MODEL_STREAMING ||
-		  replicationModel == REPLICATION_MODEL_COORDINATOR))
+		  replicationModel == REPLICATION_MODEL_STREAMING))
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("Metadata syncing is only allowed for "

@@ -1423,14 +1423,9 @@ DecideReplicationModel(char distributionMethod, char *colocateWithTableName)
 
 		return replicationModel;
 	}
-	else if (distributionMethod == DISTRIBUTE_BY_HASH &&
-			 !DistributedTableReplicationIsEnabled())
+	else if (distributionMethod == DISTRIBUTE_BY_HASH)
 	{
 		return REPLICATION_MODEL_STREAMING;
-	}
-	else
-	{
-		return REPLICATION_MODEL_COORDINATOR;
 	}
 
 	/* we should not reach to this point */

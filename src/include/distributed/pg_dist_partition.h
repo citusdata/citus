@@ -63,7 +63,6 @@ typedef FormData_pg_dist_partition *Form_pg_dist_partition;
  * and 't' for two-phase-commit. We also use an invalid replication model
  * ('i') for distinguishing uninitialized variables where necessary.
  */
-#define REPLICATION_MODEL_COORDINATOR 'c'
 #define REPLICATION_MODEL_STREAMING 's'
 #define REPLICATION_MODEL_2PC 't'
 #define REPLICATION_MODEL_INVALID 'i'
