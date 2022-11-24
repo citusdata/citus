@@ -1192,10 +1192,10 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		sqlForTaskList = DeparseTreeNode((Node *) newStmt);
 	}
 
-	/* In the case of PRIMARY KEY constraint command being rewritten,
-	 * we want to send the changed command string (deparseAT is TRUE) to the
-	 * workers such that it is executed on the main table (useInitialDDLCommandString is TRUE)
-	 * and shards as well.
+	/* In the case of ADD PRIMARY KEY command,
+	 * we want to send the new command string (ALTER TABLE ... ADD CONSTRAINT) to the
+	 * workers such that it is executed on the main table (controlled by useInitialDDLCommandString is TRUE)
+	 * and shards (controlled by  deparseAT).
 	 * Should we add CONST_PRIMARY check as well for avoiding impacting any other scenario?
 	 */
 	if (useInitialDDLCommandString && deparseAT)
