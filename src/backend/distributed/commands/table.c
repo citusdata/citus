@@ -939,6 +939,28 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				 */
 				constraint->skip_validation = true;
 			}
+			else if (constraint->contype == CONSTR_PRIMARY)
+			{
+				if (constraint->conname == NULL)
+				{
+					Relation rel = RelationIdGetRelation(leftRelationId);
+					constraint->conname = ChooseIndexName(RelationGetRelationName(rel),
+										RelationGetNamespace(rel),
+										NULL, NULL, true, true);
+					RelationClose(rel);
+
+					((Constraint *)(newCmd->def))->conname = constraint->conname;
+
+					/*
+					 * We have to change ALTER TABLE ... ADD PRIMARY ... command into
+					 * ALTER TABLE ... ADD CONSTRAINT <conname> PRIMARY KEY ...
+					 * in order to be able to use the name we created. Therefore we will send the
+					 * changed command to workers.
+					 */
+					deparseAT = true;
+					useInitialDDLCommandString = true;
+				}
+			}
 		}
 		else if (alterTableType == AT_DropConstraint)
 		{
@@ -1170,7 +1192,20 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		sqlForTaskList = DeparseTreeNode((Node *) newStmt);
 	}
 
-	ddlJob->metadataSyncCommand = useInitialDDLCommandString ? alterTableCommand : NULL;
+	/* In the case of PRIMARY KEY constraint command being rewritten,
+	 * we want to send the changed command string (deparseAT is TRUE) to the
+	 * workers such that it is executed on the main table (useInitialDDLCommandString is TRUE)
+	 * and shards as well.
+	 * Should we add CONST_PRIMARY check as well for avoiding impacting any other scenario?
+	 */
+	if (useInitialDDLCommandString && deparseAT)
+	{
+		ddlJob->metadataSyncCommand = sqlForTaskList;
+	}
+	else
+	{
+		ddlJob->metadataSyncCommand = useInitialDDLCommandString ? alterTableCommand : NULL;
+	}
 
 	if (OidIsValid(rightRelationId))
 	{
@@ -2883,9 +2918,17 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				 */
 				if (constraint->conname == NULL)
 				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					/*
+					 * We support ALTER TABLE ... ADD PRIMARY ... commands by creating a constraint name
+					 * and changing the command into the following form.
+					 * ALTER TABLE ... ADD CONSTRAINT <constaint_name> PRIMARY KEY ...
+					 */
+					if (constraint->contype != CONSTR_PRIMARY)
+					{
+						ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 									errmsg("cannot create constraint without a name on a "
 										   "distributed table")));
+					}
 				}
 
 				break;
