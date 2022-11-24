@@ -162,5 +162,26 @@ SELECT con.conname
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
           WHERE rel.relname = 'citus_local_table';
 
+-- Test with unusual table and column names
+CREATE TABLE "2nd table" ( "2nd id" INTEGER, "3rd id" INTEGER);
+SELECT create_distributed_table('"2nd table"','2nd id');
+
+ALTER TABLE  "2nd table" ADD PRIMARY KEY ("2nd id", "3rd id");
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname = '2nd table';
+
+-- Check if a primary key constraint is created for the shard tables on the workers
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE '2nd table%' ORDER BY con.conname ASC;
+
 \c - - :master_host :master_port
+ALTER TABLE  "2nd table" DROP CONSTRAINT "2nd table_pkey";
+
 DROP SCHEMA sc1 CASCADE;
