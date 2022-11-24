@@ -57,6 +57,7 @@
 
 #include "distributed/background_jobs.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_cache.h"
@@ -83,7 +84,6 @@ static shm_mq_result ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInf
 											 bool *hadError);
 static void UpdateDependingTasks(BackgroundTask *task);
 static int64 CalculateBackoffDelay(int retryCount);
-static HTAB * CreateBackgroundExecutorHash(MemoryContext context);
 static bool NewExecutorExceedsCitusLimit(
 	QueueMonitorExecutionContext *queueMonitorExecutionContext);
 static bool NewExecutorExceedsPgMaxWorkers(BackgroundWorkerHandle *handle,
@@ -331,29 +331,6 @@ CitusBackgroundTaskQueueMonitorErrorCallback(void *arg)
 
 
 /*
- * CreateBackgroundExecutorHash constructs a hash table which maps from task
- * id to a handle of BackgroundExecutor, allocated in given context
- */
-static HTAB *
-CreateBackgroundExecutorHash(MemoryContext context)
-{
-	HASHCTL info = { 0 };
-
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(int64);
-	info.entrysize = sizeof(BackgroundExecutorHashEntry);
-	info.hash = tag_hash;
-	info.hcxt = context;
-	int hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
-
-	HTAB *backgroundExecutorHash = hash_create("Background Executor Hash", 32, &info,
-											   hashFlags);
-
-	return backgroundExecutorHash;
-}
-
-
-/*
  * NewExecutorExceedsCitusLimit returns true if currently we reached Citus' max worker count.
  * It also sleeps 1 sec to let running tasks progress so that we have better chance to not hit
  * that limit again.
@@ -455,7 +432,8 @@ CreateNewExecutor(BackgroundTask *task, dsm_segment **seg, char *databaseName,
 
 
 /*
- * AssignRunnableTaskToNewExecutor tries to assign given runnable task to a new task executor. It reports the assignment status as return value.
+ * AssignRunnableTaskToNewExecutor tries to assign given runnable task to a new task executor.
+ * It reports the assignment status as return value.
  */
 static bool
 AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
@@ -515,8 +493,10 @@ AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
 
 
 /*
- * AssignRunnableTasks tries to assign all runnable tasks to a new task executor. If an assignment fails, it stops in case we hit some limitation.
- * We do not load all the runnable tasks in memory at once as it can load memory much + we have limited worker to which we can assign task.
+ * AssignRunnableTasks tries to assign all runnable tasks to a new task executor.
+ * If an assignment fails, it stops in case we hit some limitation. We do not load
+ * all the runnable tasks in memory at once as it can load memory much + we have
+ * limited worker to which we can assign task.
  */
 static void
 AssignRunnableTasks(HTAB *backgroundExecutorHandles,
@@ -602,9 +582,10 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 	StartTransactionCommand();
 	PushActiveSnapshot(GetTransactionSnapshot());
 
+	const char *databasename = get_database_name(MyDatabaseId);
+
 	/* make databasename alive during queue monitor lifetime */
 	MemoryContext oldContext = MemoryContextSwitchTo(backgroundTaskContext);
-	const char *databasename = get_database_name(MyDatabaseId);
 	databasename = pstrdup(databasename);
 	MemoryContextSwitchTo(oldContext);
 
@@ -661,7 +642,10 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 	CommitTransactionCommand();
 
 	/* create a map to store parallel task executors */
-	HTAB *backgroundExecutorHandles = CreateBackgroundExecutorHash(backgroundTaskContext);
+	HTAB *backgroundExecutorHandles = CreateSimpleHashWithNameAndSize(int64,
+																	  BackgroundExecutorHashEntry,
+																	  "Background Executor Hash",
+																	  MAX_BG_TASK_EXECUTORS);
 
 	/*
 	 * task execution context that is useful during the monitor loop.
@@ -674,7 +658,7 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		.ctx = backgroundTaskContext
 	};
 
-	/* loop exits if there is no running tasks left */
+	/* loop exits if there is no running or runnable tasks left */
 	bool hasAnyTask = true;
 	while (hasAnyTask)
 	{
