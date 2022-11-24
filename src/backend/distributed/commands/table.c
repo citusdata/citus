@@ -949,7 +949,11 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 														  NULL, NULL, true, true);
 					RelationClose(rel);
 
-					((Constraint *) (newCmd->def))->conname = constraint->conname;
+					Assert(GetMemoryChunkContext(constraint->conname) ==
+						   GetMemoryChunkContext(newCmd));
+
+					((Constraint *) (newCmd->def))->conname = pstrdup(
+						constraint->conname);
 
 					/*
 					 * We have to change ALTER TABLE ... ADD PRIMARY ... command into
