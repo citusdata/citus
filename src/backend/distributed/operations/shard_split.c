@@ -522,6 +522,8 @@ SplitShard(SplitMode splitMode,
 		sourceColocatedShardIntervalList = colocatedShardIntervalList;
 	}
 
+	DropOrphanedResourcesInSeparateTransaction();
+
 	/* use the user-specified shard ID as the split workflow ID */
 	uint64 splitWorkflowId = shardIntervalToSplit->shardId;
 
