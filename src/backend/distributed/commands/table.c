@@ -779,13 +779,30 @@ SwitchToSequentialAndLocalExecutionIfPrimaryKeyNameTooLong(Oid relationId)
 
 
 /*
- * PreprocessAlterTableAddPrimaryKey converts the ALTER TABLE ... ADD PRIMARY KEY ...
- * into ALTER TABLE ... ADD CONSTRAINT <conname> PRIMARY KEY format and returns the DDLJob
+ * PreprocessAlterTableAddPrimaryKey creates a new primary key constraint name changing the original alterTableCommand run by the utility hook.
+ * Then converts the ALTER TABLE ... ADD PRIMARY KEY ... command
+ * into ALTER TABLE ... ADD CONSTRAINT <constraint name> PRIMARY KEY format and returns the DDLJob
  * to run this command in the workers.
  */
 static List *
-PreprocessAlterTableAddPrimaryKey(AlterTableStmt *alterTableStatement, Oid relationId)
+PreprocessAlterTableAddPrimaryKey(AlterTableStmt *alterTableStatement, Oid relationId,
+								  Constraint *constraint)
 {
+	bool primary = true;
+	bool isconstraint = true;
+
+	Relation rel = RelationIdGetRelation(relationId);
+
+	/*
+	 * Change the alterTableCommand so that the standard utility
+	 * hook runs it with the name we created.
+	 */
+	constraint->conname = ChooseIndexName(RelationGetRelationName(rel),
+										  RelationGetNamespace(rel),
+										  NULL, NULL, primary,
+										  isconstraint);
+	RelationClose(rel);
+
 	char *ddlCommand = DeparseTreeNode((Node *) alterTableStatement);
 
 	SwitchToSequentialAndLocalExecutionIfPrimaryKeyNameTooLong(relationId);
@@ -1044,28 +1061,13 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 			{
 				if (constraint->conname == NULL)
 				{
-					bool primary = true;
-					bool isconstraint = true;
-
-					Relation rel = RelationIdGetRelation(leftRelationId);
-
 					/*
-					 * Change the alterTableCommand directly so that the standard utility
-					 * hook runs it with the name we created.
-					 */
-					constraint->conname = ChooseIndexName(RelationGetRelationName(rel),
-														  RelationGetNamespace(rel),
-														  NULL, NULL, primary,
-														  isconstraint);
-					RelationClose(rel);
-
-					/*
-					 * Convert ALTER TABLE ... ADD PRIMARY ... command into
-					 * ALTER TABLE ... ADD CONSTRAINT <conname> PRIMARY KEY ...
-					 * and send it to the workers.
+					 * Create a constraint name. Convert ALTER TABLE ... ADD PRIMARY ... command into
+					 * ALTER TABLE ... ADD CONSTRAINT <conname> PRIMARY KEY ... form and create the ddl jobs
+					 * for running this form of the command on the workers.
 					 */
 					return PreprocessAlterTableAddPrimaryKey(alterTableStatement,
-															 leftRelationId);
+															 leftRelationId, constraint);
 				}
 			}
 		}
