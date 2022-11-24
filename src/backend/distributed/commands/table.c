@@ -945,11 +945,11 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				{
 					Relation rel = RelationIdGetRelation(leftRelationId);
 					constraint->conname = ChooseIndexName(RelationGetRelationName(rel),
-										RelationGetNamespace(rel),
-										NULL, NULL, true, true);
+														  RelationGetNamespace(rel),
+														  NULL, NULL, true, true);
 					RelationClose(rel);
 
-					((Constraint *)(newCmd->def))->conname = constraint->conname;
+					((Constraint *) (newCmd->def))->conname = constraint->conname;
 
 					/*
 					 * We have to change ALTER TABLE ... ADD PRIMARY ... command into
@@ -1204,7 +1204,8 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	}
 	else
 	{
-		ddlJob->metadataSyncCommand = useInitialDDLCommandString ? alterTableCommand : NULL;
+		ddlJob->metadataSyncCommand = useInitialDDLCommandString ? alterTableCommand :
+									  NULL;
 	}
 
 	if (OidIsValid(rightRelationId))
@@ -2926,8 +2927,9 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 					if (constraint->contype != CONSTR_PRIMARY)
 					{
 						ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create constraint without a name on a "
-										   "distributed table")));
+										errmsg(
+											"cannot create constraint without a name on a "
+											"distributed table")));
 					}
 				}
 
