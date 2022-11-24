@@ -437,7 +437,6 @@ HINT:  You can issue each subcommand separately
 ALTER TABLE products ADD UNIQUE(product_no);
 ERROR:  cannot create constraint without a name on a distributed table
 ALTER TABLE products ADD PRIMARY KEY(product_no);
-ERROR:  cannot create constraint without a name on a distributed table
 ALTER TABLE products ADD CHECK(product_no <> 0);
 ERROR:  cannot create constraint without a name on a distributed table
 ALTER TABLE products ADD EXCLUDE USING btree (product_no with =);
