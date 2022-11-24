@@ -165,6 +165,9 @@ class CitusDefaultClusterConfig(CitusBaseClusterConfig):
         }
         self.settings.update(new_settings)
         self.add_coordinator_to_metadata = True
+        self.skip_tests = [
+            # Alter Table statement cannot be run from an arbitrary node so this test will fail
+            "arbitrary_configs_alter_table_add_constraint_without_name_create", "arbitrary_configs_alter_table_add_constraint_without_name"]
 
 
 class CitusUpgradeConfig(CitusBaseClusterConfig):
