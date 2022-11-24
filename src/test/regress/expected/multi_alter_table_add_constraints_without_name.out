@@ -4,8 +4,8 @@
 -- Test checks whether constraints of distributed tables can be adjusted using
 -- the ALTER TABLE ... ADD without specifying a name.
 SET citus.shard_count TO 32;
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1450000;
-ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 1450000;
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 5410000;
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 5410000;
 CREATE SCHEMA sc1;
 -- Check "ADD PRIMARY KEY"
 CREATE TABLE sc1.products (
@@ -37,10 +37,10 @@ SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-		WHERE rel.relname = 'products_1450000';
+		WHERE rel.relname = 'products_5410000';
         conname
 ---------------------------------------------------------------------
- products_pkey_1450000
+ products_pkey_5410000
 (1 row)
 
 \c - - :master_host :master_port
@@ -97,7 +97,7 @@ CREATE TABLE sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon
 	            name text,
                     price numeric
 		);
-SELECT create_distributed_table('sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon', 'product_no');		
+SELECT create_distributed_table('sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon', 'product_no');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -117,17 +117,23 @@ SELECT con.conname
 
 -- Constraints for the main table and the shards should be created on the worker with a shortened name
 \c - - :public_worker_1_host :worker_1_port
-SELECT Count(con.conname)
+SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
 		WHERE rel.relname LIKE 'very%';
- count
+                             conname
 ---------------------------------------------------------------------
-     5
-(1 row)
+ verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410034
+ verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410035
+ verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410036
+ verylonglonglonglonglonglonglonglonglonglonglo_559ab79d_5410037
+ verylonglonglonglonglonglonglonglonglonglonglonglonglonglo_pkey
+(5 rows)
 
--- Constraint can be deleted via the coordinator	
+		ORDER BY con.conname ASC;
+ERROR:  syntax error at or near "ORDER"
+-- Constraint can be deleted via the coordinator
 \c - - :master_host :master_port
 ALTER TABLE sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon DROP CONSTRAINT verylonglonglonglonglonglonglonglonglonglonglonglonglonglo_pkey;
 \c - - :public_worker_1_host :worker_1_port

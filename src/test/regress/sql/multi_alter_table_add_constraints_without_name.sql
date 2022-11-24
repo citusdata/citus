@@ -5,8 +5,8 @@
 -- the ALTER TABLE ... ADD without specifying a name.
 
 SET citus.shard_count TO 32;
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1450000;
-ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 1450000;
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 5410000;
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 5410000;
 
 CREATE SCHEMA sc1;
 
@@ -33,7 +33,7 @@ SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-		WHERE rel.relname = 'products_1450000';
+		WHERE rel.relname = 'products_5410000';
 
 \c - - :master_host :master_port
 ALTER TABLE sc1.products DROP CONSTRAINT products_pkey;
@@ -99,11 +99,12 @@ SELECT con.conname
 
 -- Constraints for the main table and the shards should be created on the worker with a shortened name
 \c - - :public_worker_1_host :worker_1_port
-SELECT Count(con.conname)
+SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
 		WHERE rel.relname LIKE 'very%';
+		ORDER BY con.conname ASC;
 
 -- Constraint can be deleted via the coordinator
 \c - - :master_host :master_port
