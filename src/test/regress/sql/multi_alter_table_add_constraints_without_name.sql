@@ -80,7 +80,7 @@ ALTER TABLE sc1.products_ref DROP CONSTRAINT products_ref_pkey2;
 DROP TABLE sc1.products_ref;
 
 -- Check with max table name (63 chars)
-CREATE TABLE sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon (
+CREATE TABLE sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglonger (
 	            product_no integer,
 	            name text,
                     price numeric
@@ -115,6 +115,38 @@ SELECT con.conname
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
           WHERE rel.relname LIKE 'very%';
+
+-- Test the scenario where a partitioned distributed table has a child with max allowed name
+\c - - :master_host :master_port
+CREATE TABLE dist_partitioned_table (dist_col int, another_col int, partition_col timestamp) PARTITION BY RANGE (partition_col);
+CREATE TABLE  p1 PARTITION OF dist_partitioned_table FOR VALUES FROM ('2021-01-01') TO ('2022-01-01');
+CREATE TABLE  longlonglonglonglonglonglonglonglonglonglonglonglonglonglongabc PARTITION OF dist_partitioned_table FOR VALUES FROM ('2020-01-01') TO ('2021-01-01');
+SELECT create_distributed_table('dist_partitioned_table', 'partition_col');
+
+ALTER TABLE dist_partitioned_table ADD PRIMARY KEY(partition_col);
+
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname = 'dist_partitioned_table';
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
+
+\c - - :master_host :master_port
+ALTER TABLE dist_partitioned_table DROP CONSTRAINT dist_partitioned_table_pkey;
+
+\c - - :public_worker_1_host :worker_1_port
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+      INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+      INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+          WHERE rel.relname LIKE 'longlonglonglonglonglonglonglonglong%' ORDER BY con.conname ASC;
 
 \c - - :master_host :master_port
 DROP SCHEMA sc1 CASCADE;
