@@ -701,8 +701,13 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 }
 
 
+/*
+ * SwitchToSequentialAndLocalExecutionIfPrimaryKeyNameTooLong generates the longest primary key name
+ * among the shards of the partitions, and if exceeds the limit switches to sequential and
+ * local execution to prevent self-deadlocks.
+ */
 static void
-SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(Oid relationId)
+SwitchToSequentialAndLocalExecutionIfPrimaryKeyNameTooLong(Oid relationId)
 {
 	if (!PartitionedTable(relationId))
 	{
@@ -738,15 +743,37 @@ SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(Oid relationId)
 	Oid namespaceOid = RelationGetNamespace(rel);
 	RelationClose(rel);
 
-	char *conname = ChooseIndexName(longestPartitionShardName,
+	char *primaryKeyName = ChooseIndexName(longestPartitionShardName,
 									namespaceOid,
 									NULL, NULL, true, true);
 
 
-	if (conname && strnlen(conname, NAMEDATALEN) >= NAMEDATALEN - 1)
+	if (primaryKeyName && strnlen(primaryKeyName, NAMEDATALEN) >= NAMEDATALEN - 1)
 	{
-		SetLocalMultiShardModifyModeToSequential();
-		SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
+		if (ParallelQueryExecutedInTransaction())
+		{
+			/*
+			 * If there has already been a parallel query executed, the sequential mode
+			 * would still use the already opened parallel connections to the workers,
+			 * thus contradicting our purpose of using sequential mode.
+			 */
+			ereport(ERROR, (errmsg(
+								"The primary key name (%s) on a shard is too long and could lead "
+								"to deadlocks when executed in a transaction "
+								"block after a parallel query", primaryKeyName),
+							errhint("Try re-running the transaction with "
+									"\"SET LOCAL citus.multi_shard_modify_mode TO "
+									"\'sequential\';\"")));
+		}
+		else
+		{
+			elog(DEBUG1, "the primary key name on the shards of the partition "
+						 "is too long, switching to sequential and local execution "
+						 "mode to prevent self deadlocks: %s", primaryKeyName);
+
+			SetLocalMultiShardModifyModeToSequential();
+			SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
+		}
 	}
 }
 
@@ -761,7 +788,7 @@ PreprocessAlterTableAddPrimaryKey(AlterTableStmt *alterTableStatement, Oid relat
 {
 	char *ddlCommand = DeparseTreeNode((Node *) alterTableStatement);
 
-	SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(relationId);
+	SwitchToSequentialAndLocalExecutionIfPrimaryKeyNameTooLong(relationId);
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 

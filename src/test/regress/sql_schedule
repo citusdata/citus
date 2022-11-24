@@ -13,3 +13,4 @@ test: functions
 test: arbitrary_configs_truncate
 test: arbitrary_configs_truncate_cascade
 test: arbitrary_configs_truncate_partition
+test: arbitrary_configs_alter_table_add_constraint_without_name
