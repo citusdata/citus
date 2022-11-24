@@ -74,10 +74,6 @@ AppendRoleList(StringInfo buf, List *roleList)
 		{
 			rolename = RoleSpecString((RoleSpec *) roleNode, true);
 		}
-		if (IsA(roleNode, AccessPriv))
-		{
-			rolename = quote_identifier(((AccessPriv *) roleNode)->priv_name);
-		}
 		appendStringInfoString(buf, rolename);
 		if (cell != list_tail(roleList))
 		{

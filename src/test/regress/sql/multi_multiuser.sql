@@ -328,9 +328,6 @@ DROP TABLE
     test,
     test_coloc,
     colocation_table;
-SELECT run_command_on_workers($$DROP OWNED BY full_access$$);
-SELECT run_command_on_workers($$DROP OWNED BY some_role$$);
-SELECT run_command_on_workers($$DROP OWNED BY read_access$$);
 DROP USER full_access;
 DROP USER read_access;
 DROP USER no_access;
