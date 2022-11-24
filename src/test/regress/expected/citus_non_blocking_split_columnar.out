@@ -275,7 +275,7 @@ SELECT pg_reload_conf();
 -- END: Split a shard along its co-located shards
 -- BEGIN: Perform deferred cleanup.
 CALL pg_catalog.citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 13 orphaned resources
+NOTICE:  cleaned up 11 orphaned resources
 -- END: Perform deferred cleanup.
 -- BEGIN: Validate Shard Info and Data
     SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport

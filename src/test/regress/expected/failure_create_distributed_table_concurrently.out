@@ -189,8 +189,8 @@ SELECT create_distributed_table_concurrently('table_1', 'id');
 SELECT * FROM pg_dist_shard WHERE logicalrelid = 'table_1'::regclass;
  logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue
 ---------------------------------------------------------------------
- table_1      | 1880084 | t            | -2147483648   | -1
- table_1      | 1880085 | t            | 0             | 2147483647
+ table_1      | 1880080 | t            | -2147483648   | -1
+ table_1      | 1880081 | t            | 0             | 2147483647
 (2 rows)
 
 DROP SCHEMA create_dist_tbl_con CASCADE;

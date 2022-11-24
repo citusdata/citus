@@ -196,7 +196,7 @@ $cmd$);
  run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,1)
- (localhost,57638,t,1)
+ (localhost,57638,t,0)
 (2 rows)
 
 -- override the function for testing purpose

@@ -450,7 +450,7 @@ ERROR:  insert or update on table "lineitem_streaming_1230044" violates foreign 
 DETAIL:  Key (l_orderkey)=(128) is not present in table "orders_streaming_1230046".
 \c - postgres - :master_port
 CALL pg_catalog.citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 30 orphaned resources
+NOTICE:  cleaned up 2 orphaned resources
 -- connect to the worker node with metadata
 \c - mx_isolation_role_ent - :worker_1_port
 SET search_path to "Tenant Isolation";
@@ -1054,7 +1054,7 @@ SELECT count(*) FROM test_colocated_table_2;
 
 \c - postgres - :master_port
 CALL pg_catalog.citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 4 orphaned resources
+NOTICE:  cleaned up 3 orphaned resources
 \c - postgres - :worker_1_port
 -- show the foreign keys of the main table & its colocated shard on other tables
 SELECT tbl.relname, fk."Constraint", fk."Definition"
