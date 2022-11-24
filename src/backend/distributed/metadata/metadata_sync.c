@@ -160,6 +160,7 @@ PG_FUNCTION_INFO_V1(worker_record_sequence_dependency);
 PG_FUNCTION_INFO_V1(citus_internal_add_partition_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_partition_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_shard_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_add_shardgroup_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata_legacy);
 PG_FUNCTION_INFO_V1(citus_internal_update_placement_metadata);
@@ -3284,6 +3285,47 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 
 	InsertShardRow(relationId, shardId, storageType, shardMinValue, shardMaxValue,
 				   &shardGroupId);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_internal_add_shardgroup_metadata is an internal UDF to
+ * add a row to pg_dist_shardgroup.
+ */
+Datum
+citus_internal_add_shardgroup_metadata(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	PG_ENSURE_ARGNOTNULL(0, "shard group id");
+	int64 shardgroupId = PG_GETARG_INT64(0);
+
+	PG_ENSURE_ARGNOTNULL(1, "colocation id");
+	int32 colocationId = PG_GETARG_INT32(1);
+
+	text *shardMinValue = NULL;
+	if (!PG_ARGISNULL(2))
+	{
+		shardMinValue = PG_GETARG_TEXT_P(2);
+	}
+
+	text *shardMaxValue = NULL;
+	if (!PG_ARGISNULL(3))
+	{
+		shardMaxValue = PG_GETARG_TEXT_P(3);
+	}
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+
+		/* TODO add some sanity checks */
+	}
+
+	InsertShardGroupRow(shardgroupId, colocationId, shardMinValue, shardMaxValue);
 
 	PG_RETURN_VOID();
 }

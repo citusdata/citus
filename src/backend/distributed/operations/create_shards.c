@@ -68,6 +68,17 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 }
 
 
+static char *
+TextToSQLLiteral(text *value)
+{
+	if (!value)
+	{
+		return "NULL";
+	}
+	return quote_literal_cstr(text_to_cstring(value));
+}
+
+
 /*
  * CreateShardsWithRoundRobinPolicy creates empty shards for the given table
  * based on the specified number of initial shards. The function first updates
@@ -168,6 +179,13 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	/* set shard storage type according to relation type */
 	char shardStorageType = ShardStorageType(distributedTableId);
 
+	StringInfoData shardgroupQuery = { 0 };
+	initStringInfo(&shardgroupQuery);
+
+	appendStringInfoString(&shardgroupQuery,
+						   "WITH shardgroup_data(shardgroupid, colocationid, "
+						   "shardminvalue, shardmaxvalue) AS (VALUES ");
+
 	for (int64 shardIndex = 0; shardIndex < shardCount; shardIndex++)
 	{
 		uint32 roundRobinNodeIndex = shardIndex % workerNodeCount;
@@ -190,8 +208,19 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 		text *minHashTokenText = IntegerToText(shardMinHashToken);
 		text *maxHashTokenText = IntegerToText(shardMaxHashToken);
 
+		if (shardIndex > 0)
+		{
+			appendStringInfoString(&shardgroupQuery, ", ");
+		}
+
 		InsertShardGroupRow(shardGroupId, cacheEntry->colocationId,
 							minHashTokenText, maxHashTokenText);
+		appendStringInfo(&shardgroupQuery, "(%ld, %d, %s, %s)",
+						 shardGroupId,
+						 cacheEntry->colocationId,
+						 TextToSQLLiteral(minHashTokenText),
+						 TextToSQLLiteral(maxHashTokenText));
+
 
 		InsertShardRow(distributedTableId, shardId, shardStorageType,
 					   minHashTokenText, maxHashTokenText, &shardGroupId);
@@ -205,6 +234,14 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 		insertedShardPlacements = list_concat(insertedShardPlacements,
 											  currentInsertedShardPlacements);
 	}
+
+	/* create the shardgroups on workers with metadata */
+	appendStringInfoString(&shardgroupQuery, ") ");
+	appendStringInfoString(&shardgroupQuery,
+						   "SELECT pg_catalog.citus_internal_add_shardgroup_metadata("
+						   "shardgroupid, colocationid, shardminvalue, shardmaxvalue)"
+						   "FROM shardgroup_data;");
+	SendCommandToWorkersWithMetadata(shardgroupQuery.data);
 
 	CreateShardsOnWorkers(distributedTableId, insertedShardPlacements,
 						  useExclusiveConnections, colocatedShard);
