@@ -190,8 +190,9 @@ class PostgresConfig(CitusDefaultClusterConfig):
         self.new_settings = {
             "citus.use_citus_managed_tables": False,
         }
-        self.skip_tests = ["nested_execution"]
-
+        self.skip_tests = ["nested_execution",
+            # Alter Table statement cannot be run from an arbitrary node so this test will fail
+            "arbitrary_configs_alter_table_add_constraint_without_name_create", "arbitrary_configs_alter_table_add_constraint_without_name"]
 
 class CitusSingleNodeClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
@@ -306,8 +307,9 @@ class CitusUnusualQuerySettingsConfig(CitusDefaultClusterConfig):
             # requires the table with the fk to be converted to a citus_local_table.
             # As of c11, there is no way to do that through remote execution so this test
             # will fail
-            "arbitrary_configs_truncate_cascade_create", "arbitrary_configs_truncate_cascade"]
-
+            "arbitrary_configs_truncate_cascade_create", "arbitrary_configs_truncate_cascade",
+             # Alter Table statement cannot be run from an arbitrary node so this test will fail
+            "arbitrary_configs_alter_table_add_constraint_without_name_create", "arbitrary_configs_alter_table_add_constraint_without_name"]
 
 class CitusSingleNodeSingleShardClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
@@ -332,7 +334,9 @@ class CitusShardReplicationFactorClusterConfig(CitusDefaultClusterConfig):
             "arbitrary_configs_truncate_cascade_create", "arbitrary_configs_truncate_cascade",
             # citus does not support colocating functions with distributed tables when
             # citus.shard_replication_factor >= 2
-            "function_create", "functions"]
+            "function_create", "functions",
+             # Alter Table statement cannot be run from an arbitrary node so this test will fail
+            "arbitrary_configs_alter_table_add_constraint_without_name_create", "arbitrary_configs_alter_table_add_constraint_without_name"]
 
 
 class CitusSingleShardClusterConfig(CitusDefaultClusterConfig):
