@@ -5,12 +5,13 @@
 -- the ALTER TABLE ... ADD without specifying a name.
 -- Check "ADD PRIMARY KEY"
 CREATE SCHEMA sc1;
-CREATE TABLE sc1.products (
+SET search_path TO sc1;
+CREATE TABLE products (
     product_no integer,
     name text,
     price numeric
 );
-SELECT create_distributed_table('sc1.products', 'product_no');
+SELECT create_distributed_table('products', 'product_no');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -21,35 +22,35 @@ CREATE TABLE sc1.products_ref (
     name text,
     price numeric
 );
-CREATE TABLE sc1.products_ref_2 (
+CREATE TABLE products_ref_2 (
 	    product_no integer,
 	    name text,
 	    price numeric
 );
-CREATE TABLE sc1.products_ref_3 (
+CREATE TABLE products_ref_3 (
             product_no integer,
             name text,
             price numeric
 );
-SELECT create_reference_table('sc1.products_ref');
+SELECT create_reference_table('products_ref');
  create_reference_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT create_reference_table('sc1.products_ref_3');
+SELECT create_reference_table('products_ref_3');
  create_reference_table
 ---------------------------------------------------------------------
 
 (1 row)
 
 -- Check with max table name (63 chars)
-CREATE TABLE sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglonger (
+CREATE TABLE verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglonger (
 	            product_no integer,
 	            name text,
                     price numeric
 		);
-SELECT create_distributed_table('sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon', 'product_no');
+SELECT create_distributed_table('verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon', 'product_no');
  create_distributed_table
 ---------------------------------------------------------------------
 

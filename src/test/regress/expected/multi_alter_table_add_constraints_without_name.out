@@ -217,7 +217,7 @@ SELECT con.conname
  citus_local_table_pkey
 (1 row)
 
--- Test with unusual table name and column names
+-- Test with unusual table and column names
 CREATE TABLE "2nd table" ( "2nd id" INTEGER, "3rd id" INTEGER);
 SELECT create_distributed_table('"2nd table"','2nd id');
  create_distributed_table
@@ -236,6 +236,7 @@ SELECT con.conname
  2nd table_pkey
 (1 row)
 
+-- Check if a primary key constraint is created for the shard tables on the workers
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
     FROM pg_catalog.pg_constraint con

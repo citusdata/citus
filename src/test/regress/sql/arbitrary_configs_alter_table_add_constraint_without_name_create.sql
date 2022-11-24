@@ -6,14 +6,15 @@
 
 -- Check "ADD PRIMARY KEY"
 CREATE SCHEMA sc1;
+SET search_path TO sc1;
 
-CREATE TABLE sc1.products (
+CREATE TABLE products (
     product_no integer,
     name text,
     price numeric
 );
 
-SELECT create_distributed_table('sc1.products', 'product_no');
+SELECT create_distributed_table('products', 'product_no');
 
 CREATE TABLE sc1.products_ref (
     product_no integer,
@@ -21,29 +22,29 @@ CREATE TABLE sc1.products_ref (
     price numeric
 );
 
-CREATE TABLE sc1.products_ref_2 (
+CREATE TABLE products_ref_2 (
 	    product_no integer,
 	    name text,
 	    price numeric
 );
 
-CREATE TABLE sc1.products_ref_3 (
+CREATE TABLE products_ref_3 (
             product_no integer,
             name text,
             price numeric
 );
 
-SELECT create_reference_table('sc1.products_ref');
-SELECT create_reference_table('sc1.products_ref_3');
+SELECT create_reference_table('products_ref');
+SELECT create_reference_table('products_ref_3');
 
 -- Check with max table name (63 chars)
-CREATE TABLE sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglonger (
+CREATE TABLE verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglonger (
 	            product_no integer,
 	            name text,
                     price numeric
 		);
 
-SELECT create_distributed_table('sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon', 'product_no');
+SELECT create_distributed_table('verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon', 'product_no');
 
 -- Test the scenario where a partitioned distributed table has a child with max allowed name
 -- Verify that we switch to sequential execution mode to avoid deadlock in this scenario
