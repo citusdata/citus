@@ -156,8 +156,10 @@ AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd)
 				appendStringInfoString(buf, ")");
 				break;
 			 }
-			 /* falls through */
 		}
+
+		/* fallthrough */
+
 		default:
 		{
 			ereport(ERROR, (errmsg("unsupported subtype for alter table command"),
