@@ -863,6 +863,7 @@ RecursivelyPlanDistributedJoinNode(Node *distributedNode, Query *query,
 		Node *larg = ((JoinExpr *) distributedNode)->larg;
 		if (!IsJoinNodeRecurring(larg, query))
 		{
+			elog(WARNING, "larg");
 			RecursivelyPlanDistributedJoinNode(larg, query,
 											   recursivePlanningContext);
 		}
@@ -870,6 +871,8 @@ RecursivelyPlanDistributedJoinNode(Node *distributedNode, Query *query,
 		Node *rarg = ((JoinExpr *) distributedNode)->rarg;
 		if (!IsJoinNodeRecurring(rarg, query))
 		{
+			elog(WARNING, "rarg");
+
 			RecursivelyPlanDistributedJoinNode(rarg, query,
 											   recursivePlanningContext);
 		}
