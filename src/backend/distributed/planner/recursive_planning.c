@@ -844,19 +844,36 @@ RecursivelyPlanDistributedJoinNode(Node *distributedNode, Query *query,
 	if (IsA(distributedNode, JoinExpr))
 	{
 		/*
-		 * XXX: This, for example, means that RecursivelyPlanRecurringTupleOuterJoins
-		 *      needs to plan inner side, i.e., <distributed> INNER JOIN <distributed>,
-		 *      of the following join:
+		 * This, for example, means that RecursivelyPlanRecurringTupleOuterJoins
+		 * needs to plan inner side, i.e., "<distributed> INNER JOIN <distributed>",
+		 * of the following join:
+		 *   <recurring> LEFT JOIN (<distributed> INNER JOIN <distributed>)
 		 *
-		 *      <recurring> LEFT JOIN (<distributed> INNER JOIN <distributed>)
+		 * XXX: Ideally we should handle such a sub join tree by moving
+		 *      it into a subquery "as a whole" but this implies that we need to
+		 *      rebuild the rtable and re-point all the Vars to the new rtable
+		 *      indexes, so we've not implemented that yet.
 		 *
-		 *      However, this would require moving part of the join tree into a
-		 *      subquery but this implies that we need to rebuild the rtable and
-		 *      re-point all the Vars to the new rtable indexes. We have not
-		 *      implemented that yet.
+		 *      Instead, we recursively plan all the distributed tables in that
+		 *      sub join tree. This is much more inefficient than the other
+		 *      approach (since we lose the opportunity to push-down the whole
+		 *      sub join tree into the workers) but is easier to implement.
 		 */
-		ereport(DEBUG4, (errmsg("recursive planner cannot plan distributed sub "
-								"join nodes yet")));
+
+		Node *larg = ((JoinExpr *) distributedNode)->larg;
+		if (!IsJoinNodeRecurring(larg, query))
+		{
+			RecursivelyPlanDistributedJoinNode(larg, query,
+											   recursivePlanningContext);
+		}
+
+		Node *rarg = ((JoinExpr *) distributedNode)->rarg;
+		if (!IsJoinNodeRecurring(rarg, query))
+		{
+			RecursivelyPlanDistributedJoinNode(rarg, query,
+											   recursivePlanningContext);
+		}
+
 		return;
 	}
 
@@ -882,7 +899,6 @@ RecursivelyPlanDistributedJoinNode(Node *distributedNode, Query *query,
 	else if (distributedRte->rtekind == RTE_SUBQUERY)
 	{
 		RecursivelyPlanSubquery(distributedRte->subquery, recursivePlanningContext);
-		return;
 	}
 	else
 	{
