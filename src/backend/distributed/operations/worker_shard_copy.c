@@ -288,6 +288,9 @@ ShardCopyDestReceiverStartup(DestReceiver *dest, int operation, TupleDesc
 }
 
 
+/* CreateReplicationOriginIfNotExists creates a replication origin if it does
+ * not already exist already. To make the origin id unique for different nodes,
+ * origin node's id is appended to the prefix citus_cdc_.*/
 static void
 CreateReplicationOriginIfNotExists(ShardCopyDestReceiver *dest)
 {
