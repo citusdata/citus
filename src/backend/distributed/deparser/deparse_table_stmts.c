@@ -118,6 +118,7 @@ AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd)
 			AppendAlterTableCmdAddColumn(buf, alterTableCmd);
 			break;
 		}
+
 		case AT_AddConstraint:
 		{
 			Constraint *constraint = (Constraint *) alterTableCmd->def;
@@ -130,15 +131,15 @@ AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd)
 			 */
 			if (constraint->contype == CONSTR_PRIMARY)
 			{
-				 /* Need to deparse PRIMARY KEY constraint commands only if adding a name.*/
+				/* Need to deparse PRIMARY KEY constraint commands only if adding a name.*/
 				Assert(constraint->conname != NULL);
 
 				appendStringInfoString(buf, " ADD CONSTRAINT ");
 				appendStringInfo(buf, "%s ", quote_identifier(constraint->conname));
 				appendStringInfoString(buf, " PRIMARY KEY (");
 
-				ListCell* lc;
-				char* key;
+				ListCell *lc;
+				char *key;
 				bool firstkey = true;
 
 				foreach(lc, constraint->keys)
@@ -155,7 +156,7 @@ AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd)
 
 				appendStringInfoString(buf, ")");
 				break;
-			 }
+			}
 		}
 
 		/* fallthrough */
