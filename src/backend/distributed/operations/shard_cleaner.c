@@ -196,16 +196,17 @@ citus_cleanup_orphaned_resources(PG_FUNCTION_ARGS)
 
 
 /*
- * DropOrphanedShardsInSeparateTransaction cleans up orphaned shards by
+ * DropOrphanedResourcesInSeparateTransaction cleans up orphaned resources by
  * connecting to localhost. This is done, so that the locks that
  * DropOrphanedShardsForMove takes are only held for a short time.
  */
 void
-DropOrphanedShardsInSeparateTransaction(void)
+DropOrphanedResourcesInSeparateTransaction(void)
 {
 	int connectionFlag = FORCE_NEW_CONNECTION;
 	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
 													PostPortNumber);
+	ExecuteCriticalRemoteCommand(connection, "CALL citus_cleanup_orphaned_resources()");
 	ExecuteCriticalRemoteCommand(connection, "CALL citus_cleanup_orphaned_shards()");
 	CloseConnection(connection);
 }

@@ -1501,10 +1501,10 @@ EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName, int32 sourceNo
 		if (targetPlacement->shardState == SHARD_STATE_TO_DELETE)
 		{
 			/*
-			 * Trigger deletion of orphaned shards and hope that this removes
+			 * Trigger deletion of orphaned resources and hope that this removes
 			 * the shard.
 			 */
-			DropOrphanedShardsInSeparateTransaction();
+			DropOrphanedResourcesInSeparateTransaction();
 			shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
 			targetPlacement = SearchShardPlacementInList(shardPlacementList,
 														 targetNodeName,

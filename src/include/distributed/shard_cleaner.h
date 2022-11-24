@@ -24,7 +24,7 @@ extern int NextOperationId;
 extern int NextCleanupRecordId;
 
 extern int TryDropOrphanedResources(bool waitForLocks);
-extern void DropOrphanedShardsInSeparateTransaction(void);
+extern void DropOrphanedResourcesInSeparateTransaction(void);
 
 /* Members for cleanup infrastructure */
 typedef uint64 OperationId;
