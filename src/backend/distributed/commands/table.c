@@ -744,8 +744,8 @@ SwitchToSequentialAndLocalExecutionIfPrimaryKeyNameTooLong(Oid relationId)
 	RelationClose(rel);
 
 	char *primaryKeyName = ChooseIndexName(longestPartitionShardName,
-									namespaceOid,
-									NULL, NULL, true, true);
+										   namespaceOid,
+										   NULL, NULL, true, true);
 
 
 	if (primaryKeyName && strnlen(primaryKeyName, NAMEDATALEN) >= NAMEDATALEN - 1)
