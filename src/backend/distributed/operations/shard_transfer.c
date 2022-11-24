@@ -1157,6 +1157,8 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 		return;
 	}
 
+	DropOrphanedResourcesInSeparateTransaction();
+
 	if (useLogicalReplication)
 	{
 		CopyShardTablesViaLogicalReplication(shardIntervalList, sourceNodeName,
