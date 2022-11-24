@@ -126,31 +126,31 @@ AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd)
 			/* We need to deparse ALTER TABLE ... PRIMARY KEY commands into
 			 * ALTER TABLE ... ADD CONSTRAINT <conname> PRIMARY KEY ... to be able
 			 * add a constraint name.
-			 * TODO: this code needs to support all possible syntaxes for ALTER TABLE ... PRIMARY KEY
-			 * (e.g. UNCLUSTERED)
 			 */
 			if (constraint->contype == CONSTR_PRIMARY)
 			{
 				/* Need to deparse PRIMARY KEY constraint commands only if adding a name.*/
-				Assert(constraint->conname != NULL);
+				if (constraint->conname == NULL)
+				{
+					ereport(ERROR, (errmsg(
+										"Constraint name can not be NULL when constraint type is PRIMARY KEY")));
+				}
 
 				appendStringInfoString(buf, " ADD CONSTRAINT ");
 				appendStringInfo(buf, "%s ", quote_identifier(constraint->conname));
 				appendStringInfoString(buf, " PRIMARY KEY (");
 
 				ListCell *lc;
-				char *key;
 				bool firstkey = true;
 
 				foreach(lc, constraint->keys)
 				{
-					key = strVal(lfirst(lc));
 					if (firstkey == false)
 					{
 						appendStringInfoString(buf, ", ");
 					}
 
-					appendStringInfo(buf, "%s", key);
+					appendStringInfo(buf, "%s", quote_identifier(strVal(lfirst(lc))));
 					firstkey = false;
 				}
 

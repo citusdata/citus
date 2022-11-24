@@ -700,6 +700,22 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 }
 
 
+List *
+PreprocessAlterTableAddPrimaryKey(AlterTableStmt *alterTableStatement, Oid relationId)
+{
+	char *ddlCommand = DeparseTreeNode((Node *) alterTableStatement);
+
+	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
+
+	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
+	ddlJob->startNewTransaction = false;
+	ddlJob->metadataSyncCommand = ddlCommand;
+	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+
+	return list_make1(ddlJob);
+}
+
+
 /*
  * PreprocessAlterTableStmt determines whether a given ALTER TABLE statement
  * involves a distributed table. If so (and if the statement does not use
@@ -943,26 +959,25 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 			{
 				if (constraint->conname == NULL)
 				{
+					bool primary = true;
+					bool isconstraint = true;
+
 					Relation rel = RelationIdGetRelation(leftRelationId);
+
 					constraint->conname = ChooseIndexName(RelationGetRelationName(rel),
 														  RelationGetNamespace(rel),
-														  NULL, NULL, true, true);
+														  NULL, NULL, primary,
+														  isconstraint);
 					RelationClose(rel);
-
-					Assert(GetMemoryChunkContext(constraint->conname) ==
-						   GetMemoryChunkContext(newCmd));
-
-					((Constraint *) (newCmd->def))->conname = pstrdup(
-						constraint->conname);
 
 					/*
 					 * We have to change ALTER TABLE ... ADD PRIMARY ... command into
 					 * ALTER TABLE ... ADD CONSTRAINT <conname> PRIMARY KEY ...
-					 * in order to be able to use the name we created. Therefore we will send the
+					 * in order to be able to use the name we have created. Therefore we will send the
 					 * changed command to workers.
 					 */
-					deparseAT = true;
-					useInitialDDLCommandString = true;
+					return PreprocessAlterTableAddPrimaryKey(alterTableStatement,
+															 leftRelationId);
 				}
 			}
 		}
@@ -1196,21 +1211,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		sqlForTaskList = DeparseTreeNode((Node *) newStmt);
 	}
 
-	/* In the case of ADD PRIMARY KEY command,
-	 * we want to send the new command string (ALTER TABLE ... ADD CONSTRAINT) to the
-	 * workers such that it is executed on the main table (controlled by useInitialDDLCommandString is TRUE)
-	 * and shards (controlled by  deparseAT).
-	 * Should we add CONST_PRIMARY check as well for avoiding impacting any other scenario?
-	 */
-	if (useInitialDDLCommandString && deparseAT)
-	{
-		ddlJob->metadataSyncCommand = sqlForTaskList;
-	}
-	else
-	{
-		ddlJob->metadataSyncCommand = useInitialDDLCommandString ? alterTableCommand :
-									  NULL;
-	}
+	ddlJob->metadataSyncCommand = useInitialDDLCommandString ? alterTableCommand : NULL;
 
 	if (OidIsValid(rightRelationId))
 	{
