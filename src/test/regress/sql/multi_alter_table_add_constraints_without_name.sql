@@ -26,7 +26,7 @@ SELECT con.conname
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
 	      WHERE rel.relname = 'products';
 
--- Check that the primary key name created on the coordinator is sent to workers and 
+-- Check that the primary key name created on the coordinator is sent to workers and
 -- the constraints created for the shard tables conform to the <conname>_shardid scheme.
 \c - - :public_worker_1_host :worker_1_port
 SELECT con.conname
@@ -86,7 +86,7 @@ CREATE TABLE sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon
                     price numeric
 		);
 
-SELECT create_distributed_table('sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon', 'product_no');		
+SELECT create_distributed_table('sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon', 'product_no');
 
 ALTER TABLE sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon ADD PRIMARY KEY(product_no);
 
@@ -105,7 +105,7 @@ SELECT Count(con.conname)
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
 		WHERE rel.relname LIKE 'very%';
 
--- Constraint can be deleted via the coordinator	
+-- Constraint can be deleted via the coordinator
 \c - - :master_host :master_port
 ALTER TABLE sc1.verylonglonglonglonglonglonglonglonglonglonglonglonglonglonglon DROP CONSTRAINT verylonglonglonglonglonglonglonglonglonglonglonglonglonglo_pkey;
 

@@ -700,7 +700,12 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 }
 
 
-List *
+/*
+ * PreprocessAlterTableAddPrimaryKey converts the ALTER TABLE ... ADD PRIMARY KEY ...
+ * into ALTER TABLE ... ADD CONSTRAINT <conname> PRIMARY KEY format and returns the DDLJob
+ * to run this command in the workers.
+ */
+static List *
 PreprocessAlterTableAddPrimaryKey(AlterTableStmt *alterTableStatement, Oid relationId)
 {
 	char *ddlCommand = DeparseTreeNode((Node *) alterTableStatement);
@@ -964,6 +969,10 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 
 					Relation rel = RelationIdGetRelation(leftRelationId);
 
+					/*
+					 * Change the alterTableCommand directly so that the standard utility
+					 * hook runs it with the name we created.
+					 */
 					constraint->conname = ChooseIndexName(RelationGetRelationName(rel),
 														  RelationGetNamespace(rel),
 														  NULL, NULL, primary,
@@ -971,10 +980,9 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 					RelationClose(rel);
 
 					/*
-					 * We have to change ALTER TABLE ... ADD PRIMARY ... command into
+					 * Convert ALTER TABLE ... ADD PRIMARY ... command into
 					 * ALTER TABLE ... ADD CONSTRAINT <conname> PRIMARY KEY ...
-					 * in order to be able to use the name we have created. Therefore we will send the
-					 * changed command to workers.
+					 * and send it to the workers.
 					 */
 					return PreprocessAlterTableAddPrimaryKey(alterTableStatement,
 															 leftRelationId);
