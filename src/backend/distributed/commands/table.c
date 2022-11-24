@@ -29,6 +29,7 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distribution_column.h"
 #include "distributed/foreign_key_relationship.h"
+#include "distributed/local_executor.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/dependency.h"
@@ -700,6 +701,56 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 }
 
 
+static void
+SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(Oid relationId)
+{
+	if (!PartitionedTable(relationId))
+	{
+		/* Citus already handles long names for regular tables */
+		return;
+	}
+
+	if (ShardIntervalCount(relationId) == 0)
+	{
+		/*
+		 * Relation has no shards, so we cannot run into "long shard index
+		 * name" issue.
+		 */
+		return;
+	}
+
+	Oid longestNamePartitionId = PartitionWithLongestNameRelationId(relationId);
+
+	if (!OidIsValid(longestNamePartitionId))
+	{
+		/* no partitions have been created yet */
+		return;
+	}
+
+	char *longestPartitionShardName = get_rel_name(longestNamePartitionId);
+	ShardInterval *shardInterval = LoadShardIntervalWithLongestShardName(
+		longestNamePartitionId);
+
+	AppendShardIdToName(&longestPartitionShardName, shardInterval->shardId);
+
+
+	Relation rel = RelationIdGetRelation(longestNamePartitionId);
+	Oid namespaceOid = RelationGetNamespace(rel);
+	RelationClose(rel);
+
+	char *conname = ChooseIndexName(longestPartitionShardName,
+									namespaceOid,
+									NULL, NULL, true, true);
+
+
+	if (conname && strnlen(conname, NAMEDATALEN) >= NAMEDATALEN - 1)
+	{
+		SetLocalMultiShardModifyModeToSequential();
+		SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
+	}
+}
+
+
 /*
  * PreprocessAlterTableAddPrimaryKey converts the ALTER TABLE ... ADD PRIMARY KEY ...
  * into ALTER TABLE ... ADD CONSTRAINT <conname> PRIMARY KEY format and returns the DDLJob
@@ -709,6 +760,8 @@ static List *
 PreprocessAlterTableAddPrimaryKey(AlterTableStmt *alterTableStatement, Oid relationId)
 {
 	char *ddlCommand = DeparseTreeNode((Node *) alterTableStatement);
+
+	SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(relationId);
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
