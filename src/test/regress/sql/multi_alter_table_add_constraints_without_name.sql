@@ -103,8 +103,7 @@ SELECT con.conname
     FROM pg_catalog.pg_constraint con
       INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
       INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
-		WHERE rel.relname LIKE 'very%';
-		ORDER BY con.conname ASC;
+		WHERE rel.relname LIKE 'very%' ORDER BY con.conname ASC;
 
 -- Constraint can be deleted via the coordinator
 \c - - :master_host :master_port
