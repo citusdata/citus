@@ -995,62 +995,42 @@ TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 																CitusExtensionOwnerName(),
 																NULL);
 
-	int maxSecondsToTryDropping = 20;
-	bool raiseInterrupts = true;
-	PGresult *result = NULL;
-	bool success = false;
+	int querySent = SendRemoteCommand(
+		connection,
+		psprintf(
+			"select pg_drop_replication_slot(slot_name) from "
+			REPLICATION_SLOT_CATALOG_TABLE_NAME
+			" where slot_name = %s",
+			quote_literal_cstr(replicationSlotName))
+		);
 
-	/* we'll retry in case of an OBJECT_IN_USE error */
-	while (maxSecondsToTryDropping >= 0)
+	if (querySent == 0)
 	{
-		int querySent = SendRemoteCommand(
-			connection,
-			psprintf(
-				"select pg_drop_replication_slot(slot_name) from "
-				REPLICATION_SLOT_CATALOG_TABLE_NAME
-				" where slot_name = %s",
-				quote_literal_cstr(replicationSlotName))
-			);
+		return false;
+	}
 
-		if (querySent == 0)
-		{
-			/* return false */
-			break;
-		}
+	bool raiseInterrupts = true;
+	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
 
-		result = GetRemoteCommandResult(connection, raiseInterrupts);
-
-		if (IsResponseOK(result))
-		{
-			/* no error, we are good to go */
-			success = true;
-			break;
-		}
-
-		char *errorcode = PQresultErrorField(result, PG_DIAG_SQLSTATE);
-		if (errorcode != NULL && strcmp(errorcode, STR_ERRCODE_OBJECT_IN_USE) == 0 &&
-			maxSecondsToTryDropping > 0)
-		{
-			/* retry dropping the replication slot after sleeping for one sec */
-			maxSecondsToTryDropping--;
-			pg_usleep(1000);
-		}
-		else
-		{
-			/*
-			 * we have made enough number of retries (currently 20), but didn't work
-			 */
-			break;
-		}
-
+	if (IsResponseOK(result))
+	{
 		PQclear(result);
 		ForgetResults(connection);
+		return true;
+	}
+
+	char *errorcode = PQresultErrorField(result, PG_DIAG_SQLSTATE);
+	if (errorcode != NULL && strcmp(errorcode, STR_ERRCODE_OBJECT_IN_USE) == 0)
+	{
+		PQclear(result);
+		ForgetResults(connection);
+		return false;
 	}
 
 	PQclear(result);
 	ForgetResults(connection);
 
-	return success;
+	return false;
 }
 
 
