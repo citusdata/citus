@@ -73,13 +73,15 @@ SELECT count(*) FROM t;
 (1 row)
 
 -- Verify that shard can be moved after a temporary failure
--- cleanup leftovers
+-- cleanup leftovers, as it can cause flakiness in the following test files
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
+CALL citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 4 orphaned resources
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
  master_move_shard_placement
 ---------------------------------------------------------------------
