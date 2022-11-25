@@ -995,6 +995,8 @@ TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 																CitusExtensionOwnerName(),
 																NULL);
 
+	RemoteTransactionBegin(connection);
+
 	ExecuteCriticalRemoteCommand(connection, "SET LOCAL lock_timeout TO '1s'");
 
 	int querySent = SendRemoteCommand(
@@ -1017,6 +1019,8 @@ TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 
 	if (IsResponseOK(result))
 	{
+		RemoteTransactionCommit(connection);
+		ResetRemoteTransaction(connection);
 		PQclear(result);
 		ForgetResults(connection);
 		return true;
@@ -1029,6 +1033,8 @@ TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 		ReportResultError(connection, result, WARNING);
 	}
 
+	RemoteTransactionAbort(connection);
+	ResetRemoteTransaction(connection);
 	PQclear(result);
 	ForgetResults(connection);
 	return false;
