@@ -982,7 +982,7 @@ TryDropPublicationOutsideTransaction(char *publicationName,
 
 /*
  * TryDropReplicationSlotOutsideTransaction drops the replication slot with the given
- * name if it exists. It retries if the command fails with an OBJECT_IN_USE error.
+ * name if it exists.
  */
 static bool
 TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
@@ -995,6 +995,8 @@ TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 																CitusExtensionOwnerName(),
 																NULL);
 
+	ExecuteCriticalRemoteCommand(connection, "SET LOCAL lock_timeout TO '1s'");
+
 	int querySent = SendRemoteCommand(
 		connection,
 		psprintf(
@@ -1006,6 +1008,7 @@ TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 
 	if (querySent == 0)
 	{
+		ReportConnectionError(connection, WARNING);
 		return false;
 	}
 
@@ -1020,16 +1023,14 @@ TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 	}
 
 	char *errorcode = PQresultErrorField(result, PG_DIAG_SQLSTATE);
-	if (errorcode != NULL && strcmp(errorcode, STR_ERRCODE_OBJECT_IN_USE) == 0)
+	if (errorcode != NULL && strcmp(errorcode, STR_ERRCODE_OBJECT_IN_USE) != 0)
 	{
-		PQclear(result);
-		ForgetResults(connection);
-		return false;
+		/* throw a warning unless object is in use */
+		ReportResultError(connection, result, WARNING);
 	}
 
 	PQclear(result);
 	ForgetResults(connection);
-
 	return false;
 }
 
