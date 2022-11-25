@@ -941,7 +941,8 @@ TryDropSubscriptionOutsideTransaction(char *subscriptionName,
 					 "DROP SUBSCRIPTION %s",
 					 quote_identifier(subscriptionName));
 
-	List *dropCommandList = list_make2(alterQuery->data, dropQuery->data);
+	List *dropCommandList = list_make3("SET LOCAL lock_timeout TO '1s'",
+									   alterQuery->data, dropQuery->data);
 	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
 		connection,
 		dropCommandList);
@@ -969,7 +970,8 @@ TryDropPublicationOutsideTransaction(char *publicationName,
 					 "DROP PUBLICATION IF EXISTS %s",
 					 quote_identifier(publicationName));
 
-	List *dropCommandList = list_make1(dropQuery->data);
+	List *dropCommandList = list_make2("SET LOCAL lock_timeout TO '1s'",
+									   dropQuery->data);
 	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
 		connection,
 		dropCommandList);
@@ -1071,7 +1073,8 @@ TryDropUserOutsideTransaction(char *username,
 	 */
 	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
 		connection,
-		list_make2(
+		list_make3(
+			"SET LOCAL lock_timeout TO '1s'",
 			"SET LOCAL citus.enable_ddl_propagation TO OFF;",
 			psprintf("DROP USER IF EXISTS %s;",
 					 quote_identifier(username))));
