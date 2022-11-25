@@ -301,3 +301,5 @@ s/^(NOTICE:  )(clock).*LC:[0-9]+,.*C:[0-9]+,.*$/\1\2 xxxxxx/g
 # The following 2 lines are to normalize duration and cost in the EXPLAIN output
 s/LOG:  duration: [0-9].[0-9]+ ms/LOG:  duration: xxxx ms/g
 s/"Total Cost": [0-9].[0-9]+/"Total Cost": xxxx/g
+
+s/(NOTICE:  issuing SET LOCAL application_name TO 'citus_rebalancer gpid=)[0-9]+/\1xxxxx/g

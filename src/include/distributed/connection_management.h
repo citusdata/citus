@@ -37,10 +37,10 @@
 #define CITUS_APPLICATION_NAME_PREFIX "citus_internal gpid="
 
 /* application name used for internal connections in rebalancer */
-#define CITUS_REBALANCER_NAME "citus_rebalancer"
+#define CITUS_REBALANCER_APPLICATION_NAME_PREFIX "citus_rebalancer gpid="
 
 /* application name used for connections made by run_command_on_* */
-#define CITUS_RUN_COMMAND_APPLICATION_NAME "citus_run_command"
+#define CITUS_RUN_COMMAND_APPLICATION_NAME_PREFIX "citus_run_command gpid="
 
 /* deal with waiteventset errors */
 #define WAIT_EVENT_SET_INDEX_NOT_INITIALIZED -1

@@ -204,7 +204,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  Copying shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET LOCAL application_name TO citus_rebalancer;
+NOTICE:  issuing SET LOCAL application_name TO 'citus_rebalancer gpid=xxxxx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.log_remote_commands TO 'on';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -225,7 +225,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  Copying shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET LOCAL application_name TO citus_rebalancer;
+NOTICE:  issuing SET LOCAL application_name TO 'citus_rebalancer gpid=xxxxx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.log_remote_commands TO 'on';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -246,7 +246,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  Copying shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET LOCAL application_name TO citus_rebalancer;
+NOTICE:  issuing SET LOCAL application_name TO 'citus_rebalancer gpid=xxxxx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.log_remote_commands TO 'on';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -267,7 +267,7 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  Copying shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SET LOCAL application_name TO citus_rebalancer;
+NOTICE:  issuing SET LOCAL application_name TO 'citus_rebalancer gpid=xxxxx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.log_remote_commands TO 'on';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
