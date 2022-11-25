@@ -899,6 +899,9 @@ TryDropSubscriptionOutsideTransaction(char *subscriptionName,
 																CitusExtensionOwnerName(),
 																NULL);
 
+	RemoteTransactionBegin(connection);
+
+	ExecuteCriticalRemoteCommand(connection, "SET LOCAL lock_timeout TO '1s'");
 	int querySent = SendRemoteCommand(
 		connection,
 		psprintf("ALTER SUBSCRIPTION %s DISABLE", quote_identifier(subscriptionName)));
@@ -922,12 +925,16 @@ TryDropSubscriptionOutsideTransaction(char *subscriptionName,
 		}
 		else
 		{
+			RemoteTransactionAbort(connection);
+			ResetRemoteTransaction(connection);
 			ReportResultError(connection, result, ERROR);
 			PQclear(result);
 			ForgetResults(connection);
 		}
 	}
 
+	RemoteTransactionCommit(connection);
+	ResetRemoteTransaction(connection);
 	PQclear(result);
 	ForgetResults(connection);
 
