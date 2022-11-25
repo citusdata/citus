@@ -141,6 +141,7 @@ static char * ColocationGroupCreateCommand(uint32 colocationId, int shardCount,
 										   int replicationFactor,
 										   Oid distributionColumnType,
 										   Oid distributionColumnCollation);
+static char * ShardgroupDeleteCommandByColocationId(uint32 colocationId);
 static char * ColocationGroupDeleteCommand(uint32 colocationId);
 static char * RemoteTypeIdExpression(Oid typeId);
 static char * RemoteCollationIdExpression(Oid colocationId);
@@ -169,6 +170,7 @@ PG_FUNCTION_INFO_V1(citus_internal_update_relation_colocation);
 PG_FUNCTION_INFO_V1(citus_internal_add_object_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_colocation_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_colocation_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_delete_shardgroup_metadata);
 
 
 static bool got_SIGTERM = false;
@@ -3853,6 +3855,30 @@ citus_internal_delete_colocation_metadata(PG_FUNCTION_ARGS)
 
 
 /*
+ * citus_internal_delete_shardgroup_metadata is an internal UDF to
+ * delte rows from pg_dist_shardgroup.
+ */
+Datum
+citus_internal_delete_shardgroup_metadata(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureSuperUser();
+
+	int colocationId = PG_GETARG_INT32(0);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+	}
+
+	DeleteShardgroupForColocationIdLocally(colocationId);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
  * SyncNewColocationGroup synchronizes a new pg_dist_colocation entry to a worker.
  */
 void
@@ -3969,6 +3995,14 @@ RemoteCollationIdExpression(Oid colocationId)
 }
 
 
+void
+SyncDeleteShardgroupForColocationIdToNodes(uint32 colocationId)
+{
+	char *command = ShardgroupDeleteCommandByColocationId(colocationId);
+	SendCommandToWorkersWithMetadataViaSuperUser(command);
+}
+
+
 /*
  * SyncDeleteColocationGroupToNodes deletes a pg_dist_colocation record from workers.
  */
@@ -3982,6 +4016,20 @@ SyncDeleteColocationGroupToNodes(uint32 colocationId)
 	 * no reasonable way of restricting access.
 	 */
 	SendCommandToWorkersWithMetadataViaSuperUser(command);
+}
+
+
+static char *
+ShardgroupDeleteCommandByColocationId(uint32 colocationId)
+{
+	StringInfoData deleteCommand = { 0 };
+	initStringInfo(&deleteCommand);
+
+	appendStringInfo(&deleteCommand,
+					 "SELECT pg_catalog.citus_internal_delete_shardgroup_metadata(colocationid => %d)",
+					 colocationId);
+
+	return deleteCommand.data;
 }
 
 

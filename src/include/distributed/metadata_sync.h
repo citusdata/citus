@@ -113,6 +113,7 @@ extern void SyncNewColocationGroupToNodes(uint32 colocationId, int shardCount,
 										  int replicationFactor,
 										  Oid distributionColumType,
 										  Oid distributionColumnCollation);
+extern void SyncDeleteShardgroupForColocationIdToNodes(uint32 colocationId);
 extern void SyncDeleteColocationGroupToNodes(uint32 colocationId);
 
 #define DELETE_ALL_NODES "DELETE FROM pg_dist_node"

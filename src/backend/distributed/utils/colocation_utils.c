@@ -39,6 +39,7 @@
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
+#include "distributed/pg_dist_shardgroup.h"
 
 
 /* local function forward declarations */
@@ -50,6 +51,7 @@ static bool HashPartitionedShardIntervalsEqual(ShardInterval *leftShardInterval,
 static int CompareShardPlacementsByNode(const void *leftElement,
 										const void *rightElement);
 static void DeleteColocationGroup(uint32 colocationId);
+static void DeleteShardgroupForColocationId(uint32 colocationId);
 static uint32 CreateColocationGroupForRelation(Oid sourceRelationId);
 static void BreakColocation(Oid sourceRelationId);
 
@@ -1250,9 +1252,64 @@ DeleteColocationGroupIfNoTablesBelong(uint32 colocationId)
 
 		if (colocatedTableCount == 0)
 		{
+			DeleteShardgroupForColocationId(colocationId);
 			DeleteColocationGroup(colocationId);
 		}
 	}
+}
+
+
+static void
+DeleteShardgroupForColocationId(uint32 colocationId)
+{
+	DeleteShardgroupForColocationIdLocally(colocationId);
+	SyncDeleteShardgroupForColocationIdToNodes(colocationId);
+}
+
+
+void
+DeleteShardgroupForColocationIdLocally(uint32 colocationId)
+{
+	ScanKeyData scanKey[1] = { 0 };
+	bool indexOK = false;
+
+	Relation pgDistShardgroup = table_open(DistShardgroupRelationId(), RowExclusiveLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_shardgroup_colocationid,
+				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(colocationId));
+
+	/* TODO add index to find shardgroups by colocationid */
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistShardgroup, InvalidOid, indexOK,
+													NULL, lengthof(scanKey), scanKey);
+
+	/*
+	 * simple_heap_delete() expects that the caller has at least an
+	 * AccessShareLock on primary key index.
+	 *
+	 * XXX: This does not seem required, do we really need to acquire this lock?
+	 * Postgres doesn't acquire such locks on indexes before deleting catalog tuples.
+	 * Linking here the reasons we added this lock acquirement:
+	 * https://github.com/citusdata/citus/pull/2851#discussion_r306569462
+	 * https://github.com/citusdata/citus/pull/2855#discussion_r313628554
+	 * https://github.com/citusdata/citus/issues/1890
+	 */
+	Relation replicaIndex =
+		index_open(RelationGetPrimaryKeyIndex(pgDistShardgroup), AccessShareLock);
+
+	/* for all records found delete from heap */
+	HeapTuple heapTuple = NULL;
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		simple_heap_delete(pgDistShardgroup, &(heapTuple->t_self));
+
+		CitusInvalidateRelcacheByRelid(DistShardgroupRelationId());
+	}
+
+	CommandCounterIncrement();
+	table_close(replicaIndex, AccessShareLock);
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistShardgroup, NoLock);
 }
 
 

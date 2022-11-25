@@ -61,3 +61,4 @@ DROP FUNCTION pg_catalog.citus_internal_add_shard_metadata(
 );
 
 #include "udfs/citus_internal_add_shardgroup_metadata/11.3-1.sql"
+#include "udfs/citus_internal_delete_shardgroup_metadata/11.3-1.sql"
