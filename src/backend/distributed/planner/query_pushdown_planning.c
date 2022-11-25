@@ -816,7 +816,17 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 		}
 		else if (joinType == JOIN_FULL)
 		{
-			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, innerrelRelids))
+			/*
+			 * If one of the outer or inner side contains recurring tuples and the other side
+			 * contains nonrecurring tuples, then duplicate results can exist in the result.
+			 * Thus, Citus should not pushdown the query.
+			 */
+			bool innerContainOnlyRecurring =
+				RelationInfoContainsOnlyRecurringTuples(plannerInfo, innerrelRelids);
+			bool outerContainOnlyRecurring =
+				RelationInfoContainsOnlyRecurringTuples(plannerInfo, outerrelRelids);
+
+			if (innerContainOnlyRecurring && !outerContainOnlyRecurring)
 			{
 				/*
 				 * Find the first (or only) recurring RTE to give a meaningful
@@ -827,7 +837,7 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 				break;
 			}
 
-			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, outerrelRelids))
+			if (!innerContainOnlyRecurring && outerContainOnlyRecurring)
 			{
 				/*
 				 * Find the first (or only) recurring RTE to give a meaningful
