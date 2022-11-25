@@ -80,8 +80,6 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 4 orphaned resources
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
  master_move_shard_placement
 ---------------------------------------------------------------------
