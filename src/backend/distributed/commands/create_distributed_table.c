@@ -1185,7 +1185,7 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	}
 	else if (tableType == REFERENCE_TABLE)
 	{
-		CreateReferenceTableShard(relationId);
+		CreateReferenceTableShard(relationId, colocatedTableId, colocationId);
 	}
 
 	if (ShouldSyncTableMetadata(relationId))
