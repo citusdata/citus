@@ -61,6 +61,7 @@ AppendDropOwnedStmt(StringInfo buf, DropOwnedStmt *stmt)
 	}
 }
 
+
 static void
 AppendRoleList(StringInfo buf, List *roleList)
 {
@@ -81,4 +82,3 @@ AppendRoleList(StringInfo buf, List *roleList)
 		}
 	}
 }
-

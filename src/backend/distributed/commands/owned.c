@@ -54,7 +54,7 @@
  */
 List *
 PreprocessDropOwnedStmt(Node *node, const char *queryString,
-					   ProcessUtilityContext processUtilityContext)
+						ProcessUtilityContext processUtilityContext)
 {
 	DropOwnedStmt *stmt = castNode(DropOwnedStmt, node);
 	List *allDropRoles = stmt->roles;
