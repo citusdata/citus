@@ -78,6 +78,7 @@ ALTER TABLE mx_ddl_table ALTER COLUMN version DROP NOT NULL;
 -- DROP COLUMN
 ALTER TABLE mx_ddl_table DROP COLUMN version;
 
+
 -- See that the changes are applied on coordinator, worker tables and shards
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
 \di ddl_test*_index
