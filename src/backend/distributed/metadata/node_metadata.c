@@ -103,7 +103,7 @@ static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void SyncDistributedObjectsToNodeList(List *workerNodeList);
 static void UpdateLocalGroupIdOnNode(WorkerNode *workerNode);
 static void SyncPgDistTableMetadataToNodeList(List *nodeList);
-static List * InterTableRelationshipCommandList();
+static void InterTableRelationshipCommandList(List **ddlCommandList);
 static void BlockDistributedQueriesOnMetadataNodes(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static void PropagateNodeWideObjectsCommandList(List **nodeWideObjectCommandList);
@@ -652,12 +652,11 @@ master_set_node_property(PG_FUNCTION_ARGS)
  *
  * for each citus table.
  */
-static List *
-InterTableRelationshipCommandList()
+static void
+InterTableRelationshipCommandList(List **multipleTableIntegrationCommandList)
 {
 	List *distributedTableList = CitusTableList();
 	List *propagatedTableList = NIL;
-	List *multipleTableIntegrationCommandList = NIL;
 
 	CitusTableCacheEntry *cacheEntry = NULL;
 	foreach_ptr(cacheEntry, distributedTableList)
@@ -680,17 +679,15 @@ InterTableRelationshipCommandList()
 		List *commandListForRelation =
 			InterTableRelationshipOfRelationCommandList(relationId);
 
-		multipleTableIntegrationCommandList = list_concat(
-			multipleTableIntegrationCommandList,
+		*multipleTableIntegrationCommandList = list_concat(
+			*multipleTableIntegrationCommandList,
 			commandListForRelation);
 	}
 
-	multipleTableIntegrationCommandList = lcons(DISABLE_DDL_PROPAGATION,
-												multipleTableIntegrationCommandList);
-	multipleTableIntegrationCommandList = lappend(multipleTableIntegrationCommandList,
-												  ENABLE_DDL_PROPAGATION);
-
-	return multipleTableIntegrationCommandList;
+	*multipleTableIntegrationCommandList = lcons(DISABLE_DDL_PROPAGATION,
+												 *multipleTableIntegrationCommandList);
+	*multipleTableIntegrationCommandList = lappend(*multipleTableIntegrationCommandList,
+												   ENABLE_DDL_PROPAGATION);
 }
 
 
@@ -836,7 +833,11 @@ SyncDistributedObjectsCommandList(WorkerNode *workerNode, List **commandList)
 	 * After creating each table, handle the inter table relationship between
 	 * those tables.
 	 */
-	*commandList = list_concat(*commandList, InterTableRelationshipCommandList());
+	List *interTableRelationshipCommandList = NIL;
+	InterTableRelationshipCommandList(&interTableRelationshipCommandList);
+
+	*commandList = list_concat(*commandList, interTableRelationshipCommandList);
+
 
 	return *commandList;
 }
