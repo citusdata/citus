@@ -1746,6 +1746,20 @@ void
 InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 			   text *shardMinValue, text *shardMaxValue)
 {
+	bool invalidateRelCache = true;
+	InsertShardRowInternal(relationId, shardId, storageType,
+						   shardMinValue, shardMaxValue, invalidateRelCache);
+}
+
+
+/*
+ * InsertShardRowInternal is a helper function for InsertShardRow()
+ * where callers can also control invalidateRelCache.
+ */
+void
+InsertShardRowInternal(Oid relationId, uint64 shardId, char storageType,
+					   text *shardMinValue, text *shardMaxValue, bool invalidateRelCache)
+{
 	Datum values[Natts_pg_dist_shard];
 	bool isNulls[Natts_pg_dist_shard];
 
@@ -1780,10 +1794,14 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 
 	CatalogTupleInsert(pgDistShard, heapTuple);
 
-	/* invalidate previous cache entry and close relation */
-	CitusInvalidateRelcacheByRelid(relationId);
+	if (invalidateRelCache)
+	{
+		/* invalidate previous cache entry and close relation */
+		CitusInvalidateRelcacheByRelid(relationId);
+	}
 
 	CommandCounterIncrement();
+
 	table_close(pgDistShard, NoLock);
 }
 
@@ -1798,6 +1816,21 @@ uint64
 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 						char shardState, uint64 shardLength,
 						int32 groupId)
+{
+	bool invalidateRelCache = true;
+	return InsertShardPlacementRowInternal(shardId, placementId, shardState, shardLength,
+										   groupId, invalidateRelCache);
+}
+
+
+/*
+ * InsertShardPlacementRowInternal is a helper function for InsertShardPlacementRow()
+ * where callers can also control invalidateRelCache.
+ */
+uint64
+InsertShardPlacementRowInternal(uint64 shardId, uint64 placementId,
+								char shardState, uint64 shardLength,
+								int32 groupId, bool invalidateRelCache)
 {
 	Datum values[Natts_pg_dist_placement];
 	bool isNulls[Natts_pg_dist_placement];
@@ -1824,9 +1857,13 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 
 	CatalogTupleInsert(pgDistPlacement, heapTuple);
 
-	CitusInvalidateRelcacheByShardId(shardId);
+	if (invalidateRelCache)
+	{
+		CitusInvalidateRelcacheByShardId(shardId);
+	}
 
 	CommandCounterIncrement();
+
 	table_close(pgDistPlacement, NoLock);
 
 	return placementId;
@@ -1840,6 +1877,23 @@ void
 InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 						  Var *distributionColumn, uint32 colocationId,
 						  char replicationModel, bool autoConverted)
+{
+	bool invalidateRelCache = true;
+	InsertIntoPgDistPartitionInternal(relationId, distributionMethod, distributionColumn,
+									  colocationId, replicationModel,
+									  autoConverted, invalidateRelCache);
+}
+
+
+/*
+ * InsertIntoPgDistPartitionInternal is a helper function for InsertIntoPgDistPartition()
+ * where callers can also control invalidateRelCache.
+ */
+void
+InsertIntoPgDistPartitionInternal(Oid relationId, char distributionMethod,
+								  Var *distributionColumn, uint32 colocationId,
+								  char replicationModel, bool autoConverted,
+								  bool invalidateRelCache)
 {
 	char *distributionColumnString = NULL;
 
@@ -1881,11 +1935,15 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 	/* finally insert tuple, build index entries & register cache invalidation */
 	CatalogTupleInsert(pgDistPartition, newTuple);
 
-	CitusInvalidateRelcacheByRelid(relationId);
+	if (invalidateRelCache)
+	{
+		CitusInvalidateRelcacheByRelid(relationId);
+	}
 
 	RecordDistributedRelationDependencies(relationId);
 
 	CommandCounterIncrement();
+
 	table_close(pgDistPartition, NoLock);
 }
 
