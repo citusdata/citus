@@ -935,11 +935,13 @@ TryDropSubscriptionOutsideTransaction(char *subscriptionName,
 			 * The subscription doesn't exist, so we can return right away.
 			 * This DropSubscription call is effectively a no-op.
 			 */
+			PQclear(result);
+			ForgetResults(connection);
 			return true;
 		}
 		else
 		{
-			ReportResultError(connection, result, ERROR);
+			ReportResultError(connection, result, WARNING);
 			PQclear(result);
 			ForgetResults(connection);
 			return false;

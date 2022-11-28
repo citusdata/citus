@@ -115,15 +115,14 @@ CONTEXT:  while executing command on localhost:xxxxx
 -- SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* ENABLE").cancel(' || :pid || ')');
 -- SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 -- failure on dropping subscription
-SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* (ENABLE|DISABLE)").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* (ENABLE|DISABLE)").cancel(' || :pid || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-ERROR:  connection pointer is NULL
-CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  canceling statement due to user request
 -- try again
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -163,15 +162,14 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT min\(latest_end_lsn").cancel
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
 -- failure on disabling subscription (right before dropping it)
-SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").cancel(' || :pid || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-ERROR:  connection pointer is NULL
-CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  canceling statement due to user request
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
