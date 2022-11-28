@@ -827,8 +827,10 @@ SyncDistributedObjectsCommandList(WorkerNode *workerNode, List **commandList)
 	/*
 	 * Replicate all objects of the pg_dist_object to the remote node.
 	 */
-	*commandList = list_concat(*commandList, ReplicateAllObjectsToNodeCommandList(
-								   workerNode->workerName, workerNode->workerPort));
+	List *replicateAllObjectsToNodeCommandList = NIL;
+	ReplicateAllObjectsToNodeCommandList(workerNode->workerName, workerNode->workerPort,
+										 &replicateAllObjectsToNodeCommandList);
+	*commandList = list_concat(*commandList, replicateAllObjectsToNodeCommandList);
 
 	/*
 	 * After creating each table, handle the inter table relationship between

@@ -531,11 +531,12 @@ GetAllDependencyCreateDDLCommands(const List *dependencies)
  * previously marked objects to a worker node. The function also sets
  * clusterHasDistributedFunction if there are any distributed functions.
  */
-List *
-ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort)
+void
+ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort,
+									 List **ddlCommands)
 {
 	/* since we are executing ddl commands disable propagation first, primarily for mx */
-	List *ddlCommands = list_make1(DISABLE_DDL_PROPAGATION);
+	*ddlCommands = list_make1(DISABLE_DDL_PROPAGATION);
 
 	/*
 	 * collect all dependencies in creation order and get their ddl commands
@@ -578,13 +579,11 @@ ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort)
 			continue;
 		}
 
-		ddlCommands = list_concat(ddlCommands,
-								  GetDependencyCreateDDLCommands(dependency));
+		*ddlCommands = list_concat(*ddlCommands,
+								   GetDependencyCreateDDLCommands(dependency));
 	}
 
-	ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
-
-	return ddlCommands;
+	*ddlCommands = lappend(*ddlCommands, ENABLE_DDL_PROPAGATION);
 }
 
 
