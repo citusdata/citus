@@ -532,15 +532,8 @@ GetAllDependencyCreateDDLCommands(const List *dependencies)
  * clusterHasDistributedFunction if there are any distributed functions.
  */
 void
-ReplicateAllObjectsToNodeCommandList(List *nodeToSyncMetadataConnections,
-									 List **ddlCommands)
+ReplicateAllObjectsToNodeCommandList(MetadataSyncContext syncContext)
 {
-	/* since we are executing ddl commands disable propagation first, primarily for mx */
-	if (ddlCommands != NULL)
-	{
-		*ddlCommands = list_make1(DISABLE_DDL_PROPAGATION);
-	}
-
 	/*
 	 * collect all dependencies in creation order and get their ddl commands
 	 */
@@ -582,29 +575,22 @@ ReplicateAllObjectsToNodeCommandList(List *nodeToSyncMetadataConnections,
 			continue;
 		}
 
+
+
 		List *perObjCommands = GetDependencyCreateDDLCommands(dependency);
 
-		if (list_length(nodeToSyncMetadataConnections) != 0)
+		if (syncContext.syncImmediately)
 		{
 			SendCommandListToWorkerOutsideTransactionWithConnection(linitial(
-																		nodeToSyncMetadataConnections),
+																		syncContext.
+																		nodeConnectionList),
 																	perObjCommands);
-		}
-
-		if (ddlCommands != NULL)
-		{
-			*ddlCommands = list_concat(*ddlCommands,
-									   perObjCommands);
 		}
 		else
 		{
-			list_free_deep(perObjCommands);
+			syncContext.ddlCommandList =
+				list_concat(syncContext.ddlCommandList, perObjCommands);
 		}
-	}
-
-	if (ddlCommands != NULL)
-	{
-		*ddlCommands = lappend(*ddlCommands, ENABLE_DDL_PROPAGATION);
 	}
 }
 

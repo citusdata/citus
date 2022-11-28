@@ -226,10 +226,8 @@ start_metadata_sync_to_all_nodes(PG_FUNCTION_ARGS)
  * start_metadata_sync_to_node().
  */
 void
-SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort)
+SyncNodeMetadataToNode(MetadataSyncContext syncContext)
 {
-	char *escapedNodeName = quote_literal_cstr(nodeNameString);
-
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 	EnsureModificationsCanRun();
@@ -663,44 +661,44 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 	EnsureSequentialModeMetadataOperations();
 
 	char *userName = CurrentUserName();
-	List *dropMetadataCommandList = NIL;
 
 	/*
 	 * Detach partitions, break dependencies between sequences and table then
 	 * remove shell tables first.
 	 */
 
-	List *detachPartitionCommandList = NIL;
+	MetadataSyncContext syncContext;
+	syncContext.syncImmediately = false;
 
-	DetachPartitionCommandList(NIL, &detachPartitionCommandList);
-
-	dropMetadataCommandList = list_concat(dropMetadataCommandList,
-										  detachPartitionCommandList);
+	DetachPartitionCommandList(syncContext);
 
 
-	dropMetadataCommandList = lappend(dropMetadataCommandList,
-									  BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
-	dropMetadataCommandList = lappend(dropMetadataCommandList,
-									  REMOVE_ALL_SHELL_TABLES_COMMAND);
-	dropMetadataCommandList = list_concat(dropMetadataCommandList,
-										  NodeMetadataDropCommands());
-	dropMetadataCommandList = lappend(dropMetadataCommandList,
-									  LocalGroupIdUpdateCommand(0));
+	syncContext.ddlCommandList = lappend(syncContext.ddlCommandList,
+										 BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
+	syncContext.ddlCommandList = lappend(syncContext.ddlCommandList,
+										 REMOVE_ALL_SHELL_TABLES_COMMAND);
+	syncContext.ddlCommandList = list_concat(syncContext.ddlCommandList,
+											 NodeMetadataDropCommands());
+	syncContext.ddlCommandList = lappend(syncContext.ddlCommandList,
+										 LocalGroupIdUpdateCommand(0));
 
 	/* remove all dist table and object/table related metadata afterwards */
-	dropMetadataCommandList = lappend(dropMetadataCommandList, DELETE_ALL_PARTITIONS);
-	dropMetadataCommandList = lappend(dropMetadataCommandList, DELETE_ALL_SHARDS);
-	dropMetadataCommandList = lappend(dropMetadataCommandList, DELETE_ALL_PLACEMENTS);
-	dropMetadataCommandList = lappend(dropMetadataCommandList,
-									  DELETE_ALL_DISTRIBUTED_OBJECTS);
-	dropMetadataCommandList = lappend(dropMetadataCommandList, DELETE_ALL_COLOCATION);
+	syncContext.ddlCommandList = lappend(syncContext.ddlCommandList,
+										 DELETE_ALL_PARTITIONS);
+	syncContext.ddlCommandList = lappend(syncContext.ddlCommandList, DELETE_ALL_SHARDS);
+	syncContext.ddlCommandList = lappend(syncContext.ddlCommandList,
+										 DELETE_ALL_PLACEMENTS);
+	syncContext.ddlCommandList = lappend(syncContext.ddlCommandList,
+										 DELETE_ALL_DISTRIBUTED_OBJECTS);
+	syncContext.ddlCommandList = lappend(syncContext.ddlCommandList,
+										 DELETE_ALL_COLOCATION);
 
 	Assert(superuser());
 	SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
 		workerNode->workerName,
 		workerNode->workerPort,
 		userName,
-		dropMetadataCommandList);
+		syncContext.ddlCommandList);
 }
 
 
@@ -2667,8 +2665,7 @@ CreateTableMetadataOnWorkers(Oid relationId)
  * empty list to not disable/enable DDL propagation for nothing.
  */
 void
-DetachPartitionCommandList(List *nodeToSyncMetadataConnections,
-						   List **detachPartitionCommandList)
+DetachPartitionCommandList(MetadataSyncContext syncContext)
 {
 	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
 
@@ -2693,42 +2690,31 @@ DetachPartitionCommandList(List *nodeToSyncMetadataConnections,
 			Assert(PartitionTable(partitionRelOid));
 			char *detachCommand = GenerateDetachPartitionCommand(partitionRelOid);
 
-			if (list_length(nodeToSyncMetadataConnections) != 0)
+			if (syncContext.syncImmediately)
 			{
-				SendCommandListToWorkerOutsideTransactionWithConnection(linitial(
-																			nodeToSyncMetadataConnections),
-																		list_make1(
-																			detachCommand));
-			}
+				SyncMetadataCommands(syncContext, list_make1(detachCommand), false);
 
-			if (detachPartitionCommandList != NULL)
-			{
-				*detachPartitionCommandList =
-					lappend(*detachPartitionCommandList, detachCommand);
+				pfree(detachCommand);
 			}
 			else
 			{
-				pfree(detachCommand);
+				syncContext.ddlCommandList =
+					lappend(syncContext.ddlCommandList, detachCommand);
 			}
 		}
 	}
 
-	if (!foundAnyPartitionedTable)
+	if (foundAnyPartitionedTable && !syncContext.syncImmediately)
 	{
-		return;
-	}
-
-	if (detachPartitionCommandList != NULL)
-	{
-		*detachPartitionCommandList =
-			lcons(DISABLE_DDL_PROPAGATION, *detachPartitionCommandList);
+		syncContext.ddlCommandList =
+			lcons(DISABLE_DDL_PROPAGATION, syncContext.ddlCommandList);
 
 		/*
 		 * We probably do not need this but as an extra precaution, we are enabling
 		 * DDL propagation to switch back to original state.
 		 */
-		*detachPartitionCommandList = lappend(*detachPartitionCommandList,
-											  ENABLE_DDL_PROPAGATION);
+		syncContext.ddlCommandList = lappend(syncContext.ddlCommandList,
+											 ENABLE_DDL_PROPAGATION);
 	}
 }
 

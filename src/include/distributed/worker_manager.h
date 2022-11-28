@@ -16,6 +16,8 @@
 
 #include "postgres.h"
 
+#include "distributed/metadata_utility.h"
+#include "distributed/metadata_sync_context.h"
 #include "storage/lmgr.h"
 #include "storage/lockdefs.h"
 #include "nodes/pg_list.h"
@@ -105,11 +107,11 @@ extern WorkerNode * SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnI
 											 Datum value);
 extern uint32 CountPrimariesWithMetadata(void);
 extern WorkerNode * GetFirstPrimaryWorkerNode(void);
-extern void SyncDistributedObjectsCommandList(List *nodeToSyncMetadataConnections,
-											  List **commandList);
-extern void PgDistTableMetadataSyncCommandList(List *nodeToSyncMetadataConnections,
-											   List **metadataSnapshotCommandList);
-
+extern void SyncDistributedObjectsCommandList(MetadataSyncContext syncContext);
+extern void PgDistTableMetadataSyncCommandList(MetadataSyncContext syncContext);
+extern void
+SyncMetadataCommands(MetadataSyncContext syncContext, List *commandList,
+					 bool raiseErrors);
 /* Function declarations for worker node utilities */
 extern int CompareWorkerNodes(const void *leftElement, const void *rightElement);
 extern uint32 WorkerNodeHashCode(const void *key, Size keySize);

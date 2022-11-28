@@ -76,6 +76,7 @@ typedef struct DDLJob
 	List *taskList;            /* worker DDL tasks to execute */
 } DDLJob;
 
+
 extern ProcessUtility_hook_type PrevProcessUtility;
 
 extern void multi_ProcessUtility(PlannedStmt *pstmt, const char *queryString,

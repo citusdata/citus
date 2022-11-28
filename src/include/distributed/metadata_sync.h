@@ -48,7 +48,6 @@ typedef struct SequenceInfo
 
 
 /* Functions declarations for metadata syncing */
-extern void SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort);
 extern void SyncCitusTableMetadata(Oid relationId);
 extern void EnsureSequentialModeMetadataOperations(void);
 extern bool ClusterHasKnownMetadataWorkers(void);
@@ -90,8 +89,7 @@ extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int sha
 extern TableDDLCommand * TruncateTriggerCreateCommand(Oid relationId);
 extern void CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId);
 extern List * InterTableRelationshipOfRelationCommandList(Oid relationId);
-extern void DetachPartitionCommandList(List *nodeToSyncMetadataConnections,
-									   List **detachPartitionCommandList);
+extern void DetachPartitionCommandList(MetadataSyncContext syncContext);
 extern void SyncNodeMetadataToNodes(void);
 extern BackgroundWorkerHandle * SpawnSyncNodeMetadataToNodes(Oid database, Oid owner);
 extern void SyncNodeMetadataToNodesMain(Datum main_arg);

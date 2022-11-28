@@ -49,17 +49,21 @@ activate_node_snapshot(PG_FUNCTION_ARGS)
 	 */
 	WorkerNode *dummyWorkerNode = GetFirstPrimaryWorkerNode();
 
+
 	List *updateLocalGroupCommand =
 		list_make1(LocalGroupIdUpdateCommand(dummyWorkerNode->groupId));
 
-	List *syncDistObjCommands = NIL;
-	SyncDistributedObjectsCommandList(NIL, &syncDistObjCommands);
+	MetadataSyncContext syncContext = { false, NIL, NIL };
+
+	SyncDistributedObjectsCommandList(syncContext);
+	List *syncDistObjCommands = syncContext.ddlCommandList;
 
 	List *dropSnapshotCommands = NodeMetadataDropCommands();
 	List *createSnapshotCommands = NodeMetadataCreateCommands();
 
-	List *pgDistTableMetadataSyncCommands = NIL;
-	PgDistTableMetadataSyncCommandList(NIL, &pgDistTableMetadataSyncCommands);
+	syncContext.ddlCommandList = NIL;
+	PgDistTableMetadataSyncCommandList(syncContext);
+	List *pgDistTableMetadataSyncCommands = syncContext.ddlCommandList;
 
 	List *activateNodeCommandList = NIL;
 	int activateNodeCommandIndex = 0;

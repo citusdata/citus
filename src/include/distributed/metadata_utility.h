@@ -264,6 +264,7 @@ typedef struct BackgroundTask
 	} __nullable_storage;
 } BackgroundTask;
 
+
 #define SET_NULLABLE_FIELD(ptr, field, value) \
 	(ptr)->__nullable_storage.field = (value); \
 	(ptr)->field = &((ptr)->__nullable_storage.field)
@@ -343,8 +344,7 @@ extern List * GetAllDependencyCreateDDLCommands(const List *dependencies);
 extern bool ShouldPropagate(void);
 extern bool ShouldPropagateCreateInCoordinatedTransction(void);
 extern bool ShouldPropagateAnyObject(List *addresses);
-extern void ReplicateAllObjectsToNodeCommandList(List *nodeToSyncMetadataConnections,
-												 List **ddlCommands);
+extern void ReplicateAllObjectsToNodeCommandList(MetadataSyncContext syncContext);
 
 /* Remaining metadata utility functions  */
 extern Oid TableOwnerOid(Oid relationId);

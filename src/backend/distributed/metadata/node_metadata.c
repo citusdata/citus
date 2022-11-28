@@ -33,6 +33,7 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/metadata_sync_context.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_node.h"
@@ -100,15 +101,13 @@ static void InsertPlaceholderCoordinatorRecord(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetadata
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
-static void SyncDistributedObjectsToNodeList(List *workerNodeList);
-static void UpdateLocalGroupIdOnNode(WorkerNode *workerNode);
-static void SyncPgDistTableMetadataToNodeList(List *nodeToSyncMetadataConnections);
-static void InterTableRelationshipCommandList(List *nodeToSyncMetadataConnections,
-											  List **ddlCommandList);
+static void SyncDistributedObjectsToNodeList(MetadataSyncContext syncContext);
+static void UpdateLocalGroupIdOnNode(MultiConnection *connection, WorkerNode *workerNode);
+static void SyncPgDistTableMetadataToNodeList(MetadataSyncContext syncContext);
+static void InterTableRelationshipCommandList(MetadataSyncContext syncContext);
 static void BlockDistributedQueriesOnMetadataNodes(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
-static void PropagateNodeWideObjectsCommandList(List *nodeToSyncMetadataConnections,
-												List **nodeWideObjectCommandList);
+static void PropagateNodeWideObjectsCommandList(MetadataSyncContext syncContext);
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
 static bool NodeIsLocal(WorkerNode *worker);
 static void SetLockTimeoutLocally(int32 lock_cooldown);
@@ -655,8 +654,7 @@ master_set_node_property(PG_FUNCTION_ARGS)
  * for each citus table.
  */
 static void
-InterTableRelationshipCommandList(List *nodeToSyncMetadataConnections,
-								  List **multipleTableIntegrationCommandList)
+InterTableRelationshipCommandList(MetadataSyncContext syncContext)
 {
 	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
 	List *propagatedTableList = NIL;
@@ -680,32 +678,27 @@ InterTableRelationshipCommandList(List *nodeToSyncMetadataConnections,
 		List *commandListForRelation =
 			InterTableRelationshipOfRelationCommandList(relationId);
 
-
-		if (list_length(nodeToSyncMetadataConnections) != 0)
+		if (syncContext.syncImmediately)
 		{
 			SendCommandListToWorkerOutsideTransactionWithConnection(linitial(
-																		nodeToSyncMetadataConnections),
+																		syncContext.
+																		nodeConnectionList),
 																	commandListForRelation);
-		}
-
-		if (multipleTableIntegrationCommandList != NULL)
-		{
-			*multipleTableIntegrationCommandList = list_concat(
-				*multipleTableIntegrationCommandList,
-				commandListForRelation);
 		}
 		else
 		{
-			list_free_deep(commandListForRelation);
+			syncContext.ddlCommandList = list_concat(
+				syncContext.ddlCommandList,
+				commandListForRelation);
 		}
 	}
 
-	if (multipleTableIntegrationCommandList != NULL)
+	if (!syncContext.syncImmediately)
 	{
-		*multipleTableIntegrationCommandList = lcons(DISABLE_DDL_PROPAGATION,
-													 *multipleTableIntegrationCommandList);
-		*multipleTableIntegrationCommandList = lappend(
-			*multipleTableIntegrationCommandList,
+		syncContext.ddlCommandList = lcons(DISABLE_DDL_PROPAGATION,
+										   syncContext.ddlCommandList);
+		syncContext.ddlCommandList = lappend(
+			syncContext.ddlCommandList,
 			ENABLE_DDL_PROPAGATION);
 	}
 }
@@ -716,8 +709,7 @@ InterTableRelationshipCommandList(List *nodeToSyncMetadataConnections,
  * (except pg_dist_node) metadata. We call them as table metadata.
  */
 void
-PgDistTableMetadataSyncCommandList(List *nodeToSyncMetadataConnections,
-								   List **metadataSnapshotCommandList)
+PgDistTableMetadataSyncCommandList(MetadataSyncContext syncContext)
 {
 	List *distributedTableList = CitusTableList();
 	List *propagatedTableList = NIL;
@@ -732,24 +724,27 @@ PgDistTableMetadataSyncCommandList(List *nodeToSyncMetadataConnections,
 		}
 	}
 
-	/* remove all dist table and object related metadata first */
-	*metadataSnapshotCommandList = lappend(*metadataSnapshotCommandList,
-										   DELETE_ALL_PARTITIONS);
-	*metadataSnapshotCommandList = lappend(*metadataSnapshotCommandList,
-										   DELETE_ALL_SHARDS);
-	*metadataSnapshotCommandList = lappend(*metadataSnapshotCommandList,
-										   DELETE_ALL_PLACEMENTS);
-	*metadataSnapshotCommandList = lappend(*metadataSnapshotCommandList,
-										   DELETE_ALL_DISTRIBUTED_OBJECTS);
-	*metadataSnapshotCommandList = lappend(*metadataSnapshotCommandList,
-										   DELETE_ALL_COLOCATION);
 
-	if (list_length(nodeToSyncMetadataConnections) != 0)
+	List *pgDistTableMetadata = NIL;
+
+	/* remove all dist table and object related metadata first */
+	pgDistTableMetadata = lappend(pgDistTableMetadata,
+								  DELETE_ALL_PARTITIONS);
+	pgDistTableMetadata = lappend(pgDistTableMetadata,
+								  DELETE_ALL_SHARDS);
+	pgDistTableMetadata = lappend(pgDistTableMetadata,
+								  DELETE_ALL_PLACEMENTS);
+	pgDistTableMetadata = lappend(pgDistTableMetadata,
+								  DELETE_ALL_DISTRIBUTED_OBJECTS);
+	pgDistTableMetadata = lappend(pgDistTableMetadata,
+								  DELETE_ALL_COLOCATION);
+
+	if (syncContext.syncImmediately)
 	{
 		SendCommandListToWorkerOutsideTransactionWithConnection(linitial(
-																	nodeToSyncMetadataConnections),
-																*
-																metadataSnapshotCommandList);
+																	syncContext.
+																	nodeConnectionList),
+																pgDistTableMetadata);
 	}
 
 	/* create pg_dist_partition, pg_dist_shard and pg_dist_placement entries */
@@ -758,29 +753,97 @@ PgDistTableMetadataSyncCommandList(List *nodeToSyncMetadataConnections,
 		List *tableMetadataCreateCommandList =
 			CitusTableMetadataCreateCommandList(cacheEntry->relationId);
 
-		SendCommandListToWorkerOutsideTransactionWithConnection(linitial(
-																	nodeToSyncMetadataConnections),
-																tableMetadataCreateCommandList);
+		if (syncContext.syncImmediately)
+		{
+			SendCommandListToWorkerOutsideTransactionWithConnection(linitial(
+																		syncContext.
+																		nodeConnectionList),
+																	tableMetadataCreateCommandList);
 
-		*metadataSnapshotCommandList = list_concat(*metadataSnapshotCommandList,
-												   tableMetadataCreateCommandList);
+			list_free_deep(tableMetadataCreateCommandList);
+		}
+		else
+		{
+			pgDistTableMetadata = list_concat(pgDistTableMetadata,
+											  tableMetadataCreateCommandList);
+		}
 	}
 
 	/* commands to insert pg_dist_colocation entries */
 	List *colocationGroupSyncCommandList = ColocationGroupCreateCommandList();
-	*metadataSnapshotCommandList = list_concat(*metadataSnapshotCommandList,
-											   colocationGroupSyncCommandList);
+	if (syncContext.syncImmediately)
+	{
+		SendCommandListToWorkerOutsideTransactionWithConnection(linitial(
+																	syncContext.
+																	nodeConnectionList),
+																colocationGroupSyncCommandList);
+
+		list_free_deep(colocationGroupSyncCommandList);
+	}
+	else
+	{
+		pgDistTableMetadata = list_concat(pgDistTableMetadata,
+										  colocationGroupSyncCommandList);
+	}
 
 	List *distributedObjectSyncCommandList = DistributedObjectMetadataSyncCommandList();
-	*metadataSnapshotCommandList = list_concat(*metadataSnapshotCommandList,
-											   distributedObjectSyncCommandList);
+	if (syncContext.syncImmediately)
+	{
+		SendCommandListToWorkerOutsideTransactionWithConnection(linitial(
+																	syncContext.
+																	nodeConnectionList),
+																distributedObjectSyncCommandList);
 
-	*metadataSnapshotCommandList = lcons(DISABLE_DDL_PROPAGATION,
-										 *metadataSnapshotCommandList);
-	*metadataSnapshotCommandList = lappend(*metadataSnapshotCommandList,
-										   ENABLE_DDL_PROPAGATION);
+		list_free_deep(distributedObjectSyncCommandList);
+	}
+	else
+	{
+		pgDistTableMetadata = list_concat(pgDistTableMetadata,
+										  distributedObjectSyncCommandList);
+	}
+
+	if (!syncContext.syncImmediately)
+	{
+		pgDistTableMetadata = lcons(DISABLE_DDL_PROPAGATION,
+									pgDistTableMetadata);
+		pgDistTableMetadata = lappend(pgDistTableMetadata,
+									  ENABLE_DDL_PROPAGATION);
+
+		syncContext.ddlCommandList = list_concat(syncContext.ddlCommandList,
+												 pgDistTableMetadata);
+	}
 }
 
+
+
+void
+SyncMetadataCommands(MetadataSyncContext syncContext, List *commandList,
+					 bool raiseErrors)
+{
+	/* iterate over the commands and execute them in the same connection */
+	const char *commandString = NULL;
+	foreach_ptr(commandString, commandList)
+	{
+		MultiConnection *connection = NULL;
+		foreach_ptr(connection, syncContext.nodeConnectionList)
+		{
+			bool success = SendRemoteCommand(connection, commandString);
+			if (!success)
+			{
+				HandleRemoteTransactionConnectionError(connection, raiseErrors);
+			}
+		}
+
+		WaitForAllConnections(syncContext.nodeConnectionList, raiseErrors);
+	}
+
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, syncContext.nodeConnectionList)
+	{
+		ForgetResults(connection);
+	}
+
+}
 
 /*
  * PropagateNodeWideObjectsCommandList is called during node activation to
@@ -788,8 +851,7 @@ PgDistTableMetadataSyncCommandList(List *nodeToSyncMetadataConnections,
  * generally not linked to any distributed object but change system wide behaviour.
  */
 static void
-PropagateNodeWideObjectsCommandList(List *nodeToSyncMetadataConnections,
-									List **nodeWideObjectCommandList)
+PropagateNodeWideObjectsCommandList(MetadataSyncContext syncContext)
 {
 	if (EnableAlterRoleSetPropagation)
 	{
@@ -799,23 +861,23 @@ PropagateNodeWideObjectsCommandList(List *nodeToSyncMetadataConnections,
 		 */
 		List *alterRoleSetCommands = GenerateAlterRoleSetCommandForRole(InvalidOid);
 
-		if (nodeWideObjectCommandList != NULL)
+		if (!syncContext.syncImmediately)
 		{
-			*nodeWideObjectCommandList = list_concat(*nodeWideObjectCommandList,
-													 alterRoleSetCommands);
-
 			/* if there are command wrap them in enable_ddl_propagation off */
-			*nodeWideObjectCommandList = lcons(DISABLE_DDL_PROPAGATION,
-											   *nodeWideObjectCommandList);
-			*nodeWideObjectCommandList = lappend(*nodeWideObjectCommandList,
-												 ENABLE_DDL_PROPAGATION);
-		}
+			syncContext.ddlCommandList =
+				lappend(syncContext.ddlCommandList, DISABLE_DDL_PROPAGATION);
 
-		if (list_length(nodeToSyncMetadataConnections) != 0)
+			syncContext.ddlCommandList =
+				list_concat(syncContext.ddlCommandList, alterRoleSetCommands);
+
+
+			syncContext.ddlCommandList =
+				lappend(syncContext.ddlCommandList, ENABLE_DDL_PROPAGATION);
+		}
+		else
 		{
-			SendCommandListToWorkerOutsideTransactionWithConnection(linitial(
-																		nodeToSyncMetadataConnections),
-																	alterRoleSetCommands);
+			bool raiseErrors = true;
+			SyncMetadataCommands(syncContext, alterRoleSetCommands, raiseErrors);
 		}
 	}
 }
@@ -837,63 +899,51 @@ PropagateNodeWideObjectsCommandList(List *nodeToSyncMetadataConnections,
  * requires it.
  */
 void
-SyncDistributedObjectsCommandList(List *nodeToSyncMetadataConnections, List **commandList)
+SyncDistributedObjectsCommandList(MetadataSyncContext syncContext)
 {
 	/*
 	 * Propagate node wide objects. It includes only roles for now.
 	 */
-	PropagateNodeWideObjectsCommandList(nodeToSyncMetadataConnections, commandList);
-
+	PropagateNodeWideObjectsCommandList(syncContext);
 
 	/*
 	 * Detach partitions, break dependencies between sequences and table then
 	 * remove shell tables first.
 	 */
-	DetachPartitionCommandList(nodeToSyncMetadataConnections, commandList);
+	DetachPartitionCommandList(syncContext);
 
 
-	if (list_length(nodeToSyncMetadataConnections) != 0)
+	if (syncContext.syncImmediately)
 	{
 		SendCommandListToWorkerOutsideTransactionWithConnection(linitial(
-																	nodeToSyncMetadataConnections),
+																	syncContext.
+																	nodeConnectionList),
 																list_make1(
 																	BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND));
 		SendCommandListToWorkerOutsideTransactionWithConnection(linitial(
-																	nodeToSyncMetadataConnections),
+																	syncContext.
+																	nodeConnectionList),
 																list_make1(
 																	REMOVE_ALL_SHELL_TABLES_COMMAND));
 	}
-
-	if (commandList != NULL)
+	else
 	{
-		*commandList = lappend(*commandList,
-							   BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
-		*commandList = lappend(*commandList, REMOVE_ALL_SHELL_TABLES_COMMAND);
+		syncContext.ddlCommandList = lappend(syncContext.ddlCommandList,
+											 BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
+		syncContext.ddlCommandList = lappend(syncContext.ddlCommandList,
+											 REMOVE_ALL_SHELL_TABLES_COMMAND);
 	}
 
 	/*
 	 * Replicate all objects of the pg_dist_object to the remote node.
 	 */
-	List *replicateAllObjectsToNodeCommandList = NIL;
-	ReplicateAllObjectsToNodeCommandList(nodeToSyncMetadataConnections,
-										 &replicateAllObjectsToNodeCommandList);
-	if (commandList != NULL)
-	{
-		*commandList = list_concat(*commandList, replicateAllObjectsToNodeCommandList);
-	}
+	ReplicateAllObjectsToNodeCommandList(syncContext);
 
 	/*
 	 * After creating each table, handle the inter table relationship between
 	 * those tables.
 	 */
-	List *interTableRelationshipCommandList = NIL;
-	InterTableRelationshipCommandList(nodeToSyncMetadataConnections,
-									  &interTableRelationshipCommandList);
-
-	if (commandList != NULL)
-	{
-		*commandList = list_concat(*commandList, interTableRelationshipCommandList);
-	}
+	InterTableRelationshipCommandList(syncContext);
 }
 
 
@@ -907,13 +957,8 @@ SyncDistributedObjectsCommandList(List *nodeToSyncMetadataConnections, List **co
  * since all the dependencies should be present in the coordinator already.
  */
 static void
-SyncDistributedObjectsToNodeList(List *nodeToSyncMetadataConnections)
+SyncDistributedObjectsToNodeList(MetadataSyncContext syncContext)
 {
-	if (nodeToSyncMetadataConnections == NIL)
-	{
-		return;
-	}
-
 	EnsureSequentialModeMetadataOperations();
 
 	Assert(ShouldPropagate());
@@ -921,7 +966,7 @@ SyncDistributedObjectsToNodeList(List *nodeToSyncMetadataConnections)
 	/* send commands to new workers, the current user should be a superuser */
 	Assert(superuser());
 
-	SyncDistributedObjectsCommandList(nodeToSyncMetadataConnections, NULL);
+	SyncDistributedObjectsCommandList(syncContext);
 }
 
 
@@ -929,18 +974,14 @@ SyncDistributedObjectsToNodeList(List *nodeToSyncMetadataConnections)
  * UpdateLocalGroupIdOnNode updates local group id on node.
  */
 static void
-UpdateLocalGroupIdOnNode(WorkerNode *workerNode)
+UpdateLocalGroupIdOnNode(MultiConnection *connection, WorkerNode *workerNode)
 {
-	if (NodeIsPrimary(workerNode) && !NodeIsCoordinator(workerNode))
 	{
 		List *commandList = list_make1(LocalGroupIdUpdateCommand(workerNode->groupId));
 
 		/* send commands to new workers, the current user should be a superuser */
 		Assert(superuser());
-		SendMetadataCommandListToWorkerListInCoordinatedTransaction(
-			list_make1(workerNode),
-			CurrentUserName(),
-			commandList);
+		SendCommandListToWorkerOutsideTransactionWithConnection(connection, commandList);
 	}
 }
 
@@ -951,14 +992,12 @@ UpdateLocalGroupIdOnNode(WorkerNode *workerNode)
  *
  */
 static void
-SyncPgDistTableMetadataToNodeList(List *nodeToSyncMetadataConnections)
+SyncPgDistTableMetadataToNodeList(MetadataSyncContext syncContext)
 {
 	/* send commands to new workers, the current user should be a superuser */
 	Assert(superuser());
 
-	List *syncPgDistMetadataCommandList = NIL;
-	PgDistTableMetadataSyncCommandList(nodeToSyncMetadataConnections,
-									   &syncPgDistMetadataCommandList);
+	PgDistTableMetadataSyncCommandList(syncContext);
 }
 
 
@@ -1180,7 +1219,11 @@ ActivateNodeList(List *nodeList)
 
 
 	List *nodeToSyncMetadata = NIL;
-	List *nodeToSyncMetadataConnections = NIL;
+	MetadataSyncContext syncContext;
+
+	/* we don't need to collect any the ddl commands */
+	syncContext.syncImmediately = true;
+	syncContext.nodeConnectionList = NIL;
 
 	WorkerNode *node = NULL;
 	foreach_ptr(node, nodeList)
@@ -1232,11 +1275,6 @@ ActivateNodeList(List *nodeList)
 			SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
 							BoolGetDatum(true));
 
-			/*
-			 * Update local group id first, as object dependency logic requires to have
-			 * updated local group id.
-			 */
-			UpdateLocalGroupIdOnNode(workerNode);
 
 			nodeToSyncMetadata = lappend(nodeToSyncMetadata, workerNode);
 
@@ -1247,13 +1285,19 @@ ActivateNodeList(List *nodeList)
 
 			ClaimConnectionExclusively(connection);
 
-			nodeToSyncMetadataConnections =
-				lappend(nodeToSyncMetadataConnections, connection);
+			syncContext.nodeConnectionList =
+				lappend(syncContext.nodeConnectionList, connection);
 
-			SendCommandListToWorkerOutsideTransactionWithConnection(linitial(
-																		nodeToSyncMetadataConnections),
+			SendCommandListToWorkerOutsideTransactionWithConnection(connection,
 																	list_make1(
 																		DISABLE_DDL_PROPAGATION));
+
+			/*
+			 * Update local group id first, as object dependency logic requires to have
+			 * updated local group id.
+			 */
+			UpdateLocalGroupIdOnNode(connection, workerNode);
+
 		}
 	}
 
@@ -1262,24 +1306,22 @@ ActivateNodeList(List *nodeList)
 	 * replicating reference tables to the remote node, as reference tables may
 	 * need such objects.
 	 */
-	SyncDistributedObjectsToNodeList(nodeToSyncMetadataConnections);
+	SyncDistributedObjectsToNodeList(syncContext);
 
 	/*
 	 * Sync node metadata. We must sync node metadata before syncing table
 	 * related pg_dist_xxx metadata. Since table related metadata requires
 	 * to have right pg_dist_node entries.
 	 */
-	foreach_ptr(node, nodeToSyncMetadata)
-	{
-		SyncNodeMetadataToNode(node->workerName, node->workerPort);
-	}
+	SyncNodeMetadataToNode(node->workerName, node->workerPort);
+
 
 	/*
 	 * As the last step, sync the table related metadata to the remote node.
 	 * We must handle it as the last step because of limitations shared with
 	 * above comments.
 	 */
-	SyncPgDistTableMetadataToNodeList(nodeToSyncMetadataConnections);
+	SyncPgDistTableMetadataToNodeList(syncContext);
 
 	foreach_ptr(node, nodeList)
 	{
