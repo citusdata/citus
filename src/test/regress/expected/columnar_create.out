@@ -81,7 +81,7 @@ SELECT columnar_test_helpers.pg_waitpid(val) FROM old_backend_pid;
 (1 row)
 
 DROP TABLE old_backend_pid;
--- show that temporary table itself and it's metadata is removed
+-- show that temporary table itself and its metadata is removed
 SELECT COUNT(*)=0 FROM pg_class WHERE relname='columnar_temp';
  ?column?
 ---------------------------------------------------------------------
@@ -140,7 +140,7 @@ BEGIN;
   SELECT columnar.get_storage_id(oid) AS columnar_temp_storage_id
   FROM pg_class WHERE relname='columnar_temp' \gset
 COMMIT;
--- make sure that table & it's stripe is dropped after commiting above xact
+-- make sure that table & its stripe is dropped after commiting above xact
 SELECT COUNT(*)=0 FROM pg_class WHERE relname='columnar_temp';
  ?column?
 ---------------------------------------------------------------------
@@ -160,7 +160,7 @@ BEGIN;
   SELECT columnar.get_storage_id(oid) AS columnar_temp_storage_id
   FROM pg_class WHERE relname='columnar_temp' \gset
 COMMIT;
--- make sure that table is not dropped but it's rows's are deleted after commiting above xact
+-- make sure that table is not dropped but its rows's are deleted after commiting above xact
 SELECT COUNT(*)=1 FROM pg_class WHERE relname='columnar_temp';
  ?column?
 ---------------------------------------------------------------------

@@ -356,14 +356,14 @@ FindShardIntervalIndex(Datum searchedValue, CitusTableCacheEntry *cacheEntry)
 
 /*
  * SearchCachedShardInterval performs a binary search for a shard interval
- * matching a given partition column value and returns it's index in the cached
+ * matching a given partition column value and returns its index in the cached
  * array. If it can not find any shard interval with the given value, it returns
  * INVALID_SHARD_INDEX.
  *
  * TODO: Data re-partitioning logic (worker_partition_query_resul))
  * on the worker nodes relies on this function in order to be consistent
  * with shard pruning. Since the worker nodes don't have the metadata, a
- * synthetically generated ShardInterval ** is passed to the to this
+ * synthetically generated ShardInterval ** is passed to this
  * function. The synthetic shard intervals contain only shardmin and shardmax
  * values. A proper implementation of this approach should be introducing an
  * intermediate data structure (e.g., ShardRange) on which this function

@@ -1818,7 +1818,7 @@ FindCoordinatorNodeId()
 
 /*
  * ReadDistNode iterates over pg_dist_node table, converts each row
- * into it's memory representation (i.e., WorkerNode) and adds them into
+ * into its memory representation (i.e., WorkerNode) and adds them into
  * a list. Lastly, the list is returned to the caller.
  *
  * It skips nodes which are not in the current clusters unless requested to do otherwise
@@ -1847,7 +1847,7 @@ ReadDistNode(bool includeNodesFromOtherClusters)
 		if (includeNodesFromOtherClusters ||
 			strncmp(workerNode->nodeCluster, CurrentCluster, WORKER_LENGTH) == 0)
 		{
-			/* the coordinator acts as if it never sees nodes not in it's cluster */
+			/* the coordinator acts as if it never sees nodes not in its cluster */
 			workerNodeList = lappend(workerNodeList, workerNode);
 		}
 
