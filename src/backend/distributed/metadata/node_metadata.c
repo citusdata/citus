@@ -695,12 +695,11 @@ InterTableRelationshipCommandList(List **multipleTableIntegrationCommandList)
  * PgDistTableMetadataSyncCommandList returns the command list to sync the pg_dist_*
  * (except pg_dist_node) metadata. We call them as table metadata.
  */
-List *
-PgDistTableMetadataSyncCommandList(void)
+void
+PgDistTableMetadataSyncCommandList(List **metadataSnapshotCommandList)
 {
 	List *distributedTableList = CitusTableList();
 	List *propagatedTableList = NIL;
-	List *metadataSnapshotCommandList = NIL;
 
 	/* create the list of tables whose metadata will be created */
 	CitusTableCacheEntry *cacheEntry = NULL;
@@ -713,15 +712,16 @@ PgDistTableMetadataSyncCommandList(void)
 	}
 
 	/* remove all dist table and object related metadata first */
-	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-										  DELETE_ALL_PARTITIONS);
-	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList, DELETE_ALL_SHARDS);
-	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-										  DELETE_ALL_PLACEMENTS);
-	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-										  DELETE_ALL_DISTRIBUTED_OBJECTS);
-	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-										  DELETE_ALL_COLOCATION);
+	*metadataSnapshotCommandList = lappend(*metadataSnapshotCommandList,
+										   DELETE_ALL_PARTITIONS);
+	*metadataSnapshotCommandList = lappend(*metadataSnapshotCommandList,
+										   DELETE_ALL_SHARDS);
+	*metadataSnapshotCommandList = lappend(*metadataSnapshotCommandList,
+										   DELETE_ALL_PLACEMENTS);
+	*metadataSnapshotCommandList = lappend(*metadataSnapshotCommandList,
+										   DELETE_ALL_DISTRIBUTED_OBJECTS);
+	*metadataSnapshotCommandList = lappend(*metadataSnapshotCommandList,
+										   DELETE_ALL_COLOCATION);
 
 	/* create pg_dist_partition, pg_dist_shard and pg_dist_placement entries */
 	foreach_ptr(cacheEntry, propagatedTableList)
@@ -729,25 +729,23 @@ PgDistTableMetadataSyncCommandList(void)
 		List *tableMetadataCreateCommandList =
 			CitusTableMetadataCreateCommandList(cacheEntry->relationId);
 
-		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-												  tableMetadataCreateCommandList);
+		*metadataSnapshotCommandList = list_concat(*metadataSnapshotCommandList,
+												   tableMetadataCreateCommandList);
 	}
 
 	/* commands to insert pg_dist_colocation entries */
 	List *colocationGroupSyncCommandList = ColocationGroupCreateCommandList();
-	metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-											  colocationGroupSyncCommandList);
+	*metadataSnapshotCommandList = list_concat(*metadataSnapshotCommandList,
+											   colocationGroupSyncCommandList);
 
 	List *distributedObjectSyncCommandList = DistributedObjectMetadataSyncCommandList();
-	metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-											  distributedObjectSyncCommandList);
+	*metadataSnapshotCommandList = list_concat(*metadataSnapshotCommandList,
+											   distributedObjectSyncCommandList);
 
-	metadataSnapshotCommandList = lcons(DISABLE_DDL_PROPAGATION,
-										metadataSnapshotCommandList);
-	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-										  ENABLE_DDL_PROPAGATION);
-
-	return metadataSnapshotCommandList;
+	*metadataSnapshotCommandList = lcons(DISABLE_DDL_PROPAGATION,
+										 *metadataSnapshotCommandList);
+	*metadataSnapshotCommandList = lappend(*metadataSnapshotCommandList,
+										   ENABLE_DDL_PROPAGATION);
 }
 
 
@@ -942,7 +940,9 @@ SyncPgDistTableMetadataToNodeList(List *nodeList)
 		return;
 	}
 
-	List *syncPgDistMetadataCommandList = PgDistTableMetadataSyncCommandList();
+	List *syncPgDistMetadataCommandList = NIL;
+	PgDistTableMetadataSyncCommandList(&syncPgDistMetadataCommandList);
+
 	SendMetadataCommandListToWorkerListInCoordinatedTransaction(
 		nodesWithMetadata,
 		CurrentUserName(),

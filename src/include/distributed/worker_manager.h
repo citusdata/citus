@@ -107,7 +107,7 @@ extern uint32 CountPrimariesWithMetadata(void);
 extern WorkerNode * GetFirstPrimaryWorkerNode(void);
 extern List * SyncDistributedObjectsCommandList(WorkerNode *workerNode,
 												List **commandList);
-extern List * PgDistTableMetadataSyncCommandList(void);
+extern void PgDistTableMetadataSyncCommandList(List **metadataSnapshotCommandList);
 
 /* Function declarations for worker node utilities */
 extern int CompareWorkerNodes(const void *leftElement, const void *rightElement);
