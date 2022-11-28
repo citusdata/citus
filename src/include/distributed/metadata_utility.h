@@ -311,10 +311,16 @@ extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 						   text *shardMinValue, text *shardMaxValue);
+extern void InsertShardRowInternal(Oid relationId, uint64 shardId, char storageType,
+								   text *shardMinValue, text *shardMaxValue,
+								   bool invalidateRelCache);
 extern void DeleteShardRow(uint64 shardId);
 extern uint64 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 									  char shardState, uint64 shardLength,
 									  int32 groupId);
+extern uint64 InsertShardPlacementRowInternal(uint64 shardId, uint64 placementId,
+											  char shardState, uint64 shardLength,
+											  int32 groupId, bool invalidateRelCache);
 extern void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId,
 									  char replicationModel, bool autoConverted);
