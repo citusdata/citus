@@ -17,17 +17,6 @@
 
 #include "distributed/metadata_utility.h"
 
-/*
- * BackgroundMonitorExecutionStates encodes execution states in FSM for Background task monitor
- */
-typedef enum BackgroundMonitorExecutionStates
-{
-	ExecutionStarted,
-	TaskConcurrentCancelCheck,
-	TryConsumeTaskWorker,
-	TaskHadError,
-	TaskEnded
-} BackgroundMonitorExecutionStates;
 
 /*
  * BackgroundExecutorHashEntry hash table entry to refer existing task executors
@@ -44,19 +33,46 @@ typedef struct BackgroundExecutorHashEntry
 
 
 /*
- * QueueMonitorExecutionContext is used for background worker failure handling and allocations
+ * TaskExecutionContext encapsulates info for currently executed task in queue monitor
+ */
+typedef struct TaskExecutionContext
+{
+	/* active background executor entry */
+	BackgroundExecutorHashEntry *handleEntry;
+
+	/* active background task */
+	BackgroundTask *task;
+
+	/* useful to track if task errored */
+	bool error;
+} TaskExecutionContext;
+
+
+/*
+ * QueueMonitorExecutionContext encapsulates info related to executors and tasks
+ * in queue monitor
  */
 typedef struct QueueMonitorExecutionContext
 {
 	/* current total # of parallel task executors */
 	int64 currentExecutorCount;
 
+	/* map of current executors */
+	HTAB *currentExecutors;
+
 	/* last background allocation failure timestamp */
 	TimestampTz backgroundWorkerFailedStartTime;
+
+	/* useful to track if all tasks EWOULDBLOCK'd at current iteration */
+	bool allTasksWouldBlock;
+
+	/* context related to current executed task */
+	TaskExecutionContext *taskExecutionContext;
 
 	/* context for monitor related allocations */
 	MemoryContext ctx;
 } QueueMonitorExecutionContext;
+
 
 extern BackgroundWorkerHandle * StartCitusBackgroundTaskQueueMonitor(Oid database,
 																	 Oid extensionOwner);
