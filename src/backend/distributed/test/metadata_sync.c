@@ -59,7 +59,7 @@ activate_node_snapshot(PG_FUNCTION_ARGS)
 	List *createSnapshotCommands = NodeMetadataCreateCommands();
 
 	List *pgDistTableMetadataSyncCommands = NIL;
-	PgDistTableMetadataSyncCommandList(&pgDistTableMetadataSyncCommands);
+	PgDistTableMetadataSyncCommandList(NIL, &pgDistTableMetadataSyncCommands);
 
 	List *activateNodeCommandList = NIL;
 	int activateNodeCommandIndex = 0;

@@ -537,7 +537,9 @@ ReplicateAllObjectsToNodeCommandList(List *nodeToSyncMetadataConnections,
 {
 	/* since we are executing ddl commands disable propagation first, primarily for mx */
 	if (ddlCommands != NULL)
-	*ddlCommands = list_make1(DISABLE_DDL_PROPAGATION);
+	{
+		*ddlCommands = list_make1(DISABLE_DDL_PROPAGATION);
+	}
 
 	/*
 	 * collect all dependencies in creation order and get their ddl commands
@@ -581,18 +583,29 @@ ReplicateAllObjectsToNodeCommandList(List *nodeToSyncMetadataConnections,
 		}
 
 		List *perObjCommands = GetDependencyCreateDDLCommands(dependency);
-		if (ddlCommands != NULL)
-		*ddlCommands = list_concat(*ddlCommands,
-									perObjCommands);
 
 		if (list_length(nodeToSyncMetadataConnections) != 0)
 		{
-			SendCommandListToWorkerOutsideTransactionWithConnection(linitial(nodeToSyncMetadataConnections), perObjCommands);
+			SendCommandListToWorkerOutsideTransactionWithConnection(linitial(
+																		nodeToSyncMetadataConnections),
+																	perObjCommands);
+		}
+
+		if (ddlCommands != NULL)
+		{
+			*ddlCommands = list_concat(*ddlCommands,
+									   perObjCommands);
+		}
+		else
+		{
+			list_free_deep(perObjCommands);
 		}
 	}
 
 	if (ddlCommands != NULL)
-	*ddlCommands = lappend(*ddlCommands, ENABLE_DDL_PROPAGATION);
+	{
+		*ddlCommands = lappend(*ddlCommands, ENABLE_DDL_PROPAGATION);
+	}
 }
 
 

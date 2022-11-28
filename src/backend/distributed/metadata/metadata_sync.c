@@ -2667,7 +2667,8 @@ CreateTableMetadataOnWorkers(Oid relationId)
  * empty list to not disable/enable DDL propagation for nothing.
  */
 void
-DetachPartitionCommandList(List *nodeToSyncMetadataConnections, List **detachPartitionCommandList)
+DetachPartitionCommandList(List *nodeToSyncMetadataConnections,
+						   List **detachPartitionCommandList)
 {
 	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
 
@@ -2692,10 +2693,12 @@ DetachPartitionCommandList(List *nodeToSyncMetadataConnections, List **detachPar
 			Assert(PartitionTable(partitionRelOid));
 			char *detachCommand = GenerateDetachPartitionCommand(partitionRelOid);
 
-
 			if (list_length(nodeToSyncMetadataConnections) != 0)
 			{
-				SendCommandListToWorkerOutsideTransactionWithConnection(linitial(nodeToSyncMetadataConnections), list_make1(detachCommand));
+				SendCommandListToWorkerOutsideTransactionWithConnection(linitial(
+																			nodeToSyncMetadataConnections),
+																		list_make1(
+																			detachCommand));
 			}
 
 			if (detachPartitionCommandList != NULL)
@@ -2704,8 +2707,9 @@ DetachPartitionCommandList(List *nodeToSyncMetadataConnections, List **detachPar
 					lappend(*detachPartitionCommandList, detachCommand);
 			}
 			else
+			{
 				pfree(detachCommand);
-
+			}
 		}
 	}
 

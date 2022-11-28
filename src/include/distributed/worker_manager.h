@@ -106,7 +106,7 @@ extern WorkerNode * SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnI
 extern uint32 CountPrimariesWithMetadata(void);
 extern WorkerNode * GetFirstPrimaryWorkerNode(void);
 extern void SyncDistributedObjectsCommandList(List *nodeToSyncMetadataConnections,
-												List **commandList);
+											  List **commandList);
 extern void PgDistTableMetadataSyncCommandList(List *nodeToSyncMetadataConnections,
 											   List **metadataSnapshotCommandList);
 
