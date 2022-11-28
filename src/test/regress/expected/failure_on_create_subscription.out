@@ -54,7 +54,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="ALTER SUBSCRIPTION").kill()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-ERROR:  connection not open
+ERROR:  connection pointer is NULL
 CONTEXT:  while executing command on localhost:xxxxx
 -- Verify that the shard is not moved and the number of rows are still 100k
 SELECT * FROM shards_in_workers;

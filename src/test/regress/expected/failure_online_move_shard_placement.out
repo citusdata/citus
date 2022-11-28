@@ -122,7 +122,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* (ENABLE|DISAB
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-ERROR:  connection not open
+ERROR:  connection pointer is NULL
 CONTEXT:  while executing command on localhost:xxxxx
 -- try again
 SELECT citus.mitmproxy('conn.allow()');
@@ -170,7 +170,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").kil
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-ERROR:  connection not open
+ERROR:  connection pointer is NULL
 CONTEXT:  while executing command on localhost:xxxxx
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
@@ -253,6 +253,8 @@ SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
@@ -262,7 +264,7 @@ SELECT citus.mitmproxy('conn.allow()');
 (1 row)
 
 CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 4 orphaned resources
+NOTICE:  cleaned up 3 orphaned resources
 -- lets create few more indexes and fail with both
 -- parallel mode and sequential mode
 CREATE INDEX index_failure_2 ON t(id);
@@ -284,6 +286,8 @@ SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- failure on parallel create index
 ALTER SYSTEM RESET citus.max_adaptive_executor_pool_size;
@@ -300,6 +304,8 @@ SELECT citus.mitmproxy('conn.matches(b"CREATE INDEX").killall()');
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 -- Verify that the shard is not moved and the number of rows are still 100k
 SELECT citus.mitmproxy('conn.allow()');

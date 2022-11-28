@@ -901,7 +901,8 @@ TryDropSubscriptionOutsideTransaction(char *subscriptionName,
 
 	RemoteTransactionBegin(connection);
 
-	if (ExecuteOptionalRemoteCommand(connection, "SET LOCAL lock_timeout TO '1s'", NULL) != 0)
+	if (ExecuteOptionalRemoteCommand(connection,
+									 "SET LOCAL lock_timeout TO '1s'", NULL) != 0)
 	{
 		RemoteTransactionAbort(connection);
 		ResetRemoteTransaction(connection);
@@ -1016,7 +1017,8 @@ TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 
 	RemoteTransactionBegin(connection);
 
-	if (ExecuteOptionalRemoteCommand(connection, "SET LOCAL lock_timeout TO '1s'", NULL) != 0)
+	if (ExecuteOptionalRemoteCommand(connection,
+									 "SET LOCAL lock_timeout TO '1s'", NULL) != 0)
 	{
 		RemoteTransactionAbort(connection);
 		ResetRemoteTransaction(connection);
