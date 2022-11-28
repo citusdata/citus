@@ -663,12 +663,21 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 	EnsureSequentialModeMetadataOperations();
 
 	char *userName = CurrentUserName();
+	List *dropMetadataCommandList = NIL;
 
 	/*
 	 * Detach partitions, break dependencies between sequences and table then
 	 * remove shell tables first.
 	 */
-	List *dropMetadataCommandList = DetachPartitionCommandList();
+
+	List *detachPartitionCommandList = NIL;
+
+	DetachPartitionCommandList(&detachPartitionCommandList);
+
+	dropMetadataCommandList = list_concat(dropMetadataCommandList,
+										  detachPartitionCommandList);
+
+
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
 									  BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
@@ -2657,10 +2666,9 @@ CreateTableMetadataOnWorkers(Oid relationId)
  * an extra step, if there are no partitions to DETACH, this function simply returns
  * empty list to not disable/enable DDL propagation for nothing.
  */
-List *
-DetachPartitionCommandList(void)
+void
+DetachPartitionCommandList(List **detachPartitionCommandList)
 {
-	List *detachPartitionCommandList = NIL;
 	List *distributedTableList = CitusTableList();
 
 	/* we iterate over all distributed partitioned tables and DETACH their partitions */
@@ -2675,26 +2683,24 @@ DetachPartitionCommandList(void)
 		List *partitionList = PartitionList(cacheEntry->relationId);
 		List *detachCommands =
 			GenerateDetachPartitionCommandRelationIdList(partitionList);
-		detachPartitionCommandList = list_concat(detachPartitionCommandList,
-												 detachCommands);
+		*detachPartitionCommandList = list_concat(*detachPartitionCommandList,
+												  detachCommands);
 	}
 
-	if (list_length(detachPartitionCommandList) == 0)
+	if (list_length(*detachPartitionCommandList) == 0)
 	{
-		return NIL;
+		return;
 	}
 
-	detachPartitionCommandList =
-		lcons(DISABLE_DDL_PROPAGATION, detachPartitionCommandList);
+	*detachPartitionCommandList =
+		lcons(DISABLE_DDL_PROPAGATION, *detachPartitionCommandList);
 
 	/*
 	 * We probably do not need this but as an extra precaution, we are enabling
 	 * DDL propagation to switch back to original state.
 	 */
-	detachPartitionCommandList = lappend(detachPartitionCommandList,
-										 ENABLE_DDL_PROPAGATION);
-
-	return detachPartitionCommandList;
+	*detachPartitionCommandList = lappend(*detachPartitionCommandList,
+										  ENABLE_DDL_PROPAGATION);
 }
 
 

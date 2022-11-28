@@ -105,7 +105,8 @@ extern WorkerNode * SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnI
 											 Datum value);
 extern uint32 CountPrimariesWithMetadata(void);
 extern WorkerNode * GetFirstPrimaryWorkerNode(void);
-extern List * SyncDistributedObjectsCommandList(WorkerNode *workerNode);
+extern List * SyncDistributedObjectsCommandList(WorkerNode *workerNode,
+												List **commandList);
 extern List * PgDistTableMetadataSyncCommandList(void);
 
 /* Function declarations for worker node utilities */
