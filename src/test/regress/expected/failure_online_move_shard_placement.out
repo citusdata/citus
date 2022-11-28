@@ -208,13 +208,22 @@ SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").cancel(' || :pi
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 ERROR:  canceling statement due to user request
--- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
+-- first, manually drop the subscsription object. But the record for it will remain on pg_dist_cleanup
+SELECT run_command_on_workers($$DROP SUBSCRIPTION IF EXISTS citus_shard_move_subscription_xxxxxxx$$);
+         run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,9060,t,"DROP SUBSCRIPTION")
+ (localhost,57637,t,"DROP SUBSCRIPTION")
+(2 rows)
+
+-- cleanup leftovers
+-- verify we don't see any error for already dropped subscription
 CALL citus_cleanup_orphaned_resources();
 NOTICE:  cleaned up 4 orphaned resources
 -- cancellation on dropping subscription

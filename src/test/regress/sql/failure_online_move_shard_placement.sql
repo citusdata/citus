@@ -101,8 +101,11 @@ CALL citus_cleanup_orphaned_resources();
 SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").cancel(' || :pid || ')');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 
--- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
+-- first, manually drop the subscsription object. But the record for it will remain on pg_dist_cleanup
+SELECT run_command_on_workers($$DROP SUBSCRIPTION IF EXISTS citus_shard_move_subscription_10$$);
+-- cleanup leftovers
+-- verify we don't see any error for already dropped subscription
 CALL citus_cleanup_orphaned_resources();
 
 -- cancellation on dropping subscription
