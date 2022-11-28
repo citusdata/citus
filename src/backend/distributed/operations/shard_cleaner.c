@@ -901,19 +901,32 @@ TryDropSubscriptionOutsideTransaction(char *subscriptionName,
 
 	RemoteTransactionBegin(connection);
 
-	ExecuteCriticalRemoteCommand(connection, "SET LOCAL lock_timeout TO '1s'");
+	if (ExecuteOptionalRemoteCommand(connection, "SET LOCAL lock_timeout TO '1s'", NULL) != 0)
+	{
+		RemoteTransactionAbort(connection);
+		ResetRemoteTransaction(connection);
+		return false;
+	}
+
 	int querySent = SendRemoteCommand(
 		connection,
 		psprintf("ALTER SUBSCRIPTION %s DISABLE", quote_identifier(subscriptionName)));
 	if (querySent == 0)
 	{
-		ReportConnectionError(connection, ERROR);
+		ReportConnectionError(connection, WARNING);
+		RemoteTransactionAbort(connection);
+		ResetRemoteTransaction(connection);
+		return false;
 	}
 
 	bool raiseInterrupts = true;
 	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+
 	if (!IsResponseOK(result))
 	{
+		RemoteTransactionAbort(connection);
+		ResetRemoteTransaction(connection);
+
 		char *errorcode = PQresultErrorField(result, PG_DIAG_SQLSTATE);
 		if (errorcode != NULL && strcmp(errorcode, STR_ERRCODE_UNDEFINED_OBJECT) == 0)
 		{
@@ -925,18 +938,17 @@ TryDropSubscriptionOutsideTransaction(char *subscriptionName,
 		}
 		else
 		{
-			RemoteTransactionAbort(connection);
-			ResetRemoteTransaction(connection);
 			ReportResultError(connection, result, ERROR);
 			PQclear(result);
 			ForgetResults(connection);
+			return false;
 		}
 	}
 
-	RemoteTransactionCommit(connection);
-	ResetRemoteTransaction(connection);
 	PQclear(result);
 	ForgetResults(connection);
+	RemoteTransactionCommit(connection);
+	ResetRemoteTransaction(connection);
 
 	StringInfo alterQuery = makeStringInfo();
 	appendStringInfo(alterQuery,
@@ -1004,7 +1016,12 @@ TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 
 	RemoteTransactionBegin(connection);
 
-	ExecuteCriticalRemoteCommand(connection, "SET LOCAL lock_timeout TO '1s'");
+	if (ExecuteOptionalRemoteCommand(connection, "SET LOCAL lock_timeout TO '1s'", NULL) != 0)
+	{
+		RemoteTransactionAbort(connection);
+		ResetRemoteTransaction(connection);
+		return false;
+	}
 
 	int querySent = SendRemoteCommand(
 		connection,
@@ -1018,6 +1035,8 @@ TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 	if (querySent == 0)
 	{
 		ReportConnectionError(connection, WARNING);
+		RemoteTransactionAbort(connection);
+		ResetRemoteTransaction(connection);
 		return false;
 	}
 
@@ -1026,10 +1045,10 @@ TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 
 	if (IsResponseOK(result))
 	{
-		RemoteTransactionCommit(connection);
-		ResetRemoteTransaction(connection);
 		PQclear(result);
 		ForgetResults(connection);
+		RemoteTransactionCommit(connection);
+		ResetRemoteTransaction(connection);
 		return true;
 	}
 
@@ -1040,10 +1059,11 @@ TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 		ReportResultError(connection, result, WARNING);
 	}
 
-	RemoteTransactionAbort(connection);
-	ResetRemoteTransaction(connection);
 	PQclear(result);
 	ForgetResults(connection);
+	RemoteTransactionAbort(connection);
+	ResetRemoteTransaction(connection);
+
 	return false;
 }
 
