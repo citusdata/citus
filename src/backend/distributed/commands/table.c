@@ -2992,7 +2992,9 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
+#if PG_VERSION_NUM >= PG_VERSION_15
 			case AT_SetAccessMethod:
+#endif
 			case AT_SetNotNull:
 			case AT_ReplicaIdentity:
 			case AT_ChangeOwner:
