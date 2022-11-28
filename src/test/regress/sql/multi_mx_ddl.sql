@@ -78,6 +78,20 @@ ALTER TABLE mx_ddl_table ALTER COLUMN version DROP NOT NULL;
 -- DROP COLUMN
 ALTER TABLE mx_ddl_table DROP COLUMN version;
 
+-- SET ACCESS METHOD
+-- Create a heap2 table am handler with heapam handler
+CREATE ACCESS METHOD heap2 TYPE TABLE HANDLER heap_tableam_handler;
+SELECT run_command_on_workers($$CREATE ACCESS METHOD heap2 TYPE TABLE HANDLER heap_tableam_handler$$);
+CREATE TABLE mx_ddl_table2 (
+    key int primary key,
+    value int
+);
+SELECT create_distributed_table('mx_ddl_table2', 'key', 'hash', shard_count=> 4);
+ALTER TABLE mx_ddl_table2 SET ACCESS METHOD heap2;
+
+DROP TABLE mx_ddl_table2;
+DROP ACCESS METHOD heap2;
+SELECT run_command_on_workers($$DROP ACCESS METHOD heap2$$);
 
 -- See that the changes are applied on coordinator, worker tables and shards
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
