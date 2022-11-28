@@ -105,9 +105,10 @@ extern WorkerNode * SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnI
 											 Datum value);
 extern uint32 CountPrimariesWithMetadata(void);
 extern WorkerNode * GetFirstPrimaryWorkerNode(void);
-extern List * SyncDistributedObjectsCommandList(WorkerNode *workerNode,
+extern void SyncDistributedObjectsCommandList(List *nodeToSyncMetadataConnections,
 												List **commandList);
-extern void PgDistTableMetadataSyncCommandList(List **metadataSnapshotCommandList);
+extern void PgDistTableMetadataSyncCommandList(List *nodeToSyncMetadataConnections,
+											   List **metadataSnapshotCommandList);
 
 /* Function declarations for worker node utilities */
 extern int CompareWorkerNodes(const void *leftElement, const void *rightElement);

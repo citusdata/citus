@@ -343,7 +343,7 @@ extern List * GetAllDependencyCreateDDLCommands(const List *dependencies);
 extern bool ShouldPropagate(void);
 extern bool ShouldPropagateCreateInCoordinatedTransction(void);
 extern bool ShouldPropagateAnyObject(List *addresses);
-extern void ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort,
+extern void ReplicateAllObjectsToNodeCommandList(List *nodeToSyncMetadataConnections,
 												 List **ddlCommands);
 
 /* Remaining metadata utility functions  */

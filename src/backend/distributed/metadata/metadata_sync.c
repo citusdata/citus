@@ -672,7 +672,7 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 
 	List *detachPartitionCommandList = NIL;
 
-	DetachPartitionCommandList(&detachPartitionCommandList);
+	DetachPartitionCommandList(NIL, &detachPartitionCommandList);
 
 	dropMetadataCommandList = list_concat(dropMetadataCommandList,
 										  detachPartitionCommandList);
@@ -2667,40 +2667,65 @@ CreateTableMetadataOnWorkers(Oid relationId)
  * empty list to not disable/enable DDL propagation for nothing.
  */
 void
-DetachPartitionCommandList(List **detachPartitionCommandList)
+DetachPartitionCommandList(List *nodeToSyncMetadataConnections, List **detachPartitionCommandList)
 {
-	List *distributedTableList = CitusTableList();
+	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
+
+	bool foundAnyPartitionedTable = false;
 
 	/* we iterate over all distributed partitioned tables and DETACH their partitions */
-	CitusTableCacheEntry *cacheEntry = NULL;
-	foreach_ptr(cacheEntry, distributedTableList)
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, citusTableIdList)
 	{
-		if (!PartitionedTable(cacheEntry->relationId))
+		if (!PartitionedTable(relationId))
 		{
 			continue;
 		}
 
-		List *partitionList = PartitionList(cacheEntry->relationId);
-		List *detachCommands =
-			GenerateDetachPartitionCommandRelationIdList(partitionList);
-		*detachPartitionCommandList = list_concat(*detachPartitionCommandList,
-												  detachCommands);
+		List *partitionList = PartitionList(relationId);
+
+		Oid partitionRelOid = InvalidOid;
+		foreach_oid(partitionRelOid, partitionList)
+		{
+			foundAnyPartitionedTable = true;
+
+			Assert(PartitionTable(partitionRelOid));
+			char *detachCommand = GenerateDetachPartitionCommand(partitionRelOid);
+
+
+			if (list_length(nodeToSyncMetadataConnections) != 0)
+			{
+				SendCommandListToWorkerOutsideTransactionWithConnection(linitial(nodeToSyncMetadataConnections), list_make1(detachCommand));
+			}
+
+			if (detachPartitionCommandList != NULL)
+			{
+				*detachPartitionCommandList =
+					lappend(*detachPartitionCommandList, detachCommand);
+			}
+			else
+				pfree(detachCommand);
+
+		}
 	}
 
-	if (list_length(*detachPartitionCommandList) == 0)
+	if (!foundAnyPartitionedTable)
 	{
 		return;
 	}
 
-	*detachPartitionCommandList =
-		lcons(DISABLE_DDL_PROPAGATION, *detachPartitionCommandList);
+	if (detachPartitionCommandList != NULL)
+	{
+		*detachPartitionCommandList =
+			lcons(DISABLE_DDL_PROPAGATION, *detachPartitionCommandList);
 
-	/*
-	 * We probably do not need this but as an extra precaution, we are enabling
-	 * DDL propagation to switch back to original state.
-	 */
-	*detachPartitionCommandList = lappend(*detachPartitionCommandList,
-										  ENABLE_DDL_PROPAGATION);
+		/*
+		 * We probably do not need this but as an extra precaution, we are enabling
+		 * DDL propagation to switch back to original state.
+		 */
+		*detachPartitionCommandList = lappend(*detachPartitionCommandList,
+											  ENABLE_DDL_PROPAGATION);
+	}
 }
 
 

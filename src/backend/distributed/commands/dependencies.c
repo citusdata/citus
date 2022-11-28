@@ -532,10 +532,11 @@ GetAllDependencyCreateDDLCommands(const List *dependencies)
  * clusterHasDistributedFunction if there are any distributed functions.
  */
 void
-ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort,
+ReplicateAllObjectsToNodeCommandList(List *nodeToSyncMetadataConnections,
 									 List **ddlCommands)
 {
 	/* since we are executing ddl commands disable propagation first, primarily for mx */
+	if (ddlCommands != NULL)
 	*ddlCommands = list_make1(DISABLE_DDL_PROPAGATION);
 
 	/*
@@ -559,8 +560,8 @@ ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort,
 	 */
 	if (list_length(dependencies) > 100)
 	{
-		ereport(NOTICE, (errmsg("Replicating postgres objects to node %s:%d", nodeName,
-								nodePort),
+		ereport(NOTICE, (errmsg("Replicating postgres objects to node %s:%d", "lll",
+								5555),
 						 errdetail("There are %d objects to replicate, depending on your "
 								   "environment this might take a while",
 								   list_length(dependencies))));
@@ -579,10 +580,18 @@ ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort,
 			continue;
 		}
 
+		List *perObjCommands = GetDependencyCreateDDLCommands(dependency);
+		if (ddlCommands != NULL)
 		*ddlCommands = list_concat(*ddlCommands,
-								   GetDependencyCreateDDLCommands(dependency));
+									perObjCommands);
+
+		if (list_length(nodeToSyncMetadataConnections) != 0)
+		{
+			SendCommandListToWorkerOutsideTransactionWithConnection(linitial(nodeToSyncMetadataConnections), perObjCommands);
+		}
 	}
 
+	if (ddlCommands != NULL)
 	*ddlCommands = lappend(*ddlCommands, ENABLE_DDL_PROPAGATION);
 }
 
