@@ -811,12 +811,13 @@ SyncDistributedObjectsCommandList(WorkerNode *workerNode)
 	 */
 	commandList = list_concat(commandList, PropagateNodeWideObjectsCommandList());
 
-	/*
-	 * Detach partitions, break dependencies between sequences and table then
-	 * remove shell tables first.
-	 */
-	commandList = list_concat(commandList, DetachPartitionCommandList());
 	commandList = lappend(commandList, BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
+
+	/*
+	 * First remove partitioned tables (with cascade) to avoid any need for
+	 * detaching partitions. Later, drop the remaining tables.
+	 */
+	commandList = lappend(commandList, REMOVE_PARTITIONED_SHELL_TABLES_COMMAND);
 	commandList = lappend(commandList, REMOVE_ALL_SHELL_TABLES_COMMAND);
 
 	/*
