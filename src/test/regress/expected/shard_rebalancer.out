@@ -2,6 +2,7 @@
 -- MUTLI_SHARD_REBALANCER
 --
 SET citus.next_shard_id TO 433000;
+SET citus.propagate_session_settings_for_loopback_connection TO ON;
 CREATE TABLE ref_table_test(a int primary key);
 SELECT create_reference_table('ref_table_test');
  create_reference_table
@@ -214,6 +215,8 @@ NOTICE:  issuing SET LOCAL citus.next_shard_id TO '433105';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '35000';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.propagate_session_settings_for_loopback_connection TO 'on';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_replication_factor TO '2';
@@ -234,6 +237,8 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.next_shard_id TO '433105';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '35000';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.propagate_session_settings_for_loopback_connection TO 'on';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -256,6 +261,8 @@ NOTICE:  issuing SET LOCAL citus.next_shard_id TO '433105';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '35000';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.propagate_session_settings_for_loopback_connection TO 'on';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_replication_factor TO '2';
@@ -276,6 +283,8 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.next_shard_id TO '433105';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.node_connection_timeout TO '35000';
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET LOCAL citus.propagate_session_settings_for_loopback_connection TO 'on';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SET LOCAL citus.shard_count TO '4';
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx

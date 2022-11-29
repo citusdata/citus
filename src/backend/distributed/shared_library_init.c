@@ -1992,7 +1992,7 @@ RegisterCitusConfigVariables(void)
 			"When enabled, rebalancer propagates all the allowed GUC settings to new connections."),
 		NULL,
 		&PropagateSessionSettingsForLoopbackConnection,
-		true,
+		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
