@@ -100,12 +100,12 @@ static shm_mq_result ReadFromExecutorQueue(
 	bool *hadError);
 static void CheckAndResetLastWorkerAllocationFailure(
 	QueueMonitorExecutionContext *queueMonitorExecutionContext);
-static void TaskConcurrentCancelCheck(
-	QueueMonitorExecutionContext *queueMonitorExecutionContext);
-static void ConsumeExecutorQueue(
-	QueueMonitorExecutionContext *queueMonitorExecutionContext);
-static void TaskHadError(QueueMonitorExecutionContext *queueMonitorExecutionContext);
-static void TaskEnded(QueueMonitorExecutionContext *queueMonitorExecutionContext);
+static TaskExecutionStatus TaskConcurrentCancelCheck(
+	TaskExecutionContext *taskExecutionContext);
+static TaskExecutionStatus ConsumeExecutorQueue(
+	TaskExecutionContext *taskExecutionContext);
+static void TaskHadError(TaskExecutionContext *taskExecutionContext);
+static void TaskEnded(TaskExecutionContext *taskExecutionContext);
 
 PG_FUNCTION_INFO_V1(citus_job_cancel);
 PG_FUNCTION_INFO_V1(citus_job_wait);
@@ -363,12 +363,6 @@ NewExecutorExceedsCitusLimit(QueueMonitorExecutionContext *queueMonitorExecution
 				GetCurrentTimestamp();
 		}
 
-		const long delay_ms = 1000;
-		(void) WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT |
-						 WL_EXIT_ON_PM_DEATH,
-						 delay_ms, WAIT_EVENT_PG_SLEEP);
-		ResetLatch(MyLatch);
-
 		return true;
 	}
 
@@ -407,12 +401,6 @@ NewExecutorExceedsPgMaxWorkers(BackgroundWorkerHandle *handle,
 				GetCurrentTimestamp();
 		}
 
-		const long delay_ms = 1000;
-		(void) WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT |
-						 WL_EXIT_ON_PM_DEATH,
-						 delay_ms, WAIT_EVENT_PG_SLEEP);
-		ResetLatch(MyLatch);
-
 		return true;
 	}
 
@@ -442,12 +430,9 @@ AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
 	/* try to create new executor and make it alive during queue monitor lifetime */
 	MemoryContext oldContext = MemoryContextSwitchTo(queueMonitorExecutionContext->ctx);
 	dsm_segment *seg = NULL;
-	BackgroundWorkerHandle *handle = StartCitusBackgroundTaskExecutor(databaseName,
-																	  userName,
-																	  runnableTask->
-																	  command,
-																	  runnableTask->taskid,
-																	  &seg);
+	BackgroundWorkerHandle *handle =
+		StartCitusBackgroundTaskExecutor(databaseName, userName, runnableTask->command,
+										 runnableTask->taskid, &seg);
 	MemoryContextSwitchTo(oldContext);
 
 	if (NewExecutorExceedsPgMaxWorkers(handle, queueMonitorExecutionContext))
@@ -561,18 +546,18 @@ CheckAndResetLastWorkerAllocationFailure(
 						  "able to start a background worker with %ld seconds"
 						  "delay", secs)));
 
-		queueMonitorExecutionContext->backgroundWorkerFailedStartTime =
-			0;
+		queueMonitorExecutionContext->backgroundWorkerFailedStartTime = 0;
 	}
 }
 
 
 /*
  * TaskConcurrentCancelCheck checks if concurrent task cancellation or removal happened by
- * taking Exclusive lock. It mutates task's pid and status.
+ * taking Exclusive lock. It mutates task's pid and status. Returns execution status for the
+ * task.
  */
-static void
-TaskConcurrentCancelCheck(QueueMonitorExecutionContext *queueMonitorExecutionContext)
+static TaskExecutionStatus
+TaskConcurrentCancelCheck(TaskExecutionContext *taskExecutionContext)
 {
 	/*
 	 * here we take exclusive lock on pg_dist_background_task table to prevent a
@@ -584,8 +569,6 @@ TaskConcurrentCancelCheck(QueueMonitorExecutionContext *queueMonitorExecutionCon
 	 */
 	LockRelationOid(DistBackgroundTaskRelationId(), ExclusiveLock);
 
-	TaskExecutionContext *taskExecutionContext =
-		queueMonitorExecutionContext->taskExecutionContext;
 	BackgroundExecutorHashEntry *handleEntry = taskExecutionContext->handleEntry;
 	BackgroundTask *task = GetBackgroundTaskByTaskId(handleEntry->taskid);
 	taskExecutionContext->task = task;
@@ -605,6 +588,8 @@ TaskConcurrentCancelCheck(QueueMonitorExecutionContext *queueMonitorExecutionCon
 						  task->jobid, task->taskid)));
 
 		task->status = BACKGROUND_TASK_STATUS_CANCELLED;
+
+		return TASK_EXECUTION_STATUS_CANCELLED;
 	}
 	else
 	{
@@ -623,18 +608,19 @@ TaskConcurrentCancelCheck(QueueMonitorExecutionContext *queueMonitorExecutionCon
 		/* Update task status to indicate it is running */
 		UpdateBackgroundTask(task);
 		UpdateBackgroundJob(task->jobid);
+
+		return TASK_EXECUTION_STATUS_RUNNING;
 	}
 }
 
 
 /*
- * ConsumeExecutorQueue consumes executor's shared memory queue
+ * ConsumeExecutorQueue consumes executor's shared memory queue and returns execution status
+ * for the task.
  */
-static void
-ConsumeExecutorQueue(QueueMonitorExecutionContext *queueMonitorExecutionContext)
+static TaskExecutionStatus
+ConsumeExecutorQueue(TaskExecutionContext *taskExecutionContext)
 {
-	TaskExecutionContext *taskExecutionContext =
-		queueMonitorExecutionContext->taskExecutionContext;
 	BackgroundExecutorHashEntry *handleEntry = taskExecutionContext->handleEntry;
 	BackgroundTask *task = taskExecutionContext->task;
 
@@ -642,13 +628,15 @@ ConsumeExecutorQueue(QueueMonitorExecutionContext *queueMonitorExecutionContext)
 	 * we consume task executor response queue.
 	 * possible response codes can lead us different steps below.
 	 */
-	shm_mq_result mq_res = ReadFromExecutorQueue(handleEntry,
-												 &taskExecutionContext->error);
+	bool hadError = false;
+	shm_mq_result mq_res = ReadFromExecutorQueue(handleEntry, &hadError);
 
-	if (taskExecutionContext->error)
+	if (hadError)
 	{
 		ereport(LOG, (errmsg("task jobid/taskid failed: %ld/%ld",
 							 task->jobid, task->taskid)));
+
+		return TASK_EXECUTION_STATUS_ERROR;
 	}
 	else if (mq_res == SHM_MQ_DETACHED)
 	{
@@ -657,25 +645,26 @@ ConsumeExecutorQueue(QueueMonitorExecutionContext *queueMonitorExecutionContext)
 
 		/* update task status as done. */
 		task->status = BACKGROUND_TASK_STATUS_DONE;
+
+		return TASK_EXECUTION_STATUS_SUCCESS;
 	}
 	else
 	{
 		/* still running the task */
 		Assert(mq_res == SHM_MQ_WOULD_BLOCK);
+		return TASK_EXECUTION_STATUS_WOULDBLOCK;
 	}
 }
 
 
 /*
- * TaskHadError updates retry count of a failed task inside queueMonitorExecutionContext.
+ * TaskHadError updates retry count of a failed task inside taskExecutionContext.
  * If maximum retry count is reached, task status is marked as failed. Otherwise, backoff
  * delay is calculated, notBefore time is updated and the task is marked as runnable.
  */
 static void
-TaskHadError(QueueMonitorExecutionContext *queueMonitorExecutionContext)
+TaskHadError(TaskExecutionContext *taskExecutionContext)
 {
-	TaskExecutionContext *taskExecutionContext =
-		queueMonitorExecutionContext->taskExecutionContext;
 	BackgroundTask *task = taskExecutionContext->task;
 
 	/*
@@ -711,21 +700,22 @@ TaskHadError(QueueMonitorExecutionContext *queueMonitorExecutionContext)
 		task->status = BACKGROUND_TASK_STATUS_RUNNABLE;
 	}
 
-	TaskEnded(queueMonitorExecutionContext);
+	TaskEnded(taskExecutionContext);
 }
 
 
 /*
- * TaskEnded updates task inside queueMonitorExecutionContext. It also updates depending
+ * TaskEnded updates task inside taskExecutionContext. It also updates depending
  * tasks and the job to which task belongs. At the end, it also updates executor map and
- * count after terminating the executor.
+ * count inside queueMonitorExecutionContext after terminating the executor.
  */
 static void
-TaskEnded(QueueMonitorExecutionContext *queueMonitorExecutionContext)
+TaskEnded(TaskExecutionContext *taskExecutionContext)
 {
+	QueueMonitorExecutionContext *queueMonitorExecutionContext =
+		taskExecutionContext->queueMonitorExecutionContext;
+
 	HTAB *currentExecutors = queueMonitorExecutionContext->currentExecutors;
-	TaskExecutionContext *taskExecutionContext =
-		queueMonitorExecutionContext->taskExecutionContext;
 	BackgroundExecutorHashEntry *handleEntry = taskExecutionContext->handleEntry;
 	BackgroundTask *task = taskExecutionContext->task;
 
@@ -868,7 +858,6 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		.backgroundWorkerFailedStartTime = 0,
 		.allTasksWouldBlock = true,
 		.currentExecutors = currentExecutors,
-		.taskExecutionContext = NULL,
 		.ctx = backgroundTaskContext
 	};
 
@@ -907,35 +896,33 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		{
 			/* create task execution context and assign it to queueMonitorExecutionContext */
 			TaskExecutionContext taskExecutionContext = {
+				.queueMonitorExecutionContext = &queueMonitorExecutionContext,
 				.handleEntry = handleEntry,
-				.task = NULL,
-				.error = false
+				.task = NULL
 			};
-			queueMonitorExecutionContext.taskExecutionContext = &taskExecutionContext;
 
 			/* check if concurrent cancellation occurred */
-			TaskConcurrentCancelCheck(&queueMonitorExecutionContext);
+			TaskExecutionStatus taskExecutionStatus = TaskConcurrentCancelCheck(
+				&taskExecutionContext);
 
 			/*
 			 * check task status. If it is cancelled, we do not need to consume queue
 			 * as we already consumed the queue.
 			 */
-			BackgroundTaskStatus *taskExecutionStatus =
-				&(taskExecutionContext.task->status);
-			if (*taskExecutionStatus == BACKGROUND_TASK_STATUS_CANCELLED)
+			if (taskExecutionStatus == TASK_EXECUTION_STATUS_CANCELLED)
 			{
-				TaskEnded(&queueMonitorExecutionContext);
+				TaskEnded(&taskExecutionContext);
 				continue;
 			}
 
-			ConsumeExecutorQueue(&queueMonitorExecutionContext);
-			if (taskExecutionContext.error)
+			taskExecutionStatus = ConsumeExecutorQueue(&taskExecutionContext);
+			if (taskExecutionStatus == TASK_EXECUTION_STATUS_ERROR)
 			{
-				TaskHadError(&queueMonitorExecutionContext);
+				TaskHadError(&taskExecutionContext);
 			}
-			else if (*taskExecutionStatus == BACKGROUND_TASK_STATUS_DONE)
+			else if (taskExecutionStatus == TASK_EXECUTION_STATUS_SUCCESS)
 			{
-				TaskEnded(&queueMonitorExecutionContext);
+				TaskEnded(&taskExecutionContext);
 			}
 		}
 
@@ -1300,9 +1287,8 @@ StoreArgumentsInDSM(char *database, char *username, char *command, int64 taskId)
 	shm_toc_estimate_keys(&e, CITUS_BACKGROUND_TASK_NKEYS);
 	Size segsize = shm_toc_estimate(&e);
 
-	/* attaches the segment into TopMemoryContext, else, we can get garbage segment after commit */
-	CurrentResourceOwner = ResourceOwnerCreate(NULL, "citus background job");
 	dsm_segment *seg = dsm_create(segsize, DSM_CREATE_NULL_IF_MAXSEGMENTS);
+
 	if (seg == NULL)
 	{
 		ereport(ERROR,
@@ -1310,6 +1296,13 @@ StoreArgumentsInDSM(char *database, char *username, char *command, int64 taskId)
 
 		return NULL;
 	}
+
+	/*
+	 * when we have CurrentResourceOwner != NULL, segment will be released upon CurrentResourceOwner release,
+	 * but we may consume the queue in segment even after CurrentResourceOwner released. 'dsm_pin_mapping' helps
+	 * persisting the segment until the session ends or the segment is detached explicitly by 'dsm_detach'.
+	 */
+	dsm_pin_mapping(seg);
 
 	shm_toc *toc = shm_toc_create(CITUS_BACKGROUND_TASK_MAGIC, dsm_segment_address(seg),
 								  segsize);
@@ -1336,6 +1329,7 @@ StoreArgumentsInDSM(char *database, char *username, char *command, int64 taskId)
 	int64 *taskIdTarget = shm_toc_allocate(toc, sizeof(int64));
 	*taskIdTarget = taskId;
 	shm_toc_insert(toc, CITUS_BACKGROUND_TASK_KEY_TASK_ID, taskIdTarget);
+
 	shm_mq_attach(mq, seg, NULL);
 
 	return seg;

@@ -33,19 +33,16 @@ typedef struct BackgroundExecutorHashEntry
 
 
 /*
- * TaskExecutionContext encapsulates info for currently executed task in queue monitor
+ * TaskExecutionStatus status for task execution in queue monitor
  */
-typedef struct TaskExecutionContext
+typedef enum TaskExecutionStatus
 {
-	/* active background executor entry */
-	BackgroundExecutorHashEntry *handleEntry;
-
-	/* active background task */
-	BackgroundTask *task;
-
-	/* useful to track if task errored */
-	bool error;
-} TaskExecutionContext;
+	TASK_EXECUTION_STATUS_SUCCESS = 0,
+	TASK_EXECUTION_STATUS_ERROR,
+	TASK_EXECUTION_STATUS_CANCELLED,
+	TASK_EXECUTION_STATUS_RUNNING,
+	TASK_EXECUTION_STATUS_WOULDBLOCK
+} TaskExecutionStatus;
 
 
 /*
@@ -66,12 +63,25 @@ typedef struct QueueMonitorExecutionContext
 	/* useful to track if all tasks EWOULDBLOCK'd at current iteration */
 	bool allTasksWouldBlock;
 
-	/* context related to current executed task */
-	TaskExecutionContext *taskExecutionContext;
-
 	/* context for monitor related allocations */
 	MemoryContext ctx;
 } QueueMonitorExecutionContext;
+
+
+/*
+ * TaskExecutionContext encapsulates info for currently executed task in queue monitor
+ */
+typedef struct TaskExecutionContext
+{
+	/* active background executor entry */
+	BackgroundExecutorHashEntry *handleEntry;
+
+	/* active background task */
+	BackgroundTask *task;
+
+	/* context for queue monitor */
+	QueueMonitorExecutionContext *queueMonitorExecutionContext;
+} TaskExecutionContext;
 
 
 extern BackgroundWorkerHandle * StartCitusBackgroundTaskQueueMonitor(Oid database,
