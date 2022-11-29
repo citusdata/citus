@@ -12,7 +12,7 @@ import re
 args = argparse.ArgumentParser()
 args.add_argument("-t", "--test", required=True, help="Relative path for test file (must have a .sql or .spec extension)", type=pathlib.Path)
 args.add_argument("-n", "--ntimes", required=True, help="Number of test to run", type=int)
-args.add_argument("-s", "--schedule", required=False, help="Test schedule to be used as a base (optional)", default='')
+args.add_argument("-s", "--schedule", required=False, help="Test schedule to be used as a base (optional)", nargs='?', const='', default='')
 
 args = vars(args.parse_args())
 
@@ -76,15 +76,14 @@ else:
     make_recipe = 'check-custom-schedule'
 
 # prepare command to run tests
-test_command = f"make {make_recipe} SCHEDULE='{pathlib.Path(tmp_schedule_path).stem}'"
+test_command = f"make -C {regress_dir} {make_recipe} SCHEDULE='{pathlib.Path(tmp_schedule_path).stem}'"
 
 # run test command n times
 for i in range(args['ntimes']):
-    print(f"Execution#{i} of {test_command}")
+    print(f"Execution#{i}/{args['ntimes']} of {test_command}")
     result = os.system(test_command)
     if result != 0:
-        shutil.copy2(os.path.join(regress_dir, "regression.diffs"), os.path.join(regress_dir, f"regression_{i}.diffs"))
-        shutil.copy2(os.path.join(regress_dir, "regression.out"), os.path.join(regress_dir, f"regression_{i}.out"))
+        sys.exit(2)
 
 # remove temp schedule file
 os.remove(tmp_schedule_path)

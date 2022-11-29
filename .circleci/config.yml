@@ -554,7 +554,7 @@ jobs:
       make:
         description: 'make target'
         type: string
-        default: check-minimal
+        default: ''
       test:
         description: 'the test that should be run multiple times'
         type: string
@@ -562,7 +562,7 @@ jobs:
       runs:
         description: 'number of times that the test should be run in total'
         type: integer
-        default: 1600
+        default: 2
     docker:
       - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     working_directory: /home/circleci/project
@@ -572,12 +572,13 @@ jobs:
       - attach_workspace:
           at: .
       - run:
-          name: 'Detect newly introduced tests'
+          name: 'Detect regression tests need to be ran'
           command: |
             testForDebugging="<< parameters.test >>"
 
             if [ -z "$testForDebugging" ]; then
-              tests=$(git diff origin/main --name-status --oneline --diff-filter=A | (grep 'src/test/regress/sql/' || true) | rev | cut -d "/" -f1 | rev | sed 's/.sql//g' | tr '\n' ' ' | sed 's/.$//')
+              detected_changes=$(git diff origin/HEAD --name-only --diff-filter=A | (grep 'src/test/regress/sql/.*.sql\|src/test/regress/spec/.*.spec' || true))
+              tests=${detected_changes}
             else
               tests=$testForDebugging;
             fi
@@ -585,6 +586,8 @@ jobs:
             if [ -z "$tests" ]; then
                 echo "No test found."
                 circleci-agent step halt
+            else
+              echo "Detected tests " $tests
             fi
 
             echo export tests=\""$tests"\" >> "$BASH_ENV"
@@ -608,8 +611,8 @@ jobs:
             tests_array=($tests)
             for test in "${tests_array[@]}"
             do
-                echo "Running : $test on << parameters.make >>"
-                gosu circleci make -C src/test/regress << parameters.make >> EXTRA_TESTS="$(for i in $(seq << parameters.runs >> | circleci tests split); do echo -n $test '' ; done)"
+                echo $test
+                gosu circleci src/test/regress/bin/run_test.py -t $test -n << parameters.runs >> -s << parameters.make >>
             done
           no_output_timeout: 2m
       - run:
