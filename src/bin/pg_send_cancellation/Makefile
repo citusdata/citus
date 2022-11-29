@@ -10,6 +10,7 @@ PG_LDFLAGS += $(LDFLAGS)
 include $(citus_top_builddir)/Makefile.global
 
 # We reuse all the Citus flags (incl. security flags), but we are building a program not a shared library
+# -fno-lto is needed to avoid a linker error on el/9
 override CFLAGS := $(filter-out -shared,$(CFLAGS)) -fno-lto
 
 # Filter out unneeded dependencies

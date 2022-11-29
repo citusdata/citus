@@ -1,4 +1,4 @@
-name: Packaging Tests
+name: Build tests in packaging images
 
 on:
   push:
@@ -64,9 +64,9 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Add Postgres installation directory into PATH for rpm based distros
+        if: ${{ matrix.POSTGRES_VERSION != '' }}
         run: |
           echo "/usr/pgsql-${{ matrix.POSTGRES_VERSION }}/bin" >> $GITHUB_PATH
-        if: ${{ matrix.POSTGRES_VERSION != '' }}
 
       - name: Configure
         run: |
@@ -108,5 +108,5 @@ jobs:
           git clone -b citus_packaging_pipeline --depth=1  https://github.com/citusdata/tools.git tools
           python3 -m pip install -r tools/packaging_automation/requirements.txt
           python3 -m tools.packaging_automation.validate_build_output --output_file output.log \
-            --ignore_file packaging_ignore.yml --package_type ${package_type}
+            --ignore_file .github/packaging/packaging_ignore.yml --package_type ${package_type}
 
