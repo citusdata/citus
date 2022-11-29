@@ -124,6 +124,13 @@ check-minimal-mx: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/mx_minimal_schedule $(EXTRA_TESTS)
 
+check-custom-schedule: all
+	$(pg_regress_multi_check) --load-extension=citus \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
+
+check-isolation-custom-schedule: all  $(isolation_test_files)
+	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
+	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
 check-empty: all
 	$(pg_regress_multi_check) --load-extension=citus \
