@@ -880,7 +880,9 @@ SyncDistributedObjectsToNodeList(List *workerNodeList)
 
 	char *commandStr;
 	foreach_ptr(commandStr, commandList)
-	ExecuteRemoteCommandInConnectionList(connectionList, commandStr);
+	{
+		ExecuteRemoteCommandInConnectionList(connectionList, commandStr);
+	}
 
 	MultiConnection *connection;
 	foreach_ptr(connection, connectionList)
@@ -1246,7 +1248,7 @@ ActivateNodeList(List *nodeList)
 	 * replicating reference tables to the remote node, as reference tables may
 	 * need such objects.
 	 */
-	SyncDistributedObjectsToNodeList(nodeToSyncMetadata);
+	//SyncDistributedObjectsToNodeList(nodeToSyncMetadata);
 
 	/*
 	 * Sync node metadata. We must sync node metadata before syncing table
