@@ -64,13 +64,25 @@ SELECT create_reference_table('reference_table');
 CREATE TABLE distributed_table(user_id int, item_id int, buy_count int);
 SELECT create_distributed_table('distributed_table', 'user_id');
 
+INSERT INTO distributed_table VALUES
+(1, 10),
+(2, 22),
+(3, 34),
+(7, 40);
+
+INSERT INTO reference_table VALUES
+(1, '100'),
+(null, '202'),
+(4, '300'),
+(null, '401'),
+(null, '402');
+
 -- postgres plans below queries by evaluating joins as below:
 --     L
 --   /   \
 -- ref     L
 --       /   \
 --     dist  ref
--- so we should error out as reference table is in the outer part of the top level (left) outer join
 
 SELECT count(*) FROM distributed_table a
 LEFT JOIN reference_table b ON (true)
@@ -123,7 +135,6 @@ SELECT create_reference_table('t4');
 --   t1(ref)     L
 --            /     \
 --       t0(dist)  t4(ref)
--- -- so we should error out
 SELECT count(*) FROM (
 SELECT ALL t4.c1, t0.c0, t0.c1 FROM ONLY t0
    LEFT OUTER JOIN t4 ON CAST(masklen('142.158.96.44') AS BOOLEAN)
@@ -189,7 +200,7 @@ ON (true);
 
 -- unsupported outer JOIN in a sublevel INNER JOIN
 SELECT
- unsupported_join.*
+ COUNT(unsupported_join.*)
 FROM
    (distributed_table a
    LEFT JOIN reference_table b ON (true)
@@ -199,7 +210,7 @@ JOIN
 
 -- unsupported outer JOIN in a sublevel LEFT JOIN
 SELECT
- unsupported_join.*
+ COUNT(unsupported_join.*)
 FROM
    (distributed_table a
    LEFT JOIN reference_table b ON (true)
@@ -208,7 +219,7 @@ LEFT JOIN
    (reference_table d JOIN reference_table e ON(true)) ON (true);
 
 SELECT
- unsupported_join.*
+ COUNT(unsupported_join.*)
 FROM
    (distributed_table a
    LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
@@ -224,7 +235,7 @@ ON (true);
 
 -- unsupported outer JOIN in a sublevel RIGHT JOIN
 SELECT
- unsupported_join.*
+ COUNT(unsupported_join.*)
 FROM
    (distributed_table a
    LEFT JOIN reference_table b ON (true)
@@ -233,7 +244,7 @@ RIGHT JOIN
    (reference_table d JOIN reference_table e ON(true)) ON (true);
 
 SELECT
- unsupported_join.*
+ COUNT(unsupported_join.*)
 FROM
    (distributed_table a
    LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
@@ -247,7 +258,7 @@ RIGHT JOIN
    )
 ON (true);
 
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF) SELECT
   unsupported_join.*
 FROM
    (distributed_table a

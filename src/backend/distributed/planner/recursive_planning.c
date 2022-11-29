@@ -826,19 +826,28 @@ RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
 	if (IsA(node, JoinExpr))
 	{
 		/*
-		 * XXX: This, for example, means that RecursivelyPlanRecurringTupleOuterJoins
-		 *      needs to plan inner side, i.e., <distributed> INNER JOIN <distributed>,
-		 *      of the following join:
+		 * This, for example, means that RecursivelyPlanRecurringTupleOuterJoinWalker
+		 * needs to plan inner side, i.e., "<distributed> INNER JOIN <distributed>",
+		 * of the following join:
+		 *   <recurring> LEFT JOIN (<distributed> JOIN <distributed>)
 		 *
-		 *      <recurring> LEFT JOIN (<distributed> INNER JOIN <distributed>)
+		 * XXX: Ideally, we should handle such a sub join tree by moving
+		 *      it into a subquery "as a whole" but this implies that we need to
+		 *      rebuild the rtable and re-point all the Vars to the new rtable
+		 *      indexes, so we've not implemented that yet.
 		 *
-		 *      However, this would require moving part of the join tree into a
-		 *      subquery but this implies that we need to rebuild the rtable and
-		 *      re-point all the Vars to the new rtable indexes. We have not
-		 *      implemented that yet.
+		 *      Instead, we recursively plan all the distributed tables in that
+		 *      sub join tree. This is much more inefficient than the other
+		 *      approach (since we lose the opportunity to push-down the whole
+		 *      sub join tree into the workers) but is easier to implement.
 		 */
-		ereport(DEBUG4, (errmsg("recursive planner cannot plan distributed sub "
-								"join nodes yet")));
+
+		RecursivelyPlanDistributedJoinNode(((JoinExpr *) node)->larg,
+										   query, recursivePlanningContext);
+
+		RecursivelyPlanDistributedJoinNode(((JoinExpr *) node)->rarg,
+										   query, recursivePlanningContext);
+
 		return;
 	}
 

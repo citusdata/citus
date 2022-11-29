@@ -302,13 +302,14 @@ FROM
 	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey)
 ORDER BY 1;
 
--- Right join with single shard right most table should error out
+-- Right join with single shard right most table should work
 SELECT
 	l_custkey, r_custkey, t_custkey
 FROM
 	multi_outer_join_left_hash l1
 	LEFT JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey = r1.r_custkey)
-	RIGHT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
+	RIGHT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey)
+ORDER BY 1,2,3;
 
 -- Right join with single shard left most table should work
 SELECT
