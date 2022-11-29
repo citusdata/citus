@@ -47,17 +47,17 @@ jobs:
           - citus/packaging:centos-7-pg
           - citus/packaging:centos-8-pg
           - citus/packaging:almalinux-9-pg
+          - citus/packaging:ubuntu-jammy-all
+          - citus/packaging:debian-bookworm-all
+          - citus/packaging:ubuntu-focal-all
+          - citus/packaging:debian-bullseye-all
+          - citus/packaging:ubuntu-bionic-all
+          - citus/packaging:debian-buster-all
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
-        include:
-          - packaging_docker_image: citus/packaging:ubuntu-jammy-all
-          - packaging_docker_image: citus/packaging:debian-bookworm-all
-          - packaging_docker_image: citus/packaging:ubuntu-focal-all
-          - packaging_docker_image: citus/packaging:debian-bullseye-all
-          - packaging_docker_image: citus/packaging:ubuntu-bionic-all
-          - packaging_docker_image: citus/packaging:debian-buster-all
+
 
     container:
-      image: ${{ matrix.packaging_docker_image }}${{ matrix.POSTGRES_VERSION }}
+      image: ${{ matrix.packaging_docker_image }}${{ endsWith(matrix.packaging_docker_image, matrix.POSTGRES_VERSION) }}
 
     steps:
       - name: Checkout repository
