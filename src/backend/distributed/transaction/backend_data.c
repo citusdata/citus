@@ -424,7 +424,7 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 
 		/*
 		 * We prefer to use worker_query instead of distributedCommandOriginator in
-		 * the user facing functions since its more intuitive. Thus,
+		 * the user facing functions since it's more intuitive. Thus,
 		 * we negate the result before returning.
 		 */
 		bool distributedCommandOriginator =

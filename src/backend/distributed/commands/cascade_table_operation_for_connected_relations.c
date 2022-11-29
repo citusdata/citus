@@ -250,7 +250,7 @@ ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(List *relationIdList)
 			generate_qualified_relation_name(relationId);
 		ereport(ERROR, (errmsg("cannot cascade operation via foreign keys as "
 							   "partition table %s involved in a foreign key "
-							   "relationship that is not inherited from it's "
+							   "relationship that is not inherited from its "
 							   "parent table", partitionRelationQualifiedName),
 						errhint("Remove non-inherited foreign keys from %s and "
 								"try operation again", partitionRelationQualifiedName)));

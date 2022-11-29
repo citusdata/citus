@@ -386,9 +386,9 @@ SELECT citus_add_local_table_to_metadata('cas_par2_2', cascade_via_foreign_keys=
 ERROR:  cannot add local table cas_par2_2 to metadata since it is a partition of cas_par2. Instead, add the parent table cas_par2 to metadata.
 -- these two should error out as the foreign keys are not inherited from the parent
 SELECT citus_add_local_table_to_metadata('cas_par2');
-ERROR:  cannot cascade operation via foreign keys as partition table citus_local_tables_mx.cas_par2_1 involved in a foreign key relationship that is not inherited from it's parent table
+ERROR:  cannot cascade operation via foreign keys as partition table citus_local_tables_mx.cas_par2_1 involved in a foreign key relationship that is not inherited from its parent table
 SELECT citus_add_local_table_to_metadata('cas_par2', cascade_via_foreign_keys=>true);
-ERROR:  cannot cascade operation via foreign keys as partition table citus_local_tables_mx.cas_par2_1 involved in a foreign key relationship that is not inherited from it's parent table
+ERROR:  cannot cascade operation via foreign keys as partition table citus_local_tables_mx.cas_par2_1 involved in a foreign key relationship that is not inherited from its parent table
 -- drop the foreign keys and establish them again using the parent table
 ALTER TABLE cas_par_1 DROP CONSTRAINT fkey_cas_test_1;
 ALTER TABLE cas_par2_1 DROP CONSTRAINT fkey_cas_test_2;
@@ -511,7 +511,7 @@ select conname from pg_constraint where conname like 'fkey_cas_test%' order by c
 -- add a non-inherited fkey and verify it fails when trying to convert
 ALTER TABLE cas_par2_1 ADD CONSTRAINT fkey_cas_test_3 FOREIGN KEY (a) REFERENCES cas_1(a);
 SELECT citus_add_local_table_to_metadata('cas_par2', cascade_via_foreign_keys=>true);
-ERROR:  cannot cascade operation via foreign keys as partition table citus_local_tables_mx.cas_par2_1 involved in a foreign key relationship that is not inherited from it's parent table
+ERROR:  cannot cascade operation via foreign keys as partition table citus_local_tables_mx.cas_par2_1 involved in a foreign key relationship that is not inherited from its parent table
 -- verify undistribute_table works proper for the mx worker
 \c - - - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'cas\_%' ORDER BY relname;

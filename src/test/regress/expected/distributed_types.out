@@ -535,7 +535,7 @@ SHOW citus.multi_shard_modify_mode;
 
 COMMIT;
 -- Show that PG does not allow adding a circular dependency btw types
--- We added here to make sure we can catch it if PG changes it's behaviour
+-- We added here to make sure we can catch it if PG changes its behaviour
 CREATE TYPE circ_type1 AS (a int);
 CREATE TYPE circ_type2 AS (a int, b circ_type1);
 ALTER TYPE circ_type1 ADD ATTRIBUTE b circ_type2;
