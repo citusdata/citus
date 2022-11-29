@@ -189,6 +189,8 @@ WorkerDropDistributedTable(Oid relationId)
 								PROCESS_UTILITY_QUERY, NULL, None_Receiver, NULL);
 	}
 }
+
+
 #include "access/xact.h"
 
 /*
