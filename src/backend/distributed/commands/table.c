@@ -219,14 +219,11 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
  * table is a distributed table, this function errors out, as we currently don't
  * support local tables inheriting a distributed table.
  */
-#include "utils/inval.h"
+
 void
 PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 {
-	if (!IsCoordinator())
-	{
-		CacheInvalidateRelcacheAll();
-	}
+
 	PostprocessCreateTableStmtForeignKeys(createStatement);
 
 	if (createStatement->inhRelations != NIL)

@@ -721,6 +721,13 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			PreprocessAlterExtensionCitusStmtForCitusColumnar(parsetree);
 		}
 
+#include "utils/inval.h"
+		if (IsA(parsetree, CreateStmt) && !IsCoordinator())
+
+		{
+			CacheInvalidateRelcacheAll();
+		}
+
 		PrevProcessUtility_compat(pstmt, queryString, false, context,
 								  params, queryEnv, dest, completionTag);
 
