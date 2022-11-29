@@ -189,7 +189,7 @@ WorkerDropDistributedTable(Oid relationId)
 								PROCESS_UTILITY_QUERY, NULL, None_Receiver, NULL);
 	}
 }
-
+#include "access/xact.h"
 
 /*
  * worker_drop_shell_table drops the shell table of with the given distributed
@@ -256,7 +256,7 @@ worker_drop_shell_table(PG_FUNCTION_ARGS)
 	performDeletion(distributedTableObject, DROP_CASCADE,
 					PERFORM_DELETION_INTERNAL);
 
-	CommandCounterInrement();
+	CommandCounterIncrement();
 
 	PG_RETURN_VOID();
 }
