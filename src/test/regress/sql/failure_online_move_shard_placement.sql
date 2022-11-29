@@ -82,12 +82,28 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT min\(latest_end_lsn").cancel
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 
 -- failure on disabling subscription (right before dropping it)
-SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").kill()');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+-- should succeed with warnings (subscription not dropped)
+-- move the shard back
+SELECT master_move_shard_placement(101, 'localhost', :worker_2_proxy_port, 'localhost', :worker_1_port);
 
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
 CALL citus_cleanup_orphaned_resources();
+CALL citus_cleanup_orphaned_shards();
+
+-- failure on setting lock_timeout (right before dropping subscriptions & replication slots)
+SELECT citus.mitmproxy('conn.onQuery(query="^SET LOCAL lock_timeout").kill()');
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+-- should succeed with warnings (objects not dropped)
+-- move the shard back
+SELECT master_move_shard_placement(101, 'localhost', :worker_2_proxy_port, 'localhost', :worker_1_port);
+
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+CALL citus_cleanup_orphaned_resources();
+CALL citus_cleanup_orphaned_shards();
 
 -- cancellation on disabling subscription (right before dropping it)
 SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").cancel(' || :pid || ')');
