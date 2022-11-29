@@ -14,7 +14,7 @@ jobs:
       pg_versions: ${{ steps.get-postgres-versions.outputs.pg_versions }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 2
       - name: Get Postgres Versions
@@ -61,7 +61,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Add Postgres installation directory into PATH for rpm based distros
         if: ${{ matrix.POSTGRES_VERSION != '' }}
@@ -109,4 +109,3 @@ jobs:
           python3 -m pip install -r tools/packaging_automation/requirements.txt
           python3 -m tools.packaging_automation.validate_build_output --output_file output.log \
             --ignore_file .github/packaging/packaging_ignore.yml --package_type ${package_type}
-
