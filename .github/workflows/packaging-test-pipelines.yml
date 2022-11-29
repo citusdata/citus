@@ -36,11 +36,9 @@ jobs:
       fail-fast: false
       matrix:
         # While we use separate images for different Postgres versions in rpm
-        # based distros, we use the same docker image for builds based on
-        # different Postgres versions in deb based distros.
-        # For this reason, while we need to use a "matrix" to generate names of
-        # rpm images, we can simply include deb based ones into "packaging_docker_image"
-        # list.
+        # based distros
+        # For this reason, we need to use a "matrix" to generate names of
+        # rpm images, e.g. citus/packaging:centos-7-pg12
         packaging_docker_image:
           - citus/packaging:oraclelinux-7-pg
           - citus/packaging:oraclelinux-8-pg
@@ -48,7 +46,6 @@ jobs:
           - citus/packaging:centos-8-pg
           - citus/packaging:almalinux-9-pg
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
-
 
     container:
       image: ${{ matrix.packaging_docker_image }}${{ matrix.POSTGRES_VERSION }}
@@ -103,12 +100,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # While we use separate images for different Postgres versions in rpm
-        # based distros, we use the same docker image for builds based on
-        # different Postgres versions in deb based distros.
-        # For this reason, while we need to use a "matrix" to generate names of
-        # rpm images, we can simply include deb based ones into "packaging_docker_image"
-        # list.
+        #  We use the same docker image for builds based on
+        # different Postgres versions in deb based distros, since images includes all postgres installations.
+        # For this reason, we don't use POSTGRES_VERSION in container name but used it to set PG_CONFIG variable
         packaging_docker_image:
           - citus/packaging:ubuntu-jammy-all
           - citus/packaging:debian-bookworm-all
@@ -118,7 +112,6 @@ jobs:
           - citus/packaging:debian-buster-all
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
 
-
     container:
       image: ${{ matrix.packaging_docker_image }}
 
@@ -126,7 +119,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Add Postgres installation directory into PATH for rpm based distros
+      - name: Set Pg_Config path to related Postgres version
         run: |
           echo "PG_CONFIG=/usr/lib/postgresql/${{ matrix.POSTGRES_VERSION }}/bin/pg_config" >> $GITHUB_ENV
 
