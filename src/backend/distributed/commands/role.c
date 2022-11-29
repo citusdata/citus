@@ -921,7 +921,7 @@ PreprocessCreateRoleStmt(Node *node, const char *queryString,
 	commands = lappend(commands, DISABLE_DDL_PROPAGATION);
 	commands = lappend(commands, createOrAlterRoleQuery);
 
-	/* deparse all grant statements and add them to the to commands list */
+	/* deparse all grant statements and add them to the commands list */
 	Node *stmt = NULL;
 	foreach_ptr(stmt, grantRoleStmts)
 	{

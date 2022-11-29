@@ -1030,7 +1030,7 @@ ConstraintIsAForeignKey(char *inputConstaintName, Oid relationId)
 /*
  * ConstraintWithNameIsOfType is a wrapper around get_relation_constraint_oid that
  * returns true if given constraint name identifies a valid constraint defined
- * on relation with relationId and it's type matches the input constraint type.
+ * on relation with relationId and its type matches the input constraint type.
  */
 bool
 ConstraintWithNameIsOfType(char *inputConstaintName, Oid relationId,

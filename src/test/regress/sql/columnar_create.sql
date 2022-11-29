@@ -72,7 +72,7 @@ SELECT columnar_test_helpers.pg_waitpid(val) FROM old_backend_pid;
 
 DROP TABLE old_backend_pid;
 
--- show that temporary table itself and it's metadata is removed
+-- show that temporary table itself and its metadata is removed
 SELECT COUNT(*)=0 FROM pg_class WHERE relname='columnar_temp';
 SELECT columnar_test_helpers.columnar_metadata_has_storage_id(:columnar_temp_storage_id);
 
@@ -111,7 +111,7 @@ BEGIN;
   FROM pg_class WHERE relname='columnar_temp' \gset
 COMMIT;
 
--- make sure that table & it's stripe is dropped after commiting above xact
+-- make sure that table & its stripe is dropped after commiting above xact
 SELECT COUNT(*)=0 FROM pg_class WHERE relname='columnar_temp';
 SELECT columnar_test_helpers.columnar_metadata_has_storage_id(:columnar_temp_storage_id);
 
@@ -124,7 +124,7 @@ BEGIN;
   FROM pg_class WHERE relname='columnar_temp' \gset
 COMMIT;
 
--- make sure that table is not dropped but it's rows's are deleted after commiting above xact
+-- make sure that table is not dropped but its rows's are deleted after commiting above xact
 SELECT COUNT(*)=1 FROM pg_class WHERE relname='columnar_temp';
 SELECT COUNT(*)=0 FROM columnar_temp;
 -- since we deleted all the rows, we shouldn't have any stripes for table

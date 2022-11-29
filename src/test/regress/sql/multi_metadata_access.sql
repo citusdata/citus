@@ -18,7 +18,8 @@ WHERE
     AND classid ='pg_class'::regclass
     AND ext.extname = 'citus'
     AND nsp.nspname = 'pg_catalog'
-    AND NOT has_table_privilege(pg_class.oid, 'select');
+    AND NOT has_table_privilege(pg_class.oid, 'select')
+ORDER BY 1;
 
 
 RESET role;

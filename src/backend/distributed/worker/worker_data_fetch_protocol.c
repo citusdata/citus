@@ -161,7 +161,7 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 	/*
 	 * If sequence with the same name exist for different type, it must have been
 	 * stayed on that node after a rollbacked create_distributed_table operation.
-	 * We must change it's name first to create the sequence with the correct type.
+	 * We must change its name first to create the sequence with the correct type.
 	 */
 	CreateSeqStmt *createSequenceStatement = (CreateSeqStmt *) commandNode;
 	RenameExistingSequenceWithDifferentTypeIfExists(createSequenceStatement->sequence,
