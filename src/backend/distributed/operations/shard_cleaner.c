@@ -925,9 +925,6 @@ TryDropSubscriptionOutsideTransaction(char *subscriptionName,
 
 	if (!IsResponseOK(result))
 	{
-		RemoteTransactionAbort(connection);
-		ResetRemoteTransaction(connection);
-
 		char *errorcode = PQresultErrorField(result, PG_DIAG_SQLSTATE);
 		if (errorcode != NULL && strcmp(errorcode, STR_ERRCODE_UNDEFINED_OBJECT) == 0)
 		{
@@ -937,6 +934,8 @@ TryDropSubscriptionOutsideTransaction(char *subscriptionName,
 			 */
 			PQclear(result);
 			ForgetResults(connection);
+			RemoteTransactionAbort(connection);
+			ResetRemoteTransaction(connection);
 			return true;
 		}
 		else
@@ -944,6 +943,8 @@ TryDropSubscriptionOutsideTransaction(char *subscriptionName,
 			ReportResultError(connection, result, WARNING);
 			PQclear(result);
 			ForgetResults(connection);
+			RemoteTransactionAbort(connection);
+			ResetRemoteTransaction(connection);
 			return false;
 		}
 	}
