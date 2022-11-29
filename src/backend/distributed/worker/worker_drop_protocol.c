@@ -256,6 +256,8 @@ worker_drop_shell_table(PG_FUNCTION_ARGS)
 	performDeletion(distributedTableObject, DROP_CASCADE,
 					PERFORM_DELETION_INTERNAL);
 
+	CommandCounterInrement();
+
 	PG_RETURN_VOID();
 }
 
