@@ -51,7 +51,7 @@ jobs:
 
 
     container:
-      image: ${{ matrix.packaging_docker_image }}${{ endsWith(matrix.packaging_docker_image, 'pg') }}
+      image: ${{ matrix.packaging_docker_image }}${{ matrix.POSTGRES_VERSION }}
 
     steps:
       - name: Checkout repository
