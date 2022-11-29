@@ -197,7 +197,7 @@ StringJoinParams(List *stringList, char delimiter, char *prefix, char *postfix)
 		appendStringInfoString(joinedString, command);
 		curIndex++;
 
-		if (curIndex % 50 == 0)
+		if (curIndex % 50000 == 0)
 		{
 			appendStringInfoChar(joinedString, delimiter);
 			appendStringInfo(joinedString, "SAVEPOINT citus_int_%d;", curIndex);
