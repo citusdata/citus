@@ -266,7 +266,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     SET citus.next_operation_id TO 777;
     SET citus.next_cleanup_record_id TO 11;
 
-    SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").cancel(' || pg_backend_pid() || ')');
+    SELECT citus.mitmproxy('conn.onQuery(query="ALTER SUBSCRIPTION .* DISABLE").cancel(' || pg_backend_pid() || ')');
     SELECT pg_catalog.citus_split_shard_by_split_points(
         8981000,
         ARRAY['-100000'],
