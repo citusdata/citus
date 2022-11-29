@@ -219,7 +219,7 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
  * table is a distributed table, this function errors out, as we currently don't
  * support local tables inheriting a distributed table.
  */
-#include "xact/invals.h"
+#include "utils/inval.h"
 void
 PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 {
