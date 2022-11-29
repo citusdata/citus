@@ -222,6 +222,10 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 void
 PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 {
+	if (!IsCoordinator())
+	{
+		CacheInvalidateRelcacheAll();
+	}
 	PostprocessCreateTableStmtForeignKeys(createStatement);
 
 	if (createStatement->inhRelations != NIL)
