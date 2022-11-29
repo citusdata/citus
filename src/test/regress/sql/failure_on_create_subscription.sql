@@ -39,6 +39,13 @@ SELECT * FROM shards_in_workers;
 -- 2) ERROR:  connection to the remote node localhost:xxxxx failed with the following error: another command is already in progress
 -- Instead fail on the next step (ALTER SUBSCRIPTION) instead which is also required logically as part of uber CREATE SUBSCRIPTION operation.
 
+SELECT citus.mitmproxy('conn.onQuery(query="ALTER SUBSCRIPTION").kill()');
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+CALL citus_cleanup_orphaned_resources();
+
 SELECT citus.mitmproxy('conn.onQuery(query="ALTER SUBSCRIPTION").cancel(' || :pid || ')');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 
