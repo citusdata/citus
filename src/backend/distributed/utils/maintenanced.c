@@ -98,6 +98,7 @@ double DistributedDeadlockDetectionTimeoutFactor = 2.0;
 int Recover2PCInterval = 60000;
 int DeferShardDeleteInterval = 15000;
 int BackgroundTaskQueueCheckInterval = 5000;
+int MaxBackgroundTaskExecutors = 4;
 
 /* config variables for metadata sync timeout */
 int MetadataSyncInterval = 60000;

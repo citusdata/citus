@@ -11,9 +11,12 @@
 #ifndef CITUS_SHARD_CLEANER_H
 #define CITUS_SHARD_CLEANER_H
 
+#define MAX_BG_TASK_EXECUTORS 1000
+
 /* GUC to configure deferred shard deletion */
 extern int DeferShardDeleteInterval;
 extern int BackgroundTaskQueueCheckInterval;
+extern int MaxBackgroundTaskExecutors;
 extern double DesiredPercentFreeAfterMove;
 extern bool CheckAvailableSpaceBeforeMove;
 
