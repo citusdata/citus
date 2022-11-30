@@ -110,6 +110,7 @@ jobs:
           - citus/packaging:ubuntu-jammy-all
           - citus/packaging:debian-bookworm-all
           - citus/packaging:ubuntu-focal-all
+          - citus/packaging:ubuntu-kinetic-all
           - citus/packaging:debian-bullseye-all
           - citus/packaging:ubuntu-bionic-all
           - citus/packaging:debian-buster-all
