@@ -260,6 +260,8 @@ SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE', shard_t
 ERROR:  table lineitem_streaming has already been isolated for the given value
 SELECT isolate_tenant_to_new_shard('orders_streaming', 101, 'CASCADE', shard_transfer_mode => 'force_logical');
 ERROR:  table orders_streaming has already been isolated for the given value
+CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 2 orphaned resources
 -- test corner cases: hash(-1995148554) = -2147483648 and hash(-1686493264) = 2147483647
 SELECT isolate_tenant_to_new_shard('lineitem_streaming', -1995148554, 'CASCADE', shard_transfer_mode => 'force_logical');
  isolate_tenant_to_new_shard
@@ -273,6 +275,8 @@ SELECT isolate_tenant_to_new_shard('orders_streaming', -1686493264, 'CASCADE', s
                      1230047
 (1 row)
 
+CALL pg_catalog.citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 2 orphaned resources
 SELECT count(*) FROM orders_streaming WHERE o_orderkey = -1995148554;
  count
 ---------------------------------------------------------------------
@@ -450,7 +454,6 @@ ERROR:  insert or update on table "lineitem_streaming_1230044" violates foreign 
 DETAIL:  Key (l_orderkey)=(128) is not present in table "orders_streaming_1230046".
 \c - postgres - :master_port
 CALL pg_catalog.citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 2 orphaned resources
 -- connect to the worker node with metadata
 \c - mx_isolation_role_ent - :worker_1_port
 SET search_path to "Tenant Isolation";

@@ -175,9 +175,13 @@ SELECT isolate_tenant_to_new_shard('orders_streaming', 103, 'CASCADE', shard_tra
 SELECT isolate_tenant_to_new_shard('lineitem_streaming', 100, 'CASCADE', shard_transfer_mode => 'force_logical');
 SELECT isolate_tenant_to_new_shard('orders_streaming', 101, 'CASCADE', shard_transfer_mode => 'force_logical');
 
+CALL pg_catalog.citus_cleanup_orphaned_resources();
+
 -- test corner cases: hash(-1995148554) = -2147483648 and hash(-1686493264) = 2147483647
 SELECT isolate_tenant_to_new_shard('lineitem_streaming', -1995148554, 'CASCADE', shard_transfer_mode => 'force_logical');
 SELECT isolate_tenant_to_new_shard('orders_streaming', -1686493264, 'CASCADE', shard_transfer_mode => 'force_logical');
+
+CALL pg_catalog.citus_cleanup_orphaned_resources();
 
 SELECT count(*) FROM orders_streaming WHERE o_orderkey = -1995148554;
 SELECT count(*) FROM orders_streaming WHERE o_orderkey = -1686493264;
