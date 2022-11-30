@@ -1208,7 +1208,8 @@ ConflictWithIsolationTestingAfterCopy(void)
 char *
 PublicationName(LogicalRepType type, uint32_t nodeId, Oid ownerId)
 {
-	return psprintf("%s%u_%u", publicationPrefix[type], nodeId, ownerId);
+	return psprintf("%s%u_%u_%lu", publicationPrefix[type],
+					nodeId, ownerId, CurrentOperationId);
 }
 
 
@@ -1223,8 +1224,8 @@ char *
 ReplicationSlotNameForNodeAndOwner(LogicalRepType type, uint32_t nodeId, Oid ownerId)
 {
 	StringInfo slotName = makeStringInfo();
-	appendStringInfo(slotName, "%s%u_%u", replicationSlotPrefix[type], nodeId,
-					 ownerId);
+	appendStringInfo(slotName, "%s%u_%u_%lu", replicationSlotPrefix[type], nodeId,
+					 ownerId, CurrentOperationId);
 
 	if (slotName->len > NAMEDATALEN)
 	{
@@ -1243,7 +1244,8 @@ ReplicationSlotNameForNodeAndOwner(LogicalRepType type, uint32_t nodeId, Oid own
 char *
 SubscriptionName(LogicalRepType type, Oid ownerId)
 {
-	return psprintf("%s%i", subscriptionPrefix[type], ownerId);
+	return psprintf("%s%i_%lu", subscriptionPrefix[type],
+					ownerId, CurrentOperationId);
 }
 
 
@@ -1254,7 +1256,8 @@ SubscriptionName(LogicalRepType type, Oid ownerId)
 char *
 SubscriptionRoleName(LogicalRepType type, Oid ownerId)
 {
-	return psprintf("%s%i", subscriptionRolePrefix[type], ownerId);
+	return psprintf("%s%i_%lu", subscriptionRolePrefix[type], ownerId,
+					CurrentOperationId);
 }
 
 
