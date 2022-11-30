@@ -20,6 +20,7 @@ jobs:
       - name: Get Postgres Versions
         id: get-postgres-versions
         run: |
+          ls -la .github
           # Postgres versions are stored in .circleci/config.yml file in "build-[pg-version] format. Below command
           # extracts the versions and get the unique values.
           pg_versions=`grep -Eo 'build-[[:digit:]]{2}' .circleci/config.yml|sed -e "s/^build-//"|sort|uniq|tr '\n' ','| head -c -1`
@@ -91,7 +92,7 @@ jobs:
           git clone -b citus_packaging_pipeline --depth=1  https://github.com/citusdata/tools.git tools
           python3 -m pip install -r tools/packaging_automation/requirements.txt
           python3 -m tools.packaging_automation.validate_build_output --output_file output.log \
-            --ignore_file .github/packaging/packaging_ignore.yml --package_type ${package_type}
+            --ignore_file $(pwd)/.github/packaging/packaging_ignore.yml --package_type ${package_type}
 
   build_tests_for_deb_in_packaging_images:
     name: tests_build_in_packaging_images
