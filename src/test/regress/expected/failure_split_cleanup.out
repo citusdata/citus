@@ -145,19 +145,15 @@ NOTICE:  cleaned up 3 orphaned resources
 
 (1 row)
 
+    -- set log level to prevent flakiness
+    SET client_min_messages TO ERROR;
     SELECT pg_catalog.citus_split_shard_by_split_points(
         8981000,
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection not open
-CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  failed to clean up 2 orphaned shards out of 6 after a citus_split_shard_by_split_points operation failed
 ERROR:  Failed to run worker_split_shard_replication_setup UDF. It should successfully execute  for splitting a shard in a non-blocking way. Please retry.
+    RESET client_min_messages;
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
  operation_id | object_type |                        object_name                        | node_group_id | policy_type

@@ -69,11 +69,19 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* (ENABLE|DISABLE)").kill()');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+CALL citus_cleanup_orphaned_resources();
+
 -- cancel on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* (ENABLE|DISABLE)").cancel(' || :pid || ')');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
--- try again
+
+-- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
+CALL citus_cleanup_orphaned_resources();
+
+-- try again
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 SELECT master_move_shard_placement(101, 'localhost', :worker_2_proxy_port, 'localhost', :worker_1_port);
 
