@@ -14,7 +14,7 @@ include $(citus_top_builddir)/Makefile.global
 # with and this breaks LTO (link-time optimization). Even if disabling it can
 # have some perf impact this is ok because pg_send_cancellation is only used
 # for tests anyway.
-override CFLAGS := $(filter-out -shared,$(CFLAGS)) -fno-lto
+override CFLAGS := $(filter-out -shared, $(CFLAGS)) -fno-lto
 
 # Filter out unneeded dependencies
 override LIBS := $(filter-out -lz -lreadline -ledit -ltermcap -lncurses -lcurses -lpam, $(LIBS))
