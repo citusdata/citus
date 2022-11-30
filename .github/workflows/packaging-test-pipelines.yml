@@ -89,7 +89,7 @@ jobs:
           yum install python3-pip python3-devel postgresql-devel -y
           python3 -m pip install wheel
 
-          git clone -b validate_output_fix --depth=1  https://github.com/citusdata/tools.git tools
+          git clone -b v0.8.23 --depth=1  https://github.com/citusdata/tools.git tools
           python3 -m pip install -r tools/packaging_automation/requirements.txt
           python3 -m tools.packaging_automation.validate_build_output --output_file output.log \
             --ignore_file .github/packaging/packaging_ignore.yml --package_type ${package_type}
@@ -160,7 +160,7 @@ jobs:
           sudo apt-get purge -y python3-yaml
           python3 -m pip install --upgrade pip  setuptools==57.5.0
 
-          git clone -b validate_output_fix --depth=1  https://github.com/citusdata/tools.git tools
+          git clone -b v0.8.23 --depth=1  https://github.com/citusdata/tools.git tools
           python3 -m pip install -r tools/packaging_automation/requirements.txt
           python3 -m tools.packaging_automation.validate_build_output --output_file output.log \
             --ignore_file .github/packaging/packaging_ignore.yml --package_type ${package_type}
