@@ -150,12 +150,6 @@ extern char * CreateReplicationSlots(MultiConnection *sourceConnection,
 									 List *subscriptionInfoList,
 									 char *outputPlugin);
 extern void EnableSubscriptions(List *subscriptionInfoList);
-extern void DropSubscriptions(List *subscriptionInfoList);
-extern void DropReplicationSlots(MultiConnection *sourceConnection,
-								 List *subscriptionInfoList);
-extern void DropPublications(MultiConnection *sourceConnection,
-							 HTAB *publicationInfoHash);
-extern void DropAllLogicalReplicationLeftovers(LogicalRepType type);
 
 extern char * PublicationName(LogicalRepType type, uint32_t nodeId, Oid ownerId);
 extern char * ReplicationSlotNameForNodeAndOwner(LogicalRepType type, uint32_t nodeId, Oid

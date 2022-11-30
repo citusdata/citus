@@ -42,12 +42,21 @@ SELECT * FROM shards_in_workers;
 SELECT citus.mitmproxy('conn.onQuery(query="ALTER SUBSCRIPTION").kill()');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+CALL citus_cleanup_orphaned_resources();
+
+SELECT citus.mitmproxy('conn.onQuery(query="ALTER SUBSCRIPTION").cancel(' || :pid || ')');
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+
 -- Verify that the shard is not moved and the number of rows are still 100k
 SELECT * FROM shards_in_workers;
 SELECT count(*) FROM t;
 
 -- Verify that shard can be moved after a temporary failure
+-- cleanup leftovers, as it can cause flakiness in the following test files
 SELECT citus.mitmproxy('conn.allow()');
+CALL citus_cleanup_orphaned_resources();
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 SELECT * FROM shards_in_workers;
 SELECT count(*) FROM t;

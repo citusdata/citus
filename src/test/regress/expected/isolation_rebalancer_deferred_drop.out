@@ -177,9 +177,9 @@ step s1-lock-pg-dist-placement:
 
 s2: DEBUG:  could not acquire shard lock to cleanup placements
 step s2-drop-old-shards:
-    SELECT run_try_drop_marked_shards();
+    SELECT run_try_drop_marked_resources();
 
-run_try_drop_marked_shards
+run_try_drop_marked_resources
 ---------------------------------------------------------------------
 
 (1 row)

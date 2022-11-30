@@ -772,7 +772,7 @@ ExecutePlacementUpdates(List *placementUpdateList, Oid shardReplicationModeOid,
 
 	ListCell *placementUpdateCell = NULL;
 
-	DropOrphanedShardsInSeparateTransaction();
+	DropOrphanedResourcesInSeparateTransaction();
 
 	foreach(placementUpdateCell, placementUpdateList)
 	{
@@ -1901,7 +1901,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		return 0;
 	}
 
-	DropOrphanedShardsInSeparateTransaction();
+	DropOrphanedResourcesInSeparateTransaction();
 
 	/* find the name of the shard transfer mode to interpolate in the scheduled command */
 	Datum shardTranferModeLabelDatum =

@@ -81,11 +81,16 @@ SELECT create_distributed_table('table_to_split', 'id');
     SET citus.next_cleanup_record_id TO 11;
 
     SELECT citus.mitmproxy('conn.onQuery(query="SELECT \* FROM pg_catalog.worker_split_shard_replication_setup\(.*").killall()');
+
+    -- set log level to prevent flakiness
+    SET client_min_messages TO ERROR;
     SELECT pg_catalog.citus_split_shard_by_split_points(
         8981000,
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
+    RESET client_min_messages;
+
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
     -- we need to allow connection so that we can connect to proxy
@@ -270,8 +275,7 @@ SELECT create_distributed_table('table_to_split', 'id');
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
-    -- NO records expected as we fail at 'DropAllLogicalReplicationLeftovers' before creating
-    -- any resources.
+
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
     SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;

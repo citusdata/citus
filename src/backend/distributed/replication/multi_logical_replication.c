@@ -45,6 +45,7 @@
 #include "distributed/distributed_planner.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/shard_rebalancer.h"
 #include "distributed/shard_transfer.h"
 #include "distributed/version_compat.h"
@@ -65,11 +66,6 @@
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
 
-#define STR_ERRCODE_UNDEFINED_OBJECT "42704"
-#define STR_ERRCODE_OBJECT_IN_USE "55006"
-
-
-#define REPLICATION_SLOT_CATALOG_TABLE_NAME "pg_replication_slots"
 #define CURRENT_LOG_POSITION_COMMAND "SELECT pg_current_wal_lsn()"
 
 /* decimal representation of Adler-16 hash value of citus_shard_move_publication */
@@ -135,17 +131,7 @@ static void WaitForMiliseconds(long timeout);
 static XLogRecPtr GetSubscriptionPosition(
 	GroupedLogicalRepTargets *groupedLogicalRepTargets);
 static void AcquireLogicalReplicationLock(void);
-static void DropSubscription(MultiConnection *connection,
-							 char *subscriptionName);
-static void DropPublication(MultiConnection *connection, char *publicationName);
 
-static void DropUser(MultiConnection *connection, char *username);
-static void DropReplicationSlot(MultiConnection *connection,
-								char *publicationName);
-static void DropAllSubscriptions(MultiConnection *connection, LogicalRepType type);
-static void DropAllReplicationSlots(MultiConnection *connection, LogicalRepType type);
-static void DropAllPublications(MultiConnection *connection, LogicalRepType type);
-static void DropAllUsers(MultiConnection *connection, LogicalRepType type);
 static HTAB * CreateShardMovePublicationInfoHash(WorkerNode *targetNode,
 												 List *shardIntervals);
 static List * CreateShardMoveLogicalRepTargetList(HTAB *publicationInfoHash,
@@ -153,10 +139,6 @@ static List * CreateShardMoveLogicalRepTargetList(HTAB *publicationInfoHash,
 static void WaitForGroupedLogicalRepTargetsToCatchUp(XLogRecPtr sourcePosition,
 													 GroupedLogicalRepTargets *
 													 groupedLogicalRepTargets);
-static void RecreateGroupedLogicalRepTargetsConnections(
-	HTAB *groupedLogicalRepTargetsHash,
-	char *user,
-	char *databaseName);
 
 /*
  * LogicallyReplicateShards replicates a list of shards from one node to another
@@ -183,8 +165,6 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 	{
 		return;
 	}
-
-	DropAllLogicalReplicationLeftovers(SHARD_MOVE);
 
 	MultiConnection *sourceConnection =
 		GetNodeUserDatabaseConnection(connectionFlags, sourceNodeName, sourceNodePort,
@@ -291,33 +271,13 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 	}
 	PG_CATCH();
 	{
-		/*
-		 * Try our best not to leave any left-over subscription or publication.
-		 *
-		 * Although it is not very advisable to use code-paths that could throw
-		 * new errors, we prefer to do it here since we expect the cost of leaving
-		 * left-overs not be very low.
-		 */
-
-		/* reconnect if the connection failed or is waiting for a command */
-		RecreateGroupedLogicalRepTargetsConnections(groupedLogicalRepTargetsHash,
-													superUser, databaseName);
-
-		DropSubscriptions(logicalRepTargetList);
-
-		/* reconnect if the connection failed or is waiting for a command */
-		if (PQstatus(sourceConnection->pgConn) != CONNECTION_OK ||
-			PQisBusy(sourceConnection->pgConn))
-		{
-			sourceConnection = GetNodeUserDatabaseConnection(connectionFlags,
-															 sourceNodeName,
-															 sourceNodePort, superUser,
-															 databaseName);
-		}
-		DropReplicationSlots(sourceConnection, logicalRepTargetList);
-		DropPublications(sourceConnection, publicationInfoHash);
-
 		/* We don't need to UnclaimConnections since we're already erroring out */
+
+		/*
+		 * Drop temporary objects that were marked as CLEANUP_ON_FAILURE
+		 * or CLEANUP_ALWAYS.
+		 */
+		FinalizeOperationNeedingCleanupOnFailure("citus_[move/copy]_shard_placement");
 
 		PG_RE_THROW();
 	}
@@ -452,11 +412,6 @@ CompleteNonBlockingShardTransfer(List *shardList,
 		sourceConnection->hostname,
 		sourceConnection->port,
 		PLACEMENT_UPDATE_STATUS_COMPLETING);
-
-	/* we're done, cleanup the publication and subscription */
-	DropSubscriptions(logicalRepTargetList);
-	DropReplicationSlots(sourceConnection, logicalRepTargetList);
-	DropPublications(sourceConnection, publicationInfoHash);
 }
 
 
@@ -570,74 +525,6 @@ AcquireLogicalReplicationLock(void)
 	SET_LOCKTAG_LOGICAL_REPLICATION(tag);
 
 	LockAcquire(&tag, ExclusiveLock, false, false);
-}
-
-
-/*
- * DropAllLogicalReplicationLeftovers drops all subscriptions, publications,
- * roles and replication slots on all nodes that were related to this
- * LogicalRepType. These might have been left there after the coordinator
- * crashed during a shard move/split. It's important to delete them for two
- * reasons:
- * 1. Starting new shard moves will fail when they exist, because it cannot
- *    create them.
- * 2. Leftover replication slots that are not consumed from anymore make it
- *    impossible for WAL to be dropped. This can cause out-of-disk issues.
- */
-void
-DropAllLogicalReplicationLeftovers(LogicalRepType type)
-{
-	char *superUser = CitusExtensionOwnerName();
-	char *databaseName = get_database_name(MyDatabaseId);
-
-	/*
-	 * We need connections that are not currently inside a transaction. The
-	 * reason for this is that operations on subscriptions, publications and
-	 * replication slots cannot be run in a transaction. By forcing a new
-	 * connection we make sure no transaction is active on the connection.
-	 */
-	int connectionFlags = FORCE_NEW_CONNECTION;
-
-	List *workerNodeList = ActivePrimaryNodeList(AccessShareLock);
-	List *cleanupConnectionList = NIL;
-	WorkerNode *workerNode = NULL;
-
-	/*
-	 * First we try to remove the subscription, everywhere and only after
-	 * having done that we try to remove the publication everywhere. This is
-	 * needed, because the publication can only be removed if there's no active
-	 * subscription on it.
-	 */
-	foreach_ptr(workerNode, workerNodeList)
-	{
-		MultiConnection *cleanupConnection = GetNodeUserDatabaseConnection(
-			connectionFlags, workerNode->workerName, workerNode->workerPort,
-			superUser, databaseName);
-		cleanupConnectionList = lappend(cleanupConnectionList, cleanupConnection);
-
-		DropAllSubscriptions(cleanupConnection, type);
-		DropAllUsers(cleanupConnection, type);
-	}
-
-	MultiConnection *cleanupConnection = NULL;
-	foreach_ptr(cleanupConnection, cleanupConnectionList)
-	{
-		/*
-		 * If replication slot could not be dropped while dropping the
-		 * subscriber, drop it here.
-		 */
-		DropAllReplicationSlots(cleanupConnection, type);
-		DropAllPublications(cleanupConnection, type);
-
-		/*
-		 * We close all connections that we opened for the dropping here. That
-		 * way we don't keep these connections open unnecessarily during the
-		 * 'LogicalRepType' operation (which can take a long time). We might
-		 * need to reopen a few later on, but that seems better than keeping
-		 * many open for no reason for a long time.
-		 */
-		CloseConnection(cleanupConnection);
-	}
 }
 
 
@@ -1315,115 +1202,6 @@ ConflictWithIsolationTestingAfterCopy(void)
 
 
 /*
- * DropReplicationSlots drops the replication slots used for shard moves/splits
- * over the given connection (if they exist).
- */
-void
-DropReplicationSlots(MultiConnection *sourceConnection, List *logicalRepTargetList)
-{
-	LogicalRepTarget *target = NULL;
-	foreach_ptr(target, logicalRepTargetList)
-	{
-		DropReplicationSlot(sourceConnection, target->replicationSlot->name);
-	}
-}
-
-
-/*
- * DropPublications drops the publications used for shard moves/splits over the
- * given connection (if they exist).
- */
-void
-DropPublications(MultiConnection *sourceConnection, HTAB *publicationInfoHash)
-{
-	HASH_SEQ_STATUS status;
-	hash_seq_init(&status, publicationInfoHash);
-
-	PublicationInfo *entry = NULL;
-	while ((entry = (PublicationInfo *) hash_seq_search(&status)) != NULL)
-	{
-		DropPublication(sourceConnection, entry->name);
-	}
-}
-
-
-/*
- * DropReplicationSlot drops the replication slot with the given name
- * if it exists. It retries if the command fails with an OBJECT_IN_USE error.
- */
-static void
-DropReplicationSlot(MultiConnection *connection, char *replicationSlotName)
-{
-	int maxSecondsToTryDropping = 20;
-	bool raiseInterrupts = true;
-	PGresult *result = NULL;
-
-	/* we'll retry in case of an OBJECT_IN_USE error */
-	while (maxSecondsToTryDropping >= 0)
-	{
-		int querySent = SendRemoteCommand(
-			connection,
-			psprintf(
-				"select pg_drop_replication_slot(slot_name) from "
-				REPLICATION_SLOT_CATALOG_TABLE_NAME
-				" where slot_name = %s",
-				quote_literal_cstr(replicationSlotName))
-			);
-
-		if (querySent == 0)
-		{
-			ReportConnectionError(connection, ERROR);
-		}
-
-		result = GetRemoteCommandResult(connection, raiseInterrupts);
-
-		if (IsResponseOK(result))
-		{
-			/* no error, we are good to go */
-			break;
-		}
-
-		char *errorcode = PQresultErrorField(result, PG_DIAG_SQLSTATE);
-		if (errorcode != NULL && strcmp(errorcode, STR_ERRCODE_OBJECT_IN_USE) == 0 &&
-			maxSecondsToTryDropping > 0)
-		{
-			/* retry dropping the replication slot after sleeping for one sec */
-			maxSecondsToTryDropping--;
-			pg_usleep(1000);
-		}
-		else
-		{
-			/*
-			 * Report error if:
-			 * - Error code is not 55006 (Object In Use)
-			 * - Or, we have made enough number of retries (currently 20), but didn't work
-			 */
-			ReportResultError(connection, result, ERROR);
-		}
-
-		PQclear(result);
-		ForgetResults(connection);
-	}
-
-	PQclear(result);
-	ForgetResults(connection);
-}
-
-
-/*
- * DropPublication drops the publication with the given name if it
- * exists.
- */
-static void
-DropPublication(MultiConnection *connection, char *publicationName)
-{
-	ExecuteCriticalRemoteCommand(connection, psprintf(
-									 "DROP PUBLICATION IF EXISTS %s",
-									 quote_identifier(publicationName)));
-}
-
-
-/*
  * PublicationName returns the name of the publication for the given node and
  * table owner.
  */
@@ -1531,187 +1309,6 @@ GetQueryResultStringList(MultiConnection *connection, char *query)
 
 
 /*
- * DropAllSubscriptions drops all the existing subscriptions that
- * match our shard move naming scheme on the node that the connection points
- * to.
- */
-static void
-DropAllSubscriptions(MultiConnection *connection, LogicalRepType type)
-{
-	char *query = psprintf(
-		"SELECT subname FROM pg_subscription "
-		"WHERE subname LIKE %s || '%%'",
-		quote_literal_cstr(subscriptionPrefix[type]));
-	List *subscriptionNameList = GetQueryResultStringList(connection, query);
-	char *subscriptionName;
-	foreach_ptr(subscriptionName, subscriptionNameList)
-	{
-		DropSubscription(connection, subscriptionName);
-	}
-}
-
-
-/*
- * DropAllUsers drops all the users that match our shard move naming
- * scheme for temporary shard move users on the node that the connection points
- * to.
- */
-static void
-DropAllUsers(MultiConnection *connection, LogicalRepType type)
-{
-	char *query = psprintf(
-		"SELECT rolname FROM pg_roles "
-		"WHERE rolname LIKE %s || '%%'",
-		quote_literal_cstr(subscriptionRolePrefix[type]));
-	List *usernameList = GetQueryResultStringList(connection, query);
-	char *username;
-	foreach_ptr(username, usernameList)
-	{
-		DropUser(connection, username);
-	}
-}
-
-
-/*
- * DropAllReplicationSlots drops all the existing replication slots
- * that match our shard move naming scheme on the node that the connection
- * points to.
- */
-static void
-DropAllReplicationSlots(MultiConnection *connection, LogicalRepType type)
-{
-	char *query = psprintf(
-		"SELECT slot_name FROM pg_replication_slots "
-		"WHERE slot_name LIKE %s || '%%'",
-		quote_literal_cstr(replicationSlotPrefix[type]));
-	List *slotNameList = GetQueryResultStringList(connection, query);
-	char *slotName;
-	foreach_ptr(slotName, slotNameList)
-	{
-		DropReplicationSlot(connection, slotName);
-	}
-}
-
-
-/*
- * DropAllPublications drops all the existing publications that
- * match our shard move naming scheme on the node that the connection points
- * to.
- */
-static void
-DropAllPublications(MultiConnection *connection, LogicalRepType type)
-{
-	char *query = psprintf(
-		"SELECT pubname FROM pg_publication "
-		"WHERE pubname LIKE %s || '%%'",
-		quote_literal_cstr(publicationPrefix[type]));
-	List *publicationNameList = GetQueryResultStringList(connection, query);
-	char *publicationName;
-	foreach_ptr(publicationName, publicationNameList)
-	{
-		DropPublication(connection, publicationName);
-	}
-}
-
-
-/*
- * DropSubscriptions drops all the subscriptions in the logicalRepTargetList
- * from the subscriber node. It also drops the temporary users that are used as
- * owners for of the subscription. This doesn't drop the replication slots on
- * the publisher, these should be dropped using DropReplicationSlots.
- */
-void
-DropSubscriptions(List *logicalRepTargetList)
-{
-	LogicalRepTarget *target = NULL;
-	foreach_ptr(target, logicalRepTargetList)
-	{
-		DropSubscription(target->superuserConnection,
-						 target->subscriptionName);
-		DropUser(target->superuserConnection, target->subscriptionOwnerName);
-	}
-}
-
-
-/*
- * DropSubscription drops subscription with the given name on the subscriber
- * node if it exists. Note that this doesn't drop the replication slot on the
- * publisher node. The reason is that sometimes this is not possible. To known
- * cases where this is not possible are:
- * 1. Due to the node with the replication slot being down.
- * 2. Due to a deadlock when the replication is on the same node as the
- *    subscription, which is the case for shard splits to the local node.
- *
- * So instead of directly dropping the subscription, including the attached
- * replication slot, the subscription is first disconnected from the
- * replication slot before dropping it. The replication slot itself should be
- * dropped using DropReplicationSlot on the source connection.
- */
-static void
-DropSubscription(MultiConnection *connection, char *subscriptionName)
-{
-	int querySent = SendRemoteCommand(
-		connection,
-		psprintf("ALTER SUBSCRIPTION %s DISABLE", quote_identifier(subscriptionName)));
-	if (querySent == 0)
-	{
-		ReportConnectionError(connection, ERROR);
-	}
-
-	bool raiseInterrupts = true;
-	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
-	if (!IsResponseOK(result))
-	{
-		char *errorcode = PQresultErrorField(result, PG_DIAG_SQLSTATE);
-		if (errorcode != NULL && strcmp(errorcode, STR_ERRCODE_UNDEFINED_OBJECT) == 0)
-		{
-			/*
-			 * The subscription doesn't exist, so we can return right away.
-			 * This DropSubscription call is effectively a no-op.
-			 */
-			return;
-		}
-		else
-		{
-			ReportResultError(connection, result, ERROR);
-			PQclear(result);
-			ForgetResults(connection);
-		}
-	}
-
-	PQclear(result);
-	ForgetResults(connection);
-
-	ExecuteCriticalRemoteCommand(connection, psprintf(
-									 "ALTER SUBSCRIPTION %s SET (slot_name = NONE)",
-									 quote_identifier(subscriptionName)));
-
-	ExecuteCriticalRemoteCommand(connection, psprintf(
-									 "DROP SUBSCRIPTION %s",
-									 quote_identifier(subscriptionName)));
-}
-
-
-/*
- * DropUser drops the user with the given name if it exists.
- */
-static void
-DropUser(MultiConnection *connection, char *username)
-{
-	/*
-	 * The DROP USER command should not propagate, so we temporarily disable
-	 * DDL propagation.
-	 */
-	SendCommandListToWorkerOutsideTransactionWithConnection(
-		connection,
-		list_make2(
-			"SET LOCAL citus.enable_ddl_propagation TO OFF;",
-			psprintf("DROP USER IF EXISTS %s;",
-					 quote_identifier(username))));
-}
-
-
-/*
  * CreatePublications creates a the publications defined in the
  * publicationInfoHash over the given connection.
  */
@@ -1743,6 +1340,13 @@ CreatePublications(MultiConnection *connection,
 			appendStringInfoString(createPublicationCommand, shardName);
 			prefixWithComma = true;
 		}
+
+		WorkerNode *worker = FindWorkerNode(connection->hostname,
+											connection->port);
+		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_PUBLICATION,
+											entry->name,
+											worker->groupId,
+											CLEANUP_ALWAYS);
 
 		ExecuteCriticalRemoteCommand(connection, createPublicationCommand->data);
 		pfree(createPublicationCommand->data);
@@ -1835,6 +1439,13 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 	{
 		ReplicationSlotInfo *replicationSlot = target->replicationSlot;
 
+		WorkerNode *worker = FindWorkerNode(sourceConnection->hostname,
+											sourceConnection->port);
+		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_REPLICATION_SLOT,
+											replicationSlot->name,
+											worker->groupId,
+											CLEANUP_ALWAYS);
+
 		if (!firstReplicationSlot)
 		{
 			firstReplicationSlot = replicationSlot;
@@ -1880,6 +1491,9 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 	{
 		int ownerId = target->tableOwnerId;
 
+		WorkerNode *worker = FindWorkerNode(target->superuserConnection->hostname,
+											target->superuserConnection->port);
+
 		/*
 		 * The CREATE USER command should not propagate, so we temporarily
 		 * disable DDL propagation.
@@ -1897,6 +1511,11 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 					target->subscriptionOwnerName,
 					GetUserNameFromId(ownerId, false)
 					)));
+
+		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_USER,
+											target->subscriptionOwnerName,
+											worker->groupId,
+											CLEANUP_ALWAYS);
 
 		StringInfo conninfo = makeStringInfo();
 		appendStringInfo(conninfo, "host='%s' port=%d user='%s' dbname='%s' "
@@ -1937,6 +1556,12 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 									 createSubscriptionCommand->data);
 		pfree(createSubscriptionCommand->data);
 		pfree(createSubscriptionCommand);
+
+		InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SUBSCRIPTION,
+											target->subscriptionName,
+											worker->groupId,
+											CLEANUP_ALWAYS);
+
 		ExecuteCriticalRemoteCommand(target->superuserConnection, psprintf(
 										 "ALTER SUBSCRIPTION %s OWNER TO %s",
 										 target->subscriptionName,
@@ -2091,62 +1716,6 @@ CreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
 										  targetWorkerNode->workerPort,
 										  user,
 										  databaseName);
-
-		/*
-		 * Operations on subscriptions cannot run in a transaction block. We
-		 * claim the connections exclusively to ensure they do not get used for
-		 * metadata syncing, which does open a transaction block.
-		 */
-		ClaimConnectionExclusively(superuserConnection);
-
-		groupedLogicalRepTargets->superuserConnection = superuserConnection;
-
-		LogicalRepTarget *target = NULL;
-		foreach_ptr(target, groupedLogicalRepTargets->logicalRepTargetList)
-		{
-			target->superuserConnection = superuserConnection;
-		}
-	}
-}
-
-
-/*
- * RecreateGroupedLogicalRepTargetsConnections recreates connections for all of the
- * nodes in the groupedLogicalRepTargetsHash where the old connection is broken or
- * currently running a query.
- *
- * IMPORTANT: When it recreates the connection, it doesn't close the existing
- * connection. This means that this function should only be called when we know
- * we'll throw an error afterwards, otherwise we would leak these connections.
- */
-static void
-RecreateGroupedLogicalRepTargetsConnections(HTAB *groupedLogicalRepTargetsHash,
-											char *user,
-											char *databaseName)
-{
-	int connectionFlags = FORCE_NEW_CONNECTION;
-	HASH_SEQ_STATUS status;
-	GroupedLogicalRepTargets *groupedLogicalRepTargets = NULL;
-	foreach_htab(groupedLogicalRepTargets, &status, groupedLogicalRepTargetsHash)
-	{
-		MultiConnection *superuserConnection =
-			groupedLogicalRepTargets->superuserConnection;
-		if (superuserConnection &&
-			PQstatus(superuserConnection->pgConn) == CONNECTION_OK &&
-			!PQisBusy(superuserConnection->pgConn)
-			)
-		{
-			continue;
-		}
-		WorkerNode *targetWorkerNode = FindNodeWithNodeId(
-			groupedLogicalRepTargets->nodeId,
-			false);
-		superuserConnection = GetNodeUserDatabaseConnection(
-			connectionFlags,
-			targetWorkerNode->workerName,
-			targetWorkerNode->workerPort,
-			user,
-			databaseName);
 
 		/*
 		 * Operations on subscriptions cannot run in a transaction block. We

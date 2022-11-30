@@ -522,6 +522,8 @@ SplitShard(SplitMode splitMode,
 		sourceColocatedShardIntervalList = colocatedShardIntervalList;
 	}
 
+	DropOrphanedResourcesInSeparateTransaction();
+
 	/* use the user-specified shard ID as the split workflow ID */
 	uint64 splitWorkflowId = shardIntervalToSplit->shardId;
 
@@ -771,12 +773,11 @@ CreateSplitShardsForShardGroup(List *shardGroupSplitIntervalListList,
 									   workerPlacementNode->workerPort)));
 			}
 
-			CleanupPolicy policy = CLEANUP_ON_FAILURE;
 			InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
 												ConstructQualifiedShardName(
 													shardInterval),
 												workerPlacementNode->groupId,
-												policy);
+												CLEANUP_ON_FAILURE);
 
 			/* Create new split child shard on the specified placement list */
 			CreateObjectOnPlacement(splitShardCreationCommandList,
@@ -1407,11 +1408,10 @@ InsertDeferredDropCleanupRecordsForShards(List *shardIntervalList)
 			 * We also log cleanup record in the current transaction. If the current transaction rolls back,
 			 * we do not generate a record at all.
 			 */
-			CleanupPolicy policy = CLEANUP_DEFERRED_ON_SUCCESS;
 			InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
 													qualifiedShardName,
 													placement->groupId,
-													policy);
+													CLEANUP_DEFERRED_ON_SUCCESS);
 		}
 	}
 }
@@ -1493,8 +1493,6 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		sourceColocatedShardIntervalList,
 		shardGroupSplitIntervalListList,
 		workersForPlacementList);
-
-	DropAllLogicalReplicationLeftovers(SHARD_SPLIT);
 
 	int connectionFlags = FORCE_NEW_CONNECTION;
 	MultiConnection *sourceConnection = GetNodeUserDatabaseConnection(
@@ -1722,12 +1720,6 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		/* end ongoing transactions to enable us to clean up */
 		ShutdownAllConnections();
 
-		/* Do a best effort cleanup of shards created on workers in the above block
-		 * TODO(niupre): We don't need to do this once shard cleaner can clean replication
-		 * artifacts.
-		 */
-		DropAllLogicalReplicationLeftovers(SHARD_SPLIT);
-
 		/*
 		 * Drop temporary objects that were marked as CLEANUP_ON_FAILURE
 		 * or CLEANUP_ALWAYS.
@@ -1820,12 +1812,11 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			/* Log shard in pg_dist_cleanup. Given dummy shards are transient resources,
 			 * we want to cleanup irrespective of operation success or failure.
 			 */
-			CleanupPolicy policy = CLEANUP_ALWAYS;
 			InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
 												ConstructQualifiedShardName(
 													shardInterval),
 												workerPlacementNode->groupId,
-												policy);
+												CLEANUP_ALWAYS);
 
 			/* Create dummy source shard on the specified placement list */
 			CreateObjectOnPlacement(splitShardCreationCommandList,
@@ -1883,12 +1874,11 @@ CreateDummyShardsForShardGroup(HTAB *mapOfPlacementToDummyShardList,
 			/* Log shard in pg_dist_cleanup. Given dummy shards are transient resources,
 			 * we want to cleanup irrespective of operation success or failure.
 			 */
-			CleanupPolicy policy = CLEANUP_ALWAYS;
 			InsertCleanupRecordInSubtransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
 												ConstructQualifiedShardName(
 													shardInterval),
 												sourceWorkerNode->groupId,
-												policy);
+												CLEANUP_ALWAYS);
 
 			/* Create dummy split child shard on source worker node */
 			CreateObjectOnPlacement(splitShardCreationCommandList, sourceWorkerNode);

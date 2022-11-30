@@ -972,9 +972,9 @@ step s2-non-blocking-shard-split:
   'force_logical');
  <waiting ...>
 step s1-run-cleaner: 
- SELECT run_try_drop_marked_shards();
+ SELECT run_try_drop_marked_resources();
 
-run_try_drop_marked_shards
+run_try_drop_marked_resources
 ---------------------------------------------------------------------
 
 (1 row)
@@ -982,13 +982,21 @@ run_try_drop_marked_shards
 step s1-show-pg_dist_cleanup:
  SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
 
-object_name                  |object_type|policy_type
+object_name                           |object_type|policy_type
 ---------------------------------------------------------------------
-public.to_split_table_1500002|          1|          1
-public.to_split_table_1500003|          1|          1
-public.to_split_table_1500001|          1|          0
-public.to_split_table_1500003|          1|          0
-(4 rows)
+public.to_split_table_1500002         |          1|          1
+public.to_split_table_1500003         |          1|          1
+public.to_split_table_1500001         |          1|          0
+public.to_split_table_1500003         |          1|          0
+citus_shard_split_publication_xxxxxxx_xxxxxxx    |          4|          0
+citus_shard_split_publication_xxxxxxx_xxxxxxx    |          4|          0
+citus_shard_split_slot_xxxxxxx_xxxxxxx           |          3|          0
+citus_shard_split_slot_xxxxxxx_xxxxxxx           |          3|          0
+citus_shard_split_subscription_role_10|          5|          0
+citus_shard_split_subscription_xxxxxxx     |          2|          0
+citus_shard_split_subscription_role_10|          5|          0
+citus_shard_split_subscription_xxxxxxx     |          2|          0
+(12 rows)
 
 step s1-release-split-advisory-lock:
     SELECT pg_advisory_unlock(44000, 55152);
@@ -1005,9 +1013,9 @@ citus_split_shard_by_split_points
 (1 row)
 
 step s1-run-cleaner:
- SELECT run_try_drop_marked_shards();
+ SELECT run_try_drop_marked_resources();
 
-run_try_drop_marked_shards
+run_try_drop_marked_resources
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1042,9 +1050,9 @@ step s2-non-blocking-shard-split:
   'force_logical');
  <waiting ...>
 step s1-run-cleaner: 
- SELECT run_try_drop_marked_shards();
+ SELECT run_try_drop_marked_resources();
 
-run_try_drop_marked_shards
+run_try_drop_marked_resources
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1052,13 +1060,21 @@ run_try_drop_marked_shards
 step s1-show-pg_dist_cleanup:
  SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
 
-object_name                  |object_type|policy_type
+object_name                           |object_type|policy_type
 ---------------------------------------------------------------------
-public.to_split_table_1500002|          1|          1
-public.to_split_table_1500003|          1|          1
-public.to_split_table_1500001|          1|          0
-public.to_split_table_1500003|          1|          0
-(4 rows)
+public.to_split_table_1500002         |          1|          1
+public.to_split_table_1500003         |          1|          1
+public.to_split_table_1500001         |          1|          0
+public.to_split_table_1500003         |          1|          0
+citus_shard_split_publication_xxxxxxx_xxxxxxx    |          4|          0
+citus_shard_split_publication_xxxxxxx_xxxxxxx    |          4|          0
+citus_shard_split_slot_xxxxxxx_xxxxxxx           |          3|          0
+citus_shard_split_slot_xxxxxxx_xxxxxxx           |          3|          0
+citus_shard_split_subscription_role_10|          5|          0
+citus_shard_split_subscription_xxxxxxx     |          2|          0
+citus_shard_split_subscription_role_10|          5|          0
+citus_shard_split_subscription_xxxxxxx     |          2|          0
+(12 rows)
 
 step s1-release-split-advisory-lock:
     SELECT pg_advisory_unlock(44000, 55152);
@@ -1075,9 +1091,9 @@ citus_split_shard_by_split_points
 (1 row)
 
 step s1-run-cleaner:
- SELECT run_try_drop_marked_shards();
+ SELECT run_try_drop_marked_resources();
 
-run_try_drop_marked_shards
+run_try_drop_marked_resources
 ---------------------------------------------------------------------
 
 (1 row)

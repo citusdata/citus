@@ -7,7 +7,7 @@ setup
     SELECT setval('pg_dist_shardid_seq', 1500000);
 
 	-- Cleanup any orphan shards that might be left over from a previous run.
-	CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
+	CREATE OR REPLACE FUNCTION run_try_drop_marked_resources()
 	RETURNS VOID
 	AS 'citus'
 	LANGUAGE C STRICT VOLATILE;
@@ -18,7 +18,7 @@ setup
 
 teardown
 {
-	SELECT run_try_drop_marked_shards();
+	SELECT run_try_drop_marked_resources();
 
 	DROP TABLE to_split_table;
 }
@@ -104,7 +104,7 @@ step "s1-release-split-advisory-lock"
 
 step "s1-run-cleaner"
 {
-	SELECT run_try_drop_marked_shards();
+	SELECT run_try_drop_marked_resources();
 }
 
 step "s1-show-pg_dist_cleanup"
