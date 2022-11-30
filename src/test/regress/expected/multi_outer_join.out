@@ -491,6 +491,24 @@ ORDER BY 1,2,3;
            |           |        29
 (17 rows)
 
+-- full outer join should work between reference tables
+SELECT
+	t_custkey, r_custkey
+FROM
+	(SELECT * FROM multi_outer_join_third_reference r1
+	 FULL JOIN multi_outer_join_right_reference r2 ON (r1.t_custkey = r2.r_custkey)
+	) AS foo
+	INNER JOIN multi_outer_join_right USING (r_custkey)
+ORDER BY 1,2;
+ t_custkey | r_custkey
+---------------------------------------------------------------------
+        11 |        11
+        12 |        12
+        13 |        13
+        14 |        14
+        15 |        15
+(5 rows)
+
 -- full outer join should work with 1-1 matched shards
 SELECT
 	l_custkey, r_custkey
