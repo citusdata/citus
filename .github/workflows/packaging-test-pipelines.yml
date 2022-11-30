@@ -71,11 +71,11 @@ jobs:
 
       - name: Make
         run: |
-          make -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
+          make CFLAGS="-Wno-missing-braces" -sj$(cat /proc/cpuinfo | grep "core id" | wc -l) 2>&1 | tee -a output.log
 
       - name: Make install
         run: |
-          make install 2>&1 | tee -a output.log
+          make CFLAGS="-Wno-missing-braces" install 2>&1 | tee -a output.log
 
       - name: Validate output
         env:
