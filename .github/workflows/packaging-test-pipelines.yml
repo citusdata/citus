@@ -100,9 +100,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        #  We use the same docker image for builds based on
-        # different Postgres versions in deb based distros, since images includes all postgres installations.
-        # For this reason, we don't use POSTGRES_VERSION in container name but used it to set PG_CONFIG variable
+        # On deb based distros, we use the same docker image for
+        # builds based on different Postgres versions because deb
+        # based images include all postgres installations.
+        # For this reason, we have multiple runs --which is 3 today--
+        # for each deb based image and we use POSTGRES_VERSION to set
+        # PG_CONFIG variable in each of those runs.
         packaging_docker_image:
           - citus/packaging:ubuntu-jammy-all
           - citus/packaging:debian-bookworm-all
