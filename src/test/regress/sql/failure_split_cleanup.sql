@@ -32,15 +32,13 @@ SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_proxy_
 CREATE TABLE table_to_split(id int PRIMARY KEY, int_data int, data text);
 SELECT create_distributed_table('table_to_split', 'id');
 
---1. Cancel while creating publications
-    SELECT citus.mitmproxy('conn.onQuery(query="CREATE PUBLICATION .* FOR TABLE").cancel(' || pg_backend_pid() || ')');
+--1. Failure while creating publications
+    SELECT citus.mitmproxy('conn.onQuery(query="CREATE PUBLICATION .* FOR TABLE").killall()');
     SELECT pg_catalog.citus_split_shard_by_split_points(
         8981000,
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
-
-    -- show all records have been cleanup by FinalizeOperationNeedingCleanupOnFailure
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
 
@@ -82,7 +80,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SET citus.next_operation_id TO 777;
     SET citus.next_cleanup_record_id TO 11;
 
-    SELECT citus.mitmproxy('conn.onQuery(query="SELECT \* FROM pg_catalog.worker_split_shard_replication_setup\(.*").cancel(' || pg_backend_pid() || ')');
+    SELECT citus.mitmproxy('conn.onQuery(query="SELECT \* FROM pg_catalog.worker_split_shard_replication_setup\(.*").killall()');
     SELECT pg_catalog.citus_split_shard_by_split_points(
         8981000,
         ARRAY['-100000'],
@@ -128,7 +126,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SET citus.next_operation_id TO 777;
     SET citus.next_cleanup_record_id TO 11;
 
-    SELECT citus.mitmproxy('conn.onQuery(query="CREATE_REPLICATION_SLOT .* LOGICAL .* EXPORT_SNAPSHOT.*").cancel(' || pg_backend_pid() || ')');
+    SELECT citus.mitmproxy('conn.onQuery(query="CREATE_REPLICATION_SLOT .* LOGICAL .* EXPORT_SNAPSHOT.*").killall()');
     SELECT pg_catalog.citus_split_shard_by_split_points(
         8981000,
         ARRAY['-100000'],
@@ -174,7 +172,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SET citus.next_operation_id TO 777;
     SET citus.next_cleanup_record_id TO 11;
 
-    SELECT citus.mitmproxy('conn.onQuery(query="ALTER SUBSCRIPTION .* ENABLE").cancel(' || pg_backend_pid() || ')');
+    SELECT citus.mitmproxy('conn.onQuery(query="ALTER SUBSCRIPTION .* ENABLE").killall()');
     SELECT pg_catalog.citus_split_shard_by_split_points(
         8981000,
         ARRAY['-100000'],
@@ -220,8 +218,8 @@ SELECT create_distributed_table('table_to_split', 'id');
     SET citus.next_operation_id TO 777;
     SET citus.next_cleanup_record_id TO 11;
 
-    SELECT citus.mitmproxy('conn.onQuery(query="^SELECT min\(latest_end_lsn").cancel(' || pg_backend_pid() || ')');
-SELECT pg_catalog.citus_split_shard_by_split_points(
+    SELECT citus.mitmproxy('conn.onQuery(query="^SELECT min\(latest_end_lsn").killall()');
+    SELECT pg_catalog.citus_split_shard_by_split_points(
         8981000,
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
@@ -260,20 +258,22 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     -- Empty subscriptions
     SELECT subname FROM pg_subscription;
 
---6. Cancel while dropping subscription
+--6. Failure on dropping subscription
     \c - postgres - :master_port
     SET citus.next_shard_id TO 8981002;
     SET citus.next_operation_id TO 777;
     SET citus.next_cleanup_record_id TO 11;
 
-    SELECT citus.mitmproxy('conn.onQuery(query="ALTER SUBSCRIPTION .* DISABLE").cancel(' || pg_backend_pid() || ')');
+    SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").killall()');
     SELECT pg_catalog.citus_split_shard_by_split_points(
         8981000,
         ARRAY['-100000'],
         ARRAY[:worker_1_node, :worker_2_node],
         'force_logical');
+
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777;
+    SELECT relname FROM pg_class where relname LIKE '%table_to_split_%' AND relkind = 'r' order by relname;
     -- we need to allow connection so that we can connect to proxy
     SELECT citus.mitmproxy('conn.allow()');
 

@@ -115,6 +115,23 @@ CONTEXT:  while executing command on localhost:xxxxx
 -- SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* ENABLE").cancel(' || :pid || ')');
 -- SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 -- failure on dropping subscription
+SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* (ENABLE|DISABLE)").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  role "citus_shard_move_subscription_role_10" cannot be dropped because some objects depend on it
+DETAIL:  owner of subscription citus_shard_move_subscription_xxxxxxx
+CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+-- cancel on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* (ENABLE|DISABLE)").cancel(' || :pid || ')');
  mitmproxy
 ---------------------------------------------------------------------
@@ -267,14 +284,19 @@ SELECT citus.mitmproxy('conn.allow()');
 CALL citus_cleanup_orphaned_resources();
 NOTICE:  cleaned up 4 orphaned resources
 -- failure on dropping subscription
-SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").killall()');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
-ERROR:  canceling statement due to user request
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -292,7 +314,7 @@ SELECT run_command_on_workers($$DROP SUBSCRIPTION IF EXISTS citus_shard_move_sub
 -- cleanup leftovers
 -- verify we don't see any error for already dropped subscription
 CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 4 orphaned resources
+NOTICE:  cleaned up 3 orphaned resources
 -- cancellation on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").cancel(' || :pid || ')');
  mitmproxy
