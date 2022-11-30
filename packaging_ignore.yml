@@ -1,4 +1,0 @@
-base:
-  - ".* warning: ignoring old recipe for target [`']check'"
-  - ".* warning: overriding recipe for target [`']check'"
-
