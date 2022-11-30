@@ -92,7 +92,7 @@ jobs:
           git clone -b citus_packaging_pipeline --depth=1  https://github.com/citusdata/tools.git tools
           python3 -m pip install -r tools/packaging_automation/requirements.txt
           python3 -m tools.packaging_automation.validate_build_output --output_file output.log \
-            --ignore_file $(pwd)/.github/packaging/packaging_ignore.yml --package_type ${package_type}
+            --ignore_file packaging_ignore.yml --package_type ${package_type}
 
   build_tests_for_deb_in_packaging_images:
     name: tests_build_in_packaging_images
@@ -163,4 +163,4 @@ jobs:
           git clone -b citus_packaging_pipeline --depth=1  https://github.com/citusdata/tools.git tools
           python3 -m pip install -r tools/packaging_automation/requirements.txt
           python3 -m tools.packaging_automation.validate_build_output --output_file output.log \
-            --ignore_file $(pwd)/.github/packaging/packaging_ignore.yml --package_type ${package_type}
+            --ignore_file packaging_ignore.yml --package_type ${package_type}
