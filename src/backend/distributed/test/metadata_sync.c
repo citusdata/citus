@@ -53,6 +53,7 @@ activate_node_snapshot(PG_FUNCTION_ARGS)
 		list_make1(LocalGroupIdUpdateCommand(dummyWorkerNode->groupId));
 	List *dropMetadataCommandList = DropExistingMetadataCommandList();
 	ActivateNodeContext context;
+	context.commandList = NIL;
 	context.fetchCommands = true;
 	SyncDistributedObjects(context);
 	List *syncDistObjCommands = context.commandList;
