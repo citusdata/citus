@@ -20,7 +20,6 @@ jobs:
       - name: Get Postgres Versions
         id: get-postgres-versions
         run: |
-          ls -la .github
           # Postgres versions are stored in .circleci/config.yml file in "build-[pg-version] format. Below command
           # extracts the versions and get the unique values.
           pg_versions=`grep -Eo 'build-[[:digit:]]{2}' .circleci/config.yml|sed -e "s/^build-//"|sort|uniq|tr '\n' ','| head -c -1`
@@ -124,7 +123,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set Pg_Config path to related Postgres version
+      - name: Set pg_config path to related Postgres version
         run: |
           echo "PG_CONFIG=/usr/lib/postgresql/${{ matrix.POSTGRES_VERSION }}/bin/pg_config" >> $GITHUB_ENV
 
