@@ -30,7 +30,7 @@ jobs:
           echo "pg_versions=${pg_versions_array}" >> $GITHUB_OUTPUT
 
   rpm_build_tests:
-    name: tests_build_in_packaging_images
+    name: rpm_build_tests
     needs: get_postgres_versions_from_file
     runs-on: ubuntu-latest
     strategy:
@@ -95,7 +95,7 @@ jobs:
             --ignore_file .github/packaging/packaging_ignore.yml --package_type ${package_type}
 
   deb_build_tests:
-    name: tests_build_in_packaging_images
+    name: deb_build_tests
     needs: get_postgres_versions_from_file
     runs-on: ubuntu-latest
     strategy:
