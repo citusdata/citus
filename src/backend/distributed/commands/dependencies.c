@@ -585,6 +585,17 @@ ReplicateAllObjectsToNodes(List *connectionList, List **commandList)
 			continue;
 		}
 
+		if (getObjectClass(dependency) == OCLASS_CLASS)
+		{
+			char relKind = get_rel_relkind(dependency->objectId);
+			if (
+				relKind == RELKIND_RELATION || relKind == RELKIND_PARTITIONED_TABLE ||
+				relKind == RELKIND_FOREIGN_TABLE)
+			{
+				char *q = CreateDropTableIfExistsCommand(dependency->objectId);
+				ExecuteRemoteCommandInConnectionList(connectionList, q);
+			}
+		}
 		List *commandsForDep = GetDependencyCreateDDLCommands(dependency);
 		char *command = NULL;
 		foreach_ptr(command, commandsForDep)

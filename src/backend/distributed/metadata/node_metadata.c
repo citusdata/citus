@@ -849,6 +849,13 @@ SyncDistributedObjects(List *workerNodeList, List **commandList)
 	 * those tables.
 	 */
 	BuildInterTableRelationships(connectionList, commandList);
+
+	/* finally, close the connections as we don't need them anymore */
+	MultiConnection *connection;
+	foreach_ptr(connection, connectionList)
+	{
+		CloseConnection(connection);
+	}
 }
 
 
@@ -927,10 +934,35 @@ SyncPgDistTableMetadataToNodeList(List *nodeList)
 	}
 
 	List *syncPgDistMetadataCommandList = PgDistTableMetadataSyncCommandList();
-	SendMetadataCommandListToWorkerListInCoordinatedTransaction(
-		nodesWithMetadata,
-		CurrentUserName(),
-		syncPgDistMetadataCommandList);
+
+	List *connectionList = NIL;
+
+	/* first, establish new connections */
+	workerNode = NULL;
+	foreach_ptr(workerNode, nodesWithMetadata)
+	{
+		int connectionFlags = FORCE_NEW_CONNECTION;
+
+		Assert(superuser());
+		MultiConnection *connection =
+			GetNodeUserDatabaseConnection(connectionFlags, workerNode->workerName,
+										  workerNode->workerPort, NULL, NULL);
+
+		connectionList = lappend(connectionList, connection);
+	}
+
+	char *command = NULL;
+	foreach_ptr(command, syncPgDistMetadataCommandList)
+	{
+		ExecuteRemoteCommandInConnectionList(connectionList, command);
+	}
+
+	/* finally, close the connections as we don't need them anymore */
+	MultiConnection *connection;
+	foreach_ptr(connection, connectionList)
+	{
+		CloseConnection(connection);
+	}
 }
 
 

@@ -3284,6 +3284,8 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 static void
 EnsureCoordinatorInitiatedOperation(void)
 {
+	return;
+
 	/*
 	 * We are restricting the operation to only MX workers with the local group id
 	 * check. The other two checks are to ensure that the operation is initiated
@@ -3905,6 +3907,32 @@ SyncDeleteColocationGroupToNodes(uint32 colocationId)
 	 * no reasonable way of restricting access.
 	 */
 	SendCommandToWorkersWithMetadataViaSuperUser(command);
+}
+
+
+char *
+CreateDropTableIfExistsCommand(Oid relationId)
+{
+	char *schemaName = get_namespace_name(get_rel_namespace(relationId));
+	char *relationName = get_rel_name(relationId);
+
+	StringInfo workerDropQuery = makeStringInfo();
+
+	const char *quotedShardName = quote_qualified_identifier(schemaName,
+															 relationName);
+	if (IsForeignTable(relationId))
+	{
+		appendStringInfo(workerDropQuery, DROP_FOREIGN_TABLE_COMMAND,
+						 quotedShardName);
+	}
+	else
+	{
+		appendStringInfo(workerDropQuery, DROP_REGULAR_TABLE_COMMAND,
+						 quotedShardName);
+	}
+
+
+	return workerDropQuery->data;
 }
 
 
