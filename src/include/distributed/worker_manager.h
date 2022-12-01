@@ -57,6 +57,15 @@ typedef struct WorkerNode
 } WorkerNode;
 
 
+typedef struct ActivateNodeContext
+{
+	List *workerNodeList;
+	List *connectionList;
+
+	bool fetchCommands;
+	List *commandList;
+} ActivateNodeContext;
+
 /* Config variables managed via guc.c */
 extern int MaxWorkerNodesTracked;
 extern char *WorkerListFileName;
@@ -106,7 +115,7 @@ extern WorkerNode * SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnI
 											 Datum value);
 extern uint32 CountPrimariesWithMetadata(void);
 extern WorkerNode * GetFirstPrimaryWorkerNode(void);
-extern void SyncDistributedObjects(List *workerNodeList, List **commandList);
+extern void SyncDistributedObjects(ActivateNodeContext activateNodeContext);
 extern List * PgDistTableMetadataSyncCommandList(void);
 
 /* Function declarations for worker node utilities */

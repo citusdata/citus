@@ -532,14 +532,16 @@ GetAllDependencyCreateDDLCommands(const List *dependencies)
  * clusterHasDistributedFunction if there are any distributed functions.
  */
 void
-ReplicateAllObjectsToNodes(List *connectionList, List **commandList)
+ReplicateAllObjectsToNodes(ActivateNodeContext activateNodeContext)
 {
+	List *connectionList = activateNodeContext.connectionList;
+
 	/* since we are executing ddl commands disable propagation first, primarily for mx */
 	ExecuteRemoteCommandInConnectionList(connectionList, DISABLE_DDL_PROPAGATION);
-	if (commandList != NULL)
+	if (activateNodeContext.fetchCommands)
 	{
 		/* caller requested the commands */
-		*commandList = lappend(*commandList, DISABLE_DDL_PROPAGATION);
+		activateNodeContext.commandList = lappend(activateNodeContext.commandList, DISABLE_DDL_PROPAGATION);
 	}
 
 	/*
@@ -602,19 +604,20 @@ ReplicateAllObjectsToNodes(List *connectionList, List **commandList)
 		{
 			ExecuteRemoteCommandInConnectionList(connectionList, command);
 
-			if (commandList != NULL)
+			if (activateNodeContext.fetchCommands)
 			{
 				/* caller requested the commands */
-				*commandList = lappend(*commandList, command);
+				activateNodeContext.commandList =
+					lappend(activateNodeContext.commandList, command);
 			}
 		}
 	}
 
 	ExecuteRemoteCommandInConnectionList(connectionList, ENABLE_DDL_PROPAGATION);
-	if (commandList != NULL)
+	if (activateNodeContext.fetchCommands)
 	{
 		/* caller requested the commands */
-		*commandList = lappend(*commandList, ENABLE_DDL_PROPAGATION);
+		activateNodeContext.commandList = lappend(activateNodeContext.commandList, ENABLE_DDL_PROPAGATION);
 	}
 }
 

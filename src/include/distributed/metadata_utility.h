@@ -349,7 +349,7 @@ extern List * GetAllDependencyCreateDDLCommands(const List *dependencies);
 extern bool ShouldPropagate(void);
 extern bool ShouldPropagateCreateInCoordinatedTransction(void);
 extern bool ShouldPropagateAnyObject(List *addresses);
-extern void ReplicateAllObjectsToNodes(List *connectionList, List **commandList);
+extern void ReplicateAllObjectsToNodes(ActivateNodeContext activateNodeContext);
 
 /* Remaining metadata utility functions  */
 extern Oid TableOwnerOid(Oid relationId);
