@@ -372,9 +372,6 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	 * side of the outer join. That way, inner rel gets converted into an intermediate
 	 * result and logical planner can handle the new query since it's of the from
 	 * "<recurring> LEFT JOIN <recurring>".
-	 *
-	 * See DeferredErrorIfUnsupportedRecurringTuplesJoin for the supported join
-	 * types.
 	 */
 	if (ShouldRecursivelyPlanOuterJoins(context))
 	{
@@ -719,7 +716,7 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
 
 				/*
 				 * A LEFT JOIN is recurring if the lhs is recurring.
-				 * Note that we should have converted the rhs into a recurring
+				 * Note that we might have converted the rhs into a recurring
 				 * one too if the lhs is recurring, but this anyway has no
 				 * effects when deciding whether a LEFT JOIN is recurring.
 				 */
@@ -812,6 +809,11 @@ RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
  * RecursivelyPlanRecurringTupleOuterJoinWalker that recursively plans given
  * distributed node that is known to be inner side of an outer join.
  *
+ * Fails to do so if the distributed join node references the recurring one.
+ * In that case, we don't throw an error here but instead we let
+ * DeferredErrorIfUnsupportedRecurringTuplesJoin to so for a better error
+ * message.
+ *
  * We call a node "distributed" if it points to a distributed table or a
  * more complex object (i.e., a join tree or a subquery) that can be pushed
  * down to the worker nodes directly. For a join, this means that it's either
@@ -894,7 +896,24 @@ RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
 								"since it is part of a distributed join node "
 								"that is outer joined with a recurring rel")));
 
-		RecursivelyPlanSubquery(distributedRte->subquery, recursivePlanningContext);
+		bool recursivelyPlanned = RecursivelyPlanSubquery(distributedRte->subquery,
+														  recursivePlanningContext);
+		if (!recursivelyPlanned)
+		{
+			/*
+			 * RecursivelyPlanSubquery fails to plan a subquery only if it
+			 * contains references to the outer query. This means that, we can't
+			 * plan such outer joins (like <recurring LEFT OUTER distributed>)
+			 * if it's a LATERAL join where the distributed side is a subquery that
+			 * references the outer side, as in,
+			 *
+			 * SELECT * FROM reference
+			 * LEFT JOIN LATERAL
+			 * (SELECT * FROM distributed WHERE reference.b > distributed.b) q
+			 * USING (a);
+			 */
+			Assert(ContainsReferencesToOuterQuery(distributedRte->subquery));
+		}
 	}
 	else
 	{

@@ -361,8 +361,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		HAVING sum(submit_card_info) > 0
 )
 ORDER BY 1, 2;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ERROR:  cannot perform a lateral outer join when a distributed subquery references a reference table
 -- non-partition key equality with reference table
  SELECT
   user_id, count(*)
