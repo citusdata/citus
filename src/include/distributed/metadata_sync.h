@@ -46,9 +46,8 @@ typedef struct SequenceInfo
 	bool isNextValDefault;
 } SequenceInfo;
 
-
 /* Functions declarations for metadata syncing */
-extern void SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort);
+extern void SyncNodeMetadataToNode(ActivateNodeContext activateContext);
 extern void SyncCitusTableMetadata(Oid relationId);
 extern void EnsureSequentialModeMetadataOperations(void);
 extern bool ClusterHasKnownMetadataWorkers(void);

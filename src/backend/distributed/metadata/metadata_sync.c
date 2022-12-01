@@ -104,6 +104,7 @@ static NodeMetadataSyncResult SyncNodeMetadataToNodesOptional(void);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 											bool citusTableWithNoDistKey);
 static bool SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
+static List * NodeMetadataReCreateCommandList(WorkerNode *workerNode);
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
 											  char *columnName);
@@ -226,10 +227,8 @@ start_metadata_sync_to_all_nodes(PG_FUNCTION_ARGS)
  * start_metadata_sync_to_node().
  */
 void
-SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort)
+SyncNodeMetadataToNode(ActivateNodeContext activateContext)
 {
-	char *escapedNodeName = quote_literal_cstr(nodeNameString);
-
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 	EnsureModificationsCanRun();
@@ -238,58 +237,46 @@ SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort)
 
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
-	WorkerNode *workerNode = FindWorkerNode(nodeNameString, nodePort);
-	if (workerNode == NULL)
+	WorkerNode *workerNode = NULL;
+	MultiConnection *connection = NULL;
+	forboth_ptr(workerNode, activateContext.workerNodeList,
+				connection, activateContext.connectionList)
 	{
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("you cannot sync metadata to a non-existent node"),
-						errhint("First, add the node with SELECT citus_add_node"
-								"(%s,%d)", escapedNodeName, nodePort)));
+
+		if (NodeIsCoordinator(workerNode))
+		{
+			return;
+		}
+
+		SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_metadatasynced,
+						BoolGetDatum(true));
+		char *metadataSyncCommand =
+			GetMetadataSyncCommandToSetNodeColumn(workerNode, Anum_pg_dist_node_metadatasynced, BoolGetDatum(true));
+		ExecuteRemoteCommandInConnectionList(list_make1(connection), metadataSyncCommand);
+
+
+		SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_hasmetadata,
+						BoolGetDatum(true));
+		metadataSyncCommand =
+			GetMetadataSyncCommandToSetNodeColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(true));
+		ExecuteRemoteCommandInConnectionList(list_make1(connection), metadataSyncCommand);
+
+		if (!NodeIsPrimary(workerNode))
+		{
+			/*
+			 * If this is a secondary node we can't actually sync metadata to it; we assume
+			 * the primary node is receiving metadata.
+			 */
+			return;
+		}
+
+		List *nodeMetadataCommandList = NodeMetadataReCreateCommandList(workerNode);
+		metadataSyncCommand = NULL;
+		foreach_ptr(metadataSyncCommand, nodeMetadataCommandList)
+		{
+			ExecuteRemoteCommandInConnectionList(list_make1(connection), metadataSyncCommand);
+		}
 	}
-
-	if (!workerNode->isActive)
-	{
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("you cannot sync metadata to an inactive node"),
-						errhint("First, activate the node with "
-								"SELECT citus_activate_node(%s,%d)",
-								escapedNodeName, nodePort)));
-	}
-
-	if (NodeIsCoordinator(workerNode))
-	{
-		return;
-	}
-
-	UseCoordinatedTransaction();
-
-	/*
-	 * One would normally expect to set hasmetadata first, and then metadata sync.
-	 * However, at this point we do the order reverse.
-	 * We first set metadatasynced, and then hasmetadata; since setting columns for
-	 * nodes with metadatasynced==false could cause errors.
-	 * (See ErrorIfAnyMetadataNodeOutOfSync)
-	 * We can safely do that because we are in a coordinated transaction and the changes
-	 * are only visible to our own transaction.
-	 * If anything goes wrong, we are going to rollback all the changes.
-	 */
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
-								 BoolGetDatum(true));
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(
-									 true));
-
-	if (!NodeIsPrimary(workerNode))
-	{
-		/*
-		 * If this is a secondary node we can't actually sync metadata to it; we assume
-		 * the primary node is receiving metadata.
-		 */
-		return;
-	}
-
-	/* fail if metadata synchronization doesn't succeed */
-	bool raiseInterrupts = true;
-	SyncNodeMetadataSnapshotToNode(workerNode, raiseInterrupts);
 }
 
 
@@ -609,21 +596,8 @@ SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 {
 	char *currentUser = CurrentUserName();
 
-	/* generate and add the local group id's update query */
-	char *localGroupIdUpdateCommand = LocalGroupIdUpdateCommand(workerNode->groupId);
-
-	/* generate the queries which drop the node metadata */
-	List *dropMetadataCommandList = NodeMetadataDropCommands();
-
-	/* generate the queries which create the node metadata from scratch */
-	List *createMetadataCommandList = NodeMetadataCreateCommands();
-
-	List *recreateMetadataSnapshotCommandList = list_make1(localGroupIdUpdateCommand);
-	recreateMetadataSnapshotCommandList = list_concat(recreateMetadataSnapshotCommandList,
-													  dropMetadataCommandList);
-	recreateMetadataSnapshotCommandList = list_concat(recreateMetadataSnapshotCommandList,
-													  createMetadataCommandList);
-
+	List *recreateMetadataSnapshotCommandList =
+		NodeMetadataReCreateCommandList(workerNode);
 	/*
 	 * Send the snapshot recreation commands in a single remote transaction and
 	 * if requested, error out in any kind of failure. Note that it is not
@@ -649,6 +623,29 @@ SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 	}
 }
 
+
+static List *
+NodeMetadataReCreateCommandList(WorkerNode *workerNode)
+{
+
+	/* generate and add the local group id's update query */
+	char *localGroupIdUpdateCommand = LocalGroupIdUpdateCommand(workerNode->groupId);
+
+	/* generate the queries which drop the node metadata */
+	List *dropMetadataCommandList = NodeMetadataDropCommands();
+
+	/* generate the queries which create the node metadata from scratch */
+	List *createMetadataCommandList = NodeMetadataCreateCommands();
+
+	List *recreateMetadataSnapshotCommandList = list_make1(localGroupIdUpdateCommand);
+	recreateMetadataSnapshotCommandList = list_concat(recreateMetadataSnapshotCommandList,
+													  dropMetadataCommandList);
+	recreateMetadataSnapshotCommandList = list_concat(recreateMetadataSnapshotCommandList,
+													  createMetadataCommandList);
+
+	return recreateMetadataSnapshotCommandList;
+
+}
 
 /*
  * DropMetadataSnapshotOnNode creates the queries which drop the metadata and sends them

@@ -113,6 +113,9 @@ extern WorkerNode * SetWorkerColumnOptional(WorkerNode *workerNode, int columnIn
 											value);
 extern WorkerNode * SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnIndex,
 											 Datum value);
+extern char * GetMetadataSyncCommandToSetNodeColumn(WorkerNode *workerNode,
+													int columnIndex,
+													Datum value);
 extern uint32 CountPrimariesWithMetadata(void);
 extern WorkerNode * GetFirstPrimaryWorkerNode(void);
 extern void SyncDistributedObjects(ActivateNodeContext activateNodeContext);

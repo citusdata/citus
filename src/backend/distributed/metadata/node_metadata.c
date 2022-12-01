@@ -92,7 +92,6 @@ static bool PlacementHasActivePlacementOnAnotherGroup(GroupShardPlacement
 													  *sourcePlacement);
 static int AddNodeMetadata(char *nodeName, int32 nodePort, NodeMetadata
 						   *nodeMetadata, bool *nodeAlreadyExists);
-static WorkerNode * SetNodeState(char *nodeName, int32 nodePort, bool isActive);
 static HeapTuple GetNodeTuple(const char *nodeName, int32 nodePort);
 static int32 GetNextGroupId(void);
 static int GetNextNodeId(void);
@@ -101,7 +100,6 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetada
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void SyncDistributedObjectsInOutsideTransaction(ActivateNodeContext activateNodeContext);
-static void UpdateLocalGroupIdOnNode(WorkerNode *workerNode);
 static void SyncPgDistTableMetadataToNodeList(ActivateNodeContext activateNodeContext);
 static void BuildInterTableRelationships(ActivateNodeContext activateNodeContext);
 static void BlockDistributedQueriesOnMetadataNodes(void);
@@ -113,9 +111,6 @@ static void DropExistingMetadataInOutsideTransaction(ActivateNodeContext activat
 static void SetLockTimeoutLocally(int32 lock_cooldown);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
 static bool UnsetMetadataSyncedForAllWorkers(void);
-static char * GetMetadataSyncCommandToSetNodeColumn(WorkerNode *workerNode,
-													int columnIndex,
-													Datum value);
 static char * NodeHasmetadataUpdateCommand(uint32 nodeId, bool hasMetadata);
 static char * NodeMetadataSyncedUpdateCommand(uint32 nodeId, bool metadataSynced);
 static void ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value,
@@ -869,26 +864,6 @@ SyncDistributedObjectsInOutsideTransaction(ActivateNodeContext activateNodeConte
 
 
 /*
- * UpdateLocalGroupIdOnNode updates local group id on node.
- */
-static void
-UpdateLocalGroupIdOnNode(WorkerNode *workerNode)
-{
-	if (NodeIsPrimary(workerNode) && !NodeIsCoordinator(workerNode))
-	{
-		List *commandList = list_make1(LocalGroupIdUpdateCommand(workerNode->groupId));
-
-		/* send commands to new workers, the current user should be a superuser */
-		Assert(superuser());
-		SendMetadataCommandListToWorkerListInCoordinatedTransaction(
-			list_make1(workerNode),
-			CurrentUserName(),
-			commandList);
-	}
-}
-
-
-/*
  * SyncPgDistTableMetadataToNodeList syncs the pg_dist_partition, pg_dist_shard
  * pg_dist_placement and pg_dist_object metadata entries.
  *
@@ -1142,9 +1117,13 @@ ActivateNodeList(List *nodeList)
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
-	ActivateNodeContext activateContext;
+	ActivateNodeContext activateContext = {};
 
 	activateContext.fetchCommands = false;
+	activateContext.workerNodeList = NIL;
+	activateContext.connectionList = NIL;
+	activateContext.commandList = NIL;
+
 
 	WorkerNode *node = NULL;
 	foreach_ptr(node, nodeList)
@@ -1196,19 +1175,6 @@ ActivateNodeList(List *nodeList)
 		bool syncMetadata = EnableMetadataSync && NodeIsPrimary(workerNode);
 		if (syncMetadata)
 		{
-			/*
-			 * We are going to sync the metadata anyway in this transaction, so do
-			 * not fail just because the current metadata is not synced.
-			 */
-			SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
-							BoolGetDatum(true));
-
-			/*
-			 * Update local group id first, as object dependency logic requires to have
-			 * updated local group id.
-			 */
-			UpdateLocalGroupIdOnNode(workerNode);
-
 			activateContext.workerNodeList =
 				lappend(activateContext.workerNodeList, workerNode);
 
@@ -1220,6 +1186,23 @@ ActivateNodeList(List *nodeList)
 											  workerNode->workerPort, NULL, NULL);
 			activateContext.connectionList =
 				lappend(activateContext.connectionList, connection);
+
+			/*
+			 * We are going to sync the metadata anyway in this transaction, so do
+			 * not fail just because the current metadata is not synced.
+			 */
+			SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_metadatasynced,
+							BoolGetDatum(true));
+			char *metadataSyncCommand =
+				GetMetadataSyncCommandToSetNodeColumn(workerNode, Anum_pg_dist_node_metadatasynced, BoolGetDatum(true));
+			ExecuteRemoteCommandInConnectionList(list_make1(connection), metadataSyncCommand);
+
+			/*
+			 * Update local group id first, as object dependency logic requires to have
+			 * updated local group id.
+			 */
+			char *localGroupCommand = LocalGroupIdUpdateCommand(workerNode->groupId);
+			ExecuteRemoteCommandInConnectionList(list_make1(connection), localGroupCommand);
 		}
 	}
 
@@ -1255,10 +1238,7 @@ ActivateNodeList(List *nodeList)
 	 * related pg_dist_xxx metadata. Since table related metadata requires
 	 * to have right pg_dist_node entries.
 	 */
-	foreach_ptr(node, activateContext.workerNodeList)
-	{
-		SyncNodeMetadataToNode(node->workerName, node->workerPort);
-	}
+	SyncNodeMetadataToNode(activateContext);
 
 	/*
 	 * As the last step, sync the table related metadata to the remote node.
@@ -1267,12 +1247,16 @@ ActivateNodeList(List *nodeList)
 	 */
 	SyncPgDistTableMetadataToNodeList(activateContext);
 
-	foreach_ptr(node, nodeList)
+	node = NULL;
+	MultiConnection *connection = NULL;
+	forboth_ptr(node, activateContext.workerNodeList, connection,activateContext.connectionList)
 	{
-		bool isActive = true;
-
 		/* finally, let all other active metadata nodes to learn about this change */
-		SetNodeState(node->workerName, node->workerPort, isActive);
+		SetWorkerColumnLocalOnly(node, Anum_pg_dist_node_isactive, BoolGetDatum(true));
+		char *metadataSyncCommand =
+			GetMetadataSyncCommandToSetNodeColumn(node, Anum_pg_dist_node_isactive,
+												  BoolGetDatum(true));
+		ExecuteRemoteCommandInConnectionList(list_make1(connection), metadataSyncCommand);
 	}
 }
 
@@ -1342,18 +1326,12 @@ DropExistingMetadataCommandList()
 int
 ActivateNode(char *nodeName, int nodePort)
 {
-	bool isActive = true;
-
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
 	ActivateNodeList(list_make1(workerNode));
 
-	/* finally, let all other active metadata nodes to learn about this change */
-	WorkerNode *newWorkerNode = SetNodeState(nodeName, nodePort, isActive);
-	Assert(newWorkerNode->nodeId == workerNode->nodeId);
-
 	TransactionModifiedNodeMetadata = true;
 
-	return newWorkerNode->nodeId;
+	return workerNode->nodeId;
 }
 
 
@@ -2386,7 +2364,7 @@ SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnIndex, Datum value)
  * GetMetadataSyncCommandToSetNodeColumn checks if the given workerNode and value is
  * valid or not. Then it returns the necessary metadata sync command as a string.
  */
-static char *
+char *
 GetMetadataSyncCommandToSetNodeColumn(WorkerNode *workerNode, int columnIndex, Datum
 									  value)
 {
@@ -2497,20 +2475,6 @@ SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards)
 {
 	return SetWorkerColumn(workerNode, Anum_pg_dist_node_shouldhaveshards, BoolGetDatum(
 							   shouldHaveShards));
-}
-
-
-/*
- * SetNodeState function sets the isactive column of the specified worker in
- * pg_dist_node to isActive. Also propagates this to other metadata nodes.
- * It returns the new worker node after the modification.
- */
-static WorkerNode *
-SetNodeState(char *nodeName, int nodePort, bool isActive)
-{
-	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
-	return SetWorkerColumn(workerNode, Anum_pg_dist_node_isactive, BoolGetDatum(
-							   isActive));
 }
 
 
