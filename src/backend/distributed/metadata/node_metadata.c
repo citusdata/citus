@@ -2232,7 +2232,7 @@ SetWorkerColumnOptional(WorkerNode *workerNode, int columnIndex, Datum value)
 		{
 			/* metadata out of sync, mark the worker as not synced */
 			ereport(WARNING, (errmsg("Updating the metadata of the node %s:%d "
-									 "is failed on node %s:%d."
+									 "is failed on node %s:%d. "
 									 "Metadata on %s:%d is marked as out of sync.",
 									 workerNode->workerName, workerNode->workerPort,
 									 worker->workerName, worker->workerPort,

@@ -604,7 +604,7 @@ CreateReplicaIdentitiesOnNode(List *shardList, char *nodeName, int32 nodePort)
 
 		if (commandList != NIL)
 		{
-			ereport(DEBUG1, (errmsg("Creating replica identity for shard %ld on"
+			ereport(DEBUG1, (errmsg("Creating replica identity for shard %ld on "
 									"target node %s:%d", shardId, nodeName, nodePort)));
 
 			SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
