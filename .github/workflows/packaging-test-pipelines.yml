@@ -87,7 +87,7 @@ jobs:
           yum install python3-pip python3-devel postgresql-devel -y
           python3 -m pip install wheel
 
-          ./github/packaging/validate_build_output.sh "rpm"
+          ./.github/packaging/validate_build_output.sh "rpm"
 
   deb_build_tests:
     name: deb_build_tests
@@ -155,4 +155,4 @@ jobs:
           sudo apt-get purge -y python3-yaml
           python3 -m pip install --upgrade pip  setuptools==57.5.0
 
-          ./github/packaging/validate_build_output.sh "deb"
+          ./.github/packaging/validate_build_output.sh "deb"
