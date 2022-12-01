@@ -126,8 +126,8 @@ WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  role "citus_shard_move_subscription_role_10" cannot be dropped because some objects depend on it
-DETAIL:  owner of subscription citus_shard_move_subscription_xxxxxxx
+WARNING:  role "citus_shard_move_subscription_role_10_4" cannot be dropped because some objects depend on it
+DETAIL:  owner of subscription citus_shard_move_subscription_xxxxxxx_4
 CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
@@ -202,8 +202,8 @@ WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  role "citus_shard_move_subscription_role_10" cannot be dropped because some objects depend on it
-DETAIL:  owner of subscription citus_shard_move_subscription_xxxxxxx
+WARNING:  role "citus_shard_move_subscription_role_10_10" cannot be dropped because some objects depend on it
+DETAIL:  owner of subscription citus_shard_move_subscription_xxxxxxx_10
 CONTEXT:  while executing command on localhost:xxxxx
  master_move_shard_placement
 ---------------------------------------------------------------------

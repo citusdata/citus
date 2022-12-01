@@ -982,20 +982,20 @@ run_try_drop_marked_resources
 step s1-show-pg_dist_cleanup:
  SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
 
-object_name                           |object_type|policy_type
+object_name                              |object_type|policy_type
 ---------------------------------------------------------------------
-public.to_split_table_1500002         |          1|          1
-public.to_split_table_1500003         |          1|          1
-public.to_split_table_1500001         |          1|          0
-public.to_split_table_1500003         |          1|          0
-citus_shard_split_publication_xxxxxxx_xxxxxxx    |          4|          0
-citus_shard_split_publication_xxxxxxx_xxxxxxx    |          4|          0
-citus_shard_split_slot_xxxxxxx_xxxxxxx           |          3|          0
-citus_shard_split_slot_xxxxxxx_xxxxxxx           |          3|          0
-citus_shard_split_subscription_role_10|          5|          0
-citus_shard_split_subscription_xxxxxxx     |          2|          0
-citus_shard_split_subscription_role_10|          5|          0
-citus_shard_split_subscription_xxxxxxx     |          2|          0
+public.to_split_table_1500002            |          1|          1
+public.to_split_table_1500003            |          1|          1
+public.to_split_table_1500001            |          1|          0
+public.to_split_table_1500003            |          1|          0
+citus_shard_split_publication_xxxxxxx_xxxxxxx_41    |          4|          0
+citus_shard_split_publication_xxxxxxx_xxxxxxx_41    |          4|          0
+citus_shard_split_slot_xxxxxxx_xxxxxxx_0            |          3|          0
+citus_shard_split_slot_xxxxxxx_xxxxxxx_0            |          3|          0
+citus_shard_split_subscription_role_10_41|          5|          0
+citus_shard_split_subscription_xxxxxxx_41     |          2|          0
+citus_shard_split_subscription_role_10_41|          5|          0
+citus_shard_split_subscription_xxxxxxx_41     |          2|          0
 (12 rows)
 
 step s1-release-split-advisory-lock:
@@ -1060,20 +1060,20 @@ run_try_drop_marked_resources
 step s1-show-pg_dist_cleanup:
  SELECT object_name, object_type, policy_type FROM pg_dist_cleanup;
 
-object_name                           |object_type|policy_type
+object_name                              |object_type|policy_type
 ---------------------------------------------------------------------
-public.to_split_table_1500002         |          1|          1
-public.to_split_table_1500003         |          1|          1
-public.to_split_table_1500001         |          1|          0
-public.to_split_table_1500003         |          1|          0
-citus_shard_split_publication_xxxxxxx_xxxxxxx    |          4|          0
-citus_shard_split_publication_xxxxxxx_xxxxxxx    |          4|          0
-citus_shard_split_slot_xxxxxxx_xxxxxxx           |          3|          0
-citus_shard_split_slot_xxxxxxx_xxxxxxx           |          3|          0
-citus_shard_split_subscription_role_10|          5|          0
-citus_shard_split_subscription_xxxxxxx     |          2|          0
-citus_shard_split_subscription_role_10|          5|          0
-citus_shard_split_subscription_xxxxxxx     |          2|          0
+public.to_split_table_1500002            |          1|          1
+public.to_split_table_1500003            |          1|          1
+public.to_split_table_1500001            |          1|          0
+public.to_split_table_1500003            |          1|          0
+citus_shard_split_publication_xxxxxxx_xxxxxxx_42    |          4|          0
+citus_shard_split_publication_xxxxxxx_xxxxxxx_42    |          4|          0
+citus_shard_split_slot_xxxxxxx_xxxxxxx_0            |          3|          0
+citus_shard_split_slot_xxxxxxx_xxxxxxx_0            |          3|          0
+citus_shard_split_subscription_role_10_42|          5|          0
+citus_shard_split_subscription_xxxxxxx_42     |          2|          0
+citus_shard_split_subscription_role_10_42|          5|          0
+citus_shard_split_subscription_xxxxxxx_42     |          2|          0
 (12 rows)
 
 step s1-release-split-advisory-lock:
