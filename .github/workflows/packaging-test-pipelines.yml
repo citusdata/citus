@@ -83,15 +83,11 @@ jobs:
         run: |
           echo "Postgres version: ${POSTGRES_VERSION}"
 
-          package_type="rpm"
           ## Install required packages to execute packaging tools for rpm based distros
           yum install python3-pip python3-devel postgresql-devel -y
           python3 -m pip install wheel
 
-          git clone -b v0.8.23 --depth=1  https://github.com/citusdata/tools.git tools
-          python3 -m pip install -r tools/packaging_automation/requirements.txt
-          python3 -m tools.packaging_automation.validate_build_output --output_file output.log \
-            --ignore_file .github/packaging/packaging_ignore.yml --package_type ${package_type}
+          ./github/packaging/validate_build_output.sh "rpm"
 
   deb_build_tests:
     name: deb_build_tests
@@ -107,17 +103,18 @@ jobs:
         # for each deb based image and we use POSTGRES_VERSION to set
         # PG_CONFIG variable in each of those runs.
         packaging_docker_image:
-          - citus/packaging:ubuntu-jammy-all
-          - citus/packaging:debian-bookworm-all
-          - citus/packaging:ubuntu-focal-all
-          - citus/packaging:ubuntu-kinetic-all
-          - citus/packaging:debian-bullseye-all
-          - citus/packaging:ubuntu-bionic-all
-          - citus/packaging:debian-buster-all
+          - debian-buster-all
+          - debian-bookworm-all
+          - debian-bullseye-all
+          - ubuntu-bionic-all
+          - ubuntu-focal-all
+          - ubuntu-jammy-all
+          - ubuntu-kinetic-all
+
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
 
     container:
-      image: ${{ matrix.packaging_docker_image }}
+      image: citus/packaging:${{ matrix.packaging_docker_image }}
 
     steps:
       - name: Checkout repository
@@ -152,14 +149,10 @@ jobs:
         run: |
           echo "Postgres version: ${POSTGRES_VERSION}"
 
-          package_type="deb"
           apt-get update -y
           ## Install required packages to execute packaging tools for deb based distros
           apt install python3-dev python3-pip -y
           sudo apt-get purge -y python3-yaml
           python3 -m pip install --upgrade pip  setuptools==57.5.0
 
-          git clone -b v0.8.23 --depth=1  https://github.com/citusdata/tools.git tools
-          python3 -m pip install -r tools/packaging_automation/requirements.txt
-          python3 -m tools.packaging_automation.validate_build_output --output_file output.log \
-            --ignore_file .github/packaging/packaging_ignore.yml --package_type ${package_type}
+          ./github/packaging/validate_build_output.sh "deb"
