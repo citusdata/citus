@@ -829,26 +829,7 @@ SyncDistributedObjectsCommandList(WorkerNode *workerNode)
 static void
 SyncDistributedObjectsToNodeList(List *workerNodeList)
 {
-	List *workerNodesToSync = NIL;
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
-	{
-		if (NodeIsCoordinator(workerNode))
-		{
-			/* coordinator has all the objects */
-			continue;
-		}
-
-		if (!NodeIsPrimary(workerNode))
-		{
-			/* secondary nodes gets the objects from their primaries via replication */
-			continue;
-		}
-
-		workerNodesToSync = lappend(workerNodesToSync, workerNode);
-	}
-
-	if (workerNodesToSync == NIL)
+	if (workerNodeList == NIL)
 	{
 		return;
 	}
@@ -857,12 +838,12 @@ SyncDistributedObjectsToNodeList(List *workerNodeList)
 
 	Assert(ShouldPropagate());
 
-	List *commandList = SyncDistributedObjectsCommandList(workerNode);
+	List *commandList = SyncDistributedObjectsCommandList(linitial(workerNodeList));
 
 	/* send commands to new workers, the current user should be a superuser */
 	Assert(superuser());
 	SendMetadataCommandListToWorkerListInCoordinatedTransaction(
-		workerNodesToSync,
+		workerNodeList,
 		CurrentUserName(),
 		commandList);
 }
