@@ -100,7 +100,7 @@ static void InsertPlaceholderCoordinatorRecord(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetadata
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
-static void SyncDistributedObjectsToNodeList(List *workerNodeList);
+static void SyncDistributedObjectsInOutsideTransaction(List *workerNodeList);
 static void UpdateLocalGroupIdOnNode(WorkerNode *workerNode);
 static void SyncPgDistTableMetadataToNodeList(List *nodeList);
 static void BuildInterTableRelationships(List *connectionList, List **commandList);
@@ -775,11 +775,15 @@ PropagateNodeWideObjects(List *connectionList, List **commandList)
 
 		if (alterRoleSetCommands != NIL)
 		{
+			ExecuteRemoteCommandInConnectionList(connectionList, DISABLE_DDL_PROPAGATION);
+
 			char *command = NULL;
 			foreach_ptr(command, alterRoleSetCommands)
 			{
 				ExecuteRemoteCommandInConnectionList(connectionList, command);
 			}
+
+			ExecuteRemoteCommandInConnectionList(connectionList, ENABLE_DDL_PROPAGATION);
 
 			/* the caller is interested in collecting the commands */
 			if (commandList != NULL)
@@ -807,8 +811,9 @@ PropagateNodeWideObjects(List *connectionList, List **commandList)
  * - Inter relation between those shell tables
  * - Node wide objects
  *
- * We also update the local group id here, as handling sequence dependencies
- * requires it.
+ * If the optional commandList is provided, the function fills
+ * the list. But note that the list can be huge due to
+ * partitioning, so use the list cautiously.
  */
 void
 SyncDistributedObjects(List *workerNodeList, List **commandList)
@@ -848,7 +853,8 @@ SyncDistributedObjects(List *workerNodeList, List **commandList)
 
 
 /*
- * SyncDistributedObjectsToNodeList sync the distributed objects to the node. It includes
+ * SyncDistributedObjectsInOutsideTransaction sync the distributed
+ * objects to the nodes. It includes
  * - All dependencies (e.g., types, schemas, sequences)
  * - All shell distributed table
  * - Inter relation between those shell tables
@@ -857,7 +863,7 @@ SyncDistributedObjects(List *workerNodeList, List **commandList)
  * since all the dependencies should be present in the coordinator already.
  */
 static void
-SyncDistributedObjectsToNodeList(List *workerNodeList)
+SyncDistributedObjectsInOutsideTransaction(List *workerNodeList)
 {
 	if (workerNodeList == NIL)
 	{
@@ -1234,8 +1240,11 @@ ActivateNodeList(List *nodeList)
 	 * Sync distributed objects first. We must sync distributed objects before
 	 * replicating reference tables to the remote node, as reference tables may
 	 * need such objects.
+	 *
+	 * Given that object creation is idempotent, we can afford to run them
+	 * outside the transaction.
 	 */
-	SyncDistributedObjectsToNodeList(nodeToSyncMetadata);
+	SyncDistributedObjectsInOutsideTransaction(nodeToSyncMetadata);
 
 	/*
 	 * Sync node metadata. We must sync node metadata before syncing table
