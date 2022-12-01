@@ -244,7 +244,9 @@ CALL pg_catalog.citus_cleanup_orphaned_resources();
 -- END: Split a partition table directly
 
 -- BEGIN: Perform deferred cleanup.
+SET client_min_messages TO WARNING;
 CALL pg_catalog.citus_cleanup_orphaned_resources();
+RESET client_min_messages;
 -- END: Perform deferred cleanup.
 
 -- BEGIN: Validate Shard Info and Data

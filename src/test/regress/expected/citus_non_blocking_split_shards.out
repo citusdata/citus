@@ -237,8 +237,9 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 (1 row)
 
 -- BEGIN: Perform deferred cleanup.
+SET client_min_messages TO WARNING;
 CALL pg_catalog.citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 3 orphaned resources
+RESET client_min_messages;
 -- END: Perform deferred cleanup.
 -- Perform 3 way split
 SELECT pg_catalog.citus_split_shard_by_split_points(
@@ -253,8 +254,9 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 
 -- END : Split two shards : One with move and One without move.
 -- BEGIN: Perform deferred cleanup.
+SET client_min_messages TO WARNING;
 CALL pg_catalog.citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 3 orphaned resources
+RESET client_min_messages;
 -- END: Perform deferred cleanup.
 -- BEGIN : Move a shard post split.
 SELECT citus_move_shard_placement(8981007, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='block_writes');
@@ -474,7 +476,9 @@ ERROR:  cannot use logical replication to transfer shards of the relation table_
 DETAIL:  UPDATE and DELETE commands on the shard will error out during logical replication unless there is a REPLICA IDENTITY or PRIMARY KEY.
 HINT:  If you wish to continue without a replica identity set the shard_transfer_mode to 'force_logical' or 'block_writes'.
 -- BEGIN: Perform deferred cleanup.
+SET client_min_messages TO WARNING;
 CALL pg_catalog.citus_cleanup_orphaned_resources();
+RESET client_min_messages;
 -- END: Perform deferred cleanup.
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
@@ -522,8 +526,9 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 (1 row)
 
 -- BEGIN: Perform deferred cleanup.
+SET client_min_messages TO WARNING;
 CALL pg_catalog.citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 3 orphaned resources
+RESET client_min_messages;
 -- END: Perform deferred cleanup.
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
@@ -580,6 +585,28 @@ SELECT COUNT(*) FROM colocated_dist_table;
 -- END: Validate Data Count
 --BEGIN : Cleanup
 \c - postgres - :master_port
+-- make sure we don't have any replication objects leftover on the workers
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_replication_slots$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,0)
+ (localhost,57638,t,0)
+(2 rows)
+
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_publication$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,0)
+ (localhost,57638,t,0)
+(2 rows)
+
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_subscription$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,0)
+ (localhost,57638,t,0)
+(2 rows)
+
 ALTER SYSTEM RESET citus.defer_shard_delete_interval;
 SELECT pg_reload_conf();
  pg_reload_conf
