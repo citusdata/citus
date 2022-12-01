@@ -2178,7 +2178,7 @@ RegisterCitusConfigVariables(void)
 		"citus.skip_advisory_lock_permission_checks",
 		gettext_noop("Postgres would normally enforce some "
 					 "ownership checks while acquiring locks. "
-					 "When this setting is 'off', Citus skips"
+					 "When this setting is 'on', Citus skips"
 					 "ownership checks on internal advisory "
 					 "locks."),
 		NULL,
