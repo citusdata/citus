@@ -29,7 +29,7 @@ jobs:
           # Below line is needed to set the output variable to be used in the next job
           echo "pg_versions=${pg_versions_array}" >> $GITHUB_OUTPUT
 
-  build_tests_for_rpm_in_packaging_images:
+  rpm_build_tests:
     name: tests_build_in_packaging_images
     needs: get_postgres_versions_from_file
     runs-on: ubuntu-latest
@@ -94,7 +94,7 @@ jobs:
           python3 -m tools.packaging_automation.validate_build_output --output_file output.log \
             --ignore_file .github/packaging/packaging_ignore.yml --package_type ${package_type}
 
-  build_tests_for_deb_in_packaging_images:
+  deb_build_tests:
     name: tests_build_in_packaging_images
     needs: get_postgres_versions_from_file
     runs-on: ubuntu-latest
