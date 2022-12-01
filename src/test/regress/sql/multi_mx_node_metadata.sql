@@ -170,7 +170,6 @@ INSERT INTO some_ref_table (a) SELECT i FROM generate_series(0,10)i;
 
 BEGIN;
 	SELECT master_add_node('localhost', :worker_2_port) AS nodeid_2 \gset
-	SELECT 1 FROM start_metadata_sync_to_node('localhost', :worker_2_port);
 
   -- and modifications can be read from any worker in the same transaction
   INSERT INTO some_ref_table (a) SELECT i FROM generate_series(0,10)i;

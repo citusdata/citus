@@ -109,6 +109,7 @@ static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapT
 static List * PropagateNodeWideObjectsCommandList();
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
 static bool NodeIsLocal(WorkerNode *worker);
+static void DropExistingMetadataInOutsideTransaction(List *nodeList);
 static void SetLockTimeoutLocally(int32 lock_cooldown);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
 static bool UnsetMetadataSyncedForAllWorkers(void);
@@ -715,17 +716,6 @@ PgDistTableMetadataSyncCommandList(void)
 		}
 	}
 
-	/* remove all dist table and object related metadata first */
-	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-										  DELETE_ALL_PARTITIONS);
-	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList, DELETE_ALL_SHARDS);
-	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-										  DELETE_ALL_PLACEMENTS);
-	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-										  DELETE_ALL_DISTRIBUTED_OBJECTS);
-	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-										  DELETE_ALL_COLOCATION);
-
 	/* create pg_dist_partition, pg_dist_shard and pg_dist_placement entries */
 	foreach_ptr(cacheEntry, propagatedTableList)
 	{
@@ -810,15 +800,6 @@ SyncDistributedObjectsCommandList(WorkerNode *workerNode)
 	 * Propagate node wide objects. It includes only roles for now.
 	 */
 	commandList = list_concat(commandList, PropagateNodeWideObjectsCommandList());
-
-	commandList = lappend(commandList, BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
-
-	/*
-	 * First remove partitioned tables (with cascade) to avoid any need for
-	 * detaching partitions. Later, drop the remaining tables.
-	 */
-	commandList = lappend(commandList, REMOVE_PARTITIONED_SHELL_TABLES_COMMAND);
-	commandList = lappend(commandList, REMOVE_ALL_SHELL_TABLES_COMMAND);
 
 	/*
 	 * Replicate all objects of the pg_dist_object to the remote node.
@@ -1197,6 +1178,14 @@ ActivateNodeList(List *nodeList)
 			SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_isactive,
 									 BoolGetDatum(true));
 
+		if (NodeIsCoordinator(workerNode) && NodeIsPrimary(workerNode))
+		{
+			ereport(NOTICE, (errmsg("%s:%d is the coordinator and already contains "
+									"metadata, skipping syncing the metadata",
+									workerNode->workerName, workerNode->workerPort)));
+			continue;
+		}
+
 		/* TODO: Once all tests will be enabled for MX, we can remove sync by default check */
 		bool syncMetadata = EnableMetadataSync && NodeIsPrimary(workerNode);
 		if (syncMetadata)
@@ -1217,6 +1206,23 @@ ActivateNodeList(List *nodeList)
 			nodeToSyncMetadata = lappend(nodeToSyncMetadata, workerNode);
 		}
 	}
+
+	/*
+	 * Ideally, we'd want to drop and sync the metadata inside a
+	 * single transaction. However, for some users, the metadata might
+	 * be excessively large. In that cases, Postgres fails to handle
+	 * processing of all the commands inside a single transaction.
+	 *
+	 * As of PG 15, we get error messages like the following at
+	 * commit time that are caused by relcache/catcache invalidations:
+	 *    ERROR:  invalid memory alloc request size 1073741824
+	 *
+	 * That's why, we try to split as much of the work as possible.
+	 * It incurs some risk of failures during these steps causing
+	 * issues if any of the steps is not idempotent.
+	 */
+	DropExistingMetadataInOutsideTransaction(nodeToSyncMetadata);
+
 
 	/*
 	 * Sync distributed objects first. We must sync distributed objects before
@@ -1253,6 +1259,79 @@ ActivateNodeList(List *nodeList)
 
 
 /*
+ * DropExistingMetadataInOutsideTransaction gets a nodeList and sends the
+ * necessary commands to drop the metadata (excluding node metadata).
+ *
+ * The function establishes one connection per node, and closes at the end.
+ */
+static void
+DropExistingMetadataInOutsideTransaction(List *nodeList)
+{
+	List *connectionList = NIL;
+
+	/* first, establish new connections */
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, nodeList)
+	{
+		int connectionFlags = FORCE_NEW_CONNECTION;
+
+		Assert(superuser());
+		MultiConnection *connection =
+			GetNodeUserDatabaseConnection(connectionFlags, workerNode->workerName,
+										  workerNode->workerPort, NULL, NULL);
+
+		connectionList = lappend(connectionList, connection);
+	}
+
+	char *command = NULL;
+	List *commandList = DropExistingMetadataCommandList();
+	foreach_ptr(command, commandList)
+	{
+		ExecuteRemoteCommandInConnectionList(connectionList, command);
+	}
+
+	/* finally, close the connections as we don't need them anymore */
+	MultiConnection *connection;
+	foreach_ptr(connection, connectionList)
+	{
+		CloseConnection(connection);
+	}
+}
+
+
+/*
+ * DropExistingMetadataCommandList returns a list of commands that can
+ * be used to drop the metadata (excluding node metadata).
+ */
+List *
+DropExistingMetadataCommandList()
+{
+	List *dropMetadataCommandList = NIL;
+
+	/* remove all dist table and object related metadata first */
+	dropMetadataCommandList = lappend(dropMetadataCommandList,
+									  BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
+	dropMetadataCommandList = lappend(dropMetadataCommandList,
+									  REMOVE_PARTITIONED_SHELL_TABLES_COMMAND);
+	dropMetadataCommandList = lappend(dropMetadataCommandList,
+									  REMOVE_ALL_SHELL_TABLES_COMMAND);
+
+
+	dropMetadataCommandList = lappend(dropMetadataCommandList,
+									  DELETE_ALL_PARTITIONS);
+	dropMetadataCommandList = lappend(dropMetadataCommandList, DELETE_ALL_SHARDS);
+	dropMetadataCommandList = lappend(dropMetadataCommandList,
+									  DELETE_ALL_PLACEMENTS);
+	dropMetadataCommandList = lappend(dropMetadataCommandList,
+									  DELETE_ALL_DISTRIBUTED_OBJECTS);
+	dropMetadataCommandList = lappend(dropMetadataCommandList,
+									  DELETE_ALL_COLOCATION);
+
+	return dropMetadataCommandList;
+}
+
+
+/*
  * ActivateNode activates the node with nodeName and nodePort. Currently, activation
  * includes only replicating the reference tables and setting isactive column of the
  * given node.
@@ -1268,6 +1347,8 @@ ActivateNode(char *nodeName, int nodePort)
 	/* finally, let all other active metadata nodes to learn about this change */
 	WorkerNode *newWorkerNode = SetNodeState(nodeName, nodePort, isActive);
 	Assert(newWorkerNode->nodeId == workerNode->nodeId);
+
+	TransactionModifiedNodeMetadata = true;
 
 	return newWorkerNode->nodeId;
 }

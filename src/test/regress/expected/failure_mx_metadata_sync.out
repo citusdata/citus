@@ -69,7 +69,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_dist_partition").kill
 (1 row)
 
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  failure on connection marked as essential: localhost:xxxxx
+ERROR:  connection not open
 -- Failure to delete pg_dist_node entries from the worker
 SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM pg_dist_node").cancel(' || :pid || ')');
  mitmproxy
