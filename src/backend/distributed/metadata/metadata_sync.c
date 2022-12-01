@@ -258,9 +258,6 @@ SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort)
 
 	if (NodeIsCoordinator(workerNode))
 	{
-		ereport(NOTICE, (errmsg("%s:%d is the coordinator and already contains "
-								"metadata, skipping syncing the metadata",
-								nodeNameString, nodePort)));
 		return;
 	}
 

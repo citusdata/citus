@@ -180,25 +180,25 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 SET search_path TO "start_stop_metadata_sync";
 
 -- both start & stop metadata sync operations can be transactional
-BEGIN;
+--BEGIN;
 	-- sync the same node multiple times
-	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+--	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+--	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 	-- sync the same node in the same command
-	WITH nodes(name, port) AS (VALUES ('localhost', :worker_1_port,
-									   'localhost', :worker_1_port,
-									   'localhost', :worker_2_port,
-									   'localhost', :worker_2_port))
-	SELECT start_metadata_sync_to_node(name,port) FROM nodes;
+--	WITH nodes(name, port) AS (VALUES ('localhost', :worker_1_port,
+--									   'localhost', :worker_1_port,
+--									   'localhost', :worker_2_port,
+--									   'localhost', :worker_2_port))
+--	SELECT start_metadata_sync_to_node(name,port) FROM nodes;
 
 	-- stop the same node in the same command
-	WITH nodes(name, port) AS (VALUES ('localhost', :worker_1_port,
-									   'localhost', :worker_1_port,
-									   'localhost', :worker_2_port,
-									   'localhost', :worker_2_port))
-	SELECT stop_metadata_sync_to_node(name,port) FROM nodes;
-COMMIT;
+--	WITH nodes(name, port) AS (VALUES ('localhost', :worker_1_port,
+--									   'localhost', :worker_1_port,
+--									   'localhost', :worker_2_port,
+--									   'localhost', :worker_2_port))
+--	SELECT stop_metadata_sync_to_node(name,port) FROM nodes;
+--COMMIT;
 
 
 \c - - - :worker_1_port
@@ -257,7 +257,7 @@ BEGIN;
 	ALTER TABLE distributed_table_3 ADD COLUMN new_col INT DEFAULT 15;
 	SELECT count(*) FROM distributed_table_3;
 	-- sync at the end of the tx
-	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+	-- SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 ROLLBACK;
 
 -- multi-shard commands are not allowed with start_metadata_sync
@@ -274,7 +274,7 @@ BEGIN;
 	ALTER TABLE distributed_table_3 ADD COLUMN new_col INT DEFAULT 15;
 	SELECT count(*) FROM distributed_table_3;
 	-- sync at the end of the tx
-	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+	-- SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 ROLLBACK;
 
 

@@ -379,44 +379,23 @@ NOTICE:  dropping metadata on the node (localhost,57638)
 
 SET search_path TO "start_stop_metadata_sync";
 -- both start & stop metadata sync operations can be transactional
-BEGIN;
+--BEGIN;
 	-- sync the same node multiple times
-	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
+--	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+--	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 	-- sync the same node in the same command
-	WITH nodes(name, port) AS (VALUES ('localhost', :worker_1_port,
-									   'localhost', :worker_1_port,
-									   'localhost', :worker_2_port,
-									   'localhost', :worker_2_port))
-	SELECT start_metadata_sync_to_node(name,port) FROM nodes;
- start_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
+--	WITH nodes(name, port) AS (VALUES ('localhost', :worker_1_port,
+--									   'localhost', :worker_1_port,
+--									   'localhost', :worker_2_port,
+--									   'localhost', :worker_2_port))
+--	SELECT start_metadata_sync_to_node(name,port) FROM nodes;
 	-- stop the same node in the same command
-	WITH nodes(name, port) AS (VALUES ('localhost', :worker_1_port,
-									   'localhost', :worker_1_port,
-									   'localhost', :worker_2_port,
-									   'localhost', :worker_2_port))
-	SELECT stop_metadata_sync_to_node(name,port) FROM nodes;
-NOTICE:  dropping metadata on the node (localhost,57637)
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-COMMIT;
+--	WITH nodes(name, port) AS (VALUES ('localhost', :worker_1_port,
+--									   'localhost', :worker_1_port,
+--									   'localhost', :worker_2_port,
+--									   'localhost', :worker_2_port))
+--	SELECT stop_metadata_sync_to_node(name,port) FROM nodes;
+--COMMIT;
 \c - - - :worker_1_port
 SELECT count(*) > 0 FROM pg_dist_node;
  ?column?
@@ -540,12 +519,7 @@ BEGIN;
 (1 row)
 
 	-- sync at the end of the tx
-	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
+	-- SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 ROLLBACK;
 -- multi-shard commands are not allowed with start_metadata_sync
 BEGIN;
@@ -581,12 +555,7 @@ BEGIN;
 (1 row)
 
 	-- sync at the end of the tx
-	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
+	-- SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 ROLLBACK;
 -- cleanup
 \c - - - :master_port

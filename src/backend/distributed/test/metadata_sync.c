@@ -51,8 +51,9 @@ activate_node_snapshot(PG_FUNCTION_ARGS)
 
 	List *updateLocalGroupCommand =
 		list_make1(LocalGroupIdUpdateCommand(dummyWorkerNode->groupId));
+	List *dropMetadataCommandList = DropExistingMetadataCommandList();
 	List *syncDistObjCommands = SyncDistributedObjectsCommandList(dummyWorkerNode);
-	List *dropSnapshotCommands = NodeMetadataDropCommands();
+	List *dropNodeSnapshotCommands = NodeMetadataDropCommands();
 	List *createSnapshotCommands = NodeMetadataCreateCommands();
 	List *pgDistTableMetadataSyncCommands = PgDistTableMetadataSyncCommandList();
 
@@ -60,10 +61,13 @@ activate_node_snapshot(PG_FUNCTION_ARGS)
 	int activateNodeCommandIndex = 0;
 	Oid ddlCommandTypeId = TEXTOID;
 
-	activateNodeCommandList = list_concat(activateNodeCommandList,
-										  updateLocalGroupCommand);
+	activateNodeCommandList =
+		list_concat(activateNodeCommandList, updateLocalGroupCommand);
+	activateNodeCommandList =
+		list_concat(activateNodeCommandList, dropMetadataCommandList);
 	activateNodeCommandList = list_concat(activateNodeCommandList, syncDistObjCommands);
-	activateNodeCommandList = list_concat(activateNodeCommandList, dropSnapshotCommands);
+	activateNodeCommandList =
+		list_concat(activateNodeCommandList, dropNodeSnapshotCommands);
 	activateNodeCommandList = list_concat(activateNodeCommandList,
 										  createSnapshotCommands);
 	activateNodeCommandList = list_concat(activateNodeCommandList,
