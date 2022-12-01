@@ -41,15 +41,15 @@ jobs:
         # For this reason, we need to use a "matrix" to generate names of
         # rpm images, e.g. citus/packaging:centos-7-pg12
         packaging_docker_image:
-          - citus/packaging:oraclelinux-7-pg
-          - citus/packaging:oraclelinux-8-pg
-          - citus/packaging:centos-7-pg
-          - citus/packaging:centos-8-pg
-          - citus/packaging:almalinux-9-pg
+          - oraclelinux-7
+          - oraclelinux-8
+          - centos-7
+          - centos-8
+          - almalinux-9
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
 
     container:
-      image: ${{ matrix.packaging_docker_image }}${{ matrix.POSTGRES_VERSION }}
+      image: citus/packaging:${{ matrix.packaging_docker_image }}-pg${{ matrix.POSTGRES_VERSION }}
 
     steps:
       - name: Checkout repository
