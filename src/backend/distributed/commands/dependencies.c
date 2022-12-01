@@ -531,11 +531,16 @@ GetAllDependencyCreateDDLCommands(const List *dependencies)
  * previously marked objects to a worker node. The function also sets
  * clusterHasDistributedFunction if there are any distributed functions.
  */
-List *
-ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort)
+void
+ReplicateAllObjectsToNodes(List *connectionList, List **commandList)
 {
 	/* since we are executing ddl commands disable propagation first, primarily for mx */
-	List *ddlCommands = list_make1(DISABLE_DDL_PROPAGATION);
+	ExecuteRemoteCommandInConnectionList(connectionList, DISABLE_DDL_PROPAGATION);
+	if (commandList != NULL)
+	{
+		/* caller requested the commands */
+		*commandList = lappend(*commandList, DISABLE_DDL_PROPAGATION);
+	}
 
 	/*
 	 * collect all dependencies in creation order and get their ddl commands
@@ -556,10 +561,12 @@ ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort)
 	 * 100 items, where 100 is an arbitrarily chosen number. If we find it too high or too
 	 * low we can adjust this based on experience.
 	 */
-	if (list_length(dependencies) > 100)
+	if (list_length(dependencies) > 100 && list_length(connectionList))
 	{
-		ereport(NOTICE, (errmsg("Replicating postgres objects to node %s:%d", nodeName,
-								nodePort),
+		MultiConnection *connection = (MultiConnection *) linitial(connectionList);
+
+		ereport(NOTICE, (errmsg("Replicating postgres objects to node %s:%d",
+								connection->hostname, connection->port),
 						 errdetail("There are %d objects to replicate, depending on your "
 								   "environment this might take a while",
 								   list_length(dependencies))));
@@ -578,13 +585,26 @@ ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort)
 			continue;
 		}
 
-		ddlCommands = list_concat(ddlCommands,
-								  GetDependencyCreateDDLCommands(dependency));
+		List *commandsForDep = GetDependencyCreateDDLCommands(dependency);
+		char *command = NULL;
+		foreach_ptr(command, commandsForDep)
+		{
+			ExecuteRemoteCommandInConnectionList(connectionList, command);
+
+			if (commandList != NULL)
+			{
+				/* caller requested the commands */
+				*commandList = lappend(*commandList, command);
+			}
+		}
 	}
 
-	ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
-
-	return ddlCommands;
+	ExecuteRemoteCommandInConnectionList(connectionList, ENABLE_DDL_PROPAGATION);
+	if (commandList != NULL)
+	{
+		/* caller requested the commands */
+		*commandList = lappend(*commandList, ENABLE_DDL_PROPAGATION);
+	}
 }
 
 

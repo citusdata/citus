@@ -52,7 +52,8 @@ activate_node_snapshot(PG_FUNCTION_ARGS)
 	List *updateLocalGroupCommand =
 		list_make1(LocalGroupIdUpdateCommand(dummyWorkerNode->groupId));
 	List *dropMetadataCommandList = DropExistingMetadataCommandList();
-	List *syncDistObjCommands = SyncDistributedObjectsCommandList(dummyWorkerNode);
+	List *syncDistObjCommands = NIL;
+	SyncDistributedObjects(NIL, &syncDistObjCommands);
 	List *dropNodeSnapshotCommands = NodeMetadataDropCommands();
 	List *createSnapshotCommands = NodeMetadataCreateCommands();
 	List *pgDistTableMetadataSyncCommands = PgDistTableMetadataSyncCommandList();

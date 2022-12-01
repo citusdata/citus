@@ -103,10 +103,10 @@ static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void SyncDistributedObjectsToNodeList(List *workerNodeList);
 static void UpdateLocalGroupIdOnNode(WorkerNode *workerNode);
 static void SyncPgDistTableMetadataToNodeList(List *nodeList);
-static List * InterTableRelationshipCommandList();
+static void BuildInterTableRelationships(List *connectionList, List **commandList);
 static void BlockDistributedQueriesOnMetadataNodes(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
-static List * PropagateNodeWideObjectsCommandList();
+static void PropagateNodeWideObjects(List *connectionList, List **commandList);
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
 static bool NodeIsLocal(WorkerNode *worker);
 static void DropExistingMetadataInOutsideTransaction(List *nodeList);
@@ -653,12 +653,11 @@ master_set_node_property(PG_FUNCTION_ARGS)
  *
  * for each citus table.
  */
-static List *
-InterTableRelationshipCommandList()
+static void
+BuildInterTableRelationships(List *connectionList, List **commandList)
 {
 	List *distributedTableList = CitusTableList();
 	List *propagatedTableList = NIL;
-	List *multipleTableIntegrationCommandList = NIL;
 
 	CitusTableCacheEntry *cacheEntry = NULL;
 	foreach_ptr(cacheEntry, distributedTableList)
@@ -674,6 +673,8 @@ InterTableRelationshipCommandList()
 		}
 	}
 
+	ExecuteRemoteCommandInConnectionList(connectionList, DISABLE_DDL_PROPAGATION);
+
 	foreach_ptr(cacheEntry, propagatedTableList)
 	{
 		Oid relationId = cacheEntry->relationId;
@@ -681,17 +682,27 @@ InterTableRelationshipCommandList()
 		List *commandListForRelation =
 			InterTableRelationshipOfRelationCommandList(relationId);
 
-		multipleTableIntegrationCommandList = list_concat(
-			multipleTableIntegrationCommandList,
-			commandListForRelation);
+		char *command = NULL;
+		foreach_ptr(command, commandListForRelation)
+		{
+			ExecuteRemoteCommandInConnectionList(connectionList, command);
+
+			if (commandList != NULL)
+			{
+				/* caller requested the commands */
+				*commandList = lappend(*commandList, command);
+			}
+		}
 	}
 
-	multipleTableIntegrationCommandList = lcons(DISABLE_DDL_PROPAGATION,
-												multipleTableIntegrationCommandList);
-	multipleTableIntegrationCommandList = lappend(multipleTableIntegrationCommandList,
-												  ENABLE_DDL_PROPAGATION);
+	ExecuteRemoteCommandInConnectionList(connectionList, ENABLE_DDL_PROPAGATION);
 
-	return multipleTableIntegrationCommandList;
+	if (commandList != NULL)
+	{
+		/* caller requested the commands */
+		*commandList = lcons(DISABLE_DDL_PROPAGATION, *commandList);
+		*commandList = lappend(*commandList, ENABLE_DDL_PROPAGATION);
+	}
 }
 
 
@@ -745,16 +756,15 @@ PgDistTableMetadataSyncCommandList(void)
 
 
 /*
- * PropagateNodeWideObjectsCommandList is called during node activation to
- * propagate any object that should be propagated for every node. These are
- * generally not linked to any distributed object but change system wide behaviour.
+ * PropagateNodeWideObjects is called during node activation to
+ * propagate any object that should be propagated for every node.
+ *
+ * These are generally not linked to any distributed object but
+ * change system wide behaviour.
  */
-static List *
-PropagateNodeWideObjectsCommandList()
+static void
+PropagateNodeWideObjects(List *connectionList, List **commandList)
 {
-	/* collect all commands */
-	List *ddlCommands = NIL;
-
 	if (EnableAlterRoleSetPropagation)
 	{
 		/*
@@ -762,17 +772,26 @@ PropagateNodeWideObjectsCommandList()
 		 * linked to any role that can be distributed we need to distribute them seperately
 		 */
 		List *alterRoleSetCommands = GenerateAlterRoleSetCommandForRole(InvalidOid);
-		ddlCommands = list_concat(ddlCommands, alterRoleSetCommands);
-	}
 
-	if (list_length(ddlCommands) > 0)
-	{
-		/* if there are command wrap them in enable_ddl_propagation off */
-		ddlCommands = lcons(DISABLE_DDL_PROPAGATION, ddlCommands);
-		ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
-	}
+		if (alterRoleSetCommands != NIL)
+		{
+			char *command = NULL;
+			foreach_ptr(command, alterRoleSetCommands)
+			{
+				ExecuteRemoteCommandInConnectionList(connectionList, command);
+			}
 
-	return ddlCommands;
+			/* the caller is interested in collecting the commands */
+			if (commandList != NULL)
+			{
+				*commandList = list_concat(*commandList, alterRoleSetCommands);
+
+				/* if there are command wrap them in enable_ddl_propagation off */
+				*commandList = lcons(DISABLE_DDL_PROPAGATION, *commandList);
+				*commandList = lappend(*commandList, ENABLE_DDL_PROPAGATION);
+			}
+		}
+	}
 }
 
 
@@ -791,29 +810,40 @@ PropagateNodeWideObjectsCommandList()
  * We also update the local group id here, as handling sequence dependencies
  * requires it.
  */
-List *
-SyncDistributedObjectsCommandList(WorkerNode *workerNode)
+void
+SyncDistributedObjects(List *workerNodeList, List **commandList)
 {
-	List *commandList = NIL;
+	List *connectionList = NIL;
+
+	/* first, establish new connections */
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
+	{
+		int connectionFlags = FORCE_NEW_CONNECTION;
+
+		Assert(superuser());
+		MultiConnection *connection =
+			GetNodeUserDatabaseConnection(connectionFlags, workerNode->workerName,
+										  workerNode->workerPort, NULL, NULL);
+
+		connectionList = lappend(connectionList, connection);
+	}
 
 	/*
 	 * Propagate node wide objects. It includes only roles for now.
 	 */
-	commandList = list_concat(commandList, PropagateNodeWideObjectsCommandList());
+	PropagateNodeWideObjects(connectionList, commandList);
 
 	/*
 	 * Replicate all objects of the pg_dist_object to the remote node.
 	 */
-	commandList = list_concat(commandList, ReplicateAllObjectsToNodeCommandList(
-								  workerNode->workerName, workerNode->workerPort));
+	ReplicateAllObjectsToNodes(connectionList, commandList);
 
 	/*
 	 * After creating each table, handle the inter table relationship between
 	 * those tables.
 	 */
-	commandList = list_concat(commandList, InterTableRelationshipCommandList());
-
-	return commandList;
+	BuildInterTableRelationships(connectionList, commandList);
 }
 
 
@@ -838,14 +868,9 @@ SyncDistributedObjectsToNodeList(List *workerNodeList)
 
 	Assert(ShouldPropagate());
 
-	List *commandList = SyncDistributedObjectsCommandList(linitial(workerNodeList));
-
 	/* send commands to new workers, the current user should be a superuser */
 	Assert(superuser());
-	SendMetadataCommandListToWorkerListInCoordinatedTransaction(
-		workerNodeList,
-		CurrentUserName(),
-		commandList);
+	SyncDistributedObjects(workerNodeList, NULL);
 }
 
 
