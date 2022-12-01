@@ -71,7 +71,11 @@ SELECT count(*) FROM pg_catalog.worker_split_shard_replication_setup(ARRAY[
     ROW(1, 'id', 3, '0', '2147483647', :worker_2_node)::pg_catalog.split_shard_info
     ]);
 
-SELECT slot_name FROM pg_create_logical_replication_slot(FORMAT('citus_shard_split_slot_%s_10', :worker_2_node), 'citus') \gset
+-- we create replication slots with a name including the next_operation_id as a suffix
+-- if this test file fails, make sure you compare the next_operation_id output to the object name in the next command
+SHOW citus.next_operation_id;
+
+SELECT slot_name FROM pg_create_logical_replication_slot(FORMAT('citus_shard_split_slot_%s_10_0', :worker_2_node), 'citus') \gset
 
 -- Create subscription at worker2 with copy_data to 'false' and derived replication slot name
 \c - - - :worker_2_port
