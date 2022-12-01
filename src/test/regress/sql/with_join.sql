@@ -220,6 +220,16 @@ LIMIT
   5;
 
 
+-- full outer join should work between a reference table and a cte
+WITH cte AS (
+  SELECT max(user_id) AS max_user_id FROM users_table
+)
+SELECT user_id, time FROM
+  (SELECT r1.user_id AS user_id FROM cte FULL JOIN reference_table r1 ON (cte.max_user_id = r1.user_id)) AS foo
+  INNER JOIN users_table USING (user_id)
+ORDER BY 1,2;
+
+
 -- some more tests for more complex outer-joins
 -- with reference tables
 CREATE TABLE distributed_1 (col1 int, col2 int, distrib_col int);

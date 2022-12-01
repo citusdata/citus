@@ -1131,9 +1131,9 @@ step s2-blocking-shard-split:
   'block_writes');
  <waiting ...>
 step s1-run-cleaner: 
- SELECT run_try_drop_marked_shards();
+ SELECT run_try_drop_marked_resources();
 
-run_try_drop_marked_shards
+run_try_drop_marked_resources
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1162,9 +1162,9 @@ citus_split_shard_by_split_points
 (1 row)
 
 step s1-run-cleaner:
- SELECT run_try_drop_marked_shards();
+ SELECT run_try_drop_marked_resources();
 
-run_try_drop_marked_shards
+run_try_drop_marked_resources
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1199,9 +1199,9 @@ step s2-blocking-shard-split:
   'block_writes');
  <waiting ...>
 step s1-run-cleaner: 
- SELECT run_try_drop_marked_shards();
+ SELECT run_try_drop_marked_resources();
 
-run_try_drop_marked_shards
+run_try_drop_marked_resources
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1230,9 +1230,9 @@ citus_split_shard_by_split_points
 (1 row)
 
 step s1-run-cleaner:
- SELECT run_try_drop_marked_shards();
+ SELECT run_try_drop_marked_resources();
 
-run_try_drop_marked_shards
+run_try_drop_marked_resources
 ---------------------------------------------------------------------
 
 (1 row)

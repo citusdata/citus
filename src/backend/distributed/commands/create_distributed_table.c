@@ -61,6 +61,7 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/shard_rebalancer.h"
 #include "distributed/shard_split.h"
 #include "distributed/shard_transfer.h"
@@ -354,6 +355,8 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 		ereport(ERROR, (errmsg("cannot distribute a table concurrently when "
 							   "citus.shard_replication_factor > 1")));
 	}
+
+	DropOrphanedResourcesInSeparateTransaction();
 
 	EnsureCitusTableCanBeCreated(relationId);
 

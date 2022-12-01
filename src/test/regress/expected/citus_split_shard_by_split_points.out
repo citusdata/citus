@@ -234,7 +234,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 
 -- BEGIN: Perform deferred cleanup.
 CALL pg_catalog.citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 4 orphaned resources
+NOTICE:  cleaned up 3 orphaned resources
 -- END: Perform deferred cleanup.
 -- Perform 3 way split
 SELECT pg_catalog.citus_split_shard_by_split_points(

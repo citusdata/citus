@@ -52,7 +52,7 @@ static ShardCost GetShardCost(uint64 shardId, void *context);
 PG_FUNCTION_INFO_V1(shard_placement_rebalance_array);
 PG_FUNCTION_INFO_V1(shard_placement_replication_array);
 PG_FUNCTION_INFO_V1(worker_node_responsive);
-PG_FUNCTION_INFO_V1(run_try_drop_marked_shards);
+PG_FUNCTION_INFO_V1(run_try_drop_marked_resources);
 
 typedef struct ShardPlacementTestInfo
 {
@@ -75,13 +75,13 @@ typedef struct RebalancePlanContext
 } RebalancePlacementContext;
 
 /*
- * run_try_drop_marked_shards is a wrapper to run TryDropOrphanedShards.
+ * run_try_drop_marked_resources is a wrapper to run TryDropOrphanedResources.
  */
 Datum
-run_try_drop_marked_shards(PG_FUNCTION_ARGS)
+run_try_drop_marked_resources(PG_FUNCTION_ARGS)
 {
 	bool waitForLocks = false;
-	TryDropOrphanedShards(waitForLocks);
+	TryDropOrphanedResources(waitForLocks);
 	PG_RETURN_VOID();
 }
 
