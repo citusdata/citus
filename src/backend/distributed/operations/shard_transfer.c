@@ -553,7 +553,7 @@ CheckSpaceConstraints(MultiConnection *connection, uint64 colocationSizeInBytes)
 	{
 		ereport(ERROR, (errmsg("not enough empty space on node if the shard is moved, "
 							   "actual available space after move will be %ld bytes, "
-							   "desired available space after move is %ld bytes,"
+							   "desired available space after move is %ld bytes, "
 							   "estimated size increase on node after move is %ld bytes.",
 							   diskAvailableInBytesAfterShardMove,
 							   desiredNewDiskAvailableInBytes, colocationSizeInBytes),

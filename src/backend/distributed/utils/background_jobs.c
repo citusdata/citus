@@ -543,7 +543,7 @@ CheckAndResetLastWorkerAllocationFailure(
 			GetCurrentTimestamp(),
 			&secs, &microsecs);
 		ereport(LOG, (errmsg(
-						  "able to start a background worker with %ld seconds"
+						  "able to start a background worker with %ld seconds "
 						  "delay", secs)));
 
 		queueMonitorExecutionContext->backgroundWorkerFailedStartTime = 0;
