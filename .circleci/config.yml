@@ -167,8 +167,9 @@ jobs:
           name: 'Copy coredumps'
           command: |
             mkdir -p /tmp/core_dumps
-            if ls core.* 1> /dev/null 2>&1; then
-                cp core.* /tmp/core_dumps
+            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
+            if [ ${#core_files[@]} -gt 0 ]; then
+                cp "${core_files[@]}" /tmp/core_dumps
             fi
           when: on_fail
       - run:
@@ -258,8 +259,9 @@ jobs:
           name: 'Copy coredumps'
           command: |
             mkdir -p /tmp/core_dumps
-            if ls core.* 1> /dev/null 2>&1; then
-                cp core.* /tmp/core_dumps
+            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
+            if [ ${#core_files[@]} -gt 0 ]; then
+                cp "${core_files[@]}" /tmp/core_dumps
             fi
           when: on_fail
       - store_artifacts:
@@ -339,8 +341,9 @@ jobs:
           name: 'Copy coredumps'
           command: |
             mkdir -p /tmp/core_dumps
-            if ls core.* 1> /dev/null 2>&1; then
-                cp core.* /tmp/core_dumps
+            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
+            if [ ${#core_files[@]} -gt 0 ]; then
+                cp "${core_files[@]}" /tmp/core_dumps
             fi
           when: on_fail
       - store_artifacts:
@@ -405,8 +408,9 @@ jobs:
           name: 'Copy coredumps'
           command: |
             mkdir -p /tmp/core_dumps
-            if ls core.* 1> /dev/null 2>&1; then
-                cp core.* /tmp/core_dumps
+            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
+            if [ ${#core_files[@]} -gt 0 ]; then
+                cp "${core_files[@]}" /tmp/core_dumps
             fi
           when: on_fail
       - store_artifacts:
@@ -483,8 +487,9 @@ jobs:
           name: 'Copy coredumps'
           command: |
             mkdir -p /tmp/core_dumps
-            if ls core.* 1> /dev/null 2>&1; then
-                cp core.* /tmp/core_dumps
+            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
+            if [ ${#core_files[@]} -gt 0 ]; then
+                cp "${core_files[@]}" /tmp/core_dumps
             fi
           when: on_fail
       - store_artifacts:
@@ -600,8 +605,9 @@ jobs:
           name: 'Copy coredumps'
           command: |
             mkdir -p /tmp/core_dumps
-            if ls core.* 1> /dev/null 2>&1; then
-                cp core.* /tmp/core_dumps
+            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
+            if [ ${#core_files[@]} -gt 0 ]; then
+                cp "${core_files[@]}" /tmp/core_dumps
             fi
           when: on_fail
       - store_artifacts:
