@@ -517,22 +517,21 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 static char *
 CreateDropTableIfExistsCommand(Oid relationId)
 {
-	char *schemaName = get_namespace_name(get_rel_namespace(relationId));
-	char *relationName = get_rel_name(relationId);
-	const char *quotedRelName = quote_qualified_identifier(schemaName, relationName);
+	char *relationName = generate_qualified_relation_name(relationId);
+
 
 	StringInfo workerDropQuery = makeStringInfo();
 
-	appendStringInfo(workerDropQuery, "SELECT worker_drop_sequence_dependency('%s');",
-					 quotedRelName);
+	appendStringInfo(workerDropQuery, "SELECT worker_drop_sequence_dependency(%s);",
+					 quote_literal_cstr(relationName));
 
 	if (IsForeignTable(relationId))
 	{
-		appendStringInfo(workerDropQuery, DROP_FOREIGN_TABLE_COMMAND, quotedRelName);
+		appendStringInfo(workerDropQuery, DROP_FOREIGN_TABLE_COMMAND, relationName);
 	}
 	else
 	{
-		appendStringInfo(workerDropQuery, DROP_REGULAR_TABLE_COMMAND, quotedRelName);
+		appendStringInfo(workerDropQuery, DROP_REGULAR_TABLE_COMMAND, relationName);
 	}
 
 	appendStringInfoString(workerDropQuery, ";");
