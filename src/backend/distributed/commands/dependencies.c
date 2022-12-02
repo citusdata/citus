@@ -519,10 +519,13 @@ CreateDropTableIfExistsCommand(Oid relationId)
 {
 	char *schemaName = get_namespace_name(get_rel_namespace(relationId));
 	char *relationName = get_rel_name(relationId);
+	const char *quotedRelName = quote_qualified_identifier(schemaName, relationName);
 
 	StringInfo workerDropQuery = makeStringInfo();
 
-	const char *quotedRelName = quote_qualified_identifier(schemaName, relationName);
+	appendStringInfo(workerDropQuery, "SELECT worker_drop_sequence_dependency('%s');",
+					 quotedRelName);
+
 	if (IsForeignTable(relationId))
 	{
 		appendStringInfo(workerDropQuery, DROP_FOREIGN_TABLE_COMMAND, quotedRelName);
@@ -532,6 +535,7 @@ CreateDropTableIfExistsCommand(Oid relationId)
 		appendStringInfo(workerDropQuery, DROP_REGULAR_TABLE_COMMAND, quotedRelName);
 	}
 
+	appendStringInfoString(workerDropQuery, ";");
 
 	return workerDropQuery->data;
 }
