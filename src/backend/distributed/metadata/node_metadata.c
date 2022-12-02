@@ -101,7 +101,7 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetada
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void SyncDistributedObjectsToNodeList(List *workerNodeList);
-static void UpdateLocalGroupIdOnNode(WorkerNode *workerNode);
+//static void UpdateLocalGroupIdOnNode(WorkerNode *workerNode);
 static void SyncPgDistTableMetadataToNodeList(List *nodeList);
 static List * InterTableRelationshipCommandList();
 static void BlockDistributedQueriesOnMetadataNodes(void);
@@ -875,21 +875,21 @@ SyncDistributedObjectsToNodeList(List *workerNodeList)
 /*
  * UpdateLocalGroupIdOnNode updates local group id on node.
  */
-static void
-UpdateLocalGroupIdOnNode(WorkerNode *workerNode)
-{
-	if (NodeIsPrimary(workerNode) && !NodeIsCoordinator(workerNode))
-	{
-		List *commandList = list_make1(LocalGroupIdUpdateCommand(workerNode->groupId));
-
-		/* send commands to new workers, the current user should be a superuser */
-		Assert(superuser());
-		SendMetadataCommandListToWorkerListInCoordinatedTransaction(
-			list_make1(workerNode),
-			CurrentUserName(),
-			commandList);
-	}
-}
+//static void
+//UpdateLocalGroupIdOnNode(WorkerNode *workerNode)
+//{
+//	if (NodeIsPrimary(workerNode) && !NodeIsCoordinator(workerNode))
+//	{
+//		List *commandList = list_make1(LocalGroupIdUpdateCommand(workerNode->groupId));
+//
+//		/* send commands to new workers, the current user should be a superuser */
+//		Assert(superuser());
+//		SendMetadataCommandListToWorkerListInCoordinatedTransaction(
+//			list_make1(workerNode),
+//			CurrentUserName(),
+//			commandList);
+//	}
+//}
 
 
 /*
