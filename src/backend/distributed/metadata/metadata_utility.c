@@ -1947,6 +1947,44 @@ DeletePartitionRow(Oid distributedRelationId)
 }
 
 
+void
+DeleteShardgroupRow(uint32 shardgroupId)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOK = true;
+
+	Relation pgDistShardgroup = table_open(DistShardgroupRelationId(), RowExclusiveLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistShardgroup,
+													DistShardShardidIndexId(), indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for shard "
+				UINT64_FORMAT, shardId)));
+	}
+
+	Form_pg_dist_shard pgDistShardForm = (Form_pg_dist_shard) GETSTRUCT(heapTuple);
+	Oid distributedRelationId = pgDistShardForm->logicalrelid;
+
+	simple_heap_delete(pgDistShardgroup, &heapTuple->t_self);
+
+	systable_endscan(scanDescriptor);
+
+	/* invalidate previous cache entry */
+	CitusInvalidateRelcacheByRelid(distributedRelationId);
+
+	CommandCounterIncrement();
+	table_close(pgDistShardgroup, NoLock);
+}
+
+
 /*
  * DeleteShardRow opens the shard system catalog, finds the unique row that has
  * the given shardId, and deletes this row.

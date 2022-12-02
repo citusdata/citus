@@ -184,7 +184,13 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 		candidateNodeIndex++;
 	}
 
-	InsertShardRow(relationId, shardId, storageType, nullMinValue, nullMaxValue, NULL);
+	CitusTableCacheEntry *tableEntry = LookupCitusTableCacheEntry(relationId);
+
+	uint64 shardgroupId = shardId;
+	InsertShardGroupRow(shardgroupId, tableEntry->colocationId,
+						nullMinValue, nullMaxValue);
+
+	InsertShardRow(relationId, shardId, storageType, nullMinValue, nullMaxValue, &shardgroupId);
 
 	CreateAppendDistributedShardPlacements(relationId, shardId, candidateNodeList,
 										   ShardReplicationFactor);

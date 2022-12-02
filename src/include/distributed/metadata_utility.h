@@ -71,6 +71,15 @@ typedef struct ShardInterval
 } ShardInterval;
 
 
+typedef struct Shardgroup
+{
+	uint64 shardgroupId;
+	uint32 colocationId;
+	Datum minShardValue; /* a shard's typed min value datum */
+	Datum maxShardValue; /* a shard's typed max value datum */
+} Shardgroup;
+
+
 /* In-memory representation of a tuple in pg_dist_placement. */
 typedef struct GroupShardPlacement
 {
@@ -323,6 +332,7 @@ extern void UpdateDistributionColumnGlobally(Oid relationId, char distributionMe
 extern void UpdateDistributionColumn(Oid relationId, char distributionMethod,
 									 Var *distributionColumn, int colocationId);
 extern void DeletePartitionRow(Oid distributedRelationId);
+extern void DeleteShardgroupRow(uint32 shardgroupId);
 extern void DeleteShardRow(uint64 shardId);
 extern void UpdatePlacementGroupId(uint64 placementId, int groupId);
 extern void DeleteShardPlacementRow(uint64 placementId);

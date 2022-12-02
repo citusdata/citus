@@ -147,21 +147,29 @@ SELECT master_create_empty_shard('events') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = '(1,1)', shardmaxvalue = '(1,2000000000)'
 WHERE shardid = :new_shard_id;
+UPDATE pg_dist_shardgroup SET shardminvalue = '(1,1)', shardmaxvalue = '(1,2000000000)'
+WHERE shardgroupid = (SELECT shardgroupid FROM pg_dist_shard WHERE shardid = :new_shard_id);
 
 SELECT master_create_empty_shard('events') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = '(1,2000000001)', shardmaxvalue = '(1,4300000000)'
 WHERE shardid = :new_shard_id;
+UPDATE pg_dist_shardgroup SET shardminvalue = '(1,2000000001)', shardmaxvalue = '(1,4300000000)'
+WHERE shardgroupid = (SELECT shardgroupid FROM pg_dist_shard WHERE shardid = :new_shard_id);
 
 SELECT master_create_empty_shard('events') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = '(2,1)', shardmaxvalue = '(2,2000000000)'
 WHERE shardid = :new_shard_id;
+UPDATE pg_dist_shardgroup SET shardminvalue = '(2,1)', shardmaxvalue = '(2,2000000000)'
+WHERE shardgroupid = (SELECT shardgroupid FROM pg_dist_shard WHERE shardid = :new_shard_id);
 
 SELECT master_create_empty_shard('events') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = '(2,2000000001)', shardmaxvalue = '(2,4300000000)'
 WHERE shardid = :new_shard_id;
+UPDATE pg_dist_shardgroup SET shardminvalue = '(2,2000000001)', shardmaxvalue = '(2,4300000000)'
+WHERE shardgroupid = (SELECT shardgroupid FROM pg_dist_shard WHERE shardid = :new_shard_id);
 
 COPY events FROM STDIN WITH CSV;
 "(1,1001)",20001,click,1472807012
@@ -191,21 +199,29 @@ SELECT master_create_empty_shard('users') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = '(1,1)', shardmaxvalue = '(1,2000000000)'
 WHERE shardid = :new_shard_id;
+UPDATE pg_dist_shardgroup SET shardminvalue = '(1,1)', shardmaxvalue = '(1,2000000000)'
+WHERE shardgroupid = (SELECT shardgroupid FROM pg_dist_shard WHERE shardid = :new_shard_id);
 
 SELECT master_create_empty_shard('users') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = '(1,2000000001)', shardmaxvalue = '(1,4300000000)'
 WHERE shardid = :new_shard_id;
+UPDATE pg_dist_shardgroup SET shardminvalue = '(1,2000000001)', shardmaxvalue = '(1,4300000000)'
+WHERE shardgroupid = (SELECT shardgroupid FROM pg_dist_shard WHERE shardid = :new_shard_id);
 
 SELECT master_create_empty_shard('users') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = '(2,1)', shardmaxvalue = '(2,2000000000)'
 WHERE shardid = :new_shard_id;
+UPDATE pg_dist_shardgroup SET shardminvalue = '(2,1)', shardmaxvalue = '(2,2000000000)'
+WHERE shardgroupid = (SELECT shardgroupid FROM pg_dist_shard WHERE shardid = :new_shard_id);
 
 SELECT master_create_empty_shard('users') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = '(2,2000000001)', shardmaxvalue = '(2,4300000000)'
 WHERE shardid = :new_shard_id;
+UPDATE pg_dist_shardgroup SET shardminvalue = '(2,2000000001)', shardmaxvalue = '(2,4300000000)'
+WHERE shardgroupid = (SELECT shardgroupid FROM pg_dist_shard WHERE shardid = :new_shard_id);
 
 COPY users FROM STDIN WITH CSV;
 "(1,1001)",1472807115
@@ -274,21 +290,29 @@ SELECT master_create_empty_shard('lineitem_subquery') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue = 5986
 WHERE shardid = :new_shard_id;
+UPDATE pg_dist_shardgroup SET shardminvalue = 1, shardmaxvalue = 5986
+WHERE shardgroupid = (SELECT shardgroupid FROM pg_dist_shard WHERE shardid = :new_shard_id);
 
 SELECT master_create_empty_shard('lineitem_subquery') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = 8997, shardmaxvalue = 14947
 WHERE shardid = :new_shard_id;
+UPDATE pg_dist_shardgroup SET shardminvalue = 8997, shardmaxvalue = 14947
+WHERE shardgroupid = (SELECT shardgroupid FROM pg_dist_shard WHERE shardid = :new_shard_id);
 
 SELECT master_create_empty_shard('orders_subquery') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue = 5986
 WHERE shardid = :new_shard_id;
+UPDATE pg_dist_shardgroup SET shardminvalue = 1, shardmaxvalue = 5986
+WHERE shardgroupid = (SELECT shardgroupid FROM pg_dist_shard WHERE shardid = :new_shard_id);
 
 SELECT master_create_empty_shard('orders_subquery') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = 8997, shardmaxvalue = 14947
 WHERE shardid = :new_shard_id;
+UPDATE pg_dist_shardgroup SET shardminvalue = 8997, shardmaxvalue = 14947
+WHERE shardgroupid = (SELECT shardgroupid FROM pg_dist_shard WHERE shardid = :new_shard_id);
 
 \set lineitem_1_data_file :abs_srcdir '/data/lineitem.1.data'
 \set client_side_copy_command '\\copy lineitem_subquery FROM ' :'lineitem_1_data_file' ' with delimiter '''|''';'
