@@ -168,6 +168,7 @@ jobs:
           command: |
             lcov --directory . --capture --output-file lcov.info
             codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$CIRCLE_JOB.json lcov.info
+            sed "s/^SF:$PWD//g" -i codeclimate/$CIRCLE_JOB.json
       - run:
           name: 'Copy coredumps'
           command: |
@@ -263,6 +264,7 @@ jobs:
           command: |
             lcov --directory . --capture --output-file lcov.info
             codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$CIRCLE_JOB.json lcov.info
+            sed "s/^SF:$PWD//g" -i codeclimate/$CIRCLE_JOB.json
       - run:
           name: 'Copy logfiles'
           command: |
@@ -360,6 +362,7 @@ jobs:
           command: |
             lcov --directory . --capture --output-file lcov.info
             codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$CIRCLE_JOB.json lcov.info
+            sed "s/^SF:$PWD//g" -i codeclimate/$CIRCLE_JOB.json
       - run:
           name: 'Copy coredumps'
           command: |
@@ -428,6 +431,7 @@ jobs:
           command: |
             lcov --directory . --capture --output-file lcov.info
             codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$CIRCLE_JOB.json lcov.info
+            sed "s/^SF:$PWD//g" -i codeclimate/$CIRCLE_JOB.json
       - run:
           name: 'Regressions'
           command: |
@@ -524,6 +528,7 @@ jobs:
           command: |
             lcov --directory . --capture --output-file lcov.info
             codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$CIRCLE_JOB.json lcov.info
+            sed "s/^SF:$PWD//g" -i codeclimate/$CIRCLE_JOB.json
       - run:
           name: 'Copy coredumps'
           command: |
