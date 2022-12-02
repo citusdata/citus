@@ -861,10 +861,8 @@ SyncDistributedObjectsToNodeList(List *workerNodeList)
 
 	/* send commands to new workers, the current user should be a superuser */
 	Assert(superuser());
-	SendMetadataCommandListToWorkerListInCoordinatedTransaction(
-		workerNodesToSync,
-		CurrentUserName(),
-		commandList);
+	SendBareCommandListToWorkers(workerNodesToSync,
+								 commandList);
 }
 
 

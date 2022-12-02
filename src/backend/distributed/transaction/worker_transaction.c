@@ -182,10 +182,16 @@ SendBareCommandListToMetadataWorkers(List *commandList)
 {
 	TargetWorkerSet targetWorkerSet = NON_COORDINATOR_METADATA_NODES;
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, RowShareLock);
-	char *nodeUser = CurrentUserName();
 
 	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
 
+	SendBareCommandListToWorkers(workerNodeList, commandList);
+}
+
+
+void
+SendBareCommandListToWorkers(List *workerNodeList, List *commandList)
+{
 	/* run commands serially */
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
@@ -197,7 +203,8 @@ SendBareCommandListToMetadataWorkers(List *commandList)
 		MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
 																		  nodeName,
 																		  nodePort,
-																		  nodeUser, NULL);
+																		  CurrentUserName(),
+																		  NULL);
 
 		/* iterate over the commands and execute them in the same connection */
 		const char *commandString = NULL;
