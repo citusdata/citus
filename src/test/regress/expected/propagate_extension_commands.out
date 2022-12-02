@@ -210,14 +210,13 @@ SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extnam
 
 -- adding the second node will fail as the text search template needs to be created manually
 SELECT 1 from master_add_node('localhost', :worker_2_port);
-WARNING:  text search template "public.intdict_template" does not exist
+ERROR:  text search template "public.intdict_template" does not exist
 CONTEXT:  while executing command on localhost:xxxxx
-ERROR:  failure on connection marked as essential: localhost:xxxxx
 -- create the text search template manually on the worker
 \c - - - :worker_2_port
 SET citus.enable_metadata_sync TO false;
-CREATE FUNCTION dintdict_init(internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
-CREATE FUNCTION dintdict_lexize(internal, internal, internal, internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
+CREATE OR REPLACE FUNCTION dintdict_init(internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
+CREATE OR REPLACE FUNCTION dintdict_lexize(internal, internal, internal, internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
 CREATE TEXT SEARCH TEMPLATE intdict_template (LEXIZE = dintdict_lexize, INIT   = dintdict_init );
 RESET citus.enable_metadata_sync;
 \c - - - :master_port

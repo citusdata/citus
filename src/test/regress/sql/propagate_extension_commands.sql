@@ -132,8 +132,8 @@ SELECT 1 from master_add_node('localhost', :worker_2_port);
 -- create the text search template manually on the worker
 \c - - - :worker_2_port
 SET citus.enable_metadata_sync TO false;
-CREATE FUNCTION dintdict_init(internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
-CREATE FUNCTION dintdict_lexize(internal, internal, internal, internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
+CREATE OR REPLACE FUNCTION dintdict_init(internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
+CREATE OR REPLACE FUNCTION dintdict_lexize(internal, internal, internal, internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
 CREATE TEXT SEARCH TEMPLATE intdict_template (LEXIZE = dintdict_lexize, INIT   = dintdict_init );
 RESET citus.enable_metadata_sync;
 
