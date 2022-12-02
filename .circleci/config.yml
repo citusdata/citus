@@ -167,7 +167,7 @@ jobs:
           name: 'Create codeclimate coverage'
           command: |
             lcov --directory . --capture --output-file lcov.info
-            codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$(openssl rand -hex 30).json lcov.info
+            codeclimate/test-reporter format-coverage -t lcov -o codeclimate/<< parameters.name >>.json lcov.info
       - run:
           name: 'Copy coredumps'
           command: |
@@ -198,7 +198,7 @@ jobs:
       - persist_to_workspace:
           root: .
           paths:
-            - codeclimate/*.json
+            - codeclimate/<< parameters.name >>.json
 
   test-arbitrary-configs:
     description: Runs tests on arbitrary configs
@@ -261,7 +261,7 @@ jobs:
           name: 'Create codeclimate coverage'
           command: |
             lcov --directory . --capture --output-file lcov.info
-            codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$(openssl rand -hex 30).json lcov.info
+            codeclimate/test-reporter format-coverage -t lcov -o codeclimate/<< parameters.name >>.json lcov.info
       - run:
           name: 'Copy logfiles'
           command: |
@@ -287,7 +287,7 @@ jobs:
       - persist_to_workspace:
           root: .
           paths:
-            - codeclimate/*.json
+            - codeclimate/<< parameters.name >>.json
 
   test-citus-upgrade:
     description: Runs citus upgrade tests
@@ -357,7 +357,7 @@ jobs:
           name: 'Create codeclimate coverage'
           command: |
             lcov --directory . --capture --output-file lcov.info
-            codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$(openssl rand -hex 30).json lcov.info
+            codeclimate/test-reporter format-coverage -t lcov -o codeclimate/<< parameters.name >>.json lcov.info
       - run:
           name: 'Copy coredumps'
           command: |
@@ -377,7 +377,7 @@ jobs:
       - persist_to_workspace:
           root: .
           paths:
-            - codeclimate/*.json
+            - codeclimate/<< parameters.name >>.json
 
   test-citus:
     description: Runs the common tests of citus
@@ -424,7 +424,7 @@ jobs:
           name: 'Create codeclimate coverage'
           command: |
             lcov --directory . --capture --output-file lcov.info
-            codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$(openssl rand -hex 30).json lcov.info
+            codeclimate/test-reporter format-coverage -t lcov -o codeclimate/<< parameters.name >>.json lcov.info
       - run:
           name: 'Regressions'
           command: |
@@ -468,7 +468,7 @@ jobs:
       - persist_to_workspace:
           root: .
           paths:
-            - codeclimate/*.json
+            - codeclimate/<< parameters.name >>.json
 
   tap-test-citus:
     description: Runs tap tests for citus
@@ -519,7 +519,7 @@ jobs:
           name: 'Create codeclimate coverage'
           command: |
             lcov --directory . --capture --output-file lcov.info
-            codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$(openssl rand -hex 30).json lcov.info
+            codeclimate/test-reporter format-coverage -t lcov -o codeclimate/<< parameters.name >>.json lcov.info
       - run:
           name: 'Copy coredumps'
           command: |
@@ -540,7 +540,7 @@ jobs:
       - persist_to_workspace:
           root: .
           paths:
-            - codeclimate/*.json
+            - codeclimate/<< parameters.name >>.json
 
   check-merge-to-enterprise:
     docker:
