@@ -1188,17 +1188,17 @@ ActivateNodeList(List *nodeList)
 		if (syncMetadata)
 		{
 			/*
+			 * Update local group id first, as object dependency logic requires to have
+			 * updated local group id.
+			 */
+			UpdateLocalGroupIdOnNode(workerNode);
+
+			/*
 			 * We are going to sync the metadata anyway in this transaction, so do
 			 * not fail just because the current metadata is not synced.
 			 */
 			SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
 							BoolGetDatum(true));
-
-			/*
-			 * Update local group id first, as object dependency logic requires to have
-			 * updated local group id.
-			 */
-			UpdateLocalGroupIdOnNode(workerNode);
 
 			nodeToSyncMetadata = lappend(nodeToSyncMetadata, workerNode);
 		}
