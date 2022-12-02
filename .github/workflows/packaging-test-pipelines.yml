@@ -1,4 +1,4 @@
-name: Build tests in packaging images
+name: ZBuild tests in packaging images
 
 on:
   push:
