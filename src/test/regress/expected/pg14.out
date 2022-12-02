@@ -1472,7 +1472,7 @@ BEGIN;
 SET LOCAL citus.log_remote_commands TO ON;
 SET LOCAL citus.grep_remote_commands = '%CREATE SUBSCRIPTION%';
 SELECT citus_move_shard_placement(980042, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode := 'force_logical');
-NOTICE:  issuing CREATE SUBSCRIPTION citus_shard_move_subscription_xxxxxxx_2 CONNECTION 'host=''localhost'' port=xxxxx user=''postgres'' dbname=''regression'' connect_timeout=20' PUBLICATION citus_shard_move_publication_xxxxxxx_xxxxxxx_2 WITH (citus_use_authinfo=true, create_slot=false, copy_data=false, enabled=false, slot_name=citus_shard_move_slot_xxxxxxx_xxxxxxx_2, binary=true)
+NOTICE:  issuing CREATE SUBSCRIPTION citus_shard_move_subscription_xxxxxxx_xxxxxxx CONNECTION 'host=''localhost'' port=xxxxx user=''postgres'' dbname=''regression'' connect_timeout=20' PUBLICATION citus_shard_move_publication_xxxxxxx_xxxxxxx_xxxxxxx WITH (citus_use_authinfo=true, create_slot=false, copy_data=false, enabled=false, slot_name=citus_shard_move_slot_xxxxxxx_xxxxxxx_xxxxxxx, binary=true)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  citus_move_shard_placement
 ---------------------------------------------------------------------
@@ -1487,7 +1487,7 @@ SET LOCAL citus.log_remote_commands TO ON;
 SET LOCAL citus.grep_remote_commands = '%CREATE SUBSCRIPTION%';
 SET LOCAL citus.enable_binary_protocol = FALSE;
 SELECT citus_move_shard_placement(980042, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode := 'force_logical');
-NOTICE:  issuing CREATE SUBSCRIPTION citus_shard_move_subscription_xxxxxxx_3 CONNECTION 'host=''localhost'' port=xxxxx user=''postgres'' dbname=''regression'' connect_timeout=20' PUBLICATION citus_shard_move_publication_xxxxxxx_xxxxxxx_3 WITH (citus_use_authinfo=true, create_slot=false, copy_data=false, enabled=false, slot_name=citus_shard_move_slot_xxxxxxx_xxxxxxx_3)
+NOTICE:  issuing CREATE SUBSCRIPTION citus_shard_move_subscription_xxxxxxx_xxxxxxx CONNECTION 'host=''localhost'' port=xxxxx user=''postgres'' dbname=''regression'' connect_timeout=20' PUBLICATION citus_shard_move_publication_xxxxxxx_xxxxxxx_xxxxxxx WITH (citus_use_authinfo=true, create_slot=false, copy_data=false, enabled=false, slot_name=citus_shard_move_slot_xxxxxxx_xxxxxxx_xxxxxxx)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  citus_move_shard_placement
 ---------------------------------------------------------------------

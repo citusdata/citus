@@ -127,7 +127,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  role "citus_shard_move_subscription_role_10_4" cannot be dropped because some objects depend on it
-DETAIL:  owner of subscription citus_shard_move_subscription_xxxxxxx_4
+DETAIL:  owner of subscription citus_shard_move_subscription_xxxxxxx_xxxxxxx
 CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
@@ -203,7 +203,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  role "citus_shard_move_subscription_role_10_10" cannot be dropped because some objects depend on it
-DETAIL:  owner of subscription citus_shard_move_subscription_xxxxxxx_10
+DETAIL:  owner of subscription citus_shard_move_subscription_xxxxxxx_xxxxxxx
 CONTEXT:  while executing command on localhost:xxxxx
  master_move_shard_placement
 ---------------------------------------------------------------------
@@ -316,7 +316,7 @@ SELECT citus.mitmproxy('conn.allow()');
 (1 row)
 
 -- first, manually drop the subscsription object. But the record for it will remain on pg_dist_cleanup
-SELECT run_command_on_workers($$DROP SUBSCRIPTION IF EXISTS citus_shard_move_subscription_xxxxxxx$$);
+SELECT run_command_on_workers($$DROP SUBSCRIPTION IF EXISTS citus_shard_move_subscription_10$$);
          run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,9060,t,"DROP SUBSCRIPTION")
