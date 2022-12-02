@@ -15,6 +15,7 @@
 #include "distributed/distribution_column.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/shard_utils.h"
 #include "distributed/shardsplit_shared_memory.h"
 #include "distributed/connection_management.h"
@@ -40,14 +41,16 @@ static void ParseShardSplitInfoFromDatum(Datum shardSplitInfoDatum,
 										 uint64 *childShardId,
 										 int32 *minValue,
 										 int32 *maxValue,
-										 int32 *nodeId);
+										 int32 *nodeId,
+										 OperationId *operationId);
 
 static ShardSplitInfo * CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 											 char *partitionColumnName,
 											 uint64 desSplitChildShardId,
 											 int32 minValue,
 											 int32 maxValue,
-											 int32 nodeId);
+											 int32 nodeId,
+											 OperationId operationId);
 static void AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo);
 static void PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader);
 
@@ -79,6 +82,8 @@ static void ReturnReplicationSlotInfo(Tuplestorestate *tupleStore,
  *
  * node_id         - Node where the childShardId is located
  *
+ * operation_id	   - Id of the split operation
+ *
  * The function parses the data and builds routing map with key for each distinct
  * <nodeId, tableOwner> pair. Multiple shards can be placed on the same destination node.
  * Source and destination nodes can be same too.
@@ -105,7 +110,7 @@ worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
 	}
 
 	/* SetupMap */
-	ShardInfoHashMap = CreateSimpleHash(NodeAndOwner, GroupedShardSplitInfos);
+	ShardInfoHashMap = CreateSimpleHash(ReplicationSlotKey, GroupedShardSplitInfos);
 
 	int shardSplitInfoCount = 0;
 
@@ -121,10 +126,11 @@ worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
 		int32 minValue = 0;
 		int32 maxValue = 0;
 		int32 nodeId = 0;
+		OperationId operationId = INVALID_OPERATION_ID;
 
 		ParseShardSplitInfoFromDatum(shardInfoDatum, &sourceShardId,
 									 &partitionColumnName, &childShardId,
-									 &minValue, &maxValue, &nodeId);
+									 &minValue, &maxValue, &nodeId, &operationId);
 
 		ShardSplitInfo *shardSplitInfo = CreateShardSplitInfo(
 			sourceShardId,
@@ -132,7 +138,8 @@ worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
 			childShardId,
 			minValue,
 			maxValue,
-			nodeId);
+			nodeId,
+			operationId);
 
 		AddShardSplitInfoEntryForNodeInMap(shardSplitInfo);
 		shardSplitInfoCount++;
@@ -173,7 +180,8 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 					 uint64 desSplitChildShardId,
 					 int32 minValue,
 					 int32 maxValue,
-					 int32 nodeId)
+					 int32 nodeId,
+					 OperationId operationId)
 {
 	ShardInterval *shardIntervalToSplit = LoadShardInterval(sourceShardIdToSplit);
 
@@ -232,6 +240,7 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 	shardSplitInfo->nodeId = nodeId;
 	shardSplitInfo->sourceShardId = sourceShardIdToSplit;
 	shardSplitInfo->splitChildShardId = desSplitChildShardId;
+	shardSplitInfo->operationId = operationId;
 
 	return shardSplitInfo;
 }
@@ -244,9 +253,10 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 static void
 AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo)
 {
-	NodeAndOwner key;
+	ReplicationSlotKey key;
 	key.nodeId = shardSplitInfo->nodeId;
 	key.tableOwnerId = TableOwnerOid(shardSplitInfo->distributedTableOid);
+	key.operationId = shardSplitInfo->operationId;
 
 	bool found = false;
 	GroupedShardSplitInfos *groupedInfos =
@@ -281,8 +291,11 @@ PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader)
 	{
 		uint32_t nodeId = entry->key.nodeId;
 		uint32_t tableOwnerId = entry->key.tableOwnerId;
-		char *derivedSlotName = ReplicationSlotNameForNodeAndOwner(SHARD_SPLIT, nodeId,
-																   tableOwnerId);
+		char *derivedSlotName =
+			ReplicationSlotNameForNodeAndOwnerForOperation(SHARD_SPLIT,
+														   nodeId,
+														   tableOwnerId,
+														   entry->key.operationId);
 
 		List *shardSplitInfoList = entry->shardSplitInfoList;
 		ShardSplitInfo *splitShardInfo = NULL;
@@ -309,7 +322,8 @@ ParseShardSplitInfoFromDatum(Datum shardSplitInfoDatum,
 							 uint64 *childShardId,
 							 int32 *minValue,
 							 int32 *maxValue,
-							 int32 *nodeId)
+							 int32 *nodeId,
+							 OperationId *operationId)
 {
 	HeapTupleHeader dataTuple = DatumGetHeapTupleHeader(shardSplitInfoDatum);
 	bool isnull = false;
@@ -360,6 +374,13 @@ ParseShardSplitInfoFromDatum(Datum shardSplitInfoDatum,
 	}
 
 	*nodeId = DatumGetInt32(nodeIdDatum);
+
+	Datum operationIdDatum = GetAttributeByName(dataTuple, "operation_id", &isnull);
+	if (isnull)
+	{
+		ereport(ERROR, (errmsg("operation_id for split_shard_info can't be null")));
+	}
+	*operationId = DatumGetUInt64(operationIdDatum);
 }
 
 
@@ -379,8 +400,8 @@ ReturnReplicationSlotInfo(Tuplestorestate *tupleStore, TupleDesc
 	GroupedShardSplitInfos *entry = NULL;
 	while ((entry = (GroupedShardSplitInfos *) hash_seq_search(&status)) != NULL)
 	{
-		Datum values[3];
-		bool nulls[3];
+		Datum values[4];
+		bool nulls[4];
 
 		memset(values, 0, sizeof(values));
 		memset(nulls, false, sizeof(nulls));
@@ -390,10 +411,15 @@ ReturnReplicationSlotInfo(Tuplestorestate *tupleStore, TupleDesc
 		char *tableOwnerName = GetUserNameFromId(entry->key.tableOwnerId, false);
 		values[1] = CStringGetTextDatum(tableOwnerName);
 
-		char *slotName = ReplicationSlotNameForNodeAndOwner(SHARD_SPLIT,
-															entry->key.nodeId,
-															entry->key.tableOwnerId);
-		values[2] = CStringGetTextDatum(slotName);
+		OperationId operationId = UInt64GetDatum(entry->key.operationId);
+		values[2] = operationId;
+
+		char *slotName =
+			ReplicationSlotNameForNodeAndOwnerForOperation(SHARD_SPLIT,
+														   entry->key.nodeId,
+														   entry->key.tableOwnerId,
+														   entry->key.operationId);
+		values[3] = CStringGetTextDatum(slotName);
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, nulls);
 	}

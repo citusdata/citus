@@ -273,7 +273,7 @@ CONTEXT:  while executing command on localhost:xxxxx
           777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
           777 |           4 | citus_shard_split_publication_xxxxxxx_xxxxxxx_777                    |             2 |           0
           777 |           4 | citus_shard_split_publication_xxxxxxx_xxxxxxx_777                    |             2 |           0
-          777 |           3 | citus_shard_split_slot_xxxxxxx_xxxxxxx_0                             |             2 |           0
+          777 |           3 | citus_shard_split_slot_xxxxxxx_xxxxxxx_777                           |             2 |           0
 (5 rows)
 
     -- we need to allow connection so that we can connect to proxy
@@ -385,8 +385,8 @@ CONTEXT:  while executing command on localhost:xxxxx
           777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
           777 |           4 | citus_shard_split_publication_xxxxxxx_xxxxxxx_777                    |             2 |           0
           777 |           4 | citus_shard_split_publication_xxxxxxx_xxxxxxx_777                    |             2 |           0
-          777 |           3 | citus_shard_split_slot_xxxxxxx_xxxxxxx_0                             |             2 |           0
-          777 |           3 | citus_shard_split_slot_xxxxxxx_xxxxxxx_0                             |             2 |           0
+          777 |           3 | citus_shard_split_slot_xxxxxxx_xxxxxxx_777                           |             2 |           0
+          777 |           3 | citus_shard_split_slot_xxxxxxx_xxxxxxx_777                           |             2 |           0
           777 |           2 | citus_shard_split_subscription_xxxxxxx_777                     |             2 |           0
           777 |           5 | citus_shard_split_subscription_role_10_777                |             2 |           0
 (8 rows)
@@ -420,10 +420,10 @@ CONTEXT:  while executing command on localhost:xxxxx
 
     -- Left over replication slots
     SELECT slot_name FROM pg_replication_slots;
-           slot_name
+            slot_name
 ---------------------------------------------------------------------
- citus_shard_split_slot_xxxxxxx_xxxxxxx_0
- citus_shard_split_slot_xxxxxxx_xxxxxxx_0
+ citus_shard_split_slot_xxxxxxx_xxxxxxx_777
+ citus_shard_split_slot_xxxxxxx_xxxxxxx_777
 (2 rows)
 
     -- Left over subscriptions
@@ -503,8 +503,8 @@ CONTEXT:  while executing command on localhost:xxxxx
           777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
           777 |           4 | citus_shard_split_publication_xxxxxxx_xxxxxxx_777                    |             2 |           0
           777 |           4 | citus_shard_split_publication_xxxxxxx_xxxxxxx_777                    |             2 |           0
-          777 |           3 | citus_shard_split_slot_xxxxxxx_xxxxxxx_0                             |             2 |           0
-          777 |           3 | citus_shard_split_slot_xxxxxxx_xxxxxxx_0                             |             2 |           0
+          777 |           3 | citus_shard_split_slot_xxxxxxx_xxxxxxx_777                           |             2 |           0
+          777 |           3 | citus_shard_split_slot_xxxxxxx_xxxxxxx_777                           |             2 |           0
           777 |           2 | citus_shard_split_subscription_xxxxxxx_777                     |             2 |           0
           777 |           5 | citus_shard_split_subscription_role_10_777                |             2 |           0
 (8 rows)
@@ -538,10 +538,10 @@ CONTEXT:  while executing command on localhost:xxxxx
 
     -- Left over replication slots
     SELECT slot_name FROM pg_replication_slots;
-           slot_name
+            slot_name
 ---------------------------------------------------------------------
- citus_shard_split_slot_xxxxxxx_xxxxxxx_0
- citus_shard_split_slot_xxxxxxx_xxxxxxx_0
+ citus_shard_split_slot_xxxxxxx_xxxxxxx_777
+ citus_shard_split_slot_xxxxxxx_xxxxxxx_777
 (2 rows)
 
     -- Left over subscriptions
@@ -622,8 +622,8 @@ CONTEXT:  while executing command on localhost:xxxxx
           777 |           1 | citus_failure_split_cleanup_schema.table_to_split_8981003 |             2 |           1
           777 |           4 | citus_shard_split_publication_xxxxxxx_xxxxxxx_777                    |             2 |           0
           777 |           4 | citus_shard_split_publication_xxxxxxx_xxxxxxx_777                    |             2 |           0
-          777 |           3 | citus_shard_split_slot_xxxxxxx_xxxxxxx_0                             |             2 |           0
-          777 |           3 | citus_shard_split_slot_xxxxxxx_xxxxxxx_0                             |             2 |           0
+          777 |           3 | citus_shard_split_slot_xxxxxxx_xxxxxxx_777                           |             2 |           0
+          777 |           3 | citus_shard_split_slot_xxxxxxx_xxxxxxx_777                           |             2 |           0
           777 |           2 | citus_shard_split_subscription_xxxxxxx_777                     |             2 |           0
           777 |           5 | citus_shard_split_subscription_role_10_777                |             2 |           0
 (8 rows)
@@ -661,10 +661,10 @@ CONTEXT:  while executing command on localhost:xxxxx
 
     -- Left over replication slots
     SELECT slot_name FROM pg_replication_slots;
-           slot_name
+            slot_name
 ---------------------------------------------------------------------
- citus_shard_split_slot_xxxxxxx_xxxxxxx_0
- citus_shard_split_slot_xxxxxxx_xxxxxxx_0
+ citus_shard_split_slot_xxxxxxx_xxxxxxx_777
+ citus_shard_split_slot_xxxxxxx_xxxxxxx_777
 (2 rows)
 
     -- Left over subscriptions

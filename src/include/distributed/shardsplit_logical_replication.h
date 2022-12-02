@@ -23,7 +23,7 @@
  */
 typedef struct GroupedShardSplitInfos
 {
-	NodeAndOwner key;
+	ReplicationSlotKey key;
 	List *shardSplitInfoList;
 } GroupedShardSplitInfos;
 

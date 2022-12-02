@@ -17,6 +17,7 @@
 #include "nodes/pg_list.h"
 #include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
+#include "distributed/shard_cleaner.h"
 
 
 /* Config variables managed via guc.c */
@@ -37,6 +38,19 @@ assert_valid_hash_key2(NodeAndOwner, nodeId, tableOwnerId);
 
 
 /*
+ * ReplicationSlotKey should be used as a key for structs that should be hashed by a
+ * combination of node, owner and operationId.
+ */
+typedef struct ReplicationSlotKey
+{
+	uint32_t nodeId;
+	Oid tableOwnerId;
+	OperationId operationId;
+} ReplicationSlotKey;
+assert_valid_hash_key3(ReplicationSlotKey, nodeId, tableOwnerId, operationId);
+
+
+/*
  * ReplicationSlotInfo stores the info that defines a replication slot. For
  * shard splits this information is built by parsing the result of the
  * 'worker_split_shard_replication_setup' UDF.
@@ -45,6 +59,7 @@ typedef struct ReplicationSlotInfo
 {
 	uint32 targetNodeId;
 	Oid tableOwnerId;
+	OperationId operationId;
 	char *name;
 } ReplicationSlotInfo;
 
@@ -152,8 +167,10 @@ extern char * CreateReplicationSlots(MultiConnection *sourceConnection,
 extern void EnableSubscriptions(List *subscriptionInfoList);
 
 extern char * PublicationName(LogicalRepType type, uint32_t nodeId, Oid ownerId);
-extern char * ReplicationSlotNameForNodeAndOwner(LogicalRepType type, uint32_t nodeId, Oid
-												 ownerId);
+extern char * ReplicationSlotNameForNodeAndOwnerForOperation(LogicalRepType type,
+															 uint32_t nodeId,
+															 Oid ownerId,
+															 OperationId operationId);
 extern char * SubscriptionName(LogicalRepType type, Oid ownerId);
 extern char * SubscriptionRoleName(LogicalRepType type, Oid ownerId);
 

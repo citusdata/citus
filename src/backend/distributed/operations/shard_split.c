@@ -1522,7 +1522,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		 *    Refer to the comment section of 'CreateDummyShardsForShardGroup' for indepth
 		 *    information.
 		 */
-		HTAB *mapOfPlacementToDummyShardList = CreateSimpleHash(NodeAndOwner,
+		HTAB *mapOfPlacementToDummyShardList = CreateSimpleHash(ReplicationSlotKey,
 																GroupedShardSplitInfos);
 		CreateDummyShardsForShardGroup(
 			mapOfPlacementToDummyShardList,
@@ -1963,7 +1963,7 @@ ExecuteSplitShardReplicationSetupUDF(WorkerNode *sourceWorkerNode,
 	 * <targetNodeId, tableOwnerName, replication_slot_name>.
 	 */
 	if (queryResult != RESPONSE_OKAY || !IsResponseOK(result) || PQntuples(result) < 1 ||
-		PQnfields(result) != 3)
+		PQnfields(result) != 4)
 	{
 		PQclear(result);
 		ForgetResults(sourceConnection);
@@ -2017,8 +2017,8 @@ ExecuteSplitShardReleaseSharedMemory(MultiConnection *sourceConnection)
  *
  * SELECT * FROM worker_split_shard_replication_setup(
  *  Array[
- *      ROW(sourceShardId, childFirstShardId, childFirstMinRange, childFirstMaxRange, worker1)::citus.split_shard_info,
- *      ROW(sourceShardId, childSecondShardId, childSecondMinRange, childSecondMaxRange, worker2)::citus.split_shard_info
+ *      ROW(sourceShardId, childFirstShardId, childFirstMinRange, childFirstMaxRange, worker1, CurrentOperationId)::citus.split_shard_info,
+ *      ROW(sourceShardId, childSecondShardId, childSecondMinRange, childSecondMaxRange, worker2, CurrentOperationId)::citus.split_shard_info
  *  ]);
  */
 StringInfo
@@ -2066,13 +2066,14 @@ CreateSplitShardReplicationSetupUDF(List *sourceColocatedShardIntervalList,
 								 splitChildShardInterval->maxValue));
 
 			appendStringInfo(splitChildrenRows,
-							 "ROW(%lu, %s, %lu, %s, %s, %u)::pg_catalog.split_shard_info",
+							 "ROW(%lu, %s, %lu, %s, %s, %u, %lu)::pg_catalog.split_shard_info",
 							 sourceShardId,
 							 quote_literal_cstr(distributionColumnName),
 							 splitChildShardInterval->shardId,
 							 quote_literal_cstr(minValueString->data),
 							 quote_literal_cstr(maxValueString->data),
-							 destinationWorkerNode->nodeId);
+							 destinationWorkerNode->nodeId,
+							 CurrentOperationId);
 
 			addComma = true;
 		}
@@ -2112,9 +2113,12 @@ ParseReplicationSlotInfoFromResult(PGresult *result)
 			PQgetvalue(result, rowIndex, 1 /* table owner name column */),
 			missingOk);
 
+		char *operationIdString = PQgetvalue(result, rowIndex, 2 /*operationId column*/);
+		replicationSlot->operationId = strtoul(operationIdString, NULL, 10);
+
 		/* Replication slot name */
 		replicationSlot->name = pstrdup(PQgetvalue(result, rowIndex,
-												   2 /* slot name column */));
+												   3 /* slot name column */));
 
 		replicationSlotInfoList = lappend(replicationSlotInfoList, replicationSlot);
 	}

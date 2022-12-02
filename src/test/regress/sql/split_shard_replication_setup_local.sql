@@ -14,8 +14,8 @@ CREATE PUBLICATION pub1 for table table_to_split_1, table_to_split_2, table_to_s
 
 -- Worker1 is target for table_to_split_2 and table_to_split_3
 SELECT count(*) FROM pg_catalog.worker_split_shard_replication_setup(ARRAY[
-    ROW(1, 'id', 2, '-2147483648', '-1', :worker_1_node)::pg_catalog.split_shard_info,
-    ROW(1, 'id', 3, '0', '2147483647', :worker_1_node)::pg_catalog.split_shard_info
+    ROW(1, 'id', 2, '-2147483648', '-1', :worker_1_node, 0)::pg_catalog.split_shard_info,
+    ROW(1, 'id', 3, '0', '2147483647', :worker_1_node, 0)::pg_catalog.split_shard_info
     ]);
 
 -- we create replication slots with a name including the next_operation_id as a suffix

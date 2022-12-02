@@ -20,6 +20,7 @@
 #include "distributed/shardinterval_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/remote_commands.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/shard_split.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/listutils.h"
@@ -256,7 +257,8 @@ CreateLogicalRepTarget(Oid tableOwnerId, uint32 nodeId,
 	foreach_ptr(replicationSlot, replicationSlotInfoList)
 	{
 		if (nodeId == replicationSlot->targetNodeId &&
-			tableOwnerId == replicationSlot->tableOwnerId)
+			tableOwnerId == replicationSlot->tableOwnerId &&
+			CurrentOperationId == replicationSlot->operationId)
 		{
 			target->replicationSlot = replicationSlot;
 
