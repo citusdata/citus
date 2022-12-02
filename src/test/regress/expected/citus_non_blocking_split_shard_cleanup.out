@@ -47,6 +47,11 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 
 (1 row)
 
+-- BEGIN: Perform deferred cleanup.
+SET client_min_messages TO WARNING;
+CALL pg_catalog.citus_cleanup_orphaned_resources();
+RESET client_min_messages;
+-- END: Perform deferred cleanup.
 \c - - - :worker_1_port
 SET search_path TO "citus_split_test_schema";
 SET citus.show_shards_for_app_name_prefixes = '*';

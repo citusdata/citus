@@ -325,8 +325,9 @@ SELECT run_command_on_workers($$DROP SUBSCRIPTION IF EXISTS citus_shard_move_sub
 
 -- cleanup leftovers
 -- verify we don't see any error for already dropped subscription
+SET client_min_messages TO WARNING;
 CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 3 orphaned resources
+RESET client_min_messages;
 -- cancellation on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").cancel(' || :pid || ')');
  mitmproxy

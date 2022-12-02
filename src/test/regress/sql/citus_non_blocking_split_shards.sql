@@ -149,7 +149,9 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     'force_logical');
 
 -- BEGIN: Perform deferred cleanup.
+SET client_min_messages TO WARNING;
 CALL pg_catalog.citus_cleanup_orphaned_resources();
+RESET client_min_messages;
 -- END: Perform deferred cleanup.
 
 -- Perform 3 way split
@@ -161,7 +163,9 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 -- END : Split two shards : One with move and One without move.
 
 -- BEGIN: Perform deferred cleanup.
+SET client_min_messages TO WARNING;
 CALL pg_catalog.citus_cleanup_orphaned_resources();
+RESET client_min_messages;
 -- END: Perform deferred cleanup.
 
 -- BEGIN : Move a shard post split.
@@ -263,7 +267,9 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     ARRAY[:worker_1_node, :worker_2_node]);
 
 -- BEGIN: Perform deferred cleanup.
+SET client_min_messages TO WARNING;
 CALL pg_catalog.citus_cleanup_orphaned_resources();
+RESET client_min_messages;
 -- END: Perform deferred cleanup.
 
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
@@ -288,7 +294,9 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     'auto');
 
 -- BEGIN: Perform deferred cleanup.
+SET client_min_messages TO WARNING;
 CALL pg_catalog.citus_cleanup_orphaned_resources();
+RESET client_min_messages;
 -- END: Perform deferred cleanup.
 
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
@@ -308,6 +316,11 @@ SELECT COUNT(*) FROM colocated_dist_table;
 
 --BEGIN : Cleanup
 \c - postgres - :master_port
+-- make sure we don't have any replication objects leftover on the workers
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_replication_slots$$);
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_publication$$);
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_subscription$$);
+
 ALTER SYSTEM RESET citus.defer_shard_delete_interval;
 SELECT pg_reload_conf();
 DROP SCHEMA "citus_split_test_schema" CASCADE;
