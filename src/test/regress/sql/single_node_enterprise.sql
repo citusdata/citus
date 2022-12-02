@@ -313,8 +313,6 @@ DROP SCHEMA single_node_ent CASCADE;
 
 DROP OWNED BY full_access_single_node;
 DROP OWNED BY read_access_single_node;
-SELECT run_command_on_workers($$DROP OWNED BY full_access_single_node$$);
-SELECT run_command_on_workers($$DROP OWNED BY read_access_single_node$$);
 DROP ROLE full_access_single_node;
 DROP ROLE read_access_single_node;
 

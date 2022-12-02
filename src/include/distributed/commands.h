@@ -385,6 +385,9 @@ extern bool IsReindexWithParam_compat(ReindexStmt *stmt, char *paramName);
 extern List * CreateExtensionStmtObjectAddress(Node *stmt, bool missing_ok, bool
 											   isPostprocess);
 
+/* owned.c -  forward declarations */
+extern List * PreprocessDropOwnedStmt(Node *node, const char *queryString,
+									  ProcessUtilityContext processUtilityContext);
 
 /* policy.c -  forward declarations */
 extern List * CreatePolicyCommands(Oid relationId);

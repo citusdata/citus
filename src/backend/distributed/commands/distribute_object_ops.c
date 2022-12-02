@@ -254,6 +254,15 @@ static DistributeObjectOps Any_CreateRole = {
 	.address = CreateRoleStmtObjectAddress,
 	.markDistributed = true,
 };
+static DistributeObjectOps Any_DropOwned = {
+	.deparse = DeparseDropOwnedStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessDropOwnedStmt,
+	.postprocess = NULL,
+	.operationType = DIST_OPS_DROP,
+	.address = NULL,
+	.markDistributed = false,
+};
 static DistributeObjectOps Any_DropRole = {
 	.deparse = DeparseDropRoleStmt,
 	.qualify = NULL,
@@ -1656,6 +1665,11 @@ GetDistributeObjectOps(Node *node)
 		case T_DropRoleStmt:
 		{
 			return &Any_DropRole;
+		}
+
+		case T_DropOwnedStmt:
+		{
+			return &Any_DropOwned;
 		}
 
 		case T_DropStmt:
