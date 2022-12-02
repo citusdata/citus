@@ -105,7 +105,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE SCHEMA").kill()');
 (1 row)
 
 SELECT master_activate_node('localhost', :worker_2_proxy_port);
-ERROR:  server closed the connection unexpectedly
+ERROR:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- verify node is not activated
 SELECT * FROM master_get_active_worker_nodes()
