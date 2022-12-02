@@ -878,9 +878,8 @@ UpdateLocalGroupIdOnNode(WorkerNode *workerNode)
 
 		/* send commands to new workers, the current user should be a superuser */
 		Assert(superuser());
-		SendMetadataCommandListToWorkerListInCoordinatedTransaction(
+		SendBareCommandListToWorkers(
 			list_make1(workerNode),
-			CurrentUserName(),
 			commandList);
 	}
 }
