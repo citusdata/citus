@@ -610,7 +610,7 @@ SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 	char *currentUser = CurrentUserName();
 
 	/* generate and add the local group id's update query */
-	char *localGroupIdUpdateCommand = LocalGroupIdUpdateCommand(workerNode->groupId);
+	//char *localGroupIdUpdateCommand = LocalGroupIdUpdateCommand(workerNode->groupId);
 
 	/* generate the queries which drop the node metadata */
 	List *dropMetadataCommandList = NodeMetadataDropCommands();
@@ -618,7 +618,7 @@ SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 	/* generate the queries which create the node metadata from scratch */
 	List *createMetadataCommandList = NodeMetadataCreateCommands();
 
-	List *recreateMetadataSnapshotCommandList = list_make1(localGroupIdUpdateCommand);
+	List *recreateMetadataSnapshotCommandList = NIL;//list_make1(localGroupIdUpdateCommand);
 	recreateMetadataSnapshotCommandList = list_concat(recreateMetadataSnapshotCommandList,
 													  dropMetadataCommandList);
 	recreateMetadataSnapshotCommandList = list_concat(recreateMetadataSnapshotCommandList,

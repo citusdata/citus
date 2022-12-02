@@ -857,6 +857,12 @@ SyncDistributedObjectsToNodeList(List *workerNodeList)
 
 	Assert(ShouldPropagate());
 
+	/* send commands to new workers, the current user should be a superuser */
+	Assert(superuser());
+	SendBareCommandListToWorkers(
+		list_make1(workerNode),
+		list_make1(LocalGroupIdUpdateCommand(workerNode->groupId)));
+
 	List *commandList = SyncDistributedObjectsCommandList(workerNode);
 
 	/* send commands to new workers, the current user should be a superuser */
@@ -878,8 +884,9 @@ UpdateLocalGroupIdOnNode(WorkerNode *workerNode)
 
 		/* send commands to new workers, the current user should be a superuser */
 		Assert(superuser());
-		SendBareCommandListToWorkers(
+		SendMetadataCommandListToWorkerListInCoordinatedTransaction(
 			list_make1(workerNode),
+			CurrentUserName(),
 			commandList);
 	}
 }
@@ -1187,12 +1194,6 @@ ActivateNodeList(List *nodeList)
 		bool syncMetadata = EnableMetadataSync && NodeIsPrimary(workerNode);
 		if (syncMetadata)
 		{
-			/*
-			 * Update local group id first, as object dependency logic requires to have
-			 * updated local group id.
-			 */
-			UpdateLocalGroupIdOnNode(workerNode);
-
 			/*
 			 * We are going to sync the metadata anyway in this transaction, so do
 			 * not fail just because the current metadata is not synced.

@@ -614,7 +614,7 @@ ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList)
 bool
 IsWorkerTheCurrentNode(WorkerNode *workerNode)
 {
-	int connectionFlags = REQUIRE_METADATA_CONNECTION;
+	int connectionFlags = FORCE_NEW_CONNECTION;
 
 	MultiConnection *workerConnection =
 		GetNodeUserDatabaseConnection(connectionFlags,
@@ -663,6 +663,7 @@ IsWorkerTheCurrentNode(WorkerNode *workerNode)
 	}
 
 	char *currentServerId = text_to_cstring(currentServerIdTextP);
+	CloseConnection(workerConnection);
 
 	return strcmp(workerServerId, currentServerId) == 0;
 }
