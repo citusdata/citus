@@ -1221,6 +1221,7 @@ ActivateNodeList(List *nodeList)
 	List *existingMetadataNodeList =
 		TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
 								RowShareLock);
+
 	/*ErrorIfAnyMetadataNodeOutOfSync(existingMetadataNodeList); */
 
 	node = NULL;
@@ -2274,7 +2275,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 	{
 		/* send the delete command to all primary nodes with metadata */
 		char *nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
-		SendCommandToWorkersWithMetadata(nodeDeleteCommand);
+		SendBareCommandListToMetadataWorkers(list_make1(nodeDeleteCommand));
 
 		/* finally prepare the insert command and send it to all primary nodes */
 		uint32 primariesWithMetadata = CountPrimariesWithMetadata();
@@ -2283,7 +2284,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 			List *workerNodeList = list_make1(workerNode);
 			char *nodeInsertCommand = NodeListInsertCommand(workerNodeList);
 
-			SendCommandToWorkersWithMetadata(nodeInsertCommand);
+			SendBareCommandListToMetadataWorkers(list_make1(nodeInsertCommand));
 		}
 	}
 
