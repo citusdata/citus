@@ -534,14 +534,15 @@ GetAllDependencyCreateDDLCommands(const List *dependencies)
 void
 ReplicateAllObjectsToNodes(ActivateNodeContext activateNodeContext)
 {
-	List *connectionList = activateNodeContext.connectionList;
+	List *connectionList = activateNodeContext.activatedNodeConnectionList;
 
 	/* since we are executing ddl commands disable propagation first, primarily for mx */
 	ExecuteRemoteCommandInConnectionList(connectionList, DISABLE_DDL_PROPAGATION);
 	if (activateNodeContext.fetchCommands)
 	{
 		/* caller requested the commands */
-		activateNodeContext.commandList = lappend(activateNodeContext.commandList, DISABLE_DDL_PROPAGATION);
+		activateNodeContext.commandList = lappend(activateNodeContext.commandList,
+												  DISABLE_DDL_PROPAGATION);
 	}
 
 	/*
@@ -617,7 +618,8 @@ ReplicateAllObjectsToNodes(ActivateNodeContext activateNodeContext)
 	if (activateNodeContext.fetchCommands)
 	{
 		/* caller requested the commands */
-		activateNodeContext.commandList = lappend(activateNodeContext.commandList, ENABLE_DDL_PROPAGATION);
+		activateNodeContext.commandList = lappend(activateNodeContext.commandList,
+												  ENABLE_DDL_PROPAGATION);
 	}
 }
 

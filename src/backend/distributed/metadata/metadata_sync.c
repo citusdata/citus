@@ -239,26 +239,29 @@ SyncNodeMetadataToNode(ActivateNodeContext activateContext)
 
 	WorkerNode *workerNode = NULL;
 	MultiConnection *connection = NULL;
-	forboth_ptr(workerNode, activateContext.workerNodeList,
-				connection, activateContext.connectionList)
+	forboth_ptr(workerNode, activateContext.activatedNodeList,
+				connection, activateContext.activatedNodeConnectionList)
 	{
-
 		if (NodeIsCoordinator(workerNode))
 		{
 			return;
 		}
 
 		SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_metadatasynced,
-						BoolGetDatum(true));
+								 BoolGetDatum(true));
 		char *metadataSyncCommand =
-			GetMetadataSyncCommandToSetNodeColumn(workerNode, Anum_pg_dist_node_metadatasynced, BoolGetDatum(true));
+			GetMetadataSyncCommandToSetNodeColumn(workerNode,
+												  Anum_pg_dist_node_metadatasynced,
+												  BoolGetDatum(true));
 		ExecuteRemoteCommandInConnectionList(list_make1(connection), metadataSyncCommand);
 
 
 		SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_hasmetadata,
-						BoolGetDatum(true));
+								 BoolGetDatum(true));
 		metadataSyncCommand =
-			GetMetadataSyncCommandToSetNodeColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(true));
+			GetMetadataSyncCommandToSetNodeColumn(workerNode,
+												  Anum_pg_dist_node_hasmetadata,
+												  BoolGetDatum(true));
 		ExecuteRemoteCommandInConnectionList(list_make1(connection), metadataSyncCommand);
 
 		if (!NodeIsPrimary(workerNode))
@@ -274,7 +277,8 @@ SyncNodeMetadataToNode(ActivateNodeContext activateContext)
 		metadataSyncCommand = NULL;
 		foreach_ptr(metadataSyncCommand, nodeMetadataCommandList)
 		{
-			ExecuteRemoteCommandInConnectionList(list_make1(connection), metadataSyncCommand);
+			ExecuteRemoteCommandInConnectionList(list_make1(connection),
+												 metadataSyncCommand);
 		}
 	}
 }
@@ -598,6 +602,7 @@ SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 
 	List *recreateMetadataSnapshotCommandList =
 		NodeMetadataReCreateCommandList(workerNode);
+
 	/*
 	 * Send the snapshot recreation commands in a single remote transaction and
 	 * if requested, error out in any kind of failure. Note that it is not
@@ -627,7 +632,6 @@ SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 static List *
 NodeMetadataReCreateCommandList(WorkerNode *workerNode)
 {
-
 	/* generate and add the local group id's update query */
 	char *localGroupIdUpdateCommand = LocalGroupIdUpdateCommand(workerNode->groupId);
 
@@ -644,8 +648,8 @@ NodeMetadataReCreateCommandList(WorkerNode *workerNode)
 													  createMetadataCommandList);
 
 	return recreateMetadataSnapshotCommandList;
-
 }
+
 
 /*
  * DropMetadataSnapshotOnNode creates the queries which drop the metadata and sends them

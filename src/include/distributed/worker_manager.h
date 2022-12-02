@@ -59,8 +59,10 @@ typedef struct WorkerNode
 
 typedef struct ActivateNodeContext
 {
-	List *workerNodeList;
-	List *connectionList;
+	List *activatedNodeList;
+	List *activatedNodeConnectionList;
+
+	List *existingMetadataNodeConnectionList;
 
 	bool fetchCommands;
 	List *commandList;
