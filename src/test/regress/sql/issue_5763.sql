@@ -1,0 +1,50 @@
+--
+-- ISSUE_5763
+--
+-- Issue: DROP OWNED BY fails to drop the schemas on the workers
+-- Link: https://github.com/citusdata/citus/issues/5763
+--
+
+CREATE USER issue_5763_1 WITH SUPERUSER;
+CREATE USER issue_5763_2 WITH SUPERUSER;
+
+\c - issue_5763_1 - :master_port
+CREATE SCHEMA issue_5763_sc_1;
+
+\c - issue_5763_2 - :master_port
+CREATE SCHEMA issue_5763_sc_2;
+
+\c - postgres - :master_port
+DROP OWNED BY issue_5763_1, issue_5763_2;
+
+\c - issue_5763_1 - :master_port
+CREATE SCHEMA issue_5763_sc_1;
+
+\c - postgres - :master_port
+DROP SCHEMA issue_5763_sc_1;
+DROP USER issue_5763_1, issue_5763_2;
+
+-- test CASCADE options
+CREATE USER issue_5763_3 WITH SUPERUSER;
+
+\c - issue_5763_3 - :master_port
+CREATE SCHEMA issue_5763_sc_3;
+CREATE TABLE issue_5763_sc_3.tb1(id int);
+
+\c - postgres - :master_port
+DROP OWNED BY issue_5763_3 CASCADE;
+
+DROP USER issue_5763_3;
+
+-- test non-distributed role
+SET citus.enable_create_role_propagation TO off;
+CREATE USER issue_5763_4 WITH SUPERUSER;
+
+\c - issue_5763_4 - :master_port
+set citus.enable_ddl_propagation = off;
+CREATE SCHEMA issue_5763_sc_4;
+
+\c - postgres - :master_port
+DROP OWNED BY issue_5763_4 RESTRICT;
+
+DROP USER issue_5763_4;

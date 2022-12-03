@@ -46,6 +46,11 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     ARRAY[:worker_2_node, :worker_2_node],
     'force_logical');
 
+-- BEGIN: Perform deferred cleanup.
+SET client_min_messages TO WARNING;
+CALL pg_catalog.citus_cleanup_orphaned_resources();
+RESET client_min_messages;
+-- END: Perform deferred cleanup.
 
 \c - - - :worker_1_port
 SET search_path TO "citus_split_test_schema";

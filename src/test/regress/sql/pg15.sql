@@ -924,6 +924,21 @@ DROP SERVER foreign_server CASCADE;
 CREATE DATABASE db_with_oid OID 987654;
 DROP DATABASE db_with_oid;
 
+-- SET ACCESS METHOD
+-- Create a heap2 table am handler with heapam handler
+CREATE ACCESS METHOD heap2 TYPE TABLE HANDLER heap_tableam_handler;
+SELECT run_command_on_workers($$CREATE ACCESS METHOD heap2 TYPE TABLE HANDLER heap_tableam_handler$$);
+CREATE TABLE mx_ddl_table2 (
+    key int primary key,
+    value int
+);
+SELECT create_distributed_table('mx_ddl_table2', 'key', 'hash', shard_count=> 4);
+ALTER TABLE mx_ddl_table2 SET ACCESS METHOD heap2;
+
+DROP TABLE mx_ddl_table2;
+DROP ACCESS METHOD heap2;
+SELECT run_command_on_workers($$DROP ACCESS METHOD heap2$$);
+
 -- Clean up
 \set VERBOSITY terse
 SET client_min_messages TO ERROR;

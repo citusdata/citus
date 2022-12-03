@@ -545,27 +545,6 @@ DROP TABLE
     test,
     test_coloc,
     colocation_table;
-SELECT run_command_on_workers($$DROP OWNED BY full_access$$);
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"DROP OWNED")
- (localhost,57638,t,"DROP OWNED")
-(2 rows)
-
-SELECT run_command_on_workers($$DROP OWNED BY some_role$$);
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"DROP OWNED")
- (localhost,57638,t,"DROP OWNED")
-(2 rows)
-
-SELECT run_command_on_workers($$DROP OWNED BY read_access$$);
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"DROP OWNED")
- (localhost,57638,t,"DROP OWNED")
-(2 rows)
-
 DROP USER full_access;
 DROP USER read_access;
 DROP USER no_access;

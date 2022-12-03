@@ -842,7 +842,6 @@ SET citus.next_shard_id TO 1197000;
 
 -- we do not use run_command_on_coordinator_and_workers here because when there is CASCADE, it causes deadlock
 DROP OWNED BY "test-user" CASCADE;
-SELECT run_command_on_workers('DROP OWNED BY "test-user" CASCADE');
 DROP USER "test-user";
 
 DROP FUNCTION run_command_on_coordinator_and_workers(p_sql text);
