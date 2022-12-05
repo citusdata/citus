@@ -167,8 +167,8 @@ jobs:
           name: 'Create codeclimate coverage'
           command: |
             lcov --directory . --capture --output-file lcov.info
+            sed "s=^SF:$PWD=SF:=g" -i lcov.info # relative pats are required by codeclimate
             codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$CIRCLE_JOB.json lcov.info
-            sed "s/^SF:$PWD//g" -i codeclimate/$CIRCLE_JOB.json
       - run:
           name: 'Copy coredumps'
           command: |
@@ -263,8 +263,8 @@ jobs:
           name: 'Create codeclimate coverage'
           command: |
             lcov --directory . --capture --output-file lcov.info
+            sed "s=^SF:$PWD=SF:=g" -i lcov.info # relative pats are required by codeclimate
             codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$CIRCLE_JOB.json lcov.info
-            sed "s/^SF:$PWD//g" -i codeclimate/$CIRCLE_JOB.json
       - run:
           name: 'Copy logfiles'
           command: |
@@ -361,8 +361,8 @@ jobs:
           name: 'Create codeclimate coverage'
           command: |
             lcov --directory . --capture --output-file lcov.info
+            sed "s=^SF:$PWD=SF:=g" -i lcov.info # relative pats are required by codeclimate
             codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$CIRCLE_JOB.json lcov.info
-            sed "s/^SF:$PWD//g" -i codeclimate/$CIRCLE_JOB.json
       - run:
           name: 'Copy coredumps'
           command: |
@@ -430,8 +430,8 @@ jobs:
           name: 'Create codeclimate coverage'
           command: |
             lcov --directory . --capture --output-file lcov.info
+            sed "s=^SF:$PWD=SF:=g" -i lcov.info # relative pats are required by codeclimate
             codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$CIRCLE_JOB.json lcov.info
-            sed "s/^SF:$PWD//g" -i codeclimate/$CIRCLE_JOB.json
       - run:
           name: 'Regressions'
           command: |
@@ -527,8 +527,8 @@ jobs:
           name: 'Create codeclimate coverage'
           command: |
             lcov --directory . --capture --output-file lcov.info
+            sed "s=^SF:$PWD=SF:=g" -i lcov.info # relative pats are required by codeclimate
             codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$CIRCLE_JOB.json lcov.info
-            sed "s/^SF:$PWD//g" -i codeclimate/$CIRCLE_JOB.json
       - run:
           name: 'Copy coredumps'
           command: |
