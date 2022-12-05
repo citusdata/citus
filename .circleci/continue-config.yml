@@ -563,7 +563,7 @@ jobs:
         type: string
         default: ''
       test:
-        description: 'the test that should be run multiple times'
+        description: 'the test file path (relative to regress folder) that should be run multiple times'
         type: string
         default: ''
       runs:
