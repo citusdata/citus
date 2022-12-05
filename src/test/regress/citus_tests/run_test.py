@@ -8,6 +8,7 @@ import argparse
 import shutil
 import random
 import re
+import common
 
 args = argparse.ArgumentParser()
 args.add_argument("-t", "--test", required=True, help="Relative path for test file (must have a .sql or .spec extension)", type=pathlib.Path)
@@ -79,11 +80,12 @@ else:
 test_command = f"make -C {regress_dir} {make_recipe} SCHEDULE='{pathlib.Path(tmp_schedule_path).stem}'"
 
 # run test command n times
-for i in range(args['ntimes']):
-    print(f"Execution#{i}/{args['ntimes']} of {test_command}")
-    result = os.system(test_command)
-    if result != 0:
-        sys.exit(2)
-
-# remove temp schedule file
-os.remove(tmp_schedule_path)
+try:
+    for i in range(args['ntimes']):
+        print(f"Execution#{i}/{args['ntimes']} of {test_command}")
+        result = common.run(test_command)
+        if result != 0:
+            sys.exit(2)
+finally:
+    # remove temp schedule file
+    os.remove(tmp_schedule_path)
