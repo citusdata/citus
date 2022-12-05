@@ -10,7 +10,7 @@ workflows:
   setup:
     jobs:
       - path-filtering/filter:
-          base-revision: HEAD
+          base-revision: main
           config-path: .circleci/continue-config.yml
           mapping: |
             src/test/regress/sql/.* check-flakyness true
