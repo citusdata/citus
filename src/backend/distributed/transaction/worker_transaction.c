@@ -142,23 +142,28 @@ SendCommandToWorkersWithMetadataViaSuperUser(const char *command)
 List *
 TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 {
-	List *workerNodeList = NIL;
-	if (targetWorkerSet == ALL_SHARD_NODES || targetWorkerSet == METADATA_NODES)
-	{
-		workerNodeList = ActivePrimaryNodeList(lockMode);
-	}
-	else
-	{
-		workerNodeList = ActivePrimaryNonCoordinatorNodeList(lockMode);
-	}
+	List *workerNodeList = ActivePrimaryNodeList(lockMode);
 	List *result = NIL;
 
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
 	{
-		if ((targetWorkerSet == NON_COORDINATOR_METADATA_NODES || targetWorkerSet ==
-			 METADATA_NODES) &&
+		if ((targetWorkerSet == NON_COORDINATOR_NODES ||
+			 targetWorkerSet == NON_COORDINATOR_METADATA_NODES) &&
+			workerNode->groupId == COORDINATOR_GROUP_ID)
+		{
+			continue;
+		}
+
+		if ((targetWorkerSet == NON_COORDINATOR_METADATA_NODES ||
+			 targetWorkerSet == METADATA_NODES) &&
 			!workerNode->hasMetadata)
+		{
+			continue;
+		}
+
+		if (targetWorkerSet == OTHER_PRIMARY_NODES &&
+			workerNode->groupId == GetLocalGroupId())
 		{
 			continue;
 		}
@@ -560,6 +565,41 @@ SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(const char *node
 	}
 
 	return !failed;
+}
+
+
+/*
+ * GetConnectionsToTargetNodeSet opens a list of connections with the following properties:
+ * - connectionFlags - see StartNodeUserDatabaseConnection
+ * - targetNodeSet - the target node set (e.g. ALL_NODES)
+ * - nodesLockMode - the lock on pg_dist_node to acquire
+ * - userName - connect as this user
+ * - databaseName - connect with this database name
+ */
+List *
+GetConnectionsToTargetNodeSet(uint32 connectionFlags, TargetWorkerSet targetNodeSet,
+							  LOCKMODE nodesLockMode, const char *userName)
+{
+	List *connectionList = NIL;
+	List *nodeList = TargetWorkerSetNodeList(targetNodeSet, nodesLockMode);
+
+	/* use current database */
+	const char *databaseName = NULL;
+
+	WorkerNode *node = NULL;
+	foreach_ptr(node, nodeList)
+	{
+		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
+																	  node->workerName,
+																	  node->workerPort,
+																	  userName,
+																	  databaseName);
+		connectionList = lappend(connectionList, connection);
+	}
+
+	FinishConnectionListEstablishment(connectionList);
+
+	return connectionList;
 }
 
 

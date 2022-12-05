@@ -425,6 +425,25 @@ ExecuteCriticalRemoteCommand(MultiConnection *connection, const char *command)
 
 
 /*
+ * SendCommandToConnectionList sends a given command over all connections
+ * in the list in parallel.
+ */
+void
+SendRemoteCommandToConnectionList(List *connectionList, const char *command)
+{
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, connectionList)
+	{
+		int querySent = SendRemoteCommand(connection, command);
+		if (querySent == 0)
+		{
+			ReportConnectionError(connection, ERROR);
+		}
+	}
+}
+
+
+/*
  * ExecuteRemoteCommandInConnectionList executes a remote command, on all connections
  * given in the list, that is critical to the transaction. If the command fails then
  * the transaction aborts.
@@ -434,15 +453,7 @@ ExecuteRemoteCommandInConnectionList(List *nodeConnectionList, const char *comma
 {
 	MultiConnection *connection = NULL;
 
-	foreach_ptr(connection, nodeConnectionList)
-	{
-		int querySent = SendRemoteCommand(connection, command);
-
-		if (querySent == 0)
-		{
-			ReportConnectionError(connection, ERROR);
-		}
-	}
+	SendRemoteCommandToConnectionList(nodeConnectionList, command);
 
 	/* Process the result */
 	foreach_ptr(connection, nodeConnectionList)

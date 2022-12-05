@@ -43,7 +43,12 @@ typedef enum TargetWorkerSet
 	 * All the active primary nodes in the metadata which have metadata
 	 * (includes the coodinator if it is added)
 	 */
-	METADATA_NODES
+	METADATA_NODES,
+
+	/*
+	 * All other primary nodes in the cluster
+	 */
+	OTHER_PRIMARY_NODES
 } TargetWorkerSet;
 
 
@@ -87,7 +92,11 @@ extern void SendMetadataCommandListToWorkerListInCoordinatedTransaction(
 	const char *
 	nodeUser,
 	List *commandList);
-extern void RemoveWorkerTransaction(const char *nodeName, int32 nodePort);
+
+extern List * GetConnectionsToTargetNodeSet(uint32 connectionFlags,
+											TargetWorkerSet targetNodeSet,
+											LOCKMODE nodesLockMode,
+											const char *userName);
 
 /* helper functions for worker transactions */
 extern bool IsWorkerTransactionActive(void);

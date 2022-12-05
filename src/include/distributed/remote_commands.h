@@ -51,6 +51,8 @@ extern void ExecuteRemoteCommandInConnectionList(List *nodeConnectionList,
 extern int ExecuteOptionalRemoteCommand(MultiConnection *connection,
 										const char *command,
 										PGresult **result);
+extern void SendRemoteCommandToConnectionList(List *connectionList,
+											  const char *command);
 extern int SendRemoteCommand(MultiConnection *connection, const char *command);
 extern int SendRemoteCommandParams(MultiConnection *connection, const char *command,
 								   int parameterCount, const Oid *parameterTypes,

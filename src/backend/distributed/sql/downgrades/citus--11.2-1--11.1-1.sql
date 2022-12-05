@@ -1,6 +1,7 @@
 -- citus--11.2-1--11.1-1
 #include "../udfs/get_rebalance_progress/11.1-1.sql"
 #include "../udfs/citus_isolation_test_session_is_blocked/11.1-1.sql"
+DROP FUNCTION pg_catalog.citus_use_snapshot();
 DROP FUNCTION pg_catalog.citus_get_node_clock();
 DROP FUNCTION pg_catalog.citus_get_transaction_clock();
 DROP FUNCTION pg_catalog.citus_internal_adjust_local_clock_to_remote(cluster_clock);

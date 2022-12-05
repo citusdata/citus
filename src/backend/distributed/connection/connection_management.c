@@ -679,6 +679,20 @@ CloseNodeConnectionsAfterTransaction(char *nodeName, int nodePort)
 
 
 /*
+ * CloseConnectionList closes all connections in the given list.
+ */
+void
+CloseConnectionList(List *connectionList)
+{
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, connectionList)
+	{
+		CloseConnection(connection);
+	}
+}
+
+
+/*
  * Close a previously established connection.
  */
 void

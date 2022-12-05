@@ -124,6 +124,7 @@ ORDER BY 1;
  function citus_update_node(integer,text,integer,boolean,integer)
  function citus_update_shard_statistics(bigint)
  function citus_update_table_statistics(regclass)
+ function citus_use_snapshot()
  function citus_validate_rebalance_strategy_functions(regproc,regproc,regproc)
  function citus_version()
  function cluster_clock_cmp(cluster_clock,cluster_clock)
@@ -311,5 +312,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(303 rows)
+(304 rows)
 

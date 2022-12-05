@@ -28,6 +28,7 @@
 #include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
 #include "distributed/remote_transaction.h"
+#include "distributed/transaction/snapshot.h"
 #include "distributed/transaction_identifier.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
@@ -85,13 +86,21 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 
 	StringInfo beginAndSetDistributedTransactionId = makeStringInfo();
 
-	/*
-	 * Explicitly specify READ COMMITTED, the default on the remote
-	 * side might have been changed, and that would cause problematic
-	 * behaviour.
-	 */
+	/* append the BEGIN command */
 	appendStringInfoString(beginAndSetDistributedTransactionId,
 						   BeginTransactionCommand());
+
+	/* when using a distributed snapshot, append SET TRANSACTION SNAPSHOT .. */
+	char *exportedSnapshotName = GetSnapshotNameForNode(connection->hostname,
+														connection->port,
+														connection->user,
+														connection->database);
+	if (exportedSnapshotName != NULL)
+	{
+		appendStringInfo(beginAndSetDistributedTransactionId,
+						 "SET TRANSACTION SNAPSHOT %s;",
+						 quote_literal_cstr(exportedSnapshotName));
+	}
 
 	/* append context for in-progress SAVEPOINTs for this transaction */
 	List *activeSubXacts = ActiveSubXactContexts();
