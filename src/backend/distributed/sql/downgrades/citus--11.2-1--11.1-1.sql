@@ -10,7 +10,7 @@ DROP SEQUENCE pg_catalog.pg_dist_clock_logical_seq;
 DROP OPERATOR CLASS pg_catalog.cluster_clock_ops USING btree CASCADE;
 DROP OPERATOR FAMILY pg_catalog.cluster_clock_ops USING btree CASCADE;
 DROP TYPE pg_catalog.cluster_clock CASCADE;
-DROP FUNCTION pg_catalog.worker_split_shard_replication_setup(pg_catalog.split_shard_info[]);
+DROP FUNCTION pg_catalog.worker_split_shard_replication_setup(pg_catalog.split_shard_info[], bigint);
 DROP TYPE pg_catalog.replication_slot_info;
 DROP TYPE pg_catalog.split_shard_info;
 

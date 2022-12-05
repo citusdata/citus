@@ -15,7 +15,6 @@
 #define SHARDSPLIT_SHARED_MEMORY_H
 
 #include "postgres.h"
-#include "distributed/shard_cleaner.h"
 
 /*
  * In-memory mapping of a split child shard.
@@ -32,7 +31,6 @@ typedef struct ShardSplitInfo
 	uint64 sourceShardId;        /* parent shardId */
 	uint64 splitChildShardId;        /* child shardId*/
 	char slotName[NAMEDATALEN];  /* replication slot name belonging to this node */
-	OperationId operationId;     /* the operation that the split belong to */
 } ShardSplitInfo;
 
 
