@@ -316,7 +316,7 @@ SELECT citus.mitmproxy('conn.allow()');
 (1 row)
 
 -- first, manually drop the subscsription object. But the record for it will remain on pg_dist_cleanup
-SELECT run_command_on_workers($$DROP SUBSCRIPTION IF EXISTS citus_shard_move_subscription_10$$);
+SELECT run_command_on_workers($$DROP SUBSCRIPTION IF EXISTS citus_shard_move_subscription_xxxxxxx_xxxxxxx$$);
          run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,9060,t,"DROP SUBSCRIPTION")
