@@ -194,11 +194,8 @@ jobs:
       - run:
           name: 'Create codeclimate coverage'
           command: |
-            lcov --directory . --capture --output-file lcov.info
-            lcov --remove lcov.info -o lcov.info '/usr/*'
-            sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
             mkdir -p /tmp/codeclimate
-            codeclimate/test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
+            codeclimate/test-reporter format-coverage -t gcov -o /tmp/codeclimate/$CIRCLE_JOB.json
       - persist_to_workspace:
           root: /tmp
           paths:
@@ -287,11 +284,8 @@ jobs:
       - run:
           name: 'Create codeclimate coverage'
           command: |
-            lcov --directory . --capture --output-file lcov.info
-            lcov --remove lcov.info -o lcov.info '/usr/*'
-            sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
             mkdir -p /tmp/codeclimate
-            codeclimate/test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
+            codeclimate/test-reporter format-coverage -t gcov -o /tmp/codeclimate/$CIRCLE_JOB.json
       - persist_to_workspace:
           root: /tmp
           paths:
@@ -381,11 +375,8 @@ jobs:
       - run:
           name: 'Create codeclimate coverage'
           command: |
-            lcov --directory . --capture --output-file lcov.info
-            lcov --remove lcov.info -o lcov.info '/usr/*'
-            sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
             mkdir -p /tmp/codeclimate
-            codeclimate/test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
+            codeclimate/test-reporter format-coverage -t gcov -o /tmp/codeclimate/$CIRCLE_JOB.json
       - persist_to_workspace:
           root: /tmp
           paths:
@@ -476,11 +467,8 @@ jobs:
       - run:
           name: 'Create codeclimate coverage'
           command: |
-            lcov --directory . --capture --output-file lcov.info
-            lcov --remove lcov.info -o lcov.info '/usr/*'
-            sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
             mkdir -p /tmp/codeclimate
-            codeclimate/test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
+            codeclimate/test-reporter format-coverage -t gcov -o /tmp/codeclimate/$CIRCLE_JOB.json
       - persist_to_workspace:
           root: /tmp
           paths:
@@ -552,11 +540,8 @@ jobs:
       - run:
           name: 'Create codeclimate coverage'
           command: |
-            lcov --directory . --capture --output-file lcov.info
-            lcov --remove lcov.info -o lcov.info '/usr/*'
-            sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
             mkdir -p /tmp/codeclimate
-            codeclimate/test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
+            codeclimate/test-reporter format-coverage -t gcov -o /tmp/codeclimate/$CIRCLE_JOB.json
       - persist_to_workspace:
           root: /tmp
           paths:
