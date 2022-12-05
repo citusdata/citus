@@ -6,7 +6,7 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-dev-13377e3'
+    default: '-dev-d45e616'
   pg13_version:
     type: string
     default: '13.9'
@@ -198,7 +198,7 @@ jobs:
             lcov --remove lcov.info -o lcov.info '/usr/*'
             sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
             mkdir -p /tmp/codeclimate
-            codeclimate/test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
+            cc-test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
       - persist_to_workspace:
           root: /tmp
           paths:
@@ -291,7 +291,7 @@ jobs:
             lcov --remove lcov.info -o lcov.info '/usr/*'
             sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
             mkdir -p /tmp/codeclimate
-            codeclimate/test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
+            cc-test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
       - persist_to_workspace:
           root: /tmp
           paths:
@@ -385,7 +385,7 @@ jobs:
             lcov --remove lcov.info -o lcov.info '/usr/*'
             sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
             mkdir -p /tmp/codeclimate
-            codeclimate/test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
+            cc-test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
       - persist_to_workspace:
           root: /tmp
           paths:
@@ -480,7 +480,7 @@ jobs:
             lcov --remove lcov.info -o lcov.info '/usr/*'
             sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
             mkdir -p /tmp/codeclimate
-            codeclimate/test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
+            cc-test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
       - persist_to_workspace:
           root: /tmp
           paths:
@@ -556,7 +556,7 @@ jobs:
             lcov --remove lcov.info -o lcov.info '/usr/*'
             sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
             mkdir -p /tmp/codeclimate
-            codeclimate/test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
+            cc-test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
       - persist_to_workspace:
           root: /tmp
           paths:
@@ -691,21 +691,6 @@ jobs:
       - store_artifacts:
           name: 'Save worker2 log'
           path: src/test/regress/tmp_check/worker.57638/log
-  install-codeclimate:
-    docker:
-      - image: 'citus/extbuilder:latest'
-    working_directory: /home/circleci/project
-    steps:
-      - run:
-          name:  Download cc-test-reporter
-          command: |
-            mkdir -p codeclimate/
-            curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./codeclimate/test-reporter
-            chmod +x ./codeclimate/test-reporter
-      - persist_to_workspace:
-          root: .
-          paths:
-            - codeclimate/test-reporter
   upload-coverage:
     docker:
       - image: 'citus/extbuilder:latest'
@@ -716,8 +701,8 @@ jobs:
       - run:
           name: Upload coverage results to Code Climate
           command: |
-            ./codeclimate/test-reporter sum-coverage codeclimate/*.json -o total.json
-            ./codeclimate/test-reporter upload-coverage -i total.json
+            cc-test-reporter sum-coverage codeclimate/*.json -o total.json
+            cc-test-reporter upload-coverage -i total.json
 
 workflows:
   version: 2
@@ -756,395 +741,394 @@ workflows:
 
       - check-style
       - check-sql-snapshots
-      - install-codeclimate
 
       - test-citus:
           name: 'test-13_check-multi'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-multi
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - test-citus:
           name: 'test-13_check-multi-1'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-multi-1
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - test-citus:
           name: 'test-13_check-mx'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-multi-mx
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - test-citus:
           name: 'test-13_check-vanilla'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-vanilla
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - test-citus:
           name: 'test-13_check-isolation'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-isolation
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - test-citus:
           name: 'test-13_check-operations'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-operations
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - test-citus:
           name: 'test-13_check-follower-cluster'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-follower-cluster
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - test-citus:
           name: 'test-13_check-columnar'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-columnar
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - test-citus:
           name: 'test-13_check-columnar-isolation'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-columnar-isolation
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - tap-test-citus:
           name: 'test-13_tap-recovery'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           suite: recovery
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - tap-test-citus:
           name: 'test-13_tap-columnar-freezing'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           suite: columnar_freezing
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - test-citus:
           name: 'test-13_check-failure'
           pg_major: 13
           image: citus/failtester
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-failure
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
 
       - test-citus:
           name: 'test-13_check-enterprise'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-enterprise
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - test-citus:
           name: 'test-13_check-enterprise-isolation'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-enterprise-isolation
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - test-citus:
           name: 'test-13_check-enterprise-isolation-logicalrep-1'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-enterprise-isolation-logicalrep-1
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - test-citus:
           name: 'test-13_check-enterprise-isolation-logicalrep-2'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-enterprise-isolation-logicalrep-2
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - test-citus:
           name: 'test-13_check-enterprise-isolation-logicalrep-3'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-enterprise-isolation-logicalrep-3
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - test-citus:
           name: 'test-13_check-enterprise-failure'
           pg_major: 13
           image: citus/failtester
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-enterprise-failure
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - test-citus:
           name: 'test-13_check-split'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-split
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
 
       - test-citus:
           name: 'test-14_check-split'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-split
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-enterprise'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-enterprise
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-enterprise-isolation'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-enterprise-isolation
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-enterprise-isolation-logicalrep-1'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-enterprise-isolation-logicalrep-1
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-enterprise-isolation-logicalrep-2'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-enterprise-isolation-logicalrep-2
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-enterprise-isolation-logicalrep-3'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-enterprise-isolation-logicalrep-3
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-enterprise-failure'
           pg_major: 14
           image: citus/failtester
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-enterprise-failure
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-multi'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-multi
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-multi-1'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-multi-1
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-mx'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-multi-mx
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-vanilla'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-vanilla
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-isolation'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-isolation
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-operations'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-operations
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-follower-cluster'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-follower-cluster
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-columnar'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-columnar
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-columnar-isolation'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-columnar-isolation
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - tap-test-citus:
           name: 'test-14_tap-recovery'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           suite: recovery
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - tap-test-citus:
           name: 'test-14_tap-columnar-freezing'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
           suite: columnar_freezing
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - test-citus:
           name: 'test-14_check-failure'
           pg_major: 14
           image: citus/failtester
           image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-failure
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
 
       - test-citus:
           name: 'test-15_check-split'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-split
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - test-citus:
           name: 'test-15_check-enterprise'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-enterprise
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - test-citus:
           name: 'test-15_check-enterprise-isolation'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-enterprise-isolation
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - test-citus:
           name: 'test-15_check-enterprise-isolation-logicalrep-1'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-enterprise-isolation-logicalrep-1
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - test-citus:
           name: 'test-15_check-enterprise-isolation-logicalrep-2'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-enterprise-isolation-logicalrep-2
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - test-citus:
           name: 'test-15_check-enterprise-isolation-logicalrep-3'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-enterprise-isolation-logicalrep-3
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - test-citus:
           name: 'test-15_check-enterprise-failure'
           pg_major: 15
           image: citus/failtester
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-enterprise-failure
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - test-citus:
           name: 'test-15_check-multi'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-multi
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - test-citus:
           name: 'test-15_check-multi-1'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-multi-1
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - test-citus:
           name: 'test-15_check-mx'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-multi-mx
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - test-citus:
           name: 'test-15_check-vanilla'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-vanilla
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - test-citus:
           name: 'test-15_check-isolation'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-isolation
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - test-citus:
           name: 'test-15_check-operations'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-operations
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - test-citus:
           name: 'test-15_check-follower-cluster'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-follower-cluster
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - test-citus:
           name: 'test-15_check-columnar'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-columnar
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - test-citus:
           name: 'test-15_check-columnar-isolation'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-columnar-isolation
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - tap-test-citus:
           name: 'test-15_tap-recovery'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           suite: recovery
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - tap-test-citus:
           name: 'test-15_tap-columnar-freezing'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           suite: columnar_freezing
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
       - test-citus:
           name: 'test-15_check-failure'
           pg_major: 15
           image: citus/failtester
           image_tag: '<< pipeline.parameters.pg15_version >>'
           make: check-failure
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
 
       - test-arbitrary-configs:
           name: 'test-13_check-arbitrary-configs'
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
       - test-arbitrary-configs:
           name: 'test-14_check-arbitrary-configs'
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'
-          requires: [install-codeclimate, build-14]
+          requires: [build-14]
       - test-arbitrary-configs:
           name: 'test-15_check-arbitrary-configs'
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
-          requires: [install-codeclimate, build-15]
+          requires: [build-15]
 
       - test-pg-upgrade:
           name: 'test-13-14_check-pg-upgrade'
           old_pg_major: 13
           new_pg_major: 14
           image_tag: '<< pipeline.parameters.upgrade_pg_versions >>'
-          requires: [install-codeclimate, build-13, build-14]
+          requires: [build-13, build-14]
 
       - test-pg-upgrade:
           name: 'test-14-15_check-pg-upgrade'
           old_pg_major: 14
           new_pg_major: 15
           image_tag: '<< pipeline.parameters.upgrade_pg_versions >>'
-          requires: [install-codeclimate, build-14, build-15]
+          requires: [build-14, build-15]
 
       - test-citus-upgrade:
           name: test-13_check-citus-upgrade
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
-          requires: [install-codeclimate, build-13]
+          requires: [build-13]
 
       - upload-coverage:
           requires:
