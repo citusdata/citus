@@ -252,11 +252,12 @@ DETAIL:  Key (cc)=((100,100)) already exists.
 --
 SELECT (extract(epoch from now()) * 1000)::bigint AS epoch,
 	citus_get_node_clock() AS latest_clock \gset
--- Returns true
-SELECT ABS(:epoch - cluster_clock_logical(:'latest_clock')) < 25;
- ?column?
+-- Returns difference in epoch-milliseconds
+SELECT CASE WHEN msdiff BETWEEN 0 AND 25 THEN 0 ELSE msdiff END
+FROM ABS(:epoch - cluster_clock_logical(:'latest_clock')) msdiff;
+ msdiff
 ---------------------------------------------------------------------
- t
+      0
 (1 row)
 
 BEGIN;

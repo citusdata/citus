@@ -98,8 +98,9 @@ INSERT INTO cluster_clock_type values('(100, 100)');
 SELECT (extract(epoch from now()) * 1000)::bigint AS epoch,
 	citus_get_node_clock() AS latest_clock \gset
 
--- Returns true
-SELECT ABS(:epoch - cluster_clock_logical(:'latest_clock')) < 25;
+-- Returns difference in epoch-milliseconds
+SELECT CASE WHEN msdiff BETWEEN 0 AND 25 THEN 0 ELSE msdiff END
+FROM ABS(:epoch - cluster_clock_logical(:'latest_clock')) msdiff;
 
 BEGIN;
 SELECT citus_get_transaction_clock();
