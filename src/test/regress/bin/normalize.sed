@@ -45,6 +45,7 @@ s/truncate_trigger_[0-9]+/truncate_trigger_xxxxxxx/g
 
 # shard move subscription and publication names contain the oid of the
 # table owner, which can change across runs
+s/(citus_shard_(move|split)_subscription_role_)[0-9]+_[0-9]+/\1xxxxxxx_xxxxxxx/g
 s/(citus_shard_(move|split)_subscription_)[0-9]+_[0-9]+/\1xxxxxxx_xxxxxxx/g
 s/(citus_shard_(move|split)_(slot|publication)_)[0-9]+_[0-9]+_[0-9]+/\1xxxxxxx_xxxxxxx_xxxxxxx/g
 

@@ -992,9 +992,9 @@ citus_shard_split_publication_xxxxxxx_xxxxxxx_xxxxxxx    |          4|          
 citus_shard_split_publication_xxxxxxx_xxxxxxx_xxxxxxx    |          4|          0
 citus_shard_split_slot_xxxxxxx_xxxxxxx_xxxxxxx           |          3|          0
 citus_shard_split_slot_xxxxxxx_xxxxxxx_xxxxxxx           |          3|          0
-citus_shard_split_subscription_role_10_41|          5|          0
+citus_shard_split_subscription_role_xxxxxxx_xxxxxxx|          5|          0
 citus_shard_split_subscription_xxxxxxx_xxxxxxx     |          2|          0
-citus_shard_split_subscription_role_10_41|          5|          0
+citus_shard_split_subscription_role_xxxxxxx_xxxxxxx|          5|          0
 citus_shard_split_subscription_xxxxxxx_xxxxxxx     |          2|          0
 (12 rows)
 
@@ -1070,9 +1070,9 @@ citus_shard_split_publication_xxxxxxx_xxxxxxx_xxxxxxx    |          4|          
 citus_shard_split_publication_xxxxxxx_xxxxxxx_xxxxxxx    |          4|          0
 citus_shard_split_slot_xxxxxxx_xxxxxxx_xxxxxxx           |          3|          0
 citus_shard_split_slot_xxxxxxx_xxxxxxx_xxxxxxx           |          3|          0
-citus_shard_split_subscription_role_10_42|          5|          0
+citus_shard_split_subscription_role_xxxxxxx_xxxxxxx|          5|          0
 citus_shard_split_subscription_xxxxxxx_xxxxxxx     |          2|          0
-citus_shard_split_subscription_role_10_42|          5|          0
+citus_shard_split_subscription_role_xxxxxxx_xxxxxxx|          5|          0
 citus_shard_split_subscription_xxxxxxx_xxxxxxx     |          2|          0
 (12 rows)
 
