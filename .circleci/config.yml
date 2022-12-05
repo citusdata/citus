@@ -164,12 +164,6 @@ jobs:
             fi
           when: on_fail
       - run:
-          name: 'Create codeclimate coverage'
-          command: |
-            lcov --directory . --capture --output-file lcov.info
-            sed "s=^SF:$PWD=SF:=g" -i lcov.info # relative pats are required by codeclimate
-            codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$CIRCLE_JOB.json lcov.info
-      - run:
           name: 'Copy coredumps'
           command: |
             mkdir -p /tmp/core_dumps
@@ -197,10 +191,17 @@ jobs:
           path: /tmp/pg_upgrade_newData_logs
       - codecov/upload:
           flags: 'test_<< parameters.old_pg_major >>_<< parameters.new_pg_major >>,upgrade'
+      - run:
+          name: 'Create codeclimate coverage'
+          command: |
+            lcov --directory . --capture --output-file lcov.info
+            sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
+            mkdir -p /tmp/codeclimate
+            codeclimate/test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
       - persist_to_workspace:
-          root: .
+          root: /tmp
           paths:
-            - codeclimate/$CIRCLE_JOB.json
+            - codeclimate/*.json
 
   test-arbitrary-configs:
     description: Runs tests on arbitrary configs
@@ -260,12 +261,6 @@ jobs:
 
           when: on_fail
       - run:
-          name: 'Create codeclimate coverage'
-          command: |
-            lcov --directory . --capture --output-file lcov.info
-            sed "s=^SF:$PWD=SF:=g" -i lcov.info # relative pats are required by codeclimate
-            codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$CIRCLE_JOB.json lcov.info
-      - run:
           name: 'Copy logfiles'
           command: |
             mkdir src/test/regress/tmp_citus_test/logfiles
@@ -288,10 +283,17 @@ jobs:
           path: src/test/regress/tmp_citus_test/logfiles
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,upgrade'
+      - run:
+          name: 'Create codeclimate coverage'
+          command: |
+            lcov --directory . --capture --output-file lcov.info
+            sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
+            mkdir -p /tmp/codeclimate
+            codeclimate/test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
       - persist_to_workspace:
-          root: .
+          root: /tmp
           paths:
-            - codeclimate/$CIRCLE_JOB.json
+            - codeclimate/*.json
 
   test-citus-upgrade:
     description: Runs citus upgrade tests
@@ -358,12 +360,6 @@ jobs:
             fi
           when: on_fail
       - run:
-          name: 'Create codeclimate coverage'
-          command: |
-            lcov --directory . --capture --output-file lcov.info
-            sed "s=^SF:$PWD=SF:=g" -i lcov.info # relative pats are required by codeclimate
-            codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$CIRCLE_JOB.json lcov.info
-      - run:
           name: 'Copy coredumps'
           command: |
             mkdir -p /tmp/core_dumps
@@ -380,10 +376,17 @@ jobs:
           path: /tmp/core_dumps
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,upgrade'
+      - run:
+          name: 'Create codeclimate coverage'
+          command: |
+            lcov --directory . --capture --output-file lcov.info
+            sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
+            mkdir -p /tmp/codeclimate
+            codeclimate/test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
       - persist_to_workspace:
-          root: .
+          root: /tmp
           paths:
-            - codeclimate/$CIRCLE_JOB.json
+            - codeclimate/*.json
 
   test-citus:
     description: Runs the common tests of citus
@@ -427,12 +430,6 @@ jobs:
             gosu circleci make -C src/test/regress << parameters.make >>
           no_output_timeout: 2m
       - run:
-          name: 'Create codeclimate coverage'
-          command: |
-            lcov --directory . --capture --output-file lcov.info
-            sed "s=^SF:$PWD=SF:=g" -i lcov.info # relative pats are required by codeclimate
-            codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$CIRCLE_JOB.json lcov.info
-      - run:
           name: 'Regressions'
           command: |
             if [ -f "src/test/regress/regression.diffs" ]; then
@@ -473,10 +470,17 @@ jobs:
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,<< parameters.make >>'
           when: always
+      - run:
+          name: 'Create codeclimate coverage'
+          command: |
+            lcov --directory . --capture --output-file lcov.info
+            sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
+            mkdir -p /tmp/codeclimate
+            codeclimate/test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
       - persist_to_workspace:
-          root: .
+          root: /tmp
           paths:
-            - codeclimate/$CIRCLE_JOB.json
+            - codeclimate/*.json
 
   tap-test-citus:
     description: Runs tap tests for citus
@@ -524,12 +528,6 @@ jobs:
             gosu circleci make -C src/test/<< parameters.suite >> << parameters.make >>
           no_output_timeout: 2m
       - run:
-          name: 'Create codeclimate coverage'
-          command: |
-            lcov --directory . --capture --output-file lcov.info
-            sed "s=^SF:$PWD=SF:=g" -i lcov.info # relative pats are required by codeclimate
-            codeclimate/test-reporter format-coverage -t lcov -o codeclimate/$CIRCLE_JOB.json lcov.info
-      - run:
           name: 'Copy coredumps'
           command: |
             mkdir -p /tmp/core_dumps
@@ -547,10 +545,17 @@ jobs:
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,tap_<< parameters.suite >>_<< parameters.make >>'
           when: always
+      - run:
+          name: 'Create codeclimate coverage'
+          command: |
+            lcov --directory . --capture --output-file lcov.info
+            sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
+            mkdir -p /tmp/codeclimate
+            codeclimate/test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
       - persist_to_workspace:
-          root: .
+          root: /tmp
           paths:
-            - codeclimate/$CIRCLE_JOB.json
+            - codeclimate/*.json
 
   check-merge-to-enterprise:
     docker:
