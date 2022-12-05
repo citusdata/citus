@@ -173,7 +173,7 @@ SELECT pg_reload_conf();
 -- END: Split a shard along its co-located shards
 
 -- BEGIN: Perform deferred cleanup.
-CALL pg_catalog.citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 -- END: Perform deferred cleanup.
 
 -- BEGIN: Validate Shard Info and Data
@@ -244,7 +244,7 @@ CALL pg_catalog.citus_cleanup_orphaned_resources();
 -- END: Split a partition table directly
 
 -- BEGIN: Perform deferred cleanup.
-CALL pg_catalog.citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 -- END: Perform deferred cleanup.
 
 -- BEGIN: Validate Shard Info and Data

@@ -31,6 +31,20 @@ INSERT INTO t SELECT x, x+1, MD5(random()::text) FROM generate_series(1,100000) 
 -- Initial shard placements
 SELECT * FROM shards_in_workers;
 
+-- Introduce a function that waits until all cleanup records are deleted, for testing purposes
+CREATE OR REPLACE FUNCTION public.wait_for_resource_cleanup() RETURNS void AS $$
+DECLARE
+record_count integer;
+BEGIN
+    SET client_min_messages TO WARNING;
+    EXECUTE 'SELECT COUNT(*) FROM pg_catalog.pg_dist_cleanup' INTO record_count;
+    WHILE  record_count != 0 LOOP
+	 CALL pg_catalog.citus_cleanup_orphaned_resources();
+     EXECUTE 'SELECT COUNT(*) FROM pg_catalog.pg_dist_cleanup' INTO record_count;
+    END LOOP;
+    RESET client_min_messages;
+END$$ LANGUAGE plpgsql;
+
 -- failure on sanity checks
 SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS move_shard.t CASCADE").kill()');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
@@ -71,7 +85,7 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 
 -- cancel on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* (ENABLE|DISABLE)").cancel(' || :pid || ')');
@@ -79,7 +93,7 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 
 -- try again
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
@@ -102,7 +116,7 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_2_proxy_port, 'loca
 
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 CALL citus_cleanup_orphaned_shards();
 
 -- failure on setting lock_timeout (right before dropping subscriptions & replication slots)
@@ -114,7 +128,7 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_2_proxy_port, 'loca
 
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 CALL citus_cleanup_orphaned_shards();
 
 -- cancellation on disabling subscription (right before dropping it)
@@ -123,7 +137,7 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 
 -- disable maintenance daemon cleanup, to prevent the flaky test
 ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
@@ -148,7 +162,7 @@ SELECT pg_reload_conf();
 -- cleanup leftovers
 -- then, verify we don't see any error for already dropped subscription
 SET client_min_messages TO WARNING;
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 RESET client_min_messages;
 
 -- cancellation on dropping subscription
@@ -169,7 +183,7 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 
 -- lets create few more indexes and fail with both
 -- parallel mode and sequential mode

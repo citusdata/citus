@@ -17,7 +17,8 @@ SELECT pg_backend_pid() as pid \gset
 SELECT citus.mitmproxy('conn.allow()');
 
 -- cleanup leftovers if any
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
+SET client_min_messages TO ERROR;
 
 CREATE TABLE table_1 (id int PRIMARY KEY);
 CREATE TABLE table_2 (ref_id int REFERENCES table_1(id) UNIQUE, data int);
@@ -134,7 +135,8 @@ SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode 
 
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
+SET client_min_messages TO ERROR;
 
 -- cancellation on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="DROP SUBSCRIPTION").cancel(' || :pid || ')');
@@ -142,7 +144,8 @@ SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode 
 
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
+SET client_min_messages TO ERROR;
 
 -- failure on dropping publication
 SELECT citus.mitmproxy('conn.onQuery(query="DROP PUBLICATION").killall()');
@@ -150,7 +153,8 @@ SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode 
 
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
+SET client_min_messages TO ERROR;
 
 -- cancellation on dropping publication
 SELECT citus.mitmproxy('conn.onQuery(query="DROP PUBLICATION").cancel(' || :pid || ')');
@@ -158,7 +162,8 @@ SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode 
 
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
+SET client_min_messages TO ERROR;
 
 -- failure on dropping replication slot
 SELECT citus.mitmproxy('conn.onQuery(query="select pg_drop_replication_slot").killall()');
@@ -166,7 +171,8 @@ SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode 
 
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
+SET client_min_messages TO ERROR;
 
 -- cancellation on dropping replication slot
 SELECT citus.mitmproxy('conn.onQuery(query="select pg_drop_replication_slot").cancel(' || :pid || ')');
@@ -174,7 +180,8 @@ SELECT isolate_tenant_to_new_shard('table_1', 5, 'CASCADE', shard_transfer_mode 
 
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
+SET client_min_messages TO ERROR;
 
 -- failure on foreign key creation
 SELECT citus.mitmproxy('conn.onQuery(query="ADD CONSTRAINT table_2_ref_id_fkey FOREIGN KEY").kill()');

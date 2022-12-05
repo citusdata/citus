@@ -41,6 +41,19 @@ SELECT * FROM shards_in_workers;
      103 | worker1
 (4 rows)
 
+-- Introduce a function that waits until all cleanup records are deleted, for testing purposes
+CREATE OR REPLACE FUNCTION public.wait_for_resource_cleanup() RETURNS void AS $$
+DECLARE
+record_count integer;
+BEGIN
+    SET client_min_messages TO WARNING;
+    EXECUTE 'SELECT COUNT(*) FROM pg_catalog.pg_dist_cleanup' INTO record_count;
+    WHILE  record_count != 0 LOOP
+	 CALL pg_catalog.citus_cleanup_orphaned_resources();
+     EXECUTE 'SELECT COUNT(*) FROM pg_catalog.pg_dist_cleanup' INTO record_count;
+    END LOOP;
+    RESET client_min_messages;
+END$$ LANGUAGE plpgsql;
 -- failure on sanity checks
 SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS move_shard.t CASCADE").kill()');
  mitmproxy
@@ -138,8 +151,12 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 2 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- cancel on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* (ENABLE|DISABLE)").cancel(' || :pid || ')');
  mitmproxy
@@ -156,8 +173,12 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 4 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- try again
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
  master_move_shard_placement
@@ -225,8 +246,12 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 2 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 CALL citus_cleanup_orphaned_shards();
 NOTICE:  cleaned up 1 orphaned shards
 -- failure on setting lock_timeout (right before dropping subscriptions & replication slots)
@@ -273,8 +298,12 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 4 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 CALL citus_cleanup_orphaned_shards();
 NOTICE:  cleaned up 1 orphaned shards
 -- cancellation on disabling subscription (right before dropping it)
@@ -293,14 +322,18 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 4 orphaned resources
 -- disable maintenance daemon cleanup, to prevent the flaky test
 ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
 SELECT pg_reload_conf();
  pg_reload_conf
 ---------------------------------------------------------------------
  t
+(1 row)
+
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
 (1 row)
 
 -- failure on dropping subscription
@@ -345,7 +378,12 @@ SELECT pg_reload_conf();
 -- cleanup leftovers
 -- then, verify we don't see any error for already dropped subscription
 SET client_min_messages TO WARNING;
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 RESET client_min_messages;
 -- cancellation on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").cancel(' || :pid || ')');
@@ -393,8 +431,12 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
-CALL citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 3 orphaned resources
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- lets create few more indexes and fail with both
 -- parallel mode and sequential mode
 CREATE INDEX index_failure_2 ON t(id);

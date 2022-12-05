@@ -17,9 +17,7 @@ SET citus.shard_replication_factor TO 1;
 SELECT pg_backend_pid() as pid \gset
 
 -- cleanup any leftovers from previous tests so we get consistent output
-SET client_min_messages TO WARNING;
-CALL pg_catalog.citus_cleanup_orphaned_resources();
-RESET client_min_messages;
+SELECT public.wait_for_resource_cleanup();
 
 -- Disable defer shard delete to stop auto cleanup.
 ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
@@ -58,7 +56,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SELECT subname FROM pg_subscription;
 
     \c - postgres - :master_port
-    CALL pg_catalog.citus_cleanup_orphaned_resources();
+    SELECT public.wait_for_resource_cleanup();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
 
@@ -109,7 +107,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SELECT subname FROM pg_subscription;
 
     \c - postgres - :master_port
-    CALL pg_catalog.citus_cleanup_orphaned_resources();
+    SELECT public.wait_for_resource_cleanup();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
 
@@ -155,7 +153,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SELECT subname FROM pg_subscription;
 
     \c - postgres - :master_port
-    CALL pg_catalog.citus_cleanup_orphaned_resources();
+    SELECT public.wait_for_resource_cleanup();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
 
@@ -201,7 +199,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SELECT subname FROM pg_subscription;
 
     \c - postgres - :master_port
-    CALL pg_catalog.citus_cleanup_orphaned_resources();
+    SELECT public.wait_for_resource_cleanup();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
 
@@ -247,7 +245,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SELECT subname FROM pg_subscription;
 
     \c - postgres - :master_port
-    CALL pg_catalog.citus_cleanup_orphaned_resources();
+    SELECT public.wait_for_resource_cleanup();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
 
@@ -295,7 +293,7 @@ SELECT create_distributed_table('table_to_split', 'id');
     SELECT subname FROM pg_subscription;
 
     \c - postgres - :master_port
-    CALL pg_catalog.citus_cleanup_orphaned_resources();
+    SELECT public.wait_for_resource_cleanup();
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
 
