@@ -693,7 +693,7 @@ jobs:
           path: src/test/regress/tmp_check/worker.57638/log
   upload-coverage:
     docker:
-      - image: 'citus/extbuilder:latest'
+      - image: 'citus/exttester:<< pipeline.parameters.pg15_version >><< pipeline.parameters.image_suffix >>'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
