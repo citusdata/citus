@@ -33,6 +33,8 @@ if not test_file_extension in '.spec.sql':
     )
     sys.exit(1)
 
+test_schedule = ''
+
 # find related schedule
 for schedule_file_path in sorted(glob(os.path.join(regress_dir, "*_schedule"))):
         for schedule_line in open(schedule_file_path, 'r'):
