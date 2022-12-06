@@ -8,6 +8,7 @@ SHOW citus.enable_cluster_clock;
 CREATE TABLE clock_test (id int, nonid int);
 SELECT create_distributed_table('clock_test', 'id', colocate_with := 'none');
 
+
 --
 -- Compare <logical, counter> pairs
 --
