@@ -1151,6 +1151,7 @@ workflows:
             - test-13_check-enterprise-isolation-logicalrep-3
             - test-13_check-enterprise-failure
             - test-13_check-split
+            - test-13_check-arbitrary-configs
             - test-14_check-multi
             - test-14_check-multi-1
             - test-14_check-mx
@@ -1193,6 +1194,7 @@ workflows:
             - test-15_check-arbitrary-configs
             - test-13-14_check-pg-upgrade
             - test-14-15_check-pg-upgrade
+            - test-13_check-citus-upgrade
 
 
       - ch_benchmark:
