@@ -24,7 +24,7 @@ parameters:
     default: '0.8.18'
   flaky_test:
     type: string
-    default: ''
+    default: 'background_task_queue_monitor'
   flaky_test_make:
     type: string
     default: check-minimal
