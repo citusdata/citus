@@ -12,8 +12,8 @@ import common
 import config
 
 args = argparse.ArgumentParser()
+args.add_argument("test_name", help="Test name (must be included in a schedule.)", nargs='?')
 args.add_argument("-p", "--path", required=False, help="Relative path for test file (must have a .sql or .spec extension)", type=pathlib.Path)
-args.add_argument("-t", "--test_name", required=False, help="Test name (must be included in a schedule.")
 args.add_argument("-r", "--repeat", help="Number of test to run", type=int, default=5)
 args.add_argument("-s", "--schedule", required=False, help="Test schedule to be used as a base (optional)", nargs='?', const='', default='')
 
