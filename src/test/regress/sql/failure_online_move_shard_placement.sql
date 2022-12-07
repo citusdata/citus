@@ -125,6 +125,10 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 SELECT citus.mitmproxy('conn.allow()');
 CALL citus_cleanup_orphaned_resources();
 
+-- disable maintenance daemon cleanup, to prevent the flaky test
+ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
+SELECT pg_reload_conf();
+
 -- failure on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").killall()');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
@@ -136,6 +140,10 @@ SELECT COUNT(*)
     FROM run_command_on_workers(
         $$DROP SUBSCRIPTION citus_shard_move_subscription_10_15$$)
     WHERE success AND result = 'DROP SUBSCRIPTION';
+
+-- reset back
+ALTER SYSTEM RESET citus.defer_shard_delete_interval;
+SELECT pg_reload_conf();
 
 -- cleanup leftovers
 -- then, verify we don't see any error for already dropped subscription
