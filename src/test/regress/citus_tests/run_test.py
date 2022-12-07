@@ -75,7 +75,7 @@ tmp_schedule_path = os.path.join(regress_dir, f"tmp_schedule_{ random.randint(1,
 shutil.copy2(os.path.join(regress_dir, test_schedule), tmp_schedule_path)
 with open(tmp_schedule_path, "a") as myfile:
         for i in range(args['ntimes']):
-            myfile.write(test_schedule_line + "\n")
+            myfile.write(test_schedule_line)
 
 # find suitable make recipe
 if "isolation" in test_schedule:
