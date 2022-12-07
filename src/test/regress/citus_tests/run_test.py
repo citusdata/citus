@@ -12,27 +12,37 @@ import common
 import config
 
 args = argparse.ArgumentParser()
-args.add_argument("-t", "--test", required=True, help="Relative path for test file (must have a .sql or .spec extension)", type=pathlib.Path)
+args.add_argument("-p", "--path", required=False, help="Relative path for test file (must have a .sql or .spec extension)", type=pathlib.Path)
+args.add_argument("-t", "--test_name", required=False, help="Test name (must be included in a schedule.")
 args.add_argument("-n", "--ntimes", required=True, help="Number of test to run", type=int)
 args.add_argument("-s", "--schedule", required=False, help="Test schedule to be used as a base (optional)", nargs='?', const='', default='')
 
 args = vars(args.parse_args())
 
 regress_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-test_file_path = os.path.join(os.getcwd(), args['test'])
+test_file_path = args['path']
+test_file_name = args['test_name']
 
-if not os.path.isfile(test_file_path):
-    print(f"ERROR: test file '{test_file_path}' does not exist")
+if not (test_file_name or test_file_path):
+    print(f"FATAL: No test given.")
     sys.exit(2)
 
-test_file_extension = pathlib.Path(test_file_path).suffix
-test_file_name = pathlib.Path(test_file_path).stem
 
-if not test_file_extension in '.spec.sql':
-    print(
-        "ERROR: Unrecognized test extension. Valid extensions are: .sql and .spec"
-    )
-    sys.exit(1)
+if test_file_path:
+    test_file_path = os.path.join(os.getcwd(), args['path'])
+
+    if not os.path.isfile(test_file_path):
+        print(f"ERROR: test file '{test_file_path}' does not exist")
+        sys.exit(2)
+
+    test_file_extension = pathlib.Path(test_file_path).suffix
+    test_file_name = pathlib.Path(test_file_path).stem
+
+    if not test_file_extension in '.spec.sql':
+        print(
+            "ERROR: Unrecognized test extension. Valid extensions are: .sql and .spec"
+        )
+        sys.exit(1)
 
 test_schedule = ''
 
