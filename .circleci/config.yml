@@ -2,16 +2,1105 @@ version: 2.1
 orbs:
   codecov: codecov/codecov@1.1.1
   azure-cli: circleci/azure-cli@1.0.0
-  path-filtering: circleci/path-filtering@0.1.3
 
-setup: true
+parameters:
+  image_suffix:
+    type: string
+    default: '-v9372c09'
+  pg13_version:
+    type: string
+    default: '13.9'
+  pg14_version:
+    type: string
+    default: '14.6'
+  pg15_version:
+    type: string
+    default: '15.1'
+  upgrade_pg_versions:
+    type: string
+    default: '13.9-14.6-15.1'
+  style_checker_tools_version:
+    type: string
+    default: '0.8.18'
+  flaky_test:
+    type: string
+    default: ''
+  flaky_test_schedule:
+    type: string
+    default: check-minimal
+  check-flakyness:
+    type: boolean
+    default: false
+
+jobs:
+  build:
+    description: Build the citus extension
+    parameters:
+      pg_major:
+        description: postgres major version building citus for
+        type: integer
+      image:
+        description: docker image to use for the build
+        type: string
+        default: citus/extbuilder
+      image_tag:
+        description: tag to use for the docker image
+        type: string
+    docker:
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
+    steps:
+      - checkout
+      - run:
+          name: 'Configure, Build, and Install'
+          command: |
+            ./ci/build-citus.sh
+      - persist_to_workspace:
+          root: .
+          paths:
+            - build-<< parameters.pg_major >>/*
+            - install-<<parameters.pg_major >>.tar
+
+  check-style:
+    docker:
+      - image: 'citus/stylechecker:<< pipeline.parameters.style_checker_tools_version >><< pipeline.parameters.image_suffix >>'
+    steps:
+      - checkout
+      - run:
+          name: 'Check Style'
+          command: citus_indent --check
+      - run:
+          name: 'Fix whitespace'
+          command: ci/editorconfig.sh && git diff --exit-code
+      - run:
+          name: 'Remove useless declarations'
+          command: ci/remove_useless_declarations.sh && git diff --cached --exit-code
+      - run:
+          name: 'Normalize test output'
+          command: ci/normalize_expected.sh && git diff --exit-code
+      - run:
+          name: 'Check for C-style comments in migration files'
+          command: ci/disallow_c_comments_in_migrations.sh && git diff --exit-code
+      - run:
+          name: 'Check for comment--cached ns that start with # character in spec files'
+          command: ci/disallow_hash_comments_in_spec_files.sh && git diff --exit-code
+      - run:
+          name: 'Check for gitignore entries .for source files'
+          command: ci/fix_gitignore.sh && git diff --exit-code
+      - run:
+          name: 'Check for lengths of changelog entries'
+          command: ci/disallow_long_changelog_entries.sh
+      - run:
+          name: 'Check for banned C API usage'
+          command: ci/banned.h.sh
+      - run:
+          name: 'Check for tests missing in schedules'
+          command: ci/check_all_tests_are_run.sh
+      - run:
+          name: 'Check if all CI scripts are actually run'
+          command: ci/check_all_ci_scripts_are_run.sh
+      - run:
+          name: 'Check if all GUCs are sorted alphabetically'
+          command: ci/check_gucs_are_alphabetically_sorted.sh
+
+  check-sql-snapshots:
+    docker:
+      - image: 'citus/extbuilder:latest'
+    steps:
+      - checkout
+      - run:
+          name: 'Check Snapshots'
+          command: ci/check_sql_snapshots.sh
+
+  test-pg-upgrade:
+    description: Runs postgres upgrade tests
+    parameters:
+      old_pg_major:
+        description: 'postgres major version to use before the upgrade'
+        type: integer
+      new_pg_major:
+        description: 'postgres major version to upgrade to'
+        type: integer
+      image:
+        description: 'docker image to use as for the tests'
+        type: string
+        default: citus/pgupgradetester
+      image_tag:
+        description: 'docker image tag to use'
+        type: string
+    docker:
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install Extension'
+          command: |
+            tar xfv "${CIRCLE_WORKING_DIRECTORY}/install-<< parameters.old_pg_major >>.tar" --directory /
+            tar xfv "${CIRCLE_WORKING_DIRECTORY}/install-<< parameters.new_pg_major >>.tar" --directory /
+      - run:
+          name: 'Configure'
+          command: |
+            chown -R circleci .
+            gosu circleci ./configure --without-pg-version-check
+      - run:
+          name: 'Enable core dumps'
+          command: |
+            ulimit -c unlimited
+      - run:
+          name: 'Install and test postgres upgrade'
+          command: |
+            gosu circleci \
+              make -C src/test/regress \
+                check-pg-upgrade \
+                old-bindir=/usr/lib/postgresql/<< parameters.old_pg_major >>/bin \
+                new-bindir=/usr/lib/postgresql/<< parameters.new_pg_major >>/bin
+          no_output_timeout: 2m
+      - run:
+          name: 'Regressions'
+          command: |
+            if [ -f "src/test/regress/regression.diffs" ]; then
+              cat src/test/regress/regression.diffs
+              exit 1
+            fi
+          when: on_fail
+      - run:
+          name: 'Copy coredumps'
+          command: |
+            mkdir -p /tmp/core_dumps
+            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
+            if [ ${#core_files[@]} -gt 0 ]; then
+                cp "${core_files[@]}" /tmp/core_dumps
+            fi
+          when: on_fail
+      - run:
+          name: 'Copy pg_upgrade logs for newData dir'
+          command: |
+            mkdir -p /tmp/pg_upgrade_newData_logs
+            if ls src/test/regress/tmp_upgrade/newData/*.log 1> /dev/null 2>&1; then
+                cp src/test/regress/tmp_upgrade/newData/*.log /tmp/pg_upgrade_newData_logs
+            fi
+          when: on_fail
+      - store_artifacts:
+          name: 'Save regressions'
+          path: src/test/regress/regression.diffs
+      - store_artifacts:
+          name: 'Save core dumps'
+          path: /tmp/core_dumps
+      - store_artifacts:
+          name: 'Save pg_upgrade logs for newData dir'
+          path: /tmp/pg_upgrade_newData_logs
+      - codecov/upload:
+          flags: 'test_<< parameters.old_pg_major >>_<< parameters.new_pg_major >>,upgrade'
+
+  test-arbitrary-configs:
+    description: Runs tests on arbitrary configs
+    parallelism: 6
+    parameters:
+      pg_major:
+        description: 'postgres major version to use'
+        type: integer
+      image:
+        description: 'docker image to use as for the tests'
+        type: string
+        default: citus/failtester
+      image_tag:
+        description: 'docker image tag to use'
+        type: string
+    docker:
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
+    resource_class: xlarge
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install Extension'
+          command: |
+            tar xfv "${CIRCLE_WORKING_DIRECTORY}/install-<< parameters.pg_major >>.tar" --directory /
+      - run:
+          name: 'Configure'
+          command: |
+            chown -R circleci .
+            gosu circleci ./configure --without-pg-version-check
+      - run:
+          name: 'Enable core dumps'
+          command: |
+            ulimit -c unlimited
+      - run:
+          name: 'Test arbitrary configs'
+          command: |
+            TESTS=$(src/test/regress/citus_tests/print_test_names.py | circleci tests split)
+            # Our test suite expects comma separated values
+            TESTS=$(echo $TESTS | tr ' ' ',')
+            # TESTS will contain subset of configs that will be run on a container and we use multiple containers
+            # to run the test suite
+            gosu circleci \
+              make -C src/test/regress \
+                check-arbitrary-configs parallel=4 CONFIGS=$TESTS
+          no_output_timeout: 2m
+      - run:
+          name: 'Show regressions'
+          command: |
+            find src/test/regress/tmp_citus_test/ -name "regression*.diffs" -exec cat {} +
+            lines=$(find src/test/regress/tmp_citus_test/ -name "regression*.diffs" | wc -l)
+            if [ $lines -ne 0 ]; then
+               exit 1
+            fi
+
+          when: on_fail
+      - run:
+          name: 'Copy logfiles'
+          command: |
+            mkdir src/test/regress/tmp_citus_test/logfiles
+            find src/test/regress/tmp_citus_test/ -name "logfile_*" -exec cp -t src/test/regress/tmp_citus_test/logfiles/ {} +
+          when: on_fail
+      - run:
+          name: 'Copy coredumps'
+          command: |
+            mkdir -p /tmp/core_dumps
+            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
+            if [ ${#core_files[@]} -gt 0 ]; then
+                cp "${core_files[@]}" /tmp/core_dumps
+            fi
+          when: on_fail
+      - store_artifacts:
+          name: 'Save core dumps'
+          path: /tmp/core_dumps
+      - store_artifacts:
+          name: 'Save logfiles'
+          path: src/test/regress/tmp_citus_test/logfiles
+      - codecov/upload:
+          flags: 'test_<< parameters.pg_major >>,upgrade'
+
+  test-citus-upgrade:
+    description: Runs citus upgrade tests
+    parameters:
+      pg_major:
+        description: 'postgres major version'
+        type: integer
+      image:
+        description: 'docker image to use as for the tests'
+        type: string
+        default: citus/citusupgradetester
+      image_tag:
+        description: 'docker image tag to use'
+        type: string
+    docker:
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Configure'
+          command: |
+            chown -R circleci .
+            gosu circleci ./configure --without-pg-version-check
+      - run:
+          name: 'Enable core dumps'
+          command: |
+            ulimit -c unlimited
+      - run:
+          name: 'Install and test citus upgrade'
+          command: |
+            # run make check-citus-upgrade for all citus versions
+            # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
+            for citus_version in ${CITUS_VERSIONS}; do \
+              gosu circleci \
+                make -C src/test/regress \
+                  check-citus-upgrade \
+                  bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
+                  citus-old-version=${citus_version} \
+                  citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
+                  citus-post-tar=/home/circleci/project/install-$PG_MAJOR.tar; \
+            done;
+
+            # run make check-citus-upgrade-mixed for all citus versions
+            # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
+            for citus_version in ${CITUS_VERSIONS}; do \
+              gosu circleci \
+                make -C src/test/regress \
+                  check-citus-upgrade-mixed \
+                  citus-old-version=${citus_version} \
+                  bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
+                  citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
+                  citus-post-tar=/home/circleci/project/install-$PG_MAJOR.tar; \
+            done;
+          no_output_timeout: 2m
+      - run:
+          name: 'Regressions'
+          command: |
+            if [ -f "src/test/regress/regression.diffs" ]; then
+              cat src/test/regress/regression.diffs
+              exit 1
+            fi
+          when: on_fail
+      - run:
+          name: 'Copy coredumps'
+          command: |
+            mkdir -p /tmp/core_dumps
+            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
+            if [ ${#core_files[@]} -gt 0 ]; then
+                cp "${core_files[@]}" /tmp/core_dumps
+            fi
+          when: on_fail
+      - store_artifacts:
+          name: 'Save regressions'
+          path: src/test/regress/regression.diffs
+      - store_artifacts:
+          name: 'Save core dumps'
+          path: /tmp/core_dumps
+      - codecov/upload:
+          flags: 'test_<< parameters.pg_major >>,upgrade'
+
+  test-citus:
+    description: Runs the common tests of citus
+    parameters:
+      pg_major:
+        description: 'postgres major version'
+        type: integer
+      image:
+        description: 'docker image to use as for the tests'
+        type: string
+        default: citus/exttester
+      image_tag:
+        description: 'docker image tag to use'
+        type: string
+      make:
+        description: 'make target'
+        type: string
+    docker:
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install Extension'
+          command: |
+            tar xfv "${CIRCLE_WORKING_DIRECTORY}/install-${PG_MAJOR}.tar" --directory /
+      - run:
+          name: 'Configure'
+          command: |
+            chown -R circleci .
+            gosu circleci ./configure --without-pg-version-check
+      - run:
+          name: 'Enable core dumps'
+          command: |
+            ulimit -c unlimited
+      - run:
+          name: 'Run Test'
+          command: |
+            gosu circleci make -C src/test/regress << parameters.make >>
+          no_output_timeout: 2m
+      - run:
+          name: 'Regressions'
+          command: |
+            if [ -f "src/test/regress/regression.diffs" ]; then
+              cat src/test/regress/regression.diffs
+              exit 1
+            fi
+          when: on_fail
+      - run:
+          name: 'Copy coredumps'
+          command: |
+            mkdir -p /tmp/core_dumps
+            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
+            if [ ${#core_files[@]} -gt 0 ]; then
+                cp "${core_files[@]}" /tmp/core_dumps
+            fi
+          when: on_fail
+      - store_artifacts:
+          name: 'Save regressions'
+          path: src/test/regress/regression.diffs
+      - store_artifacts:
+          name: 'Save mitmproxy output (failure test specific)'
+          path: src/test/regress/proxy.output
+      - store_artifacts:
+          name: 'Save results'
+          path: src/test/regress/results/
+      - store_artifacts:
+          name: 'Save core dumps'
+          path: /tmp/core_dumps
+      - store_artifacts:
+          name: 'Save coordinator log'
+          path: src/test/regress/tmp_check/master/log
+      - store_artifacts:
+          name: 'Save worker1 log'
+          path: src/test/regress/tmp_check/worker.57637/log
+      - store_artifacts:
+          name: 'Save worker2 log'
+          path: src/test/regress/tmp_check/worker.57638/log
+      - codecov/upload:
+          flags: 'test_<< parameters.pg_major >>,<< parameters.make >>'
+          when: always
+
+  tap-test-citus:
+    description: Runs tap tests for citus
+    parameters:
+      pg_major:
+        description: 'postgres major version'
+        type: integer
+      image:
+        description: 'docker image to use as for the tests'
+        type: string
+        default: citus/exttester
+      image_tag:
+        description: 'docker image tag to use'
+        type: string
+      suite:
+        description: 'name of the tap test suite to run'
+        type: string
+      make:
+        description: 'make target'
+        type: string
+        default: installcheck
+    docker:
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install Extension'
+          command: |
+            tar xfv "${CIRCLE_WORKING_DIRECTORY}/install-${PG_MAJOR}.tar" --directory /
+      - run:
+          name: 'Configure'
+          command: |
+            chown -R circleci .
+            gosu circleci ./configure --without-pg-version-check
+      - run:
+          name: 'Enable core dumps'
+          command: |
+            ulimit -c unlimited
+      - run:
+          name: 'Run Test'
+          command: |
+            gosu circleci make -C src/test/<< parameters.suite >> << parameters.make >>
+          no_output_timeout: 2m
+      - run:
+          name: 'Copy coredumps'
+          command: |
+            mkdir -p /tmp/core_dumps
+            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
+            if [ ${#core_files[@]} -gt 0 ]; then
+                cp "${core_files[@]}" /tmp/core_dumps
+            fi
+          when: on_fail
+      - store_artifacts:
+          name: 'Save tap logs'
+          path: /home/circleci/project/src/test/<< parameters.suite >>/tmp_check/log
+      - store_artifacts:
+          name: 'Save core dumps'
+          path: /tmp/core_dumps
+      - codecov/upload:
+          flags: 'test_<< parameters.pg_major >>,tap_<< parameters.suite >>_<< parameters.make >>'
+          when: always
+
+  check-merge-to-enterprise:
+    docker:
+      - image: citus/extbuilder:<< pipeline.parameters.pg13_version >>
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - run:
+          command: |
+            ci/check_enterprise_merge.sh
+
+  ch_benchmark:
+    docker:
+      - image: buildpack-deps:stretch
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - azure-cli/install
+      - azure-cli/login-with-service-principal
+      - run:
+          command: |
+            cd ./src/test/hammerdb
+            sh run_hammerdb.sh citusbot_ch_benchmark_rg
+          name: install dependencies and run ch_benchmark tests
+          no_output_timeout: 20m
+
+  tpcc_benchmark:
+    docker:
+      - image: buildpack-deps:stretch
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - azure-cli/install
+      - azure-cli/login-with-service-principal
+      - run:
+          command: |
+            cd ./src/test/hammerdb
+            sh run_hammerdb.sh citusbot_tpcc_benchmark_rg
+          name: install dependencies and run ch_benchmark tests
+          no_output_timeout: 20m
+
+  test-flakyness:
+    description: Runs a test multiple times to see if it's flaky
+    parallelism: 32
+    parameters:
+      pg_major:
+        description: 'postgres major version'
+        type: integer
+      image:
+        description: 'docker image to use as for the tests'
+        type: string
+        default: citus/exttester
+      image_tag:
+        description: 'docker image tag to use'
+        type: string
+      schedule:
+        description: 'test schedule'
+        type: string
+        default: ''
+      test:
+        description: 'the test file path that should be run multiple times'
+        type: string
+        default: ''
+      runs:
+        description: 'number of times that the test should be run in total'
+        type: integer
+        default: 50
+    docker:
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
+    working_directory: /home/circleci/project
+    resource_class: small
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Detect regression tests need to be ran'
+          command: |
+            testForDebugging="<< parameters.test >>"
+
+            if [ -z "$testForDebugging" ]; then
+              detected_changes=$(git diff origin/HEAD --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*.sql\|src/test/regress/spec/.*.spec' || true))
+              tests=${detected_changes}
+            else
+              tests=$testForDebugging;
+            fi
+
+            if [ -z "$tests" ]; then
+                echo "No test found."
+                circleci-agent step halt
+            else
+              echo "Detected tests " $tests
+            fi
+
+            echo export tests=\""$tests"\" >> "$BASH_ENV"
+            source "$BASH_ENV"
+      - run:
+          name: 'Install Extension'
+          command: |
+            tar xfv "${CIRCLE_WORKING_DIRECTORY}/install-${PG_MAJOR}.tar" --directory /
+      - run:
+          name: 'Configure'
+          command: |
+            chown -R circleci .
+            gosu circleci ./configure --without-pg-version-check
+      - run:
+          name: 'Enable core dumps'
+          command: |
+            ulimit -c unlimited
+      - run:
+          name: 'Run minimal tests'
+          command: |
+            tests_array=($tests)
+            for test in "${tests_array[@]}"
+            do
+                echo $test
+                gosu circleci src/test/regress/citus_tests/run_test.py -t $test -n << parameters.runs >> -s << parameters.schedule >>
+            done
+          no_output_timeout: 2m
+      - run:
+          name: 'Regressions'
+          command: |
+            if [ -f "src/test/regress/regression.diffs" ]; then
+              cat src/test/regress/regression.diffs
+              exit 1
+            fi
+          when: on_fail
+      - run:
+          name: 'Copy coredumps'
+          command: |
+            mkdir -p /tmp/core_dumps
+            core_files=( $(find . -type f -regex .*core.*\d*.*postgres) )
+            if [ ${#core_files[@]} -gt 0 ]; then
+                cp "${core_files[@]}" /tmp/core_dumps
+            fi
+          when: on_fail
+      - store_artifacts:
+          name: 'Save regressions'
+          path: src/test/regress/regression.diffs
+      - store_artifacts:
+          name: 'Save mitmproxy output (failure test specific)'
+          path: src/test/regress/proxy.output
+      - store_artifacts:
+          name: 'Save results'
+          path: src/test/regress/results/
+      - store_artifacts:
+          name: 'Save core dumps'
+          path: /tmp/core_dumps
+      - store_artifacts:
+          name: 'Save coordinator log'
+          path: src/test/regress/tmp_check/master/log
+      - store_artifacts:
+          name: 'Save worker1 log'
+          path: src/test/regress/tmp_cßheck/worker.57637/log
+      - store_artifacts:
+          name: 'Save worker2 log'
+          path: src/test/regress/tmp_check/worker.57638/log
 
 workflows:
-  setup:
+  version: 2
+  flaky_test_debugging:
+    when: << pipeline.parameters.flaky_test >>
     jobs:
-      - path-filtering/filter:
-          base-revision: main
-          config-path: .circleci/continue-config.yml
-          mapping: |
-            src/test/regress/sql/.* check-flakyness true
-            src/test/regress/spec/.* check-flakyness true
+      - build:
+          name: build-flaky-15
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+
+      - test-flakyness:
+          name: 'test-15_flaky'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          requires: [build-flaky-15]
+          schedule: '<< pipeline.parameters.flaky_test_schedule >>'
+          test: '<< pipeline.parameters.flaky_test >>'
+
+  build_and_test:
+    when:
+      not: << pipeline.parameters.flaky_test >>
+    jobs:
+      - build:
+          name: build-13
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+      - build:
+          name: build-14
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+      - build:
+          name: build-15
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+
+      - check-style
+      - check-sql-snapshots
+
+      - test-citus:
+          name: 'test-13_check-multi'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-multi
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-multi-1'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-multi-1
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-mx'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-multi-mx
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-vanilla'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-vanilla
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-isolation'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-isolation
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-operations'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-operations
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-follower-cluster'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-follower-cluster
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-columnar'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-columnar
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-columnar-isolation'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-columnar-isolation
+          requires: [build-13]
+      - tap-test-citus:
+          name: 'test-13_tap-recovery'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          suite: recovery
+          requires: [build-13]
+      - tap-test-citus:
+          name: 'test-13_tap-columnar-freezing'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          suite: columnar_freezing
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-failure'
+          pg_major: 13
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-failure
+          requires: [build-13]
+
+      - test-citus:
+          name: 'test-13_check-enterprise'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-enterprise
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-enterprise-isolation'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-enterprise-isolation
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-enterprise-isolation-logicalrep-1'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-enterprise-isolation-logicalrep-1
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-enterprise-isolation-logicalrep-2'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-enterprise-isolation-logicalrep-2
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-enterprise-isolation-logicalrep-3'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-enterprise-isolation-logicalrep-3
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-enterprise-failure'
+          pg_major: 13
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-enterprise-failure
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-split'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          make: check-split
+          requires: [build-13]
+
+      - test-citus:
+          name: 'test-14_check-split'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-split
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-enterprise'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-enterprise
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-enterprise-isolation'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-enterprise-isolation
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-enterprise-isolation-logicalrep-1'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-enterprise-isolation-logicalrep-1
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-enterprise-isolation-logicalrep-2'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-enterprise-isolation-logicalrep-2
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-enterprise-isolation-logicalrep-3'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-enterprise-isolation-logicalrep-3
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-enterprise-failure'
+          pg_major: 14
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-enterprise-failure
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-multi'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-multi
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-multi-1'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-multi-1
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-mx'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-multi-mx
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-vanilla'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-vanilla
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-isolation'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-isolation
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-operations'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-operations
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-follower-cluster'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-follower-cluster
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-columnar'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-columnar
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-columnar-isolation'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-columnar-isolation
+          requires: [build-14]
+      - tap-test-citus:
+          name: 'test-14_tap-recovery'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          suite: recovery
+          requires: [build-14]
+      - tap-test-citus:
+          name: 'test-14_tap-columnar-freezing'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          suite: columnar_freezing
+          requires: [build-14]
+      - test-citus:
+          name: 'test-14_check-failure'
+          pg_major: 14
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          make: check-failure
+          requires: [build-14]
+
+      - test-citus:
+          name: 'test-15_check-split'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-split
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-enterprise'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-enterprise
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-enterprise-isolation'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-enterprise-isolation
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-enterprise-isolation-logicalrep-1'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-enterprise-isolation-logicalrep-1
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-enterprise-isolation-logicalrep-2'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-enterprise-isolation-logicalrep-2
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-enterprise-isolation-logicalrep-3'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-enterprise-isolation-logicalrep-3
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-enterprise-failure'
+          pg_major: 15
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-enterprise-failure
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-multi'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-multi
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-multi-1'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-multi-1
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-mx'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-multi-mx
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-vanilla'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-vanilla
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-isolation'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-isolation
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-operations'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-operations
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-follower-cluster'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-follower-cluster
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-columnar'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-columnar
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-columnar-isolation'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-columnar-isolation
+          requires: [build-15]
+      - tap-test-citus:
+          name: 'test-15_tap-recovery'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          suite: recovery
+          requires: [build-15]
+      - tap-test-citus:
+          name: 'test-15_tap-columnar-freezing'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          suite: columnar_freezing
+          requires: [build-15]
+      - test-citus:
+          name: 'test-15_check-failure'
+          pg_major: 15
+          image: citus/failtester
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          make: check-failure
+          requires: [build-15]
+
+      - test-arbitrary-configs:
+          name: 'test-13_check-arbitrary-configs'
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          requires: [build-13]
+      - test-arbitrary-configs:
+          name: 'test-14_check-arbitrary-configs'
+          pg_major: 14
+          image_tag: '<< pipeline.parameters.pg14_version >>'
+          requires: [build-14]
+      - test-arbitrary-configs:
+          name: 'test-15_check-arbitrary-configs'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          requires: [build-15]
+
+      - test-pg-upgrade:
+          name: 'test-13-14_check-pg-upgrade'
+          old_pg_major: 13
+          new_pg_major: 14
+          image_tag: '<< pipeline.parameters.upgrade_pg_versions >>'
+          requires: [build-13, build-14]
+
+      - test-pg-upgrade:
+          name: 'test-14-15_check-pg-upgrade'
+          old_pg_major: 14
+          new_pg_major: 15
+          image_tag: '<< pipeline.parameters.upgrade_pg_versions >>'
+          requires: [build-14, build-15]
+
+      - test-citus-upgrade:
+          name: test-13_check-citus-upgrade
+          pg_major: 13
+          image_tag: '<< pipeline.parameters.pg13_version >>'
+          requires: [build-13]
+
+      - ch_benchmark:
+          requires: [build-13]
+          filters:
+            branches:
+              only:
+                - /ch_benchmark\/.*/ # match with ch_benchmark/ prefix
+      - tpcc_benchmark:
+          requires: [build-13]
+          filters:
+            branches:
+              only:
+                - /tpcc_benchmark\/.*/ # match with tpcc_benchmark/ prefix
+      - test-flakyness:
+              name: 'test-15_flaky'
+              pg_major: 15
+              image_tag: '<< pipeline.parameters.pg15_version >>'
+              requires: [build-15]
