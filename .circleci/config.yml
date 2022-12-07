@@ -716,7 +716,7 @@ jobs:
           path: src/test/regress/tmp_check/master/log
       - store_artifacts:
           name: 'Save worker1 log'
-          path: src/test/regress/tmp_cßheck/worker.57637/log
+          path: src/test/regress/tmp_check/worker.57637/log
       - store_artifacts:
           name: 'Save worker2 log'
           path: src/test/regress/tmp_check/worker.57638/log
