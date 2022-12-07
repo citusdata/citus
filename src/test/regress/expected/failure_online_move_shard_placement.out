@@ -317,13 +317,13 @@ SELECT citus.mitmproxy('conn.allow()');
 
 -- first, manually drop the subscsription object. But the record for it will remain on pg_dist_cleanup
 -- we expect the drop query will succeed on only one node
-SELECT COUNT(*)=1 AS success_on_one_node
+SELECT COUNT(*)
     FROM run_command_on_workers(
         $$DROP SUBSCRIPTION citus_shard_move_subscription_xxxxxxx_xxxxxxx$$)
     WHERE success AND result = 'DROP SUBSCRIPTION';
- success_on_one_node
+ count
 ---------------------------------------------------------------------
- t
+     1
 (1 row)
 
 -- cleanup leftovers
