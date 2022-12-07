@@ -629,7 +629,7 @@ jobs:
       runs:
         description: 'number of times that the test should be run in total'
         type: integer
-        default: 50
+        default: 256
     docker:
       - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     working_directory: /home/circleci/project
