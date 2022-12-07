@@ -1839,8 +1839,6 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
 ON (f.id = f2.id)
 WHERE f.id IN (SELECT user_id
                FROM   raw_events_second));
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
 -- cannot push down since join is not equi join (f.id > f2.id)
 INSERT INTO raw_events_second
             (user_id)
@@ -1869,8 +1867,6 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
 ON (f.id > f2.id)
 WHERE f.id IN (SELECT user_id
                FROM   raw_events_second));
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
 -- we currently not support grouping sets
 INSERT INTO agg_events
             (user_id,
@@ -1978,7 +1974,7 @@ INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4)
 SELECT count(*) FROM raw_events_second;
  count
 ---------------------------------------------------------------------
-    36
+    45
 (1 row)
 
 INSERT INTO raw_events_second SELECT * FROM test_view;
@@ -1988,7 +1984,7 @@ INSERT INTO raw_events_second SELECT * FROM test_view WHERE user_id = 17 GROUP B
 SELECT count(*) FROM raw_events_second;
  count
 ---------------------------------------------------------------------
-    38
+    47
 (1 row)
 
 -- intermediate results (CTEs) should be allowed when doing INSERT...SELECT within a CTE

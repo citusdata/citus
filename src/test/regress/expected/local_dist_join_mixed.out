@@ -1212,9 +1212,16 @@ DEBUG:  push down of limit count: 1
 SELECT id, name FROM local LEFT JOIN distributed USING (id) ORDER BY 1 LIMIT 1;
 DEBUG:  Wrapping relation "local" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT local.id, distributed.name FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local LEFT JOIN local_dist_join_mixed.distributed USING (id)) ORDER BY local.id LIMIT 1
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "distributed" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "distributed" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT id, name FROM local_dist_join_mixed.distributed WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT local.id, distributed.name FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local LEFT JOIN (SELECT NULL::integer AS "dummy-1", distributed_1.id, distributed_1.name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id, intermediate_result.name FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, name text)) distributed_1) distributed USING (id)) ORDER BY local.id LIMIT 1
+ id | name
+---------------------------------------------------------------------
+  0 | 0
+(1 row)
+
  SELECT
         foo1.id
     FROM

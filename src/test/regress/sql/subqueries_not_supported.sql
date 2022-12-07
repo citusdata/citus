@@ -68,15 +68,19 @@ FROM
 SET citus.enable_router_execution TO true;
 
 -- OUTER JOINs where the outer part is recursively planned and not the other way
--- around is not supported
+-- around are supported
 SELECT
     foo.value_2
+INTO result_table
 FROM
-    	(SELECT users_table.value_2 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (1,2,3,4) LIMIT 5) as foo
+    	(SELECT users_table.value_2 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (1,2,3,4) ORDER BY users_table.value_2 LIMIT 5) as foo
     LEFT JOIN
     	(SELECT users_table.value_2 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (5,6,7,8)) as bar
 	ON(foo.value_2 = bar.value_2);
 
+SELECT COUNT(*) = 60 FROM result_table WHERE value_2 = 0;
+SELECT COUNT(*) = 0 FROM result_table WHERE value_2 != 0;
+DROP TABLE result_table;
 
 -- We do not support GROUPING SETS in subqueries
 -- This also includes ROLLUP or CUBE clauses

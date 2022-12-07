@@ -1,0 +1,119 @@
+SET search_path TO local_dist_join_mixed;
+SELECT COUNT(*) FROM reference LEFT JOIN distributed USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT COUNT(*) FROM distributed RIGHT JOIN reference USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT COUNT(*) FROM reference FULL JOIN distributed USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT COUNT(*) FROM distributed FULL JOIN reference USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT COUNT(*) FROM distributed FULL JOIN reference USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+-- distributed side is a subquery
+SELECT COUNT(*) FROM reference LEFT JOIN (SELECT * FROM distributed) q USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+-- distributed side is a join tree
+SELECT COUNT(*) FROM reference LEFT JOIN (distributed t1 JOIN distributed t2 USING (id)) q USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT COUNT(*) FROM reference LEFT JOIN (distributed t1 LEFT JOIN distributed t2 USING (id)) q USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT COUNT(*) FROM
+-- 2) right side is distributed but t1 is recurring, hence what
+--    makes the right side distributed (t4) is recursively planned
+reference t1
+LEFT JOIN
+(
+    distributed t4
+    JOIN
+    -- 1) t6 is recursively planned since the outer side is recurring
+    (SELECT t6.id FROM distributed t6 RIGHT JOIN reference t7 USING(id)) t5
+    USING(id)
+) q
+USING(id)
+-- 3) outer side of the join tree became recurring, hence t8 is
+--    recursively planned too
+LEFT JOIN
+distributed t8
+USING (id)
+WHERE t8.id IS NULL;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT COUNT(*) FROM
+local t1
+LEFT JOIN
+-- 2) t6 subquery is distributed so needs to be recursively planned
+--    because t1 is first recursively planned
+(
+    SELECT * FROM
+    (SELECT * FROM reference t2 JOIN distributed t3 USING (id)) p
+    JOIN
+    -- 1) t5 is recursively planned since the outer side is recurring
+    (SELECT * FROM reference t4 LEFT JOIN distributed t5 USING (id)) q
+    USING(id)
+) t6
+USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+BEGIN;
+  WITH cte AS (
+    DELETE FROM distributed
+    USING (
+        SELECT t1.id, t1.id*3 FROM reference t1
+        LEFT JOIN
+        (
+            SELECT * FROM distributed t2 WHERE EXISTS (
+                SELECT * FROM distributed t4
+                WHERE t4.id = t2.id
+            )
+        ) t3
+        USING (id)
+    ) q
+    WHERE distributed.id = q.id AND
+          distributed.id > 65
+    RETURNING *
+  )
+  SELECT COUNT(*) FROM cte;
+ count
+---------------------------------------------------------------------
+    35
+(1 row)
+
+ROLLBACK;

@@ -137,6 +137,7 @@ static bool ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 														RecursivePlanningContext *
 														context);
 static bool ContainsSubquery(Query *query);
+static bool ShouldRecursivelyPlanOuterJoins(RecursivePlanningContext *context);
 static void RecursivelyPlanNonColocatedSubqueries(Query *subquery,
 												  RecursivePlanningContext *context);
 static void RecursivelyPlanNonColocatedJoinWalker(Node *joinNode,
@@ -149,6 +150,11 @@ static void RecursivelyPlanNonColocatedSubqueriesInWhere(Query *query,
 														 colocatedJoinChecker,
 														 RecursivePlanningContext *
 														 recursivePlanningContext);
+static bool RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
+														 RecursivePlanningContext *context);
+static void RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
+											   RecursivePlanningContext *context);
+static bool IsRTERefRecurring(RangeTblRef *rangeTableRef, Query *query);
 static List * SublinkListFromWhere(Query *originalQuery);
 static bool ExtractSublinkWalker(Node *node, List **sublinkList);
 static bool ShouldRecursivelyPlanSublinks(Query *query);
@@ -359,6 +365,19 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 		RecursivelyPlanLocalTableJoins(query, context);
 	}
 
+	/*
+	 * Similarly, logical planner cannot handle outer joins when the outer rel
+	 * is recurring, such as "<recurring> LEFT JOIN <distributed>". In that case,
+	 * we convert distributed table into a subquery and recursively plan inner
+	 * side of the outer join. That way, inner rel gets converted into an intermediate
+	 * result and logical planner can handle the new query since it's of the from
+	 * "<recurring> LEFT JOIN <recurring>".
+	 */
+	if (ShouldRecursivelyPlanOuterJoins(context))
+	{
+		RecursivelyPlanRecurringTupleOuterJoinWalker((Node *) query->jointree,
+													 query, context);
+	}
 
 	return NULL;
 }
@@ -437,6 +456,25 @@ static bool
 ContainsSubquery(Query *query)
 {
 	return JoinTreeContainsSubquery(query) || WhereOrHavingClauseContainsSubquery(query);
+}
+
+
+/*
+ * ShouldRecursivelyPlanOuterJoins returns true if the JoinRestrictionContext
+ * that given RecursivePlanningContext holds implies that the query has outer
+ * join(s) that might need to be recursively planned.
+ */
+static bool
+ShouldRecursivelyPlanOuterJoins(RecursivePlanningContext *context)
+{
+	if (!context || !context->plannerRestrictionContext ||
+		!context->plannerRestrictionContext->joinRestrictionContext)
+	{
+		ereport(ERROR, (errmsg("unexpectedly got NULL pointer in recursive "
+							   "planning context")));
+	}
+
+	return context->plannerRestrictionContext->joinRestrictionContext->hasOuterJoin;
 }
 
 
@@ -596,6 +634,333 @@ RecursivelyPlanNonColocatedSubqueriesInWhere(Query *query,
 			RecursivelyPlanSubquery(subselect, recursivePlanningContext);
 		}
 	}
+}
+
+
+/*
+ * RecursivelyPlanRecurringTupleOuterJoinWalker descends into a join tree and
+ * recursively plans all non-recurring (i.e., distributed) rels that that
+ * participate in an outer join expression together with a recurring rel,
+ * such as <distributed> in "<recurring> LEFT JOIN <distributed>", i.e.,
+ * where the recurring rel causes returning recurring tuples from the worker
+ * nodes.
+ *
+ * Returns true if given node is recurring.
+ *
+ * See RecursivelyPlanDistributedJoinNode() function for the explanation on
+ * what does it mean for a node to be "recurring" or "distributed".
+ */
+static bool
+RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
+											 RecursivePlanningContext *
+											 recursivePlanningContext)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+	else if (IsA(node, FromExpr))
+	{
+		FromExpr *fromExpr = (FromExpr *) node;
+		ListCell *fromExprCell;
+
+		/* search for join trees in each FROM element */
+		foreach(fromExprCell, fromExpr->fromlist)
+		{
+			Node *fromElement = (Node *) lfirst(fromExprCell);
+
+			RecursivelyPlanRecurringTupleOuterJoinWalker(fromElement, query,
+														 recursivePlanningContext);
+		}
+
+		/*
+		 * Can only appear during the top-level call and top-level callers
+		 * are not interested in the return value. Even more, we can't tell
+		 * whether a FromExpr is recurring or not.
+		 */
+		return false;
+	}
+	else if (IsA(node, JoinExpr))
+	{
+		JoinExpr *joinExpr = (JoinExpr *) node;
+
+		Node *leftNode = joinExpr->larg;
+		Node *rightNode = joinExpr->rarg;
+
+		/*
+		 * There may be recursively plannable outer joins deeper in the join tree.
+		 *
+		 * We first handle the sub join trees and then the top level one since the
+		 * top level join expression might not require recursive planning after
+		 * handling the sub join trees.
+		 */
+		bool leftNodeRecurs =
+			RecursivelyPlanRecurringTupleOuterJoinWalker(leftNode, query,
+														 recursivePlanningContext);
+		bool rightNodeRecurs =
+			RecursivelyPlanRecurringTupleOuterJoinWalker(rightNode, query,
+														 recursivePlanningContext);
+		switch (joinExpr->jointype)
+		{
+			case JOIN_LEFT:
+			{
+				/* <recurring> left join <distributed> */
+				if (leftNodeRecurs && !rightNodeRecurs)
+				{
+					ereport(DEBUG1, (errmsg("recursively planning right side of "
+											"the left join since the outer side "
+											"is a recurring rel")));
+					RecursivelyPlanDistributedJoinNode(rightNode, query,
+													   recursivePlanningContext);
+				}
+
+				/*
+				 * A LEFT JOIN is recurring if the lhs is recurring.
+				 * Note that we might have converted the rhs into a recurring
+				 * one too if the lhs is recurring, but this anyway has no
+				 * effects when deciding whether a LEFT JOIN is recurring.
+				 */
+				return leftNodeRecurs;
+			}
+
+			case JOIN_RIGHT:
+			{
+				/* <distributed> right join <recurring> */
+				if (!leftNodeRecurs && rightNodeRecurs)
+				{
+					ereport(DEBUG1, (errmsg("recursively planning left side of "
+											"the right join since the outer side "
+											"is a recurring rel")));
+					RecursivelyPlanDistributedJoinNode(leftNode, query,
+													   recursivePlanningContext);
+				}
+
+				/*
+				 * Similar to LEFT JOINs, a RIGHT JOIN is recurring if the rhs
+				 * is recurring.
+				 */
+				return rightNodeRecurs;
+			}
+
+			case JOIN_FULL:
+			{
+				/*
+				 * <recurring> full join <distributed>
+				 * <distributed> full join <recurring>
+				 */
+				if (leftNodeRecurs && !rightNodeRecurs)
+				{
+					ereport(DEBUG1, (errmsg("recursively planning right side of "
+											"the full join since the other side "
+											"is a recurring rel")));
+					RecursivelyPlanDistributedJoinNode(rightNode, query,
+													   recursivePlanningContext);
+				}
+				else if (!leftNodeRecurs && rightNodeRecurs)
+				{
+					ereport(DEBUG1, (errmsg("recursively planning left side of "
+											"the full join since the other side "
+											"is a recurring rel")));
+					RecursivelyPlanDistributedJoinNode(leftNode, query,
+													   recursivePlanningContext);
+				}
+
+				/*
+				 * An OUTER JOIN is recurring if any sides of the join is
+				 * recurring. As in other outer join types, it doesn't matter
+				 * whether the other side was / became recurring or not.
+				 */
+				return leftNodeRecurs || rightNodeRecurs;
+			}
+
+			case JOIN_INNER:
+			{
+				/*
+				 * We don't need to recursively plan non-outer joins and we
+				 * already descended into sub join trees to handle outer joins
+				 * buried in them.
+				 */
+				return leftNodeRecurs && rightNodeRecurs;
+			}
+
+			default:
+			{
+				ereport(ERROR, (errmsg("got unexpected join type (%d) when recursively "
+									   "planning a join",
+									   joinExpr->jointype)));
+			}
+		}
+	}
+	else if (IsA(node, RangeTblRef))
+	{
+		return IsRTERefRecurring((RangeTblRef *) node, query);
+	}
+	else
+	{
+		ereport(ERROR, errmsg("got unexpected node type (%d) when recursively "
+							  "planning a join",
+							  nodeTag(node)));
+	}
+}
+
+
+/*
+ * RecursivelyPlanDistributedJoinNode is a helper function for
+ * RecursivelyPlanRecurringTupleOuterJoinWalker that recursively plans given
+ * distributed node that is known to be inner side of an outer join.
+ *
+ * Fails to do so if the distributed join node references the recurring one.
+ * In that case, we don't throw an error here but instead we let
+ * DeferredErrorIfUnsupportedRecurringTuplesJoin to so for a better error
+ * message.
+ *
+ * We call a node "distributed" if it points to a distributed table or a
+ * more complex object (i.e., a join tree or a subquery) that can be pushed
+ * down to the worker nodes directly. For a join, this means that it's either
+ * an INNER join where any side of it is a distributed table / a distributed
+ * sub join tree, or an OUTER join where the outer side is a distributed table
+ * / a distributed sub join tree.
+ */
+static void
+RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
+								   RecursivePlanningContext *recursivePlanningContext)
+{
+	if (IsA(node, JoinExpr))
+	{
+		/*
+		 * This, for example, means that RecursivelyPlanRecurringTupleOuterJoinWalker
+		 * needs to plan inner side, i.e., "<distributed> INNER JOIN <distributed>",
+		 * of the following join:
+		 *   <recurring> LEFT JOIN (<distributed> JOIN <distributed>)
+		 *
+		 * XXX: Ideally, we should handle such a sub join tree by moving
+		 *      it into a subquery "as a whole" but this implies that we need to
+		 *      rebuild the rtable and re-point all the Vars to the new rtable
+		 *      indexes, so we've not implemented that yet.
+		 *
+		 *      Instead, we recursively plan all the distributed tables in that
+		 *      sub join tree. This is much more inefficient than the other
+		 *      approach (since we lose the opportunity to push-down the whole
+		 *      sub join tree into the workers) but is easier to implement.
+		 */
+
+		RecursivelyPlanDistributedJoinNode(((JoinExpr *) node)->larg,
+										   query, recursivePlanningContext);
+
+		RecursivelyPlanDistributedJoinNode(((JoinExpr *) node)->rarg,
+										   query, recursivePlanningContext);
+
+		return;
+	}
+
+	if (!IsA(node, RangeTblRef))
+	{
+		ereport(ERROR, (errmsg("unexpected join node type (%d)",
+							   nodeTag(node))));
+	}
+
+	RangeTblRef *rangeTableRef = (RangeTblRef *) node;
+	if (IsRTERefRecurring(rangeTableRef, query))
+	{
+		/*
+		 * Not the top-level callers but RecursivelyPlanDistributedJoinNode
+		 * might call itself for recurring nodes and need to skip them.
+		 */
+		return;
+	}
+
+	RangeTblEntry *distributedRte = rt_fetch(rangeTableRef->rtindex,
+											 query->rtable);
+	if (distributedRte->rtekind == RTE_RELATION)
+	{
+		ereport(DEBUG1, (errmsg("recursively planning distributed relation %s "
+								"since it is part of a distributed join node "
+								"that is outer joined with a recurring rel",
+								GetRelationNameAndAliasName(distributedRte))));
+
+		PlannerRestrictionContext *restrictionContext =
+			GetPlannerRestrictionContext(recursivePlanningContext);
+		List *requiredAttributes =
+			RequiredAttrNumbersForRelation(distributedRte, restrictionContext);
+
+		ReplaceRTERelationWithRteSubquery(distributedRte, requiredAttributes,
+										  recursivePlanningContext);
+	}
+	else if (distributedRte->rtekind == RTE_SUBQUERY)
+	{
+		/*
+		 * We don't try logging the subquery here because RecursivelyPlanSubquery
+		 * will anyway do so if the query doesn't reference the outer query.
+		 */
+		ereport(DEBUG1, (errmsg("recursively planning the distributed subquery "
+								"since it is part of a distributed join node "
+								"that is outer joined with a recurring rel")));
+
+		bool recursivelyPlanned = RecursivelyPlanSubquery(distributedRte->subquery,
+														  recursivePlanningContext);
+		if (!recursivelyPlanned)
+		{
+			/*
+			 * RecursivelyPlanSubquery fails to plan a subquery only if it
+			 * contains references to the outer query. This means that, we can't
+			 * plan such outer joins (like <recurring LEFT OUTER distributed>)
+			 * if it's a LATERAL join where the distributed side is a subquery that
+			 * references the outer side, as in,
+			 *
+			 * SELECT * FROM reference
+			 * LEFT JOIN LATERAL
+			 * (SELECT * FROM distributed WHERE reference.b > distributed.b) q
+			 * USING (a);
+			 */
+			Assert(ContainsReferencesToOuterQuery(distributedRte->subquery));
+		}
+	}
+	else
+	{
+		/*
+		 * We don't expect RecursivelyPlanRecurringTupleOuterJoinWalker to try recursively
+		 * plan such an RTE.
+		 */
+		ereport(ERROR, errmsg("got unexpected RTE type (%d) when recursively "
+							  "planning a join",
+							  distributedRte->rtekind));
+	}
+}
+
+
+/*
+ * IsRTERefRecurring returns true if given rte reference points to a recurring
+ * rte.
+ *
+ * If an rte points to a table, then we call it recurring if the table is not
+ * a distributed table. Otherwise, e.g., if it points a query, then we call it
+ * recurring if none of the rtes that belongs to the query point to a distributed
+ * table.
+ *
+ * Note that it's safe to assume a subquery is not recurring if we have a rte reference
+ * to a distributed table somewhere in the query tree. For example, considering
+ * the subquery (q) of the the following query:
+ *   SELECT * FROM ref LEFT JOIN (SELECT * FROM ref LEFT dist) q,
+ * one might think that it's not appropriate to call IsRTERefRecurring for subquery
+ * (q). However, this is already not the case because this function is called
+ * in the context of recursive planning and hence any query that contains
+ * rtes pointing to distributed tables and that cannot be pushed down to worker
+ * nodes should've been recursively planned already. This is because, the recursive
+ * planner processes the queries in bottom-up fashion. For this reason, the subquery
+ * in the example should've already be converted to the following before we check
+ * the rte reference that points to the subquery (q):
+ *   SELECT * FROM ref LEFT JOIN (SELECT * FROM ref LEFT (SELECT * FROM read_intermediate_result()) dist_1)
+ * That way, we wouldn't incorrectly say that (SELECT * FROM ref LEFT dist) is a
+ * distributed subquery (due to having a reference to a distributed table).
+ */
+static bool
+IsRTERefRecurring(RangeTblRef *rangeTableRef, Query *query)
+{
+	int rangeTableIndex = rangeTableRef->rtindex;
+	List *rangeTableList = query->rtable;
+	RangeTblEntry *rangeTableEntry = rt_fetch(rangeTableIndex, rangeTableList);
+	return !FindNodeMatchingCheckFunctionInRangeTableList(list_make1(rangeTableEntry),
+														  IsDistributedTableRTE);
 }
 
 

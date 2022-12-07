@@ -198,6 +198,7 @@ test: local_dist_join_modifications
 test: local_table_join
 test: local_dist_join_mixed
 test: citus_local_dist_joins
+test: recurring_outer_join
 test: pg_dump
 
 # ---------

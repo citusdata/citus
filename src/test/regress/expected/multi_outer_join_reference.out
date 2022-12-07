@@ -208,13 +208,17 @@ FROM
     20 |     0
 (1 row)
 
--- Right join should be disallowed in this case
+-- Right join is allowed as we recursively plan the distributed table (multi_outer_join_left_hash)
 SELECT
 	min(r_custkey), max(r_custkey)
 FROM
 	multi_outer_join_left_hash a RIGHT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+LOG:  join order: [ "multi_outer_join_left_hash" ]
+ min | max
+---------------------------------------------------------------------
+   1 |  15
+(1 row)
+
 -- Reverse right join should be same as left join
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -319,13 +323,17 @@ FROM
     25 |     1
 (1 row)
 
--- Right join should not be allowed in this case
+-- Right join should be allowed in this case as we recursively plan the distributed table (multi_outer_join_left_hash
 SELECT
 	min(r_custkey), max(r_custkey)
 FROM
 	multi_outer_join_left_hash a RIGHT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+LOG:  join order: [ "multi_outer_join_left_hash" ]
+ min | max
+---------------------------------------------------------------------
+  11 |  30
+(1 row)
+
 -- Reverse right join should be same as left join
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -393,15 +401,50 @@ ORDER BY 1;
         30 |        30 |        30
 (25 rows)
 
--- Right join with single shard right most table should error out
+-- Right join with single shard right most table should work
 SELECT
 	l_custkey, r_custkey, t_custkey
 FROM
 	multi_outer_join_left_hash l1
 	LEFT JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey = r1.r_custkey)
-	RIGHT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+	RIGHT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey)
+ORDER BY 1,2,3;
+LOG:  join order: [ "multi_outer_join_left_hash" ]
+LOG:  join order: [ "multi_outer_join_right_hash" ]
+ l_custkey | r_custkey | t_custkey
+---------------------------------------------------------------------
+        11 |        11 |        11
+        12 |        12 |        12
+        13 |        13 |        13
+        14 |        14 |        14
+        15 |        15 |        15
+        21 |        21 |        21
+        22 |        22 |        22
+        23 |        23 |        23
+        24 |        24 |        24
+        25 |        25 |        25
+        26 |        26 |        26
+        27 |        27 |        27
+        28 |        28 |        28
+        29 |        29 |        29
+        30 |        30 |        30
+           |           |         1
+           |           |         2
+           |           |         3
+           |           |         4
+           |           |         5
+           |           |         6
+           |           |         7
+           |           |         8
+           |           |         9
+           |           |        10
+           |           |        16
+           |           |        17
+           |           |        18
+           |           |        19
+           |           |        20
+(30 rows)
+
 -- Right join with single shard left most table should work
 SELECT
 	t_custkey, r_custkey, l_custkey
@@ -600,14 +643,48 @@ ORDER BY 1,2 DESC;
            |        16
 (15 rows)
 
--- full outer join should error out for mismatched shards
+-- full outer join should work as we recursively plan the distributed table (multi_outer_join_left_hash
 SELECT
 	l_custkey, t_custkey
 FROM
 	multi_outer_join_left_hash l1
-	FULL JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+	FULL JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
+ORDER BY 1,2;
+LOG:  join order: [ "multi_outer_join_left_hash" ]
+ l_custkey | t_custkey
+---------------------------------------------------------------------
+         1 |         1
+         2 |         2
+         3 |         3
+         4 |         4
+         5 |         5
+         6 |         6
+         7 |         7
+         8 |         8
+         9 |         9
+        10 |        10
+        11 |        11
+        12 |        12
+        13 |        13
+        14 |        14
+        15 |        15
+        21 |        21
+        22 |        22
+        23 |        23
+        24 |        24
+        25 |        25
+        26 |        26
+        27 |        27
+        28 |        28
+        29 |        29
+        30 |        30
+           |        16
+           |        17
+           |        18
+           |        19
+           |        20
+(30 rows)
+
 -- inner join  + single shard left join should work
 SELECT
 	l_custkey, r_custkey, t_custkey
