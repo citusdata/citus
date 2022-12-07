@@ -477,9 +477,11 @@ CreateShardMoveLogicalRepTargetList(HTAB *publicationInfoHash, List *shardList)
 		target->newShards = NIL;
 		target->subscriptionOwnerName = SubscriptionRoleName(SHARD_MOVE, ownerId);
 		target->replicationSlot = palloc0(sizeof(ReplicationSlotInfo));
-		target->replicationSlot->name = ReplicationSlotNameForNodeAndOwner(SHARD_MOVE,
-																		   nodeId,
-																		   ownerId);
+		target->replicationSlot->name =
+			ReplicationSlotNameForNodeAndOwnerForOperation(SHARD_MOVE,
+														   nodeId,
+														   ownerId,
+														   CurrentOperationId);
 		target->replicationSlot->targetNodeId = nodeId;
 		target->replicationSlot->tableOwnerId = ownerId;
 		logicalRepTargetList = lappend(logicalRepTargetList, target);
@@ -1208,23 +1210,25 @@ ConflictWithIsolationTestingAfterCopy(void)
 char *
 PublicationName(LogicalRepType type, uint32_t nodeId, Oid ownerId)
 {
-	return psprintf("%s%u_%u", publicationPrefix[type], nodeId, ownerId);
+	return psprintf("%s%u_%u_%lu", publicationPrefix[type],
+					nodeId, ownerId, CurrentOperationId);
 }
 
 
 /*
- * ReplicationSlotNameForNodeAndOwner returns the name of the replication slot for the
- * given node and table owner.
+ * ReplicationSlotNameForNodeAndOwnerForOperation returns the name of the
+ * replication slot for the given node, table owner and operation id.
  *
  * Note that PG15 introduced a new ReplicationSlotName function that caused name conflicts
  * and we renamed this function.
  */
 char *
-ReplicationSlotNameForNodeAndOwner(LogicalRepType type, uint32_t nodeId, Oid ownerId)
+ReplicationSlotNameForNodeAndOwnerForOperation(LogicalRepType type, uint32_t nodeId,
+											   Oid ownerId, OperationId operationId)
 {
 	StringInfo slotName = makeStringInfo();
-	appendStringInfo(slotName, "%s%u_%u", replicationSlotPrefix[type], nodeId,
-					 ownerId);
+	appendStringInfo(slotName, "%s%u_%u_%lu", replicationSlotPrefix[type], nodeId,
+					 ownerId, operationId);
 
 	if (slotName->len > NAMEDATALEN)
 	{
@@ -1243,7 +1247,8 @@ ReplicationSlotNameForNodeAndOwner(LogicalRepType type, uint32_t nodeId, Oid own
 char *
 SubscriptionName(LogicalRepType type, Oid ownerId)
 {
-	return psprintf("%s%i", subscriptionPrefix[type], ownerId);
+	return psprintf("%s%i_%lu", subscriptionPrefix[type],
+					ownerId, CurrentOperationId);
 }
 
 
@@ -1254,7 +1259,8 @@ SubscriptionName(LogicalRepType type, Oid ownerId)
 char *
 SubscriptionRoleName(LogicalRepType type, Oid ownerId)
 {
-	return psprintf("%s%i", subscriptionRolePrefix[type], ownerId);
+	return psprintf("%s%i_%lu", subscriptionRolePrefix[type], ownerId,
+					CurrentOperationId);
 }
 
 

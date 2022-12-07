@@ -15,6 +15,7 @@
 #include "distributed/distribution_column.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/shard_utils.h"
 #include "distributed/shardsplit_shared_memory.h"
 #include "distributed/connection_management.h"
@@ -49,10 +50,12 @@ static ShardSplitInfo * CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 											 int32 maxValue,
 											 int32 nodeId);
 static void AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo);
-static void PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader);
+static void PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader,
+									   OperationId operationId);
 
 static void ReturnReplicationSlotInfo(Tuplestorestate *tupleStore,
-									  TupleDesc tupleDescriptor);
+									  TupleDesc tupleDescriptor,
+									  OperationId operationId);
 
 /*
  * worker_split_shard_replication_setup UDF creates in-memory data structures
@@ -104,6 +107,8 @@ worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("Unexpectedly shard info array contains a null value")));
 	}
 
+	OperationId operationId = DatumGetUInt64(PG_GETARG_DATUM(1));
+
 	/* SetupMap */
 	ShardInfoHashMap = CreateSimpleHash(NodeAndOwner, GroupedShardSplitInfos);
 
@@ -142,14 +147,14 @@ worker_split_shard_replication_setup(PG_FUNCTION_ARGS)
 	ShardSplitInfoSMHeader *splitShardInfoSMHeader =
 		CreateSharedMemoryForShardSplitInfo(shardSplitInfoCount, &dsmHandle);
 
-	PopulateShardSplitInfoInSM(splitShardInfoSMHeader);
+	PopulateShardSplitInfoInSM(splitShardInfoSMHeader, operationId);
 
 	/* store handle in statically allocated shared memory*/
 	StoreShardSplitSharedMemoryHandle(dsmHandle);
 
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
-	ReturnReplicationSlotInfo(tupleStore, tupleDescriptor);
+	ReturnReplicationSlotInfo(tupleStore, tupleDescriptor, operationId);
 
 	PG_RETURN_VOID();
 }
@@ -270,7 +275,8 @@ AddShardSplitInfoEntryForNodeInMap(ShardSplitInfo *shardSplitInfo)
  * shardSplitInfoSMHeader - Shared memory header
  */
 static void
-PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader)
+PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader,
+						   OperationId operationId)
 {
 	HASH_SEQ_STATUS status;
 	hash_seq_init(&status, ShardInfoHashMap);
@@ -281,8 +287,11 @@ PopulateShardSplitInfoInSM(ShardSplitInfoSMHeader *shardSplitInfoSMHeader)
 	{
 		uint32_t nodeId = entry->key.nodeId;
 		uint32_t tableOwnerId = entry->key.tableOwnerId;
-		char *derivedSlotName = ReplicationSlotNameForNodeAndOwner(SHARD_SPLIT, nodeId,
-																   tableOwnerId);
+		char *derivedSlotName =
+			ReplicationSlotNameForNodeAndOwnerForOperation(SHARD_SPLIT,
+														   nodeId,
+														   tableOwnerId,
+														   operationId);
 
 		List *shardSplitInfoList = entry->shardSplitInfoList;
 		ShardSplitInfo *splitShardInfo = NULL;
@@ -370,8 +379,9 @@ ParseShardSplitInfoFromDatum(Datum shardSplitInfoDatum,
  * part of non-blocking split workflow.
  */
 static void
-ReturnReplicationSlotInfo(Tuplestorestate *tupleStore, TupleDesc
-						  tupleDescriptor)
+ReturnReplicationSlotInfo(Tuplestorestate *tupleStore,
+						  TupleDesc tupleDescriptor,
+						  OperationId operationId)
 {
 	HASH_SEQ_STATUS status;
 	hash_seq_init(&status, ShardInfoHashMap);
@@ -390,9 +400,11 @@ ReturnReplicationSlotInfo(Tuplestorestate *tupleStore, TupleDesc
 		char *tableOwnerName = GetUserNameFromId(entry->key.tableOwnerId, false);
 		values[1] = CStringGetTextDatum(tableOwnerName);
 
-		char *slotName = ReplicationSlotNameForNodeAndOwner(SHARD_SPLIT,
-															entry->key.nodeId,
-															entry->key.tableOwnerId);
+		char *slotName =
+			ReplicationSlotNameForNodeAndOwnerForOperation(SHARD_SPLIT,
+														   entry->key.nodeId,
+														   entry->key.tableOwnerId,
+														   operationId);
 		values[2] = CStringGetTextDatum(slotName);
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, nulls);

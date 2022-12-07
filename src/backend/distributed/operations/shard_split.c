@@ -2019,7 +2019,7 @@ ExecuteSplitShardReleaseSharedMemory(MultiConnection *sourceConnection)
  *  Array[
  *      ROW(sourceShardId, childFirstShardId, childFirstMinRange, childFirstMaxRange, worker1)::citus.split_shard_info,
  *      ROW(sourceShardId, childSecondShardId, childSecondMinRange, childSecondMaxRange, worker2)::citus.split_shard_info
- *  ]);
+ *  ], CurrentOperationId);
  */
 StringInfo
 CreateSplitShardReplicationSetupUDF(List *sourceColocatedShardIntervalList,
@@ -2080,8 +2080,10 @@ CreateSplitShardReplicationSetupUDF(List *sourceColocatedShardIntervalList,
 
 	StringInfo splitShardReplicationUDF = makeStringInfo();
 	appendStringInfo(splitShardReplicationUDF,
-					 "SELECT * FROM pg_catalog.worker_split_shard_replication_setup(ARRAY[%s]);",
-					 splitChildrenRows->data);
+					 "SELECT * FROM pg_catalog.worker_split_shard_replication_setup("
+					 "ARRAY[%s], %lu);",
+					 splitChildrenRows->data,
+					 CurrentOperationId);
 
 	return splitShardReplicationUDF;
 }

@@ -6,7 +6,7 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-v9372c09'
+    default: '-vcbba174'
   pg13_version:
     type: string
     default: '13.9'
@@ -193,6 +193,18 @@ jobs:
           path: /tmp/pg_upgrade_newData_logs
       - codecov/upload:
           flags: 'test_<< parameters.old_pg_major >>_<< parameters.new_pg_major >>,upgrade'
+      - run:
+          name: 'Create codeclimate coverage'
+          command: |
+            lcov --directory . --capture --output-file lcov.info
+            lcov --remove lcov.info -o lcov.info '/usr/*'
+            sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
+            mkdir -p /tmp/codeclimate
+            cc-test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
+      - persist_to_workspace:
+          root: /tmp
+          paths:
+            - codeclimate/*.json
 
   test-arbitrary-configs:
     description: Runs tests on arbitrary configs
@@ -274,6 +286,18 @@ jobs:
           path: src/test/regress/tmp_citus_test/logfiles
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,upgrade'
+      - run:
+          name: 'Create codeclimate coverage'
+          command: |
+            lcov --directory . --capture --output-file lcov.info
+            lcov --remove lcov.info -o lcov.info '/usr/*'
+            sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
+            mkdir -p /tmp/codeclimate
+            cc-test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
+      - persist_to_workspace:
+          root: /tmp
+          paths:
+            - codeclimate/*.json
 
   test-citus-upgrade:
     description: Runs citus upgrade tests
@@ -356,6 +380,18 @@ jobs:
           path: /tmp/core_dumps
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,upgrade'
+      - run:
+          name: 'Create codeclimate coverage'
+          command: |
+            lcov --directory . --capture --output-file lcov.info
+            lcov --remove lcov.info -o lcov.info '/usr/*'
+            sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
+            mkdir -p /tmp/codeclimate
+            cc-test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
+      - persist_to_workspace:
+          root: /tmp
+          paths:
+            - codeclimate/*.json
 
   test-citus:
     description: Runs the common tests of citus
@@ -439,6 +475,18 @@ jobs:
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,<< parameters.make >>'
           when: always
+      - run:
+          name: 'Create codeclimate coverage'
+          command: |
+            lcov --directory . --capture --output-file lcov.info
+            lcov --remove lcov.info -o lcov.info '/usr/*'
+            sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
+            mkdir -p /tmp/codeclimate
+            cc-test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
+      - persist_to_workspace:
+          root: /tmp
+          paths:
+            - codeclimate/*.json
 
   tap-test-citus:
     description: Runs tap tests for citus
@@ -503,6 +551,18 @@ jobs:
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,tap_<< parameters.suite >>_<< parameters.make >>'
           when: always
+      - run:
+          name: 'Create codeclimate coverage'
+          command: |
+            lcov --directory . --capture --output-file lcov.info
+            lcov --remove lcov.info -o lcov.info '/usr/*'
+            sed "s=^SF:$PWD/=SF:=g" -i lcov.info # relative pats are required by codeclimate
+            mkdir -p /tmp/codeclimate
+            cc-test-reporter format-coverage -t lcov -o /tmp/codeclimate/$CIRCLE_JOB.json lcov.info
+      - persist_to_workspace:
+          root: /tmp
+          paths:
+            - codeclimate/*.json
 
   check-merge-to-enterprise:
     docker:
@@ -660,6 +720,18 @@ jobs:
       - store_artifacts:
           name: 'Save worker2 log'
           path: src/test/regress/tmp_check/worker.57638/log
+  upload-coverage:
+    docker:
+      - image: 'citus/exttester:<< pipeline.parameters.pg15_version >><< pipeline.parameters.image_suffix >>'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Upload coverage results to Code Climate
+          command: |
+            cc-test-reporter sum-coverage codeclimate/*.json -o total.json
+            cc-test-reporter upload-coverage -i total.json
 
 workflows:
   version: 2
@@ -1086,6 +1158,73 @@ workflows:
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
           requires: [build-13]
+
+      - upload-coverage:
+          requires:
+            - test-13_check-multi
+            - test-13_check-multi-1
+            - test-13_check-mx
+            - test-13_check-vanilla
+            - test-13_check-isolation
+            - test-13_check-operations
+            - test-13_check-follower-cluster
+            - test-13_check-columnar
+            - test-13_check-columnar-isolation
+            - test-13_tap-recovery
+            - test-13_tap-columnar-freezing
+            - test-13_check-failure
+            - test-13_check-enterprise
+            - test-13_check-enterprise-isolation
+            - test-13_check-enterprise-isolation-logicalrep-1
+            - test-13_check-enterprise-isolation-logicalrep-2
+            - test-13_check-enterprise-isolation-logicalrep-3
+            - test-13_check-enterprise-failure
+            - test-13_check-split
+            - test-13_check-arbitrary-configs
+            - test-14_check-multi
+            - test-14_check-multi-1
+            - test-14_check-mx
+            - test-14_check-vanilla
+            - test-14_check-isolation
+            - test-14_check-operations
+            - test-14_check-follower-cluster
+            - test-14_check-columnar
+            - test-14_check-columnar-isolation
+            - test-14_tap-recovery
+            - test-14_tap-columnar-freezing
+            - test-14_check-failure
+            - test-14_check-enterprise
+            - test-14_check-enterprise-isolation
+            - test-14_check-enterprise-isolation-logicalrep-1
+            - test-14_check-enterprise-isolation-logicalrep-2
+            - test-14_check-enterprise-isolation-logicalrep-3
+            - test-14_check-enterprise-failure
+            - test-14_check-split
+            - test-14_check-arbitrary-configs
+            - test-15_check-multi
+            - test-15_check-multi-1
+            - test-15_check-mx
+            - test-15_check-vanilla
+            - test-15_check-isolation
+            - test-15_check-operations
+            - test-15_check-follower-cluster
+            - test-15_check-columnar
+            - test-15_check-columnar-isolation
+            - test-15_tap-recovery
+            - test-15_tap-columnar-freezing
+            - test-15_check-failure
+            - test-15_check-enterprise
+            - test-15_check-enterprise-isolation
+            - test-15_check-enterprise-isolation-logicalrep-1
+            - test-15_check-enterprise-isolation-logicalrep-2
+            - test-15_check-enterprise-isolation-logicalrep-3
+            - test-15_check-enterprise-failure
+            - test-15_check-split
+            - test-15_check-arbitrary-configs
+            - test-13-14_check-pg-upgrade
+            - test-14-15_check-pg-upgrade
+            - test-13_check-citus-upgrade
+
 
       - ch_benchmark:
           requires: [build-13]

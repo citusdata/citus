@@ -1,0 +1,7 @@
+exclude_patterns:
+  - "src/backend/distributed/utils/citus_outfuncs.c"
+  - "src/backend/distributed/deparser/ruleutils_*.c"
+  - "src/include/distributed/citus_nodes.h"
+  - "src/backend/distributed/safeclib"
+  - "src/backend/columnar/safeclib"
+  - "**/vendor/"
