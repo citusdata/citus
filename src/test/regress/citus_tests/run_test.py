@@ -86,8 +86,6 @@ try:
     for i in range(args['ntimes']):
         print(f"Execution#{i}/{args['ntimes']} of {test_command}")
         result = common.run(test_command)
-        if result != 0:
-            sys.exit(2)
 finally:
     # remove temp schedule file
     os.remove(tmp_schedule_path)
