@@ -14,7 +14,7 @@ import config
 args = argparse.ArgumentParser()
 args.add_argument("-p", "--path", required=False, help="Relative path for test file (must have a .sql or .spec extension)", type=pathlib.Path)
 args.add_argument("-t", "--test_name", required=False, help="Test name (must be included in a schedule.")
-args.add_argument("-n", "--ntimes", required=True, help="Number of test to run", type=int)
+args.add_argument("-r", "--repeat", help="Number of test to run", type=int, default=5)
 args.add_argument("-s", "--schedule", required=False, help="Test schedule to be used as a base (optional)", nargs='?', const='', default='')
 
 args = vars(args.parse_args())
@@ -84,7 +84,7 @@ if args['schedule']:
 tmp_schedule_path = os.path.join(regress_dir, f"tmp_schedule_{ random.randint(1, 10000)}")
 shutil.copy2(os.path.join(regress_dir, test_schedule), tmp_schedule_path)
 with open(tmp_schedule_path, "a") as myfile:
-        for i in range(args['ntimes']):
+        for i in range(args['repeat']):
             myfile.write(test_schedule_line)
 
 # find suitable make recipe
