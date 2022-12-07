@@ -2255,7 +2255,8 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
  * ALTER TABLE ... ADD FOREIGN KEY command to skip the validation step.
  */
 void
-SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement)
+SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement,
+										   bool processLocalRelation)
 {
 	/* first check whether a distributed relation is affected */
 	if (alterTableStatement->relation == NULL)
@@ -2270,11 +2271,17 @@ SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement)
 		return;
 	}
 
-	if (!IsCitusTable(leftRelationId))
+	if (!IsCitusTable(leftRelationId) && !processLocalRelation)
 	{
 		return;
 	}
 
+	/*
+	 * We check if there is a ADD FOREIGN CONSTRAINT command in sub commands
+	 * list. We set skip_validation to true to prevent PostgreSQL to verify
+	 * validity of the foreign constraint. Validity will be checked on the
+	 * shards anyway.
+	 */
 	AlterTableCmd *command = NULL;
 	foreach_ptr(command, alterTableStatement->cmds)
 	{
@@ -2286,9 +2293,8 @@ SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement)
 			Constraint *constraint = (Constraint *) command->def;
 			if (constraint->contype == CONSTR_FOREIGN)
 			{
-				/* set the GUC skip_constraint_validation to on */
-				EnableSkippingConstraintValidation();
-				return;
+				/* foreign constraint validations will be done in shards. */
+				constraint->skip_validation = true;
 			}
 		}
 	}
