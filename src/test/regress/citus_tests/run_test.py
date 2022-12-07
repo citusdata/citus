@@ -9,6 +9,7 @@ import shutil
 import random
 import re
 import common
+import config
 
 args = argparse.ArgumentParser()
 args.add_argument("-t", "--test", required=True, help="Relative path for test file (must have a .sql or .spec extension)", type=pathlib.Path)
@@ -58,6 +59,9 @@ elif "failure" in test_schedule:
     test_schedule = 'failure_base_schedule'
 elif "mx" in test_schedule:
     test_schedule = 'mx_base_schedule'
+elif test_schedule in config.ARBITRARY_SCHEDULE_NAMES:
+    print(f"WARNING: Arbitrary config schedule ({test_schedule}) is not supported.")
+    sys.exit(0)
 else:
     test_schedule = 'base_schedule'
 
@@ -70,7 +74,8 @@ if args['schedule']:
 tmp_schedule_path = os.path.join(regress_dir, f"tmp_schedule_{ random.randint(1, 10000)}")
 shutil.copy2(os.path.join(regress_dir, test_schedule), tmp_schedule_path)
 with open(tmp_schedule_path, "a") as myfile:
-    myfile.write(test_schedule_line + "\n")
+        for i in range(args['ntimes']):
+            myfile.write(test_schedule_line + "\n")
 
 # find suitable make recipe
 if "isolation" in test_schedule:
@@ -83,9 +88,8 @@ test_command = f"make -C {regress_dir} {make_recipe} SCHEDULE='{pathlib.Path(tmp
 
 # run test command n times
 try:
-    for i in range(args['ntimes']):
-        print(f"Execution#{i}/{args['ntimes']} of {test_command}")
-        result = common.run(test_command)
+    print(f"Executing.. {test_command}")
+    result = common.run(test_command)
 finally:
     # remove temp schedule file
     os.remove(tmp_schedule_path)
