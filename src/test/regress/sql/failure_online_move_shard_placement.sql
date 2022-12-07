@@ -131,9 +131,14 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 
 SELECT citus.mitmproxy('conn.allow()');
 -- first, manually drop the subscsription object. But the record for it will remain on pg_dist_cleanup
-SELECT run_command_on_workers($$DROP SUBSCRIPTION IF EXISTS citus_shard_move_subscription_10_15$$);
+-- we expect the drop query will succeed on only one node
+SELECT COUNT(*)
+    FROM run_command_on_workers(
+        $$DROP SUBSCRIPTION citus_shard_move_subscription_10_15$$)
+    WHERE success AND result = 'DROP SUBSCRIPTION';
+
 -- cleanup leftovers
--- verify we don't see any error for already dropped subscription
+-- then, verify we don't see any error for already dropped subscription
 SET client_min_messages TO WARNING;
 CALL citus_cleanup_orphaned_resources();
 RESET client_min_messages;
