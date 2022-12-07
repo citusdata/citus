@@ -295,6 +295,14 @@ SELECT citus.mitmproxy('conn.allow()');
 
 CALL citus_cleanup_orphaned_resources();
 NOTICE:  cleaned up 4 orphaned resources
+-- disable maintenance daemon cleanup, to prevent the flaky test
+ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- failure on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").killall()');
  mitmproxy
@@ -324,6 +332,14 @@ SELECT COUNT(*)
  count
 ---------------------------------------------------------------------
      1
+(1 row)
+
+-- reset back
+ALTER SYSTEM RESET citus.defer_shard_delete_interval;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
 (1 row)
 
 -- cleanup leftovers
