@@ -664,10 +664,7 @@ jobs:
 workflows:
   version: 2
   flaky_test_debugging:
-    when:
-      and:
-        - not: << pipeline.parameters.check-flakyness >>
-        - << pipeline.parameters.flaky_test >>
+    when: << pipeline.parameters.flaky_test >>
     jobs:
       - build:
           name: build-flaky-15
@@ -683,7 +680,10 @@ workflows:
           test: '<< pipeline.parameters.flaky_test >>'
 
   flaky_test:
-      when: << pipeline.parameters.check-flakyness >>
+      when:
+        and:
+          - << pipeline.parameters.check-flakyness >>
+          - not: << pipeline.parameters.flaky_test >>
       jobs:
         - build:
             name: build-flaky-15
