@@ -1673,7 +1673,7 @@ TupleToGroupShardPlacement(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 
 
 void
-InsertShardGroupRow(uint64 shardGroupId, uint32 colocationId,
+InsertShardGroupRow(int64 shardGroupId, uint32 colocationId,
 					text *shardMinValue, text *shardMaxValue)
 {
 	Datum values[Natts_pg_dist_shardgroup];
@@ -1720,7 +1720,7 @@ InsertShardGroupRow(uint64 shardGroupId, uint32 colocationId,
  */
 void
 InsertShardRow(Oid relationId, uint64 shardId, char storageType,
-			   text *shardMinValue, text *shardMaxValue, uint64 *shardGroupId)
+			   text *shardMinValue, text *shardMaxValue, int64 *shardGroupId)
 {
 	Datum values[Natts_pg_dist_shard];
 	bool isNulls[Natts_pg_dist_shard];
@@ -1750,7 +1750,7 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 
 	if (shardGroupId)
 	{
-		values[Anum_pg_dist_shard_shardgroupid - 1] = UInt64GetDatum(*shardGroupId);
+		values[Anum_pg_dist_shard_shardgroupid - 1] = Int64GetDatum(*shardGroupId);
 	}
 	else
 	{
@@ -1948,37 +1948,34 @@ DeletePartitionRow(Oid distributedRelationId)
 
 
 void
-DeleteShardgroupRow(uint32 shardgroupId)
+DeleteShardgroupRow(int64 shardgroupId)
 {
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
-	bool indexOK = true;
+	ScanKeyData scanKey[1] = { 0 };
+	const bool indexOK = true;
 
 	Relation pgDistShardgroup = table_open(DistShardgroupRelationId(), RowExclusiveLock);
 
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardId));
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_shardgroup_shardgroupid,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardgroupId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistShardgroup,
-													DistShardShardidIndexId(), indexOK,
-													NULL, scanKeyCount, scanKey);
+													DistShardgroupPkeyId(), indexOK, NULL,
+													lengthof(scanKey), scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	if (!HeapTupleIsValid(heapTuple))
 	{
-		ereport(ERROR, (errmsg("could not find valid entry for shard "
-				UINT64_FORMAT, shardId)));
+		ereport(ERROR, (errmsg("could not find valid entry for shardgroup " INT64_FORMAT,
+							   shardgroupId)));
 	}
-
-	Form_pg_dist_shard pgDistShardForm = (Form_pg_dist_shard) GETSTRUCT(heapTuple);
-	Oid distributedRelationId = pgDistShardForm->logicalrelid;
 
 	simple_heap_delete(pgDistShardgroup, &heapTuple->t_self);
 
 	systable_endscan(scanDescriptor);
 
 	/* invalidate previous cache entry */
-	CitusInvalidateRelcacheByRelid(distributedRelationId);
+	/* TODO figure out what caches to invalidate */
+	/* CitusInvalidateRelcacheByRelid(distributedRelationId); */
 
 	CommandCounterIncrement();
 	table_close(pgDistShardgroup, NoLock);

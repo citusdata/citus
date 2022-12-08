@@ -159,7 +159,7 @@ static void AddDummyShardEntryInMap(HTAB *mapOfPlacementToDummyShardList, uint32
 static uint64 GetNextShardIdForSplitChild(void);
 static void AcquireNonblockingSplitLock(Oid relationId);
 static List * GetWorkerNodesFromWorkerIds(List *nodeIdsForPlacementList);
-static void DropShardgroupMetadata(uint32 shardgroupId);
+static void DropShardgroupMetadata(int64 shardgroupId);
 static void DropShardListMetadata(List *shardIntervalList);
 
 /* Customize error message strings based on operation type */
@@ -498,7 +498,7 @@ SplitShard(SplitMode splitMode,
 	{
 		sourceColocatedShardIntervalList = colocatedShardIntervalList;
 	}
-	
+
 	/* Find the colocationId we are splitting in */
 	CitusTableCacheEntry *citusTableCacheEntry = GetCitusTableCacheEntry(relationId);
 	uint32 colocationId = citusTableCacheEntry->colocationId;
@@ -571,11 +571,11 @@ BlockingShardSplit(SplitOperation splitOperation,
 	BlockWritesToShardList(sourceColocatedShardIntervalList);
 
 	ShardInterval *sampleShardInterval =
-			(ShardInterval *) linitial(sourceColocatedShardIntervalList);
+		(ShardInterval *) linitial(sourceColocatedShardIntervalList);
 	List *shardgroupSplits = CreateNewShardgroups(
-			colocationId,
-			sampleShardInterval,
-			shardSplitPointsList);
+		colocationId,
+		sampleShardInterval,
+		shardSplitPointsList);
 
 	/* First create shard interval metadata for split children */
 	List *shardGroupSplitIntervalListList = CreateSplitIntervalsForShardGroup(
@@ -1042,7 +1042,6 @@ static List *
 CreateNewShardgroups(uint32 colocationId, ShardInterval *sampleInterval,
 					 List *splitPointsForShard)
 {
-
 	int32 splitParentMaxValue = DatumGetInt32(sampleInterval->maxValue);
 	int32 currentSplitChildMinValue = DatumGetInt32(sampleInterval->minValue);
 
@@ -1064,7 +1063,7 @@ CreateNewShardgroups(uint32 colocationId, ShardInterval *sampleInterval,
 		Datum splitPoint = (Datum) lfirst(splitPointCell);
 
 		Shardgroup *shardgroup = palloc0(sizeof(Shardgroup));
-		shardgroup->shardgroupId = GetNextShardIdForSplitChild();
+		shardgroup->shardgroupId = (int64) GetNextShardIdForSplitChild();
 		shardgroup->colocationId = colocationId;
 		shardgroup->minShardValue = Int32GetDatum(currentSplitChildMinValue);
 		shardgroup->maxShardValue = splitPoint;
@@ -1081,7 +1080,7 @@ CreateNewShardgroups(uint32 colocationId, ShardInterval *sampleInterval,
 	 */
 
 	Shardgroup *shardgroup = palloc0(sizeof(Shardgroup));
-	shardgroup->shardgroupId = GetNextShardIdForSplitChild();
+	shardgroup->shardgroupId = (int64) GetNextShardIdForSplitChild();
 	shardgroup->colocationId = colocationId;
 	shardgroup->minShardValue = Int32GetDatum(currentSplitChildMinValue);
 	shardgroup->maxShardValue = splitParentMaxValue;
@@ -1104,8 +1103,8 @@ CreateSplitIntervalsForShardGroup(List *sourceColocatedShardIntervalList,
 	foreach_ptr(shardToSplitInterval, sourceColocatedShardIntervalList)
 	{
 		List *shardSplitIntervalList =
-				CreateShardIntervalsForNewShardgroups(shardToSplitInterval,
-													  newShardgroups);
+			CreateShardIntervalsForNewShardgroups(shardToSplitInterval,
+												  newShardgroups);
 
 		shardGroupSplitIntervalListList = lappend(shardGroupSplitIntervalListList,
 												  shardSplitIntervalList);
@@ -1359,8 +1358,15 @@ CreateForeignKeyConstraints(List *shardGroupSplitIntervalListList,
 
 
 static void
-DropShardgroupMetadata(uint32 shardgroupId)
+DropShardgroupMetadata(int64 shardgroupId)
 {
+	/* delete metadata from synced nodes */
+	/* TODO decide how shardgroup metadata should be synced*/
+	if (/* ShouldSyncTableMetadata(relationId) */ true)
+	{
+		SyncDeleteShardgroupForShardgroupIdToNodes(shardgroupId);
+	}
+
 	DeleteShardgroupRow(shardgroupId);
 }
 
@@ -1469,9 +1475,9 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 	char *databaseName = get_database_name(MyDatabaseId);
 
 	List *shardgroupSplits = CreateNewShardgroups(
-			colocationId,
-			(ShardInterval *) linitial(sourceColocatedShardIntervalList),
-			shardSplitPointsList);
+		colocationId,
+		(ShardInterval *) linitial(sourceColocatedShardIntervalList),
+		shardSplitPointsList);
 
 	/* First create shard interval metadata for split children */
 	List *shardGroupSplitIntervalListList = CreateSplitIntervalsForShardGroup(

@@ -142,6 +142,7 @@ static char * ColocationGroupCreateCommand(uint32 colocationId, int shardCount,
 										   Oid distributionColumnType,
 										   Oid distributionColumnCollation);
 static char * ShardgroupDeleteCommandByColocationId(uint32 colocationId);
+static const char * ShardgroupDeleteCommandByShardgroupId(int64 shardgroupid);
 static char * ColocationGroupDeleteCommand(uint32 colocationId);
 static char * RemoteTypeIdExpression(Oid typeId);
 static char * RemoteCollationIdExpression(Oid colocationId);
@@ -1312,7 +1313,7 @@ ShardListInsertCommand(List *shardIntervalList)
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
-		uint64 shardGroupId = shardInterval->shardGroupId;
+		int64 shardGroupId = shardInterval->shardGroupId;
 		Oid distributedRelationId = shardInterval->relationId;
 		char *qualifiedRelationName = generate_qualified_relation_name(
 			distributedRelationId);
@@ -3263,7 +3264,7 @@ citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 	}
 
 	PG_ENSURE_ARGNOTNULL(5, "shard group id");
-	uint64 shardGroupId = (uint64) PG_GETARG_INT64(5);
+	int64 shardGroupId = (uint64) PG_GETARG_INT64(5);
 
 	/* only owner of the table (or superuser) is allowed to add the Citus metadata */
 	EnsureTableOwner(relationId);
@@ -3864,17 +3865,39 @@ citus_internal_delete_shardgroup_metadata(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 	EnsureSuperUser();
 
-	int colocationId = PG_GETARG_INT32(0);
-
-	if (!ShouldSkipMetadataChecks())
+	if (!PG_ARGISNULL(0) && PG_ARGISNULL(1))
 	{
-		/* this UDF is not allowed allowed for executing as a separate command */
-		EnsureCoordinatorInitiatedOperation();
+		int64 shardgroupId = PG_GETARG_INT64(0);
+
+		if (!ShouldSkipMetadataChecks())
+		{
+			/* this UDF is not allowed allowed for executing as a separate command */
+			EnsureCoordinatorInitiatedOperation();
+		}
+
+		DeleteShardgroupRow(shardgroupId);
+
+		PG_RETURN_VOID();
 	}
+	else if (!PG_ARGISNULL(1) && PG_ARGISNULL(0))
+	{
+		int colocationId = PG_GETARG_INT32(1);
 
-	DeleteShardgroupForColocationIdLocally(colocationId);
+		if (!ShouldSkipMetadataChecks())
+		{
+			/* this UDF is not allowed allowed for executing as a separate command */
+			EnsureCoordinatorInitiatedOperation();
+		}
 
-	PG_RETURN_VOID();
+		DeleteShardgroupForColocationIdLocally(colocationId);
+
+		PG_RETURN_VOID();
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("expected exactly one argument from: "
+							   "shardgroupid, colocationid")));
+	}
 }
 
 
@@ -4003,6 +4026,14 @@ SyncDeleteShardgroupForColocationIdToNodes(uint32 colocationId)
 }
 
 
+void
+SyncDeleteShardgroupForShardgroupIdToNodes(int64 shardgroupId)
+{
+	const char *command = ShardgroupDeleteCommandByShardgroupId(shardgroupId);
+	SendCommandToWorkersWithMetadataViaSuperUser(command);
+}
+
+
 /*
  * SyncDeleteColocationGroupToNodes deletes a pg_dist_colocation record from workers.
  */
@@ -4028,6 +4059,20 @@ ShardgroupDeleteCommandByColocationId(uint32 colocationId)
 	appendStringInfo(&deleteCommand,
 					 "SELECT pg_catalog.citus_internal_delete_shardgroup_metadata(colocationid => %d)",
 					 colocationId);
+
+	return deleteCommand.data;
+}
+
+
+static const char *
+ShardgroupDeleteCommandByShardgroupId(int64 shardgroupid)
+{
+	StringInfoData deleteCommand = { 0 };
+	initStringInfo(&deleteCommand);
+
+	appendStringInfo(&deleteCommand,
+					 "SELECT pg_catalog.citus_internal_delete_shardgroup_metadata("
+					 "shardgroupid => " INT64_FORMAT ")", shardgroupid);
 
 	return deleteCommand.data;
 }
