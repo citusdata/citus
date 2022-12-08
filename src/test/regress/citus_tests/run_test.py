@@ -15,7 +15,6 @@ args = argparse.ArgumentParser()
 args.add_argument("test_name", help="Test name (must be included in a schedule.)", nargs='?')
 args.add_argument("-p", "--path", required=False, help="Relative path for test file (must have a .sql or .spec extension)", type=pathlib.Path)
 args.add_argument("-r", "--repeat", help="Number of test to run", type=int, default=5)
-args.add_argument("-s", "--schedule", required=False, help="Test schedule to be used as a base (optional)", nargs='?', const='', default='')
 args.add_argument("-b", "--use-base-schedule", required=False, help="Choose base-schedules rather than minimal-schedules", action='store_true')
 
 args = vars(args.parse_args())
@@ -82,10 +81,6 @@ else:
         test_schedule = 'base_schedule'
     else:
         test_schedule = 'minimal_schedule'
-
-# override if -s/--schedule is passed
-if args['schedule']:
-    test_schedule = args['schedule']
 
 # copy base schedule to a temp file and append test_schedule_line
 # to be able to run tests in parallel (if test_schedule_line is a parallel group.)

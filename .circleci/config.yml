@@ -25,9 +25,6 @@ parameters:
   flaky_test:
     type: string
     default: ''
-  flaky_test_schedule:
-    type: string
-    default: check-minimal
   check-flakyness:
     type: boolean
     default: false
@@ -618,10 +615,6 @@ jobs:
       image_tag:
         description: 'docker image tag to use'
         type: string
-      schedule:
-        description: 'test schedule'
-        type: string
-        default: ''
       test:
         description: 'the test file path that should be run multiple times'
         type: string
@@ -679,7 +672,7 @@ jobs:
             for test in "${tests_array[@]}"
             do
                 echo $test
-                gosu circleci src/test/regress/citus_tests/run_test.py -p $test -r << parameters.runs >> -s << parameters.schedule >> --use-base-schedule
+                gosu circleci src/test/regress/citus_tests/run_test.py -p $test -r << parameters.runs >> --use-base-schedule
             done
           no_output_timeout: 2m
       - run:
@@ -748,7 +741,6 @@ workflows:
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           requires: [build-flaky-15]
-          schedule: '<< pipeline.parameters.flaky_test_schedule >>'
           test: '<< pipeline.parameters.flaky_test >>'
 
   build_and_test:
