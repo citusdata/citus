@@ -156,7 +156,6 @@ static uint64 GetNextShardIdForSplitChild(void);
 static void AcquireNonblockingSplitLock(Oid relationId);
 static List * GetWorkerNodesFromWorkerIds(List *nodeIdsForPlacementList);
 static void DropShardListMetadata(List *shardIntervalList);
-static void InsertDeferredDropCleanupRecordsForShards(List *shardIntervalList);
 
 /* Customize error message strings based on operation type */
 static const char *const SplitOperationName[] =
@@ -223,7 +222,7 @@ ErrorIfCannotSplitShard(SplitOperation splitOperation, ShardInterval *sourceShar
 		uint64 shardId = shardInterval->shardId;
 		ListCell *shardPlacementCell = NULL;
 
-		List *shardPlacementList = ShardPlacementListWithoutOrphanedPlacements(shardId);
+		List *shardPlacementList = ShardPlacementListSortedByWorker(shardId);
 		foreach(shardPlacementCell, shardPlacementList)
 		{
 			ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
@@ -1359,45 +1358,6 @@ DropShardListMetadata(List *shardIntervalList)
 
 		/* delete shard row */
 		DeleteShardRow(oldShardId);
-	}
-}
-
-
-/*
- * Insert deferred cleanup records.
- * The shards will be dropped by background cleaner later.
- */
-static void
-InsertDeferredDropCleanupRecordsForShards(List *shardIntervalList)
-{
-	ListCell *shardIntervalCell = NULL;
-
-	foreach(shardIntervalCell, shardIntervalList)
-	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
-		ListCell *shardPlacementCell = NULL;
-		uint64 oldShardId = shardInterval->shardId;
-
-		/* mark for deferred drop */
-		List *shardPlacementList = ActiveShardPlacementList(oldShardId);
-		foreach(shardPlacementCell, shardPlacementList)
-		{
-			ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
-
-			/* get shard name */
-			char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
-
-			/* Log shard in pg_dist_cleanup.
-			 * Parent shards are to be dropped only on sucess after split workflow is complete,
-			 * so mark the policy as 'CLEANUP_DEFERRED_ON_SUCCESS'.
-			 * We also log cleanup record in the current transaction. If the current transaction rolls back,
-			 * we do not generate a record at all.
-			 */
-			InsertCleanupRecordInCurrentTransaction(CLEANUP_OBJECT_SHARD_PLACEMENT,
-													qualifiedShardName,
-													placement->groupId,
-													CLEANUP_DEFERRED_ON_SUCCESS);
-		}
 	}
 }
 

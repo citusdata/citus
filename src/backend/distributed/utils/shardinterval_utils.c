@@ -475,7 +475,7 @@ SingleReplicatedTable(Oid relationId)
 	foreach_ptr(shardIdPointer, shardIntervalList)
 	{
 		uint64 shardId = *shardIdPointer;
-		shardPlacementList = ShardPlacementListWithoutOrphanedPlacements(shardId);
+		shardPlacementList = ShardPlacementListSortedByWorker(shardId);
 
 		if (list_length(shardPlacementList) != 1)
 		{

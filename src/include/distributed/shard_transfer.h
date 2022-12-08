@@ -23,3 +23,4 @@ extern void UpdatePlacementUpdateStatusForShardIntervalList(List *shardIntervalL
 															char *sourceName,
 															int sourcePort,
 															PlacementUpdateStatus status);
+extern void InsertDeferredDropCleanupRecordsForShards(List *shardIntervalList);
