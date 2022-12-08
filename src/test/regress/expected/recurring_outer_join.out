@@ -1,0 +1,2023 @@
+CREATE SCHEMA recurring_outer_join;
+SET search_path TO recurring_outer_join;
+SET citus.next_shard_id TO 1520000;
+SET citus.shard_count TO 32;
+-- idempotently add node to allow this test to run without add_coordinator
+SET client_min_messages TO WARNING;
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SET client_min_messages TO DEBUG1;
+CREATE TABLE dist_1 (a int, b int);
+SELECT create_distributed_table('dist_1', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist_1 VALUES
+(1, 10),
+(1, 11),
+(1, 12),
+(2, 20),
+(2, 21),
+(2, 22),
+(2, 23),
+(3, 30),
+(3, 31),
+(3, 32),
+(3, 33),
+(3, 34),
+(7, 40),
+(7, 41),
+(7, 42);
+CREATE TABLE dist_2_columnar(LIKE dist_1) USING columnar;
+INSERT INTO dist_2_columnar SELECT * FROM dist_1;
+DEBUG:  Flushing Stripe of size 15
+SELECT create_distributed_table('dist_2_columnar', 'a');
+DEBUG:  pathlist hook for columnar table am
+CONTEXT:  SQL statement "SELECT TRUE FROM recurring_outer_join.dist_2_columnar LIMIT 1"
+NOTICE:  Copying data from local table...
+DEBUG:  Copied 15 rows
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$recurring_outer_join.dist_2_columnar$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE dist_3_partitioned(LIKE dist_1) PARTITION BY RANGE(a);
+CREATE TABLE dist_3_partitioned_p1 PARTITION OF dist_3_partitioned FOR VALUES FROM (0) TO (2);
+CREATE TABLE dist_3_partitioned_p2 PARTITION OF dist_3_partitioned FOR VALUES FROM (2) TO (4);
+CREATE TABLE dist_3_partitioned_p3 PARTITION OF dist_3_partitioned FOR VALUES FROM (4) TO (100);
+SELECT create_distributed_table('dist_3_partitioned', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist_3_partitioned SELECT * FROM dist_1;
+CREATE TABLE ref_1 (a int, b int);
+SELECT create_reference_table('ref_1');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO ref_1 VALUES
+(1, 100),
+(1, 11),
+(null, 102),
+(2, 200),
+(2, 21),
+(null, 202),
+(2, 203),
+(4, 300),
+(4, 301),
+(null, 302),
+(4, 303),
+(4, 304),
+(null, 400),
+(null, 401),
+(null, 402);
+CREATE TABLE local_1 (a int, b int);
+INSERT INTO local_1 VALUES
+(null, 1000),
+(1, 11),
+(1, 100),
+(5, 2000),
+(5, 2001),
+(5, 2002),
+(null, 2003),
+(6, 3000),
+(6, 3001),
+(6, 3002),
+(null, 3003),
+(6, 3004),
+(null, 4000),
+(null, 4001),
+(null, 4002);
+CREATE TABLE citus_local_1(LIKE local_1);
+INSERT INTO citus_local_1 SELECT * FROM local_1;
+SELECT citus_add_local_table_to_metadata('citus_local_1');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE dist_4_different_colocation_group(LIKE dist_1);
+INSERT INTO dist_4_different_colocation_group SELECT * FROM local_1;
+DELETE FROM dist_4_different_colocation_group WHERE a IS NULL;
+SELECT create_distributed_table('dist_4_different_colocation_group', 'a', colocate_with=>'none');
+NOTICE:  Copying data from local table...
+DEBUG:  Copied 9 rows
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$recurring_outer_join.dist_4_different_colocation_group$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE dist_5_with_pkey(LIKE dist_1);
+INSERT INTO dist_5_with_pkey VALUES
+(1, 11),
+(2, 22),
+(3, 34),
+(7, 40);
+SELECT create_distributed_table('dist_5_with_pkey', 'a');
+NOTICE:  Copying data from local table...
+DEBUG:  Copied 4 rows
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$recurring_outer_join.dist_5_with_pkey$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE dist_5_with_pkey ADD CONSTRAINT pkey_1 PRIMARY KEY (a);
+DEBUG:  ALTER TABLE / ADD PRIMARY KEY will create implicit index "pkey_1" for table "dist_5_with_pkey"
+DEBUG:  verifying table "dist_5_with_pkey"
+--
+-- basic cases
+--
+SELECT COUNT(*) FROM ref_1 LEFT JOIN dist_1 USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 LEFT JOIN (SELECT dist_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dist_1_1) dist_1 USING (a))
+ count
+---------------------------------------------------------------------
+    28
+(1 row)
+
+SELECT COUNT(*) FROM ref_1 LEFT JOIN dist_1 USING (a,b);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 LEFT JOIN (SELECT dist_1_1.a, dist_1_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) dist_1_1) dist_1 USING (a, b))
+ count
+---------------------------------------------------------------------
+    15
+(1 row)
+
+SELECT COUNT(*) FROM dist_1 RIGHT JOIN ref_1 USING (a);
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT dist_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dist_1_1) dist_1 RIGHT JOIN recurring_outer_join.ref_1 USING (a))
+ count
+---------------------------------------------------------------------
+    28
+(1 row)
+
+SELECT COUNT(*) FROM ref_1 FULL JOIN dist_1 USING (a);
+DEBUG:  recursively planning right side of the full join since the other side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 FULL JOIN (SELECT dist_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dist_1_1) dist_1 USING (a))
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
+SELECT COUNT(*) FROM dist_1 FULL JOIN ref_1 USING (a);
+DEBUG:  recursively planning left side of the full join since the other side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT dist_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dist_1_1) dist_1 FULL JOIN recurring_outer_join.ref_1 USING (a))
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
+SELECT COUNT(*) FROM dist_1 FULL JOIN ref_1 USING (a,b);
+DEBUG:  recursively planning left side of the full join since the other side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT dist_1_1.a, dist_1_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) dist_1_1) dist_1 FULL JOIN recurring_outer_join.ref_1 USING (a, b))
+ count
+---------------------------------------------------------------------
+    28
+(1 row)
+
+-- distributed side is a subquery
+SELECT COUNT(*) FROM ref_1 LEFT JOIN (SELECT * FROM dist_1) q USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) q USING (a))
+ count
+---------------------------------------------------------------------
+    28
+(1 row)
+
+-- distributed side is a join tree
+SELECT COUNT(*) FROM ref_1 LEFT JOIN (dist_1 t1 JOIN dist_1 t2 USING (a)) q USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t1 WHERE true
+DEBUG:  recursively planning distributed relation "dist_1" "t2" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t2" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_1 t2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 LEFT JOIN ((SELECT t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t1_1) t1 JOIN (SELECT t2_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t2_1) t2 USING (a)) q(a, b, b_1) USING (a))
+ count
+---------------------------------------------------------------------
+    76
+(1 row)
+
+SELECT COUNT(*) FROM ref_1 LEFT JOIN (dist_1 t1 LEFT JOIN dist_1 t2 USING (a)) q USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t1 WHERE true
+DEBUG:  recursively planning distributed relation "dist_1" "t2" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t2" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_1 t2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 LEFT JOIN ((SELECT t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t1_1) t1 LEFT JOIN (SELECT t2_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t2_1) t2 USING (a)) q(a, b, b_1) USING (a))
+ count
+---------------------------------------------------------------------
+    76
+(1 row)
+
+-- use functions/VALUES clauses/intrermediate results as the recurring rel
+  -- values clause
+  SELECT COUNT(*) FROM (SELECT a, b FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(a,b)) recurring LEFT JOIN dist_1 USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t.a, t.b FROM (VALUES (1,'one'::text), (2,'two'::text), (3,'three'::text)) t(a, b)) recurring LEFT JOIN (SELECT dist_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dist_1_1) dist_1 USING (a))
+ count
+---------------------------------------------------------------------
+    12
+(1 row)
+
+  -- generate_series()
+  SELECT COUNT(*) FROM dist_1 RIGHT JOIN (SELECT a FROM generate_series(1, 10) a) recurring USING (a);
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT dist_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dist_1_1) dist_1 RIGHT JOIN (SELECT a.a FROM generate_series(1, 10) a(a)) recurring USING (a))
+ count
+---------------------------------------------------------------------
+    21
+(1 row)
+
+  -- materialized cte
+  WITH dist_1_materialized AS MATERIALIZED (
+    SELECT * FROM dist_1
+  )
+  SELECT COUNT(*) FROM dist_1 RIGHT JOIN dist_1_materialized USING (a);
+DEBUG:  generating subplan XXX_1 for CTE dist_1_materialized: SELECT a, b FROM recurring_outer_join.dist_1
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT dist_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dist_1_1) dist_1 RIGHT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) dist_1_materialized USING (a))
+ count
+---------------------------------------------------------------------
+    59
+(1 row)
+
+  -- offset in the subquery
+  SELECT COUNT(*) FROM dist_1 t1 RIGHT JOIN (SELECT * FROM dist_1 OFFSET 0) t2 USING (a);
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 OFFSET 0
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t1" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_1 t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t1_1) t1 RIGHT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t2 USING (a))
+ count
+---------------------------------------------------------------------
+    59
+(1 row)
+
+  -- limit in the subquery
+  SELECT COUNT(*) FROM dist_1 t1 RIGHT JOIN (SELECT * FROM dist_1 ORDER BY 1,2 LIMIT 2) t2 USING (a);
+DEBUG:  push down of limit count: 2
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 ORDER BY a, b LIMIT 2
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t1" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_1 t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t1_1) t1 RIGHT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t2 USING (a))
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+  -- local-distributed join as the recurring rel
+  --
+  -- We plan local-distributed join by converting local_1 into an intermediate result
+  -- and hence it becomes a recurring rel. Then we convert distributed - inner side of
+  -- the right join (dist_1) into an intermediate result too and this makes rhs of the
+  -- full join a recurring rel. And finally, we convert lhs of the full join (t1) into
+  -- an intermediate result too.
+  SELECT COUNT(*) FROM dist_1 t1 FULL JOIN (dist_1 RIGHT JOIN local_1 USING(a)) t2 USING (a);
+DEBUG:  Wrapping relation "local_1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.local_1 WHERE true
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_1 WHERE true
+DEBUG:  recursively planning left side of the full join since the other side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t1" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT a FROM recurring_outer_join.dist_1 t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t1_1) t1 FULL JOIN ((SELECT dist_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dist_1_1) dist_1 RIGHT JOIN (SELECT local_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) local_1_1) local_1 USING (a)) t2(a, b, b_1) USING (a))
+ count
+---------------------------------------------------------------------
+    43
+(1 row)
+
+  SELECT COUNT(*) FROM dist_1 t1 FULL JOIN (dist_1 RIGHT JOIN citus_local_1 USING(a)) t2 USING (a);
+DEBUG:  Wrapping relation "citus_local_1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.citus_local_1 WHERE true
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_1 WHERE true
+DEBUG:  recursively planning left side of the full join since the other side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t1" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT a FROM recurring_outer_join.dist_1 t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t1_1) t1 FULL JOIN ((SELECT dist_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dist_1_1) dist_1 RIGHT JOIN (SELECT citus_local_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_1_1) citus_local_1 USING (a)) t2(a, b, b_1) USING (a))
+ count
+---------------------------------------------------------------------
+    43
+(1 row)
+
+  -- subqury without FROM
+  SELECT COUNT(*) FROM dist_1 t1 RIGHT JOIN (SELECT generate_series(1,10) AS a) t2 USING (a);
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t1_1) t1 RIGHT JOIN (SELECT generate_series(1, 10) AS a) t2 USING (a))
+ count
+---------------------------------------------------------------------
+    21
+(1 row)
+
+-- such semi joins / anti joins are supported too
+  -- reference table
+  SELECT COUNT(*) FROM
+  ref_1 t1
+  JOIN dist_1 t2
+  ON (t1.a = t2.a)
+  WHERE t1.a IN (SELECT a FROM dist_1 t3);
+ count
+---------------------------------------------------------------------
+    18
+(1 row)
+
+  -- not supported because we join t3 (inner rel of the anti join) with a column
+  -- of reference table, not with the distribution column of the other distributed
+  -- table (t2)
+  SELECT COUNT(*) FROM
+  ref_1 t1
+  JOIN dist_1 t2
+  ON (t1.a = t2.a)
+  WHERE NOT EXISTS (SELECT * FROM dist_1 t3 WHERE t1.a = a);
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+  -- supported because the semi join is performed based on distribution keys
+  -- of the distributed tables
+  SELECT COUNT(*) FROM
+  ref_1 t1
+  JOIN dist_1 t2
+  ON (t1.a = t2.a)
+  WHERE NOT EXISTS (SELECT * FROM dist_1 t3 WHERE t2.a = a);
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+  -- values clause
+  SELECT COUNT(*) FROM
+  (SELECT a, b FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(a,b)) t1
+  JOIN dist_1 t2
+  ON (t1.a = t2.a)
+  WHERE EXISTS (SELECT * FROM dist_1 t3 WHERE t1.a = a);
+ count
+---------------------------------------------------------------------
+    12
+(1 row)
+
+  -- offset in the subquery
+  SELECT COUNT(*) FROM
+  (SELECT * FROM dist_1 OFFSET 0) t1
+  JOIN dist_1 t2
+  ON (t1.a = t2.a)
+  WHERE t1.a IN (SELECT a FROM dist_1 t3);
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 OFFSET 0
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t1 JOIN recurring_outer_join.dist_1 t2 ON ((t1.a OPERATOR(pg_catalog.=) t2.a))) WHERE (t1.a OPERATOR(pg_catalog.=) ANY (SELECT t3.a FROM recurring_outer_join.dist_1 t3))
+ count
+---------------------------------------------------------------------
+    59
+(1 row)
+
+  -- local-distributed join as the recurring rel
+  SELECT COUNT(*) FROM
+  (dist_1 RIGHT JOIN local_1 USING(a)) t1
+  JOIN dist_1 t2
+  ON (t1.a = t2.a)
+  WHERE t1.a IN (SELECT a FROM dist_1 t3);
+DEBUG:  Wrapping relation "local_1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.local_1 WHERE true
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((SELECT dist_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dist_1_1) dist_1 RIGHT JOIN (SELECT local_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) local_1_1) local_1 USING (a)) t1(a, b, b_1) JOIN recurring_outer_join.dist_1 t2 ON ((t1.a OPERATOR(pg_catalog.=) t2.a))) WHERE (t1.a OPERATOR(pg_catalog.=) ANY (SELECT t3.a FROM recurring_outer_join.dist_1 t3))
+ count
+---------------------------------------------------------------------
+    18
+(1 row)
+
+  -- materialized cte
+  WITH dist_1_materialized AS MATERIALIZED (
+      SELECT * FROM dist_1
+  )
+  SELECT COUNT(*) FROM
+  dist_1_materialized t1
+  JOIN dist_1 t2
+  ON (t1.a = t2.a)
+  WHERE t1.a IN (SELECT a FROM dist_1 t3);
+DEBUG:  generating subplan XXX_1 for CTE dist_1_materialized: SELECT a, b FROM recurring_outer_join.dist_1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t1 JOIN recurring_outer_join.dist_1 t2 ON ((t1.a OPERATOR(pg_catalog.=) t2.a))) WHERE (t1.a OPERATOR(pg_catalog.=) ANY (SELECT t3.a FROM recurring_outer_join.dist_1 t3))
+ count
+---------------------------------------------------------------------
+    59
+(1 row)
+
+  WITH dist_1_materialized AS MATERIALIZED (
+      SELECT * FROM dist_1
+  )
+  SELECT COUNT(*) FROM
+  dist_1_materialized t1
+  JOIN dist_1 t2
+  ON (t1.a = t2.a)
+  WHERE EXISTS (SELECT a FROM dist_1 t3 WHERE t3.a = t1.a);
+DEBUG:  generating subplan XXX_1 for CTE dist_1_materialized: SELECT a, b FROM recurring_outer_join.dist_1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t1 JOIN recurring_outer_join.dist_1 t2 ON ((t1.a OPERATOR(pg_catalog.=) t2.a))) WHERE (EXISTS (SELECT t3.a FROM recurring_outer_join.dist_1 t3 WHERE (t3.a OPERATOR(pg_catalog.=) t1.a)))
+ count
+---------------------------------------------------------------------
+    59
+(1 row)
+
+  -- not supported because we anti-join t3 --inner rel-- with a column
+  -- of t1 (intermediate result) --outer-rel--
+  WITH dist_1_materialized AS MATERIALIZED (
+      SELECT * FROM dist_1
+  )
+  SELECT COUNT(*) FROM
+  dist_1_materialized t1
+  JOIN dist_1 t2
+  ON (t1.a = t2.a)
+  WHERE NOT EXISTS (SELECT a FROM dist_1 t3 WHERE t3.a = t1.a);
+DEBUG:  generating subplan XXX_1 for CTE dist_1_materialized: SELECT a, b FROM recurring_outer_join.dist_1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t1 JOIN recurring_outer_join.dist_1 t2 ON ((t1.a OPERATOR(pg_catalog.=) t2.a))) WHERE (NOT (EXISTS (SELECT t3.a FROM recurring_outer_join.dist_1 t3 WHERE (t3.a OPERATOR(pg_catalog.=) t1.a))))
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+  -- so this is supported because now t3 is joined with t2, not t1
+  WITH dist_1_materialized AS MATERIALIZED (
+      SELECT a AS a_alias, b AS b_alias FROM dist_1
+  )
+  SELECT COUNT(*) FROM
+  dist_1_materialized t1
+  JOIN dist_1 t2
+  ON (t1.a_alias = t2.a)
+  WHERE NOT EXISTS (SELECT a FROM dist_1 t3 WHERE t3.a = t2.a);
+DEBUG:  generating subplan XXX_1 for CTE dist_1_materialized: SELECT a AS a_alias, b AS b_alias FROM recurring_outer_join.dist_1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.a_alias, intermediate_result.b_alias FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a_alias integer, b_alias integer)) t1 JOIN recurring_outer_join.dist_1 t2 ON ((t1.a_alias OPERATOR(pg_catalog.=) t2.a))) WHERE (NOT (EXISTS (SELECT t3.a FROM recurring_outer_join.dist_1 t3 WHERE (t3.a OPERATOR(pg_catalog.=) t2.a))))
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+  WITH dist_1_materialized AS MATERIALIZED (
+      SELECT a AS a_alias, b AS b_alias FROM dist_1
+  )
+  SELECT COUNT(*) FROM
+  dist_1_materialized t1
+  JOIN dist_1 t2
+  ON (t1.a_alias = t2.a)
+  WHERE t1.a_alias NOT IN (SELECT a FROM dist_1 t3);
+DEBUG:  generating subplan XXX_1 for CTE dist_1_materialized: SELECT a AS a_alias, b AS b_alias FROM recurring_outer_join.dist_1
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_1 t3
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.a_alias, intermediate_result.b_alias FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a_alias integer, b_alias integer)) t1 JOIN recurring_outer_join.dist_1 t2 ON ((t1.a_alias OPERATOR(pg_catalog.=) t2.a))) WHERE (NOT (t1.a_alias OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer))))
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+  -- generate_series()
+  SELECT COUNT(*) FROM
+  (SELECT a FROM generate_series(1, 10) a) t1
+  JOIN dist_1 t2
+  ON (t1.a = t2.a)
+  WHERE t1.a IN (SELECT a FROM dist_1 t3);
+ count
+---------------------------------------------------------------------
+    15
+(1 row)
+
+  -- subqury without FROM
+  SELECT COUNT(*) FROM
+  (SELECT generate_series(1,10) AS a) t1
+  JOIN dist_1 t2
+  ON (t1.a = t2.a)
+  WHERE t1.a IN (SELECT a FROM dist_1 t3);
+ count
+---------------------------------------------------------------------
+    15
+(1 row)
+
+-- together with correlated subqueries
+SELECT COUNT(*) FROM ref_1 t1
+LEFT JOIN dist_1 t2 USING (a,b)
+WHERE EXISTS (SELECT * FROM dist_1 t3 WHERE t1.a = t3.a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t2" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT t2_1.a, t2_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t2_1) t2 USING (a, b)) WHERE (EXISTS (SELECT t3.a, t3.b FROM recurring_outer_join.dist_1 t3 WHERE (t1.a OPERATOR(pg_catalog.=) t3.a)))
+ERROR:  correlated subqueries are not supported when the FROM clause contains a reference table
+SELECT COUNT(*) FROM dist_1 t1
+RIGHT JOIN ref_1 t2 USING (a,b)
+WHERE EXISTS (SELECT * FROM dist_1 t3 WHERE t2.a = t3.a);
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t1_1.a, t1_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t1_1) t1 RIGHT JOIN recurring_outer_join.ref_1 t2 USING (a, b)) WHERE (EXISTS (SELECT t3.a, t3.b FROM recurring_outer_join.dist_1 t3 WHERE (t2.a OPERATOR(pg_catalog.=) t3.a)))
+ERROR:  correlated subqueries are not supported when the FROM clause contains a CTE or subquery
+-- "dist_1 t2" can't contribute to result set of the right join with
+-- a tuple having "(t2.a) a = NULL" because t2 is in the inner side of
+-- right join. For this reason, Postgres knows that <t2.a = t1.a> can
+-- never evaluate to true (because <NULL = NULL> never yields "true")
+-- and replaces the right join with an inner join.
+-- And as a result, we can push-down the query without having to go
+-- through recursive planning.
+SELECT COUNT(*) FROM dist_1 t1
+WHERE EXISTS (
+    SELECT * FROM dist_1 t2
+    RIGHT JOIN ref_1 t3 USING (a)
+    WHERE t2.a = t1.a
+);
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+-- same here, Postgres converts the left join into an inner one
+SELECT foo.* FROM
+ref_1 r1,
+LATERAL
+(
+    SELECT * FROM ref_1 r2
+    LEFT JOIN dist_1
+    USING (a)
+    WHERE r1.a > dist_1.b
+) as foo;
+ a | b | b
+---------------------------------------------------------------------
+(0 rows)
+
+-- Qual is the same but top-level join is an anti-join. Right join
+-- stays as is and hence requires recursive planning.
+SELECT COUNT(*) FROM dist_1 t1
+WHERE NOT EXISTS (
+    SELECT * FROM dist_1 t2
+    RIGHT JOIN ref_1 t3 USING (a)
+    WHERE t2.a = t1.a
+);
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t2" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM recurring_outer_join.dist_1 t1 WHERE (NOT (EXISTS (SELECT t3.a, t2.b, t3.b FROM ((SELECT t2_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t2_1) t2 RIGHT JOIN recurring_outer_join.ref_1 t3 USING (a)) WHERE (t2.a OPERATOR(pg_catalog.=) t1.a))))
+ count
+---------------------------------------------------------------------
+     8
+(1 row)
+
+-- This time the semi-join qual is <t3.a = t1.a> (not <<t2.a = t1.a>)
+-- where t3 is the outer rel of the right join. Hence Postgres can't
+-- replace right join with an inner join and so we recursively plan
+-- inner side of the right join since the outer side is a recurring
+-- rel.
+SELECT COUNT(*) FROM dist_1 t1
+WHERE EXISTS (
+    SELECT * FROM dist_1 t2
+    RIGHT JOIN ref_1 t3 USING (a)
+    WHERE t3.a = t1.a
+);
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t2" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM recurring_outer_join.dist_1 t1 WHERE (EXISTS (SELECT t3.a, t2.b, t3.b FROM ((SELECT t2_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t2_1) t2 RIGHT JOIN recurring_outer_join.ref_1 t3 USING (a)) WHERE (t3.a OPERATOR(pg_catalog.=) t1.a)))
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+SELECT COUNT(*) FROM dist_1 t1
+WHERE NOT EXISTS (
+    SELECT * FROM dist_1 t2
+    RIGHT JOIN ref_1 t3 USING (a)
+    WHERE t3.a = t1.a
+);
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t2" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM recurring_outer_join.dist_1 t1 WHERE (NOT (EXISTS (SELECT t3.a, t2.b, t3.b FROM ((SELECT t2_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t2_1) t2 RIGHT JOIN recurring_outer_join.ref_1 t3 USING (a)) WHERE (t3.a OPERATOR(pg_catalog.=) t1.a))))
+ count
+---------------------------------------------------------------------
+     8
+(1 row)
+
+--
+-- more complex cases
+--
+SELECT COUNT(*) FROM
+-- 1) right side is distributed but t1 is recurring, hence what
+--    makes the right side distributed (t3) is recursively planned
+ref_1 t1
+LEFT JOIN
+(ref_1 t2 RIGHT JOIN dist_1 t3(x,y) ON (t2.a=t3.x)) t5
+USING(a)
+-- 2) outer side of the join tree became recurring, hence t4 is
+--    recursively planned too
+LEFT JOIN
+dist_1 t4
+ON (t4.a = t5.a AND t4.b = t5.b)
+WHERE t4.b IS NULL;
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t3" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t3" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT x AS a FROM recurring_outer_join.dist_1 t3(x, y) WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t4" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t4" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t4 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((recurring_outer_join.ref_1 t1 LEFT JOIN (recurring_outer_join.ref_1 t2(a_1, b) RIGHT JOIN (SELECT t3_1.x AS a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t3_1(x)) t3(x, y) ON ((t2.a_1 OPERATOR(pg_catalog.=) t3.x))) t5(a, b, x, y) USING (a)) LEFT JOIN (SELECT t4_1.a, t4_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t4_1) t4 ON (((t4.a OPERATOR(pg_catalog.=) t5.a) AND (t4.b OPERATOR(pg_catalog.=) t5.b)))) WHERE (t4.b IS NULL)
+ count
+---------------------------------------------------------------------
+    40
+(1 row)
+
+SELECT COUNT(*) FROM
+-- 2) right side is distributed but t1 is recurring, hence what
+--    makes the right side distributed (t4) is recursively planned
+ref_1 t1
+LEFT JOIN
+(
+    dist_1 t4
+    JOIN
+    -- 1) t6 is recursively planned since the outer side is recurring
+    (SELECT t6.a FROM dist_1 t6 RIGHT JOIN ref_1 t7 USING(a)) t5
+    USING(a)
+) q
+USING(a)
+-- 3) outer side of the join tree became recurring, hence t8 is
+--    recursively planned too
+LEFT JOIN
+dist_1 t8
+USING (a)
+WHERE t8.b IS NULL;
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t6" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t6" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t6 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t4" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t4" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_1 t4 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t8" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t8" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t8 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((recurring_outer_join.ref_1 t1 LEFT JOIN ((SELECT t4_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t4_1) t4 JOIN (SELECT t6.a FROM ((SELECT t6_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t6_1) t6 RIGHT JOIN recurring_outer_join.ref_1 t7 USING (a))) t5 USING (a)) q USING (a)) LEFT JOIN (SELECT t8_1.a, t8_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t8_1) t8 USING (a)) WHERE (t8.b IS NULL)
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+SELECT COUNT(*) FROM
+ref_1 t1
+-- all distributed tables in the rhs will be recursively planned
+-- in the order of t3, t4, t5
+LEFT JOIN
+(
+    ref_1 t2
+    JOIN
+    dist_1 t3
+    USING (a)
+    JOIN
+    (dist_1 t4 JOIN dist_1 t5 USING (a))
+    USING(a)
+)
+USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t3" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t3" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t3 WHERE true
+DEBUG:  recursively planning distributed relation "dist_1" "t4" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t4" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_1 t4 WHERE true
+DEBUG:  recursively planning distributed relation "dist_1" "t5" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t5" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT a FROM recurring_outer_join.dist_1 t5 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t1 LEFT JOIN ((recurring_outer_join.ref_1 t2 JOIN (SELECT t3_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t3_1) t3 USING (a)) JOIN ((SELECT t4_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t4_1) t4 JOIN (SELECT t5_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t5_1) t5 USING (a)) USING (a)) USING (a))
+ count
+---------------------------------------------------------------------
+   694
+(1 row)
+
+-- Even if dist_1 and dist_4_different_colocation_group belong to different
+-- colocation groups, we can run query without doing a repartition join as
+-- we first decide recursively planning lhs of the right join because rhs
+-- (ref_1) is a recurring rel. And while doing so, we anyway recursively plan
+-- the distributed tables in the subjoin tree individually hence the whole join
+-- tree becomes:
+--                                          RIGHT JOIN
+--                                      /               \
+--   intermediate_result_for_dist_1                     ref_1
+--   JOIN
+--   intermediate_result_for_dist_4_different_colocation_group
+--
+-- When we decide implementing the optimization noted in
+-- RecursivelyPlanDistributedJoinNode in an XXX comment, then this query would
+-- require enabling repartition joins.
+SELECT COUNT(*) FROM
+dist_1 JOIN dist_4_different_colocation_group USING(a)
+RIGHT JOIN ref_1 USING(a);
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 WHERE true
+DEBUG:  recursively planning distributed relation "dist_4_different_colocation_group" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_4_different_colocation_group" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_4_different_colocation_group WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((SELECT dist_1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dist_1_1) dist_1 JOIN (SELECT dist_4_different_colocation_group_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) dist_4_different_colocation_group_1) dist_4_different_colocation_group USING (a)) RIGHT JOIN recurring_outer_join.ref_1 USING (a))
+ count
+---------------------------------------------------------------------
+    25
+(1 row)
+
+SELECT COUNT(*) FROM
+ref_1 t1
+LEFT JOIN
+-- 2) t6 subquery is distributed so needs to be recursively planned
+--    because t1 is recurring
+(
+    SELECT * FROM
+    (SELECT * FROM ref_1 t2 JOIN dist_1 t3 USING (a) WHERE t3.b IS NULL) p
+    JOIN
+    -- 1) t5 is recursively planned since the outer side is recurring
+    (SELECT * FROM ref_1 t4 LEFT JOIN dist_1 t5 USING (a)) q
+    USING(a)
+) t6
+USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t5" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t5" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t5 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_2 for subquery SELECT p.a, p.b, p.b_1 AS b, q.b, q.b_1 AS b FROM ((SELECT t2.a, t2.b, t3.b FROM (recurring_outer_join.ref_1 t2 JOIN recurring_outer_join.dist_1 t3 USING (a)) WHERE (t3.b IS NULL)) p(a, b, b_1) JOIN (SELECT t4.a, t4.b, t5.b FROM (recurring_outer_join.ref_1 t4 LEFT JOIN (SELECT t5_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t5_1) t5 USING (a))) q(a, b, b_1) USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.b_1 AS b, intermediate_result.b_2 AS b, intermediate_result.b_3 AS b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, b_1 integer, b_2 integer, b_3 integer)) t6(a, b, b_1, b_2, b_3) USING (a))
+ count
+---------------------------------------------------------------------
+    15
+(1 row)
+
+-- No need to recursively plan dist_5_with_pkey thanks to
+-- pkey optimizations done by Postgres.
+SELECT COUNT(*) FROM ref_1 LEFT JOIN dist_5_with_pkey USING(a);
+ count
+---------------------------------------------------------------------
+    15
+(1 row)
+
+-- Similarly, <dist_1.a IN (1,4)> implies that "dist_1.a" cannot be NULL
+-- and hence Postgres converts the LEFT JOIN into an INNER JOIN form.
+-- For this reason, we don't need to recursively plan dist_1.
+SELECT COUNT(*) FROM ref_1 LEFT JOIN dist_1 USING(a) WHERE dist_1.a IN (1,4);
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+SELECT COUNT(*) FROM
+ref_1 t1
+LEFT JOIN
+-- 2) t6 subquery is distributed so needs to be recursively planned
+--    because t1 is recurring
+(
+    SELECT * FROM
+    (SELECT * FROM ref_1 t2 JOIN dist_3_partitioned t3 USING (a) WHERE t3.b IS NULL) p
+    JOIN
+    -- 1) t5 is recursively planned since the outer side is recurring
+    (SELECT * FROM ref_1 t4 LEFT JOIN dist_1 t5 USING (a)) q
+    USING(a)
+) t6
+USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t5" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t5" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t5 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_2 for subquery SELECT p.a, p.b, p.b_1 AS b, q.b, q.b_1 AS b FROM ((SELECT t2.a, t2.b, t3.b FROM (recurring_outer_join.ref_1 t2 JOIN recurring_outer_join.dist_3_partitioned t3 USING (a)) WHERE (t3.b IS NULL)) p(a, b, b_1) JOIN (SELECT t4.a, t4.b, t5.b FROM (recurring_outer_join.ref_1 t4 LEFT JOIN (SELECT t5_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t5_1) t5 USING (a))) q(a, b, b_1) USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.b_1 AS b, intermediate_result.b_2 AS b, intermediate_result.b_3 AS b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, b_1 integer, b_2 integer, b_3 integer)) t6(a, b, b_1, b_2, b_3) USING (a))
+ count
+---------------------------------------------------------------------
+    15
+(1 row)
+
+SELECT COUNT(t1.a), t1.b FROM
+ref_1 t1
+LEFT JOIN
+-- 2) t6 subquery is distributed so needs to be recursively planned
+--    because t1 is recurring
+(
+    SELECT * FROM
+    (SELECT * FROM ref_1 t2 JOIN dist_3_partitioned t3 USING (a) WHERE t3.b IS NULL) p
+    JOIN
+    -- 1) t5 is recursively planned since the outer side is recurring
+    (SELECT * FROM ref_1 t4 LEFT JOIN dist_1 t5 USING (a)) q
+    USING(a)
+) t6
+USING (a)
+GROUP BY (t1.b)
+HAVING t1.b > 200
+ORDER BY 1,2;
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t5" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t5" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t5 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_2 for subquery SELECT p.a, p.b, p.b_1 AS b, q.b, q.b_1 AS b FROM ((SELECT t2.a, t2.b, t3.b FROM (recurring_outer_join.ref_1 t2 JOIN recurring_outer_join.dist_3_partitioned t3 USING (a)) WHERE (t3.b IS NULL)) p(a, b, b_1) JOIN (SELECT t4.a, t4.b, t5.b FROM (recurring_outer_join.ref_1 t4 LEFT JOIN (SELECT t5_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t5_1) t5 USING (a))) q(a, b, b_1) USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(t1.a) AS count, t1.b FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.b_1 AS b, intermediate_result.b_2 AS b, intermediate_result.b_3 AS b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, b_1 integer, b_2 integer, b_3 integer)) t6(a, b, b_1, b_2, b_3) USING (a)) GROUP BY t1.b HAVING (t1.b OPERATOR(pg_catalog.>) 200) ORDER BY (count(t1.a)), t1.b
+ count |  b
+---------------------------------------------------------------------
+     0 | 202
+     0 | 302
+     0 | 400
+     0 | 401
+     0 | 402
+     1 | 203
+     1 | 300
+     1 | 301
+     1 | 303
+     1 | 304
+(10 rows)
+
+SELECT COUNT(t1.a), t1.b FROM
+ref_1 t1
+LEFT JOIN
+-- 2) t6 subquery is distributed so needs to be recursively planned
+--    because t1 is recurring
+(
+    SELECT * FROM
+    (SELECT * FROM ref_1 t2 JOIN dist_3_partitioned t3 USING (a) WHERE t3.b IS NULL) p
+    JOIN
+    -- 1) t5 is recursively planned since the outer side is recurring
+    (SELECT * FROM ref_1 t4 LEFT JOIN dist_1 t5 USING (a)) q
+    USING(a)
+) t6
+USING (a)
+GROUP BY (t1.b)
+HAVING (
+    EXISTS (
+        SELECT * FROM ref_1 t6
+        LEFT JOIN dist_1 t7 USING (a)
+        WHERE t7.b > 10
+    )
+)
+ORDER BY 1,2;
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t7" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t7" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t7 WHERE (b OPERATOR(pg_catalog.>) 10)
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t5" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t5" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_1 t5 WHERE true
+DEBUG:  generating subplan XXX_3 for subquery SELECT t6.a, t6.b, t7.b FROM (recurring_outer_join.ref_1 t6 LEFT JOIN (SELECT t7_1.a, t7_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t7_1) t7 USING (a)) WHERE (t7.b OPERATOR(pg_catalog.>) 10)
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_4 for subquery SELECT p.a, p.b, p.b_1 AS b, q.b, q.b_1 AS b FROM ((SELECT t2.a, t2.b, t3.b FROM (recurring_outer_join.ref_1 t2 JOIN recurring_outer_join.dist_3_partitioned t3 USING (a)) WHERE (t3.b IS NULL)) p(a, b, b_1) JOIN (SELECT t4.a, t4.b, t5.b FROM (recurring_outer_join.ref_1 t4 LEFT JOIN (SELECT t5_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t5_1) t5 USING (a))) q(a, b, b_1) USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(t1.a) AS count, t1.b FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.b_1 AS b, intermediate_result.b_2 AS b, intermediate_result.b_3 AS b FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, b_1 integer, b_2 integer, b_3 integer)) t6(a, b, b_1, b_2, b_3) USING (a)) GROUP BY t1.b HAVING (EXISTS (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.b_1 AS b FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, b_1 integer))) ORDER BY (count(t1.a)), t1.b
+ count |  b
+---------------------------------------------------------------------
+     0 | 102
+     0 | 202
+     0 | 302
+     0 | 400
+     0 | 401
+     0 | 402
+     1 |  11
+     1 |  21
+     1 | 100
+     1 | 200
+     1 | 203
+     1 | 300
+     1 | 301
+     1 | 303
+     1 | 304
+(15 rows)
+
+SELECT COUNT(*) FROM
+citus_local_1 t1
+LEFT JOIN
+-- 2) t6 subquery is distributed so needs to be recursively planned
+--    because t1 is first recursively planned
+(
+    SELECT * FROM
+    (SELECT * FROM ref_1 t2 JOIN dist_1 t3 USING (a) WHERE t3.b IS NULL) p
+    JOIN
+    -- 1) t5 is recursively planned since the outer side is recurring
+    (SELECT * FROM ref_1 t4 LEFT JOIN dist_1 t5 USING (a)) q
+    USING(a)
+) t6
+USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t5" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t5" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t5 WHERE true
+DEBUG:  Wrapping relation "citus_local_1" "t1" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.citus_local_1 t1 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_3 for subquery SELECT p.a, p.b, p.b_1 AS b, q.b, q.b_1 AS b FROM ((SELECT t2.a, t2.b, t3.b FROM (recurring_outer_join.ref_1 t2 JOIN recurring_outer_join.dist_1 t3 USING (a)) WHERE (t3.b IS NULL)) p(a, b, b_1) JOIN (SELECT t4.a, t4.b, t5.b FROM (recurring_outer_join.ref_1 t4 LEFT JOIN (SELECT t5_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t5_1) t5 USING (a))) q(a, b, b_1) USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t1_1) t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.b_1 AS b, intermediate_result.b_2 AS b, intermediate_result.b_3 AS b FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, b_1 integer, b_2 integer, b_3 integer)) t6(a, b, b_1, b_2, b_3) USING (a))
+ count
+---------------------------------------------------------------------
+    15
+(1 row)
+
+SELECT COUNT(*) FROM
+-- 2) t1 is recursively planned because the outer side (t2) is
+--    converted into a recurring rel
+dist_2_columnar t1
+RIGHT JOIN
+(
+    -- 1) t4 is recursively planned since the outer side is recurring
+    ref_1 t3 LEFT JOIN dist_1 t4 USING(a)
+) t2
+USING (a);
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t4" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t4" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t4 WHERE true
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_2_columnar" "t1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_2_columnar" "t1" to a subquery
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_2_columnar t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t1_1) t1 RIGHT JOIN (recurring_outer_join.ref_1 t3 LEFT JOIN (SELECT t4_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t4_1) t4 USING (a)) t2(a, b, b_1) USING (a))
+ count
+---------------------------------------------------------------------
+    76
+(1 row)
+
+SELECT COUNT(*) FROM
+-- 3) t1 is recursively planned because the outer side (t2) is
+--    converted into a recurring rel
+dist_1 t1
+RIGHT JOIN
+(
+    -- 2) t6 is recursively planned because now it's part of a distributed
+    --    inner join node that is about to be outer joined with t3
+    ref_1 t3
+    LEFT JOIN
+    (
+        -- 1-a) t4 is recursively planned since the outer side is recurring
+        (ref_1 t5 LEFT JOIN dist_1 t4 USING(a))
+        JOIN
+        dist_1 t6
+        USING(a)
+        JOIN
+        -- 1-b) t8 is recursively planned since the outer side is recurring
+        (ref_1 t7 LEFT JOIN dist_1 t8 USING(a))
+        USING(a)
+    )
+    USING(a)
+) t2
+USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t4" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t4" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t4 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t8" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t8" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_1 t8 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t6" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t6" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT a FROM recurring_outer_join.dist_1 t6 WHERE true
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t1" to a subquery
+DEBUG:  generating subplan XXX_4 for subquery SELECT a FROM recurring_outer_join.dist_1 t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t1_1) t1 RIGHT JOIN (recurring_outer_join.ref_1 t3 LEFT JOIN (((recurring_outer_join.ref_1 t5 LEFT JOIN (SELECT t4_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t4_1) t4 USING (a)) JOIN (SELECT t6_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t6_1) t6 USING (a)) JOIN (recurring_outer_join.ref_1 t7 LEFT JOIN (SELECT t8_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t8_1) t8 USING (a)) USING (a)) USING (a)) t2(a, b, b_1, b_2, b_3, b_4, b_5) USING (a))
+ count
+---------------------------------------------------------------------
+  7570
+(1 row)
+
+SELECT COUNT(*) FROM
+ref_1 t6
+LEFT JOIN
+(
+    ref_1 t1
+    LEFT JOIN
+    (
+        -- t3 is a distributed join tree so needs to be recursively planned
+        -- because t2 is recurring
+        ref_1 t2 LEFT JOIN (dist_1 t7 JOIN dist_1 t8 USING (a)) t3 USING(a)
+        JOIN
+        ref_1 t5
+        USING(a)
+    )
+    USING(a)
+)
+USING(a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t7" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t7" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t7 WHERE true
+DEBUG:  recursively planning distributed relation "dist_1" "t8" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t8" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_1 t8 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t6 LEFT JOIN (recurring_outer_join.ref_1 t1 LEFT JOIN ((recurring_outer_join.ref_1 t2 LEFT JOIN ((SELECT t7_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t7_1) t7 JOIN (SELECT t8_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t8_1) t8 USING (a)) t3(a, b, b_1) USING (a)) JOIN recurring_outer_join.ref_1 t5 USING (a)) USING (a)) USING (a))
+ count
+---------------------------------------------------------------------
+  1702
+(1 row)
+
+SELECT COUNT(*) FROM
+ref_1 t6
+LEFT JOIN
+(
+    ref_1 t1
+    LEFT JOIN
+    (
+        -- t4 subquery is distributed so needs to be recursively planned
+        -- because t2 is recurring
+        ref_1 t2 LEFT JOIN (SELECT * FROM dist_1 t3) t4 USING(a)
+        JOIN
+        ref_1 t5
+        USING(a)
+    )
+    USING(a)
+)
+USING(a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t3
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t6 LEFT JOIN (recurring_outer_join.ref_1 t1 LEFT JOIN ((recurring_outer_join.ref_1 t2 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t4 USING (a)) JOIN recurring_outer_join.ref_1 t5 USING (a)) USING (a)) USING (a))
+ count
+---------------------------------------------------------------------
+   634
+(1 row)
+
+SELECT COUNT(*) FROM
+ref_1 t6
+LEFT JOIN
+(
+    ref_1 t1
+    LEFT JOIN
+    (
+        -- t4 subquery is distributed so needs to be recursively planned
+        -- because t2 is recurring
+        ref_1 t2 LEFT JOIN (SELECT * FROM dist_3_partitioned t3) t4 USING(a)
+        JOIN
+        ref_1 t5
+        USING(a)
+    )
+    USING(a)
+)
+USING(a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_3_partitioned t3
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t6 LEFT JOIN (recurring_outer_join.ref_1 t1 LEFT JOIN ((recurring_outer_join.ref_1 t2 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t4 USING (a)) JOIN recurring_outer_join.ref_1 t5 USING (a)) USING (a)) USING (a))
+ count
+---------------------------------------------------------------------
+   634
+(1 row)
+
+-- cannot recursively plan because t3 (inner - distributed)
+-- references t1 (outer - recurring)
+SELECT COUNT(*) FROM ref_1 t1 LEFT JOIN LATERAL (SELECT * FROM dist_1 t2 WHERE t1.b < t2.b) t3 USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+ERROR:  cannot perform a lateral outer join when a distributed subquery references a reference table
+SELECT COUNT(*) FROM (SELECT * FROM dist_1 OFFSET 100) t1 LEFT JOIN LATERAL (SELECT * FROM dist_1 t2 WHERE t1.b < t2.b) t3 USING (a);
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 OFFSET 100
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t1 LEFT JOIN LATERAL (SELECT t2.a, t2.b FROM recurring_outer_join.dist_1 t2 WHERE (t1.b OPERATOR(pg_catalog.<) t2.b)) t3 USING (a))
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+ERROR:  cannot perform a lateral outer join when a distributed subquery references complex subqueries, CTEs or local tables
+SELECT COUNT(*) FROM local_1 t1 LEFT JOIN LATERAL (SELECT * FROM dist_1 t2 WHERE t1.b < t2.b) t3 USING (a);
+DEBUG:  Wrapping relation "local_1" "t1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.local_1 t1 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t1_1.a, t1_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t1_1) t1 LEFT JOIN LATERAL (SELECT t2.a, t2.b FROM recurring_outer_join.dist_1 t2 WHERE (t1.b OPERATOR(pg_catalog.<) t2.b)) t3 USING (a))
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+ERROR:  cannot perform a lateral outer join when a distributed subquery references complex subqueries, CTEs or local tables
+SELECT COUNT(*) FROM (SELECT 1 a, generate_series(1,2) b) t1 LEFT JOIN LATERAL (SELECT * FROM dist_1 t2 WHERE t1.b < t2.b) t3 USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+ERROR:  cannot perform a lateral outer join when a distributed subquery references a subquery without FROM
+SELECT COUNT(*) FROM (ref_1 t10 JOIN ref_1 t11 USING(a,b)) t1 LEFT JOIN LATERAL (SELECT * FROM dist_1 t2 WHERE t1.b < t2.b) t3 USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+ERROR:  cannot perform a lateral outer join when a distributed subquery references a reference table
+-- cannot plan because the query in the WHERE clause of t3
+-- (inner - distributed) references t1 (outer - recurring)
+SELECT COUNT(*) FROM ref_1 t1
+LEFT JOIN LATERAL
+(
+    SELECT * FROM dist_1 t2 WHERE EXISTS (
+        SELECT * FROM dist_1 t4
+        WHERE t4.a = t2.a AND t4.b > t1.b
+    )
+) t3
+USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+ERROR:  cannot perform a lateral outer join when a distributed subquery references a reference table
+-- can recursively plan after dropping (t4.b > t1.b) qual from t3
+SELECT COUNT(*) FROM ref_1 t1
+LEFT JOIN
+(
+    SELECT * FROM dist_1 t2 WHERE EXISTS (
+        SELECT * FROM dist_1 t4
+        WHERE t4.a = t2.a
+    )
+) t3
+USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t2 WHERE (EXISTS (SELECT t4.a, t4.b FROM recurring_outer_join.dist_1 t4 WHERE (t4.a OPERATOR(pg_catalog.=) t2.a)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t3 USING (a))
+ count
+---------------------------------------------------------------------
+    28
+(1 row)
+
+-- same test using a view, can be recursively planned
+CREATE VIEW my_view_1 AS
+SELECT * FROM dist_1 t2 WHERE EXISTS (
+    SELECT * FROM dist_1 t4
+    WHERE t4.a = t2.a
+);
+SELECT COUNT(*) FROM ref_1 t1
+LEFT JOIN
+my_view_1 t3
+USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_1 for subquery SELECT t2.a, t2.b FROM recurring_outer_join.dist_1 t2 WHERE (EXISTS (SELECT t4.a, t4.b FROM recurring_outer_join.dist_1 t4 WHERE (t4.a OPERATOR(pg_catalog.=) t2.a)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t3 USING (a))
+ count
+---------------------------------------------------------------------
+    28
+(1 row)
+
+SELECT COUNT(*) FROM
+ref_1 t6
+LEFT JOIN
+(
+    ref_1 t1
+    LEFT JOIN
+    (
+        -- t4 subquery is distributed so needs to be recursively planned
+        -- because t2 is recurring.
+        -- However, we fail to recursively plan t4 because it references
+        -- t6.
+        ref_1 t2 LEFT JOIN LATERAL (SELECT * FROM dist_2_columnar t3 WHERE t3.a > t6.a) t4 USING(a)
+        JOIN
+        ref_1 t5
+        USING(a)
+    )
+    USING(a)
+)
+USING(a);
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+ERROR:  cannot perform a lateral outer join when a distributed subquery references a reference table
+SELECT COUNT(*) FROM
+ref_1 t6
+LEFT JOIN
+(
+    ref_1 t1
+    LEFT JOIN
+    (
+        -- t4 subquery is distributed so needs to be recursively planned
+        -- because t2 is recurring.
+        -- Even if the query says t2 is lateral joined with t4, t4 doesn't
+        -- reference anywhere else and hence can be planned recursively.
+        ref_1 t2 LEFT JOIN LATERAL (SELECT * FROM dist_1 t3) t4 USING(a)
+        JOIN
+        ref_1 t5
+        USING(a)
+    )
+    USING(a)
+)
+USING(a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t3
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t6 LEFT JOIN (recurring_outer_join.ref_1 t1 LEFT JOIN ((recurring_outer_join.ref_1 t2 LEFT JOIN LATERAL (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t4 USING (a)) JOIN recurring_outer_join.ref_1 t5 USING (a)) USING (a)) USING (a))
+ count
+---------------------------------------------------------------------
+   634
+(1 row)
+
+-- since t1 is recurring and t6 is distributed, all the distributed
+-- tables in t6 will be recursively planned
+SELECT COUNT(*) FROM ref_1 t1
+LEFT JOIN
+(
+    ((SELECT * FROM ref_1 WHERE a > 1) t2 JOIN dist_1 t3 USING (a))
+    JOIN
+    (dist_1 t4 JOIN dist_1 t5 USING (a))
+    USING(a)
+) t6
+USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t3" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t3" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t3 WHERE true
+DEBUG:  recursively planning distributed relation "dist_1" "t4" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t4" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_1 t4 WHERE true
+DEBUG:  recursively planning distributed relation "dist_1" "t5" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t5" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT a FROM recurring_outer_join.dist_1 t5 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (((SELECT ref_1.a, ref_1.b FROM recurring_outer_join.ref_1 WHERE (ref_1.a OPERATOR(pg_catalog.>) 1)) t2 JOIN (SELECT t3_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t3_1) t3 USING (a)) JOIN ((SELECT t4_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t4_1) t4 JOIN (SELECT t5_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t5_1) t5 USING (a)) USING (a)) t6(a, b, b_1, b_2, b_3) USING (a))
+ count
+---------------------------------------------------------------------
+   588
+(1 row)
+
+BEGIN;
+    -- same test but this time should fail due to
+    -- citus.max_intermediate_result_size
+    SET LOCAL citus.max_intermediate_result_size TO "0.5kB";
+    SELECT COUNT(*) FROM ref_1 t1
+    LEFT JOIN
+    (
+        ((SELECT * FROM ref_1 WHERE a > 1) t2 JOIN dist_1 t3 USING (a))
+        JOIN
+        (dist_1 t4 JOIN dist_1 t5 USING (a))
+        USING(a)
+    ) t6
+    USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t3" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t3" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t3 WHERE true
+DEBUG:  recursively planning distributed relation "dist_1" "t4" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t4" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_1 t4 WHERE true
+DEBUG:  recursively planning distributed relation "dist_1" "t5" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t5" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT a FROM recurring_outer_join.dist_1 t5 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (((SELECT ref_1.a, ref_1.b FROM recurring_outer_join.ref_1 WHERE (ref_1.a OPERATOR(pg_catalog.>) 1)) t2 JOIN (SELECT t3_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t3_1) t3 USING (a)) JOIN ((SELECT t4_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t4_1) t4 JOIN (SELECT t5_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t5_1) t5 USING (a)) USING (a)) t6(a, b, b_1, b_2, b_3) USING (a))
+ERROR:  the intermediate result size exceeds citus.max_intermediate_result_size (currently 0 kB)
+DETAIL:  Citus restricts the size of intermediate results of complex subqueries and CTEs to avoid accidentally pulling large result sets into once place.
+HINT:  To run the current query, set citus.max_intermediate_result_size to a higher value or -1 to disable.
+ROLLBACK;
+-- Same test using some views, can be recursively planned too.
+-- Since t1 is recurring and t6 is distributed, all the distributed
+-- tables in t6 will be recursively planned.
+CREATE VIEW my_view_2 AS
+(SELECT * FROM ref_1 WHERE a > 1);
+CREATE VIEW my_view_3 AS
+(SELECT * FROM ref_1);
+SELECT COUNT(*) FROM my_view_3 t1
+LEFT JOIN
+(
+    (my_view_2 t2 JOIN dist_1 t3 USING (a))
+    JOIN
+    (dist_1 t4 JOIN dist_1 t5 USING (a))
+    USING(a)
+) t6
+USING (a);
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t3" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t3" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t3 WHERE true
+DEBUG:  recursively planning distributed relation "dist_1" "t4" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t4" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a FROM recurring_outer_join.dist_1 t4 WHERE true
+DEBUG:  recursively planning distributed relation "dist_1" "t5" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t5" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT a FROM recurring_outer_join.dist_1 t5 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT ref_1.a, ref_1.b FROM recurring_outer_join.ref_1) t1 LEFT JOIN (((SELECT ref_1.a, ref_1.b FROM recurring_outer_join.ref_1 WHERE (ref_1.a OPERATOR(pg_catalog.>) 1)) t2 JOIN (SELECT t3_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t3_1) t3 USING (a)) JOIN ((SELECT t4_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t4_1) t4 JOIN (SELECT t5_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t5_1) t5 USING (a)) USING (a)) t6(a, b, b_1, b_2, b_3) USING (a))
+ count
+---------------------------------------------------------------------
+   588
+(1 row)
+
+SELECT COUNT(*) FROM ref_1 t1
+-- 2) Since t8 is distributed and t1 is recurring, t8 needs be converted
+--    to a recurring rel too. For this reason, subquery t8 is recursively
+--    planned because t7 is recurring already.
+LEFT JOIN
+(
+    SELECT * FROM (SELECT * FROM ref_1 t2 RIGHT JOIN dist_1 t3 USING (a)) AS t4
+    JOIN
+    -- 1) subquery t6 is recursively planned because t5 is recurring
+    (SELECT * FROM ref_1 t5 LEFT JOIN (SELECT * FROM dist_2_columnar WHERE b < 150) t6 USING (a)) as t7
+    USING(a)
+) t8
+USING (a);
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_2_columnar WHERE (b OPERATOR(pg_catalog.<) 150)
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_2 for subquery SELECT t4.a, t4.b, t4.b_1 AS b, t7.b, t7.b_1 AS b FROM ((SELECT t3.a, t2.b, t3.b FROM (recurring_outer_join.ref_1 t2 RIGHT JOIN recurring_outer_join.dist_1 t3 USING (a))) t4(a, b, b_1) JOIN (SELECT t5.a, t5.b, t6.b FROM (recurring_outer_join.ref_1 t5 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t6 USING (a))) t7(a, b, b_1) USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.b_1 AS b, intermediate_result.b_2 AS b, intermediate_result.b_3 AS b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, b_1 integer, b_2 integer, b_3 integer)) t8(a, b, b_1, b_2, b_3) USING (a))
+ count
+---------------------------------------------------------------------
+   514
+(1 row)
+
+-- same test using a prepared statement
+PREPARE recurring_outer_join_p1 AS
+SELECT COUNT(*) FROM ref_1 t1
+-- 2) Since t8 is distributed and t1 is recurring, t8 needs be converted
+--    to a recurring rel too. For this reason, subquery t8 is recursively
+--    planned because t7 is recurring already.
+LEFT JOIN
+(
+    SELECT * FROM (SELECT * FROM ref_1 t2 RIGHT JOIN dist_1 t3 USING (a)) AS t4
+    JOIN
+    -- 1) subquery t6 is recursively planned because t5 is recurring
+    (SELECT * FROM ref_1 t5 LEFT JOIN (SELECT * FROM dist_2_columnar WHERE b < $1) t6 USING (a)) as t7
+    USING(a)
+) t8
+USING (a);
+EXECUTE recurring_outer_join_p1(0);
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_2_columnar WHERE (b OPERATOR(pg_catalog.<) 0)
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_2 for subquery SELECT t4.a, t4.b, t4.b_1 AS b, t7.b, t7.b_1 AS b FROM ((SELECT t3.a, t2.b, t3.b FROM (recurring_outer_join.ref_1 t2 RIGHT JOIN recurring_outer_join.dist_1 t3 USING (a))) t4(a, b, b_1) JOIN (SELECT t5.a, t5.b, t6.b FROM (recurring_outer_join.ref_1 t5 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t6 USING (a))) t7(a, b, b_1) USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.b_1 AS b, intermediate_result.b_2 AS b, intermediate_result.b_3 AS b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, b_1 integer, b_2 integer, b_3 integer)) t8(a, b, b_1, b_2, b_3) USING (a))
+ count
+---------------------------------------------------------------------
+   142
+(1 row)
+
+EXECUTE recurring_outer_join_p1(100);
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_2_columnar WHERE (b OPERATOR(pg_catalog.<) 100)
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_2 for subquery SELECT t4.a, t4.b, t4.b_1 AS b, t7.b, t7.b_1 AS b FROM ((SELECT t3.a, t2.b, t3.b FROM (recurring_outer_join.ref_1 t2 RIGHT JOIN recurring_outer_join.dist_1 t3 USING (a))) t4(a, b, b_1) JOIN (SELECT t5.a, t5.b, t6.b FROM (recurring_outer_join.ref_1 t5 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t6 USING (a))) t7(a, b, b_1) USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.b_1 AS b, intermediate_result.b_2 AS b, intermediate_result.b_3 AS b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, b_1 integer, b_2 integer, b_3 integer)) t8(a, b, b_1, b_2, b_3) USING (a))
+ count
+---------------------------------------------------------------------
+   514
+(1 row)
+
+EXECUTE recurring_outer_join_p1(100);
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_2_columnar WHERE (b OPERATOR(pg_catalog.<) 100)
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_2 for subquery SELECT t4.a, t4.b, t4.b_1 AS b, t7.b, t7.b_1 AS b FROM ((SELECT t3.a, t2.b, t3.b FROM (recurring_outer_join.ref_1 t2 RIGHT JOIN recurring_outer_join.dist_1 t3 USING (a))) t4(a, b, b_1) JOIN (SELECT t5.a, t5.b, t6.b FROM (recurring_outer_join.ref_1 t5 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t6 USING (a))) t7(a, b, b_1) USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.b_1 AS b, intermediate_result.b_2 AS b, intermediate_result.b_3 AS b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, b_1 integer, b_2 integer, b_3 integer)) t8(a, b, b_1, b_2, b_3) USING (a))
+ count
+---------------------------------------------------------------------
+   514
+(1 row)
+
+EXECUTE recurring_outer_join_p1(10);
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_2_columnar WHERE (b OPERATOR(pg_catalog.<) 10)
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_2 for subquery SELECT t4.a, t4.b, t4.b_1 AS b, t7.b, t7.b_1 AS b FROM ((SELECT t3.a, t2.b, t3.b FROM (recurring_outer_join.ref_1 t2 RIGHT JOIN recurring_outer_join.dist_1 t3 USING (a))) t4(a, b, b_1) JOIN (SELECT t5.a, t5.b, t6.b FROM (recurring_outer_join.ref_1 t5 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t6 USING (a))) t7(a, b, b_1) USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.b_1 AS b, intermediate_result.b_2 AS b, intermediate_result.b_3 AS b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, b_1 integer, b_2 integer, b_3 integer)) t8(a, b, b_1, b_2, b_3) USING (a))
+ count
+---------------------------------------------------------------------
+   142
+(1 row)
+
+EXECUTE recurring_outer_join_p1(10);
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_2_columnar WHERE (b OPERATOR(pg_catalog.<) 10)
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_2 for subquery SELECT t4.a, t4.b, t4.b_1 AS b, t7.b, t7.b_1 AS b FROM ((SELECT t3.a, t2.b, t3.b FROM (recurring_outer_join.ref_1 t2 RIGHT JOIN recurring_outer_join.dist_1 t3 USING (a))) t4(a, b, b_1) JOIN (SELECT t5.a, t5.b, t6.b FROM (recurring_outer_join.ref_1 t5 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t6 USING (a))) t7(a, b, b_1) USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.b_1 AS b, intermediate_result.b_2 AS b, intermediate_result.b_3 AS b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, b_1 integer, b_2 integer, b_3 integer)) t8(a, b, b_1, b_2, b_3) USING (a))
+ count
+---------------------------------------------------------------------
+   142
+(1 row)
+
+EXECUTE recurring_outer_join_p1(1000);
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_2_columnar WHERE (b OPERATOR(pg_catalog.<) 1000)
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_2 for subquery SELECT t4.a, t4.b, t4.b_1 AS b, t7.b, t7.b_1 AS b FROM ((SELECT t3.a, t2.b, t3.b FROM (recurring_outer_join.ref_1 t2 RIGHT JOIN recurring_outer_join.dist_1 t3 USING (a))) t4(a, b, b_1) JOIN (SELECT t5.a, t5.b, t6.b FROM (recurring_outer_join.ref_1 t5 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t6 USING (a))) t7(a, b, b_1) USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.b_1 AS b, intermediate_result.b_2 AS b, intermediate_result.b_3 AS b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, b_1 integer, b_2 integer, b_3 integer)) t8(a, b, b_1, b_2, b_3) USING (a))
+ count
+---------------------------------------------------------------------
+   514
+(1 row)
+
+EXECUTE recurring_outer_join_p1(1000);
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  pathlist hook for columnar table am
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_2_columnar WHERE (b OPERATOR(pg_catalog.<) 1000)
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_2 for subquery SELECT t4.a, t4.b, t4.b_1 AS b, t7.b, t7.b_1 AS b FROM ((SELECT t3.a, t2.b, t3.b FROM (recurring_outer_join.ref_1 t2 RIGHT JOIN recurring_outer_join.dist_1 t3 USING (a))) t4(a, b, b_1) JOIN (SELECT t5.a, t5.b, t6.b FROM (recurring_outer_join.ref_1 t5 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t6 USING (a))) t7(a, b, b_1) USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.b_1 AS b, intermediate_result.b_2 AS b, intermediate_result.b_3 AS b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, b_1 integer, b_2 integer, b_3 integer)) t8(a, b, b_1, b_2, b_3) USING (a))
+ count
+---------------------------------------------------------------------
+   514
+(1 row)
+
+-- t5 is recursively planned because the outer side of the final
+-- left join is recurring
+SELECT * FROM ref_1 t1
+JOIN ref_1 t2 USING (a)
+LEFT JOIN ref_1 t3 USING (a)
+LEFT JOIN ref_1 t4 USING (a)
+LEFT JOIN dist_1 t5 USING (a)
+ORDER BY 1,2,3,4,5,6 DESC
+LIMIT 5;
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t5" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t5" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t5 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT t1.a, t1.b, t2.b, t3.b, t4.b, t5.b FROM ((((recurring_outer_join.ref_1 t1 JOIN recurring_outer_join.ref_1 t2 USING (a)) LEFT JOIN recurring_outer_join.ref_1 t3 USING (a)) LEFT JOIN recurring_outer_join.ref_1 t4 USING (a)) LEFT JOIN (SELECT t5_1.a, t5_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t5_1) t5 USING (a)) ORDER BY t1.a, t1.b, t2.b, t3.b, t4.b, t5.b DESC LIMIT 5
+ a | b  | b  | b  |  b  | b
+---------------------------------------------------------------------
+ 1 | 11 | 11 | 11 |  11 | 12
+ 1 | 11 | 11 | 11 |  11 | 11
+ 1 | 11 | 11 | 11 |  11 | 10
+ 1 | 11 | 11 | 11 | 100 | 12
+ 1 | 11 | 11 | 11 | 100 | 11
+(5 rows)
+
+-- t6 is recursively planned because the outer side of the final
+-- left join is recurring
+SELECT * FROM (SELECT * FROM ref_1 ORDER BY 1,2 LIMIT 7) t1
+JOIN ref_1 t2 USING (a)
+LEFT JOIN (SELECT *, random() > 1 FROM dist_1 t3) t4 USING (a)
+LEFT JOIN ref_1 t5 USING (a)
+LEFT JOIN dist_1 t6 USING (a)
+ORDER BY 1,2,3,4,5,6,7 DESC
+LIMIT 10;
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.ref_1 ORDER BY a, b LIMIT 7
+DEBUG:  generating subplan XXX_2 for subquery SELECT a, b, (random() OPERATOR(pg_catalog.>) (1)::double precision) FROM recurring_outer_join.dist_1 t3
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t6" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t6" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t6 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT t1.a, t1.b, t2.b, t4.b, t4."?column?", t5.b, t6.b FROM (((((SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t1 JOIN recurring_outer_join.ref_1 t2 USING (a)) LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b, intermediate_result."?column?" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, "?column?" boolean)) t4(a, b, "?column?") USING (a)) LEFT JOIN recurring_outer_join.ref_1 t5 USING (a)) LEFT JOIN (SELECT t6_1.a, t6_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t6_1) t6 USING (a)) ORDER BY t1.a, t1.b, t2.b, t4.b, t4."?column?", t5.b, t6.b DESC LIMIT 10
+ a | b  | b  | b  | ?column? |  b  | b
+---------------------------------------------------------------------
+ 1 | 11 | 11 | 10 | f        |  11 | 12
+ 1 | 11 | 11 | 10 | f        |  11 | 11
+ 1 | 11 | 11 | 10 | f        |  11 | 10
+ 1 | 11 | 11 | 10 | f        | 100 | 12
+ 1 | 11 | 11 | 10 | f        | 100 | 11
+ 1 | 11 | 11 | 10 | f        | 100 | 10
+ 1 | 11 | 11 | 11 | f        |  11 | 12
+ 1 | 11 | 11 | 11 | f        |  11 | 11
+ 1 | 11 | 11 | 11 | f        |  11 | 10
+ 1 | 11 | 11 | 11 | f        | 100 | 12
+(10 rows)
+
+--
+-- Such join rels can recursively appear anywhere in the query instead
+-- of simple relation rtes.
+--
+SELECT COUNT(*) FROM
+  (SELECT ref_1.a, t10.b FROM ref_1 LEFT JOIN dist_1 t10 USING(b)) AS t1,
+  (SELECT ref_1.a, t20.b FROM ref_1 LEFT JOIN dist_1 t20 USING(b)) AS t2,
+  (SELECT ref_1.a, t30.b FROM ref_1 LEFT JOIN dist_1 t30 USING(b)) AS t3,
+  (SELECT ref_1.a, t40.b FROM ref_1 LEFT JOIN dist_1 t40 USING(b)) AS t4,
+  (SELECT ref_1.a, t50.b FROM ref_1 LEFT JOIN dist_1 t50 USING(b)) AS t5
+WHERE
+  t1.a =  t5.a AND
+  t1.a =  t4.a AND
+  t1.a =  t3.a AND
+  t1.a =  t2.a AND
+  t1.a =  t1.a;
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t10" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t10" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT b FROM recurring_outer_join.dist_1 t10 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t20" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t20" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT b FROM recurring_outer_join.dist_1 t20 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t30" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t30" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT b FROM recurring_outer_join.dist_1 t30 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t40" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t40" to a subquery
+DEBUG:  generating subplan XXX_4 for subquery SELECT b FROM recurring_outer_join.dist_1 t40 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t50" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t50" to a subquery
+DEBUG:  generating subplan XXX_5 for subquery SELECT b FROM recurring_outer_join.dist_1 t50 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT ref_1.a, t10.b FROM (recurring_outer_join.ref_1 LEFT JOIN (SELECT NULL::integer AS a, t10_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) t10_1) t10 USING (b))) t1, (SELECT ref_1.a, t20.b FROM (recurring_outer_join.ref_1 LEFT JOIN (SELECT NULL::integer AS a, t20_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) t20_1) t20 USING (b))) t2, (SELECT ref_1.a, t30.b FROM (recurring_outer_join.ref_1 LEFT JOIN (SELECT NULL::integer AS a, t30_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) t30_1) t30 USING (b))) t3, (SELECT ref_1.a, t40.b FROM (recurring_outer_join.ref_1 LEFT JOIN (SELECT NULL::integer AS a, t40_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) t40_1) t40 USING (b))) t4, (SELECT ref_1.a, t50.b FROM (recurring_outer_join.ref_1 LEFT JOIN (SELECT NULL::integer AS a, t50_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_5'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) t50_1) t50 USING (b))) t5 WHERE ((t1.a OPERATOR(pg_catalog.=) t5.a) AND (t1.a OPERATOR(pg_catalog.=) t4.a) AND (t1.a OPERATOR(pg_catalog.=) t3.a) AND (t1.a OPERATOR(pg_catalog.=) t2.a) AND (t1.a OPERATOR(pg_catalog.=) t1.a))
+ count
+---------------------------------------------------------------------
+  1299
+(1 row)
+
+-- subqueries in the target list
+SELECT t1.b, (SELECT b FROM ref_1 WHERE t1.a = a ORDER BY a,b LIMIT 1), (SELECT t2.a)
+FROM ref_1
+LEFT JOIN dist_1 t1 USING (a,b)
+JOIN dist_1 t2 USING (a,b)
+ORDER BY 1,2,3 LIMIT 5;
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT t1.b, (SELECT ref_1_1.b FROM recurring_outer_join.ref_1 ref_1_1 WHERE (t1.a OPERATOR(pg_catalog.=) ref_1_1.a) ORDER BY ref_1_1.a, ref_1_1.b LIMIT 1) AS b, (SELECT t2.a) AS a FROM ((recurring_outer_join.ref_1 LEFT JOIN (SELECT t1_1.a, t1_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t1_1) t1 USING (a, b)) JOIN recurring_outer_join.dist_1 t2 USING (a, b)) ORDER BY t1.b, (SELECT ref_1_1.b FROM recurring_outer_join.ref_1 ref_1_1 WHERE (t1.a OPERATOR(pg_catalog.=) ref_1_1.a) ORDER BY ref_1_1.a, ref_1_1.b LIMIT 1), (SELECT t2.a) LIMIT 5
+DEBUG:  push down of limit count: 5
+ b  | b  | a
+---------------------------------------------------------------------
+ 11 | 11 | 1
+ 21 | 21 | 2
+(2 rows)
+
+WITH
+outer_cte_1 AS (
+	SELECT
+    t1.b,
+    -- 9) t3 is recursively planned since t2 is recurring
+    (SELECT a FROM ref_1 t2 LEFT JOIN dist_1 t3 USING(a,b) WHERE t2.a=t1.a ORDER BY 1 LIMIT 1)
+	FROM dist_1 t1
+	ORDER BY 1,2 LIMIT 10
+),
+outer_cte_2 AS (
+	SELECT * FROM (
+    SELECT * FROM (
+      SELECT * FROM (
+        SELECT * FROM (
+          SELECT * FROM (
+            -- 10) t5 is recursively planned since t4 is recurring
+            SELECT * FROM ref_1 t4
+            LEFT JOIN dist_1 t5
+            USING(a,b)
+          ) AS t6
+        ) AS t7
+      ) AS t8
+    ) AS t9
+    OFFSET 0
+  )AS t10
+  -- 11) t11 is recursively planned since lhs of the join tree became recurring
+  LEFT JOIN dist_1 t11 USING (b)
+)
+SELECT * FROM ref_1 t36 WHERE (b,100,a) IN (
+  WITH
+  cte_1 AS (
+    WITH cte_1_inner_cte AS (
+      -- 3) t12 is recursively planned because t11 is recurring
+      SELECT *  FROM ref_1 t11
+      LEFT JOIN dist_1 t12
+      USING (a,b)
+    )
+    -- 4) t14 is recursively planned because t13 is recurring
+    SELECT * FROM ref_1 t13
+    LEFT JOIN dist_1 t14 USING (a,b)
+    JOIN cte_1_inner_cte t15
+    USING (a,b)
+    OFFSET 0
+  )
+  -- 6) t31 is recursively planned since t35 is recurring
+  -- 7) t34 is recursively planned since lhs of the join tree is now recurring
+  SELECT
+    DISTINCT t31.b,
+    -- 1) we first search for such joins in the target list and recursively plan t33
+    --    because t32 is recurring
+    (SELECT max(b) FROM ref_1 t32 LEFT JOIN dist_1 t33 USING(a,b) WHERE t31.a = t32.a),
+    (SELECT t34.a)
+  FROM ref_1 t35
+  LEFT JOIN dist_1 t31 USING (a,b)
+  LEFT JOIN dist_1 t34 USING (a,b)
+  -- 2) cte_1 was inlided, so we then recursively check for such joins there.
+  --    When doing so, we first check for cte_1_inner_cte was since it was
+  --    also inlined.
+  LEFT JOIN cte_1 USING (a,b)
+  -- 5) Since rhs of below join is a subquery too, we recursively search
+  --    for such joins there and plan distributed side of all those 10
+  --    joins.
+  LEFT JOIN (
+    SELECT COUNT(DISTINCT t20.a) AS a
+    FROM
+      (SELECT r.a, d.b FROM ref_1 r LEFT JOIN dist_1 d USING(b) WHERE r.a IS NOT NULL) AS t20,
+      (SELECT r.a, d.b FROM ref_1 r LEFT JOIN dist_1 d USING(b) WHERE r.a IS NOT NULL) AS t21,
+      (SELECT r.a, d.b FROM ref_1 r LEFT JOIN dist_1 d USING(b) WHERE r.a IS NOT NULL) AS t22,
+      (SELECT r.a, d.b FROM ref_1 r LEFT JOIN dist_1 d USING(b) WHERE r.a IS NOT NULL) AS t23,
+      (SELECT r.a, d.b FROM ref_1 r LEFT JOIN dist_1 d USING(b) WHERE r.a IS NOT NULL) AS t24,
+      (SELECT r.a, d.b FROM ref_1 r LEFT JOIN dist_1 d USING(b) WHERE r.a IS NOT NULL) AS t25,
+      (SELECT r.a, d.b FROM ref_1 r LEFT JOIN dist_1 d USING(b) WHERE r.a IS NOT NULL) AS t26,
+      (SELECT r.a, d.b FROM ref_1 r LEFT JOIN dist_1 d USING(b) WHERE r.a IS NOT NULL) AS t27,
+      (SELECT r.a, d.b FROM ref_1 r LEFT JOIN dist_1 d USING(b) WHERE r.a IS NOT NULL) AS t28,
+      (SELECT r.a, d.b FROM ref_1 r LEFT JOIN dist_1 d USING(b) WHERE r.a IS NOT NULL) AS t29
+      WHERE
+        t20.a = t29.a AND
+        t20.a = t28.a AND
+        t20.a = t27.a AND
+        t20.a = t26.a AND
+        t20.a = t25.a AND
+        t20.a = t24.a AND
+        t20.a = t23.a AND
+        t20.a = t21.a AND
+        t20.a = t21.a AND
+        t20.a = t20.a
+  ) AS t30
+  ON (t30.a = cte_1.a)
+  ORDER BY 1,2,3
+) AND
+-- 8) Then we search for such joins in the next (and final) qual of the WHERE clause.
+--    Since both outer_cte_1 and outer_cte_2 were inlined, we will first
+--    recursively check for such joins in them.
+a NOT IN (SELECT outer_cte_1.b FROM outer_cte_1 LEFT JOIN outer_cte_2 USING (b));
+DEBUG:  CTE outer_cte_1 is going to be inlined via distributed planning
+DEBUG:  CTE outer_cte_2 is going to be inlined via distributed planning
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  CTE cte_1_inner_cte is going to be inlined via distributed planning
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t33" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t33" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t33 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t12" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t12" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t12 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t14" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t14" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t14 WHERE true
+DEBUG:  generating subplan XXX_4 for subquery SELECT t13.a, t13.b FROM ((recurring_outer_join.ref_1 t13 LEFT JOIN (SELECT t14_1.a, t14_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t14_1) t14 USING (a, b)) JOIN (SELECT t11.a, t11.b FROM (recurring_outer_join.ref_1 t11 LEFT JOIN (SELECT t12_1.a, t12_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t12_1) t12 USING (a, b))) t15 USING (a, b)) OFFSET 0
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "d" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "d" to a subquery
+DEBUG:  generating subplan XXX_5 for subquery SELECT NULL::integer AS "dummy-1" FROM recurring_outer_join.dist_1 d WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "d" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "d" to a subquery
+DEBUG:  generating subplan XXX_6 for subquery SELECT NULL::integer AS "dummy-1" FROM recurring_outer_join.dist_1 d WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "d" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "d" to a subquery
+DEBUG:  generating subplan XXX_7 for subquery SELECT NULL::integer AS "dummy-1" FROM recurring_outer_join.dist_1 d WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "d" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "d" to a subquery
+DEBUG:  generating subplan XXX_8 for subquery SELECT NULL::integer AS "dummy-1" FROM recurring_outer_join.dist_1 d WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "d" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "d" to a subquery
+DEBUG:  generating subplan XXX_9 for subquery SELECT NULL::integer AS "dummy-1" FROM recurring_outer_join.dist_1 d WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "d" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "d" to a subquery
+DEBUG:  generating subplan XXX_10 for subquery SELECT NULL::integer AS "dummy-1" FROM recurring_outer_join.dist_1 d WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "d" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "d" to a subquery
+DEBUG:  generating subplan XXX_11 for subquery SELECT NULL::integer AS "dummy-1" FROM recurring_outer_join.dist_1 d WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "d" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "d" to a subquery
+DEBUG:  generating subplan XXX_12 for subquery SELECT NULL::integer AS "dummy-1" FROM recurring_outer_join.dist_1 d WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "d" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "d" to a subquery
+DEBUG:  generating subplan XXX_13 for subquery SELECT NULL::integer AS "dummy-1" FROM recurring_outer_join.dist_1 d WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "d" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "d" to a subquery
+DEBUG:  generating subplan XXX_14 for subquery SELECT NULL::integer AS "dummy-1" FROM recurring_outer_join.dist_1 d WHERE true
+DEBUG:  generating subplan XXX_15 for subquery SELECT count(DISTINCT t20.a) AS a FROM (SELECT r.a, d.b FROM (recurring_outer_join.ref_1 r LEFT JOIN (SELECT NULL::integer AS a, NULL::integer AS b FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_5'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) d_1) d USING (b)) WHERE (r.a IS NOT NULL)) t20, (SELECT r.a, d.b FROM (recurring_outer_join.ref_1 r LEFT JOIN (SELECT NULL::integer AS a, NULL::integer AS b FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_6'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) d_1) d USING (b)) WHERE (r.a IS NOT NULL)) t21, (SELECT r.a, d.b FROM (recurring_outer_join.ref_1 r LEFT JOIN (SELECT NULL::integer AS a, NULL::integer AS b FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_7'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) d_1) d USING (b)) WHERE (r.a IS NOT NULL)) t22, (SELECT r.a, d.b FROM (recurring_outer_join.ref_1 r LEFT JOIN (SELECT NULL::integer AS a, NULL::integer AS b FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_8'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) d_1) d USING (b)) WHERE (r.a IS NOT NULL)) t23, (SELECT r.a, d.b FROM (recurring_outer_join.ref_1 r LEFT JOIN (SELECT NULL::integer AS a, NULL::integer AS b FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_9'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) d_1) d USING (b)) WHERE (r.a IS NOT NULL)) t24, (SELECT r.a, d.b FROM (recurring_outer_join.ref_1 r LEFT JOIN (SELECT NULL::integer AS a, NULL::integer AS b FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_10'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) d_1) d USING (b)) WHERE (r.a IS NOT NULL)) t25, (SELECT r.a, d.b FROM (recurring_outer_join.ref_1 r LEFT JOIN (SELECT NULL::integer AS a, NULL::integer AS b FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_11'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) d_1) d USING (b)) WHERE (r.a IS NOT NULL)) t26, (SELECT r.a, d.b FROM (recurring_outer_join.ref_1 r LEFT JOIN (SELECT NULL::integer AS a, NULL::integer AS b FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_12'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) d_1) d USING (b)) WHERE (r.a IS NOT NULL)) t27, (SELECT r.a, d.b FROM (recurring_outer_join.ref_1 r LEFT JOIN (SELECT NULL::integer AS a, NULL::integer AS b FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_13'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) d_1) d USING (b)) WHERE (r.a IS NOT NULL)) t28, (SELECT r.a, d.b FROM (recurring_outer_join.ref_1 r LEFT JOIN (SELECT NULL::integer AS a, NULL::integer AS b FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_14'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) d_1) d USING (b)) WHERE (r.a IS NOT NULL)) t29 WHERE ((t20.a OPERATOR(pg_catalog.=) t29.a) AND (t20.a OPERATOR(pg_catalog.=) t28.a) AND (t20.a OPERATOR(pg_catalog.=) t27.a) AND (t20.a OPERATOR(pg_catalog.=) t26.a) AND (t20.a OPERATOR(pg_catalog.=) t25.a) AND (t20.a OPERATOR(pg_catalog.=) t24.a) AND (t20.a OPERATOR(pg_catalog.=) t23.a) AND (t20.a OPERATOR(pg_catalog.=) t21.a) AND (t20.a OPERATOR(pg_catalog.=) t21.a) AND (t20.a OPERATOR(pg_catalog.=) t20.a))
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t31" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t31" to a subquery
+DEBUG:  generating subplan XXX_16 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t31 WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t34" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t34" to a subquery
+DEBUG:  generating subplan XXX_17 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t34 WHERE true
+DEBUG:  generating subplan XXX_18 for subquery SELECT DISTINCT t31.b, (SELECT max(t32.b) AS max FROM (recurring_outer_join.ref_1 t32 LEFT JOIN (SELECT t33_1.a, t33_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t33_1) t33 USING (a, b)) WHERE (t31.a OPERATOR(pg_catalog.=) t32.a)) AS max, (SELECT t34.a) AS a FROM ((((recurring_outer_join.ref_1 t35 LEFT JOIN (SELECT t31_1.a, t31_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_16'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t31_1) t31 USING (a, b)) LEFT JOIN (SELECT t34_1.a, t34_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_17'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t34_1) t34 USING (a, b)) LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte_1 USING (a, b)) LEFT JOIN (SELECT intermediate_result.a FROM read_intermediate_result('XXX_15'::text, 'binary'::citus_copy_format) intermediate_result(a bigint)) t30 ON ((t30.a OPERATOR(pg_catalog.=) cte_1.a))) ORDER BY t31.b, (SELECT max(t32.b) AS max FROM (recurring_outer_join.ref_1 t32 LEFT JOIN (SELECT t33_1.a, t33_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t33_1) t33 USING (a, b)) WHERE (t31.a OPERATOR(pg_catalog.=) t32.a)), (SELECT t34.a)
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t3" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t3" to a subquery
+DEBUG:  generating subplan XXX_19 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t3 WHERE true
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan XXX_20 for subquery SELECT b, (SELECT t2.a FROM (recurring_outer_join.ref_1 t2 LEFT JOIN (SELECT t3_1.a, t3_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_19'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t3_1) t3 USING (a, b)) WHERE (t2.a OPERATOR(pg_catalog.=) t1.a) ORDER BY t2.a LIMIT 1) AS a FROM recurring_outer_join.dist_1 t1 ORDER BY b, (SELECT t2.a FROM (recurring_outer_join.ref_1 t2 LEFT JOIN (SELECT t3_1.a, t3_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_19'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t3_1) t3 USING (a, b)) WHERE (t2.a OPERATOR(pg_catalog.=) t1.a) ORDER BY t2.a LIMIT 1) LIMIT 10
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t5" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t5" to a subquery
+DEBUG:  generating subplan XXX_21 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t5 WHERE true
+DEBUG:  generating subplan XXX_22 for subquery SELECT a, b FROM (SELECT t8.a, t8.b FROM (SELECT t7.a, t7.b FROM (SELECT t6.a, t6.b FROM (SELECT t4.a, t4.b FROM (recurring_outer_join.ref_1 t4 LEFT JOIN (SELECT t5_1.a, t5_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_21'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t5_1) t5 USING (a, b))) t6) t7) t8) t9 OFFSET 0
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t11" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t11" to a subquery
+DEBUG:  generating subplan XXX_23 for subquery SELECT b FROM recurring_outer_join.dist_1 t11 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a, b FROM recurring_outer_join.ref_1 t36 WHERE (((b, 100, a) OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.b, intermediate_result.max, intermediate_result.a FROM read_intermediate_result('XXX_18'::text, 'binary'::citus_copy_format) intermediate_result(b integer, max integer, a integer))) AND (NOT (a OPERATOR(pg_catalog.=) ANY (SELECT outer_cte_1.b FROM ((SELECT intermediate_result.b, intermediate_result.a FROM read_intermediate_result('XXX_20'::text, 'binary'::citus_copy_format) intermediate_result(b integer, a integer)) outer_cte_1 LEFT JOIN (SELECT t10.b, t10.a, t11.a FROM ((SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_22'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t10 LEFT JOIN (SELECT NULL::integer AS a, t11_1.b FROM (SELECT intermediate_result.b FROM read_intermediate_result('XXX_23'::text, 'binary'::citus_copy_format) intermediate_result(b integer)) t11_1) t11 USING (b))) outer_cte_2(b, a, a_1) USING (b))))))
+ a | b
+---------------------------------------------------------------------
+ 1 | 11
+(1 row)
+
+WITH
+cte_1 AS (
+  SELECT COUNT(*) FROM dist_1 t1
+  JOIN
+  (
+    (
+      dist_1 t2 JOIN dist_1 t3 USING (a)
+    )
+    JOIN
+    (
+      dist_1 t4 JOIN (
+        dist_1 t5 JOIN (
+          dist_1 t6 JOIN (
+            ref_1 t7 LEFT JOIN dist_1 t8 USING (a)
+          ) USING(a)
+        ) USING(a)
+      ) USING (a)
+    ) USING(a)
+  ) USING (a)
+),
+cte_2 AS (
+  SELECT COUNT(*) FROM dist_1 t9
+  JOIN
+  (
+    (
+      dist_1 t10 JOIN dist_1 t11 USING (a)
+    )
+    JOIN
+    (
+      dist_1 t12 JOIN (
+        dist_1 t13 JOIN (
+          dist_1 t14 JOIN (
+            ref_1 t15 LEFT JOIN dist_1 t16 USING (a)
+          ) USING(a)
+        ) USING(a)
+      ) USING (a)
+    ) USING(a)
+  ) USING (a)
+)
+SELECT * FROM cte_1, cte_2;
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  CTE cte_2 is going to be inlined via distributed planning
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t8" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t8" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t8 WHERE true
+DEBUG:  generating subplan XXX_2 for subquery SELECT count(*) AS count FROM (recurring_outer_join.dist_1 t1 JOIN ((recurring_outer_join.dist_1 t2 JOIN recurring_outer_join.dist_1 t3 USING (a)) JOIN (recurring_outer_join.dist_1 t4 JOIN (recurring_outer_join.dist_1 t5 JOIN (recurring_outer_join.dist_1 t6 JOIN (recurring_outer_join.ref_1 t7 LEFT JOIN (SELECT t8_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t8_1) t8 USING (a)) USING (a)) USING (a)) USING (a)) USING (a)) USING (a))
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t16" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t16" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT a FROM recurring_outer_join.dist_1 t16 WHERE true
+DEBUG:  generating subplan XXX_4 for subquery SELECT count(*) AS count FROM (recurring_outer_join.dist_1 t9 JOIN ((recurring_outer_join.dist_1 t10 JOIN recurring_outer_join.dist_1 t11 USING (a)) JOIN (recurring_outer_join.dist_1 t12 JOIN (recurring_outer_join.dist_1 t13 JOIN (recurring_outer_join.dist_1 t14 JOIN (recurring_outer_join.ref_1 t15 LEFT JOIN (SELECT t16_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t16_1) t16 USING (a)) USING (a)) USING (a)) USING (a)) USING (a)) USING (a))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT cte_1.count, cte_2.count FROM (SELECT intermediate_result.count FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) cte_1, (SELECT intermediate_result.count FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) cte_2
+ count | count
+---------------------------------------------------------------------
+ 53526 | 53526
+(1 row)
+
+-- such joins can appear within SET operations too
+SELECT COUNT(*) FROM
+-- 2) given that the rhs of the right join is recurring due to set
+--    operation, t1 is recursively planned too
+dist_1 t1
+RIGHT JOIN
+(
+    SELECT * FROM dist_1 t2
+    UNION
+    (
+        -- 1) t3 is recursively planned because t4 is recurring
+        SELECT t3.a, t3.b FROM dist_1 t3
+        FULL JOIN
+        ref_1 t4
+        USING (a)
+    )
+) t5
+USING(a);
+DEBUG:  recursively planning left side of the full join since the other side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t3" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t3" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t3 WHERE true
+DEBUG:  generating subplan XXX_2 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t2
+DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) UNION SELECT t3.a, t3.b FROM ((SELECT t3_1.a, t3_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t3_1) t3 FULL JOIN recurring_outer_join.ref_1 t4 USING (a))
+DEBUG:  recursively planning left side of the right join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t1" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t1" to a subquery
+DEBUG:  generating subplan XXX_4 for subquery SELECT a FROM recurring_outer_join.dist_1 t1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT t1_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t1_1) t1 RIGHT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t5 USING (a))
+ count
+---------------------------------------------------------------------
+    60
+(1 row)
+
+-- simple modification queries
+CREATE TABLE dist_5 (LIKE dist_1);
+INSERT INTO dist_5 SELECT * FROM dist_1 WHERE a < 5;
+SELECT create_distributed_table('dist_5', 'a');
+NOTICE:  Copying data from local table...
+DEBUG:  Copied 12 rows
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$recurring_outer_join.dist_5$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+  DELETE FROM dist_5
+  USING (
+      SELECT t1.a, t1.b FROM ref_1 t1
+      LEFT JOIN
+      (
+          SELECT * FROM dist_1 t2 WHERE EXISTS (
+              SELECT * FROM dist_1 t4
+              WHERE t4.a = t2.a
+          )
+      ) t3
+      USING (a)
+  ) q
+  WHERE dist_5.a = q.a
+  RETURNING *;
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t2 WHERE (EXISTS (SELECT t4.a, t4.b FROM recurring_outer_join.dist_1 t4 WHERE (t4.a OPERATOR(pg_catalog.=) t2.a)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: DELETE FROM recurring_outer_join.dist_5 USING (SELECT t1.a, t1.b FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t3 USING (a))) q WHERE (dist_5.a OPERATOR(pg_catalog.=) q.a) RETURNING dist_5.a, dist_5.b, q.a, q.b
+ a | b  | a |  b
+---------------------------------------------------------------------
+ 1 | 10 | 1 |  11
+ 1 | 11 | 1 |  11
+ 1 | 12 | 1 |  11
+ 2 | 20 | 2 | 203
+ 2 | 21 | 2 | 203
+ 2 | 22 | 2 | 203
+ 2 | 23 | 2 | 203
+(7 rows)
+
+ROLLBACK;
+BEGIN;
+  UPDATE dist_5
+  SET b = 10
+  WHERE a IN (
+    SELECT t1.a FROM ref_1 t1
+    LEFT JOIN
+    (
+        SELECT * FROM dist_1 t2 WHERE EXISTS (
+            SELECT * FROM dist_1 t4
+            WHERE t4.a = t2.a
+        )
+    ) t3
+    USING (a)
+  )
+  RETURNING *;
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning the distributed subquery since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, b FROM recurring_outer_join.dist_1 t2 WHERE (EXISTS (SELECT t4.a, t4.b FROM recurring_outer_join.dist_1 t4 WHERE (t4.a OPERATOR(pg_catalog.=) t2.a)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE recurring_outer_join.dist_5 SET b = 10 WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT t1.a FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) t3 USING (a)))) RETURNING a, b
+ a | b
+---------------------------------------------------------------------
+ 1 | 10
+ 1 | 10
+ 1 | 10
+ 2 | 10
+ 2 | 10
+ 2 | 10
+ 2 | 10
+(7 rows)
+
+ROLLBACK;
+-- INSERT .. SELECT: pull to coordinator
+BEGIN;
+  DELETE FROM ref_1 WHERE a IS NULL;
+  INSERT INTO dist_1
+  SELECT t1.*
+  FROM ref_1 t1
+  LEFT JOIN dist_1 t2
+  ON (t1.a = t2.a);
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t2" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT t1.a, t1.b FROM (recurring_outer_join.ref_1 t1 LEFT JOIN (SELECT t2_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t2_1) t2 ON ((t1.a OPERATOR(pg_catalog.=) t2.a)))
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ROLLBACK;
+-- INSERT .. SELECT: repartitioned (due to <t1.a*3>)
+BEGIN;
+  INSERT INTO dist_1
+  SELECT t1.a*3, t1.b
+  FROM dist_1 t1
+  JOIN
+  (ref_1 t2 LEFT JOIN dist_1 t3 USING(a)) t4
+  ON (t1.a = t4.a);
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  Subquery contains an operator in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t3" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t3" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t3 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (t1.a OPERATOR(pg_catalog.*) 3) AS a, t1.b FROM (recurring_outer_join.dist_1 t1 JOIN (recurring_outer_join.ref_1 t2 LEFT JOIN (SELECT t3_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t3_1) t3 USING (a)) t4(a, b, b_1) ON ((t1.a OPERATOR(pg_catalog.=) t4.a)))
+DEBUG:  performing repartitioned INSERT ... SELECT
+ROLLBACK;
+-- INSERT .. SELECT: repartitioned
+-- should be able to push-down once https://github.com/citusdata/citus/issues/6544 is fixed
+BEGIN;
+  INSERT INTO dist_1
+  SELECT t1.*
+  FROM dist_1 t1
+  JOIN
+  (ref_1 t2 LEFT JOIN dist_1 t3 USING(a)) t4
+  ON (t1.a = t4.a);
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "dist_1" "t3" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "dist_1" "t3" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM recurring_outer_join.dist_1 t3 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT t1.a, t1.b FROM (recurring_outer_join.dist_1 t1 JOIN (recurring_outer_join.ref_1 t2 LEFT JOIN (SELECT t3_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) t3_1) t3 USING (a)) t4(a, b, b_1) ON ((t1.a OPERATOR(pg_catalog.=) t4.a)))
+DEBUG:  performing repartitioned INSERT ... SELECT
+ROLLBACK;
+SET client_min_messages TO ERROR;
+DROP SCHEMA recurring_outer_join CASCADE;
+SELECT master_remove_node('localhost', :master_port);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+

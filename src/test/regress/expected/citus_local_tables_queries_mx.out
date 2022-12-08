@@ -430,9 +430,13 @@ SELECT count(*) FROM reference_table
   1296
 (1 row)
 
--- not supported direct outer join
+-- supported outer join
 SELECT count(*) FROM citus_local_table LEFT JOIN distributed_table ON (true);
-ERROR:  cannot pushdown the subquery
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
 -- distinct in subquery on CTE
 WITH one_row AS (
 	SELECT a from citus_local_table WHERE b = 1

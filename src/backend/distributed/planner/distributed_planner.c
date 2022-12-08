@@ -1845,6 +1845,8 @@ multi_join_restriction_hook(PlannerInfo *root,
 	 */
 	joinRestrictionContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin ||
 										  extra->sjinfo->jointype == JOIN_SEMI;
+	joinRestrictionContext->hasOuterJoin = joinRestrictionContext->hasOuterJoin ||
+										   IS_OUTER_JOIN(extra->sjinfo->jointype);
 
 	MemoryContextSwitchTo(oldMemoryContext);
 }

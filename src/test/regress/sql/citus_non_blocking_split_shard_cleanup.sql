@@ -47,9 +47,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     'force_logical');
 
 -- BEGIN: Perform deferred cleanup.
-SET client_min_messages TO WARNING;
-CALL pg_catalog.citus_cleanup_orphaned_resources();
-RESET client_min_messages;
+SELECT public.wait_for_resource_cleanup();
 -- END: Perform deferred cleanup.
 
 \c - - - :worker_1_port

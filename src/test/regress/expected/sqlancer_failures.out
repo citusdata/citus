@@ -149,8 +149,11 @@ SELECT create_reference_table('t10');
 SELECT count(*) FROM (
 SELECT ALL t7.c1, t7.c0, t8.c1, t10.c1, t8.c0 FROM t7 CROSS JOIN t10 FULL OUTER JOIN t8 ON (((((((('[832125354,1134163512)'::int4range)*('(0,2106623281)'::int4range)))-('(-600267905,509840582]'::int4range)))*('(-365203965,1662828182)'::int4range)))&<((((((('(-1286467417,697584012]'::int4range)*('[-1691485781,1341103963)'::int4range)))*((('(-1768368435,1719707648)'::int4range)*('(139536997,1275813540]'::int4range)))))*((((('[-2103910157,-1961746758)'::int4range)*('[-834534078,533073939)'::int4range)))*((('[-1030552151,552856781]'::int4range)*('[-1109419376,1205173697]'::int4range))))))))
 ) AS foo;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
 CREATE TABLE reference_table(id int, it_name varchar(25), k_no int);
 SELECT create_reference_table('reference_table');
  create_reference_table
@@ -165,33 +168,55 @@ SELECT create_distributed_table('distributed_table', 'user_id');
 
 (1 row)
 
+INSERT INTO distributed_table VALUES
+(1, 10),
+(2, 22),
+(3, 34),
+(7, 40);
+INSERT INTO reference_table VALUES
+(1, '100'),
+(null, '202'),
+(4, '300'),
+(null, '401'),
+(null, '402');
 -- postgres plans below queries by evaluating joins as below:
 --     L
 --   /   \
 -- ref     L
 --       /   \
 --     dist  ref
--- so we should error out as reference table is in the outer part of the top level (left) outer join
 SELECT count(*) FROM distributed_table a
 LEFT JOIN reference_table b ON (true)
 RIGHT JOIN reference_table c ON (true);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
 SELECT count(*) FROM distributed_table a
 LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
 RIGHT JOIN (SELECT * FROM reference_table OFFSET 0) c ON (true);
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
 SELECT count(*) FROM distributed_table a
 LEFT JOIN reference_table b ON (true)
 RIGHT JOIN reference_table c ON (c.id > 0);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    43
+(1 row)
+
 SELECT count(*) FROM distributed_table a
 LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
 RIGHT JOIN (SELECT * FROM reference_table OFFSET 0) c ON (c.id > 0);
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
+ count
+---------------------------------------------------------------------
+    43
+(1 row)
+
 -- drop existing sqlancer tables before next tests
 DROP TABLE t0, t1, t2, t3, t4 CASCADE;
 CREATE TABLE tbl1(a REAL, b FLOAT, c money);
@@ -255,14 +280,16 @@ SELECT create_reference_table('t4');
 --   t1(ref)     L
 --            /     \
 --       t0(dist)  t4(ref)
--- -- so we should error out
 SELECT count(*) FROM (
 SELECT ALL t4.c1, t0.c0, t0.c1 FROM ONLY t0
    LEFT OUTER JOIN t4 ON CAST(masklen('142.158.96.44') AS BOOLEAN)
    RIGHT OUTER JOIN t1 ON ((0.024767844)::MONEY) BETWEEN (t1.c1) AND (CAST(0.0602135 AS MONEY))
 ) AS foo;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
 -- first subquery has the same join tree as above, so we should error out
 SELECT count(*) FROM (
 SELECT ALL t4.c1, t0.c0, t0.c1 FROM ONLY t0
@@ -278,21 +305,29 @@ UNION ALL SELECT ALL t4.c1, t0.c0, t0.c1 FROM ONLY t0
    RIGHT OUTER JOIN t1 ON ((0.024767844)::MONEY) BETWEEN (t1.c1) AND ((0.0602135)::MONEY)
    WHERE (NOT (((t0.c0)LIKE((t4.c0))))) ISNULL
 ) AS foo;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
 -- unsupported outer JOIN inside a subquery in WHERE clause
 SELECT * FROM distributed_table WHERE buy_count > (
 SELECT count(*) FROM distributed_table a
 LEFT JOIN reference_table b ON (true)
 RIGHT JOIN reference_table c ON (false));
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ user_id | item_id | buy_count
+---------------------------------------------------------------------
+(0 rows)
+
 -- unsupported outer JOIN via subqueries
 SELECT count(*) FROM (SELECT *, random() FROM distributed_table) AS a
 LEFT JOIN (SELECT *, random() FROM reference_table) AS b ON (true)
 RIGHT JOIN (SELECT *, random() FROM reference_table) AS c ON (false);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
 -- unsupported outer JOIN in a sublevel subquery
 SELECT
    count(*)
@@ -307,8 +342,11 @@ JOIN
       RIGHT JOIN reference_table c ON (true)
    ) AS unsupported_join
 ON (true);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+   400
+(1 row)
+
 SELECT
    count(*)
 FROM
@@ -322,32 +360,41 @@ JOIN
       RIGHT JOIN (SELECT * FROM reference_table OFFSET 0) c ON (true)
    ) AS unsupported_join
 ON (true);
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
+ count
+---------------------------------------------------------------------
+   400
+(1 row)
+
 -- unsupported outer JOIN in a sublevel INNER JOIN
 SELECT
- unsupported_join.*
+ COUNT(unsupported_join.*)
 FROM
    (distributed_table a
    LEFT JOIN reference_table b ON (true)
    RIGHT JOIN reference_table c ON (true)) as unsupported_join (x,y,z,t,e,f,q)
 JOIN
    (reference_table d JOIN reference_table e ON(true)) ON (true);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+  2500
+(1 row)
+
 -- unsupported outer JOIN in a sublevel LEFT JOIN
 SELECT
- unsupported_join.*
+ COUNT(unsupported_join.*)
 FROM
    (distributed_table a
    LEFT JOIN reference_table b ON (true)
    RIGHT JOIN reference_table c ON (true)) as unsupported_join
 LEFT JOIN
    (reference_table d JOIN reference_table e ON(true)) ON (true);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+  2500
+(1 row)
+
 SELECT
- unsupported_join.*
+ COUNT(unsupported_join.*)
 FROM
    (distributed_table a
    LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
@@ -360,21 +407,27 @@ LEFT JOIN
     ON(true)
    )
 ON (true);
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
+ count
+---------------------------------------------------------------------
+  2500
+(1 row)
+
 -- unsupported outer JOIN in a sublevel RIGHT JOIN
 SELECT
- unsupported_join.*
+ COUNT(unsupported_join.*)
 FROM
    (distributed_table a
    LEFT JOIN reference_table b ON (true)
    RIGHT JOIN reference_table c ON (false)) as unsupported_join
 RIGHT JOIN
    (reference_table d JOIN reference_table e ON(true)) ON (true);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+   125
+(1 row)
+
 SELECT
- unsupported_join.*
+ COUNT(unsupported_join.*)
 FROM
    (distributed_table a
    LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
@@ -387,9 +440,12 @@ RIGHT JOIN
     ON(true)
    )
 ON (true);
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
-EXPLAIN SELECT
+ count
+---------------------------------------------------------------------
+   125
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT
   unsupported_join.*
 FROM
    (distributed_table a
@@ -397,7 +453,34 @@ FROM
    RIGHT JOIN reference_table c ON (true)) as unsupported_join (x,y,z,t,e,f,q)
 JOIN
    (reference_table d JOIN reference_table e ON(true)) ON (d.id > 0);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+                                            QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan XXX_1
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Seq Scan on distributed_table_92862439 a
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Nested Loop
+               ->  Nested Loop
+                     ->  Nested Loop Left Join
+                           ->  Seq Scan on reference_table_92862438 c
+                           ->  Nested Loop Left Join
+                                 ->  Function Scan on read_intermediate_result intermediate_result
+                                 ->  Materialize
+                                       ->  Seq Scan on reference_table_92862438 b
+                     ->  Materialize
+                           ->  Seq Scan on reference_table_92862438 d
+                                 Filter: (id > 0)
+               ->  Materialize
+                     ->  Seq Scan on reference_table_92862438 e
+(25 rows)
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA sqlancer_failures CASCADE;

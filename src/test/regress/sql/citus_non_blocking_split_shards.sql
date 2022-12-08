@@ -149,9 +149,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     'force_logical');
 
 -- BEGIN: Perform deferred cleanup.
-SET client_min_messages TO WARNING;
-CALL pg_catalog.citus_cleanup_orphaned_resources();
-RESET client_min_messages;
+SELECT public.wait_for_resource_cleanup();
 -- END: Perform deferred cleanup.
 
 -- Perform 3 way split
@@ -163,9 +161,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 -- END : Split two shards : One with move and One without move.
 
 -- BEGIN: Perform deferred cleanup.
-SET client_min_messages TO WARNING;
-CALL pg_catalog.citus_cleanup_orphaned_resources();
-RESET client_min_messages;
+SELECT public.wait_for_resource_cleanup();
 -- END: Perform deferred cleanup.
 
 -- BEGIN : Move a shard post split.
@@ -241,7 +237,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     'force_logical');
 
 -- BEGIN: Perform deferred cleanup.
-CALL pg_catalog.citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 -- END: Perform deferred cleanup.
 
 SET search_path TO "citus_split_test_schema";
@@ -267,9 +263,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     ARRAY[:worker_1_node, :worker_2_node]);
 
 -- BEGIN: Perform deferred cleanup.
-SET client_min_messages TO WARNING;
-CALL pg_catalog.citus_cleanup_orphaned_resources();
-RESET client_min_messages;
+SELECT public.wait_for_resource_cleanup();
 -- END: Perform deferred cleanup.
 
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
@@ -294,9 +288,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     'auto');
 
 -- BEGIN: Perform deferred cleanup.
-SET client_min_messages TO WARNING;
-CALL pg_catalog.citus_cleanup_orphaned_resources();
-RESET client_min_messages;
+SELECT public.wait_for_resource_cleanup();
 -- END: Perform deferred cleanup.
 
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport

@@ -90,28 +90,49 @@ SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table r
 
 -- two reference tables CROSS JOINNed, and later JOINED with distributed tables
 -- but the reference table CROSS JOIN is in the outer side of the JOIN with the distributed table
--- so we cannot pushdown
+-- so this is supported by recursively planning the distributed table (users_table)
 SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table ref2 LEFT JOIN users_table ON (ref1.id = users_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+   606
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table ref2 FULL JOIN users_table ON (ref1.id = users_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+   606
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table ref2 LEFT JOIN users_table ON (ref1.id != users_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+  3030
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table ref2 LEFT JOIN users_table ON (ref1.id > 0);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+  3636
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table ref2 LEFT JOIN users_table ON (users_table.user_id > 0);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+  3636
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table ref2 LEFT JOIN users_table ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+  3636
+(1 row)
+
 SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table ref2 LEFT JOIN users_table ON false;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
 -- a reference tables CROSS JOINed with a distribted table, and later JOINED with distributed tables on distribution keys
 -- so safe to pushdown
 SELECT count(*) FROM users_table u1 CROSS JOIN users_ref_test_table ref2 JOIN users_table u2 ON (u1.user_id = u2.user_id);
@@ -167,8 +188,11 @@ SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table r
 -- this is the same query as the above, but this time the outer query is also LEFT JOIN, meaning that Postgres
 -- cannot eliminate the outer join
 SELECT count(*) FROM users_ref_test_table ref1 CROSS JOIN users_ref_test_table ref2 LEFT JOIN users_table ON (ref1.id = users_table.user_id) LEFT JOIN users_table u2 ON (u2.user_id = users_table.user_id);
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+ count
+---------------------------------------------------------------------
+ 11802
+(1 row)
+
 -- cross join that goes through non-colocated subquery logic
 -- for the "events_table" subquery as both distributed tables
 -- do not have JOIN on the distribution key

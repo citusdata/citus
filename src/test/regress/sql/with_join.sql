@@ -126,7 +126,7 @@ ORDER BY
 LIMIT
   5;
 
--- cte LEFT JOIN distributed_table should error out
+-- cte LEFT JOIN distributed_table should work
 -- as long as the CTE is recursively planned
 WITH cte AS MATERIALIZED (
   SELECT * FROM users_table WHERE user_id = 1 ORDER BY value_1
@@ -173,7 +173,7 @@ ORDER BY
 LIMIT
   5;
 
--- distributed_table RIGHT JOIN cte should error out
+-- distributed_table RIGHT JOIN cte should work
 WITH cte AS MATERIALIZED (
   SELECT * FROM users_table WHERE value_1 = 1 ORDER BY value_1
 )
@@ -188,7 +188,7 @@ ORDER BY
 LIMIT
   5;
 
--- cte FULL JOIN distributed_table should error out
+-- cte FULL JOIN distributed_table should work
 WITH cte AS MATERIALIZED (
   SELECT * FROM users_table WHERE user_id = 1 ORDER BY value_1
 )
