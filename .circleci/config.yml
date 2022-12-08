@@ -25,6 +25,9 @@ parameters:
   flaky_test:
     type: string
     default: ''
+  flaky_test_runs:
+    type: integer
+    default: 1600
 
 jobs:
   build:
@@ -710,6 +713,7 @@ jobs:
       - store_artifacts:
           name: 'Save worker2 log'
           path: src/test/regress/tmp_check/worker.57638/log
+
   upload-coverage:
     docker:
       - image: 'citus/exttester:<< pipeline.parameters.pg15_version >><< pipeline.parameters.image_suffix >>'
@@ -739,6 +743,7 @@ workflows:
           image_tag: '<< pipeline.parameters.pg15_version >>'
           requires: [build-flaky-15]
           test: '<< pipeline.parameters.flaky_test >>'
+          runs: << pipeline.parameters.flaky_test_runs >>
 
   build_and_test:
     when:
