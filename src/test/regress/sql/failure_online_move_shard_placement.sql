@@ -147,9 +147,7 @@ SELECT pg_reload_conf();
 
 -- cleanup leftovers
 -- then, verify we don't see any error for already dropped subscription
-SET client_min_messages TO WARNING;
 SELECT public.wait_for_resource_cleanup();
-RESET client_min_messages;
 
 -- cancellation on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="^DROP SUBSCRIPTION").cancel(' || :pid || ')');
