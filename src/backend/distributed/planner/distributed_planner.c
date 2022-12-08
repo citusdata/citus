@@ -47,6 +47,7 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shard_utils.h"
+#include "distributed/utils/attribute.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "executor/executor.h"
@@ -131,7 +132,6 @@ static RTEListProperties * GetRTEListProperties(List *rangeTableList);
 static List * TranslatedVars(PlannerInfo *root, int relationIndex);
 static void WarnIfListHasForeignDistributedTable(List *rangeTableList);
 
-
 /* Distributed planner hook */
 PlannedStmt *
 distributed_planner(Query *parse,
@@ -142,6 +142,8 @@ distributed_planner(Query *parse,
 	bool needsDistributedPlanning = false;
 	bool fastPathRouterQuery = false;
 	Node *distributionKeyValue = NULL;
+
+	AttributeQueryIfAnnotated(query_string);
 
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
 
