@@ -304,3 +304,6 @@ s/LOG:  duration: [0-9].[0-9]+ ms/LOG:  duration: xxxx ms/g
 s/"Total Cost": [0-9].[0-9]+/"Total Cost": xxxx/g
 
 s/(NOTICE:  issuing SET LOCAL application_name TO 'citus_rebalancer gpid=)[0-9]+/\1xxxxx/g
+
+# PG13 changes bgworker sigterm message, we can drop that line with PG13 drop
+s/(FATAL: terminating).*Citus Background Task Queue Executor.*(due to administrator command)\+/\1 connection \2                    \+/g
