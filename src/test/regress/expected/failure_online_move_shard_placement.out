@@ -41,19 +41,6 @@ SELECT * FROM shards_in_workers;
      103 | worker1
 (4 rows)
 
--- Introduce a function that waits until all cleanup records are deleted, for testing purposes
-CREATE OR REPLACE FUNCTION public.wait_for_resource_cleanup() RETURNS void AS $$
-DECLARE
-record_count integer;
-BEGIN
-    SET client_min_messages TO WARNING;
-    EXECUTE 'SELECT COUNT(*) FROM pg_catalog.pg_dist_cleanup' INTO record_count;
-    WHILE  record_count != 0 LOOP
-	 CALL pg_catalog.citus_cleanup_orphaned_resources();
-     EXECUTE 'SELECT COUNT(*) FROM pg_catalog.pg_dist_cleanup' INTO record_count;
-    END LOOP;
-    RESET client_min_messages;
-END$$ LANGUAGE plpgsql;
 -- failure on sanity checks
 SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS move_shard.t CASCADE").kill()');
  mitmproxy
@@ -322,18 +309,18 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- disable maintenance daemon cleanup, to prevent the flaky test
 ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
 SELECT pg_reload_conf();
  pg_reload_conf
 ---------------------------------------------------------------------
  t
-(1 row)
-
-SELECT public.wait_for_resource_cleanup();
- wait_for_resource_cleanup
----------------------------------------------------------------------
-
 (1 row)
 
 -- failure on dropping subscription

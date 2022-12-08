@@ -31,20 +31,6 @@ INSERT INTO t SELECT x, x+1, MD5(random()::text) FROM generate_series(1,100000) 
 -- Initial shard placements
 SELECT * FROM shards_in_workers;
 
--- Introduce a function that waits until all cleanup records are deleted, for testing purposes
-CREATE OR REPLACE FUNCTION public.wait_for_resource_cleanup() RETURNS void AS $$
-DECLARE
-record_count integer;
-BEGIN
-    SET client_min_messages TO WARNING;
-    EXECUTE 'SELECT COUNT(*) FROM pg_catalog.pg_dist_cleanup' INTO record_count;
-    WHILE  record_count != 0 LOOP
-	 CALL pg_catalog.citus_cleanup_orphaned_resources();
-     EXECUTE 'SELECT COUNT(*) FROM pg_catalog.pg_dist_cleanup' INTO record_count;
-    END LOOP;
-    RESET client_min_messages;
-END$$ LANGUAGE plpgsql;
-
 -- failure on sanity checks
 SELECT citus.mitmproxy('conn.onQuery(query="DROP TABLE IF EXISTS move_shard.t CASCADE").kill()');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);

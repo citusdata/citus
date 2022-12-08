@@ -7,18 +7,6 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1230000;
 SELECT nextval('pg_catalog.pg_dist_placement_placementid_seq') AS last_placement_id
 \gset
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 100000;
-CREATE OR REPLACE FUNCTION public.wait_for_resource_cleanup() RETURNS void AS $$
-DECLARE
-record_count integer;
-BEGIN
-    SET client_min_messages TO WARNING;
-    EXECUTE 'SELECT COUNT(*) FROM pg_catalog.pg_dist_cleanup' INTO record_count;
-    WHILE  record_count != 0 LOOP
-	 CALL pg_catalog.citus_cleanup_orphaned_resources();
-     EXECUTE 'SELECT COUNT(*) FROM pg_catalog.pg_dist_cleanup' INTO record_count;
-    END LOOP;
-    RESET client_min_messages;
-END$$ LANGUAGE plpgsql;
 CREATE SCHEMA "Tenant Isolation";
 SET search_path to "Tenant Isolation";
 CREATE ROLE mx_isolation_role_ent WITH LOGIN;

@@ -17,20 +17,6 @@ CREATE SCHEMA "citus_split_test_schema";
 ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
 SELECT pg_reload_conf();
 
--- Introduce a function that waits until all cleanup records are deleted, for testing purposes
-CREATE OR REPLACE FUNCTION public.wait_for_resource_cleanup() RETURNS void AS $$
-DECLARE
-record_count integer;
-BEGIN
-    SET client_min_messages TO WARNING;
-    EXECUTE 'SELECT COUNT(*) FROM pg_catalog.pg_dist_cleanup' INTO record_count;
-    WHILE  record_count != 0 LOOP
-	 CALL pg_catalog.citus_cleanup_orphaned_resources();
-     EXECUTE 'SELECT COUNT(*) FROM pg_catalog.pg_dist_cleanup' INTO record_count;
-    END LOOP;
-    RESET client_min_messages;
-END$$ LANGUAGE plpgsql;
-
 CREATE ROLE test_split_role WITH LOGIN;
 GRANT USAGE, CREATE ON SCHEMA "citus_split_test_schema" TO test_split_role;
 SET ROLE test_split_role;
