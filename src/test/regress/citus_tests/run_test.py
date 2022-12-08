@@ -16,12 +16,14 @@ args.add_argument("test_name", help="Test name (must be included in a schedule.)
 args.add_argument("-p", "--path", required=False, help="Relative path for test file (must have a .sql or .spec extension)", type=pathlib.Path)
 args.add_argument("-r", "--repeat", help="Number of test to run", type=int, default=5)
 args.add_argument("-s", "--schedule", required=False, help="Test schedule to be used as a base (optional)", nargs='?', const='', default='')
+args.add_argument("-b", "--use-base-schedule", required=False, help="Choose base-schedules rather than minimal-schedules", action='store_true')
 
 args = vars(args.parse_args())
 
 regress_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 test_file_path = args['path']
 test_file_name = args['test_name']
+use_base_schedule = args['use_base_schedule']
 
 if not (test_file_name or test_file_path):
     print(f"FATAL: No test given.")
@@ -68,12 +70,18 @@ elif "isolation" in test_schedule:
 elif "failure" in test_schedule:
     test_schedule = 'failure_base_schedule'
 elif "mx" in test_schedule:
-    test_schedule = 'mx_base_schedule'
+    if use_base_schedule:
+        test_schedule = 'mx_base_schedule'
+    else:
+        test_schedule = 'mx_minimal_schedule'
 elif test_schedule in config.ARBITRARY_SCHEDULE_NAMES:
     print(f"WARNING: Arbitrary config schedule ({test_schedule}) is not supported.")
     sys.exit(0)
 else:
-    test_schedule = 'base_schedule'
+    if use_base_schedule:
+        test_schedule = 'base_schedule'
+    else:
+        test_schedule = 'minimal_schedule'
 
 # override if -s/--schedule is passed
 if args['schedule']:
