@@ -1,9 +1,8 @@
 /*-------------------------------------------------------------------------
  *
  * shard_cleaner.c
- *	  This implements the background process that cleans shards that are
- *	  left around. Shards that are left around are marked as state 4
- *	  (SHARD_STATE_TO_DELETE) in pg_dist_placement.
+ *	  This implements the background process that cleans shards and resources
+ *	  that are left around.
  *
  * Copyright (c) 2018, Citus Data, Inc.
  *
