@@ -90,6 +90,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
+#include "distributed/utils/attribute.h"
 #include "distributed/utils/directory.h"
 #include "distributed/worker_log_messages.h"
 #include "distributed/worker_manager.h"
@@ -439,6 +440,8 @@ _PG_init(void)
 	ExecutorStart_hook = CitusExecutorStart;
 	ExecutorRun_hook = CitusExecutorRun;
 	ExplainOneQuery_hook = CitusExplainOneQuery;
+	prev_ExecutorEnd = ExecutorEnd_hook;
+	ExecutorEnd_hook = CitusAttributeToEnd;
 
 	/* register hook for error messages */
 	emit_log_hook = multi_log_hook;
