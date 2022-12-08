@@ -144,7 +144,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     'block_writes');
 
 -- BEGIN: Perform deferred cleanup.
-CALL pg_catalog.citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 -- END: Perform deferred cleanup.
 
 -- Perform 3 way split
@@ -156,7 +156,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
 -- END : Split two shards : One with move and One without move.
 
 -- BEGIN: Perform deferred cleanup.
-CALL pg_catalog.citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 -- END: Perform deferred cleanup.
 
 -- BEGIN : Move a shard post split.
@@ -232,7 +232,7 @@ SELECT pg_catalog.citus_split_shard_by_split_points(
     'block_writes');
 
 -- BEGIN: Perform deferred cleanup.
-CALL pg_catalog.citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 -- END: Perform deferred cleanup.
 
 SET search_path TO "citus_split_test_schema";

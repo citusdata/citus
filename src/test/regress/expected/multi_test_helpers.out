@@ -154,3 +154,16 @@ BEGIN
   END LOOP;
 END;
 $$ LANGUAGE plpgsql;
+-- Introduce a function that waits until all cleanup records are deleted, for testing purposes
+CREATE OR REPLACE FUNCTION wait_for_resource_cleanup() RETURNS void
+SET client_min_messages TO WARNING
+AS $$
+DECLARE
+record_count integer;
+BEGIN
+    EXECUTE 'SELECT COUNT(*) FROM pg_catalog.pg_dist_cleanup' INTO record_count;
+    WHILE  record_count != 0 LOOP
+      CALL pg_catalog.citus_cleanup_orphaned_resources();
+      EXECUTE 'SELECT COUNT(*) FROM pg_catalog.pg_dist_cleanup' INTO record_count;
+    END LOOP;
+END$$ LANGUAGE plpgsql;

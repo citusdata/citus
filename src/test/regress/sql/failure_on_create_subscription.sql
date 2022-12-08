@@ -44,7 +44,7 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost'
 
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 
 SELECT citus.mitmproxy('conn.onQuery(query="ALTER SUBSCRIPTION").cancel(' || :pid || ')');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
@@ -56,7 +56,7 @@ SELECT count(*) FROM t;
 -- Verify that shard can be moved after a temporary failure
 -- cleanup leftovers, as it can cause flakiness in the following test files
 SELECT citus.mitmproxy('conn.allow()');
-CALL citus_cleanup_orphaned_resources();
+SELECT public.wait_for_resource_cleanup();
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 SELECT * FROM shards_in_workers;
 SELECT count(*) FROM t;

@@ -15,9 +15,12 @@ SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 1;
 SELECT pg_backend_pid() as pid \gset
 -- cleanup any leftovers from previous tests so we get consistent output
-SET client_min_messages TO WARNING;
-CALL pg_catalog.citus_cleanup_orphaned_resources();
-RESET client_min_messages;
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- Disable defer shard delete to stop auto cleanup.
 ALTER SYSTEM SET citus.defer_shard_delete_interval TO -1;
 SELECT pg_reload_conf();
@@ -98,8 +101,12 @@ CONTEXT:  while executing command on localhost:xxxxx
 (0 rows)
 
     \c - postgres - :master_port
-    CALL pg_catalog.citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 3 orphaned resources
+    SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
  operation_id | object_type | object_name | node_group_id | policy_type
@@ -204,8 +211,12 @@ ERROR:  Failed to run worker_split_shard_replication_setup UDF. It should succes
 (0 rows)
 
     \c - postgres - :master_port
-    CALL pg_catalog.citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 4 orphaned resources
+    SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
  operation_id | object_type | object_name | node_group_id | policy_type
@@ -316,8 +327,12 @@ CONTEXT:  while executing command on localhost:xxxxx
 (0 rows)
 
     \c - postgres - :master_port
-    CALL pg_catalog.citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 5 orphaned resources
+    SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
  operation_id | object_type | object_name | node_group_id | policy_type
@@ -434,8 +449,12 @@ CONTEXT:  while executing command on localhost:xxxxx
 (1 row)
 
     \c - postgres - :master_port
-    CALL pg_catalog.citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 8 orphaned resources
+    SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
  operation_id | object_type | object_name | node_group_id | policy_type
@@ -552,8 +571,12 @@ CONTEXT:  while executing command on localhost:xxxxx
 (1 row)
 
     \c - postgres - :master_port
-    CALL pg_catalog.citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 8 orphaned resources
+    SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
  operation_id | object_type | object_name | node_group_id | policy_type
@@ -675,8 +698,12 @@ CONTEXT:  while executing command on localhost:xxxxx
 (1 row)
 
     \c - postgres - :master_port
-    CALL pg_catalog.citus_cleanup_orphaned_resources();
-NOTICE:  cleaned up 8 orphaned resources
+    SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
     SELECT operation_id, object_type, object_name, node_group_id, policy_type
     FROM pg_dist_cleanup where operation_id = 777 ORDER BY object_name;
  operation_id | object_type | object_name | node_group_id | policy_type
