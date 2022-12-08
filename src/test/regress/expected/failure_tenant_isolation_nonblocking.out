@@ -25,7 +25,6 @@ SELECT public.wait_for_resource_cleanup();
 
 (1 row)
 
-SET client_min_messages TO ERROR;
 CREATE TABLE table_1 (id int PRIMARY KEY);
 CREATE TABLE table_2 (ref_id int REFERENCES table_1(id) UNIQUE, data int);
 SELECT create_distributed_table('table_1', 'id');
@@ -285,7 +284,6 @@ SELECT public.wait_for_resource_cleanup();
 
 (1 row)
 
-SET client_min_messages TO ERROR;
 -- cancellation on dropping subscription
 SELECT citus.mitmproxy('conn.onQuery(query="DROP SUBSCRIPTION").cancel(' || :pid || ')');
  mitmproxy
@@ -308,7 +306,6 @@ SELECT public.wait_for_resource_cleanup();
 
 (1 row)
 
-SET client_min_messages TO ERROR;
 -- failure on dropping publication
 SELECT citus.mitmproxy('conn.onQuery(query="DROP PUBLICATION").killall()');
  mitmproxy
@@ -332,7 +329,6 @@ SELECT public.wait_for_resource_cleanup();
 
 (1 row)
 
-SET client_min_messages TO ERROR;
 -- cancellation on dropping publication
 SELECT citus.mitmproxy('conn.onQuery(query="DROP PUBLICATION").cancel(' || :pid || ')');
  mitmproxy
@@ -355,7 +351,6 @@ SELECT public.wait_for_resource_cleanup();
 
 (1 row)
 
-SET client_min_messages TO ERROR;
 -- failure on dropping replication slot
 SELECT citus.mitmproxy('conn.onQuery(query="select pg_drop_replication_slot").killall()');
  mitmproxy
@@ -379,7 +374,6 @@ SELECT public.wait_for_resource_cleanup();
 
 (1 row)
 
-SET client_min_messages TO ERROR;
 -- cancellation on dropping replication slot
 SELECT citus.mitmproxy('conn.onQuery(query="select pg_drop_replication_slot").cancel(' || :pid || ')');
  mitmproxy
@@ -402,7 +396,6 @@ SELECT public.wait_for_resource_cleanup();
 
 (1 row)
 
-SET client_min_messages TO ERROR;
 -- failure on foreign key creation
 SELECT citus.mitmproxy('conn.onQuery(query="ADD CONSTRAINT table_2_ref_id_fkey FOREIGN KEY").kill()');
  mitmproxy
