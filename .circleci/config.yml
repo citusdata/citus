@@ -672,7 +672,7 @@ jobs:
             for test in "${tests_array[@]}"
             do
                 echo $test
-                gosu circleci src/test/regress/citus_tests/run_test.py -p $test -r << parameters.runs >> --use-base-schedule
+                gosu circleci src/test/regress/citus_tests/run_test.py -p $test -r << parameters.runs >> --use-base-schedule --use-whole-schedule-line
             done
           no_output_timeout: 2m
       - run:

@@ -16,6 +16,7 @@ args.add_argument("test_name", help="Test name (must be included in a schedule.)
 args.add_argument("-p", "--path", required=False, help="Relative path for test file (must have a .sql or .spec extension)", type=pathlib.Path)
 args.add_argument("-r", "--repeat", help="Number of test to run", type=int, default=5)
 args.add_argument("-b", "--use-base-schedule", required=False, help="Choose base-schedules rather than minimal-schedules", action='store_true')
+args.add_argument("-w", "--use-whole-schedule-line", required=False, help="Use the whole line found in related schedule", action='store_true')
 
 args = vars(args.parse_args())
 
@@ -23,6 +24,7 @@ regress_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 test_file_path = args['path']
 test_file_name = args['test_name']
 use_base_schedule = args['use_base_schedule']
+use_whole_schedule_line = args['use_whole_schedule_line']
 
 if not (test_file_name or test_file_path):
     print(f"FATAL: No test given.")
@@ -52,7 +54,10 @@ for schedule_file_path in sorted(glob(os.path.join(regress_dir, "*_schedule"))):
         for schedule_line in open(schedule_file_path, 'r'):
             if  re.search(r'\b' + test_file_name + r'\b', schedule_line):
                 test_schedule = pathlib.Path(schedule_file_path).stem
-                test_schedule_line = schedule_line
+                if use_whole_schedule_line:
+                    test_schedule_line = schedule_line
+                else:
+                    test_schedule_line = f"test: {test_file_name}\n"
                 break
         else:
             continue
