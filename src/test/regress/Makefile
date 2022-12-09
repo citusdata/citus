@@ -202,7 +202,7 @@ check-isolation-base: all  $(isolation_test_files)
 
 # ci takes regression.diffs output from another location, so copy diffs file at the end.
 check-vanilla: all
-	$(pg_regress_multi_check) --vanillatest || (cp $(vanilla_diffs_file) $(citus_abs_srcdir)/regression.diffs)
+	$(pg_regress_multi_check) --vanillatest || (cp $(vanilla_diffs_file) $(citus_abs_srcdir)/regression.diffs && false)
 
 check-multi-mx: all
 	$(pg_regress_multi_check) --load-extension=citus \
