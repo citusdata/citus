@@ -32,11 +32,11 @@ $cmd$);
 
 -- Make sure this cannot be run in a transaction
 BEGIN;
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 COMMIT;
 
 -- execute delayed removal
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 
 -- we expect the shard to be on only the second worker
 SELECT run_command_on_workers($cmd$

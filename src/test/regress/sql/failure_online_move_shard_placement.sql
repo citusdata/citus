@@ -103,7 +103,6 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_2_proxy_port, 'loca
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
 SELECT public.wait_for_resource_cleanup();
-CALL citus_cleanup_orphaned_shards();
 
 -- failure on setting lock_timeout (right before dropping subscriptions & replication slots)
 SELECT citus.mitmproxy('conn.onQuery(query="^SET LOCAL lock_timeout").kill()');
@@ -115,7 +114,6 @@ SELECT master_move_shard_placement(101, 'localhost', :worker_2_proxy_port, 'loca
 -- cleanup leftovers
 SELECT citus.mitmproxy('conn.allow()');
 SELECT public.wait_for_resource_cleanup();
-CALL citus_cleanup_orphaned_shards();
 
 -- cancellation on disabling subscription (right before dropping it)
 SELECT citus.mitmproxy('conn.onQuery(query="^ALTER SUBSCRIPTION .* DISABLE").cancel(' || :pid || ')');
@@ -203,5 +201,9 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT master_move_shard_placement(101, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port);
 SELECT * FROM shards_in_workers;
 SELECT count(*) FROM t;
+
+-- cleanup leftovers
+SELECT citus.mitmproxy('conn.allow()');
+SELECT public.wait_for_resource_cleanup();
 
 DROP SCHEMA move_shard CASCADE ;

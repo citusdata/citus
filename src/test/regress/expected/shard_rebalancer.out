@@ -34,14 +34,14 @@ SELECT rebalance_table_shards('dist_table_test');
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT rebalance_table_shards();
  rebalance_table_shards
 ---------------------------------------------------------------------
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 -- test that calling rebalance_table_shards without specifying relation
 -- wouldn't move shard of the citus local table.
 SET citus.next_shard_id TO 433100;
@@ -59,7 +59,7 @@ SELECT rebalance_table_shards();
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 -- Check that rebalance_table_shards and get_rebalance_table_shards_plan fail
 -- for any type of table, but distributed tables.
 SELECT rebalance_table_shards('ref_table_test');
@@ -110,7 +110,7 @@ SELECT pg_sleep(.1); -- wait to make sure the config has changed before running 
 
 SELECT master_drain_node('localhost', :master_port);
 ERROR:  connection to the remote node foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();
  pg_reload_conf
@@ -130,7 +130,7 @@ SELECT master_drain_node('localhost', :master_port);
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 -- show that citus local table shard is still on the coordinator
 SELECT tablename FROM pg_catalog.pg_tables where tablename like 'citus_local_table_%';
         tablename
@@ -202,7 +202,7 @@ BEGIN;
     SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
 NOTICE:  issuing CALL citus_cleanup_orphaned_resources()
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing CALL citus_cleanup_orphaned_shards()
+NOTICE:  issuing CALL citus_cleanup_orphaned_resources()
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  Copying shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
@@ -646,7 +646,7 @@ AS $$
     pg_dist_shard_placement src USING (shardid),
     (SELECT nodename, nodeport FROM pg_dist_shard_placement ORDER BY nodeport DESC LIMIT 1) dst
     WHERE src.nodeport < dst.nodeport AND s.logicalrelid = rel::regclass;
-    CALL citus_cleanup_orphaned_shards();
+    CALL citus_cleanup_orphaned_resources();
 $$;
 CALL create_unbalanced_shards('rebalance_test_table');
 SET citus.shard_replication_factor TO 2;
@@ -683,7 +683,7 @@ FROM (
          WHERE logicalrelid = 'rebalance_test_table'::regclass
      ) T;
 ERROR:  connection to the remote node foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();
  pg_reload_conf
@@ -712,7 +712,7 @@ FROM (
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM table_placements_per_node;
  nodeport |     logicalrelid     | count
 ---------------------------------------------------------------------
@@ -760,7 +760,7 @@ SELECT rebalance_table_shards('rebalance_test_table',
 ERROR:  must be owner of table rebalance_test_table
 CONTEXT:  while executing command on localhost:xxxxx
 RESET ROLE;
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 -- Confirm no moves took place at all during these errors
 SELECT * FROM table_placements_per_node;
  nodeport |     logicalrelid     | count
@@ -769,7 +769,7 @@ SELECT * FROM table_placements_per_node;
     57638 | rebalance_test_table |     5
 (2 rows)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT rebalance_table_shards('rebalance_test_table',
     threshold := 0, max_shard_moves := 1,
     shard_transfer_mode:='block_writes');
@@ -778,7 +778,7 @@ SELECT rebalance_table_shards('rebalance_test_table',
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM table_placements_per_node;
  nodeport |     logicalrelid     | count
 ---------------------------------------------------------------------
@@ -793,7 +793,7 @@ SELECT rebalance_table_shards('rebalance_test_table', threshold := 1, shard_tran
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM table_placements_per_node;
  nodeport |     logicalrelid     | count
 ---------------------------------------------------------------------
@@ -808,7 +808,7 @@ SELECT rebalance_table_shards('rebalance_test_table', threshold := 0, shard_tran
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM table_placements_per_node;
  nodeport |     logicalrelid     | count
 ---------------------------------------------------------------------
@@ -824,7 +824,7 @@ SELECT rebalance_table_shards('rebalance_test_table', threshold := 0, shard_tran
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM table_placements_per_node;
  nodeport |     logicalrelid     | count
 ---------------------------------------------------------------------
@@ -983,7 +983,7 @@ SELECT rebalance_table_shards('imbalanced_table', threshold:=0, shard_transfer_m
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 -- Confirm rebalance
 -- Shard counts in each node after rebalance
 SELECT * FROM public.table_placements_per_node;
@@ -1020,7 +1020,7 @@ FROM pg_dist_shard_placement
 WHERE nodeport = :worker_2_port;
 ERROR:  Moving shards to a non-existing node is not supported
 HINT:  Add the target node via SELECT citus_add_node('localhost', 10000);
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 -- Try to move shards to a node where shards are not allowed
 SELECT * from master_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', false);
  master_set_node_property
@@ -1064,7 +1064,7 @@ WHERE nodeport = :worker_2_port;
 
 (2 rows)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT create_distributed_table('colocated_rebalance_test2', 'id');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -1092,7 +1092,7 @@ SELECT * FROM rebalance_table_shards('colocated_rebalance_test', threshold := 0,
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 -- Confirm that nothing changed
 SELECT * FROM public.table_placements_per_node;
  nodeport |       logicalrelid        | count
@@ -1134,7 +1134,7 @@ SELECT * FROM rebalance_table_shards('colocated_rebalance_test', threshold := 0,
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 -- Check that we can call this function without a crash
 SELECT * FROM get_rebalance_progress();
  sessionid | table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport | progress | source_shard_size | target_shard_size | operation_type | source_lsn | target_lsn | status
@@ -1151,7 +1151,7 @@ SELECT * FROM public.table_placements_per_node;
     57638 | colocated_rebalance_test2 |     2
 (4 rows)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 select * from pg_dist_placement ORDER BY placementid;
  placementid | shardid | shardstate | shardlength | groupid
 ---------------------------------------------------------------------
@@ -1183,7 +1183,7 @@ SELECT * FROM public.table_placements_per_node;
     57637 | colocated_rebalance_test2 |     4
 (2 rows)
 
--- Explicitly don't run citus_cleanup_orphaned_shards, rebalance_table_shards
+-- Explicitly don't run citus_cleanup_orphaned_resources, rebalance_table_shards
 -- should do that for automatically.
 SELECT * FROM rebalance_table_shards('colocated_rebalance_test', threshold := 0, shard_transfer_mode := 'block_writes');
  rebalance_table_shards
@@ -1242,7 +1242,7 @@ SELECT * FROM rebalance_table_shards('colocated_rebalance_test', threshold := 0,
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM public.table_placements_per_node;
  nodeport |         logicalrelid         | count
 ---------------------------------------------------------------------
@@ -1265,7 +1265,7 @@ SELECT * FROM rebalance_table_shards('non_colocated_rebalance_test', threshold :
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM public.table_placements_per_node;
  nodeport |         logicalrelid         | count
 ---------------------------------------------------------------------
@@ -1287,7 +1287,7 @@ SELECT * FROM rebalance_table_shards('colocated_rebalance_test', threshold := 0,
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM public.table_placements_per_node;
  nodeport |         logicalrelid         | count
 ---------------------------------------------------------------------
@@ -1304,7 +1304,7 @@ SELECT * FROM rebalance_table_shards('non_colocated_rebalance_test', threshold :
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM public.table_placements_per_node;
  nodeport |         logicalrelid         | count
 ---------------------------------------------------------------------
@@ -1341,7 +1341,7 @@ SELECT * FROM rebalance_table_shards(threshold := 0, shard_transfer_mode := 'blo
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM public.table_placements_per_node;
  nodeport |         logicalrelid         | count
 ---------------------------------------------------------------------
@@ -1363,7 +1363,7 @@ SELECT * FROM rebalance_table_shards(threshold := 0, shard_transfer_mode := 'blo
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM public.table_placements_per_node;
  nodeport |         logicalrelid         | count
 ---------------------------------------------------------------------
@@ -1400,7 +1400,7 @@ SELECT * FROM rebalance_table_shards(threshold := 0, shard_transfer_mode := 'blo
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM public.table_placements_per_node;
  nodeport |         logicalrelid         | count
 ---------------------------------------------------------------------
@@ -1422,7 +1422,7 @@ SELECT * FROM rebalance_table_shards(threshold := 0, shard_transfer_mode := 'blo
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM public.table_placements_per_node;
  nodeport |         logicalrelid         | count
 ---------------------------------------------------------------------
@@ -1448,7 +1448,7 @@ SELECT * from master_drain_node('localhost', :worker_2_port, shard_transfer_mode
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 select shouldhaveshards from pg_dist_node where nodeport = :worker_2_port;
  shouldhaveshards
 ---------------------------------------------------------------------
@@ -1476,7 +1476,7 @@ SELECT * FROM rebalance_table_shards(threshold := 0, shard_transfer_mode := 'blo
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM public.table_placements_per_node;
  nodeport |         logicalrelid         | count
 ---------------------------------------------------------------------
@@ -1615,7 +1615,7 @@ SELECT * FROM rebalance_table_shards('tab', shard_transfer_mode:='block_writes')
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
 ---------------------------------------------------------------------
@@ -1630,7 +1630,7 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 NOTICE:  cleaned up 1 orphaned shards
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
@@ -1647,7 +1647,7 @@ DETAIL:  Using threshold of 0.01
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
 ---------------------------------------------------------------------
@@ -1755,7 +1755,7 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 NOTICE:  cleaned up 2 orphaned shards
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
@@ -1854,7 +1854,7 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 NOTICE:  cleaned up 1 orphaned shards
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
@@ -1879,7 +1879,7 @@ SELECT * FROM rebalance_table_shards('tab', shard_transfer_mode:='block_writes')
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
 ---------------------------------------------------------------------
@@ -1929,7 +1929,7 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 NOTICE:  cleaned up 1 orphaned shards
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
@@ -1955,10 +1955,10 @@ SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'non_
 ERROR:  could not find rebalance strategy with name non_existing
 SELECT * FROM rebalance_table_shards('tab', rebalance_strategy := 'non_existing');
 ERROR:  could not find rebalance strategy with name non_existing
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM master_drain_node('localhost', :worker_2_port, rebalance_strategy := 'non_existing');
 ERROR:  could not find rebalance strategy with name non_existing
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT citus_set_default_rebalance_strategy('non_existing');
 ERROR:  strategy with specified name does not exist
 UPDATE pg_dist_rebalance_strategy SET default_strategy=false;
@@ -1966,10 +1966,10 @@ SELECT * FROM get_rebalance_table_shards_plan('tab');
 ERROR:  no rebalance_strategy was provided, but there is also no default strategy set
 SELECT * FROM rebalance_table_shards('tab');
 ERROR:  no rebalance_strategy was provided, but there is also no default strategy set
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM master_drain_node('localhost', :worker_2_port);
 ERROR:  no rebalance_strategy was provided, but there is also no default strategy set
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 UPDATE pg_dist_rebalance_strategy SET default_strategy=true WHERE name='by_shard_count';
 CREATE OR REPLACE FUNCTION shard_cost_no_arguments()
     RETURNS real AS $$ SELECT 1.0::real $$ LANGUAGE sql;
@@ -2254,7 +2254,7 @@ SELECT rebalance_table_shards('rebalance_test_table', shard_transfer_mode:='bloc
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass;
  count
 ---------------------------------------------------------------------
@@ -2325,7 +2325,7 @@ SELECT 1 from master_add_node('localhost', :worker_2_port);
 -- since r2 has no replica identity we expect an error here
 SELECT rebalance_table_shards();
 ERROR:  cannot use logical replication to transfer shards of the relation r2 since it doesn't have a REPLICA IDENTITY or PRIMARY KEY
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 DROP TABLE t1, r1, r2;
 -- verify there are no distributed tables before we perform the following tests. Preceding
 -- test suites should clean up their distributed tables.
@@ -2380,7 +2380,7 @@ SELECT rebalance_table_shards();
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 -- verify the reference table is on all nodes after the rebalance
 SELECT count(*)
 FROM pg_dist_shard
@@ -2480,7 +2480,7 @@ SELECT * FROM master_drain_node('localhost', :worker_2_port);
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 UPDATE pg_dist_node SET shouldhaveshards=true WHERE nodeport = :worker_2_port;
 SELECT rebalance_table_shards();
  rebalance_table_shards
@@ -2488,7 +2488,7 @@ SELECT rebalance_table_shards();
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 DROP TABLE test_rebalance_with_index CASCADE;
 -- Test rebalancer with disabled worker
 SET citus.next_shard_id TO 433500;

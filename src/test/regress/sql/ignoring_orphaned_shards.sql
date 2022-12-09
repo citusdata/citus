@@ -109,7 +109,7 @@ CALL public.create_range_partitioned_shards('range1', '{0,3}','{2,5}');
 
 -- Move shard placement and clean it up
 SELECT citus_move_shard_placement(92448500, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'block_writes');
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT shardid, shardstate, nodeport FROM pg_dist_shard_placement WHERE shardid = 92448300 ORDER BY placementid;
 
 SET citus.next_shard_id TO 92448600;

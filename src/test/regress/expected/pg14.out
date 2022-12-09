@@ -310,7 +310,7 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 NOTICE:  cleaned up 1 orphaned shards
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
 SELECT attname || ' ' || attcompression::text FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1

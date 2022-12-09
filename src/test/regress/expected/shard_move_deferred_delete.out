@@ -51,11 +51,11 @@ $cmd$);
 
 -- Make sure this cannot be run in a transaction
 BEGIN;
-CALL citus_cleanup_orphaned_shards();
-ERROR:  citus_cleanup_orphaned_shards cannot run inside a transaction block
+CALL citus_cleanup_orphaned_resources();
+ERROR:  citus_cleanup_orphaned_resources cannot run inside a transaction block
 COMMIT;
 -- execute delayed removal
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 NOTICE:  cleaned up 1 orphaned shards
 -- we expect the shard to be on only the second worker
 SELECT run_command_on_workers($cmd$

@@ -73,7 +73,7 @@ SELECT master_move_shard_placement(201, 'localhost', :worker_1_port, 'localhost'
 SELECT citus.mitmproxy('conn.onQuery(query="ADD CONSTRAINT").cancel(' || :pid || ')');
 SELECT master_move_shard_placement(201, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port, 'block_writes');
 
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 
 -- Verify that the shard is not moved and the number of rows are still 100k
 SELECT citus.mitmproxy('conn.allow()');
@@ -83,7 +83,7 @@ SELECT * FROM find_index_for_shard_201_in_workers;
 
 -- Verify that shard can be moved after a temporary failure
 SELECT master_move_shard_placement(201, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port, 'block_writes');
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT * FROM shards_in_workers;
 SELECT count(*) FROM t;
 SELECT * FROM find_index_for_shard_201_in_workers;

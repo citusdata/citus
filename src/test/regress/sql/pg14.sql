@@ -101,7 +101,7 @@ SELECT attname || ' ' || attcompression::text FROM pg_attribute WHERE attrelid::
 SELECT shardid INTO moving_shard FROM citus_shards WHERE table_name='col_compression'::regclass AND nodeport=:worker_1_port LIMIT 1;
 SELECT citus_move_shard_placement((SELECT * FROM moving_shard), :'public_worker_1_host', :worker_1_port, :'public_worker_2_host', :worker_2_port, shard_transfer_mode := 'block_writes');
 SELECT rebalance_table_shards('col_compression', rebalance_strategy := 'by_shard_count', shard_transfer_mode := 'block_writes');
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
 SELECT attname || ' ' || attcompression::text FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
 )$$);

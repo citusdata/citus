@@ -130,7 +130,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="ADD CONSTRAINT").cancel(' || :pid ||
 
 SELECT master_move_shard_placement(201, 'localhost', :worker_1_port, 'localhost', :worker_2_proxy_port, 'block_writes');
 ERROR:  canceling statement due to user request
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 -- Verify that the shard is not moved and the number of rows are still 100k
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -166,8 +166,8 @@ SELECT master_move_shard_placement(201, 'localhost', :worker_1_port, 'localhost'
 
 (1 row)
 
-CALL citus_cleanup_orphaned_shards();
-NOTICE:  cleaned up 1 orphaned shards
+CALL citus_cleanup_orphaned_resources();
+NOTICE:  cleaned up 1 orphaned resources
 SELECT * FROM shards_in_workers;
  shardid | worker
 ---------------------------------------------------------------------

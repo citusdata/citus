@@ -150,7 +150,7 @@ indrelid IN
 \c - - - :master_port
 -- make sure that constrainst are moved sanely with logical replication
 SELECT citus_move_shard_placement(8970000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='force_logical');
-CALL citus_cleanup_orphaned_shards();
+CALL citus_cleanup_orphaned_resources();
 
 
 \c - postgres - :worker_2_port

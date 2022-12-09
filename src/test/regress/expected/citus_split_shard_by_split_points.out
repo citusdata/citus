@@ -214,8 +214,12 @@ SELECT citus_move_shard_placement(8981000, 'localhost', :worker_1_port, 'localho
 (1 row)
 
 -- END : Move one shard before we split it.
-CALL citus_cleanup_orphaned_shards();
-NOTICE:  cleaned up 3 orphaned shards
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- BEGIN : Set node id variables
 SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
 SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
@@ -268,8 +272,12 @@ SELECT citus_move_shard_placement(8981007, 'localhost', :worker_1_port, 'localho
 (1 row)
 
 -- END : Move a shard post split.
-CALL citus_cleanup_orphaned_shards();
-NOTICE:  cleaned up 3 orphaned shards
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
 -- BEGIN : Display current state.
 SELECT shard.shardid, logicalrelid, shardminvalue, shardmaxvalue, nodename, nodeport
   FROM pg_dist_shard AS shard
