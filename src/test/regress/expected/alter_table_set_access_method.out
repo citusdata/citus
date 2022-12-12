@@ -805,7 +805,7 @@ CREATE SCHEMA view_access_method_test;
 SET search_path TO view_access_method_test;
 --create the view to test alter table set access method on it
 CREATE TABLE view_test_table (id int, val int, flag bool, kind int);
-SELECT create_distributed_table('view_access_method_test.view_test_table','id');
+SELECT create_distributed_table('vview_test_table','id');
  create_distributed_table
 ---------------------------------------------------------------------
 
