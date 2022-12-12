@@ -684,8 +684,8 @@ jobs:
             tests_array=($tests)
             for test in "${tests_array[@]}"
             do
-                echo $test
-                gosu circleci src/test/regress/citus_tests/run_test.py --path $test --repeat << parameters.runs >> --use-base-schedule --use-whole-schedule-line
+                test_name=$(echo "$test" | sed -r "s/.+\/(.+)\..+/\1/")
+                gosu circleci src/test/regress/citus_tests/run_test.py $test_name --repeat << parameters.runs >> --use-base-schedule --use-whole-schedule-line
             done
           no_output_timeout: 2m
       - run:
