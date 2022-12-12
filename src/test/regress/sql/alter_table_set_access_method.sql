@@ -99,10 +99,10 @@ CREATE INDEX idx1 ON index_table (a);
 -- also create an index with statistics
 CREATE INDEX idx2 ON index_table ((a+1));
 ALTER INDEX idx2 ALTER COLUMN 1 SET STATISTICS 300;
-SELECT indexname FROM pg_indexes WHERE schemaname = 'alter_table_set_access_method' AND tablename = 'index_table';
+SELECT indexname FROM pg_indexes WHERE schemaname = 'alter_table_set_access_method' AND tablename = 'index_table' order by indexname;
 SELECT a.amname FROM pg_class c, pg_am a where c.relname = 'index_table' AND c.relnamespace = 'alter_table_set_access_method'::regnamespace AND c.relam = a.oid;
 SELECT alter_table_set_access_method('index_table', 'columnar');
-SELECT indexname FROM pg_indexes WHERE schemaname = 'alter_table_set_access_method' AND tablename = 'index_table';
+SELECT indexname FROM pg_indexes WHERE schemaname = 'alter_table_set_access_method' AND tablename = 'index_table' order by indexname;
 SELECT a.amname FROM pg_class c, pg_am a where c.relname = 'index_table' AND c.relnamespace = 'alter_table_set_access_method'::regnamespace AND c.relam = a.oid;
 
 CREATE TABLE "heap_\'tbl" (
