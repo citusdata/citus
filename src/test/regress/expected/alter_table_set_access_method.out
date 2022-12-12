@@ -299,7 +299,7 @@ CREATE INDEX idx1 ON index_table (a);
 -- also create an index with statistics
 CREATE INDEX idx2 ON index_table ((a+1));
 ALTER INDEX idx2 ALTER COLUMN 1 SET STATISTICS 300;
-SELECT indexname FROM pg_indexes WHERE schemaname = 'alter_table_set_access_method' AND tablename = 'index_table';
+SELECT indexname FROM pg_indexes WHERE schemaname = 'alter_table_set_access_method' AND tablename = 'index_table' order by indexname;
  indexname
 ---------------------------------------------------------------------
  idx1
@@ -322,7 +322,7 @@ NOTICE:  renaming the new table to alter_table_set_access_method.index_table
 
 (1 row)
 
-SELECT indexname FROM pg_indexes WHERE schemaname = 'alter_table_set_access_method' AND tablename = 'index_table';
+SELECT indexname FROM pg_indexes WHERE schemaname = 'alter_table_set_access_method' AND tablename = 'index_table' order by indexname;
  indexname
 ---------------------------------------------------------------------
  idx1
@@ -792,20 +792,9 @@ NOTICE:  renaming the new table to alter_table_set_access_method.events
 (1 row)
 
 COMMIT;
-SET client_min_messages TO WARNING;
-DROP SCHEMA alter_table_set_access_method CASCADE;
-SELECT 1 FROM master_remove_node('localhost', :master_port);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
---test failure when a view is being tried to be altered to columnar
-CREATE SCHEMA view_access_method_test;
-SET search_path TO view_access_method_test;
 --create the view to test alter table set access method on it
 CREATE TABLE view_test_table (id int, val int, flag bool, kind int);
-SELECT create_distributed_table('vview_test_table','id');
+SELECT create_distributed_table('view_test_table','id');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -816,5 +805,11 @@ CREATE VIEW view_test_view AS SELECT * FROM view_test_table;
 -- error out when attempting to set access method of a view.
 select alter_table_set_access_method('view_test_view','columnar');
 ERROR:  you cannot alter access method of a view
---clean environment
-DROP SCHEMA view_access_method_test CASCADE;
+SET client_min_messages TO WARNING;
+DROP SCHEMA alter_table_set_access_method CASCADE;
+SELECT 1 FROM master_remove_node('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
