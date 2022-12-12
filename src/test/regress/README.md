@@ -29,7 +29,27 @@ Take a look at the makefile for a list of all the testing targets.
 ### Running a specific test
 
 Often you want to run a specific test and don't want to run everything. You can
-use one of the following commands to do so:
+simply use `run_test.py [test_name]` script like below in that case. It detects the test schedule
+and make target to run the given test.
+
+```bash
+src/test/regress/citus_tests/run_test.py multi_utility_warnings
+```
+You can pass `--repeat` or `r` parameter to run the given test for multiple times.
+
+```bash
+src/test/regress/citus_tests/run_test.py multi_utility_warnings -r 1000
+```
+
+To force the script to use base schedules rather than minimal ones, you can
+pass `-b` or `--use-base-schedule`.
+
+```bash
+src/test/regress/citus_tests/run_test.py coordinator_shouldhaveshards -r 1000 --use-base-schedule
+```
+
+If you would like to run a specific test on a certain target you can use one
+of the following commands to do so:
 
 ```bash
 # If your tests needs almost no setup you can use check-minimal
@@ -41,6 +61,7 @@ make install -j9 && make -C src/test/regress/ check-base EXTRA_TESTS='with_prepa
 # the test you want to run. You can do so by adding it to EXTRA_TESTS too.
 make install -j9 && make -C src/test/regress/ check-base EXTRA_TESTS='add_coordinator coordinator_shouldhaveshards'
 ```
+
 
 ## Normalization
 

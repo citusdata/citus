@@ -17,21 +17,17 @@ tests.
 
 ## Reproducing a flaky test
 
+### 1. Reproduce a flaky test in CI
 Before trying to fix the flakyness, it's important that you can reproduce the
 flaky test. Often it only reproduces in CI, so we have a CI job that can help
 you reproduce flakyness consistently by running the same test a lot of times.
-You can configure CI to run this job by setting the `flaky_test` and if
-necessary the possibly the `flaky_test_make` parameters.
+You can configure CI to run this job by setting the `flaky_test`
 
 ```diff
    flaky_test:
      type: string
 -    default: ''
 +    default: 'isolation_shard_rebalancer_progress'
-   flaky_test_make:
-     type: string
--    default: check-minimal
-+    default: check-isolation-base
 ```
 
 Once you get this job to consistently fail in CI, you can continue with the next
@@ -40,6 +36,15 @@ with this CI job, it's almost certainly caused by running it concurrently with
 other tests. See the "Don't run test in parallel with others" section below on
 how to fix that.
 
+### 2. Reproduce a flaky test in local environment
+To reproduce the flaky tests on your local environment, you can use `run-test.py [test_name]`
+script like below.
+
+```bash
+src/test/regress/citus_tests/run_test.py isolation_shard_rebalancer_progress -r 1000 --use-base-schedule --use-whole-schedule-line
+```
+
+The script above will try to run the whole line in the schedule file containing the test name by using the related base_schedule (rather than a minimal_schedule), 1000 times.
 
 ## Easy fixes
 
