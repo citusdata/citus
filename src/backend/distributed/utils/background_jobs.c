@@ -123,6 +123,7 @@ static volatile sig_atomic_t GotSighup = false;
 
 PG_FUNCTION_INFO_V1(citus_job_cancel);
 PG_FUNCTION_INFO_V1(citus_job_wait);
+PG_FUNCTION_INFO_V1(citus_task_wait);
 
 
 /*
@@ -203,7 +204,41 @@ citus_job_wait(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_job_wait_internal imaplements the waiting on a job for reuse in other areas where
+ * pg_catalog.citus_task_wait(taskid bigint,
+ *                            desired_status citus_task_status DEFAULT NULL) boolean
+ *   waits till a task reaches a desired status, or can't reach the status anymore because
+ *   it reached a (different) terminal state. When no desired_status is given it will
+ *   assume any terminal state as its desired status. The function returns if the
+ *   desired_state was reached.
+ *
+ * The current implementation is a polling implementation with an interval of 1 second.
+ * Ideally we would have some synchronization between the background tasks queue monitor
+ * and any backend calling this function to receive a signal when the task changes state.
+ */
+Datum
+citus_task_wait(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
+	int64 taskid = PG_GETARG_INT64(0);
+
+	/* parse the optional desired_status argument */
+	bool hasDesiredStatus = !PG_ARGISNULL(1);
+	BackgroundTaskStatus desiredStatus = { 0 };
+	if (hasDesiredStatus)
+	{
+		desiredStatus = BackgroundTaskStatusByOid(PG_GETARG_OID(1));
+	}
+
+	citus_task_wait_internal(taskid, hasDesiredStatus ? &desiredStatus : NULL);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_job_wait_internal implements the waiting on a job for reuse in other areas where
  * we want to wait on jobs. eg the background rebalancer.
  *
  * When a desiredStatus is provided it will provide an error when a different state is
@@ -270,6 +305,89 @@ citus_job_wait_internal(int64 jobid, BackgroundJobStatus *desiredStatus)
 		}
 
 		/* sleep for a while, before rechecking the job status */
+		CHECK_FOR_INTERRUPTS();
+		const long delay_ms = 1000;
+		(void) WaitLatch(MyLatch,
+						 WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
+						 delay_ms,
+						 WAIT_EVENT_PG_SLEEP);
+
+		ResetLatch(MyLatch);
+	}
+
+	MemoryContextSwitchTo(oldContext);
+	MemoryContextDelete(waitContext);
+}
+
+
+/*
+ * citus_task_wait_internal implements the waiting on a task for reuse in other areas where
+ * we want to wait on tasks.
+ *
+ * When a desiredStatus is provided it will provide an error when a different state is
+ * reached and the state cannot ever reach the desired state anymore.
+ */
+void
+citus_task_wait_internal(int64 taskid, BackgroundTaskStatus *desiredStatus)
+{
+	/*
+	 * Since we are wait polling we will actually allocate memory on every poll. To make
+	 * sure we don't put unneeded pressure on the memory we create a context that we clear
+	 * every iteration.
+	 */
+	MemoryContext waitContext = AllocSetContextCreate(CurrentMemoryContext,
+													  "TasksWaitContext",
+													  ALLOCSET_DEFAULT_MINSIZE,
+													  ALLOCSET_DEFAULT_INITSIZE,
+													  ALLOCSET_DEFAULT_MAXSIZE);
+	MemoryContext oldContext = MemoryContextSwitchTo(waitContext);
+
+	while (true)
+	{
+		MemoryContextReset(waitContext);
+
+		BackgroundTask *task = GetBackgroundTaskByTaskId(taskid);
+		if (!task)
+		{
+			ereport(ERROR, (errmsg("no task found with taskid: %ld", taskid)));
+		}
+
+		if (desiredStatus && task->status == *desiredStatus)
+		{
+			/* task has reached its desired status, done waiting */
+			break;
+		}
+
+		if (IsBackgroundTaskStatusTerminal(task->status))
+		{
+			if (desiredStatus)
+			{
+				/*
+				 * We have reached a terminal state, which is not the desired state we
+				 * were waiting for, otherwise we would have escaped earlier. Since it is
+				 * a terminal state we know that we can never reach the desired state.
+				 */
+
+				Oid reachedStatusOid = BackgroundTaskStatusOid(task->status);
+				Datum reachedStatusNameDatum = DirectFunctionCall1(enum_out,
+																   reachedStatusOid);
+				char *reachedStatusName = DatumGetCString(reachedStatusNameDatum);
+
+				Oid desiredStatusOid = BackgroundTaskStatusOid(*desiredStatus);
+				Datum desiredStatusNameDatum = DirectFunctionCall1(enum_out,
+																   desiredStatusOid);
+				char *desiredStatusName = DatumGetCString(desiredStatusNameDatum);
+
+				ereport(ERROR,
+						(errmsg("Task reached terminal state \"%s\" instead of desired "
+								"state \"%s\"", reachedStatusName, desiredStatusName)));
+			}
+
+			/* task has reached its terminal state, done waiting */
+			break;
+		}
+
+		/* sleep for a while, before rechecking the task status */
 		CHECK_FOR_INTERRUPTS();
 		const long delay_ms = 1000;
 		(void) WaitLatch(MyLatch,
@@ -745,8 +863,7 @@ TaskEnded(TaskExecutionContext *taskExecutionContext)
 
 	hash_search(currentExecutors, &task->taskid,
 				HASH_REMOVE, NULL);
-	TerminateBackgroundWorker(handleEntry->handle);
-	dsm_detach(handleEntry->seg);
+	WaitForBackgroundWorkerShutdown(handleEntry->handle);
 	queueMonitorExecutionContext->currentExecutorCount--;
 }
 
@@ -1022,6 +1139,9 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 		/* handle signals */
 		CHECK_FOR_INTERRUPTS();
 
+		/* invalidate cache for new data in catalog */
+		InvalidateMetadataSystemCache();
+
 		/*
 		 * if the flag is set, we should terminate all task executor workers to prevent duplicate
 		 * runs of the same task on the next start of the monitor, which is dangerous for non-idempotent
@@ -1050,9 +1170,6 @@ CitusBackgroundTaskQueueMonitorMain(Datum arg)
 			/* update max_background_task_executors if changed */
 			ProcessConfigFile(PGC_SIGHUP);
 		}
-
-		/* invalidate cache for new data in catalog */
-		InvalidateMetadataSystemCache();
 
 		/* assign runnable tasks, if any, to new task executors in a transaction if we do not have SIGTERM or SIGINT */
 		if (!MonitorGotTerminationOrCancellationRequest())
@@ -1485,13 +1602,6 @@ StoreArgumentsInDSM(char *database, char *username, char *command,
 		return NULL;
 	}
 
-	/*
-	 * when we have CurrentResourceOwner != NULL, segment will be released upon CurrentResourceOwner release,
-	 * but we may consume the queue in segment even after CurrentResourceOwner released. 'dsm_pin_mapping' helps
-	 * persisting the segment until the session ends or the segment is detached explicitly by 'dsm_detach'.
-	 */
-	dsm_pin_mapping(seg);
-
 	shm_toc *toc = shm_toc_create(CITUS_BACKGROUND_TASK_MAGIC, dsm_segment_address(seg),
 								  segsize);
 
@@ -1523,6 +1633,13 @@ StoreArgumentsInDSM(char *database, char *username, char *command,
 	shm_toc_insert(toc, CITUS_BACKGROUND_TASK_KEY_JOB_ID, jobIdTarget);
 
 	shm_mq_attach(mq, seg, NULL);
+
+	/*
+	 * when we have CurrentResourceOwner != NULL, segment will be released upon CurrentResourceOwner release,
+	 * but we may consume the queue in segment even after CurrentResourceOwner released. 'dsm_pin_mapping' helps
+	 * persisting the segment until the session ends or the segment is detached explicitly by 'dsm_detach'.
+	 */
+	dsm_pin_mapping(seg);
 
 	return seg;
 }
@@ -1675,31 +1792,10 @@ CitusBackgroundTaskExecutor(Datum main_arg)
 								  "executing this task")));
 	}
 
-	/* Prepare to execute the query. */
-	SetCurrentStatementStartTimestamp();
-	debug_query_string = command;
-	char *appname = psprintf("citus background task queue executor (%ld/%ld)",
-							 *jobId, *taskId);
-	pgstat_report_appname(appname);
-	pgstat_report_activity(STATE_RUNNING, command);
-	StartTransactionCommand();
-	if (StatementTimeout > 0)
-	{
-		enable_timeout_after(STATEMENT_TIMEOUT, StatementTimeout);
-	}
-	else
-	{
-		disable_timeout(STATEMENT_TIMEOUT, false);
-	}
-
 	/* Execute the query. */
+	StartTransactionCommand();
 	ExecuteSqlString(command);
-
-	/* Post-execution cleanup. */
-	disable_timeout(STATEMENT_TIMEOUT, false);
 	CommitTransactionCommand();
-	pgstat_report_activity(STATE_IDLE, command);
-	pgstat_report_stat(true);
 
 	/* Signal that we are done. */
 	ReadyForQuery(DestRemote);
