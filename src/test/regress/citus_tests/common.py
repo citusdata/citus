@@ -295,3 +295,15 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
     if config.add_coordinator_to_metadata:
         add_coordinator_to_metadata(bindir, config.coordinator_port())
     config.setup_steps()
+
+def eprint(*args, **kwargs):
+    """eprint prints to stderr"""
+
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def run(command, *args, shell=True, **kwargs):
+    """run runs the given command and prints it to stderr"""
+
+    eprint(f"+ {command} ")
+    return subprocess.run(command, *args, check=True, shell=shell, **kwargs)

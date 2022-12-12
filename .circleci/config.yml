@@ -25,10 +25,12 @@ parameters:
   flaky_test:
     type: string
     default: ''
-  flaky_test_make:
-    type: string
-    default: check-minimal
-
+  flaky_test_runs:
+    type: integer
+    default: 1600
+  skip_flaky_tests:
+    type: boolean
+    default: false
 
 jobs:
   build:
@@ -616,17 +618,18 @@ jobs:
       image_tag:
         description: 'docker image tag to use'
         type: string
-      make:
-        description: 'make target'
-        type: string
-        default: check-minimal
       test:
-        description: 'the test that should be run multiple times'
+        description: 'the test file path that should be run multiple times'
         type: string
+        default: ''
       runs:
         description: 'number of times that the test should be run in total'
         type: integer
-        default: 1600
+        default: 256
+      skip:
+        description: 'A flag to bypass flaky test detection.'
+        type: boolean
+        default: false
     docker:
       - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     working_directory: /home/circleci/project
@@ -635,6 +638,33 @@ jobs:
       - checkout
       - attach_workspace:
           at: .
+      - run:
+          name: 'Detect regression tests need to be ran'
+          command: |
+            skip=<< parameters.skip >>
+            if [ "$skip" = true ]; then
+                echo "Skipping flaky test detection."
+                circleci-agent step halt
+            fi
+
+            testForDebugging="<< parameters.test >>"
+
+            if [ -z "$testForDebugging" ]; then
+              detected_changes=$(git diff origin/HEAD --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*.sql\|src/test/regress/spec/.*.spec' || true))
+              tests=${detected_changes}
+            else
+              tests=$testForDebugging;
+            fi
+
+            if [ -z "$tests" ]; then
+                echo "No test found."
+                circleci-agent step halt
+            else
+              echo "Detected tests " $tests
+            fi
+
+            echo export tests=\""$tests"\" >> "$BASH_ENV"
+            source "$BASH_ENV"
       - run:
           name: 'Install Extension'
           command: |
@@ -651,7 +681,12 @@ jobs:
       - run:
           name: 'Run minimal tests'
           command: |
-            gosu circleci make -C src/test/regress << parameters.make >> EXTRA_TESTS="$(for i in $(seq << parameters.runs >> | circleci tests split); do echo -n '<< parameters.test >> ' ; done)"
+            tests_array=($tests)
+            for test in "${tests_array[@]}"
+            do
+                echo $test
+                gosu circleci src/test/regress/citus_tests/run_test.py --path $test --repeat << parameters.runs >> --use-base-schedule --use-whole-schedule-line
+            done
           no_output_timeout: 2m
       - run:
           name: 'Regressions'
@@ -691,6 +726,7 @@ jobs:
       - store_artifacts:
           name: 'Save worker2 log'
           path: src/test/regress/tmp_check/worker.57638/log
+
   upload-coverage:
     docker:
       - image: 'citus/exttester:<< pipeline.parameters.pg15_version >><< pipeline.parameters.image_suffix >>'
@@ -719,8 +755,8 @@ workflows:
           pg_major: 15
           image_tag: '<< pipeline.parameters.pg15_version >>'
           requires: [build-flaky-15]
-          make: '<< pipeline.parameters.flaky_test_make >>'
           test: '<< pipeline.parameters.flaky_test >>'
+          runs: << pipeline.parameters.flaky_test_runs >>
 
   build_and_test:
     when:
@@ -1209,3 +1245,9 @@ workflows:
             branches:
               only:
                 - /tpcc_benchmark\/.*/ # match with tpcc_benchmark/ prefix
+      - test-flakyness:
+          name: 'test-15_flaky'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          requires: [build-15]
+          skip: << pipeline.parameters.skip_flaky_tests >>
