@@ -28,6 +28,9 @@ parameters:
   flaky_test_runs:
     type: integer
     default: 1600
+  skip_flaky_tests:
+    type: boolean
+    default: false
 
 jobs:
   build:
@@ -623,6 +626,10 @@ jobs:
         description: 'number of times that the test should be run in total'
         type: integer
         default: 256
+      skip:
+        description: 'A flag to bypass flaky test detection.'
+        type: boolean
+        default: false
     docker:
       - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     working_directory: /home/circleci/project
@@ -634,6 +641,12 @@ jobs:
       - run:
           name: 'Detect regression tests need to be ran'
           command: |
+            skip = << parameters.skip >>
+            if [ "$skip" = true ] then
+                echo "Skipping flaky test detection."
+                circleci-agent step halt
+            fi
+
             testForDebugging="<< parameters.test >>"
 
             if [ -z "$testForDebugging" ]; then
@@ -1233,7 +1246,8 @@ workflows:
               only:
                 - /tpcc_benchmark\/.*/ # match with tpcc_benchmark/ prefix
       - test-flakyness:
-              name: 'test-15_flaky'
-              pg_major: 15
-              image_tag: '<< pipeline.parameters.pg15_version >>'
-              requires: [build-15]
+          name: 'test-15_flaky'
+          pg_major: 15
+          image_tag: '<< pipeline.parameters.pg15_version >>'
+          requires: [build-15]
+          skip: << pipeline.parameters.skip_flaky_tests >>
