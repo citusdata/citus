@@ -194,9 +194,7 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 		int32 shardMinHashToken = PG_INT32_MIN + (shardIndex * hashTokenIncrement);
 		int32 shardMaxHashToken = shardMinHashToken + (hashTokenIncrement - 1);
 		uint64 shardId = GetNextShardId();
-
-		/* we use shardid of the first shard in a shardgroup as the shardgroupid */
-		int64 shardGroupId = (int64) shardId;
+		int64 shardGroupId = GetNextShardgroupId();
 
 		/* if we are at the last shard, make sure the max token value is INT_MAX */
 		if (shardIndex == (shardCount - 1))
@@ -399,7 +397,7 @@ CreateReferenceTableShard(Oid distributedTableId, Oid colocatedTableId,
 
 		/* get the next shard id */
 		uint64 shardId = GetNextShardId();
-		int64 shardGroupId = (int64) shardId;
+		int64 shardGroupId = GetNextShardgroupId();
 
 		StringInfoData shardgroupQuery = { 0 };
 		initStringInfo(&shardgroupQuery);

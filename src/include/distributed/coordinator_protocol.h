@@ -53,6 +53,7 @@
 #define TRANSFER_MODE_BLOCK_WRITES 'b'
 
 #define SHARDID_SEQUENCE_NAME "pg_dist_shardid_seq"
+#define SHARDGROUPID_SEQUENCE_NAME "pg_dist_shardgroupid_seq"
 #define PLACEMENTID_SEQUENCE_NAME "pg_dist_placement_placementid_seq"
 
 /* Remote call definitions to help with data staging and deletion */
@@ -221,6 +222,7 @@ extern bool IsCoordinator(void);
 
 /* Function declarations local to the distributed module */
 extern uint64 GetNextShardId(void);
+extern int64 GetNextShardgroupId(void);
 extern uint64 GetNextPlacementId(void);
 extern Oid ResolveRelationId(text *relationName, bool missingOk);
 extern List * GetFullTableCreationCommands(Oid relationId,

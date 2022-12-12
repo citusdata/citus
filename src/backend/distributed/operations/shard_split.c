@@ -157,6 +157,7 @@ static void AddDummyShardEntryInMap(HTAB *mapOfPlacementToDummyShardList, uint32
 									targetNodeId,
 									ShardInterval *shardInterval);
 static uint64 GetNextShardIdForSplitChild(void);
+static int64 GetNextShardgroupIdForSplitChild(void);
 static void AcquireNonblockingSplitLock(Oid relationId);
 static List * GetWorkerNodesFromWorkerIds(List *nodeIdsForPlacementList);
 static void DropShardgroupMetadata(int64 shardgroupId);
@@ -1063,7 +1064,7 @@ CreateNewShardgroups(uint32 colocationId, ShardInterval *sampleInterval,
 		Datum splitPoint = (Datum) lfirst(splitPointCell);
 
 		Shardgroup *shardgroup = palloc0(sizeof(Shardgroup));
-		shardgroup->shardgroupId = (int64) GetNextShardIdForSplitChild();
+		shardgroup->shardgroupId = GetNextShardgroupIdForSplitChild();
 		shardgroup->colocationId = colocationId;
 		shardgroup->minShardValue = Int32GetDatum(currentSplitChildMinValue);
 		shardgroup->maxShardValue = splitPoint;
@@ -1080,7 +1081,7 @@ CreateNewShardgroups(uint32 colocationId, ShardInterval *sampleInterval,
 	 */
 
 	Shardgroup *shardgroup = palloc0(sizeof(Shardgroup));
-	shardgroup->shardgroupId = (int64) GetNextShardIdForSplitChild();
+	shardgroup->shardgroupId = GetNextShardgroupIdForSplitChild();
 	shardgroup->colocationId = colocationId;
 	shardgroup->minShardValue = Int32GetDatum(currentSplitChildMinValue);
 	shardgroup->maxShardValue = splitParentMaxValue;
@@ -2227,4 +2228,37 @@ GetNextShardIdForSplitChild()
 	ForgetResults(connection);
 
 	return shardId;
+}
+
+
+static int64
+GetNextShardgroupIdForSplitChild()
+{
+	StringInfo nextValueCommand = makeStringInfo();
+	appendStringInfo(nextValueCommand, "SELECT nextval(%s);",
+					 quote_literal_cstr("pg_catalog.pg_dist_shardgroupid_seq"));
+
+	MultiConnection *connection =
+		GetConnectionForLocalQueriesOutsideTransaction(CitusExtensionOwnerName());
+
+	PGresult *result = NULL;
+	int queryResult = ExecuteOptionalRemoteCommand(connection, nextValueCommand->data,
+												   &result);
+	if (queryResult != RESPONSE_OKAY || !IsResponseOK(result) || PQntuples(result) != 1 ||
+		PQnfields(result) != 1)
+	{
+		PQclear(result);
+		ForgetResults(connection);
+		CloseConnection(connection);
+
+		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
+						errmsg("Could not generate next shardgroup id while executing "
+							   "shard splits.")));
+	}
+
+	int64 shardgroupId = SafeStringToInt64(PQgetvalue(result, 0, 0 /* nodeId column*/));
+	PQclear(result);
+	ForgetResults(connection);
+
+	return shardgroupId;
 }

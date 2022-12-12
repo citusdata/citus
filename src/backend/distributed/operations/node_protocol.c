@@ -252,6 +252,30 @@ GetNextShardId()
 }
 
 
+int64
+GetNextShardgroupId()
+{
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
+
+	text *sequenceName = cstring_to_text(SHARDGROUPID_SEQUENCE_NAME);
+	Oid sequenceId = ResolveRelationId(sequenceName, false);
+	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
+
+	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+
+	/* generate new and unique shardId from sequence */
+	Datum shardgroupIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
+
+	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+
+	int64 shardgroupId = DatumGetInt64(shardgroupIdDatum);
+
+	return shardgroupId;
+}
+
+
 /*
  * master_get_new_placementid is a user facing wrapper function around
  * GetNextPlacementId() which allocates and returns a unique placement id for the
